@@ -147,6 +147,16 @@ class ColumnBase(Column):
             sr[~mask_bytes] = None
         return sr
 
+    def clip(self, lo, hi):
+        # If categorical, it returns non categorical column
+        # as there is possibility of change in categories
+        if is_categorical_dtype(self):
+            input_col = self.astype(self.categories.dtype)
+        else:
+            input_col = self
+
+        return libcudf.replace.clip(input_col, lo, hi)
+
     def equals(self, other):
         if self is other:
             return True

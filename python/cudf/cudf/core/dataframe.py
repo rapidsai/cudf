@@ -4452,6 +4452,54 @@ class DataFrame(Frame):
             **kwargs,
         )
 
+    def clip(self, lower=None, upper=None, inplace=False):
+        """
+        Trim values at input threshold(s).
+
+        Assigns values outside boundary to boundary values.
+        Thresholds can be singular values or array like,
+        and in the latter case the clipping is performed
+        element-wise in the specified axis.
+
+        Parameters
+        ----------
+        lower : scalar or array_like, default None
+            Minimum threshold value. All values below this
+            threshold will be set to it.
+        upper : scalar or array_like, default None
+            Maximum threshold value. All values below this
+            threshold will be set to it.
+        inplace : bool, default False
+
+        Returns
+        -------
+        Clipped DataFrame
+        """
+
+        if lower is None and upper is None:
+            return self if inplace is True else self.copy(deep=True)
+
+        if is_scalar(lower):
+            lower = np.full(self._num_columns, lower)
+        if is_scalar(upper):
+            upper = np.full(self._num_columns, upper)
+
+        if len(lower) != len(upper):
+            raise ValueError("Length of lower and upper should be equal")
+
+        if len(lower) != self._num_columns:
+            raise ValueError(
+                """Length of lower/upper should be
+                equal to number of columns in dataframe"""
+            )
+
+        outdf = DataFrame()
+        outdf.index = self.index
+        for idx, name in enumerate(self._data):
+            outdf[name] = self._data[name].clip(lower[idx], upper[idx])
+
+        return self._mimic_inplace(outdf, inplace=inplace)
+
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         """
         Return whether all elements are True in DataFrame.
