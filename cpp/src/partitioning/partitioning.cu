@@ -548,7 +548,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
                          global_partition_sizes.end(),
                          scanned_global_partition_sizes);
 
-  // Copy the result of the exlusive scan to the output offsets array
+  // Copy the result of the exclusive scan to the output offsets array
   // to indicate the starting point for each partition in the output
   std::vector<size_type> partition_offsets(num_partitions);
   CUDA_TRY(cudaMemcpyAsync(partition_offsets.data(),
@@ -707,8 +707,8 @@ struct dispatch_map_type {
                       });
 
     // Scatter the rows into their partitions
-    auto scattered =
-      cudf::experimental::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t);
+    auto scattered = cudf::experimental::detail::scatter(
+      t, scatter_map.begin(), scatter_map.end(), t, false, mr, stream);
 
     return std::make_pair(std::move(scattered), std::move(partition_offsets));
   }

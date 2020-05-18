@@ -149,15 +149,16 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   }
 
   // add the scalar to get the output dictionary key-set
-  auto scalar_column = cudf::make_column_from_scalar(value, 1, mr, stream);
+  auto scalar_column =
+    cudf::make_column_from_scalar(value, 1, rmm::mr::get_default_resource(), stream);
   auto target_matched =
     cudf::dictionary::detail::add_keys(target, scalar_column->view(), mr, stream);
   cudf::column_view const target_indices =
     cudf::dictionary_column_view(target_matched->view()).get_indices_annotated();
 
   // get the index of the key just added
-  auto index_of_value =
-    cudf::dictionary::detail::get_index(target_matched->view(), value, mr, stream);
+  auto index_of_value = cudf::dictionary::detail::get_index(
+    target_matched->view(), value, rmm::mr::get_default_resource(), stream);
   // now call fill using just the indices column and the new index
   out_of_place_fill_range_dispatch filler{*index_of_value, target_indices};
   auto new_indices       = filler.template operator()<int32_t>(begin, end, mr, stream);
@@ -168,7 +169,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   auto indices_column = std::make_unique<cudf::column>(cudf::data_type{cudf::INT32},
                                                        static_cast<cudf::size_type>(output_size),
                                                        std::move(*(contents.data.release())),
-                                                       rmm::device_buffer{},
+                                                       rmm::device_buffer{0, stream, mr},
                                                        0);
 
   // take the keys from matched column

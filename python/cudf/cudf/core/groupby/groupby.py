@@ -264,11 +264,14 @@ class GroupBy(object):
 
             # Can't do set arithmetic here as sets are
             # not ordered
-            columns = [
-                col_name
-                for col_name in self.obj._data
-                if col_name not in self.grouping._named_columns
-            ]
+            if isinstance(self, SeriesGroupBy):
+                columns = [self.obj.name]
+            else:
+                columns = [
+                    col_name
+                    for col_name in self.obj._data
+                    if col_name not in self.grouping._named_columns
+                ]
             out = dict.fromkeys(columns, aggs)
         else:
             out = aggs.copy()
@@ -431,7 +434,7 @@ class GroupBy(object):
                             total += val[j]
                         avg[i] = total / win_size
 
-            # Compute moving avgs on all groups
+            # Compute moving averages on all groups
             results = groups.apply_grouped(rolling_avg,
                                            incols=['val'],
                                            outcols=dict(avg=np.float64))

@@ -276,6 +276,16 @@ if(JITIFY_USE_CACHE)
 endif(JITIFY_USE_CACHE)
 
 ###################################################################################################
+# - per-thread default stream option --------------------------------------------------------------
+# This needs to be defined first so tests and benchmarks can inherit it.
+
+option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+if(PER_THREAD_DEFAULT_STREAM)
+    message(STATUS "Using per-thread default stream")
+    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
+endif(PER_THREAD_DEFAULT_STREAM)
+
+###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
@@ -518,6 +528,7 @@ add_library(cudf
             src/io/csv/legacy/csv_gpu.cu
             src/io/csv/csv_gpu.cu
             src/io/csv/reader_impl.cu
+            src/io/csv/writer_impl.cu
             src/io/json/legacy/json_reader_impl.cu
             src/io/json/reader_impl.cu
             src/io/json/json_gpu.cu

@@ -333,7 +333,7 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                                              cudaStream_t stream)
 {
   auto indices =
-    cudf::make_numeric_column(data_type{INT32}, target.size(), mask_state::UNALLOCATED, stream, mr);
+    cudf::make_numeric_column(data_type{INT32}, target.size(), mask_state::UNALLOCATED, stream);
   auto mutable_indices = indices->mutable_view();
 
   thrust::sequence(rmm::exec_policy(stream)->on(stream),
@@ -342,8 +342,8 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                    0);
 
   // The scatter map is actually a table with only one column, which is scatter map.
-  auto scatter_map =
-    detail::apply_boolean_mask(table_view{{indices->view()}}, boolean_mask, mr, stream);
+  auto scatter_map = detail::apply_boolean_mask(
+    table_view{{indices->view()}}, boolean_mask, rmm::mr::get_default_resource(), stream);
   auto output_table = detail::scatter(table_view{{input}},
                                       scatter_map->get_column(0).view(),
                                       table_view{{target}},

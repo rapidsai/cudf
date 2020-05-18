@@ -249,7 +249,7 @@ struct column_gatherer_impl<dictionary32, MapItType> {
     auto indices_column = std::make_unique<column>(data_type{INT32},
                                                    static_cast<size_type>(output_count),
                                                    std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{},
+                                                   rmm::device_buffer{0, stream, mr},
                                                    0);  // set null count to 0
     // finally, build the dictionary with the null_mask component and the keys and indices
     return make_dictionary_column(std::move(keys_copy),

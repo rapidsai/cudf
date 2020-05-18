@@ -68,7 +68,7 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
 }  // namespace detail
 
 /*
- * @brief A specialization for floating-point `Element` type rerlational comparison
+ * @brief A specialization for floating-point `Element` type relational comparison
  * to derive the order of the elements with respect to `lhs`. Specialization is to
  * handle `nan` in the order shown below.
  * `[-Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN, null] (for null_order::AFTER)`
@@ -152,7 +152,7 @@ class element_equality_comparator {
    * @note `lhs` and `rhs` may be the same.
    *
    * @param lhs The column containing the first element
-   * @param rhs The column containg the second element (may be the same as lhs)
+   * @param rhs The column containing the second element (may be the same as lhs)
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    **/
   __host__ __device__ element_equality_comparator(column_device_view lhs,
@@ -245,7 +245,7 @@ class element_relational_comparator {
    * @note `lhs` and `rhs` may be the same.
    *
    * @param lhs The column containing the first element
-   * @param rhs The column containg the second element (may be the same as lhs)
+   * @param rhs The column containing the second element (may be the same as lhs)
    * @param null_precedence Indicates how null values are ordered with other
    * values
    **/

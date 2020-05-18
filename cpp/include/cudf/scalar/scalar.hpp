@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,11 @@
 #include <vector>
 
 namespace cudf {
+
 /**
  * @brief An owning class to represent a singular value
+ *
+ * @ingroup scalar_classes
  *
  * A scalar is a singular value of any of the supported datatypes in cudf.
  * Classes derived from this class are used to represent a scalar. Objects of
@@ -196,6 +199,8 @@ class fixed_width_scalar : public scalar {
 /**
  * @brief An owning class to represent a numerical value in device memory
  *
+ * @ingroup scalar_classes
+ *
  * @tparam T the data type of the numerical value
  */
 template <typename T>
@@ -243,6 +248,8 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
 
 /**
  * @brief An owning class to represent a string in device memory
+ *
+ * @ingroup scalar_classes
  */
 class string_scalar : public scalar {
  public:
@@ -339,36 +346,9 @@ class string_scalar : public scalar {
 };
 
 /**
- * @brief An owning class to represent a list in device memory
- */
-class list_scalar : public scalar {
- public:
-  using value_type = cudf::list_view;
-
-  list_scalar() : scalar(data_type(LIST)) {}
-  ~list_scalar()                        = default;
-  list_scalar(list_scalar&& other)      = default;
-  list_scalar(list_scalar const& other) = default;
-  list_scalar& operator=(list_scalar const& other) = delete;
-  list_scalar& operator=(list_scalar&& other) = delete;
-
-  /**
-   * @brief Get the value of the scalar as a string_view
-   *
-   * @param stream The CUDA stream to do the operation in
-   */
-  value_type value(cudaStream_t stream = 0) const { return list_view{}; }
-
-  /**
-   * @brief Returns the size of the string in bytes
-   */
-  size_type size() const { return 0; }
-
- protected:
-};
-
-/**
  * @brief An owning class to represent a timestamp value in device memory
+ *
+ * @ingroup scalar_classes
  *
  * @tparam T the data type of the timestamp value
  * @see cudf/wrappers/timestamps.hpp for a list of allowed types

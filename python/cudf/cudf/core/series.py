@@ -6,6 +6,7 @@ from numbers import Number
 import cupy
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_dict_like
 
 import cudf
 import cudf._lib as libcudf
@@ -1093,7 +1094,7 @@ class Series(Frame):
             )
 
     def __neg__(self):
-        """Negatated value (-) for each element
+        """Negated value (-) for each element
 
         Returns a new Series.
         """
@@ -1179,14 +1180,15 @@ class Series(Frame):
         return self._fill([fill_value], begin, end, inplace)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
-        """Fill null values with ``value``.
+        """Fill null values with ``value`` without changing the series' type.
 
         Parameters
         ----------
         value : scalar or Series-like
-            Value to use to fill nulls. If Series-like, null values
-            are filled with the values in corresponding indices of the
-            given Series.
+            Value to use to fill nulls. If `value`'s dtype differs from the
+            series, the fill value will be cast to the column's dtype before
+            applying the fill. If Series-like, null values are filled with the
+            values in corresponding indices of the given Series.
 
         Returns
         -------
@@ -1415,31 +1417,56 @@ class Series(Frame):
         """
         return self._column.as_mask()
 
-    def astype(self, dtype, errors="raise", **kwargs):
+    def astype(self, dtype, copy=False, errors="raise", **kwargs):
         """
         Cast the Series to the given dtype
 
         Parameters
         ----------
 
-        dtype : data type
+        dtype : data type, or dict of column name -> data type
+            Use a numpy.dtype or Python type to cast Series object to
+            the same type. Alternatively, use {col: dtype, ...}, where col is a
+            series name and dtype is a numpy.dtype or Python type to cast to.
+        copy : bool, default False
+            Return a deep-copy when ``copy=True``. Note by default
+            ``copy=False`` setting is used and hence changes to
+            values then may propagate to other cudf objects.
+        errors : {'raise', 'ignore', 'warn'}, default 'raise'
+            Control raising of exceptions on invalid data for provided dtype.
+            - ``raise`` : allow exceptions to be raised
+            - ``ignore`` : suppress exceptions. On error return original
+            object.
+            - ``warn`` : prints last exceptions as warnings and
+            return original object.
         **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
         out : Series
-            Copy of ``self`` cast to the given dtype. Returns
-            ``self`` if ``dtype`` is the same as ``self.dtype``.
+            Returns ``self.copy(deep=copy)`` if ``dtype`` is the same
+            as ``self.dtype``.
         """
         if errors not in ("ignore", "raise", "warn"):
             raise ValueError("invalid error value specified")
 
+        if is_dict_like(dtype):
+            if len(dtype) > 1 or self.name not in dtype:
+                raise KeyError(
+                    "Only the Series name can be used for "
+                    "the key in Series dtype mappings."
+                )
+            dtype = dtype[self.name]
+
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
-            return self
+            return self.copy(deep=copy)
         try:
+            data = self._column.astype(dtype, **kwargs)
+
             return self._copy_construct(
-                data=self._column.astype(dtype, **kwargs)
+                data=data.copy(deep=True) if copy else data, index=self.index
             )
+
         except Exception as e:
             if errors == "raise":
                 raise e
@@ -1639,7 +1666,7 @@ class Series(Frame):
         values : sequence of input values
         dtype: numpy.dtype; optional
                Specifies the output dtype.  If `None` is given, the
-               smallest possible integer dtype (starting with np.int32)
+               smallest possible integer dtype (starting with np.int8)
                is used.
         na_sentinel : number
             Value to indicate missing category.
@@ -1650,20 +1677,36 @@ class Series(Frame):
         from cudf import DataFrame
 
         if dtype is None:
-            dtype = min_scalar_type(len(cats), 32)
+            dtype = min_scalar_type(len(cats), 8)
 
-        cats = Series(cats).astype(self.dtype)
-        order = Series(cupy.arange(len(self)))
-        codes = Series(cupy.arange(len(cats), dtype=dtype))
+        cats = column.as_column(cats)
+        try:
+            # Where there is a type-cast from string to numeric types,
+            # there is a possibility for ValueError when strings
+            # are having non-numeric values, in such cases we have
+            # to catch the exception and return encoded labels
+            # with na_sentinel values as there would be no corresponding
+            # encoded values of cats in self.
+            cats = cats.astype(self.dtype)
+        except ValueError:
+            return Series(
+                utils.scalar_broadcast_to(
+                    na_sentinel, size=len(self), dtype=dtype
+                ),
+                index=self.index,
+                name=None,
+            )
+
+        order = column.as_column(cupy.arange(len(self)))
+        codes = column.as_column(cupy.arange(len(cats), dtype=dtype))
 
         value = DataFrame({"value": cats, "code": codes})
         codes = DataFrame(
-            {"value": self.copy(deep=False)._data.columns[0], "order": order}
+            {"value": self._data.columns[0].copy(deep=False), "order": order}
         )
+
         codes = codes.merge(value, on="value", how="left")
         codes = codes.sort_values("order")["code"].fillna(na_sentinel)
-
-        cats.name = None  # because it was mutated above
 
         return codes._copy_construct(name=None, index=self.index)
 
@@ -1693,7 +1736,7 @@ class Series(Frame):
     # UDF related
 
     def applymap(self, udf, out_dtype=None):
-        """Apply a elemenwise function to transform the values in the Column.
+        """Apply an elementwise function to transform the values in the Column.
 
         The user function is expected to take one argument and return the
         result, which will be stored to the output Series.  The function
@@ -3281,7 +3324,7 @@ class Series(Frame):
         return result
 
     def merge(self, other):
-        # An inner join shuold return a series containing matching elements
+        # An inner join should return a series containing matching elements
         # a Left join should return just self
         # an outer join should return a two column
         # dataframe containing all elements from both

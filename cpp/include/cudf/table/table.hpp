@@ -23,6 +23,11 @@
 
 namespace cudf {
 namespace experimental {
+/**
+ * @addtogroup table_classes
+ * @{
+ */
+
 class table {
  public:
   table()        = default;
@@ -138,6 +143,6 @@ class table {
   std::vector<std::unique_ptr<column>> _columns{};
   size_type _num_rows{};
 };
-
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf

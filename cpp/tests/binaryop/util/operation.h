@@ -204,6 +204,28 @@ struct LogBase {
   }
 };
 
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct PMod {
+  using CommonArgsT = typename std::common_type<TypeLhs, TypeRhs>::type;
+
+  TypeOut operator()(TypeLhs x, TypeRhs y) const
+  {
+    CommonArgsT xconv{x};
+    CommonArgsT yconv{y};
+    auto rem = std::fmod(xconv, yconv);
+    if (rem < 0) rem = std::fmod(rem + yconv, yconv);
+    return static_cast<TypeOut>(rem);
+  }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct ATan2 {
+  TypeOut operator()(TypeLhs x, TypeRhs y) const
+  {
+    return static_cast<TypeOut>(std::atan2(static_cast<double>(x), static_cast<double>(y)));
+  }
+};
+
 }  // namespace operation
 }  // namespace library
 }  // namespace cudf

@@ -123,6 +123,12 @@ class NumericalColumn(column.ColumnBase):
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
+    def int2ip(self):
+        if self.dtype != np.dtype("int64"):
+            raise TypeError("Only int64 type can be converted to ip")
+
+        return libcudf.string_casting.int2ip(self)
+
     def as_string_column(self, dtype, **kwargs):
         from cudf.core.column import string, as_column
 
@@ -216,7 +222,7 @@ class NumericalColumn(column.ColumnBase):
         return column.build_column(data=data, dtype=self.dtype, mask=self.mask)
 
     def applymap(self, udf, out_dtype=None):
-        """Apply a elemenwise function to transform the values in the Column.
+        """Apply an element-wise function to transform the values in the Column.
 
         Parameters
         ----------

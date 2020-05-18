@@ -22,6 +22,7 @@ namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
+
 const char* operation =
   R"***(
     #pragma once
@@ -406,7 +407,133 @@ const char* operation =
     struct RLogBase {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return LogBase::operate<TypeOut, TypeLhs,TypeRhs>(y, x);
+            return LogBase::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
+        }
+    };
+
+    struct NullEquals {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            if (!lhs_valid && !rhs_valid) return true;
+            if (lhs_valid && rhs_valid) return x == y;
+            return false;
+        }
+    };
+
+    struct RNullEquals {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            return NullEquals::operate<TypeOut, TypeRhs, TypeLhs>(y, x, rhs_valid, lhs_valid,
+                                                                  output_valid);
+        }
+    };
+
+    struct NullMax {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            if (!lhs_valid && !rhs_valid) {
+                output_valid = false;
+                return TypeOut{};
+            } else if (lhs_valid && rhs_valid) {
+                return (TypeOut{x} > TypeOut{y}) ? TypeOut{x} : TypeOut{y};
+            } else if (lhs_valid) return TypeOut{x};
+            else return TypeOut{y};
+        }
+    };
+
+    struct RNullMax {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            return NullMax::operate<TypeOut, TypeRhs, TypeLhs>(y, x, rhs_valid, lhs_valid,
+                                                               output_valid);
+        }
+    };
+
+    struct NullMin {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            if (!lhs_valid && !rhs_valid) {
+                output_valid = false;
+                return TypeOut{};
+            } else if (lhs_valid && rhs_valid) {
+                return (TypeOut{x} < TypeOut{y}) ? TypeOut{x} : TypeOut{y};
+            } else if (lhs_valid) return TypeOut{x};
+            else return TypeOut{y};
+        }
+    };
+
+    struct RNullMin {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            return NullMin::operate<TypeOut, TypeRhs, TypeLhs>(y, x, rhs_valid, lhs_valid,
+                                                               output_valid);
+        }
+    };
+
+    struct PMod {
+        // Ideally, these two specializations - one for integral types and one for non integral
+        // types shouldn't be required, as std::fmod should promote integral types automatically
+        // to double and call the std::fmod overload for doubles. Sadly, doing this in jitified
+        // code does not work - it is having trouble deciding between float/double overloads
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
+            common_t xconv{x};
+            common_t yconv{y};
+            auto rem = xconv % yconv;
+            if (rem < 0) rem = (rem + yconv) % yconv;
+            return TypeOut{rem};
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<!(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
+            common_t xconv{x};
+            common_t yconv{y};
+            auto rem = std::fmod(xconv, yconv);
+            if (rem < 0) rem = std::fmod(rem + yconv, yconv);
+            return TypeOut{rem};
+        }
+    };
+
+    struct RPMod {
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return PMod::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
+        }
+    };
+
+    struct ATan2 {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return TypeOut{std::atan2(double{x}, double{y})};
+        }
+    };
+
+    struct RATan2 {
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return TypeOut{ATan2::operate<TypeOut, TypeRhs, TypeLhs>(y, x)};
         }
     };
 )***";

@@ -269,7 +269,7 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     df["a"] = np.random.choice(strlist[:map_size], nelem)
     df["b"] = np.random.uniform(low=0, high=map_size, size=nelem)
     df["c"] = np.random.randint(map_size, size=nelem)
-    df["d"] = df["a"]._column.as_categorical_column(np.int32)
+    df["d"] = df["a"].astype("category")
 
     def _check_scatter_by_map(dfs, col):
         assert len(dfs) == map_size
@@ -281,7 +281,10 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
             if len(df) > 0:
                 # Make sure the column types were preserved
                 assert isinstance(df[name]._column, type(col._column))
-            sr = df[name].astype(np.int32)
+            try:
+                sr = df[name].astype(np.int32)
+            except ValueError:
+                sr = df[name]
             assert sr.nunique() <= 1
             if sr.nunique() == 1:
                 if isinstance(df[name]._column, NumericalColumn):

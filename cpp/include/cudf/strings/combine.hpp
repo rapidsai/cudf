@@ -23,9 +23,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_apis
- * @addtogroup strings_combine Combine
- * APIs to combine strings row-wise.
+ * @addtogroup strings_combine
  * @{
  */
 

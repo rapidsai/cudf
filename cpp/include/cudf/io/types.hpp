@@ -36,6 +36,7 @@ class RandomAccessFile;
 
 // <io/utilities/data_sink.hpp>
 namespace cudf {
+//! IO interfaces
 namespace io {
 class data_sink;
 }

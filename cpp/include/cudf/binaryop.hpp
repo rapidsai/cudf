@@ -23,6 +23,12 @@
 
 namespace cudf {
 namespace experimental {
+
+/**
+ * @addtogroup transformation_binaryops
+ * @{
+ */
+
 /**
  * @brief Types of binary operations that can be performed on data.
  */
@@ -53,13 +59,20 @@ enum class binary_operator : int32_t {
                    ///< ptx code
   SHIFT_LEFT,      ///< operator <<
   SHIFT_RIGHT,     ///< operator >>
-
-  // Logical right shift. Casts to an unsigned value before shifing.
+  // Logical right shift. Casts to an unsigned value before shifting.
   // approximates >>> from Java.
   SHIFT_RIGHT_UNSIGNED,  ///< operator >>>
-
-  LOG_BASE,  ///< logarithm to the base
-
+  LOG_BASE,              ///< logarithm to the base
+  ATAN2,                 ///< 2-argument arctangent
+  // If remainder is negative, this returns (remainder + divisor) % divisor
+  // else, it returns (dividend % divisor)
+  PMOD,           ///< positive modulo operator
+  NULL_EQUALS,    ///< Returns true when both operands are null; false when one is null; the
+                  ///< result of equality when both are non-null
+  NULL_MAX,       ///< Returns max of operands when both are non-null; returns the non-null
+                  ///< operand when one is null; or invalid when both are null
+  NULL_MIN,       ///< Returns min of operands when both are non-null; returns the non-null
+                  ///< operand when one is null; or invalid when both are null
   INVALID_BINARY  ///< invalid operation
 };
 
@@ -167,5 +180,6 @@ std::unique_ptr<column> binary_operation(
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf
