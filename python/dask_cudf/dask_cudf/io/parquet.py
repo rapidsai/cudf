@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+
 import warnings
 from functools import partial
 
@@ -16,16 +18,17 @@ class CudfEngine(ArrowEngine):
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
-        dtypes = {}
+
+        new_meta = cudf.DataFrame(index=meta.index)
         for col in meta.columns:
             if meta[col].dtype == "O":
-                dtypes[col] = "int32" if strings_to_cats else "object"
+                new_meta[col] = as_column(
+                    meta[col], dtype="int32" if strings_to_cats else "object"
+                )
+            else:
+                new_meta[col] = as_column(meta[col])
 
-        meta = cudf.DataFrame.from_pandas(meta)
-        for col, dtype in dtypes.items():
-            meta[col] = meta[col].astype(dtype)
-
-        return (meta, stats, parts)
+        return (new_meta, stats, parts)
 
     @staticmethod
     def read_partition(
@@ -64,7 +67,7 @@ class CudfEngine(ArrowEngine):
                     **kwargs.get("read", {}),
                 )
 
-        if index and index[0] in df.columns:
+        if index and (index[0] in df.columns):
             df = df.set_index(index[0])
 
         if len(partition_keys) > 0:
@@ -74,14 +77,13 @@ class CudfEngine(ArrowEngine):
                 categories = [
                     val.as_py() for val in partitions.levels[i].dictionary
                 ]
-                sr = cudf.Series(index2).astype(type(index2)).repeat(len(df))
+
+                col = as_column(index2).as_frame().repeat(len(df))._data[None]
                 df[name] = build_categorical_column(
                     categories=categories,
-                    codes=as_column(
-                        sr._column.base_data, dtype=sr._column.dtype
-                    ),
-                    size=sr._column.size,
-                    offset=sr._column.offset,
+                    codes=as_column(col.base_data, dtype=col.dtype),
+                    size=col.size,
+                    offset=col.offset,
                     ordered=False,
                 )
 
@@ -148,6 +150,7 @@ def read_parquet(
     chunksize=None,
     split_row_groups=True,
     gather_statistics=None,
+    row_groups_per_part=None,
     **kwargs,
 ):
     """ Read parquet files into a Dask DataFrame
@@ -169,6 +172,27 @@ def read_parquet(
     """
     if isinstance(columns, str):
         columns = [columns]
+
+    if row_groups_per_part:
+        from .opt_parquet import parquet_reader
+
+        warnings.warn(
+            "Using optimized read_parquet engine. This option does not "
+            "support partitioned datsets or filtering, and will not "
+            "result in known divisions. Do not use `row_groups_per_part` "
+            "if full support is needed."
+        )
+        if kwargs.get("filters", None):
+            raise ValueError(
+                "Cannot use `filters` with `row_groups_per_part=True`."
+            )
+        return parquet_reader(
+            path,
+            columns=columns,
+            row_groups_per_part=row_groups_per_part,
+            **kwargs,
+        )
+
     if chunksize and gather_statistics is False:
         warnings.warn(
             "Setting chunksize parameter with gather_statistics=False. "

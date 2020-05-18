@@ -37,7 +37,8 @@ namespace cudf {
 class table;
 
 namespace groupby {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Top-level options for controlling behavior of the groupby operation.
  *
  * This structure defines all of the shared options between the hash and
@@ -45,13 +46,13 @@ namespace groupby {
  * defined by a new structure that inherits from this one inside the appropriate
  * namespace.
  *
- *---------------------------------------------------------------------------**/
+ */
 struct Options {
   Options(bool _ignore_null_keys) : ignore_null_keys{_ignore_null_keys} {}
 
   Options() = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * Determines whether key rows with null values are ignored.
    *
    * If `true`, any row in the `keys` table that contains a NULL value will be
@@ -69,25 +70,26 @@ struct Options {
    * @note The behavior for a SQL groupby operation is `ignore_null_keys ==
    *false`.
    *
-   *---------------------------------------------------------------------------**/
+   */
   bool const ignore_null_keys{true};
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Supported aggregation operations
  *
- *---------------------------------------------------------------------------**/
+ */
 enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE, VARIANCE, STD };
 
 namespace hash {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief  Options unique to the hash-based groupby
- *---------------------------------------------------------------------------**/
+ */
 struct Options : groupby::Options {
   Options(bool _ignore_null_keys = true) : groupby::Options(_ignore_null_keys) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Performs groupby operation(s) via a hash-based implementation
  *
  * Given a table of keys and corresponding table of values, equivalent keys will
@@ -106,7 +108,7 @@ struct Options : groupby::Options {
  * @param ops The list of aggregation operations
  * @return A tuple whose first member contains the table of output keys, and
  * second member contains the table of reduced output values
- *---------------------------------------------------------------------------**/
+ */
 std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                             cudf::table const& values,
                                             std::vector<operators> const& ops,
@@ -141,11 +143,11 @@ struct operation {
 
 enum class null_order : bool { AFTER, BEFORE };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief  Options unique to the sort-based groupby
  * The priority of determining the sort flags:
  * - The `ignore_null_keys` take precedence over the `null_sort_behavior`
- *---------------------------------------------------------------------------**/
+ */
 struct Options : groupby::Options {
   null_order null_sort_behavior;  ///< Indicates how nulls are treated
   bool input_sorted;              ///< Indicates if the input data is sorted.
@@ -160,7 +162,7 @@ struct Options : groupby::Options {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Performs groupby operation(s) via a sort-based implementation
  *
  * Given a table of keys and corresponding table of values, equivalent keys will
@@ -179,7 +181,7 @@ struct Options : groupby::Options {
  * @param ops The list of aggregation operations
  * @return A tuple whose first member contains the table of output keys, and
  * second member contains the reduced output values
- *---------------------------------------------------------------------------**/
+ */
 std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys,
                                                          cudf::table const& values,
                                                          std::vector<operation> const& ops,

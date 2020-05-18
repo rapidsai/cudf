@@ -22,6 +22,11 @@
 namespace cudf {
 namespace strings {
 /**
+ * @addtogroup strings_split
+ * @{
+ */
+
+/**
  * @brief Returns a list of columns by splitting each string using the
  * specified delimiter.
  *
@@ -35,7 +40,7 @@ namespace strings {
  *
  * Any null string entries return corresponding null output columns.
  *
- * @param strings Strings instance for this operation.
+ * @param strings_column Strings instance for this operation.
  * @param delimiter UTF-8 encoded string indentifying the split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
@@ -44,7 +49,7 @@ namespace strings {
  * @return New table of strings columns.
  */
 std::unique_ptr<experimental::table> split(
-  strings_column_view const& strings,
+  strings_column_view const& strings_column,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -63,7 +68,7 @@ std::unique_ptr<experimental::table> split(
  *
  * Any null string entries return corresponding null output columns.
  *
- * @param strings Strings instance for this operation.
+ * @param strings_column Strings instance for this operation.
  * @param delimiter UTF-8 encoded string indentifying the split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
@@ -72,7 +77,7 @@ std::unique_ptr<experimental::table> split(
  * @return New strings columns.
  */
 std::unique_ptr<experimental::table> rsplit(
-  strings_column_view const& strings,
+  strings_column_view const& strings_column,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -159,5 +164,6 @@ contiguous_split_record_result contiguous_rsplit_record(
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

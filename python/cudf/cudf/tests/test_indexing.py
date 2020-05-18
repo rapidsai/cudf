@@ -290,6 +290,20 @@ def test_dataframe_loc_duplicate_index_scalar():
     assert_eq(pdf.loc[2], gdf.loc[2])
 
 
+@pytest.mark.parametrize(
+    "mask",
+    [[True, False, False, False, False], [True, False, True, False, True]],
+)
+@pytest.mark.parametrize("arg", ["a", slice("a", "a"), slice("a", "b")])
+def test_dataframe_loc_mask(mask, arg):
+    pdf = pd.DataFrame(
+        {"a": ["a", "b", "c", "d", "e"], "b": ["f", "g", "h", "i", "j"]}
+    )
+    gdf = DataFrame.from_pandas(pdf)
+
+    assert_eq(pdf.loc[mask, arg], gdf.loc[mask, arg])
+
+
 @pytest.mark.xfail(raises=IndexError, reason="label scalar is out of bound")
 def test_dataframe_loc_outbound():
     df = DataFrame()
@@ -648,6 +662,9 @@ def test_dataframe_boolean_mask_with_None():
     gdf_masked = gdf[[True, False, True, False]]
     assert_eq(pdf_masked, gdf_masked)
 
+    with pytest.raises(ValueError):
+        gdf[Series([True, False, None, False])]
+
 
 @pytest.mark.parametrize("dtype", [int, float, str])
 def test_empty_boolean_mask(dtype):
@@ -1001,6 +1018,10 @@ def test_out_of_bounds_indexing():
         a[[0, 1, 9]] = 2
     with pytest.raises(IndexError):
         a[[0, 1, -4]] = 2
+    with pytest.raises(IndexError):
+        a[4:6].iloc[-1] = 2
+    with pytest.raises(IndexError):
+        a[4:6].iloc[1] = 2
 
 
 def test_sliced_indexing():

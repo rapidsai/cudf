@@ -52,15 +52,15 @@ std::unique_ptr<column> add_keys(
   CUDF_EXPECTS(new_keys.type() == old_keys.type(), "Keys must be the same type");
   // first, concatenate the keys together
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
-  auto combined_keys =
-    cudf::detail::concatenate(std::vector<column_view>{old_keys, new_keys}, mr, stream);
+  auto combined_keys = cudf::detail::concatenate(
+    std::vector<column_view>{old_keys, new_keys}, rmm::mr::get_default_resource(), stream);
   // sort and remove any duplicates from the combined keys
   // drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
   auto table_keys =
     experimental::detail::drop_duplicates(table_view{{*combined_keys}},
                                           std::vector<size_type>{0},  // only one key column
                                           experimental::duplicate_keep_option::KEEP_FIRST,
-                                          true,
+                                          null_equality::EQUAL,
                                           mr,
                                           stream)
       ->release();
@@ -96,7 +96,7 @@ std::unique_ptr<column> add_keys(
   auto indices_column = std::make_unique<column>(data_type{INT32},
                                                  dictionary_column.size(),
                                                  std::move(*(contents.data.release())),
-                                                 rmm::device_buffer{},
+                                                 rmm::device_buffer{0, stream, mr},
                                                  0);
 
   // create new dictionary column with keys_column and indices_column

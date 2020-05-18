@@ -47,13 +47,13 @@
 #define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
   EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief test macro to be expected as no exception.
  * The testing is same with EXPECT_NO_THROW() in gtest.
  * It also outputs captured error message, useful for debugging.
  *
  * @param statement The statement to be tested
- *---------------------------------------------------------------------------**/
+ **/
 #define CUDF_EXPECT_NO_THROW(statement)                                                       \
   try {                                                                                       \
     statement;                                                                                \

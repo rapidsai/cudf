@@ -341,7 +341,7 @@ public final class Table implements AutoCloseable {
                                                       int[] aggTypes, int[] minPeriods, int[] preceding, int[] following,
                                                       boolean ignoreNullKeys) throws CudfException;
 
-  private static native long[] timeRangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] timestampIndices,
+  private static native long[] timeRangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] timestampIndices, boolean[] isTimesampAscending,
                                                                int[] aggColumnsIndices, int[] aggTypes, int[] minPeriods,
                                                                int[] preceding, int[] following, boolean ignoreNullKeys) throws CudfException;
 
@@ -1047,6 +1047,26 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Returns first aggregation.
+   * @param index Column on which first aggregation is to be performed.
+   * @param includeNulls Specifies whether null values are included in the aggregate operation.
+   * @return first aggregation of column `index`
+   */
+  public static Aggregate first(int index, boolean includeNulls) {
+    return Aggregate.first(index, includeNulls);
+  }
+
+  /**
+   * Returns last aggregation.
+   * @param index Column on which last aggregation is to be performed.
+   * @param includeNulls Specifies whether null values are included in the aggregate operation.
+   * @return last aggregation of column `index`
+   */
+  public static Aggregate last(int index, boolean includeNulls) {
+    return Aggregate.last(index, includeNulls);
+  }
+
+  /**
    * Returns aggregate operations grouped by columns provided in indices
    * @param groupByOptions Options provided in the builder
    * @param indices columnns to be considered for groupBy
@@ -1523,6 +1543,7 @@ public final class Table implements AutoCloseable {
 
       int[] aggColumnIndexes = new int[totalOps];
       int[] timestampColumnIndexes = new int[totalOps];
+      boolean[] isTimestampOrderAscending = new boolean[totalOps];
       int[] aggOperationIds = new int[totalOps];
       int[] aggPrecedingWindows = new int[totalOps];
       int[] aggFollowingWindows = new int[totalOps];
@@ -1538,6 +1559,7 @@ public final class Table implements AutoCloseable {
           aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
           assert(operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
           timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
+          isTimestampOrderAscending[opIndex] = operation.getWindowOptions().isTimestampOrderAscending();
           opIndex++;
         }
       }
@@ -1548,6 +1570,7 @@ public final class Table implements AutoCloseable {
           operation.table.nativeHandle,
           operation.indices,
           timestampColumnIndexes,
+          isTimestampOrderAscending,
           aggColumnIndexes,
           aggOperationIds, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
           groupByOptions.getIgnoreNullKeys()));

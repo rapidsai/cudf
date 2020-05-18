@@ -22,10 +22,17 @@
 namespace cudf {
 namespace strings {
 /**
+ * @addtogroup strings_replace
+ * @{
+ */
+
+/**
  * @brief For each string, replaces any character sequence matching the given pattern
  * with the provided replacement string.
  *
  * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression pattern to search within each string.
@@ -48,8 +55,10 @@ std::unique_ptr<column> replace_re(
  *
  * Any null string entries return corresponding null output column entries.
  *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
  * @param strings Strings instance for this operation.
- * @param pattern The regular expression patterns to search within each string.
+ * @param patterns The regular expression patterns to search within each string.
  * @param repls The strings used for replacement.
  * @param mr Resource for allocating device memory.
  * @return New strings column.
@@ -65,6 +74,8 @@ std::unique_ptr<column> replace_re(
  * using the repl template for back-references.
  *
  * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression patterns to search within each string.

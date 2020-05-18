@@ -21,6 +21,11 @@
 namespace cudf {
 namespace strings {
 /**
+ * @addtogroup strings_modify
+ * @{
+ */
+
+/**
  * @brief Wraps strings onto multiple lines shorter than `width` by replacing appropriate white
  * space with new-line characters (ASCII 0x0A).
  *
@@ -58,5 +63,6 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
                              size_type width,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

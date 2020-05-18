@@ -22,6 +22,11 @@
 namespace cudf {
 namespace strings {
 /**
+ * @addtogroup strings_replace
+ * @{
+ */
+
+/**
  * @brief Replaces target string within each string with the specified
  * replacement string.
  *
@@ -35,13 +40,14 @@ namespace strings {
  *
  * Null string entries will return null output string entries.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["hello", "goodbye"]
  * r1 = replace(s,"o","OOO")
  * r1 is now ["hellOOO","gOOOOOOdbye"]
  * r2 = replace(s,"oo","")
  * r2 is now ["hello","gdbye"]
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if target is an empty string.
  *
@@ -74,11 +80,12 @@ std::unique_ptr<column> replace(
  * string can be appended to each string by specifying -1 for both
  * start and stop.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["abcdefghij","0123456789"]
  * r = s.replace_slice(s,2,5,"z")
  * r is now ["abzfghij", "01z56789"]
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if start is greater than stop.
  *
@@ -114,7 +121,8 @@ std::unique_ptr<column> replace_slice(
  * The repls argument can optionally contain a single string. In this case, all
  * matching target substrings will be replaced by that single string.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["hello", "goodbye"]
  * tgts = ["e","o"]
  * repls = ["EE","OO"]
@@ -124,7 +132,7 @@ std::unique_ptr<column> replace_slice(
  * repls = ["33",""]
  * r2 = replace(s,tgts,repls)
  * r2 is now ["h33llo", "gdby33"]
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if targets and repls are different sizes except
  * if repls is a single string.
@@ -147,11 +155,12 @@ std::unique_ptr<column> replace(
  *
  * This returns a strings column with no null entries.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["hello", nullptr, "goodbye"]
  * r = replace_nulls(s,"**")
  * r is now ["hello", "**", "goodbye"]
- * ```
+ * @endcode
  *
  * @param strings Strings column for this operation.
  * @param repl Replacement string for null entries. Default is empty string.
@@ -163,5 +172,6 @@ std::unique_ptr<column> replace_nulls(
   string_scalar const& repl           = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

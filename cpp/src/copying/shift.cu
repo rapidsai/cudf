@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/scalar/scalar.hpp>
@@ -59,8 +60,9 @@ struct shift_functor {
     using ScalarType = cudf::experimental::scalar_type_t<T>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
 
-    auto device_input  = column_device_view::create(input);
-    auto output        = allocate_like(input, mask_allocation_policy::NEVER);
+    auto device_input = column_device_view::create(input);
+    auto output =
+      detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, mr, stream);
     auto device_output = mutable_column_device_view::create(*output);
 
     auto size        = input.size();
@@ -76,7 +78,7 @@ struct shift_functor {
         return out_of_bounds(size, src_idx) ? *fill : input.is_valid(src_idx);
       };
 
-      auto mask_pair = detail::valid_if(index_begin, index_end, func_validity);
+      auto mask_pair = detail::valid_if(index_begin, index_end, func_validity, stream, mr);
 
       output->set_null_mask(std::move(std::get<0>(mask_pair)));
       output->set_null_count(std::get<1>(mask_pair));

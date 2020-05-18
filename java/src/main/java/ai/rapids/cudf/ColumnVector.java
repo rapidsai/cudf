@@ -186,6 +186,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a new ColumnVector with NaNs converted to nulls, preserving the existing null values.
+   */
+  public ColumnVector nansToNulls() {
+    assert type == DType.FLOAT32 || type == DType.FLOAT64;
+    return new ColumnVector(nansToNulls(this.getNativeView()));
+  }
+
+  /**
    * Returns the number of rows in this vector.
    */
   public long getRowCount() {
@@ -341,9 +349,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *
    * @return ColumnVector holding length of string at index 'i' in the original vector
    */
-  public ColumnVector getLengths() {
-    assert DType.STRING == type : "length only available for String type";
-    return new ColumnVector(lengths(getNativeView()));
+  public ColumnVector getCharLengths() {
+    assert DType.STRING == type : "char length only available for String type";
+    return new ColumnVector(charLengths(getNativeView()));
   }
 
   /**
@@ -1840,7 +1848,73 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector strip() {
     assert type == DType.STRING : "column type must be a String";
-    return new ColumnVector(stringStrip(getNativeView()));
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return new ColumnVector(stringStrip(getNativeView(), StripType.BOTH.nativeId,
+          emptyString.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Removes the specified characters from the beginning and end of each string.
+   * @param toStrip UTF-8 encoded characters to strip from each string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector strip(Scalar toStrip) {
+    assert type == DType.STRING : "column type must be a String";
+    assert toStrip != null : "toStrip scalar may not be null";
+    assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
+    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
+    return new ColumnVector(stringStrip(getNativeView(), StripType.BOTH.nativeId, toStrip.getScalarHandle()));
+  }
+
+  /**
+   * Removes whitespace from the beginning of a string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector lstrip() {
+    assert type == DType.STRING : "column type must be a String";
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return new ColumnVector(stringStrip(getNativeView(), StripType.LEFT.nativeId,
+          emptyString.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Removes the specified characters from the beginning of each string.
+   * @param toStrip UTF-8 encoded characters to strip from each string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector lstrip(Scalar toStrip) {
+    assert type == DType.STRING : "column type must be a String";
+    assert toStrip != null : "toStrip  Scalar may not be null";
+    assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
+    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
+    return new ColumnVector(stringStrip(getNativeView(), StripType.LEFT.nativeId, toStrip.getScalarHandle()));
+  }
+
+  /**
+   * Removes whitespace from the end of a string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector rstrip() {
+    assert type == DType.STRING : "column type must be a String";
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return new ColumnVector(stringStrip(getNativeView(), StripType.RIGHT.nativeId,
+          emptyString.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Removes the specified characters from the end of each string.
+   * @param toStrip UTF-8 encoded characters to strip from each string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector rstrip(Scalar toStrip) {
+    assert type == DType.STRING : "column type must be a String";
+    assert toStrip != null : "toStrip  Scalar may not be null";
+    assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
+    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
+    return new ColumnVector(stringStrip(getNativeView(), StripType.RIGHT.nativeId, toStrip.getScalarHandle()));
   }
 
   /**
@@ -1982,6 +2056,24 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert pattern != null : "pattern may not be null";
     assert !pattern.isEmpty() : "pattern string may not be empty";
     return new ColumnVector(containsRe(getNativeView(), pattern));
+  }
+
+  /**
+   * For each captured group specified in the given regular expression
+   * return a column in the table. Null entries are added if the string
+   * does not match. Any null inputs also result in null output entries.
+   *
+   * For supported regex patterns refer to:
+   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
+   * @param pattern the pattern to use
+   * @return the table of extracted matches
+   * @throws CudfException if any error happens including if the RE does
+   * not contain any capture groups.
+   */
+  public Table extractRe(String pattern) throws CudfException {
+    assert type == DType.STRING : "column type must be a String";
+    assert pattern != null : "pattern may not be null";
+    return new Table(extractRe(this.getNativeView(), pattern));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2159,7 +2251,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Native method to strip whitespace from the start and end of a string.
    * @param columnView native handle of the cudf::column_view being operated on.
    */
-  private static native long stringStrip(long columnView) throws CudfException;
+  private static native long stringStrip(long columnView, int type, long toStrip) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in regex pattern from the
@@ -2185,6 +2277,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing the boolean results.
    */
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
+
+  /**
+   * Native method for extracting results from an regular expressions.  Returns a table handle.
+   */
+  private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
    * Native method to concatenate columns of strings together, combining a row from
@@ -2236,7 +2333,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
                                            int preceding, int following,
                                            long preceding_col, long following_col);
 
-  private static native long lengths(long viewHandle) throws CudfException;
+  private static native long nansToNulls(long viewHandle) throws CudfException;
+
+  private static native long charLengths(long viewHandle) throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
 
@@ -2347,6 +2446,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long getNativeColumnView(long cudfColumnHandle) throws CudfException;
 
   private static native long makeEmptyCudfColumn(int type);
+
+  /**
+   * Used for string strip function.
+   * Indicates characters to be stripped from the beginning, end, or both of each string.
+   */
+  private enum StripType {
+    LEFT(0),   // strip characters from the beginning of the string
+    RIGHT(1),  // strip characters from the end of the string
+    BOTH(2);   // strip characters from the beginning and end of the string
+    final int nativeId;
+
+    StripType(int nativeId) { this.nativeId = nativeId; }
+  }
 
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES

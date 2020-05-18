@@ -137,7 +137,8 @@ void set_null_mask(
 }
 
 namespace {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Counts the number of non-zero bits in a bitmask in the range
  * `[first_bit_index, last_bit_index]`.
  *
@@ -147,7 +148,7 @@ namespace {
  * @param[in] first_bit_index The index (inclusive) of the first bit to count
  * @param[in] last_bit_index The index (inclusive) of the last bit to count
  * @param[out] global_count The number of non-zero bits in the specified range
- *---------------------------------------------------------------------------**/
+ **/
 template <size_type block_size>
 __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
                                       size_type first_bit_index,
@@ -283,7 +284,7 @@ __global__ void subtract_set_bits_range_boundaries_kerenel(bitmask_type const *b
   }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Copies the bits starting at the specified offset from a source
  * bitmask into the destination bitmask.
  *
@@ -294,7 +295,7 @@ __global__ void subtract_set_bits_range_boundaries_kerenel(bitmask_type const *b
  * @param source_begin_bit The offset into `source` from which to begin the copy
  * @param source_end_bit   The offset into `source` till which copying is done
  * @param number_of_mask_words The number of `cudf::bitmask_type` words to copy
- *---------------------------------------------------------------------------**/
+ **/
 // TODO: Also make binops test that uses offset in column_view
 __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
                                     bitmask_type const *__restrict__ source,

@@ -10,6 +10,14 @@ from packaging.version import Version
 import cudf._lib as libcudf
 from cudf.core import Series
 
+try:
+    # Numba >= 0.49
+    from numba.np import numpy_support
+except ImportError:
+    # Numba <= 0.49
+    from numba import numpy_support
+
+
 supported_types = ["int16", "int32", "int64", "float32", "float64"]
 
 
@@ -32,14 +40,14 @@ def test_generic_ptx(dtype):
     def generic_function(a, b):
         return a ** 3 + b
 
-    nb_type = numba.numpy_support.from_dtype(np.dtype(dtype))
+    nb_type = numpy_support.from_dtype(np.dtype(dtype))
     type_signature = (nb_type, nb_type)
 
     result = generic_function.compile(type_signature)
     ptx = generic_function.inspect_ptx(type_signature)
     ptx_code = ptx.decode("utf-8")
 
-    output_type = numba.numpy_support.as_dtype(result.signature.return_type)
+    output_type = numpy_support.as_dtype(result.signature.return_type)
 
     out_col = libcudf.binaryop.binaryop_udf(
         lhs_col, rhs_col, ptx_code, output_type.type

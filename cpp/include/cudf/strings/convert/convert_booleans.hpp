@@ -22,6 +22,11 @@
 namespace cudf {
 namespace strings {
 /**
+ * @addtogroup strings_convert
+ * @{
+ */
+
+/**
  * @brief Returns a new BOOL8 column by parsing boolean values from the strings
  * in the provided strings column.
  *
@@ -57,5 +62,6 @@ std::unique_ptr<column> from_booleans(
   string_scalar const& false_string   = string_scalar("false"),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

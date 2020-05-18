@@ -30,7 +30,8 @@
 
 namespace cudf {
 namespace experimental {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Result type of the `element_relational_comparator` function object.
  *
  * Indicates how two elements `a` and `b` compare with one and another.
@@ -38,7 +39,7 @@ namespace experimental {
  * Equivalence is defined as `not (a<b) and not (b<a)`. Elements that are
  * EQUIVALENT may not necessarily be *equal*.
  *
- *---------------------------------------------------------------------------**/
+ **/
 enum class weak_ordering {
   LESS,        ///< Indicates `a` is less than (ordered before) `b`
   EQUIVALENT,  ///< Indicates `a` is ordered neither before nor after `b`
@@ -46,14 +47,14 @@ enum class weak_ordering {
 };
 
 namespace detail {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Compare the elements ordering with respect to `lhs`.
  *
  * @param[in] lhs first element
  * @param[in] rhs second element
  * @return weak_ordering Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
- *---------------------------------------------------------------------------**/
+ **/
 template <typename Element>
 __device__ weak_ordering compare_elements(Element lhs, Element rhs)
 {
@@ -65,7 +66,8 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
   return weak_ordering::EQUIVALENT;
 }
 }  // namespace detail
-/**---------------------------------------------------------------------------*
+
+/*
  * @brief A specialization for floating-point `Element` type rerlational comparison
  * to derive the order of the elements with respect to `lhs`. Specialization is to
  * handle `nan` in the order shown below.
@@ -76,7 +78,7 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
  * @param[in] rhs second element
  * @return weak_ordering Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
- *---------------------------------------------------------------------------**/
+ */
 template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
 {
@@ -91,7 +93,7 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
   return detail::compare_elements(lhs, rhs);
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief A specialization for non-floating-point `Element` type relational
  * comparison to derive the order of the elements with respect to `lhs`.
  *
@@ -99,21 +101,21 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
  * @param[in] rhs second element
  * @return weak_ordering Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
- *---------------------------------------------------------------------------**/
+ */
 template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
 {
   return detail::compare_elements(lhs, rhs);
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief A specialization for floating-point `Element` type to check if
  * `lhs` is equivalent to `rhs`. `nan == nan`.
  *
  * @param[in] lhs first element
  * @param[in] rhs second element
  * @return bool `true` if `lhs` == `rhs` else `false`.
- *---------------------------------------------------------------------------**/
+ */
 template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
 __device__ bool equality_compare(Element lhs, Element rhs)
 {
@@ -121,29 +123,29 @@ __device__ bool equality_compare(Element lhs, Element rhs)
   return lhs == rhs;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief A specialization for non-floating-point `Element` type to check if
  * `lhs` is equivalent to `rhs`.
  *
  * @param[in] lhs first element
  * @param[in] rhs second element
  * @return bool `true` if `lhs` == `rhs` else `false`.
- *---------------------------------------------------------------------------**/
+ */
 template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
 __device__ bool equality_compare(Element const lhs, Element const rhs)
 {
   return lhs == rhs;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Performs an equality comparison between two elements in two columns.
  *
  * @tparam has_nulls Indicates the potential for null values in either column.
- *---------------------------------------------------------------------------**/
+ **/
 template <bool has_nulls = true>
 class element_equality_comparator {
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct type-dispatched function object for comparing equality
    * between two elements.
    *
@@ -151,9 +153,8 @@ class element_equality_comparator {
    *
    * @param lhs The column containing the first element
    * @param rhs The column containg the second element (may be the same as lhs)
-   * @param nulls_are_equal Indicates if two null elements are treated as
-   *equivalent
-   *---------------------------------------------------------------------------**/
+   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
+   **/
   __host__ __device__ element_equality_comparator(column_device_view lhs,
                                                   column_device_view rhs,
                                                   bool nulls_are_equal = true)
@@ -161,12 +162,12 @@ class element_equality_comparator {
   {
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Compares the specified elements for equality.
    *
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename Element>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index) const
     noexcept
@@ -219,15 +220,15 @@ class row_equality_comparator {
   bool nulls_are_equal;
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Performs a relational comparison between two elements in two columns.
  *
  * @tparam has_nulls Indicates the potential for null values in either column.
- *---------------------------------------------------------------------------**/
+ **/
 template <bool has_nulls = true>
 class element_relational_comparator {
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct type-dispatched function object for performing a
    * relational comparison between two elements.
    *
@@ -237,7 +238,7 @@ class element_relational_comparator {
    * @param rhs The column containg the second element (may be the same as lhs)
    * @param null_precedence Indicates how null values are ordered with other
    * values
-   *---------------------------------------------------------------------------**/
+   **/
   __host__ __device__ element_relational_comparator(column_device_view lhs,
                                                     column_device_view rhs,
                                                     null_order null_precedence)
@@ -245,7 +246,7 @@ class element_relational_comparator {
   {
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Performs a relational comparison between the specified elements
    *
    * @param lhs_element_index The index of the first element
@@ -254,7 +255,7 @@ class element_relational_comparator {
    * values
    * @return weak_ordering Indicates the relationship between the elements in
    * the `lhs` and `rhs` columns.
-   *---------------------------------------------------------------------------**/
+   */
   template <typename Element,
             std::enable_if_t<cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
   __device__ weak_ordering operator()(size_type lhs_element_index,
@@ -292,7 +293,7 @@ class element_relational_comparator {
   null_order null_precedence;
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes whether one row is lexicographically *less* than another row.
  *
  * Lexicographic ordering is determined by:
@@ -306,11 +307,11 @@ class element_relational_comparator {
  * `aac < abb`.
  *
  * @tparam has_nulls Indicates the potential for null values in either row.
- *---------------------------------------------------------------------------**/
+ **/
 template <bool has_nulls = true>
 class row_lexicographic_comparator {
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
@@ -325,7 +326,7 @@ class row_lexicographic_comparator {
    * and indicates how null values compare to all other for every column. If
    * it is nullptr, then null precedence would be `null_order::BEFORE` for all
    * columns.
-   *---------------------------------------------------------------------------**/
+   */
   row_lexicographic_comparator(table_device_view lhs,
                                table_device_view rhs,
                                order const* column_order         = nullptr,
@@ -336,7 +337,7 @@ class row_lexicographic_comparator {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
    * lexicographically less than the row at `rhs_index` in the `rhs` table.
    *
@@ -344,7 +345,7 @@ class row_lexicographic_comparator {
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return `true` if row from the `lhs` table compares less than row in the
    * `rhs` table
-   *---------------------------------------------------------------------------**/
+   */
   __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
   {
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
@@ -374,12 +375,12 @@ class row_lexicographic_comparator {
   order const* _column_order{};
 };  // class row_lexicographic_comparator
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes the hash value of an element in the given column.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam has_nulls Indicates the potential for null values in the column.
- *---------------------------------------------------------------------------**/
+ **/
 template <template <typename> class hash_function, bool has_nulls = true>
 class element_hasher {
  public:
@@ -392,12 +393,12 @@ class element_hasher {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes the hash value of a row in the given table.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam has_nulls Indicates the potential for null values in the table.
- *---------------------------------------------------------------------------**/
+ **/
 template <template <typename> class hash_function, bool has_nulls = true>
 class row_hasher {
  public:
@@ -431,13 +432,13 @@ class row_hasher {
   table_device_view _table;
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes the hash value of a row in the given table, combined with an
  * initial hash value for each column.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam has_nulls Indicates the potential for null values in the table.
- *---------------------------------------------------------------------------**/
+ **/
 template <template <typename> class hash_function, bool has_nulls = true>
 class row_hasher_initial_values {
  public:
