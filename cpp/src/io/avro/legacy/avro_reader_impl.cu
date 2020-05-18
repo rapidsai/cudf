@@ -65,7 +65,7 @@ class avro_metadata : public avro::file_metadata {
    **/
   void init_and_select_rows(int &row_start, int &row_count)
   {
-    const auto buffer = source->get_buffer(0, source->size());
+    const auto buffer{source->host_read(0, source->size())};
     avro::container pod(buffer->data(), buffer->size());
     CUDF_EXPECTS(pod.parse(this, row_count, row_start), "Cannot parse metadata");
     print_metadata();
@@ -179,7 +179,7 @@ table reader::Impl::read(int skip_rows, int num_rows)
   }
 
   if (md_->total_data_size > 0) {
-    const auto buffer = source_->get_buffer(md_->block_list[0].offset, md_->total_data_size);
+    const auto buffer = source_->host_read(md_->block_list[0].offset, md_->total_data_size);
     rmm::device_buffer block_data(buffer->data(), align_size(buffer->size()));
 
     if (md_->codec != "" && md_->codec != "null") {
@@ -271,7 +271,7 @@ rmm::device_buffer reader::Impl::decompress_data(const rmm::device_buffer &comp_
   } else if (md_->codec == "snappy") {
     // Extract the uncompressed length from the snappy stream
     for (size_t i = 0; i < md_->block_list.size(); i++) {
-      const auto buffer  = source_->get_buffer(md_->block_list[i].offset, 4);
+      const auto buffer  = source_->host_read(md_->block_list[i].offset, 4);
       const uint8_t *blk = buffer->data();
       uint32_t blk_len   = blk[0];
       if (blk_len > 0x7f) {

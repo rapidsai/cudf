@@ -135,7 +135,7 @@ class metadata {
     const auto max_ps_size = std::min(len, static_cast<size_t>(256));
 
     // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
-    auto buffer            = source->get_buffer(len - max_ps_size, max_ps_size);
+    auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
     const size_t ps_length = buffer->data()[max_ps_size - 1];
     const uint8_t *ps_data = &buffer->data()[max_ps_size - ps_length - 1];
     ProtobufReader pb;
@@ -148,7 +148,7 @@ class metadata {
     decompressor = std::make_unique<OrcDecompressor>(ps.compression, ps.compressionBlockSize);
 
     // Read compressed filefooter section
-    buffer           = source->get_buffer(len - ps_length - 1 - ps.footerLength, ps.footerLength);
+    buffer           = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
     size_t ff_length = 0;
     auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
     pb.init(ff_data, ff_length);
@@ -230,7 +230,7 @@ class metadata {
         CUDF_EXPECTS(sf_comp_offset + sf_comp_length < source->size(),
                      "Invalid stripe information");
 
-        const auto buffer = source->get_buffer(sf_comp_offset, sf_comp_length);
+        const auto buffer = source->host_read(sf_comp_offset, sf_comp_length);
         size_t sf_length  = 0;
         auto sf_data      = decompressor->Decompress(buffer->data(), sf_comp_length, &sf_length);
         pb.init(sf_data, sf_length);
@@ -710,7 +710,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           len += stream_info[stream_count].length;
           stream_count++;
         }
-        const auto buffer = _source->get_buffer(offset, len);
+        const auto buffer = _source->host_read(offset, len);
         CUDA_TRY(cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream));
         CUDA_TRY(cudaStreamSynchronize(stream));
       }

@@ -27,6 +27,14 @@
 
 namespace cudf {
 namespace io {
+
+class buffer {
+ public:
+  virtual size_t size() const = 0;
+
+  virtual const uint8_t *data() const = 0;
+};
+
 /**
  * @brief Class for reading from a file or memory source
  **/
@@ -68,9 +76,9 @@ class datasource {
    * @param[in] offset Bytes from the start
    * @param[in] size Bytes to read
    *
-   * @return std::shared_ptr<arrow::Buffer> The data buffer
+   * @return The data buffer
    **/
-  virtual const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset, size_t size) = 0;
+  virtual std::unique_ptr<buffer> host_read(size_t offset, size_t size) = 0;
 
   /**
    * @brief Returns the size of the data in the source

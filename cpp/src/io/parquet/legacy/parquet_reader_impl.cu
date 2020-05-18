@@ -125,9 +125,9 @@ struct ParquetMetadata : public parquet::FileMetaData {
     constexpr auto ender_len  = sizeof(parquet::file_ender_s);
 
     const auto len           = source->size();
-    const auto header_buffer = source->get_buffer(0, header_len);
+    const auto header_buffer = source->host_read(0, header_len);
     const auto header        = (const parquet::file_header_s *)header_buffer->data();
-    const auto ender_buffer  = source->get_buffer(len - ender_len, ender_len);
+    const auto ender_buffer  = source->host_read(len - ender_len, ender_len);
     const auto ender         = (const parquet::file_ender_s *)ender_buffer->data();
     CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
     CUDF_EXPECTS(header->magic == PARQUET_MAGIC && ender->magic == PARQUET_MAGIC,
@@ -135,7 +135,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
     CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                  "Incorrect footer length");
 
-    const auto buffer = source->get_buffer(len - ender->footer_len - ender_len, ender->footer_len);
+    const auto buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
     parquet::CompactProtocolReader cp(buffer->data(), ender->footer_len);
     CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
     CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
@@ -648,7 +648,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group)
         const auto offset = (col_meta.dictionary_page_offset != 0)
                               ? std::min(col_meta.data_page_offset, col_meta.dictionary_page_offset)
                               : col_meta.data_page_offset;
-        const auto buffer        = source_->get_buffer(offset, col_meta.total_compressed_size);
+        const auto buffer        = source_->host_read(offset, col_meta.total_compressed_size);
         page_data[chunks.size()] = rmm::device_buffer(buffer->data(), buffer->size());
         d_compdata               = static_cast<uint8_t *>(page_data[chunks.size()].data());
       }

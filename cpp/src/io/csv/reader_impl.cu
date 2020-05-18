@@ -212,7 +212,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
     size_t h_uncomp_size      = 0;
 
     auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
-    auto buffer    = source_->get_buffer(range_offset, data_size);
+    auto buffer    = source_->host_read(range_offset, data_size);
 
     std::vector<char> h_uncomp_data_owner;
     if (compression_type_ == "none") {

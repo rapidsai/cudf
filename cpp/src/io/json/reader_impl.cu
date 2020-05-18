@@ -135,7 +135,7 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
 
   if (!source_->empty()) {
     auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
-    buffer_        = source_->get_buffer(range_offset, data_size);
+    buffer_        = source_->host_read(range_offset, data_size);
   }
 
   byte_range_offset_ = range_offset;

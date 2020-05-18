@@ -33,13 +33,25 @@ namespace io {
  **/
 class arrow_io_source : public datasource {
  public:
+  class arrow_io_buffer : public buffer {
+    std::shared_ptr<arrow::Buffer> arrow_buffer;
+
+   public:
+    explicit arrow_io_buffer(std::shared_ptr<arrow::Buffer> arrow_buffer)
+      : arrow_buffer(arrow_buffer)
+    {
+    }
+    size_t size() const override { return arrow_buffer->size(); }
+    const uint8_t *data() const override { return arrow_buffer->data(); }
+  };
+
   explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file) : arrow_file(file) {}
 
-  const std::shared_ptr<arrow::Buffer> get_buffer(size_t position, size_t length) override
+  std::unique_ptr<buffer> host_read(size_t position, size_t length) override
   {
     std::shared_ptr<arrow::Buffer> out;
     CUDF_EXPECTS(arrow_file->ReadAt(position, length, &out).ok(), "Cannot read file data");
-    return out;
+    return std::make_unique<arrow_io_buffer>(out);
   }
 
   size_t size() const override
@@ -68,6 +80,16 @@ class memory_mapped_source : public datasource {
   };
 
  public:
+  class memory_mapped_buffer : public buffer {
+    size_t _size   = 0;
+    uint8_t *_data = nullptr;
+
+   public:
+    memory_mapped_buffer(uint8_t *data, size_t size) : _data(data), _size(size) {}
+    size_t size() const override { return _size; }
+    const uint8_t *data() const override { return _data; }
+  };
+
   explicit memory_mapped_source(const char *filepath, size_t offset, size_t size)
   {
     auto file = file_wrapper(filepath);
@@ -86,13 +108,14 @@ class memory_mapped_source : public datasource {
     if (map_addr_ != nullptr) { munmap(map_addr_, map_size_); }
   }
 
-  const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset, size_t size) override
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     // Clamp length to available data in the mapped region
     CUDF_EXPECTS(offset >= map_offset_, "Requested offset is outside mapping");
     size = std::min(size, map_size_ - (offset - map_offset_));
 
-    return arrow::Buffer::Wrap(static_cast<uint8_t *>(map_addr_) + (offset - map_offset_), size);
+    return std::make_unique<memory_mapped_buffer>(
+      static_cast<uint8_t *>(map_addr_) + (offset - map_offset_), size);
   }
 
   size_t size() const override { return file_size_; }
