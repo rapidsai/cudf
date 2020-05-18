@@ -178,7 +178,7 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
 cdef get_scalar_value(gdf_scalar scalar, dtype):
     """
     Returns typed value from a gdf_scalar
-    0-dim array is retuned if dtype is date32/64, timestamp
+    0-dim array is returned if dtype is date32/64, timestamp
     """
     if scalar.dtype == GDF_FLOAT64:
         return scalar.data.fp64
