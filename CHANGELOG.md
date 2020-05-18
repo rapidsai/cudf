@@ -15,6 +15,7 @@
 - PR #4900 Add `get_element` to obtain scalar from a column given an index
 - PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
+- PR #4972 Add list_view (cudf::LIST) type
 - PR #5004 Added a null considering min/max binary op
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
@@ -29,6 +30,7 @@
 - PR #5149 Add Java bindings for PMOD
 - PR #5153 Add Java bindings for extract
 - PR #5196 Add Java bindings for NULL_EQUALS, NULL_MAX and NULL_MIN
+- PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
 
 ## Improvements
 
@@ -169,11 +171,16 @@
 - PR #5109 Update CONTRIBUTING.md for `clang-format` pre-commit hook
 - PR #5054 Change String typecasting to be inline with Pandas
 - PR #5123 Display more useful info on `clang-format` CI Failure
+- PR #5058 Adding cython binding for CSV writer
 - PR #5156 Raise error when applying boolean mask containing null values.
 - PR #5137 Add java bindings for getSizeInBytes in DType
 - PR #5194 Update Series.fillna to reflect dtype behavior
 - PR #5159 Add `make_meta_object` in `dask_cudf` backend and add `str.split` test
+- PR #5198 Add detail headers for strings converter functions
 - PR #5199 Add index support in `DataFrame.query`
+- PR #5214 Move docs build script into repository
+- PR #5155 Fix cudf documentation misspellings
+- PR #5214 Move docs build script into repository
 
 ## Bug Fixes
 
@@ -294,6 +301,7 @@
 - PR #5185 Fix flake8 configuration and issues from new flake8 version
 - PR #5193 Fix OOB read in csv reader
 - PR #5191 Fix the use of the device memory resource
+- PR #5212 Fix memory leak in `dlpack.pyx:from_dlpack()`
 
 
 # cuDF 0.13.0 (31 Mar 2020)

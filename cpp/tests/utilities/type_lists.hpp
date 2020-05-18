@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -128,6 +128,18 @@ using TimestampTypes =
  * ```
  **/
 using StringTypes = cudf::test::Types<string_view>;
+
+/**
+ * @brief Provides a list of all list types supported in libcudf for use in a
+ * GTest typed test.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all string types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::StringTypes);
+ * ```
+ */
+using ListTypes = cudf::test::Types<list_view>;
 
 /**
  * @brief Provides a list of all fixed-width element types for use in GTest
