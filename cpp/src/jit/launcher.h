@@ -40,7 +40,7 @@ class launcher {
   launcher() = delete;
 
   /**
-   * @brief C'tor of the launcher class
+   * @brief Constructor of the launcher class
    *
    * Method to generate vector containing all template types for a JIT kernel.
    *  This vector is used to get the compiled kernel for one set of types and set
@@ -75,7 +75,7 @@ class launcher {
    *
    * @param kernel_name The kernel to be launched
    * @param arguments   The template arguments to be used to instantiate the kernel
-   * @return launcher& ref to this launcehr object
+   * @return launcher& ref to this launcher object
    */
   launcher& set_kernel_inst(const std::string& kernel_name,
                             const std::vector<std::string>& arguments)

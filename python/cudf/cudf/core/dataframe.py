@@ -1000,10 +1000,10 @@ class DataFrame(Frame):
                 right_cols = -(int(ncols) - left_cols + 1)
             else:
                 # If right_cols is 0 or negative, it means
-                # self has lesser number of columns thans ncols.
+                # self has lesser number of columns than ncols.
                 # Hence assign len(self._data.names) which
                 # will result in empty `*_right` quadrants.
-                # This is because `*_left` quadransts will
+                # This is because `*_left` quadrants will
                 # contain all columns.
                 right_cols = len(self._data.names)
 
@@ -2701,7 +2701,7 @@ class DataFrame(Frame):
         if isinstance(mapper, Mapping):
             postfix = 1
             # It is possible for DataFrames with a MultiIndex columns object
-            # to have columns with the same name. The followig use of
+            # to have columns with the same name. The following use of
             # _cols.items and ("_1", "_2"... allows the use of
             # rename in this case
             for key, col in self._data.items():
@@ -3002,7 +3002,7 @@ class DataFrame(Frame):
         Notes
         -----
         Difference from pandas:
-        Not supporting *copy* because default and only behaviour is copy=True
+        Not supporting *copy* because default and only behavior is copy=True
         """
         # Never transpose a MultiIndex - remove the existing columns and
         # replace with a RangeIndex. Afterward, reassign.
@@ -3610,7 +3610,7 @@ class DataFrame(Frame):
 
         By looping over the range
         ``range(cuda.threadIdx.x, in1.size, cuda.blockDim.x)``, the *kernel*
-        function can be used with any *tpb* in a efficient manner.
+        function can be used with any *tpb* in an efficient manner.
 
         >>> from numba import cuda
         >>> @cuda.jit
@@ -3717,7 +3717,7 @@ class DataFrame(Frame):
                   replaced with replacement*.
         value : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with. If a dict is provided, then
-            its keys must match the keys in *to_replace*, and correponding
+            its keys must match the keys in *to_replace*, and corresponding
             values must be compatible (e.g., if they are lists, then they must
             match in length).
         inplace : bool, default False
@@ -5687,7 +5687,7 @@ def merge(left, right, *args, **kwargs):
     return left.merge(right, *args, **kwargs)
 
 
-# a bit of fanciness to inject doctstring with left parameter
+# a bit of fanciness to inject docstring with left parameter
 merge_doc = DataFrame.merge.__doc__
 idx = merge_doc.find("right")
 merge.__doc__ = "".join(

@@ -88,7 +88,7 @@ __launch_bounds__(block_size) __global__
  * The purpose of this kernel is to reduce the number of
  * kernel calls for copying a string column from 2 to 1, since number of kernel calls is the
  * dominant factor in large scale contiguous_split() calls.  To do this, the kernel is
- * invoked with using max(num_chars, num_offsets) threads and then doing seperate
+ * invoked with using max(num_chars, num_offsets) threads and then doing separate
  * bounds checking on offset, chars and validity indices.
  *
  * Outgoing offset values are shifted down to account for the new base address
