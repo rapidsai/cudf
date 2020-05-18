@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -437,10 +437,98 @@ public interface BinaryOperable {
   }
 
   /**
-   * Calculate the log with the specified base, output is the same type as input.
+   * Calculate the log with the specified base
    */
-  default ColumnVector log(Scalar base) {
-    return binaryOp(BinaryOp.LOG_BASE, base, getType());
+  default ColumnVector log(BinaryOperable rhs, DType outType) {
+    return binaryOp(BinaryOp.LOG_BASE, rhs, outType);
   }
 
+  /**
+   * Calculate the log with the specified base, output is the same as this.
+   */
+  default ColumnVector log(BinaryOperable rhs) {
+    return log(rhs, getType());
+  }
+
+  /**
+   * The function arctan2(y,x) or atan2(y,x) is defined as the angle in the Euclidean plane, given
+   * in radians, between the positive x axis and the ray to the point (x, y) ≠ (0, 0).
+   */
+  default ColumnVector arctan2(BinaryOperable xCoordinate, DType outType) {
+    return binaryOp(BinaryOp.ATAN2, xCoordinate, outType);
+  }
+
+  /**
+   * The function arctan2(y,x) or atan2(y,x) is defined as the angle in the Euclidean plane, given
+   * in radians, between the positive x axis and the ray to the point (x, y) ≠ (0, 0).
+   */
+  default ColumnVector arctan2(BinaryOperable xCoordinate) {
+    return arctan2(xCoordinate, implicitConversion(this, xCoordinate));
+  }
+
+  /**
+   * Returns the positive value of lhs mod rhs.
+   *
+   * r = lhs % rhs
+   * if r < 0 then (r + rhs) % rhs
+   * else r
+   *
+   */
+  default ColumnVector pmod(BinaryOperable rhs, DType outputType) {
+    return binaryOp(BinaryOp.PMOD, rhs, outputType);
+  }
+
+  /**
+   * Returns the positive value of lhs mod rhs.
+   *
+   * r = lhs % rhs
+   * if r < 0 then (r + rhs) % rhs
+   * else r
+   *
+   */
+  default ColumnVector pmod(BinaryOperable rhs) {
+    return pmod(rhs, implicitConversion(this, rhs));
+  }
+
+  /**
+   * like equalTo but NULL == NULL is TRUE and NULL == not NULL is FALSE
+   */
+  default ColumnVector equalToNullAware(BinaryOperable rhs, DType outType) {
+    return binaryOp(BinaryOp.NULL_EQUALS, rhs, outType);
+  }
+
+  /**
+   * like equalTo but NULL == NULL is TRUE and NULL == not NULL is FALSE
+   */
+  default ColumnVector equalToNullAware(BinaryOperable rhs) {
+    return equalToNullAware(rhs, DType.BOOL8);
+  }
+
+  /**
+   * Returns the max non null value.
+   */
+  default ColumnVector maxNullAware(BinaryOperable rhs, DType outType) {
+    return binaryOp(BinaryOp.NULL_MAX, rhs, outType);
+  }
+
+  /**
+   * Returns the max non null value.
+   */
+  default ColumnVector maxNullAware(BinaryOperable rhs) {
+    return maxNullAware(rhs, implicitConversion(this, rhs));
+  }
+
+  /**
+   * Returns the min non null value.
+   */
+  default ColumnVector minNullAware(BinaryOperable rhs, DType outType) {
+    return binaryOp(BinaryOp.NULL_MIN, rhs, outType);
+  }
+
+  /**
+   * Returns the min non null value.
+   */
+  default ColumnVector minNullAware(BinaryOperable rhs) {
+    return minNullAware(rhs, implicitConversion(this, rhs));
+  }
 }

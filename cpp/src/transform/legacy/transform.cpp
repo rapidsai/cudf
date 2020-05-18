@@ -37,16 +37,16 @@
 
 namespace cudf {
 namespace transformation {
-/**---------------------------------------------------------------------------*
+namespace jit {
+
+/**
  * @brief Computes output valid mask for op between a column and a scalar
  *
  * @param out_null_coun[out] number of nulls in output
  * @param valid_out preallocated output mask
  * @param valid_col input mask of column
  * @param num_values number of values in input mask valid_col
- *---------------------------------------------------------------------------**/
-
-namespace jit {
+ **/
 void unary_operation(gdf_column& output,
                      const gdf_column& input,
                      const std::string& udf,
@@ -55,14 +55,14 @@ void unary_operation(gdf_column& output,
 {
   std::string hash = "prog_tranform." + std::to_string(std::hash<std::string>{}(udf));
 
-  std::string cuda_source;
+  std::string cuda_source = "\n#include <cudf/types.hpp>\n";
   if (is_ptx) {
-    cuda_source = cudf::jit::parse_single_function_ptx(
-                    udf, "GENERIC_UNARY_OP", cudf::jit::getTypeName(output_type), {0}) +
-                  cudf::experimental::transformation::jit::code::kernel;
+    cuda_source += cudf::jit::parse_single_function_ptx(
+                     udf, "GENERIC_UNARY_OP", cudf::jit::getTypeName(output_type), {0}) +
+                   cudf::experimental::transformation::jit::code::kernel;
   } else {
-    cuda_source = cudf::jit::parse_single_function_cuda(udf, "GENERIC_UNARY_OP") +
-                  cudf::experimental::transformation::jit::code::kernel;
+    cuda_source += cudf::jit::parse_single_function_cuda(udf, "GENERIC_UNARY_OP") +
+                   cudf::experimental::transformation::jit::code::kernel;
   }
 
   // Launch the jitify kernel

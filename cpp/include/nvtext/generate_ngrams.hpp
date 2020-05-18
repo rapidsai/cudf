@@ -21,11 +21,17 @@
 
 namespace nvtext {
 /**
+ * @addtogroup nvtext_ngrams
+ * @{
+ */
+
+/**
  * @brief Returns a single column of strings by generating ngrams from
  * a strings column.
  *
  * An ngram is a grouping of 2 or more strings with a separator. For example,
  * generating bigrams groups all adjacent pairs of strings.
+ *
  * ```
  * ["a", "bb", "ccc"] would generate bigrams as ["a_bb", "bb_ccc"]
  * and trigrams as ["a_bb_ccc"]
@@ -50,4 +56,5 @@ std::unique_ptr<cudf::column> generate_ngrams(
   cudf::string_scalar const& separator = cudf::string_scalar{"_"},
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace nvtext

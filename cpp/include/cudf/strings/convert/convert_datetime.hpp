@@ -21,6 +21,11 @@
 namespace cudf {
 namespace strings {
 /**
+ * @addtogroup strings_convert
+ * @{
+ */
+
+/**
  * @brief Returns a new timestamp column converting a strings column into
  * timestamps using the provided format pattern.
  *
@@ -120,5 +125,6 @@ std::unique_ptr<column> from_timestamps(
   std::string const& format           = "%Y-%m-%dT%H:%M:%SZ",
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

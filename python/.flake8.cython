@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2019, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 #
 
 [flake8]
-filename = *.pyx, *.pxd
+filename = *.pyx, *.pxd, *.pxi
 exclude = *.egg, build, docs, .git
 ignore = E999, E225, E226, E227, W503, W504, E211
 

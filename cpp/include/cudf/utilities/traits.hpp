@@ -24,6 +24,12 @@
 #include <type_traits>
 
 namespace cudf {
+
+/**
+ * @addtogroup utility_types
+ * @{
+ */
+
 template <typename...>
 using void_t = void;
 
@@ -51,7 +57,7 @@ using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>
                                               std::is_same<cudf::timestamp_us, T>,
                                               std::is_same<cudf::timestamp_ns, T>>;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether objects of types `L` and `R` can be relationally
  *compared.
  *
@@ -62,20 +68,20 @@ using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>
  * @tparam R Type of the second object
  * @return true Objects of types `L` and `R` can be relationally be compared
  * @return false Objects of types `L` and `R` cannot be compared
- *---------------------------------------------------------------------------**/
+ **/
 template <typename L, typename R>
 constexpr inline bool is_relationally_comparable()
 {
   return is_relationally_comparable_impl<L, R>::value;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether the type `T` is a numeric type.
  *
  * @tparam T  The type to verify
  * @return true `T` is numeric
  * @return false  `T` is not numeric
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 constexpr inline bool is_numeric()
 {
@@ -90,7 +96,7 @@ struct is_numeric_impl {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether `type` is a numeric `data_type`.
  *
  * "Numeric" types are fundamental integral/floating point types such as `INT*`
@@ -100,19 +106,19 @@ struct is_numeric_impl {
  * @param type The `data_type` to verify
  * @return true `type` is numeric
  * @return false `type` is not numeric
- *---------------------------------------------------------------------------**/
+ **/
 constexpr inline bool is_numeric(data_type type)
 {
   return cudf::experimental::type_dispatcher(type, is_numeric_impl{});
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether `T` is a Boolean type.
  *
  * @param type The `data_type` to verify
  * @return true `type` is Boolean
  * @return false `type` is not Boolean
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 constexpr inline bool is_boolean()
 {
@@ -127,25 +133,25 @@ struct is_boolean_impl {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether `type` is a Boolean `data_type`.
  *
  * @param type The `data_type` to verify
  * @return true `type` is a Boolean
  * @return false `type` is not a Boolean
- *---------------------------------------------------------------------------**/
+ **/
 constexpr inline bool is_boolean(data_type type)
 {
   return cudf::experimental::type_dispatcher(type, is_boolean_impl{});
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether the type `T` is a timestamp type.
  *
  * @tparam T  The type to verify
  * @return true `T` is a timestamp
  * @return false  `T` is not a timestamp
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 constexpr inline bool is_timestamp()
 {
@@ -160,7 +166,7 @@ struct is_timestamp_impl {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether `type` is a timestamp `data_type`.
  *
  * "Timestamp" types are int32_t or int64_t durations since the unix epoch.
@@ -168,13 +174,13 @@ struct is_timestamp_impl {
  * @param type The `data_type` to verify
  * @return true `type` is a timestamp
  * @return false `type` is not a timestamp
- *---------------------------------------------------------------------------**/
+ **/
 constexpr inline bool is_timestamp(data_type type)
 {
   return cudf::experimental::type_dispatcher(type, is_timestamp_impl{});
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether elements of type `T` are fixed-width.
  *
  * Elements of a fixed-width type all have the same size in bytes.
@@ -182,7 +188,7 @@ constexpr inline bool is_timestamp(data_type type)
  * @tparam T The C++ type to verify
  * @return true `T` corresponds to a fixed-width element type
  * @return false `T` corresponds to a variable-width element type
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 constexpr inline bool is_fixed_width()
 {
@@ -199,7 +205,7 @@ struct is_fixed_width_impl {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether elements of `type` are fixed-width.
  *
  * Elements of a fixed-width type all have the same size in bytes.
@@ -207,7 +213,7 @@ struct is_fixed_width_impl {
  * @param type The `data_type` to verify
  * @return true `type` is fixed-width
  * @return false  `type` is variable-width
- *---------------------------------------------------------------------------**/
+ **/
 constexpr inline bool is_fixed_width(data_type type)
 {
   return cudf::experimental::type_dispatcher(type, is_fixed_width_impl{});
@@ -239,7 +245,7 @@ struct is_compound_impl {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether elements of `type` are compound.
  *
  * `column`s with "compound" elements are logically a single column of elements,
@@ -250,13 +256,13 @@ struct is_compound_impl {
  * @param type The `data_type` to verify
  * @return true `type` is a compound type
  * @return false `type` is a simple type
- *---------------------------------------------------------------------------**/
+ **/
 constexpr inline bool is_compound(data_type type)
 {
   return cudf::experimental::type_dispatcher(type, is_compound_impl{});
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether the type `T` is a simple type.
  *
  * "Simple" element types are implemented with only a single column, i.e.,
@@ -265,7 +271,7 @@ constexpr inline bool is_compound(data_type type)
  * @tparam T The type to verify
  * @return true `T` corresponds to a simple type
  * @return false `T` corresponds to a compound type
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 constexpr inline bool is_simple()
 {
@@ -280,7 +286,7 @@ struct is_simple_impl {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether elements of `type` are simple.
  *
  * "Simple" element types are implemented with only a single column, i.e.,
@@ -289,7 +295,8 @@ struct is_simple_impl {
  * @param type The `data_type` to verify
  * @return true `type` is a simple type
  * @return false `type` is a compound type
- *---------------------------------------------------------------------------**/
+ **/
 constexpr inline bool is_simple(data_type type) { return not is_compound(type); }
 
+/** @} */
 }  // namespace cudf

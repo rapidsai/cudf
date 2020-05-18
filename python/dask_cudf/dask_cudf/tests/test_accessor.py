@@ -3,6 +3,8 @@ import pandas as pd
 import pytest
 from pandas.util.testing import assert_series_equal
 
+import dask.dataframe as dd
+
 from cudf import DataFrame, Series
 
 import dask_cudf as dgd
@@ -131,6 +133,31 @@ def test_categorical_basic(data):
 4 a
 """
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
+    from cudf.tests.utils import assert_eq
+
+    df = DataFrame()
+    df["a"] = ["xyz", "abc", "def"] * 10
+
+    pdf = df.to_pandas()
+    cddf = dgd.from_cudf(df, 1)
+    cddf["b"] = cddf["a"].astype("category")
+
+    ddf = dd.from_pandas(pdf, 1)
+    ddf["b"] = ddf["a"].astype("category")
+
+    assert_eq(ddf._meta_nonempty["b"], cddf._meta_nonempty["b"])
+
+    with pytest.raises(NotImplementedError):
+        cddf["b"].cat.categories
+
+    with pytest.raises(NotImplementedError):
+        ddf["b"].cat.categories
+
+    cddf = cddf.categorize()
+    ddf = ddf.categorize()
+
+    assert_eq(ddf["b"].cat.categories, cddf["b"].cat.categories)
+    assert_eq(ddf["b"].cat.ordered, cddf["b"].cat.ordered)
 
 
 @pytest.mark.parametrize("data", [data_cat_1()])
@@ -221,7 +248,6 @@ def test_string_slicing(data):
 
 
 def test_categorical_categories():
-    import dask.dataframe as dd
 
     df = DataFrame(
         {"a": ["a", "b", "c", "d", "e", "e", "a", "d"], "b": range(8)}
@@ -236,4 +262,32 @@ def test_categorical_categories():
         ddf.a.cat.categories.to_series(),
         dpdf.a.cat.categories.to_series(),
         check_index=False,
+    )
+
+
+def test_categorical_as_known():
+    df = dgd.from_cudf(DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
+    df["col_1"] = df["col_1"].astype("category")
+    actual = df["col_1"].cat.as_known()
+
+    pdf = dd.from_pandas(pd.DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
+    pdf["col_1"] = pdf["col_1"].astype("category")
+    expected = pdf["col_1"].cat.as_known()
+    dd.assert_eq(expected, actual)
+
+
+def test_str_slice():
+
+    df = DataFrame({"a": ["abc,def,123", "xyz,hi,bye"]})
+
+    ddf = dgd.from_cudf(df, 1)
+    pdf = df.to_pandas()
+
+    dd.assert_eq(
+        pdf.a.str.split(",", expand=True, n=1),
+        ddf.a.str.split(",", expand=True, n=1),
+    )
+    dd.assert_eq(
+        pdf.a.str.split(",", expand=True, n=2),
+        ddf.a.str.split(",", expand=True, n=2),
     )

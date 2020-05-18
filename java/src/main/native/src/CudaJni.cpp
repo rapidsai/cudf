@@ -242,6 +242,7 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Cuda_eventQuery(JNIEnv* env, jcla
     JNI_CUDA_TRY(env, false, result);
   }
   CATCH_STD(env, false);
+  return false;
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_eventRecord(JNIEnv* env, jclass,

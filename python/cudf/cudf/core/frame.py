@@ -11,7 +11,7 @@ from pandas.api.types import is_dtype_equal
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
-from cudf._lib.scalar import Scalar
+from cudf._lib.scalar import as_scalar
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
@@ -97,7 +97,7 @@ class Frame(libcudf.table.Table):
                     categories[idx] = (
                         cudf.concat([col.cat().categories for col in cols])
                         .to_series()
-                        .drop_duplicates()
+                        .drop_duplicates(ignore_index=True)
                         ._column
                     )
                     # Set the column dtype to the codes' dtype. The categories
@@ -184,7 +184,7 @@ class Frame(libcudf.table.Table):
         # order. This strips the given index/column names and replaces the
         # names with their integer positions in the `cols` list
         tables = []
-        for i, cols in enumerate(columns):
+        for cols in columns:
             table_cols = cols[first_data_column_position:]
             table_names = indices[first_data_column_position:]
             table = cls(data=dict(zip(table_names, table_cols)))
@@ -423,7 +423,7 @@ class Frame(libcudf.table.Table):
             ):
                 return self._normalize_scalars(other)
 
-            elif (self, cudf.DataFrame):
+            elif isinstance(self, cudf.DataFrame):
                 out = []
                 if is_scalar(other):
                     other = [other for i in range(len(self._data.names))]
@@ -744,7 +744,9 @@ class Frame(libcudf.table.Table):
 
         # Convert string or categorical to integer
         if isinstance(map_index, cudf.core.column.StringColumn):
-            map_index = map_index.as_categorical_column(np.int32).as_numerical
+            map_index = map_index.as_categorical_column(
+                "category"
+            ).as_numerical
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
@@ -869,6 +871,11 @@ class Frame(libcudf.table.Table):
         Applies boolean mask to each row of `self`,
         rows corresponding to `False` is dropped
         """
+        boolean_mask = as_column(boolean_mask)
+        if boolean_mask.has_nulls:
+            raise ValueError(
+                "cannot mask with boolean_mask containing null values"
+            )
         result = self.__class__._from_table(
             libcudf.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
@@ -1010,7 +1017,7 @@ class Frame(libcudf.table.Table):
 
     def _repeat(self, count):
         if is_scalar(count):
-            count = Scalar(count)
+            count = as_scalar(count)
         else:
             count = as_column(count)
 
@@ -1053,7 +1060,13 @@ class Frame(libcudf.table.Table):
             host array, consider using .to_array()"
         )
 
-    def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
+    def drop_duplicates(
+        self,
+        subset=None,
+        keep="first",
+        nulls_are_equal=True,
+        ignore_index=False,
+    ):
         """
         Drops rows in frame as per duplicate rows in `subset` columns from
         self.
@@ -1065,6 +1078,8 @@ class Frame(libcudf.table.Table):
             duplicate
         nulls_are_equal: null elements are considered equal to other null
             elements
+        ignore_index: bool, default False
+            If True, the resulting axis will be labeled 0, 1, …, n - 1.
         """
         if subset is None:
             subset = self._column_names
@@ -1084,7 +1099,11 @@ class Frame(libcudf.table.Table):
 
         result = self._from_table(
             libcudf.stream_compaction.drop_duplicates(
-                self, keys=subset, keep=keep, nulls_are_equal=nulls_are_equal
+                self,
+                keys=subset,
+                keep=keep,
+                nulls_are_equal=nulls_are_equal,
+                ignore_index=ignore_index,
             )
         )
 
@@ -1699,8 +1718,10 @@ class Frame(libcudf.table.Table):
                 elif right_index:
                     compare_cols_l = lhs[left_on]._data.columns
                     compare_cols_r = rhs._index._data.columns
-                for l, r in compare_cols_l, compare_cols_r:
-                    if not pd.api.types.is_dtype_equal(l.dtype, r.dtype):
+                for left, right in compare_cols_l, compare_cols_r:
+                    if not pd.api.types.is_dtype_equal(
+                        left.dtype, right.dtype
+                    ):
                         raise NotImplementedError(
                             "Typecasting not yet supported for MultiIndicies"
                         )

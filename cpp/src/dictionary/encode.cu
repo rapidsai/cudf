@@ -38,6 +38,8 @@ std::unique_ptr<column> encode(column_view const& input_column,
                                cudaStream_t stream)
 {
   CUDF_EXPECTS(indices_type.id() == INT32, "only INT32 type for indices");
+  CUDF_EXPECTS(input_column.type().id() != DICTIONARY32,
+               "cannot encode a dictionary from a dictionary");
 
   // side effects of this function were are now dependent on:
   // - resulting column elements are sorted ascending
@@ -46,7 +48,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
     experimental::detail::drop_duplicates(table_view{{input_column}},
                                           std::vector<size_type>{0},
                                           experimental::duplicate_keep_option::KEEP_FIRST,
-                                          true,
+                                          null_equality::EQUAL,
                                           mr,
                                           stream)
       ->release();  // true == nulls are equal
@@ -60,7 +62,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
         .front(),
       stream,
       mr);
-    keys_column->set_null_mask(rmm::device_buffer{}, 0);  // remove the null-mask
+    keys_column->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // remove the null-mask
   }
 
   // this returns a column with no null entries

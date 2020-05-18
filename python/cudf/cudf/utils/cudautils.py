@@ -4,9 +4,7 @@ from functools import lru_cache
 
 import cupy
 import numpy as np
-from numba import cuda, numpy_support
-
-import rmm
+from numba import cuda
 
 from cudf.utils.utils import (
     check_equals_float,
@@ -15,6 +13,14 @@ from cudf.utils.utils import (
     mask_get,
     rint,
 )
+
+try:
+    # Numba >= 0.49
+    from numba.np import numpy_support
+except ImportError:
+    # Numba <= 0.49
+    from numba import numpy_support
+
 
 # GPU array type casting
 
@@ -119,7 +125,7 @@ def gpu_round(in_col, out_col, decimal):
 
 
 def apply_round(data, decimal):
-    output_dary = rmm.device_array_like(data)
+    output_dary = cuda.device_array_like(data)
     if output_dary.size > 0:
         gpu_round.forall(output_dary.size)(data, output_dary, decimal)
     return output_dary
@@ -180,7 +186,7 @@ def find_first(arr, val, compare="eq"):
     val : scalar
     compare: str ('gt', 'lt', or 'eq' (default))
     """
-    found = rmm.device_array_like(arr)
+    found = cuda.device_array_like(arr)
     if found.size > 0:
         if compare == "gt":
             gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
@@ -217,7 +223,7 @@ def find_last(arr, val, compare="eq"):
     val : scalar
     compare: str ('gt', 'lt', or 'eq' (default))
     """
-    found = rmm.device_array_like(arr)
+    found = cuda.device_array_like(arr)
     if found.size > 0:
         if compare == "gt":
             gpu_mark_gt.forall(found.size)(arr, val, found, -1)
@@ -248,7 +254,7 @@ def gpu_window_sizes_from_offset(arr, window_sizes, offset):
 
 
 def window_sizes_from_offset(arr, offset):
-    window_sizes = rmm.device_array(shape=(arr.shape), dtype="int32")
+    window_sizes = cuda.device_array(shape=(arr.shape), dtype="int32")
     if arr.size > 0:
         gpu_window_sizes_from_offset.forall(arr.size)(
             arr, window_sizes, offset

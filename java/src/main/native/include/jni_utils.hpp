@@ -435,6 +435,7 @@ public:
     this->cstr = other.cstr;
     this->cstr_length = other.cstr_length;
     other.cstr = NULL;
+    return *this;
   }
 
   bool is_null() const noexcept { return orig == NULL; }

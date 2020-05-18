@@ -22,10 +22,10 @@ import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.function.Function;
-import java.util.stream.Collector;
+import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
+import static ai.rapids.cudf.TestUtils.*;
 
 public class BinaryOpTest extends CudfTestBase {
   private static final Integer[] INTS_1 = new Integer[]{1, 2, 3, 4, 5, null, 100};
@@ -96,6 +96,108 @@ public class BinaryOpTest extends CudfTestBase {
         }
       }
       return builder.buildAndPutOnDevice();
+    }
+  }
+
+  private double pmod(double i1, double i2) {
+    double r = i1 % i2;
+    if (r < 0) return (r + i2) % i2;
+    else return r;
+  }
+
+  private long pmod(long i1, long i2) {
+   long r = i1 % i2;
+   if (r < 0) return (r + i2) % i2;
+   else return r;
+  }
+
+  private int pmod(int i1, int i2) {
+    int r = i1 % i2;
+    if (r < 0) return (r + i2) % i2;
+    else return r;
+  }
+
+  @Test
+  public void testPmod() {
+
+    Double[] d1 = TestUtils.getDoubles(23423423424L, 50, ALL ^ NULL);
+    Double[] d2 = TestUtils.getDoubles(56456456454L, 50, NULL);
+
+    Integer[] i1 = TestUtils.getIntegers(76576554564L, 50, NULL);
+    Integer[] i2 = TestUtils.getIntegers(34502395934L, 50, NULL);
+
+    Long[] l1 = TestUtils.getLongs(29843248234L, 50, NULL);
+    Long[] l2 = TestUtils.getLongs(23423049234L, 50, NULL);
+
+    try (ColumnVector icv1 = ColumnVector.fromBoxedInts(i1);
+         ColumnVector icv2 = ColumnVector.fromBoxedInts(i2);
+         ColumnVector lcv1 = ColumnVector.fromBoxedLongs(l1);
+         ColumnVector lcv2 = ColumnVector.fromBoxedLongs(l2);
+         ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(d1);
+         ColumnVector dcv2 = ColumnVector.fromBoxedDoubles(d2)) {
+
+      // Ints
+      try (ColumnVector pmod = icv1.pmod(icv2);
+           ColumnVector expected = forEach(DType.INT32, icv1, icv2,
+               (b, l, r, i) -> b.append(pmod(l.getInt(i), r.getInt(i))))) {
+        assertColumnsAreEqual(expected, pmod, "int32");
+      }
+
+      try (Scalar s = Scalar.fromInt(11);
+           ColumnVector pmod = icv1.pmod(s);
+           ColumnVector expected = forEachS(DType.INT32, icv1, 11,
+               (b, l, r, i) -> b.append(pmod(l.getInt(i) , r)))) {
+        assertColumnsAreEqual(expected, pmod, "int32 + scalar int32");
+      }
+
+      try (Scalar s = Scalar.fromInt(11);
+           ColumnVector pmod = s.pmod(icv2);
+           ColumnVector expected = forEachS(DType.INT32, 11, icv2,
+               (b, l, r, i) -> b.append(pmod(l , r.getInt(i))))) {
+        assertColumnsAreEqual(expected, pmod, "scalar int32 + int32");
+      }
+
+      // Long
+      try (ColumnVector pmod = lcv1.pmod(lcv2);
+           ColumnVector expected = forEach(DType.INT64, lcv1, lcv2,
+               (b, l, r, i) -> b.append(pmod(l.getLong(i), r.getLong(i))))) {
+        assertColumnsAreEqual(expected, pmod, "int64");
+      }
+
+      try (Scalar s = Scalar.fromLong(11L);
+           ColumnVector pmod = lcv1.pmod(s);
+           ColumnVector expected = forEachS(DType.INT64, lcv1, 11L,
+               (b, l, r, i) -> b.append(pmod(l.getLong(i) , r)))) {
+        assertColumnsAreEqual(expected, pmod, "int64 + scalar int64");
+      }
+
+      try (Scalar s = Scalar.fromLong(11L);
+           ColumnVector pmod = s.pmod(lcv2);
+           ColumnVector expected = forEachS(DType.INT64, 11L, lcv2,
+               (b, l, r, i) -> b.append(pmod(l , r.getLong(i))))) {
+        assertColumnsAreEqual(expected, pmod, "scalar int64 + int64");
+      }
+
+      // Double
+      try (ColumnVector pmod = dcv1.pmod(dcv2);
+           ColumnVector expected = forEach(DType.FLOAT64, dcv1, dcv2,
+               (b, l, r, i) -> b.append(pmod(l.getDouble(i), r.getDouble(i))))) {
+        assertColumnsAreEqual(expected, pmod, "float64");
+      }
+
+      try (Scalar s = Scalar.fromDouble(1.1d);
+           ColumnVector pmod = dcv1.pmod(s);
+           ColumnVector expected = forEachS(DType.FLOAT64, dcv1, 1.1d,
+               (b, l, r, i) -> b.append(pmod(l.getDouble(i) , r)))) {
+        assertColumnsAreEqual(expected, pmod, "float64 + scalar float64");
+      }
+
+      try (Scalar s = Scalar.fromDouble(1.1d);
+           ColumnVector pmod = s.pmod(dcv2);
+           ColumnVector expected = forEachS(DType.FLOAT64, 1.1d, dcv2,
+               (b, l, r, i) -> b.append(pmod(l , r.getDouble(i))))) {
+        assertColumnsAreEqual(expected, pmod, "scalar float64 + float64");
+      }
     }
   }
 
@@ -1072,16 +1174,6 @@ public class BinaryOpTest extends CudfTestBase {
                (b, l, r, i) -> b.append(((long)(l.getInt(i) >>> r))))) {
         assertColumnsAreEqual(expected, answer, "int32 >>> scalar = int64");
       }
-
-      try (Scalar s = Scalar.fromShort((short) 0x0000FFFF);
-           ColumnVector answer = s.shiftRightUnsigned(shiftBy, DType.INT16);
-           ColumnVector expected = forEachS(DType.INT16, (short) 0x0000FFFF,  shiftBy,
-               (b, l, r, i) -> {
-                 int shifted = l >>> r.getInt(i);
-                 b.append((short) shifted);
-               })) {
-        assertColumnsAreEqual(expected, answer, "scalar short >>> int32 = int16");
-      }
     }
   }
 
@@ -1108,4 +1200,125 @@ public class BinaryOpTest extends CudfTestBase {
       assertColumnsAreEqual(expected, answer, "log2");
     }
   }
+
+  @Test
+  public void testArctan2() {
+    Integer[] xInt = {7, 1, 2, 10};
+    Integer[] yInt = {4, 10, 8, 2};
+
+    Double[] xDouble = TestUtils.getDoubles(98234234523432423L, 50, ALL ^ NULL);
+    Double[] yDouble = TestUtils.getDoubles(23623274238423532L, 50, ALL ^ NULL);
+
+    try (ColumnVector yDoubleCV = ColumnVector.fromBoxedDoubles(yDouble);
+         ColumnVector xDoubleCV = ColumnVector.fromBoxedDoubles(xDouble);
+         ColumnVector yIntCV = ColumnVector.fromBoxedInts(yInt);
+         ColumnVector xIntCV = ColumnVector.fromBoxedInts(xInt);
+         ColumnVector resultDouble = yDoubleCV.arctan2(xDoubleCV);
+         ColumnVector resultInt = yIntCV.arctan2(xIntCV, DType.FLOAT64);
+         ColumnVector expectedInt = ColumnVector.fromDoubles(IntStream.range(0,xInt.length)
+             .mapToDouble(n -> Math.atan2(yInt[n], xInt[n])).toArray());
+         ColumnVector expectedDouble = ColumnVector.fromDoubles(IntStream.range(0,xDouble.length)
+             .mapToDouble(n -> Math.atan2(yDouble[n], xDouble[n])).toArray())) {
+      assertColumnsAreEqual(expectedInt, resultInt);
+      assertColumnsAreEqual(expectedDouble, resultDouble);
+    }
+  }
+
+  @Test
+  public void testEqualNullAware() {
+    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
+         ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
+      try (ColumnVector answer = icv.equalToNullAware(dcv);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, false, false, false,
+                   false, false)) {
+        assertColumnsAreEqual(expected, answer, "int32 <=> double");
+      }
+
+      try (Scalar s = Scalar.fromFloat(1.0f);
+           ColumnVector answer = icv.equalToNullAware(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, false, false, false,
+                   false, false)) {
+        assertColumnsAreEqual(expected, answer, "int32 <=> scalar float");
+      }
+
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.equalToNullAware(icv);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false,
+                   false, true)) {
+        assertColumnsAreEqual(expected, answer, "scalar short <=> int32");
+      }
+    }
+  }
+
+  @Test
+  public void testStringEqualNullAwareScalar() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("b")) {
+
+      try (ColumnVector answer = a.equalToNullAware(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, false, false)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = b.equalToNullAware(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, false)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = c.equalToNullAware(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, false)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+    }
+  }
+
+  @Test
+  public void testMaxNullAware() {
+    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
+         ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
+      try (ColumnVector answer = icv.maxNullAware(dcv);
+           ColumnVector expected = ColumnVector.fromBoxedDoubles(1.0, 10.0,  100.0, 5.3, 50.0,
+                   100.0, 100.0)) {
+        assertColumnsAreEqual(expected, answer, "max(int32, double)");
+      }
+
+      try (Scalar s = Scalar.fromFloat(1.0f);
+           ColumnVector answer = icv.maxNullAware(s);
+           ColumnVector expected = ColumnVector.fromBoxedFloats(1f, 2f, 3f, 4f, 5f, 1f, 100f)) {
+        assertColumnsAreEqual(expected, answer, "max(int32, scalar float)");
+      }
+
+      try (Scalar s = Scalar.fromShort((short) 99);
+           ColumnVector answer = s.maxNullAware(icv);
+           ColumnVector expected = ColumnVector.fromBoxedInts(99, 99, 99, 99, 99, 99, 100)) {
+        assertColumnsAreEqual(expected, answer, "max(scalar short, int32)");
+      }
+    }
+  }
+
+  @Test
+  public void testMinNullAware() {
+    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
+         ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
+      try (ColumnVector answer = icv.minNullAware(dcv);
+           ColumnVector expected = ColumnVector.fromBoxedDoubles(1.0, 2.0, 3.0, 4.0, 5.0, 100.0, 100.0)) {
+        assertColumnsAreEqual(expected, answer, "min(int32, double)");
+      }
+
+      try (Scalar s = Scalar.fromFloat(3.1f);
+           ColumnVector answer = icv.minNullAware(s);
+           ColumnVector expected = ColumnVector.fromBoxedFloats(1f, 2f, 3f, 3.1f, 3.1f, 3.1f, 3.1f)) {
+        assertColumnsAreEqual(expected, answer, "min(int32, scalar float)");
+      }
+
+      try (Scalar s = Scalar.fromShort((short) 99);
+           ColumnVector answer = s.minNullAware(icv);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 99, 99)) {
+        assertColumnsAreEqual(expected, answer, "min(scalar short, int32)");
+      }
+    }
+  }
+
 }

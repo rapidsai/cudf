@@ -16,10 +16,14 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy_range.cuh>
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/dictionary/detail/encode.hpp>
+#include <cudf/dictionary/detail/search.hpp>
+#include <cudf/dictionary/detail/update_keys.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/fill.hpp>
@@ -83,6 +87,7 @@ struct out_of_place_fill_range_dispatch {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream                 = 0)
   {
+    CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
     auto p_ret = std::make_unique<cudf::column>(input, stream, mr);
 
     if (end != begin) {  // otherwise no fill
@@ -105,6 +110,7 @@ struct out_of_place_fill_range_dispatch {
              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
              cudaStream_t stream                 = 0)
   {
+    CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
     using ScalarType = cudf::experimental::scalar_type_t<T>;
     auto p_scalar    = static_cast<ScalarType const*>(&value);
     return cudf::strings::detail::fill(
@@ -118,7 +124,51 @@ struct out_of_place_fill_range_dispatch {
              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
              cudaStream_t stream                 = 0)
   {
-    CUDF_FAIL("dictionary not supported yet");
+    if (input.size() == 0) return std::make_unique<cudf::column>(input, stream, mr);
+    cudf::dictionary_column_view const target(input);
+    CUDF_EXPECTS(target.keys().type() == value.type(), "Data type mismatch.");
+
+    // if the scalar is invalid, then just copy the column and fill the null mask
+    if (!value.is_valid()) {
+      auto result = std::make_unique<cudf::column>(input, stream, mr);
+      auto mview  = result->mutable_view();
+      cudf::set_null_mask(mview.null_mask(), begin, end, false, stream);
+      mview.set_null_count(input.null_count() + (end - begin));
+      return result;
+    }
+
+    // add the scalar to get the output dictionary key-set
+    auto scalar_column =
+      cudf::make_column_from_scalar(value, 1, rmm::mr::get_default_resource(), stream);
+    auto target_matched =
+      cudf::dictionary::detail::add_keys(target, scalar_column->view(), mr, stream);
+    cudf::column_view const target_indices =
+      cudf::dictionary_column_view(target_matched->view()).get_indices_annotated();
+
+    // get the index of the key just added
+    auto index_of_value = cudf::dictionary::detail::get_index(
+      target_matched->view(), value, rmm::mr::get_default_resource(), stream);
+    // now call fill using just the indices column and the new index
+    out_of_place_fill_range_dispatch filler{*index_of_value, target_indices};
+    auto new_indices       = filler.template operator()<int32_t>(begin, end, mr, stream);
+    auto const output_size = new_indices->size();        // record these
+    auto const null_count  = new_indices->null_count();  // before the release()
+    auto contents          = new_indices->release();
+    // create the new indices column from the result
+    auto indices_column = std::make_unique<cudf::column>(cudf::data_type{cudf::INT32},
+                                                         static_cast<cudf::size_type>(output_size),
+                                                         std::move(*(contents.data.release())),
+                                                         rmm::device_buffer{0, stream, mr},
+                                                         0);
+
+    // take the keys from matched column
+    std::unique_ptr<cudf::column> keys_column(std::move(target_matched->release().children.back()));
+
+    // create column with keys_column and indices_column
+    return cudf::make_dictionary_column(std::move(keys_column),
+                                        std::move(indices_column),
+                                        std::move(*(contents.null_mask.release())),
+                                        null_count);
   }
 };
 
@@ -157,7 +207,6 @@ std::unique_ptr<column> fill(column_view const& input,
                              cudaStream_t stream)
 {
   CUDF_EXPECTS((begin >= 0) && (end <= input.size()) && (begin <= end), "Range is out of bounds.");
-  CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
 
   return cudf::experimental::type_dispatcher(
     input.type(), out_of_place_fill_range_dispatch{value, input}, begin, end, mr, stream);

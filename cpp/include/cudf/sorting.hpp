@@ -22,9 +22,11 @@
 #include <vector>
 
 namespace cudf {
+
 /**
  * @brief Tie-breaker method to use for ranking the column.
  *
+ * @ingroup column_sort
  */
 enum class rank_method {
   FIRST,    ///< stable sort order ranking (no ties)
@@ -35,7 +37,12 @@ enum class rank_method {
 };
 
 namespace experimental {
-/**---------------------------------------------------------------------------*
+/**
+ * @addtogroup column_sort
+ * @{
+ */
+
+/**
  * @brief Computes the row indices that would produce `input`  in a
  * lexicographical sorted order.
  *
@@ -48,7 +55,7 @@ namespace experimental {
  * If empty, all columns will be sorted in `null_order::BEFORE`.
  * @return std::unique_ptr<column> A non-nullable column of `size_type` elements
  * containing the permuted row indices of `input` if it were sorted
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<column> sorted_order(
   table_view input,
   std::vector<order> const& column_order         = {},
@@ -58,9 +65,10 @@ std::unique_ptr<column> sorted_order(
 /**
  * @brief Computes the row indices that would produce `input` in a stable
  * lexicographical sorted order.
+ *
  * The order of equivalent elements is guaranteed to be preserved.
  *
- * @copydetails cudf::experimental::sorted_order
+ * @copydoc cudf::experimental::sorted_order
  */
 std::unique_ptr<column> stable_sorted_order(
   table_view input,
@@ -68,7 +76,7 @@ std::unique_ptr<column> stable_sorted_order(
   std::vector<null_order> const& null_precedence = {},
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Checks whether the rows of a `table` are sorted in a lexicographical
  *        order.
  *
@@ -83,7 +91,7 @@ std::unique_ptr<column> stable_sorted_order(
  *                              `null_order::BEFORE` is assumed for all columns.
  *
  * @returns bool                true if sorted as expected, false if not.
- *---------------------------------------------------------------------------**/
+ */
 bool is_sorted(cudf::table_view const& table,
                std::vector<order> const& column_order,
                std::vector<null_order> const& null_precedence);
@@ -135,23 +143,26 @@ std::unique_ptr<table> sort_by_key(
   std::vector<null_order> const& null_precedence = {},
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes the ranks of input column in sorted order.
+ *
  * Rank indicate the position of each element in the sorted column and rank
  * value starts from 1.
  *
- * @example input = { 3, 4, 5, 4, 1, 2}
+ * @code{.pseudo}
+ * input = { 3, 4, 5, 4, 1, 2}
  * Result for different rank_method are
  * FIRST    = {3, 4, 6, 5, 1, 2}
  * AVERAGE  = {3, 4.5, 6, 4.5, 1, 2}
  * MIN      = {3, 4, 6, 4, 1, 2}
  * MAX      = {3, 5, 6, 5, 1, 2}
  * DENSE    = {3, 4, 5, 4, 1, 2}
+ * @endcode
  *
  * @param input The column to rank
  * @param method The ranking method used for tie breaking (same values).
  * @param column_order The desired sort order for ranking
- * @param _include_nulls  flag to include nulls during ranking. If nulls are not
+ * @param null_handling  flag to include nulls during ranking. If nulls are not
  * included, corresponding rank will be null.
  * @param null_precedence The desired order of null compared to other elements
  * for column
@@ -161,14 +172,15 @@ std::unique_ptr<table> sort_by_key(
  * element of the column of `input`. The output column type will be `size_type`
  * column by default or else `double` when `method=rank_method::AVERAGE` or
  *`percentage=True`
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<column> rank(column_view const& input,
                              rank_method method,
                              order column_order,
-                             include_nulls _include_nulls,
+                             null_policy null_handling,
                              null_order null_precedence,
                              bool percentage,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf

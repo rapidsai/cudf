@@ -48,13 +48,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
       cudf::experimental::detail::make_null_replacement_iterator<string_view>(input, string_view{});
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input_begin, offsets_transformer);
-    offsets_column = std::move(cudf::strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream));
+    offsets_column = cudf::strings::detail::make_offsets_child_column(
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
   } else {
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input.begin<string_view>(), offsets_transformer);
-    offsets_column = std::move(cudf::strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream));
+    offsets_column = cudf::strings::detail::make_offsets_child_column(
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
   }
 
   auto d_offsets = offsets_column->view().template data<size_type>();
@@ -78,30 +78,29 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
   auto input_device_column = column_device_view::create(input.parent(), stream);
   auto d_input             = *input_device_column;
   size_type null_count     = input.parent().null_count();
-  const auto d_lo          = (*lo_itr).first;
-  const auto d_hi          = (*hi_itr).first;
-  const auto d_lo_replace  = (*lo_replace_itr).first;
-  const auto d_hi_replace  = (*hi_replace_itr).first;
-  const auto lo_valid      = (*lo_itr).second;
-  const auto hi_valid      = (*hi_itr).second;
 
   // build offset column
-  auto offsets_transformer =
-    [d_lo, lo_valid, d_lo_replace, d_hi, hi_valid, d_hi_replace] __device__(string_view element,
-                                                                            bool is_valid = true) {
-      size_type bytes = 0;
+  auto offsets_transformer = [lo_itr, hi_itr, lo_replace_itr, hi_replace_itr] __device__(
+                               string_view element, bool is_valid = true) {
+    const auto d_lo         = (*lo_itr).first;
+    const auto d_hi         = (*hi_itr).first;
+    const auto d_lo_replace = (*lo_replace_itr).first;
+    const auto d_hi_replace = (*hi_replace_itr).first;
+    const auto lo_valid     = (*lo_itr).second;
+    const auto hi_valid     = (*hi_itr).second;
+    size_type bytes         = 0;
 
-      if (is_valid) {
-        if (lo_valid and element < d_lo) {
-          bytes = d_lo_replace.size_bytes();
-        } else if (hi_valid and d_hi < element) {
-          bytes = d_hi_replace.size_bytes();
-        } else {
-          bytes = element.size_bytes();
-        }
+    if (is_valid) {
+      if (lo_valid and element < d_lo) {
+        bytes = d_lo_replace.size_bytes();
+      } else if (hi_valid and d_hi < element) {
+        bytes = d_hi_replace.size_bytes();
+      } else {
+        bytes = element.size_bytes();
       }
-      return bytes;
-    };
+    }
+    return bytes;
+  };
 
   auto offset_and_char =
     form_offsets_and_char_column(d_input, null_count, offsets_transformer, mr, stream);
@@ -111,26 +110,26 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
   auto d_offsets = offsets_column->view().template data<size_type>();
   auto d_chars   = chars_column->mutable_view().template data<char>();
   // fill in chars
-  auto copy_transformer = [d_input,
-                           d_lo,
-                           lo_valid,
-                           d_lo_replace,
-                           d_hi,
-                           hi_valid,
-                           d_hi_replace,
-                           d_offsets,
-                           d_chars] __device__(size_type idx) {
-    if (d_input.is_null(idx)) { return; }
-    auto input_element = d_input.element<string_view>(idx);
+  auto copy_transformer =
+    [d_input, lo_itr, hi_itr, lo_replace_itr, hi_replace_itr, d_offsets, d_chars] __device__(
+      size_type idx) {
+      if (d_input.is_null(idx)) { return; }
+      auto input_element      = d_input.element<string_view>(idx);
+      const auto d_lo         = (*lo_itr).first;
+      const auto d_hi         = (*hi_itr).first;
+      const auto d_lo_replace = (*lo_replace_itr).first;
+      const auto d_hi_replace = (*hi_replace_itr).first;
+      const auto lo_valid     = (*lo_itr).second;
+      const auto hi_valid     = (*hi_itr).second;
 
-    if (lo_valid and input_element < d_lo) {
-      memcpy(d_chars + d_offsets[idx], d_lo_replace.data(), d_lo_replace.size_bytes());
-    } else if (hi_valid and d_hi < input_element) {
-      memcpy(d_chars + d_offsets[idx], d_hi_replace.data(), d_hi_replace.size_bytes());
-    } else {
-      memcpy(d_chars + d_offsets[idx], input_element.data(), input_element.size_bytes());
-    }
-  };
+      if (lo_valid and input_element < d_lo) {
+        memcpy(d_chars + d_offsets[idx], d_lo_replace.data(), d_lo_replace.size_bytes());
+      } else if (hi_valid and d_hi < input_element) {
+        memcpy(d_chars + d_offsets[idx], d_hi_replace.data(), d_hi_replace.size_bytes());
+      } else {
+        memcpy(d_chars + d_offsets[idx], input_element.data(), input_element.size_bytes());
+      }
+    };
 
   auto exec = rmm::exec_policy(stream);
   thrust::for_each_n(

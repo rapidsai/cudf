@@ -26,6 +26,12 @@
  */
 
 namespace cudf {
+
+/**
+ * @ingroup strings_classes
+ * @{
+ */
+
 /**
  * @brief Given a column-view of strings type, an instance of this class
  * provides a wrapper on this compound column for strings operations.
@@ -76,6 +82,7 @@ class strings_column_view : private column_view {
   size_type chars_size() const noexcept;
 };
 
+//! Strings column APIs.
 namespace strings {
 /**
  * @brief Prints the strings to stdout.
@@ -110,4 +117,5 @@ std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>> create_offset
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace strings
+/** @} */  // end of group
 }  // namespace cudf

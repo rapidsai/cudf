@@ -244,7 +244,7 @@ void join_call(cudf::table const& left,
   nvtx::range_pop();
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a vector with non-common indices which is set difference
  * between `[0, num_columns)` and index values in common_column_indices
  *
@@ -254,7 +254,7 @@ void join_call(cudf::table const& left,
  * excluded from `[0, num_columns)`
  * @return vector A vector containing only the indices which are not present in
  * `common_column_indices`
- *---------------------------------------------------------------------------**/
+ **/
 
 auto non_common_column_indices(cudf::size_type num_columns,
                                std::vector<cudf::size_type> const& common_column_indices)

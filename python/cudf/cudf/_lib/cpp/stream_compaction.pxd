@@ -6,7 +6,9 @@ from libcpp cimport bool
 
 from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
 
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.types cimport (
+    size_type, null_policy, nan_policy, null_equality
+)
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -31,8 +33,8 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" \
     cdef unique_ptr[table] drop_duplicates(table_view source_table,
                                            vector[size_type] keys,
                                            duplicate_keep_option keep,
-                                           bool nulls_are_equal) except +
+                                           null_equality nulls_equal) except +
 
     cdef size_type unique_count(column_view source_table,
-                                bool ignore_nulls,
-                                bool nan_as_null) except +
+                                null_policy null_handling,
+                                nan_policy nan_handling) except +

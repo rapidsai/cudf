@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -28,11 +29,15 @@
  *
  * @note Not all aggregation APIs support all aggregation operations. See
  * individual function documentation to see what aggregations are supported.
- *
  */
 
 namespace cudf {
 namespace experimental {
+/**
+ * @addtogroup aggregation_factories
+ * @{
+ */
+
 /**
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
@@ -64,6 +69,7 @@ class aggregation {
     ARGMIN,          ///< Index of min element
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
+    ROW_NUMBER,      ///< get row-number of element
     PTX,             ///< PTX UDF based reduction
     CUDA             ///< CUDA UDf based reduction
   };
@@ -71,7 +77,14 @@ class aggregation {
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform
 
-  bool operator==(aggregation const& other) const { return kind == other.kind; }
+  virtual bool is_equal(aggregation const& other) const { return kind == other.kind; }
+
+  virtual size_t do_hash() const { return std::hash<int>{}(kind); }
+
+  virtual std::unique_ptr<aggregation> clone() const
+  {
+    return std::make_unique<aggregation>(*this);
+  }
 
   virtual ~aggregation() = default;
 };
@@ -93,10 +106,10 @@ std::unique_ptr<aggregation> make_max_aggregation();
 /**
  * @brief Factory to create a COUNT aggregation
  *
- * @param _include_nulls Indicates if null values will be counted.
+ * @param null_handling Indicates if null values will be counted.
  */
 std::unique_ptr<aggregation> make_count_aggregation(
-  include_nulls _include_nulls = include_nulls::NO);
+  null_policy null_handling = null_policy::EXCLUDE);
 
 /// Factory to create a ANY aggregation
 std::unique_ptr<aggregation> make_any_aggregation();
@@ -156,10 +169,10 @@ std::unique_ptr<aggregation> make_argmin_aggregation();
  * @brief Factory to create a `nunique` aggregation
  *
  * `nunique` returns the number of unique elements.
- * @param _include_nulls Indicates if null values will be counted.
+ * @param null_handling Indicates if null values will be counted.
  */
 std::unique_ptr<aggregation> make_nunique_aggregation(
-  include_nulls _include_nulls = include_nulls::NO);
+  null_policy null_handling = null_policy::EXCLUDE);
 
 /**
  * @brief Factory to create a `nth_element` aggregation
@@ -172,10 +185,13 @@ std::unique_ptr<aggregation> make_nunique_aggregation(
  * the size of each group.
  *
  * @param n index of nth element in each group.
- * @param _include_nulls include nulls during indexing.
+ * @param null_handling Indicates to include/exclude nulls during indexing.
  */
 std::unique_ptr<aggregation> make_nth_element_aggregation(
-  size_type n, include_nulls _include_nulls = include_nulls::YES);
+  size_type n, null_policy null_handling = null_policy::INCLUDE);
+
+/// Factory to create a ROW_NUMBER aggregation
+std::unique_ptr<aggregation> make_row_number_aggregation();
 
 /**
  * @brief Factory to create a aggregation base on UDF for PTX or CUDA
@@ -190,5 +206,6 @@ std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
                                                   std::string const& user_defined_aggregator,
                                                   data_type output_type);
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf

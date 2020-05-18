@@ -27,7 +27,8 @@ class NVStrings;
 #include <cassert>
 #include <utility>
 
-/* --------------------------------------------------------------------------*/
+namespace cudf {
+
 /**
  * @brief  Invokes an instance of a functor template with the appropriate type
  * determined by a gdf_dtype enum value.
@@ -158,8 +159,7 @@ class NVStrings;
  * @returns Whatever is returned by the functor's "operator()".
  *
  */
-/* ----------------------------------------------------------------------------*/
-namespace cudf {
+
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
 #pragma hd_warning_disable
@@ -233,7 +233,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(gdf_dtype dty
   }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Maps a C++ type to it's corresponding gdf_dtype.
  *
  * When explicitly passed a template argument of a given type, returns the
@@ -246,7 +246,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(gdf_dtype dty
  * ```
  *
  * @tparam T The type to map to a `gdf_dtype`
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 inline constexpr gdf_dtype gdf_dtype_of()
 {

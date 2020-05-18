@@ -21,13 +21,30 @@
 namespace cudf {
 namespace strings {
 /**
+ * @addtogroup strings_contains
+ * @{
+ */
+
+/**
  * @brief Returns a table of strings columns for each matching occurrence of the
  * regex pattern within each string.
  *
  * The number of output columns is determined by the string with the most
  * matches.
  *
+ * @code{.pseudo}
+ * Example:
+ * s = ["bunny","rabbit"]
+ * r = findall(s, "[ab]"")
+ * r is now a table of 3 columns:
+ *   ["b","a"]
+ *   [null,"b"]
+ *   [null,"b"]
+ * @endcode
+ *
  * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match within each string.
@@ -39,5 +56,6 @@ std::unique_ptr<experimental::table> findall_re(
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf
