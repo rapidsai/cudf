@@ -59,59 +59,14 @@ void expect_column_properties_equivalent(column_view const& lhs, column_view con
 }
 
 class corresponding_rows_unequal {
-  table_device_view d_lhs;
-  table_device_view d_rhs;
-
  public:
-  corresponding_rows_unequal(table_device_view d_lhs, table_device_view d_rhs)
-    : d_lhs(d_lhs), d_rhs(d_rhs), comp(d_lhs, d_rhs)
+  corresponding_rows_unequal(table_device_view d_lhs, table_device_view d_rhs) : comp(d_lhs, d_rhs)
   {
-    CUDF_EXPECTS(d_lhs.num_columns() == 1 and d_rhs.num_columns() == 1,
-                 "Unsupported number of columns");
   }
-
-  struct typed_element_unequal {
-    template <typename T>
-    __device__ std::enable_if_t<std::is_floating_point<T>::value, bool> operator()(
-      column_device_view const& lhs, column_device_view const& rhs, size_type index)
-    {
-      if (lhs.is_valid(index) and rhs.is_valid(index)) {
-        int ulp = 4;  // value taken from google test
-        T x     = lhs.element<T>(index);
-        T y     = rhs.element<T>(index);
-        return std::abs(x - y) > std::numeric_limits<T>::epsilon() * std::abs(x + y) * ulp &&
-               std::abs(x - y) >= std::numeric_limits<T>::min();
-      } else {
-        // if either is null, then the inequality was checked already
-        return true;
-      }
-    }
-
-    template <typename T, typename... Args>
-    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(Args... args)
-    {
-      // Non-floating point inequality is checked already
-      return true;
-    }
-  };
 
   cudf::experimental::row_equality_comparator<true> comp;
 
-  __device__ bool operator()(size_type index)
-  {
-    if (not comp(index, index)) {
-      return thrust::any_of(thrust::seq,
-                            thrust::make_counting_iterator(0),
-                            thrust::make_counting_iterator(d_lhs.num_columns()),
-                            [this, index](auto i) {
-                              auto lhs_col = this->d_lhs.column(i);
-                              auto rhs_col = this->d_rhs.column(i);
-                              return experimental::type_dispatcher(
-                                lhs_col.type(), typed_element_unequal{}, lhs_col, rhs_col, index);
-                            });
-    }
-    return false;
-  }
+  __device__ bool operator()(size_type index) { return !comp(index, index); }
 };
 
 class corresponding_rows_not_equivalent {
@@ -181,7 +136,6 @@ void column_comparison(cudf::column_view const& lhs,
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
   auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
 
-  // TODO (dm): handle floating point equality
   thrust::device_vector<int> differences(lhs.size());
 
   auto diff_iter = thrust::copy_if(thrust::device,

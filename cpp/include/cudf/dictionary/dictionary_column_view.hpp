@@ -22,6 +22,8 @@ namespace cudf {
 /**
  * @brief A wrapper class for operations on a dictionary column.
  *
+ * @ingroup dictionary_classes
+ *
  * A dictionary column contains a set of keys and a column of indices.
  * The keys are a sorted set of unique values for the column.
  * The indices represent the corresponding positions of each element's
@@ -68,5 +70,9 @@ class dictionary_column_view : private column_view {
    */
   size_type keys_size() const noexcept;
 };
+
+//! Dictionary column APIs.
+namespace dictionary {  // defined here for doxygen output
+}
 
 }  // namespace cudf

@@ -25,6 +25,12 @@
 #include <type_traits>
 
 namespace cudf {
+
+/**
+ * @addtogroup utility_types
+ * @{
+ */
+
 template <typename...>
 using void_t = void;
 
@@ -364,4 +370,5 @@ constexpr inline bool is_nested(data_type type)
   return cudf::experimental::type_dispatcher(type, is_nested_impl{});
 }
 
+/** @} */
 }  // namespace cudf

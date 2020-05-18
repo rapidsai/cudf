@@ -15,6 +15,7 @@
  */
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -42,24 +43,20 @@ struct copy_if_else_functor_impl {
       if (right_nullable) {
         auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T, true>(lhs);
         auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T, true>(rhs);
-        return detail::copy_if_else<T>(
-          lhs.type(), true, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
+        return detail::copy_if_else(true, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
       }
       auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T, true>(lhs);
       auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T, false>(rhs);
-      return detail::copy_if_else<T>(
-        lhs.type(), true, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
+      return detail::copy_if_else(true, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
     }
     if (right_nullable) {
       auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T, false>(lhs);
       auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T, true>(rhs);
-      return detail::copy_if_else<T>(
-        lhs.type(), true, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
+      return detail::copy_if_else(true, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
     }
     auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T, false>(lhs);
     auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T, false>(rhs);
-    return detail::copy_if_else<T>(
-      lhs.type(), false, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
+    return detail::copy_if_else(false, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
   }
 };
 
@@ -260,7 +257,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
@@ -269,7 +266,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
 
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
@@ -278,7 +275,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
@@ -287,7 +284,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
 
 }  // namespace experimental

@@ -35,6 +35,11 @@ class sort_groupby_helper;
 }  // namespace detail
 
 /**
+ * @addtogroup aggregation_groupby
+ * @{
+ */
+
+/**
  * @brief Request for groupby aggregation(s) to perform on a column.
  *
  * The group membership of each `value[i]` is determined by the corresponding
@@ -225,6 +230,7 @@ class groupby {
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr);
 };
+/** @} */
 }  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf

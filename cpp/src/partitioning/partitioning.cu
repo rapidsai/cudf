@@ -707,8 +707,8 @@ struct dispatch_map_type {
                       });
 
     // Scatter the rows into their partitions
-    auto scattered =
-      cudf::experimental::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t);
+    auto scattered = cudf::experimental::detail::scatter(
+      t, scatter_map.begin(), scatter_map.end(), t, false, mr, stream);
 
     return std::make_pair(std::move(scattered), std::move(partition_offsets));
   }

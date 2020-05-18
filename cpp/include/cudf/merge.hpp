@@ -23,11 +23,17 @@
 namespace cudf {
 namespace experimental {
 /**
+ * @addtogroup column_merge
+ * @{
+ */
+
+/**
  * @brief Merge a set of sorted tables.
  *
  * Merges sorted tables into one sorted table
  * containing data from all tables.
  *
+ * ```
  * Example 1:
  * input:
  * table 1 => col 1 {0, 1, 2, 3}
@@ -39,7 +45,8 @@ namespace experimental {
  * output:
  * table => col 1 {0, 1, 1, 2, 2, 2, 3, 4}
  *          col 2 {4, 5, 8, 6, 8, 9, 7, 9}
- *
+ * ```
+ * ```
  * Example 2:
  * input:
  * table 1 => col 0 {1, 0}
@@ -66,7 +73,7 @@ namespace experimental {
  *   Res0 = {0,1,1}
  *   Res1 = {'b', 'a', 'c'}
  *   Res2 = {GREEN, NULL, RED}
- *
+ * ```
  *
  * @throws cudf::logic_error if tables in `tables_to_merge` have different
  * number of columns
@@ -77,14 +84,14 @@ namespace experimental {
  * columns in `tables_to_merge` tables
  * @throws cudf::logic_error if `key_cols` size and `column_order` size mismatches
  *
- * @Param[in] tables_to_merge Non-empty list of tables to be merged
- * @Param[in] key_cols Indices of left_cols and right_cols to be used
+ * @param[in] tables_to_merge Non-empty list of tables to be merged
+ * @param[in] key_cols Indices of left_cols and right_cols to be used
  *                     for comparison criteria
- * @Param[in] column_order Sort order types of columns indexed by key_cols
- * @Param[in] null_precedence Array indicating the order of nulls with respect
+ * @param[in] column_order Sort order types of columns indexed by key_cols
+ * @param[in] null_precedence Array indicating the order of nulls with respect
  * to non-nulls for the indexing columns (key_cols)
  *
- * @Returns A table containing sorted data from all input tables
+ * @returns A table containing sorted data from all input tables
  */
 std::unique_ptr<cudf::experimental::table> merge(
   std::vector<table_view> const& tables_to_merge,
@@ -93,5 +100,6 @@ std::unique_ptr<cudf::experimental::table> merge(
   std::vector<cudf::null_order> const& null_precedence = {},
   rmm::mr::device_memory_resource* mr                  = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf
