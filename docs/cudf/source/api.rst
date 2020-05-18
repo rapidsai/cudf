@@ -7,6 +7,7 @@ DataFrame
 ---------
 .. autoclass:: DataFrame
     :members:
+    :exclude-members: serialize, deserialize
 
 ..
   For cudf.concat function
