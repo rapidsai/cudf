@@ -80,13 +80,13 @@ mv $PROJECT_WORKSPACE/cpp/custrings/doxygen/html/* $DOCS_WORKSPACE/api/libnvstri
 
 
 for PROJECT in ${PROJECTS[@]}; do
-	echo ""
+    echo ""
     echo "Customizing: $PROJECT"
-	./customization/customize_docs_in_folder.sh api/$PROJECT/ $NIGHTLY_VERSION
+    ./customization/customize_docs_in_folder.sh api/$PROJECT/ $NIGHTLY_VERSION
 done
 
 for PROJECT in ${PROJECTS[@]}; do
-	cd $DOCS_WORKSPACE/api/$PROJECT/
-	git add .	
+    cd $DOCS_WORKSPACE/api/$PROJECT/
+    git add .	
 done
 
