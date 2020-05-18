@@ -613,6 +613,52 @@ class DataFrame(Frame):
         return columns + index
 
     def memory_usage(self, index=True, deep=False):
+        """
+        Return the memory usage of each column in bytes.
+        The memory usage can optionally include the contribution of
+        the index and elements of `object` dtype.
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the DataFrame's
+            index in returned Series. If ``index=True``, the memory usage of
+            the index is the first item in the output.
+        deep : bool, default False
+            If True, introspect the data deeply by interrogating
+            `object` dtypes for system-level memory consumption, and include
+            it in the returned values.
+
+        Returns
+        -------
+        Series
+            A Series whose index is the original column names and whose values
+            is the memory usage of each column in bytes.
+
+        Examples
+        --------
+        >>> dtypes = ['int64', 'float64', 'object', 'bool']
+        >>> data = dict([(t, np.ones(shape=5000).astype(t))
+        ...              for t in dtypes])
+        >>> df = cudf.DataFrame(data)
+        >>> df.head()
+            int64  float64  object  bool
+        0      1      1.0     1.0  True
+        1      1      1.0     1.0  True
+        2      1      1.0     1.0  True
+        3      1      1.0     1.0  True
+        4      1      1.0     1.0  True
+        >>> df.memory_usage(index=False)
+        int64      40000
+        float64    40000
+        object     40000
+        bool        5000
+        dtype: int64
+        Use a Categorical for efficient storage of an object-dtype column with
+        many repeated values.
+        >>> df['object'].astype('category').memory_usage(deep=True)
+        5048
+        """
         ind = list(self.columns)
         sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
         if index:
