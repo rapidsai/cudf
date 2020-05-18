@@ -1082,7 +1082,7 @@ class DataFrame(Frame):
             )
         return result
 
-    def add(self, other, axis="columns", fill_value=None):
+    def add(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Addition of dataframe and other, element-wise (binary
         operator `add`).
@@ -1130,12 +1130,16 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("add", other, fill_value)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
 
-    def radd(self, other, axis=1, fill_value=None):
+    def radd(self, other, axis=1, level=None, fill_value=None):
         """
         Get Addition of dataframe and other, element-wise (binary
         operator `radd`).
@@ -1183,12 +1187,16 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("radd", other, fill_value)
 
     def __radd__(self, other):
         return self._apply_op("__radd__", other)
 
-    def sub(self, other, axis="columns", fill_value=None):
+    def sub(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Subtraction of dataframe and other, element-wise (binary
         operator `sub`).
@@ -1236,12 +1244,16 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("sub", other, fill_value)
 
     def __sub__(self, other):
         return self._apply_op("__sub__", other)
 
-    def rsub(self, other, axis="columns", fill_value=None):
+    def rsub(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Subtraction of dataframe and other, element-wise (binary
         operator `rsub`).
@@ -1289,12 +1301,16 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("rsub", other, fill_value)
 
     def __rsub__(self, other):
         return self._apply_op("__rsub__", other)
 
-    def mul(self, other, axis="columns", fill_value=None):
+    def mul(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Multiplication of dataframe and other, element-wise (binary
         operator `mul`).
@@ -1344,12 +1360,16 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("mul", other, fill_value)
 
     def __mul__(self, other):
         return self._apply_op("__mul__", other)
 
-    def rmul(self, other, axis="columns", fill_value=None):
+    def rmul(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Multiplication of dataframe and other, element-wise (binary
         operator `rmul`).
@@ -1399,12 +1419,16 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("rmul", other, fill_value)
 
     def __rmul__(self, other):
         return self._apply_op("__rmul__", other)
 
-    def mod(self, other, axis="columns", fill_value=None):
+    def mod(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Modulo division of dataframe and other, element-wise (binary
         operator `mod`).
@@ -1452,12 +1476,16 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("mod", other, fill_value)
 
     def __mod__(self, other):
         return self._apply_op("__mod__", other)
 
-    def rmod(self, other, axis="columns", fill_value=None):
+    def rmod(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Modulo division of dataframe and other, element-wise (binary
         operator `rmod`).
@@ -1505,12 +1533,16 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("rmod", other, fill_value)
 
     def __rmod__(self, other):
         return self._apply_op("__rmod__", other)
 
-    def pow(self, other, axis="columns", fill_value=None):
+    def pow(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Exponential power of dataframe and other, element-wise (binary
         operator `pow`).
@@ -1558,12 +1590,16 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("pow", other, fill_value)
 
     def __pow__(self, other):
         return self._apply_op("__pow__", other)
 
-    def rpow(self, other, axis="columns", fill_value=None):
+    def rpow(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Exponential power of dataframe and other, element-wise (binary
         operator `pow`).
@@ -1611,12 +1647,16 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("rpow", other, fill_value)
 
     def __rpow__(self, other):
         return self._apply_op("__pow__", other)
 
-    def floordiv(self, other, axis="columns", fill_value=None):
+    def floordiv(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Integer division of dataframe and other, element-wise (binary
         operator `floordiv`).
@@ -1664,12 +1704,16 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("floordiv", other, fill_value)
 
     def __floordiv__(self, other):
         return self._apply_op("__floordiv__", other)
 
-    def rfloordiv(self, other, axis="columns", fill_value=None):
+    def rfloordiv(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Integer division of dataframe and other, element-wise (binary
         operator `rfloordiv`).
@@ -1704,12 +1748,16 @@ class DataFrame(Frame):
 
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("rfloordiv", other, fill_value)
 
     def __rfloordiv__(self, other):
         return self._apply_op("__rfloordiv__", other)
 
-    def truediv(self, other, axis="columns", fill_value=None):
+    def truediv(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Floating division of dataframe and other, element-wise (binary
         operator `truediv`).
@@ -1762,6 +1810,10 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("truediv", other, fill_value)
 
     # Alias for truediv
@@ -1770,7 +1822,7 @@ class DataFrame(Frame):
     def __truediv__(self, other):
         return self._apply_op("__truediv__", other)
 
-    def rtruediv(self, other, axis="columns", fill_value=None):
+    def rtruediv(self, other, axis="columns", level=None, fill_value=None):
         """
         Get Floating division of dataframe and other, element-wise (binary
         operator `rtruediv`).
@@ -1823,6 +1875,10 @@ class DataFrame(Frame):
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("rtruediv", other, fill_value)
 
     # Alias for rtruediv
