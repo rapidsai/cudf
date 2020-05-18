@@ -38,8 +38,8 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 {
   using MapValueType = typename thrust::iterator_traits<MapIterator>::value_type;
 
-  static_assert(std::is_signed<MapValueType>::value,
-                "Need different invalid index if unsigned index types are added");
+  // static_assert(std::is_signed<MapValueType>::value,
+  //              "Need different invalid index if unsigned index types are added");
   auto const invalid_index = static_cast<MapValueType>(-1);
 
   // Convert scatter map to a gather map
