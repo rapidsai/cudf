@@ -185,7 +185,7 @@ struct ScanDispatcher {
    * @param input     input column view
    * @param inclusive inclusive or exclusive scan
    * @param mr Device memory resource used to allocate the returned column
-   * @param stream The stream on which to execute all allocations and copies
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return
    *
    * @tparam T type of input column
