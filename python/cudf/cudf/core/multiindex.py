@@ -469,7 +469,7 @@ class MultiIndex(Index):
     def _get_row_major(self, df, row_tuple):
         from cudf import Series
 
-        if pd.api.types.is_bool_dtype(list(row_tuple)):
+        if pd.api.types.is_bool_dtype(row_tuple):
             return df[row_tuple]
 
         valid_indices = self._get_valid_indices_by_tuple(
