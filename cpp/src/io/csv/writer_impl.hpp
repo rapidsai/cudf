@@ -67,7 +67,7 @@ class writer::impl {
    *
    * @param table The set of columns
    * @param metadata The metadata associated with the table
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void write(table_view const& table,
              const table_metadata* metadata = nullptr,
@@ -78,7 +78,7 @@ class writer::impl {
    *
    * @param table The set of columns
    * @param metadata The metadata associated with the table
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void write_chunked_begin(table_view const& table,
                            const table_metadata* metadata = nullptr,
@@ -89,7 +89,7 @@ class writer::impl {
    *
    * @param strings_column Subset of columns converted to string to be written.
    * @param metadata The metadata associated with the table
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void write_chunked(strings_column_view const& strings_column,
                      const table_metadata* metadata = nullptr,
@@ -100,7 +100,7 @@ class writer::impl {
    *
    * @param table The set of columns
    * @param metadata The metadata associated with the table
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void write_chunked_end(table_view const& table,
                          const table_metadata* metadata = nullptr,

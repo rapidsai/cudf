@@ -90,7 +90,7 @@ class reader::impl {
    * @param skip_rows_end Number of rows to skip from the end
    * @param num_rows Number of rows to read
    * @param metadata Optional location to return table metadata
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with metadata
    */
@@ -116,7 +116,7 @@ class reader::impl {
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; -1: all remaining data
    * @param load_whole_file Hint that the entire data will be needed on gpu
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void gather_row_offsets(const char *h_data,
                           size_t h_size,
@@ -140,7 +140,7 @@ class reader::impl {
   /**
    * @brief Returns a detected or parsed list of column dtypes.
    *
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return `std::vector<data_type>` List of column types
    */
@@ -151,7 +151,7 @@ class reader::impl {
    *
    * @param column_types Column types
    * @param out_buffers Output columns' device buffers
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void decode_data(std::vector<data_type> const &column_types,
                    std::vector<column_buffer> &out_buffers,
