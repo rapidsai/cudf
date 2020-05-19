@@ -46,7 +46,7 @@ namespace detail {
  * @param begin Start of index iterator.
  * @param end End of index iterator.
  * @param mr Device memory resource used to allocate the returned column.
- * @param stream CUDA stream to use kernels in this method.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column containing the gathered strings.
  */
 template <bool NullifyOutOfBounds, typename MapIterator>
@@ -123,7 +123,7 @@ std::unique_ptr<cudf::column> gather(
  * @param end End of index iterator.
  * @param nullify_out_of_bounds If true, indices outside the column's range are nullified.
  * @param mr Device memory resource used to allocate the returned column.
- * @param stream CUDA stream to use kernels in this method.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column containing the gathered strings.
  */
 template <typename MapIterator>

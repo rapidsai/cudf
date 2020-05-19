@@ -90,7 +90,7 @@ namespace detail {
  * @param target_end The index of the last element in the target range
  * (exclusive)
  * @param mr Device memory resource used to allocate the returned column.
- * @param stream CUDA stream to run this function
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> The result target column
  */
 template <typename SourceValueIterator, typename SourceValidityIterator>

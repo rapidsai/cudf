@@ -38,7 +38,7 @@ namespace detail {
  * @param rhs Second column.
  * @param row_order Indexes for each column.
  * @param mr Device memory resource used to allocate the returned column.
- * @param stream CUDA stream to use for any kernels in this function.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column.
  */
 template <typename index_type, typename row_order_iterator>

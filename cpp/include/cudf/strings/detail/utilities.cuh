@@ -34,7 +34,7 @@ namespace detail {
  * @param begin The beginning of the input sequence
  * @param end The end of the input sequence
  * @param mr Device memory resource used to allocate the returned column.
- * @param stream Stream to use for any kernel calls.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return offsets child column for strings column
  */
 template <typename InputIterator>

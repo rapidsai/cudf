@@ -45,7 +45,7 @@ namespace detail {
  * @param filter_fn Called to determine which iterator (lhs or rhs) to retrieve an entry for a
  * specific row.
  * @param mr Device memory resource used to allocate the returned column.
- * @param stream CUDA stream to use kernels in this method.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column.
  */
 template <typename StringPairIterLeft, typename StringPairIterRight, typename Filter>

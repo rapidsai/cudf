@@ -45,7 +45,7 @@ namespace detail {
  * @param target The set of columns into which values from the source column
  *        are to be scattered.
  * @param mr Device memory resource used to allocate the returned column
- * @param stream The stream to use for CUDA operations
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column.
  */
 template <typename SourceIterator, typename MapIterator>
