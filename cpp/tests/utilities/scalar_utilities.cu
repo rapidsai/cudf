@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,6 +61,13 @@ void compare_scalar_functor::operator()<cudf::dictionary32>(cudf::scalar const& 
                                                             cudf::scalar const& rhs)
 {
   CUDF_FAIL("Unsupported scalar compare type: dictionary");
+}
+
+template <>
+void compare_scalar_functor::operator()<cudf::list_view>(cudf::scalar const& lhs,
+                                                         cudf::scalar const& rhs)
+{
+  CUDF_FAIL("Unsupported scalar compare type: list_view");
 }
 
 }  // anonymous namespace
