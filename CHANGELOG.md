@@ -157,6 +157,7 @@
 - PR #5039 Make `annotate` picklable
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
 - PR #5049 Add grouping of libcudf apis into doxygen modules
+- PR #5069 Remove duplicate documentation from detail headers
 - PR #5075 Add simple row-group aggregation mechanism in dask_cudf read_parquet
 - PR #5084 Improve downcasting in `Series.label_encoding()` to reduce memory usage
 - PR #5085 Print more precise numerical strings in unit tests
@@ -183,6 +184,7 @@
 - PR #5214 Move docs build script into repository
 - PR #5155 Fix cudf documentation misspellings
 - PR #5214 Move docs build script into repository
+- PR #5219 Add per context cache for JIT kernels
 
 ## Bug Fixes
 
