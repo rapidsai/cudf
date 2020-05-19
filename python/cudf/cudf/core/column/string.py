@@ -510,8 +510,8 @@ class StringMethods(object):
 
     def replace_with_backrefs(self, pat, repl, **kwargs):
         """
-        Use the `repl` back-ref template to create a new string
-        with the extracted elements found using the `pat` expression.
+        Use the ``repl`` back-ref template to create a new string
+        with the extracted elements found using the ``pat`` expression.
 
         Parameters
         ----------
@@ -1314,7 +1314,7 @@ class StringMethods(object):
         NotImplementedError if they are set to any value.
 
         This method currently achieves behavior matching R’s
-        stringr library str_wrap function, the equivalent
+        stringr library ``str_wrap`` function, the equivalent
         pandas implementation can be obtained using the
         following parameter setting:
 
@@ -1516,7 +1516,7 @@ class StringMethods(object):
     def find(self, sub, start=0, end=None, **kwargs):
         """
         Return lowest indexes in each strings in the Series/Index
-        where the substring is fully contained between [start:end].
+        where the substring is fully contained between ``[start:end]``.
         Return -1 on failure.
 
         Parameters
@@ -1551,7 +1551,7 @@ class StringMethods(object):
     def rfind(self, sub, start=0, end=None, **kwargs):
         """
         Return highest indexes in each strings in the Series/Index
-        where the substring is fully contained between [start:end].
+        where the substring is fully contained between ``[start:end]``.
         Return -1 on failure.
 
         Parameters
@@ -1586,7 +1586,7 @@ class StringMethods(object):
     def index(self, sub, start=0, end=None, **kwargs):
         """
         Return lowest indexes in each strings where the substring
-        is fully contained between [start:end]. This is the same
+        is fully contained between ``[start:end]``. This is the same
         as str.find except instead of returning -1, it raises a ValueError
         when the substring is not found.
 
@@ -1627,9 +1627,9 @@ class StringMethods(object):
     def rindex(self, sub, start=0, end=None, **kwargs):
         """
         Return highest indexes in each strings where the substring
-        is fully contained between [start:end]. This is the same
-        as str.rfind except instead of returning -1, it raises a ValueError
-        when the substring is not found.
+        is fully contained between ``[start:end]``. This is the same
+        as ``str.rfind`` except instead of returning -1, it raises a
+        ``ValueError`` when the substring is not found.
 
         Parameters
         ----------
@@ -1713,7 +1713,7 @@ class StringMethods(object):
         Returns a URL-encoded format of each string.
         No format checking is performed.
         All characters are encoded except for ASCII letters,
-        digits, and these characters: ‘.’,’_’,’-‘,’~’.
+        digits, and these characters: ``‘.’,’_’,’-‘,’~’``.
         Encoding converts to hex using UTF-8 encoded bytes.
 
         Returns
@@ -1727,7 +1727,7 @@ class StringMethods(object):
         """
         Returns an array by filling it with the UTF-8 code point
         values for each character of each string.
-        This function uses the len() method to determine
+        This function uses the ``len()`` method to determine
         the size of each sub-array of integers.
 
         Returns
