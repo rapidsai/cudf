@@ -125,7 +125,7 @@ struct upper_lower_fn {
  * @param strings Strings to convert.
  * @param case_flag The character type to convert (upper, lower, or both)
  * @param mr Device memory resource used to allocate the returned column.
- * @param stream Stream to use for any kernels launched.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column with characters converted.
  */
 std::unique_ptr<column> convert_case(strings_column_view const& strings,

@@ -44,7 +44,7 @@ namespace {
  * @param stop Last character position (exclusive) to end the search.
  * @param pfn Functor used for locating `target` in each string.
  * @param mr Device memory resource used to allocate the returned column.
- * @param stream Stream to use for kernel calls.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New integer column with character position values.
  */
 template <typename FindFunction>
@@ -167,7 +167,7 @@ namespace {
  * @param target UTF-8 encoded string to check in strings column.
  * @param pfn Returns bool value if target is found in the given string.
  * @param mr Device memory resource used to allocate the returned column.
- * @param stream Stream to use for kernel calls.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New BOOL column.
  */
 template <typename BoolFunction>
