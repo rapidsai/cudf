@@ -386,6 +386,39 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
+   * for null entries
+   *
+   * NOTE: Integer doesn't mean a 32-bit integer. It means a number that is not a fraction.
+   * i.e. If this method returns true for a value it could still result in an overflow or underflow
+   * if you convert it to a Java integral type
+   *
+   * @return - Boolean vector
+   */
+  public ColumnVector isInteger() {
+    assert type == DType.STRING;
+    return new ColumnVector(isInteger(getNativeView()));
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is a float, and FALSE if its not a float. A null will be returned
+   * for null entries
+   *
+   * NOTE: Float doesn't mean a 32-bit float. It means a number that is a fraction or can be written
+   * as a fraction. i.e. This method will return true for integers as well as floats. Also note if
+   * this method returns true for a value it could still result in an overflow or underflow if you
+   * convert it to a Java float or double
+   *
+   * @return - Boolean vector
+   */
+  public ColumnVector isFloat() {
+    assert type == DType.STRING;
+    return new ColumnVector(isFloat(getNativeView()));
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is NaN, and FALSE if null or a valid floating point value
    * @return - Boolean vector
    */
@@ -2359,6 +2392,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private static native long isNanNative(long viewHandle);
 
+  private static native long isFloat(long viewHandle);
+
+  private static native long isInteger(long viewHandle);
+
   private static native long isNotNanNative(long viewHandle);
 
   private static native long isNotNullNative(long viewHandle);
@@ -2912,4 +2949,5 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   public static ColumnVector timestampNanoSecondsFromBoxedLongs(Long... values) {
     return build(DType.TIMESTAMP_NANOSECONDS, values.length, (b) -> b.appendBoxed(values));
   }
+
 }
