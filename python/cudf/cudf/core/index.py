@@ -20,6 +20,7 @@ from cudf.core.column import (
     StringColumn,
     column,
 )
+from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.frame import Frame
 from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -1101,6 +1102,11 @@ class StringIndex(GenericIndex):
             )
             + ")"
         )
+
+    @copy_docstring(StringMethods)
+    @property
+    def str(self):
+        return self._values.str(parent=self)
 
 
 def as_index(arbitrary, **kwargs):
