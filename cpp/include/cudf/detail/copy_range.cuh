@@ -128,7 +128,7 @@ namespace detail {
  * @param target_begin The starting index of the target range (inclusive)
  * @param target_end The index of the last element in the target range
  * (exclusive)
- * @param stream CUDA stream to run this function
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 template <typename SourceValueIterator, typename SourceValidityIterator>
 void copy_range(SourceValueIterator source_value_begin,
@@ -190,7 +190,7 @@ void copy_range(SourceValueIterator source_value_begin,
 
 /**
  * @copydoc cudf::experimental::copy_range_in_place
- * @param stream Optional CUDA stream to run this function
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
@@ -201,7 +201,7 @@ void copy_range_in_place(column_view const& source,
 
 /**
  * @copydoc cudf::experimental::copy_range
- * @param stream CUDA stream to run this function
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> The result target column
  */
 std::unique_ptr<column> copy_range(

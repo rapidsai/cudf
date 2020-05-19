@@ -68,7 +68,7 @@ ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type
 /**
  * @copydoc cudf::experimental::slice(column_view const&,std::vector<size_type> const&)
  *
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices,
@@ -77,7 +77,7 @@ std::vector<column_view> slice(column_view const& input,
 /**
  * @copydoc cudf::experimental::contiguous_split
  *
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
 std::vector<contiguous_split_result> contiguous_split(
   cudf::table_view const& input,
