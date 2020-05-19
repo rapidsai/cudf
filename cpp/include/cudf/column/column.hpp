@@ -58,7 +58,7 @@ class column {
    * and copies.
    *
    * @param other The `column` to copy
-   * @param stream The stream on which to execute all allocations and copies
+   * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for all allocations
    */
   column(column const& other,
@@ -113,8 +113,7 @@ class column {
    * This accounts for the `column_view`'s offset.
    *
    * @param view The view to copy
-   * @param stream The stream on which all allocations and copies will be
-   * executed
+   * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for all allocations
    */
   explicit column(column_view view,
