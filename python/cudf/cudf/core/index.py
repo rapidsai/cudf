@@ -499,7 +499,7 @@ class Index(Frame):
         return self._values._memory_usage(deep=deep)
 
     @classmethod
-    def from_pandas(cls, index, nan_as_null=None):
+    def from_pandas(cls, index, nan_as_null=True):
         if not isinstance(index, pd.Index):
             raise TypeError("not a pandas.Index")
 
