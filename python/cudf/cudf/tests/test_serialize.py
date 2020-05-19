@@ -55,12 +55,12 @@ def test_serialize(df, to_host):
             ndevice += 1
     # Indices etc. will not be DeviceNDArray
     # but data should be...
-    if hasattr(df, "_cols"):
-        assert ndevice >= len(df._data)
-    elif not to_host:
-        assert ndevice > 0
-    else:
+    if to_host:
         assert ndevice == 0
+    elif hasattr(df, "_cols"):
+        assert ndevice >= len(df._data)
+    else:
+        assert ndevice > 0
 
     typ = type(a)
     b = typ.deserialize(header, frames)
