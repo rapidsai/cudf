@@ -435,7 +435,7 @@ class GroupBy(Serializable):
                             total += val[j]
                         avg[i] = total / win_size
 
-            # Compute moving avgs on all groups
+            # Compute moving averages on all groups
             results = groups.apply_grouped(rolling_avg,
                                            incols=['val'],
                                            outcols=dict(avg=np.float64))

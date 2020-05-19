@@ -82,7 +82,7 @@ def test_string_index(testlist):
 )
 def test_categorical_index(testlist):
 
-    # Assuming unordered catagorical data cannot be "monotonic"
+    # Assuming unordered categorical data cannot be "monotonic"
     raw_cat = pd.Categorical(testlist, ordered=True)
     index = CategoricalIndex(raw_cat)
     index_pd = pd.CategoricalIndex(raw_cat)

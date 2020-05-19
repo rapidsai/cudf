@@ -22,9 +22,11 @@
 #include <vector>
 
 namespace cudf {
+
 /**
  * @brief Tie-breaker method to use for ranking the column.
  *
+ * @ingroup column_sort
  */
 enum class rank_method {
   FIRST,    ///< stable sort order ranking (no ties)
@@ -35,6 +37,10 @@ enum class rank_method {
 };
 
 namespace experimental {
+/**
+ * @addtogroup column_sort
+ * @{
+ */
 
 /**
  * @brief Computes the row indices that would produce `input`  in a
@@ -49,7 +55,7 @@ namespace experimental {
  * If empty, all columns will be sorted in `null_order::BEFORE`.
  * @return std::unique_ptr<column> A non-nullable column of `size_type` elements
  * containing the permuted row indices of `input` if it were sorted
- **/
+ */
 std::unique_ptr<column> sorted_order(
   table_view input,
   std::vector<order> const& column_order         = {},
@@ -59,9 +65,10 @@ std::unique_ptr<column> sorted_order(
 /**
  * @brief Computes the row indices that would produce `input` in a stable
  * lexicographical sorted order.
+ *
  * The order of equivalent elements is guaranteed to be preserved.
  *
- * @copydetails cudf::experimental::sorted_order
+ * @copydoc cudf::experimental::sorted_order
  */
 std::unique_ptr<column> stable_sorted_order(
   table_view input,
@@ -84,7 +91,7 @@ std::unique_ptr<column> stable_sorted_order(
  *                              `null_order::BEFORE` is assumed for all columns.
  *
  * @returns bool                true if sorted as expected, false if not.
- **/
+ */
 bool is_sorted(cudf::table_view const& table,
                std::vector<order> const& column_order,
                std::vector<null_order> const& null_precedence);
@@ -138,6 +145,7 @@ std::unique_ptr<table> sort_by_key(
 
 /**
  * @brief Computes the ranks of input column in sorted order.
+ *
  * Rank indicate the position of each element in the sorted column and rank
  * value starts from 1.
  *
@@ -173,5 +181,6 @@ std::unique_ptr<column> rank(column_view const& input,
                              bool percentage,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf

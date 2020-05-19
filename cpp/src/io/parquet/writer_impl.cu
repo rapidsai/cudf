@@ -443,10 +443,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(table_view const &tabl
                                                           const std::string &metadata_out_file_path,
                                                           cudaStream_t stream)
 {
-  pq_chunked_state state;
-  state.user_metadata     = metadata;
-  state.stream            = stream;
-  state.single_write_mode = true;
+  pq_chunked_state state{metadata, SingleWriteMode::YES, stream};
 
   write_chunked_begin(state);
   write_chunked(table, state);
@@ -459,7 +456,6 @@ void writer::impl::write_chunked_begin(pq_chunked_state &state)
   file_header_s fhdr;
   fhdr.magic = PARQUET_MAGIC;
   out_sink_->host_write(&fhdr, sizeof(fhdr));
-
   state.current_chunk_offset = sizeof(file_header_s);
 }
 
@@ -518,7 +514,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       // with nulls/no nulls in the multiple write_chunked() case.  so we'll do some special
       // handling.
       //
-      // if the user is explictly saying "I am only calling this once", fall back to the original
+      // if the user is explicitly saying "I am only calling this once", fall back to the original
       // behavior and assume the columns in this one table tell us everything we need to know.
       if (state.single_write_mode) {
         state.md.schema[1 + i].repetition_type =
@@ -935,7 +931,10 @@ std::unique_ptr<std::vector<uint8_t>> writer::write_all(table_view const &table,
 }
 
 // Forward to implementation
-void writer::write_chunked_begin(pq_chunked_state &state) { _impl->write_chunked_begin(state); }
+void writer::write_chunked_begin(pq_chunked_state &state)
+{
+  return _impl->write_chunked_begin(state);
+}
 
 // Forward to implementation
 void writer::write_chunked(table_view const &table, pq_chunked_state &state)

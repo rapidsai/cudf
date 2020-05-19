@@ -43,6 +43,8 @@ from cudf._lib.strings.char_types import (
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
     is_digit as cpp_is_digit,
+    is_float as cpp_is_float,
+    is_integer as cpp_is_integer,
     is_lower as cpp_is_lower,
     is_numeric as cpp_is_numeric,
     is_space as cpp_isspace,
@@ -149,7 +151,7 @@ _numeric_to_str_typecast_functions = {
 
 class StringMethods(object):
     """
-    This mimicks pandas `df.str` interface.
+    This mimics pandas `df.str` interface.
     """
 
     def __init__(self, column, parent=None):
@@ -429,8 +431,8 @@ class StringMethods(object):
         self, pat, repl, n=-1, case=None, flags=0, regex=True, **kwargs
     ):
         """
-        Replace occurences of pattern/regex in the Series/Index with some other
-        string.
+        Replace occurrences of pattern/regex in the Series/Index with some
+        other string.
 
         Parameters
         ----------
@@ -784,7 +786,7 @@ class StringMethods(object):
             Default is beginning of the each string.
             Specify -1 to insert at the end of each string.
         repl : str
-            String to insert into the specified position valus.
+            String to insert into the specified position value.
 
         Returns
         -------
@@ -821,7 +823,7 @@ class StringMethods(object):
             cpp_string_get(self._column, i), **kwargs
         )
 
-    def split(self, pat=None, n=-1, expand=True, **kwargs):
+    def split(self, pat=None, n=-1, expand=None, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -846,8 +848,13 @@ class StringMethods(object):
         The parameter `expand` is not yet supported and will raise a
         NotImplementedError if anything other than the default value is set.
         """
-        if expand is not True:
-            raise NotImplementedError("`expand` parameter is not supported")
+        if expand is None:
+            expand = True
+            warnings.warn("`expand` parameter defatults to True.")
+        elif expand is not True:
+            raise NotImplementedError(
+                "`expand=False` setting is not supported yet"
+            )
 
         # Pandas treats 0 as all
         if n == 0:
@@ -868,7 +875,7 @@ class StringMethods(object):
 
         return self._return_or_inplace(result_table, **kwargs,)
 
-    def rsplit(self, pat=None, n=-1, expand=True, **kwargs):
+    def rsplit(self, pat=None, n=-1, expand=None, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -893,8 +900,13 @@ class StringMethods(object):
         The parameter `expand` is not yet supported and will raise a
         NotImplementedError if anything other than the default value is set.
         """
-        if expand is not True:
-            raise NotImplementedError("`expand=False` is not yet supported")
+        if expand is None:
+            expand = True
+            warnings.warn("`expand` parameter defatults to True.")
+        elif expand is not True:
+            raise NotImplementedError(
+                "`expand=False` setting is not supported yet"
+            )
 
         # Pandas treats 0 as all
         if n == 0:
@@ -1410,7 +1422,7 @@ class StringMethods(object):
 
     def isempty(self, **kwargs):
         """
-        Check whether each string is a an empty string.
+        Check whether each string is an empty string.
 
         Returns : Series or Index of bool
             Series or Index of boolean values with the same length as
@@ -2052,6 +2064,21 @@ class StringColumn(column.ColumnBase):
                     fmt = datetime.infer_format(self[self.notna()][0])
                     kwargs.update(format=fmt)
         kwargs.update(dtype=out_dtype)
+
+        if str_dtype.kind in ("i"):
+
+            if not cpp_is_integer(self).all():
+                raise ValueError(
+                    "Could not convert strings to integer \
+                        type due to presence of non-integer values."
+                )
+        elif str_dtype.kind in ("f"):
+
+            if not cpp_is_float(self).all():
+                raise ValueError(
+                    "Could not convert strings to float \
+                        type due to presence of non-floating values."
+                )
 
         return _str_to_numeric_typecast_functions[str_dtype](self, **kwargs)
 

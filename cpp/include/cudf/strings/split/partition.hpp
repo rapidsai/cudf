@@ -22,9 +22,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_apis
- * @addtogroup strings_split Split
- * APIs to split strings into multiple columns of strings.
+ * @addtogroup strings_split
  * @{
  */
 
@@ -50,7 +48,7 @@ namespace strings {
  * @endcode
  *
  * @param strings Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indentifying where to split each string.
+ * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
  * @param mr Resource for allocating device memory.
  * @return New table of strings columns.
@@ -82,7 +80,7 @@ std::unique_ptr<experimental::table> partition(
  * @endcode
  *
  * @param strings Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indentifying where to split each string.
+ * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
  * @param mr Resource for allocating device memory.
  * @return New strings columns.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include "datetime.cuh"
 
 #include <cudf/detail/utilities/trie.cuh>
+#include <cudf/lists/list_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/bit.hpp>
@@ -74,7 +75,7 @@ __device__ __inline__ void trim_field_start_end(const char *data,
  * @brief Returns true is the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  *
- * @param c Chracter to check
+ * @param c Character to check
  * @param is_hex Whether to check as a hexadecimal
  *
  * @return `true` if it is digit-like, `false` otherwise
@@ -351,6 +352,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
 }
 
 // The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
 template <>
 __inline__ __device__ cudf::string_view decode_value(const char *data,
                                                      long start,
@@ -359,6 +361,8 @@ __inline__ __device__ cudf::string_view decode_value(const char *data,
 {
   return cudf::string_view{};
 }
+
+// The purpose of this is merely to allow compilation ONLY
 template <>
 __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
                                                       long start,
@@ -366,6 +370,17 @@ __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
                                                       ParseOptions const &opts)
 {
   return cudf::dictionary32{};
+}
+
+// The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
+template <>
+__inline__ __device__ cudf::list_view decode_value(const char *data,
+                                                   long start,
+                                                   long end,
+                                                   ParseOptions const &opts)
+{
+  return cudf::list_view{};
 }
 
 /**
@@ -658,7 +673,7 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
 /*
  * @brief 512-wide row context merge transform
  *
- * Repeatingly merge row context blocks, keeping track of each merge operation
+ * Repeatedly merge row context blocks, keeping track of each merge operation
  * in a context tree so that the transform is reversible
  * The tree is organized such that the left and right children of node n
  * are located at indices n*2 and n*2+1, the root node starting at index 1
@@ -811,7 +826,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
     .y = 0,
     .z = 0,
     .w = (ROW_CTX_NONE << 0) | (ROW_CTX_QUOTE << 2) | (ROW_CTX_COMMENT << 4) | (ROW_CTX_EOF << 6)};
-  int c, c_prev = (cur > start) ? cur[-1] : terminator;
+  int c, c_prev = (cur > start && cur <= end) ? cur[-1] : terminator;
   // Loop through all 32 bytes and keep a bitmask of row starts for each possible input context
   for (uint32_t pos = 0; pos < 32; pos++, cur++, c_prev = c) {
     uint32_t ctx;
@@ -842,12 +857,11 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       }
     } else {
       const char *data_end = start + data_size - start_offset;
-      if (cur >= data_end) {
+      if (cur <= end && cur == data_end) {
         // Add a newline at data end (need the extra row offset to infer length of previous row)
-        uint32_t eof_row = (cur == data_end && cur <= end) ? 1 : 0;
-        ctx = make_char_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, eof_row, eof_row, eof_row);
+        ctx = make_char_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, 1, 1, 1);
       } else {
-        // Pass-through context (beyond chunk_size but before data_size)
+        // Pass-through context (beyond chunk_size or data_end)
         ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_COMMENT);
       }
     }

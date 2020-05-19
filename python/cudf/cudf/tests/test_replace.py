@@ -486,7 +486,7 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
     with pytest.raises(TypeError):
         sr.replace(0, [replacement, 2])
 
-    # Both list of uneqal length
+    # Both list of unequal length
     with pytest.raises(ValueError):
         sr.replace([0, 1], [replacement])
 

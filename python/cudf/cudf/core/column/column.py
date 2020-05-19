@@ -642,7 +642,7 @@ class ColumnBase(Serializable, Column):
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
 
-        # get sorted indicies and exclude nulls
+        # get sorted indices and exclude nulls
         sorted_indices = self.as_frame()._get_sorted_inds(True, "after")
         sorted_indices = sorted_indices[self.null_count :]
 
@@ -1036,11 +1036,11 @@ def build_column(
     Parameters
     ----------
     data : Buffer
-        The data buffer (can be None if constructin certain Column
+        The data buffer (can be None if constructing certain Column
         types like StringColumn or CategoricalColumn)
     dtype
         The dtype associated with the Column to construct
-    mask : Buffer, optionapl
+    mask : Buffer, optional
         The mask buffer
     size : int, optional
     offset : int, optional
@@ -1143,7 +1143,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         no mask passed along with it. If True, combines the mask and NaNs to
         form a new validity mask. If False, leaves NaN values as is.
     dtype : optional
-        Optionally typecast the construted Column to the given
+        Optionally typecast the constructed Column to the given
         dtype.
     length : int, optional
         If `arbitrary` is a scalar, broadcast into a Column of
@@ -1213,7 +1213,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
     elif isinstance(arbitrary, Buffer):
         if dtype is None:
-            raise TypeError(f"dtype cannot be None if 'arbitrary' is a Buffer")
+            raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
         data = build_column(arbitrary, dtype=dtype)
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
@@ -1565,7 +1565,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
 
 def column_applymap(udf, column, out_dtype):
-    """Apply a elemenwise function to transform the values in the Column.
+    """Apply an element-wise function to transform the values in the Column.
 
     Parameters
     ----------

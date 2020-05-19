@@ -21,9 +21,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_apis
- * @addtogroup strings_case Case
- * APIs to convert the upper/lower case of strings characters.
+ * @addtogroup strings_case
  * @{
  */
 

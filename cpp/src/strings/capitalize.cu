@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/case.hpp>
+#include <cudf/strings/detail/modify_strings.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -32,9 +33,9 @@ namespace strings {
 namespace detail {
 namespace {  // anonym.
 
-// base class for probing string
-// manipulation memory load requirements;
-// and for executing string modification:
+// base class for 2-passes string modification:
+// 1st pass: probing string manipulation memory load requirements
+// 2nd pass: executing string modification.
 //
 struct probe_execute_base {
   using char_info = thrust::pair<uint32_t, detail::character_flags_table_type>;
@@ -249,76 +250,21 @@ struct execute_title : private probe_execute_title {
 };
 
 }  // namespace
-
-template <typename device_probe_functor, typename device_execute_functor>
-std::unique_ptr<column> modify_strings(
-  strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0)
-{
-  auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
-
-  auto execpol = rmm::exec_policy(stream);
-
-  auto strings_column  = column_device_view::create(strings.parent(), stream);
-  auto d_column        = *strings_column;
-  size_type null_count = strings.null_count();
-
-  // copy null mask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
-  // get the lookup tables used for case conversion
-
-  device_probe_functor d_probe_fctr{d_column};
-
-  // build offsets column -- calculate the size of each output string
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), d_probe_fctr);
-  auto offsets_column = detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
-  auto offsets_view = offsets_column->view();
-  auto d_new_offsets =
-    offsets_view.template data<int32_t>();  // not sure why this requires `.template` and the next
-                                            // one (`d_chars = ...`) doesn't
-
-  // build the chars column -- convert characters based on case_flag parameter
-  size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-  auto chars_column =
-    strings::detail::create_chars_child_column(strings_count, null_count, bytes, mr, stream);
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.data<char>();
-
-  device_execute_functor d_execute_fctr{d_column, d_new_offsets, d_chars};
-
-  thrust::for_each_n(execpol->on(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     strings_count,
-                     d_execute_fctr);
-
-  //
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
-}
-
 }  // namespace detail
 
 std::unique_ptr<column> capitalize(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::modify_strings<detail::probe_capitalize, detail::execute_capitalize>(strings, mr);
+  return detail::modify_strings<detail::probe_capitalize, detail::execute_capitalize>(
+    strings, mr, nullptr);
 }
 
 std::unique_ptr<column> title(strings_column_view const& strings,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::modify_strings<detail::probe_title, detail::execute_title>(strings, mr);
+  return detail::modify_strings<detail::probe_title, detail::execute_title>(strings, mr, nullptr);
 }
 
 }  // namespace strings

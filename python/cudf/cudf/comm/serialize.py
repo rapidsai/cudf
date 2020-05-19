@@ -11,7 +11,7 @@ try:
         with log_errors():
             return x.device_serialize()
 
-    # all (de-)serializtion are attached to cudf Objects:
+    # all (de-)serializations are attached to cudf Objects:
     # Series/DataFrame/Index/Column/Buffer/etc
     @dask_serialize.register(Serializable)
     def dask_serialize_cudf_object(x):

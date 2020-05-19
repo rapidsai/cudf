@@ -417,7 +417,7 @@ class regex_parser {
           return PLUS_LAZY;
         }
         return PLUS;
-      case '{':  // counted repitition
+      case '{':  // counted repetition
       {
         if (*exprp < '0' || *exprp > '9') break;
         const char32_t* exprp_backup = exprp;  // in case '}' is not found
