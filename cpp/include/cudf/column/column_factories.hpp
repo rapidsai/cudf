@@ -239,8 +239,7 @@ std::unique_ptr<column> make_fixed_width_column(
  * @param strings The vector of pointer/size pairs.
  *                Each pointer must be a device memory address or `nullptr`
  * (indicating a null string). The size must be the number of bytes.
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used for allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<column> make_strings_column(
@@ -270,8 +269,7 @@ std::unique_ptr<column> make_strings_column(
  * bytes.
  * @param null_placeholder string_view indicating null string in given list of
  * string_views.
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used for allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<column> make_strings_column(
@@ -308,8 +306,7 @@ std::unique_ptr<column> make_strings_column(
  * @param null_count The number of null string entries. If equal to
  * `UNKNOWN_NULL_COUNT`, the null count will be computed dynamically on the
  * first invocation of `column::null_count()`
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used for allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<column> make_strings_column(
@@ -348,8 +345,7 @@ std::unique_ptr<column> make_strings_column(
  * @param null_count The number of null string entries. If equal to
  * `UNKNOWN_NULL_COUNT`, the null count will be computed dynamically on the
  * first invocation of `column::null_count()`
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used for allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<column> make_strings_column(
@@ -376,8 +372,7 @@ std::unique_ptr<column> make_strings_column(
  * @param null_count The number of null string entries.
  * @param null_mask The bits specifying the null strings in device memory.
  *                  Arrow format for nulls is used for interpeting this bitmask.
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used for allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<column> make_strings_column(
@@ -399,8 +394,7 @@ std::unique_ptr<column> make_strings_column(
  *
  * @param s The scalar to use for values in the column.
  * @param size The number of rows for the output column.
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column.
  */
 std::unique_ptr<column> make_column_from_scalar(
