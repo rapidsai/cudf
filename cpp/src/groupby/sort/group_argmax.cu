@@ -49,13 +49,15 @@ std::unique_ptr<column> group_argmax(column_view const& values,
     data_type(type_to_id<size_type>()),
     indices->size(),
     static_cast<void const*>(indices->view().template data<size_type>()));
-  auto result_table = cudf::experimental::detail::gather(table_view({key_sort_order}),
-                                                         null_removed_indices,
-                                                         false,
-                                                         indices->nullable(),
-                                                         false,
-                                                         mr,
-                                                         stream);
+  auto result_table = cudf::experimental::detail::gather(
+    table_view({key_sort_order}),
+    null_removed_indices,
+    experimental::detail::bounds::NO_CHECK,
+    indices->nullable() ? experimental::detail::out_of_bounds::IGNORE
+                        : experimental::detail::out_of_bounds::DONT_IGNORE,
+    experimental::detail::negative_indices::NOT_ALLOWED,
+    mr,
+    stream);
 
   return std::move(result_table->release()[0]);
 }

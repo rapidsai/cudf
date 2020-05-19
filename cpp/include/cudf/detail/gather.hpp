@@ -10,6 +10,13 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
+
+// clang-format off
+enum class bounds           : bool { CHECK,  NO_CHECK };
+enum class out_of_bounds    : bool { IGNORE, DONT_IGNORE };
+enum class negative_indices : bool { ALLOW,  NOT_ALLOWED };
+// clang-format on
+
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.
  *
@@ -41,9 +48,9 @@ namespace detail {
  */
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
-                              bool check_bounds                   = false,
-                              bool ignore_out_of_bounds           = false,
-                              bool allow_negative_indices         = false,
+                              bounds check_bounds                 = bounds::NO_CHECK,
+                              out_of_bounds oob                   = out_of_bounds::DONT_IGNORE,
+                              negative_indices neg_indices        = negative_indices::NOT_ALLOWED,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream                 = 0);
 }  // namespace detail

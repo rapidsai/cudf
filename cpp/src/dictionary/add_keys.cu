@@ -82,14 +82,15 @@ std::unique_ptr<column> add_keys(
                            nullptr,
                            0,
                            dictionary_column.offset());
-  auto table_indices = cudf::experimental::detail::gather(table_view{{map_indices->view()}},
-                                                          indices_view,
-                                                          false,
-                                                          true,
-                                                          false,  // ignore out-of-bounds
-                                                          mr,
-                                                          stream)
-                         ->release();
+  auto table_indices =
+    cudf::experimental::detail::gather(table_view{{map_indices->view()}},
+                                       indices_view,
+                                       experimental::detail::bounds::NO_CHECK,
+                                       experimental::detail::out_of_bounds::IGNORE,
+                                       experimental::detail::negative_indices::NOT_ALLOWED,
+                                       mr,
+                                       stream)
+      ->release();
   // the result may contain nulls if the input contains nulls and the corresponding index is
   // therefore invalid
   auto contents       = table_indices.front()->release();

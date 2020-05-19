@@ -200,7 +200,14 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
         argmin_result.size(),
         static_cast<void const*>(argmin_result.template data<size_type>()));
       auto transformed_result = experimental::detail::gather(
-        table_view({values}), null_removed_map, false, argmin_result.nullable(), false, mr, stream);
+        table_view({values}),
+        null_removed_map,
+        experimental::detail::bounds::NO_CHECK,
+        argmin_result.nullable() ? experimental::detail::out_of_bounds::IGNORE
+                                 : experimental::detail::out_of_bounds::DONT_IGNORE,
+        experimental::detail::negative_indices::NOT_ALLOWED,
+        mr,
+        stream);
       return std::move(transformed_result->release()[0]);
     }
   }();
@@ -231,7 +238,14 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
         argmax_result.size(),
         static_cast<void const*>(argmax_result.template data<size_type>()));
       auto transformed_result = experimental::detail::gather(
-        table_view({values}), null_removed_map, false, argmax_result.nullable(), false, mr, stream);
+        table_view({values}),
+        null_removed_map,
+        experimental::detail::bounds::NO_CHECK,
+        argmax_result.nullable() ? experimental::detail::out_of_bounds::IGNORE
+                                 : experimental::detail::out_of_bounds::DONT_IGNORE,
+        experimental::detail::negative_indices::NOT_ALLOWED,
+        mr,
+        stream);
       return std::move(transformed_result->release()[0]);
     }
   }();

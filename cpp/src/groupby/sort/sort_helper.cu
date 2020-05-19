@@ -273,8 +273,14 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
   column_view gather_map =
     cudf::experimental::detail::slice(values_sort_order->view(), 0, num_keys(stream));
 
-  auto sorted_values_table = cudf::experimental::detail::gather(
-    table_view({values}), gather_map, false, false, false, mr, stream);
+  auto sorted_values_table =
+    cudf::experimental::detail::gather(table_view({values}),
+                                       gather_map,
+                                       experimental::detail::bounds::NO_CHECK,
+                                       experimental::detail::out_of_bounds::DONT_IGNORE,
+                                       experimental::detail::negative_indices::NOT_ALLOWED,
+                                       mr,
+                                       stream);
 
   return std::move(sorted_values_table->release()[0]);
 }
@@ -284,8 +290,14 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
 {
   auto gather_map = key_sort_order();
 
-  auto grouped_values_table = cudf::experimental::detail::gather(
-    table_view({values}), gather_map, false, false, false, mr, stream);
+  auto grouped_values_table =
+    cudf::experimental::detail::gather(table_view({values}),
+                                       gather_map,
+                                       experimental::detail::bounds::NO_CHECK,
+                                       experimental::detail::out_of_bounds::DONT_IGNORE,
+                                       experimental::detail::negative_indices::NOT_ALLOWED,
+                                       mr,
+                                       stream);
 
   return std::move(grouped_values_table->release()[0]);
 }
@@ -305,8 +317,13 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::mr::device_memory_r
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::mr::device_memory_resource* mr,
                                                         cudaStream_t stream)
 {
-  return cudf::experimental::detail::gather(
-    _keys, key_sort_order(), false, false, false, mr, stream);
+  return cudf::experimental::detail::gather(_keys,
+                                            key_sort_order(),
+                                            experimental::detail::bounds::NO_CHECK,
+                                            experimental::detail::out_of_bounds::DONT_IGNORE,
+                                            experimental::detail::negative_indices::NOT_ALLOWED,
+                                            mr,
+                                            stream);
 }
 
 }  // namespace sort

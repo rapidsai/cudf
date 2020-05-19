@@ -87,8 +87,13 @@ std::unique_ptr<column> remove_keys_fn(
   // Example: gather([4,0,3,1,2,2,2,4,0],[0,-1,1,-1,2]) => [2,0,-1,-1,1,1,1,2,0]
   column_view map_indices_view(data_type{INT32}, keys_view.size(), map_indices.data().get());
   auto table_indices =
-    experimental::detail::gather(
-      table_view{{map_indices_view}}, indices_view, false, false, false, mr, stream)
+    experimental::detail::gather(table_view{{map_indices_view}},
+                                 indices_view,
+                                 experimental::detail::bounds::NO_CHECK,
+                                 experimental::detail::out_of_bounds::DONT_IGNORE,
+                                 experimental::detail::negative_indices::NOT_ALLOWED,
+                                 mr,
+                                 stream)
       ->release();
   std::unique_ptr<column> indices_column(std::move(table_indices.front()));
 

@@ -169,7 +169,14 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
         arg_result->size(),
         static_cast<void const*>(arg_result->view().template data<size_type>()));
       auto transformed_result = experimental::detail::gather(
-        table_view({col}), null_removed_map, false, arg_result->nullable(), false, mr, stream);
+        table_view({col}),
+        null_removed_map,
+        experimental::detail::bounds::NO_CHECK,
+        arg_result->nullable() ? experimental::detail::out_of_bounds::IGNORE
+                               : experimental::detail::out_of_bounds::DONT_IGNORE,
+        experimental::detail::negative_indices::NOT_ALLOWED,
+        mr,
+        stream);
       return std::move(transformed_result->release()[0]);
     };
 

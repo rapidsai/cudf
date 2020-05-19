@@ -458,9 +458,14 @@ struct rolling_window_launcher {
     if ((op == aggregation::MIN) or (op == aggregation::MAX)) {
       // The rows that represent null elements will be having negative values in gather map,
       // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
-      auto output_table =
-        detail::gather(table_view{{input}}, output->view(), false, true, false, mr, stream);
-      output = std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
+      auto output_table = detail::gather(table_view{{input}},
+                                         output->view(),
+                                         experimental::detail::bounds::NO_CHECK,
+                                         experimental::detail::out_of_bounds::IGNORE,
+                                         experimental::detail::negative_indices::NOT_ALLOWED,
+                                         mr,
+                                         stream);
+      output            = std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
     }
 
     return output;

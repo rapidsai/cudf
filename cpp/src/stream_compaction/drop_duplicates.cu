@@ -205,7 +205,13 @@ std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
     keys_view, mutable_unique_indices_view, keep, nulls_equal, stream);
 
   // run gather operation to establish new order
-  return detail::gather(input, unique_indices_view, false, false, false, mr, stream);
+  return detail::gather(input,
+                        unique_indices_view,
+                        experimental::detail::bounds::NO_CHECK,
+                        experimental::detail::out_of_bounds::DONT_IGNORE,
+                        experimental::detail::negative_indices::NOT_ALLOWED,
+                        mr,
+                        stream);
 }
 
 /**

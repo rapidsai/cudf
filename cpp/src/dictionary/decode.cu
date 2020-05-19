@@ -41,9 +41,15 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
                       0,
                       source.offset()};  // no nulls for gather indices
   // use gather to create the output column -- use ignore_out_of_bounds=true
-  auto table_column = experimental::detail::gather(
-                        table_view{{source.keys()}}, indices, false, true, false, mr, stream)
-                        ->release();
+  auto table_column =
+    experimental::detail::gather(table_view{{source.keys()}},
+                                 indices,
+                                 experimental::detail::bounds::NO_CHECK,
+                                 experimental::detail::out_of_bounds::IGNORE,
+                                 experimental::detail::negative_indices::NOT_ALLOWED,
+                                 mr,
+                                 stream)
+      ->release();
   auto output_column = std::unique_ptr<column>(std::move(table_column.front()));
 
   // apply any nulls to the output column

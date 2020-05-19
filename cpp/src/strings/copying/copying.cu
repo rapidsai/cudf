@@ -51,7 +51,13 @@ std::unique_ptr<cudf::column> slice(strings_column_view const& strings,
   column_view indices_view(data_type{INT32}, strings_count, indices.data().get(), nullptr, 0);
   // build a new strings column from the indices
   auto sliced_table =
-    experimental::detail::gather(table_view{{strings.parent()}}, indices_view, stream, mr)
+    experimental::detail::gather(table_view{{strings.parent()}},
+                                 indices_view,
+                                 experimental::detail::bounds::NO_CHECK,
+                                 experimental::detail::out_of_bounds::DONT_IGNORE,
+                                 experimental::detail::negative_indices::NOT_ALLOWED,
+                                 mr,
+                                 stream)
       ->release();
   std::unique_ptr<column> output_column(std::move(sliced_table.front()));
   if (output_column->null_count() == 0) output_column->set_null_mask(rmm::device_buffer{}, 0);
