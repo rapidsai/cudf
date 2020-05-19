@@ -422,7 +422,7 @@ cudaError_t orc_init_statistics_groups(statistics_group *groups,
  * @brief Launches kernels to return statistics buffer offsets and sizes
  *
  * @param[in,out] groups Statistics merge groups
- * @param[in] chunks Satistics chunks
+ * @param[in] chunks Statistics chunks
  * @param[in] statistics_count Number of statistics buffers to encode
  * @param[in] stream CUDA stream to use, default 0
  *

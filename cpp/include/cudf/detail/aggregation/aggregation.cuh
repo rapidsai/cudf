@@ -205,7 +205,8 @@ struct update_target_element<
   aggregation::ARGMAX,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMAX>()>> {
+  std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMAX>() and
+                   cudf::is_relationally_comparable<Source, Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -231,7 +232,8 @@ struct update_target_element<
   aggregation::ARGMIN,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMIN>()>> {
+  std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMIN>() and
+                   cudf::is_relationally_comparable<Source, Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,

@@ -201,7 +201,7 @@ def test_series_init_none():
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
-    # 2: Using `None` as a initializer
+    # 2: Using `None` as an initializer
     sr2 = Series(None)
     got = sr2.to_string()
     print(got)
@@ -801,7 +801,7 @@ def test_dataframe_hash_partition(nrows, nparts, nkeys):
     part_unique_keys = set()
     for p in got:
         if len(p):
-            # Take rows of the keycolums and build a set of the key-values
+            # Take rows of the keycolumns and build a set of the key-values
             unique_keys = set(map(tuple, p.as_matrix(columns=keycols)))
             # Ensure that none of the key-values have occurred in other groups
             assert not (unique_keys & part_unique_keys)
@@ -4053,11 +4053,11 @@ def test_constructor_properties():
     # Correct use of _constructor_expanddim (for Series)
     assert_eq(df, df[key2]._constructor_expanddim({key1: val1, key2: val2}))
 
-    # Inorrect use of _constructor_sliced (Raises for Series)
+    # Incorrect use of _constructor_sliced (Raises for Series)
     with pytest.raises(NotImplementedError):
         df[key1]._constructor_sliced
 
-    # Inorrect use of _constructor_expanddim (Raises for DataFrame)
+    # Incorrect use of _constructor_expanddim (Raises for DataFrame)
     with pytest.raises(NotImplementedError):
         df._constructor_expanddim
 
@@ -4436,7 +4436,7 @@ def test_insert(data):
 
     assert_eq(pdf, gdf)
 
-    # pandas insert doesnt support negative indexing
+    # pandas insert doesn't support negative indexing
     pdf.insert(len(pdf.columns), "qux", data)
     gdf.insert(-1, "qux", data)
 

@@ -40,10 +40,12 @@ def from_dlpack(dlpack_capsule):
             cpp_from_dlpack(dlpack_tensor)
         )
 
-    return Table.from_unique_ptr(
+    res = Table.from_unique_ptr(
         move(c_result),
         column_names=range(0, c_result.get()[0].num_columns())
     )
+    dlpack_tensor.deleter(dlpack_tensor)
+    return res
 
 
 def to_dlpack(Table source_table):

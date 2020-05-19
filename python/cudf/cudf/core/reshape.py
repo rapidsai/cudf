@@ -419,7 +419,7 @@ def merge_sorted(
 
     Returns
     -------
-    A new, lexocographically sorted, DataFrame/Series.
+    A new, lexicographically sorted, DataFrame/Series.
     """
 
     if not pd.api.types.is_list_like(objs):

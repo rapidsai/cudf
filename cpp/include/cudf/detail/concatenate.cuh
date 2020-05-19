@@ -23,6 +23,7 @@
 #include <vector>
 
 namespace cudf {
+//! Inner interfaces and implementations
 namespace detail {
 /**
  * @copydoc cudf::concatenate_masks(std::vector<column_view>
