@@ -419,10 +419,7 @@ def test_datetime_unique(data, nulls):
     expected = psr.unique()
     got = gsr.unique()
 
-    # convert to int64 for equivalence testing
-    np.testing.assert_array_almost_equal(
-        got.to_pandas().astype(int), expected.astype(int)
-    )
+    assert_eq(pd.Series(expected), got.to_pandas())
 
 
 @pytest.mark.parametrize(
