@@ -146,8 +146,13 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
 
   std::unique_ptr<table> grouped_values{nullptr};
   if (values.num_columns()) {
-    grouped_values = cudf::experimental::detail::gather(
-      values, helper().key_sort_order(), false, false, false, mr);
+    grouped_values =
+      cudf::experimental::detail::gather(values,
+                                         helper().key_sort_order(),
+                                         experimental::detail::bounds::NO_CHECK,
+                                         experimental::detail::out_of_bounds::DONT_IGNORE,
+                                         experimental::detail::negative_indices::NOT_ALLOWED,
+                                         mr);
     return groupby::groups{
       std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};
   } else {
