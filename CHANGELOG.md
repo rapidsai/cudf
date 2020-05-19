@@ -303,6 +303,7 @@
 - PR #5193 Fix OOB read in csv reader
 - PR #5191 Fix the use of the device memory resource
 - PR #5212 Fix memory leak in `dlpack.pyx:from_dlpack()`
+- PR #5224 Add new headers from 5198 to libcudf/meta.yaml
 
 
 # cuDF 0.13.0 (31 Mar 2020)
