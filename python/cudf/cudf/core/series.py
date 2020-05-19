@@ -18,6 +18,9 @@ from cudf.core.column import (
     column,
     column_empty_like,
 )
+from cudf.core.column.categorical import (
+    CategoricalAccessor as CategoricalAccessor,
+)
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import SeriesGroupBy
@@ -201,6 +204,26 @@ class Series(Frame):
 
     @property
     def values(self):
+        """
+        Return a CuPy representation of the Series.
+
+        Only the values in the Series will be returned.
+
+        Returns
+        -------
+        out : cupy.ndarray
+            The values of the Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, -10, 100, 20])
+        >>> ser.values
+        array([  1, -10, 100,  20])
+        >>> type(ser.values)
+        <class 'cupy.core.core.ndarray'>
+
+        """
 
         if is_categorical_dtype(self.dtype) or np.issubdtype(
             self.dtype, np.dtype("object")
@@ -217,6 +240,26 @@ class Series(Frame):
 
     @property
     def values_host(self):
+        """
+        Return a numpy representation of the Series.
+
+        Only the values in the Series will be returned.
+
+        Returns
+        -------
+        out : numpy.ndarray
+            The values of the Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, -10, 100, 20])
+        >>> ser.values_host
+        array([  1, -10, 100,  20])
+        >>> type(ser.values)
+        <class 'numpy.ndarray'>
+
+        """
         if self.dtype == np.dtype("object"):
             return self._column.to_array()
         elif is_categorical_dtype(self.dtype):
@@ -281,6 +324,24 @@ class Series(Frame):
 
     @property
     def dt(self):
+        """
+        Accessor object for datetimelike properties of the Series values.
+
+        Examples
+        --------
+        >>> s.dt.hour
+        >>> s.dt.second
+        >>> s.dt.day
+
+        Returns
+        -------
+            A Series indexed like the original Series.
+
+        Raises
+        ------
+            TypeError if the Series does not contain datetimelike values.
+
+        """
         if isinstance(self._column, DatetimeColumn):
             return DatetimeProperties(self)
         else:
@@ -384,6 +445,7 @@ class Series(Frame):
         True
 
         Deep copy has own copy of data and index.
+
         >>> s is deep
         False
         >>> s.values is deep.values or s.index is deep.index
@@ -648,6 +710,16 @@ class Series(Frame):
 
     @property
     def empty(self):
+        """
+        Indicator whether Series is empty.
+
+        True if Series is entirely empty (no items).
+
+        Returns
+        -------
+        out : bool
+            If Series is empty, return True, if not return False.
+        """
         return not len(self)
 
     def __getitem__(self, arg):
@@ -911,7 +983,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -929,7 +1001,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -949,7 +1021,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -967,7 +1039,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -985,7 +1057,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1003,7 +1075,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1021,7 +1093,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1039,7 +1111,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1057,7 +1129,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1075,7 +1147,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1093,7 +1165,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1111,7 +1183,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1129,7 +1201,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1147,7 +1219,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1235,7 +1307,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1290,7 +1362,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1308,7 +1380,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1326,7 +1398,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1344,7 +1416,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1362,7 +1434,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        other: Series or scalar value
+        other : Series or scalar value
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
@@ -1396,6 +1468,7 @@ class Series(Frame):
         """
         return self.__mul__(-1)
 
+    @copy_docstring(CategoricalAccessor)
     @property
     def cat(self):
         return self._column.cat(parent=self)
@@ -1445,6 +1518,15 @@ class Series(Frame):
 
     @property
     def has_nulls(self):
+        """
+        Indicator whether Series contains null values.
+
+        Returns
+        -------
+        out : bool
+            If Series has atleast one null value, return True, if not
+            return False.
+        """
         return self._column.has_nulls
 
     def dropna(self):
@@ -1518,7 +1600,7 @@ class Series(Frame):
         Notes
         -----
 
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
+        If ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
         return self._column.to_array(fillna=fillna)
@@ -1541,7 +1623,7 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values. If the entire row/column is NA and
             skipna is True, then the result will be True, as for an
             empty row/column.
@@ -1590,7 +1672,7 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values. If the entire row/column is NA and
             skipna is True, then the result will be False, as for an
             empty row/column.
@@ -1727,7 +1809,9 @@ class Series(Frame):
         """
         Select values by label.
 
-        See DataFrame.loc
+        See also
+        --------
+        cudf.DataFrame.loc
         """
         return _SeriesLocIndexer(self)
 
@@ -1736,7 +1820,9 @@ class Series(Frame):
         """
         Select values by position.
 
-        See DataFrame.iloc
+        See also
+        --------
+        cudf.DataFrame.iloc
         """
         return _SeriesIlocIndexer(self)
 
@@ -1847,12 +1933,15 @@ class Series(Frame):
             If True, sort values in ascending order, otherwise descending.
         na_position : {‘first’, ‘last’}, default ‘last’
             'first' puts nulls at the beginning, 'last' puts nulls at the end.
+
         Returns
         -------
         sorted_obj : cuDF Series
 
+        Notes
+        -----
         Difference from pandas:
-          * Not supporting: inplace, kind
+          * Not supporting: `inplace`, `kind`
 
         Examples
         --------
@@ -1922,19 +2011,21 @@ class Series(Frame):
         method=None,
     ):
         """
-        Replace values given in *to_replace* with *replacement*.
+        Replace values given in ``to_replace`` with ``value``.
 
         Parameters
         ----------
         to_replace : numeric, str or list-like
             Value(s) to replace.
+
             * numeric or str:
-                - values equal to *to_replace* will be replaced with *value*
+                - values equal to ``to_replace`` will be replaced
+                  with ``value``
             * list of numeric or str:
-                - If *replacement* is also list-like, *to_replace* and
-                  *replacement* must be of same length.
+                - If ``value`` is also list-like, ``to_replace`` and
+                  ``value`` must be of same length.
         value : numeric, str, list-like, or dict
-            Value(s) to replace `to_replace` with.
+            Value(s) to replace ``to_replace`` with.
         inplace : bool, default False
             If True, in place.
 
@@ -1987,8 +2078,9 @@ class Series(Frame):
 
         Returns
         -------
-        A sequence of new series for each category.  Its length is determined
-        by the length of ``cats``.
+        Sequence
+            A sequence of new series for each category. Its length is
+            determined by the length of ``cats``.
         """
         if hasattr(cats, "to_pandas"):
             cats = cats.to_pandas()
@@ -2009,6 +2101,7 @@ class Series(Frame):
                is used.
         na_sentinel : number
             Value to indicate missing category.
+
         Returns
         -------
         A sequence of encoded labels with value between 0 and n-1 classes(cats)
@@ -2127,6 +2220,7 @@ class Series(Frame):
         Examples
         --------
         Returning a Series of booleans using only a literal pattern.
+
         >>> import cudf
         >>> s = cudf.Series([1, 10, -10, 200, 100])
         >>> s.applymap(lambda x: x)
@@ -2157,7 +2251,6 @@ class Series(Frame):
         3    40100.0
         4    10050.0
         dtype: float64
-
         >>> def cube_function(a):
         ...     return a ** 3
         ...
@@ -2168,7 +2261,6 @@ class Series(Frame):
         3    8000000
         4    1000000
         dtype: int64
-
         >>> def custom_udf(x):
         ...     if x > 0:
         ...         return x + 5
@@ -2234,10 +2326,10 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values when computing the result.
 
-        dtype: data type
+        dtype : data type
             Data type to cast the result to.
 
         Returns
@@ -2296,10 +2388,10 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values when computing the result.
 
-        dtype: data type
+        dtype : data type
             Data type to cast the result to.
 
         Returns
@@ -2359,13 +2451,13 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values when computing the result.
 
-        dtype: data type
+        dtype : data type
             Data type to cast the result to.
 
-        min_count: int, default 0
+        min_count : int, default 0
             The required number of valid values to perform the operation.
             If fewer than min_count non-NA values are present the result
             will be NA.
@@ -2438,13 +2530,13 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values when computing the result.
 
-        dtype: data type
+        dtype : data type
             Data type to cast the result to.
 
-        min_count: int, default 0
+        min_count : int, default 0
             The required number of valid values to perform the operation.
             If fewer than min_count non-NA values are present the result
             will be NA.
@@ -2517,13 +2609,13 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values when computing the result.
 
-        dtype: data type
+        dtype : data type
             Data type to cast the result to.
 
-        min_count: int, default 0
+        min_count : int, default 0
             The required number of valid values to perform the operation.
             If fewer than min_count non-NA values are present the result
             will be NA.
@@ -2563,7 +2655,7 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values. If an entire row/column is NA,
             the result will be NA.
 
@@ -2615,7 +2707,7 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values. If an entire row/column is NA,
             the result will be NA.
 
@@ -2666,7 +2758,7 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values. If an entire row/column is NA,
             the result will be NA.
 
@@ -2729,7 +2821,7 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values. If an entire row/column is NA,
             the result will be NA.
 
@@ -2793,7 +2885,7 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values when computing the result.
 
         Returns
@@ -2856,11 +2948,11 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values. If an entire row/column is NA, the result
             will be NA.
 
-        ddof: int, default 1
+        ddof : int, default 1
             Delta Degrees of Freedom. The divisor used in calculations
             is N - ddof, where N represents the number of elements.
 
@@ -2917,11 +3009,11 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values. If an entire row/column is NA, the result
             will be NA.
 
-        ddof: int, default 1
+        ddof : int, default 1
             Delta Degrees of Freedom. The divisor used in calculations is
             N - ddof, where N represents the number of elements.
 
@@ -2993,7 +3085,7 @@ class Series(Frame):
         Parameters
         ----------
 
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values when computing the result.
 
         Returns
@@ -3051,7 +3143,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        skipna: bool, default True
+        skipna : bool, default True
             Exclude NA/null values when computing the result.
 
         Returns
@@ -3189,8 +3281,9 @@ class Series(Frame):
 
         Returns
         -------
-        result: Series
+        result : Series
             Series of booleans indicating if each element is in values.
+
         Raises
         -------
         TypeError
@@ -3292,9 +3385,10 @@ class Series(Frame):
             with hashed column name. This is useful for when the same
             values in different columns should be encoded
             with different hashed values.
+
         Returns
         -------
-        result: Series
+        result : Series
             The encoded Series.
         """
         assert stop > 0
@@ -3592,9 +3686,11 @@ class Series(Frame):
         -------
         Series
 
+        Notes
+        -----
         Difference from pandas:
-          * Supports scalar values only for changing name attribute
-          * Not supporting: inplace, level
+          - Supports scalar values only for changing name attribute
+          - Not supporting : inplace, level
         """
         out = self.copy(deep=False)
         out = out.set_index(self.index)
@@ -3605,18 +3701,46 @@ class Series(Frame):
 
     @property
     def is_unique(self):
+        """
+        Return boolean if values in the object are unique.
+
+        Returns
+        -------
+        out : bool
+        """
         return self._column.is_unique
 
     @property
     def is_monotonic(self):
+        """
+        Return boolean if values in the object are monotonic_increasing.
+
+        Returns
+        -------
+        out : bool
+        """
         return self._column.is_monotonic_increasing
 
     @property
     def is_monotonic_increasing(self):
+        """
+        Return boolean if values in the object are monotonic_increasing.
+
+        Returns
+        -------
+        out : bool
+        """
         return self._column.is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
+        """
+        Return boolean if values in the object are monotonic_decreasing.
+
+        Returns
+        -------
+        out : bool
+        """
         return self._column.is_monotonic_decreasing
 
     @property
@@ -3659,6 +3783,7 @@ class Series(Frame):
         return result
 
     def merge(self, other):
+        # TODO: ADD docs.
         # An inner join should return a series containing matching elements
         # a Left join should return just self
         # an outer join should return a two column

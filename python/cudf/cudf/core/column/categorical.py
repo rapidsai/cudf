@@ -17,7 +17,57 @@ from cudf.core.dtypes import CategoricalDtype
 
 class CategoricalAccessor(object):
     """
-    This mimics pandas `df.cat` interface.
+    Accessor object for categorical properties of the Series values.
+    Be aware that assigning to `categories` is a inplace operation, while all
+    methods return new categorical data per default.
+
+    Parameters
+    ----------
+    data : Series or CategoricalIndex
+
+    Examples
+    --------
+    >>> s = cudf.Series([1,2,3], dtype='category')
+    >>> s
+    >>> s
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [1, 2, 3]
+    >>> s.cat.categories
+    Int64Index([1, 2, 3], dtype='int64')
+    >>> s.cat.reorder_categories([3,2,1])
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [3, 2, 1]
+    >>> s.cat.remove_categories([1])
+    0   null
+    1      2
+    2      3
+    dtype: category
+    Categories (2, int64): [2, 3]
+    >>> s.cat.set_categories(list('abcde'))
+    0   null
+    1   null
+    2   null
+    dtype: category
+    Categories (5, object): [a, b, c, d, e]
+    >>> s.cat.as_ordered()
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [1 < 2 < 3]
+    >>> s.cat.as_unordered()
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [1, 2, 3]
+
     """
 
     def __init__(self, column, parent=None):
