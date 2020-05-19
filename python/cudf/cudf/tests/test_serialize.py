@@ -51,7 +51,7 @@ def test_serialize(df, to_host):
     msgpack.dumps(header)  # ensure that header is msgpack serializable
     ndevice = 0
     for frame in frames:
-        if not isinstance(frame, (bytes, memoryview)):
+        if hasattr(frame, "__cuda_array_interface__"):
             ndevice += 1
     # Indices etc. will not be DeviceNDArray
     # but data should be...
