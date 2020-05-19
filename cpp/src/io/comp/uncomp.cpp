@@ -372,7 +372,7 @@ void io_uncompress_single_h2d(const void *src,
       break;
   }
   CUDF_EXPECTS(comp_data != nullptr, "Unsupported compressed stream type");
-  CUDF_EXPECTS(comp_len <= 0, "Unsupported compressed stream type");
+  CUDF_EXPECTS(comp_len > 0, "Unsupported compressed stream type");
 
   if (uncomp_len <= 0) {
     uncomp_len = comp_len * 4 + 4096;  // In case uncompressed size isn't known in advance, assume
