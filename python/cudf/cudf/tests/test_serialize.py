@@ -57,8 +57,10 @@ def test_serialize(df, to_host):
     # but data should be...
     if hasattr(df, "_cols"):
         assert ndevice >= len(df._data)
-    else:
+    elif not to_host:
         assert ndevice > 0
+    else:
+        assert ndevice == 0
 
     typ = type(a)
     b = typ.deserialize(header, frames)
