@@ -68,6 +68,13 @@ class datasource {
   static std::unique_ptr<datasource> create(std::shared_ptr<arrow::io::RandomAccessFile> file);
 
   /**
+   * @brief Create a source from an user implemented datasource object
+   *
+   * @param[in] source Non-owning pointer to the datasource object
+   **/
+  static std::unique_ptr<datasource> create(datasource *source);
+
+  /**
    * @brief Base class destructor
    **/
   virtual ~datasource(){};

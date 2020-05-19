@@ -168,6 +168,42 @@ class memory_mapped_source : public datasource {
   size_t map_offset_ = 0;
 };
 
+/**
+ * @brief Wrapper class for user implemented data sources
+ *
+ **/
+class user_datasource_wrapper : public datasource {
+ public:
+  explicit user_datasource_wrapper(datasource *const source) : source(source) {}
+
+  size_t host_read(size_t offset, size_t size, uint8_t *dst) override
+  {
+    return source->host_read(offset, size, dst);
+  }
+
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    return source->host_read(offset, size);
+  }
+
+  bool supports_device_write() const override { return source->supports_device_write(); }
+
+  size_t device_read(size_t offset, size_t size, uint8_t *dst) override
+  {
+    return source->device_read(offset, size, dst);
+  }
+
+  std::unique_ptr<buffer> device_read(size_t offset, size_t size) override
+  {
+    return source->device_read(offset, size);
+  }
+
+  size_t size() const override { return source->size(); }
+
+ private:
+  datasource *const source;
+};
+
 std::unique_ptr<datasource> datasource::create(const std::string filepath,
                                                size_t offset,
                                                size_t size)
@@ -187,6 +223,12 @@ std::unique_ptr<datasource> datasource::create(std::shared_ptr<arrow::io::Random
 {
   // Support derived classes of the top-level Arrow IO interface
   return std::make_unique<arrow_io_source>(file);
+}
+
+std::unique_ptr<datasource> datasource::create(datasource *source)
+{
+  // instantiate a wrapper that forwards the calls to the user implementation
+  return std::make_unique<user_datasource_wrapper>(source);
 }
 
 }  // namespace io
