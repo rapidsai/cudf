@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,6 +59,7 @@ class column;
 class column_view;
 class mutable_column_view;
 class string_view;
+class list_view;
 
 class scalar;
 template <typename T>
@@ -72,6 +73,8 @@ class numeric_scalar_device_view;
 class string_scalar_device_view;
 template <typename T>
 class timestamp_scalar_device_view;
+
+class list_scalar;
 
 namespace experimental {
 class table;
@@ -196,6 +199,7 @@ enum type_id {
   TIMESTAMP_NANOSECONDS,   ///< duration of nanoseconds since Unix Epoch in int64
   DICTIONARY32,            ///< Dictionary type using int32 indices
   STRING,                  ///< String elements
+  LIST,                    ///< List elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
 };

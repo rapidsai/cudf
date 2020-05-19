@@ -35,7 +35,7 @@ using index_type = thrust::tuple<side, cudf::size_type>;
 
 /**
  * @brief tagged_element_relational_comparator uses element_relational_comparator to provide
- * "tagged-index" comparation logic.
+ * "tagged-index" comparison logic.
  *
  * Special treatment is necessary in several thrust algorithms (e.g., merge()) where
  * the index affinity to the side is not guaranteed; i.e., the algorithms rely on

@@ -86,7 +86,7 @@ def test_categorical_compare_unordered():
     assert np.all(out.to_array())
     assert np.all(pdsr == pdsr)
 
-    # test inequal
+    # test inequality
     out = sr != sr
     assert not np.any(out.to_array())
     assert not np.any(pdsr != pdsr)
@@ -125,7 +125,7 @@ def test_categorical_compare_ordered():
     assert np.all(out.to_array())
     assert np.all(pdsr1 == pdsr1)
 
-    # test inequal
+    # test inequality
     out = sr1 != sr1
     assert not np.any(out.to_array())
     assert not np.any(pdsr1 != pdsr1)
