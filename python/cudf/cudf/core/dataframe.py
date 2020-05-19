@@ -3199,7 +3199,7 @@ class DataFrame(Frame):
         return out_df
 
     @classmethod
-    def from_pandas(cls, dataframe, nan_as_null=True):
+    def from_pandas(cls, dataframe, nan_as_null=None):
         """
         Convert from a Pandas DataFrame.
 
@@ -4862,7 +4862,7 @@ class DataFrame(Frame):
         return df
 
 
-def from_pandas(obj, nan_as_null=True):
+def from_pandas(obj, nan_as_null=None):
     """
     Convert certain Pandas objects into the cudf equivalent.
 
