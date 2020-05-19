@@ -58,14 +58,9 @@ std::unique_ptr<column> true_if(
 }
 
 /**
- * @brief Performs unary op on all values in column
+ * @copydoc cudf::experimental::unary_operation
  *
- * @param input A `column_view` as input
- * @param op operation to perform
- * @param mr Optional, The resource to use for all allocations
  * @param stream Optional CUDA stream on which to execute kernels
- *
- * @returns std::unique_ptr<cudf::column> Result of the operation
  */
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
@@ -74,16 +69,9 @@ std::unique_ptr<cudf::column> unary_operation(
   cudaStream_t stream                 = 0);
 
 /**
- * @brief  Casts data from dtype specified in input to dtype specified in output.
- * Supports only fixed-width types.
+ * @copydoc cudf::experimental::cast
  *
- * @param column_view Input column
- * @param out_type Desired datatype of output column
- * @param mr Optional, The resource to use for all allocations
  * @param stream Optional CUDA stream on which to execute kernels
- *
- * @returns unique_ptr<column> Result of the cast operation
- * @throw cudf::logic_error if `out_type` is not a fixed-width type
  */
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
