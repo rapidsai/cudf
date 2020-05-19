@@ -151,7 +151,12 @@ _numeric_to_str_typecast_functions = {
 
 class StringMethods(object):
     """
-    This mimics pandas ``df.str`` interface.
+    Vectorized string functions for Series and Index.
+
+    This mimics pandas ``df.str`` interface. nulls stay null
+    unless handled otherwise by a particular method.
+    Patterned after Python’s string methods, with some
+    inspiration from R’s stringr package.
     """
 
     def __init__(self, column, parent=None):
@@ -1762,31 +1767,155 @@ class StringMethods(object):
         )
 
     def normalize_spaces(self, **kwargs):
+        """
+        Remove extra whitespace between tokens and trim whitespace
+        from the beginning and the end of each string.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["hello \t world"," test string  "])
+        >>> ser.str.normalize_spaces()
+        0    hello world
+        1    test string
+        dtype: object
+
+        """
         return self._return_or_inplace(
             cpp_normalize_spaces(self._column), **kwargs
         )
 
-    def tokenize(self, delimiter="", **kwargs):
+    def tokenize(self, delimiter=" ", **kwargs):
+        """
+        Each string is split into tokens using the provided delimiter(s).
+        The sequence returned contains the tokens in the order
+        they were found.
+
+        Parameters
+        ----------
+        delimiter : str or list of strs, Default is whitespace.
+            The string used to locate the split points of each string.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["hello world", "goodbye world",
+        ...                          "hello goodbye"])
+        >>> ser.str.tokenize()
+        0      hello
+        1      world
+        2    goodbye
+        3      world
+        4      hello
+        5    goodbye
+        dtype: object
+
+        """
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         kwargs.setdefault("retain_index", False)
         return self._return_or_inplace(
             cpp_tokenize(self._column, delimiter), **kwargs
         )
 
-    def token_count(self, delimiter="", **kwargs):
+    def token_count(self, delimiter=" ", **kwargs):
+        """
+        Each string is split into tokens using the provided delimiter.
+        The returned integer sequence is the number of tokens in each string.
+
+        Parameters
+        ----------
+
+        delimiter : str or list of strs, Default is whitespace.
+            The characters or strings used to locate the
+            split points of each string.
+
+        Returns
+        -------
+        Series or Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["hello world","goodbye",""])
+        >>> ser.str.token_count()
+        0    2
+        1    1
+        2    0
+        dtype: int32
+
+        """
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         return self._return_or_inplace(
             cpp_count_tokens(self._column, delimiter), **kwargs
         )
 
     def ngrams(self, n=2, separator="_", **kwargs):
+        """
+        Generate the n-grams from a set of tokens.
+        You can generate tokens from an nvstrings instance using
+        the tokenize() function.
+
+        Parameters
+        ----------
+        n : int
+            The degree of the n-gram (number of consecutive tokens).
+            Default of 2 for bigrams.
+        separator : str
+            The separator to use between within an n-gram.
+            Default is '_'.
+
+        Examples
+        --------
+        # TODO: Check and fix
+        >>> import cudf
+        >>> str_series = cudf.Series(['this is my', 'favorite book'])
+        >>> print(nvtext.ngrams(dstrings, N=2, sep='_'))
+        ['this_is', 'is_my', 'my_favorite', 'favorite_book']
+        """
         separator = _massage_string_arg(separator, "separator")
         kwargs.setdefault("retain_index", False)
         return self._return_or_inplace(
             cpp_generate_ngrams(self._column, n, separator), **kwargs
         )
 
-    def ngrams_tokenize(self, n=2, delimiter="", separator="_", **kwargs):
+    def ngrams_tokenize(self, n=2, delimiter=" ", separator="_", **kwargs):
+        """
+        Generate the n-grams using tokens from each string.
+        This will tokenize each string and then generate ngrams for each
+        string.
+
+        Parameters
+        ----------
+        n : int, Default 2.
+            The degree of the n-gram (number of consecutive tokens).
+        delimiter : str, Default is white-space.
+            The character used to locate the split points of each string.
+        sep : str, Default is '_'.
+            The separator to use between tokens within an n-gram.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(['this is the', 'best book'])
+        >>> ser.str.ngrams_tokenize(n=2, sep='_')
+        0      this_is
+        1       is_the
+        2    best_book
+        dtype: object
+
+        """
         delimiter = _massage_string_arg(delimiter, "delimiter")
         separator = _massage_string_arg(separator, "separator")
         kwargs.setdefault("retain_index", False)

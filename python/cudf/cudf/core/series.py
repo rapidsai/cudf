@@ -21,6 +21,7 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
+from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import SeriesGroupBy
@@ -1473,6 +1474,7 @@ class Series(Frame):
     def cat(self):
         return self._column.cat(parent=self)
 
+    @copy_docstring(StringMethods)
     @property
     def str(self):
         return self._column.str(parent=self)
