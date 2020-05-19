@@ -528,7 +528,6 @@ add_library(cudf
             src/sort/sort.cu
             src/sort/stable_sort.cu
             src/sort/rank.cu
-            src/column/legacy/interop.cpp
             src/strings/attributes.cu
             src/strings/case.cu
             src/strings/wrap.cu
