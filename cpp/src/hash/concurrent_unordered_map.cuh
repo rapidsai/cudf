@@ -151,7 +151,7 @@ class concurrent_unordered_map {
    * equal
    * @param allocator The allocator to use for allocation the hash table's
    * storage
-   * @param stream CUDA stream to use for device operations.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   static auto create(size_type capacity,
                      const mapped_type unused_element = std::numeric_limits<key_type>::max(),
@@ -468,7 +468,7 @@ class concurrent_unordered_map {
    * This function is invoked as the deleter of the `std::unique_ptr` returned
    * from the `create()` factory function.
    *
-   * @param stream CUDA stream to use for device operations.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void destroy(cudaStream_t stream = 0)
   {
@@ -503,7 +503,7 @@ class concurrent_unordered_map {
    *are equal
    * @param allocator The allocator to use for allocation the hash table's
    * storage
-   * @param stream CUDA stream to use for device operations.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   concurrent_unordered_map(size_type capacity,
                            const mapped_type unused_element,

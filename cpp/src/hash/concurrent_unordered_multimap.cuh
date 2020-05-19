@@ -97,7 +97,7 @@ class concurrent_unordered_multimap {
    * @param equal The equality comparison function for comparing if two keys are
    * equal
    * @param allocator The allocator to use for allocation of the map's storage
-   * @param stream CUDA stream to use for device operations.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   static auto create(size_type capacity,
                      const bool init                 = true,
@@ -129,7 +129,7 @@ class concurrent_unordered_multimap {
    * This function is invoked as the deleter of the `std::unique_ptr` returned
    * from the `create()` factory function.
    *
-   * @param stream CUDA stream to use for device operations.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void destroy(cudaStream_t stream = 0)
   {
