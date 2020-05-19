@@ -621,7 +621,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
  *                                  std::unique_ptr<aggregation> const& agg,
  *                                  rmm::mr::device_memory_resource* mr)
  *
- * @param stream The stream to use for CUDA operations
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 std::unique_ptr<column> rolling_window(column_view const& input,
