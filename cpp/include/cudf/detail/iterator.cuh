@@ -49,8 +49,8 @@ namespace detail {
  * the return value for element `i` will return `column[i]`
  * if it is valid, or `null_replacement` if it is null.
  *
- * @throws `cudf::logic_error` if the column is not nullable.
- * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ * @throws cudf::logic_error if the column is not nullable.
+ * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
  * -------------------------------------------------------------------------**/
@@ -86,7 +86,7 @@ struct null_replaced_value_accessor {
  * `operator() (cudf::size_type id)` computes validity flag at `id`
  * This functor is only allowed for nullable columns.
  *
- * @throws `cudf::logic_error` if the column is not nullable.
+ * @throws cudf::logic_error if the column is not nullable.
  * -------------------------------------------------------------------------**/
 struct validity_accessor {
   column_device_view const col;
@@ -113,8 +113,8 @@ struct validity_accessor {
  * if it is valid, or `null_replacement` if it is null.
  * This iterator is only allowed for nullable columns.
  *
- * @throws `cudf::logic_error` if the column is not nullable.
- * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ * @throws cudf::logic_error if the column is not nullable.
+ * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
  * @param column The column to iterate
@@ -143,8 +143,8 @@ auto make_null_replacement_iterator(column_device_view const& column,
  * false`. `pair(column[i], validity)`. `validity` is `true` if `has_nulls=false`. `validity` is
  * validity of the element at `i` if `has_nulls=true` and the column is nullable.
  *
- * @throws `cudf::logic_error` if the column is nullable.
- * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ * @throws cudf::logic_error if the column is nullable.
+ * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
  * @tparam has_nulls boolean indicating to treat the column is nullable
@@ -165,7 +165,7 @@ auto make_pair_iterator(column_device_view const& column)
  * of `column[i]`
  * This iterator is only allowed for nullable columns.
  *
- * @throws `cudf::logic_error` if the column is not nullable.
+ * @throws cudf::logic_error if the column is not nullable.
  *
  * @param column The column to iterate
  * @return auto Iterator that returns validities of column elements.
@@ -224,9 +224,9 @@ struct scalar_value_accessor {
  *
  * The behavior is undefined if the scalar is destroyed before iterator dereferencing.
  *
- * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
- * @throws `cudf::logic_error` if scalar is null.
- * @throws `cudf::logic_error` if the returned iterator is dereferenced in host
+ * @throws cudf::logic_error if scalar datatype and Element type mismatch.
+ * @throws cudf::logic_error if scalar is null.
+ * @throws cudf::logic_error if the returned iterator is dereferenced in host
  *
  * @tparam Element The type of element in the scalar
  * @param scalar_value The scalar to iterate
@@ -286,8 +286,8 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
  *
  * The behavior is undefined if the scalar is destroyed before iterator dereferencing.
  *
- * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
- * @throws `cudf::logic_error` if the returned iterator is dereferenced in host
+ * @throws cudf::logic_error if scalar datatype and Element type mismatch.
+ * @throws cudf::logic_error if the returned iterator is dereferenced in host
  *
  * @tparam Element The type of elements in the scalar
  * @tparam bool unused. This template parameter exists to enforce same

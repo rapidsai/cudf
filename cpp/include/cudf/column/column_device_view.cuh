@@ -333,9 +333,9 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * Else, if the element at `i` is null, then the value of `p.first` is
    * undefined and `p.second == false`.
    *
-   * @throws `cudf::logic_error` if tparam `has_nulls == true` and
+   * @throws cudf::logic_error if tparam `has_nulls == true` and
    * `nullable() == false`
-   * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+   * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
   template <typename T, bool has_nulls>
   const_pair_iterator<T, has_nulls> pair_begin() const
@@ -348,9 +348,9 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @brief Return a pair iterator to the element following the last element of
    * the column.
    *
-   * @throws `cudf::logic_error` if tparam `has_nulls == true` and
+   * @throws cudf::logic_error if tparam `has_nulls == true` and
    * `nullable() == false`
-   * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+   * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
   template <typename T, bool has_nulls>
   const_pair_iterator<T, has_nulls> pair_end() const
@@ -729,8 +729,8 @@ namespace detail {
  *
  * the return value for element `i` will return `column[i]`
  *
- * @throws `cudf::logic_error` if the column is nullable.
- * @throws `cudf::logic_error` if column datatype and template T type mismatch.
+ * @throws cudf::logic_error if the column is nullable.
+ * @throws cudf::logic_error if column datatype and template T type mismatch.
  *
  * @tparam T The type of elements in the column
  */
@@ -762,9 +762,9 @@ struct value_accessor {
  * `validity` is validity of the element at `i` if `has_nulls=true` and the
  * column is nullable.
  *
- * @throws `cudf::logic_error` if `has_nulls==true` and the column is not
+ * @throws cudf::logic_error if `has_nulls==true` and the column is not
  * nullable.
- * @throws `cudf::logic_error` if column datatype and template T type mismatch.
+ * @throws cudf::logic_error if column datatype and template T type mismatch.
  *
  * @tparam T The type of elements in the column
  * @tparam has_nulls boolean indicating to treat the column is nullable
