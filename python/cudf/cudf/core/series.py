@@ -36,7 +36,7 @@ from cudf.utils.dtypes import (
 )
 
 
-class Series(Serializable, Frame):
+class Series(Frame, Serializable):
     """
     Data and null-masks.
 

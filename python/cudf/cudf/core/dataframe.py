@@ -88,7 +88,7 @@ def _reverse_op(fn):
     }[fn]
 
 
-class DataFrame(Serializable, Frame):
+class DataFrame(Frame, Serializable):
     """
     A GPU Dataframe object.
 

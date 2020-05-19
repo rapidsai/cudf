@@ -39,7 +39,7 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
 
-class ColumnBase(Serializable, Column):
+class ColumnBase(Column, Serializable):
     def __init__(
         self,
         data,

@@ -56,7 +56,7 @@ def _to_frame(this_index, index=True, name=None):
     )
 
 
-class Index(Serializable, Frame):
+class Index(Frame, Serializable):
     """The root interface for all Series indexes.
     """
 
