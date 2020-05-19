@@ -389,9 +389,8 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(requests, sparse_results, cache, gather_map, map_size, stream, mr);
 
-  auto unique_keys = experimental::detail::gather(
+  return experimental::detail::gather(
     keys, gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
-  return unique_keys;
 }
 
 }  // namespace

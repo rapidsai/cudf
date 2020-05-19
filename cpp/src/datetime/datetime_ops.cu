@@ -169,9 +169,8 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
   // Return an empty column if source column is empty
   if (size == 0) return make_empty_column(output_col_type);
 
-  auto null_mask = copy_bitmask(column, stream, mr);
-  auto output =
-    make_fixed_width_column(output_col_type, size, null_mask, column.null_count(), stream, mr);
+  auto output = make_fixed_width_column(
+    output_col_type, size, copy_bitmask(column, stream, mr), column.null_count(), stream, mr);
   auto launch = launch_functor<TransformFunctor,
                                typename cudf::experimental::id_to_type_impl<OutputColCudfT>::type>{
     column, static_cast<mutable_column_view>(*output)};

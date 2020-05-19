@@ -42,13 +42,15 @@ requirements:
 
 test:
   commands:
-    - test -f $PREFIX/include/nvstrings/NVStrings.h
     - test -f $PREFIX/include/nvstrings/NVCategory.h
+    - test -f $PREFIX/include/nvstrings/NVStrings.h
     - test -f $PREFIX/include/nvstrings/NVText.h
-    - test -f $PREFIX/include/nvstrings/ipc_transfer.h
     - test -f $PREFIX/include/nvstrings/StringsStatistics.h
-    - test -f $PREFIX/lib/libNVStrings.so
+    - test -f $PREFIX/include/nvstrings/base_category.h
+    - test -f $PREFIX/include/nvstrings/ipc_transfer.h
+    - test -f $PREFIX/include/nvstrings/numeric_category.h
     - test -f $PREFIX/lib/libNVCategory.so
+    - test -f $PREFIX/lib/libNVStrings.so
     - test -f $PREFIX/lib/libNVText.so
 
 about:

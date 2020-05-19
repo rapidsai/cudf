@@ -110,7 +110,7 @@ std::string ptx_parser::register_type_to_cpp_type(const std::string& register_ty
 
 std::string ptx_parser::parse_instruction(const std::string& src)
 {
-  // I am assumming for an instruction statement the starting phrase is an
+  // I am assuming for an instruction statement the starting phrase is an
   // instruction.
   const size_t length = src.size();
   std::string output;
@@ -176,7 +176,7 @@ std::string ptx_parser::parse_instruction(const std::string& src)
           // "ld", "st", and "cvt". So we use cvt instead and something like
           // "cvt.s32.s32". This keep the same operation behavior and when compiling to
           // SASS code "usually" (in cases I have seen) this is optimized away, thus
-          // gives no performance panelty.
+          // gives no performance penalty.
           output += " cvt" + register_type + register_type;
         } else {
           output += " mov" + register_type;

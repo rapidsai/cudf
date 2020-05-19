@@ -251,7 +251,7 @@ cdef class Context:
         return pyarrow_wrap_cudabuffer(cudabuf)
 
     def buffer_from_data(self, object data, int64_t offset=0, int64_t size=-1):
-        """Create device buffer and initalize with data.
+        """Create device buffer and initialize with data.
 
         Parameters
         ----------
@@ -497,7 +497,7 @@ cdef class CudaBuffer(Buffer):
                     raise ValueError(
                         'requested more to copy than available from '
                         'device buffer')
-                # copy nbytes starting from position to new host buffeer
+                # copy nbytes starting from position to new host buffer
                 nbytes_ = nbytes
             buf = allocate_buffer(nbytes_, memory_pool=memory_pool,
                                   resizable=resizable)
@@ -530,7 +530,7 @@ cdef class CudaBuffer(Buffer):
           Specify data in host. It can be array-like that is valid
           argument to py_buffer
         position : int
-          Specify the starting position of the copy in devive buffer.
+          Specify the starting position of the copy in device buffer.
           Default: 0.
         nbytes : int
           Specify the number of bytes to copy. Default: -1 (all from

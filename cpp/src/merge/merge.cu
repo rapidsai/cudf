@@ -143,7 +143,7 @@ void materialize_bitmask(column_view const& left_col,
  *
  * @tparam index_type Indicates the type to be used to collect index and side information;
  * @param[in] left_table The left table_view to be merged
- * @param[in] right_tbale The right table_view to be merged
+ * @param[in] right_table The right table_view to be merged
  * @param[in] column_order Sort order types of index columns
  * @param[in] null_precedence Array indicating the order of nulls with respect to non-nulls for the
  * index columns
@@ -264,7 +264,7 @@ struct column_merger {
     // initialize null_mask to all valid:
     //
     // Note: this initialization in conjunction with _conditionally_
-    // calling materialze_bitmask() below covers the case
+    // calling materialize_bitmask() below covers the case
     // materialize_merged_bitmask_kernel<false, false>()
     // which won't be called anymore (because of the _condition_ below)
     //
@@ -457,8 +457,17 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
     auto const left_table = top_and_pop(merge_queue);
     // Deallocated at the end of the block
     auto const right_table = top_and_pop(merge_queue);
-    auto merged_table =
-      merge(left_table.view, right_table.view, key_cols, column_order, null_precedence, mr, stream);
+
+    // Only use mr for the output table
+    auto const& new_tbl_rm = merge_queue.empty() ? mr : rmm::mr::get_default_resource();
+    auto merged_table      = merge(left_table.view,
+                              right_table.view,
+                              key_cols,
+                              column_order,
+                              null_precedence,
+                              new_tbl_rm,
+                              stream);
+
     auto const merged_table_view = merged_table->view();
     merge_queue.emplace(merged_table_view, std::move(merged_table));
   }

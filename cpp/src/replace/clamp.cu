@@ -48,13 +48,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
       cudf::experimental::detail::make_null_replacement_iterator<string_view>(input, string_view{});
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input_begin, offsets_transformer);
-    offsets_column = std::move(cudf::strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream));
+    offsets_column = cudf::strings::detail::make_offsets_child_column(
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
   } else {
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input.begin<string_view>(), offsets_transformer);
-    offsets_column = std::move(cudf::strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream));
+    offsets_column = cudf::strings::detail::make_offsets_child_column(
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
   }
 
   auto d_offsets = offsets_column->view().template data<size_type>();
@@ -227,6 +227,19 @@ std::enable_if_t<std::is_same<T, dictionary32>::value, std::unique_ptr<cudf::col
   CUDF_FAIL("dictionary type not supported");
 }
 
+template <typename T, typename ScalarIterator>
+std::enable_if_t<std::is_same<T, list_view>::value, std::unique_ptr<cudf::column>> clamper(
+  column_view const& input,
+  ScalarIterator const& lo_itr,
+  ScalarIterator const& lo_replace_itr,
+  ScalarIterator const& hi_itr,
+  ScalarIterator const& hi_replace_itr,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("list_view type not supported");
+}
+
 }  // namespace
 
 template <typename T, typename ScalarIterator>
@@ -260,6 +273,19 @@ struct dispatch_clamp {
     return clamp<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, mr, stream);
   }
 };
+
+template <>
+std::unique_ptr<column> dispatch_clamp::operator()<cudf::list_view>(
+  column_view const& input,
+  scalar const& lo,
+  scalar const& lo_replace,
+  scalar const& hi,
+  scalar const& hi_replace,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("clamp for list_view not supported");
+}
 
 /**
  * @copydoc cudf::experimental::clamp(column_view const& input,
