@@ -4017,8 +4017,6 @@ def test_isin_dataframe(data, values):
             got = gdf.isin(values)
         except ValueError as e:
             if str(e) == "Lengths must match.":
-                import pdb
-                pdb.set_trace()
                 pytest.xfail(reason='xref https://github.com/pandas-dev/pandas/issues/34256')
 
         assert_eq(got, expected)
