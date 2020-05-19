@@ -28,7 +28,7 @@ namespace detail {
  *                                       rmm::mr::device_memory_resource* mr =
  *rmm::mr::get_default_resource())
  *
- * @param stream CUDA stream to run this function
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
 std::unique_ptr<column> sequence(
   size_type size,
@@ -42,7 +42,7 @@ std::unique_ptr<column> sequence(
                                          rmm::mr::device_memory_resource* mr =
  rmm::mr::get_default_resource())
  *
- * @param stream CUDA stream to run this function
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
 std::unique_ptr<column> sequence(
   size_type size,
