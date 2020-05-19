@@ -10,12 +10,11 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.core.abc import Serializable
 from cudf.core.column import column
 from cudf.core.index import Index, as_index
 
 
-class MultiIndex(Serializable, Index):
+class MultiIndex(Index):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
