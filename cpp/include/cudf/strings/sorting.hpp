@@ -39,7 +39,7 @@ enum sort_type {
  * @param stype Specify what attribute of the string to sort on.
  * @param order Sort strings in ascending or descending order.
  * @param null_order Sort nulls to the beginning or the end of the new column.
- * @param stream CUDA stream to use kernels in this method.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column.
  * @return New strings column with sorted elements of this instance.
  */
