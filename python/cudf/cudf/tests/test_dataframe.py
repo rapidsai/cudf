@@ -12,6 +12,7 @@ import pytest
 from numba import cuda
 
 import cudf as gd
+from cudf.core.column import column
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, does_not_raise, gen_rand
@@ -5321,6 +5322,53 @@ def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
         df = gd.DataFrame(pdf)
         assert_eq(pdf, df, check_dtype=False)
         assert df["one_col"].dtype == expected_upcast_type
+
+
+@pytest.mark.parametrize("nan_as_null", [True, False])
+@pytest.mark.parametrize("index", [None, "a", ["a", "b"]])
+def test_from_pandas_nan_as_null(nan_as_null, index):
+
+    data = [np.nan, 2.0, 3.0]
+
+    if index is None:
+        pdf = pd.DataFrame({"a": data, "b": data})
+        expected = DataFrame(
+            {
+                "a": column.as_column(data, nan_as_null=nan_as_null),
+                "b": column.as_column(data, nan_as_null=nan_as_null),
+            }
+        )
+    else:
+        pdf = pd.DataFrame({"a": data, "b": data}).set_index(index)
+        expected = DataFrame(
+            {
+                "a": column.as_column(data, nan_as_null=nan_as_null),
+                "b": column.as_column(data, nan_as_null=nan_as_null),
+            }
+        )
+        expected = DataFrame(
+            {
+                "a": column.as_column(data, nan_as_null=nan_as_null),
+                "b": column.as_column(data, nan_as_null=nan_as_null),
+            }
+        )
+        expected = expected.set_index(index)
+
+    got = gd.from_pandas(pdf, nan_as_null=nan_as_null)
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("nan_as_null", [True, False])
+def test_from_pandas_for_series_nan_as_null(nan_as_null):
+
+    data = [np.nan, 2.0, 3.0]
+    psr = pd.Series(data)
+
+    expected = Series(column.as_column(data, nan_as_null=nan_as_null))
+    got = gd.from_pandas(psr, nan_as_null=nan_as_null)
+
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("copy", [True, False])
