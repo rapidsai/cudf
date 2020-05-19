@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp cimport bool
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 
 import cudf
@@ -389,11 +390,13 @@ cpdef write_csv(
         for col_name in table._column_names:
             metadata_.column_names.push_back(str(col_name).encode())
 
-    cdef write_csv_args write_csv_args_c = write_csv_args(
-        snk, input_table_view, na_c, include_header_c,
-        rows_per_hunk_c, line_term_c, delim_c, true_value_c,
-        false_value_c, &metadata_
+    cdef unique_ptr[write_csv_args] write_csv_args_c = (
+        make_unique[write_csv_args](
+            snk, input_table_view, na_c, include_header_c,
+            rows_per_hunk_c, line_term_c, delim_c, true_value_c,
+            false_value_c, &metadata_
+        )
     )
 
     with nogil:
-        cpp_write_csv(write_csv_args_c)
+        cpp_write_csv(write_csv_args_c.get()[0])

@@ -275,7 +275,7 @@ class concurrent_unordered_map {
   }
 
   /**
-   * @brief Atempts to insert a key,value pair at the specified hash bucket.
+   * @brief Attempts to insert a key,value pair at the specified hash bucket.
    *
    * @param[in] insert_location Pointer to hash bucket to attempt insert
    * @param[in] insert_pair The pair to insert
@@ -310,7 +310,7 @@ class concurrent_unordered_map {
    * that the insert did not succeed.
    *
    * If the new key was not present, the iterator points to the location
-   *where the insert occured and the boolean is `true` indicating that the
+   * where the insert occurred and the boolean is `true` indicating that the
    *insert succeeded.
    *
    * @param insert_pair The key and value pair to insert

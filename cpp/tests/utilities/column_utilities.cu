@@ -336,6 +336,13 @@ struct column_view_printer {
       out.insert(out.end(), indices.begin() + 1, indices.end());
     }
   }
+
+  template <typename Element,
+            typename std::enable_if_t<std::is_same<Element, cudf::list_view>::value>* = nullptr>
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out)
+  {
+    CUDF_FAIL("list_view printing not supported yet");
+  }
 };
 
 std::vector<std::string> to_strings(cudf::column_view const& col)

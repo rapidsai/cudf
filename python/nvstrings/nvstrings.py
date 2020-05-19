@@ -260,13 +260,13 @@ def int2ip(values, count=0, nulls=None, bdevmem=False):
     ----------
     values : list, memory address or buffer
         Array of uint32 values (IPv4) to convert to strings.
-    countc : int
+    count : int
         Number of integers in values.
         This is only required if values is a memory pointer.
-    nullsc : list, memory address or buffer
+    nulls : list, memory address or buffer
         Bit array indicating which values should be considered null.
         Uses the arrow format for valid bitmask.
-    bdevmemc : boolean
+    bdevmem : boolean
         Default (False) interprets memory pointers as CPU memory.
 
     """
@@ -1444,7 +1444,7 @@ class nvstrings:
             Default is beginning of the each string.
             Specify -1 to insert at the end of each string.
         repl : str
-            String to insert into the specified position valus.
+            String to insert into the specified position value.
 
         Examples
         --------

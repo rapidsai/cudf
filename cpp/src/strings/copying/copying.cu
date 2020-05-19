@@ -54,7 +54,8 @@ std::unique_ptr<cudf::column> slice(strings_column_view const& strings,
     experimental::detail::gather(table_view{{strings.parent()}}, indices_view, stream, mr)
       ->release();
   std::unique_ptr<column> output_column(std::move(sliced_table.front()));
-  if (output_column->null_count() == 0) output_column->set_null_mask(rmm::device_buffer{}, 0);
+  if (output_column->null_count() == 0)
+    output_column->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
   return output_column;
 }
 
