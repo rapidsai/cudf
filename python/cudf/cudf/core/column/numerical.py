@@ -16,7 +16,6 @@ from cudf.utils.dtypes import (
     min_signed_type,
     np_to_pa_dtype,
     numeric_normalize_types,
-    _cudf_nullable_pd_dtypes
 )
 
 

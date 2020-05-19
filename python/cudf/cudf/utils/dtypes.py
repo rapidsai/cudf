@@ -23,18 +23,6 @@ _np_pa_dtypes = {
     np.str_: pa.string(),
 }
 
-_cudf_nullable_pd_dtypes = {
-    np.float64: np.float64,
-    np.float32: np.float32,
-    np.int64: pd.Int64Dtype(),
-    np.int32: pd.Int32Dtype(),
-    np.int16: pd.Int16Dtype(),
-    np.int8: pd.Int8Dtype(),
-    np.bool_: pd.BooleanDtype(),
-    np.str_: pd.StringDtype(),
-}
-
-
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype.
     """
