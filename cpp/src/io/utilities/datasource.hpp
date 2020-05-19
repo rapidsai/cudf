@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/utilities/error.hpp>
+
 #include <arrow/buffer.h>
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
@@ -85,11 +87,49 @@ class datasource {
    *
    * @param[in] offset Bytes from the start
    * @param[in] size Bytes to read
-   * @param[in] dst Address in existing host memory
+   * @param[in] dst Address of the existing host memory
    *
    * @return The number of bytes read (can be smaller than size)
    **/
   virtual size_t host_read(size_t offset, size_t size, uint8_t *dst) = 0;
+
+  /**
+   * @brief Whether or not this source supports reading directly into device memory
+   *
+   * If this function returns true, the data_sink will receive calls to device_read()
+   * instead of host_read() when possible.  However, it is still possible to receive
+   * host_read() calls as well.
+   *
+   * @return bool Whether this source supports device_read() calls.
+   **/
+  virtual bool supports_device_write() const { return false; }
+
+  /**
+   * @brief Returns a device buffer with a subset of data from the source
+   *
+   * @param[in] offset Bytes from the start
+   * @param[in] size Bytes to read
+   *
+   * @return The data buffer in the device memory
+   **/
+  virtual std::unique_ptr<buffer> device_read(size_t offset, size_t size)
+  {
+    CUDF_FAIL("datasource classes that support device_read must override this function.");
+  }
+
+  /**
+   * @brief Read a selected range into a preallocated device buffer
+   *
+   * @param[in] offset Bytes from the start
+   * @param[in] size Bytes to read
+   * @param[in] dst Address of the existing device memory
+   *
+   * @return The number of bytes read (can be smaller than size)
+   **/
+  virtual size_t device_read(size_t offset, size_t size, uint8_t *dst)
+  {
+    CUDF_FAIL("datasource classes that support device_read must override this function.");
+  }
 
   /**
    * @brief Returns the size of the data in the source
