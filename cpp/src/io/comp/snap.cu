@@ -169,7 +169,7 @@ static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
 }
 
 /**
- * @brief Finds the first occurence of a consecutive 4-byte match in the input sequence,
+ * @brief Finds the first occurrence of a consecutive 4-byte match in the input sequence,
  * or at most MAX_LITERAL_LENGTH bytes
  *
  * @param s Compressor state (copy_length set to 4 if a match is found, zero otherwise)

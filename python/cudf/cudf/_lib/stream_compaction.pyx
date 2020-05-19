@@ -91,7 +91,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
 
     Parameters
     ----------
-    source_table : source table whose rows are droppped as per boolean_mask
+    source_table : source table whose rows are dropped as per boolean_mask
     boolean_mask : a boolean column of same size as source_table
 
     Returns

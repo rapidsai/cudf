@@ -28,7 +28,7 @@ enum class negative_indices : bool { ALLOW,  NOT_ALLOWED };
  * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
  * `n` is the number of rows in the `source_table`.
  *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * @throws cudf::logic_error if `check_bounds == true` and an index exists in
  * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
  * the source table. If `check_bounds == false`, the behavior is undefined.
  *

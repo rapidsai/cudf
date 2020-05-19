@@ -174,7 +174,7 @@ def test_column_from_ephemeral_cupy():
 
 
 def test_column_from_ephemeral_cupy_try_lose_reference():
-    # Try to lose the reference we keep to the ephermal
+    # Try to lose the reference we keep to the ephemeral
     # CuPy array
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
     a = cudf.core.column.as_column(a)

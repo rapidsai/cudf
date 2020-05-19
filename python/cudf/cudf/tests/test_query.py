@@ -153,7 +153,7 @@ def test_query_empty_frames():
     got = empty_gdf.query(expr).to_pandas()
     expect = empty_pdf.query(expr)
 
-    # assert euqal results
+    # assert equal results
     assert_frame_equal(got, expect)
 
 

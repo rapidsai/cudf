@@ -111,7 +111,7 @@ std::unique_ptr<column> remove_keys_fn(
     stream,
     mr);
   rmm::device_buffer new_null_mask =
-    (new_nulls.second > 0) ? std::move(new_nulls.first) : rmm::device_buffer{};
+    (new_nulls.second > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};
 
   // create column with keys_column and indices_column
   return make_dictionary_column(

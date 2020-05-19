@@ -62,7 +62,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
         .front(),
       stream,
       mr);
-    keys_column->set_null_mask(rmm::device_buffer{}, 0);  // remove the null-mask
+    keys_column->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // remove the null-mask
   }
 
   // this returns a column with no null entries

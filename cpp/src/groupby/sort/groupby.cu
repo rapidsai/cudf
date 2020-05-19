@@ -75,7 +75,7 @@ struct store_result_functor {
    */
   column_view get_grouped_values()
   {
-    // TODO (dm): After implementing single pass mutli-agg, explore making a
+    // TODO (dm): After implementing single pass multi-agg, explore making a
     //            cache of all grouped value columns rather than one at a time
     if (grouped_values)
       return grouped_values->view();
