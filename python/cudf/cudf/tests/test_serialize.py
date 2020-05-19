@@ -38,12 +38,16 @@ from cudf.tests.utils import assert_eq
         # pd.util.testing.makeMultiIndex, # Indices not serialized on device
     ],
 )
-def test_serialize(df):
+@pytest.mark.parametrize("to_host", [True, False])
+def test_serialize(df, to_host):
     """ This should hopefully replace all functions below """
     a = df()
     if "cudf" not in type(a).__module__:
         a = cudf.from_pandas(a)
-    header, frames = a.serialize()
+    if to_host:
+        header, frames = a.host_serialize()
+    else:
+        header, frames = a.device_serialize()
     msgpack.dumps(header)  # ensure that header is msgpack serializable
     ndevice = 0
     for frame in frames:
