@@ -4,6 +4,8 @@ from cudf.tests.utils import assert_eq
 
 from cudf import Series
 
+import pytest
+
 
 def test_can_cast_safely_same_kind():
     data = Series([1, 2, 3], dtype="int32")._column
@@ -44,6 +46,7 @@ def test_can_cast_safely_mixed_kind():
     data = Series([1.0, 2.0, 1.0 * (2 ** 31)], dtype="float32")._column
     assert not data.can_cast_safely(to_dtype)
 
+@pytest.mark.xfail
 def test_to_pandas_nullable_integer():
     gsr_not_null = Series([1,2,3])
     gsr_has_null = Series([1,2,None])
@@ -54,6 +57,7 @@ def test_to_pandas_nullable_integer():
     assert_eq(gsr_not_null.to_pandas(), psr_not_null)
     assert_eq(gsr_has_null.to_pandas(), psr_has_null)
 
+@pytest.mark.xfail
 def test_to_pandas_nullable_bool():
     gsr_not_null = Series([True, False, True])
     gsr_has_null = Series([True, False, None])
