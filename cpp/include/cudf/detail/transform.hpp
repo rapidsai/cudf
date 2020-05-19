@@ -24,7 +24,7 @@ namespace detail {
 /**
  * @copydoc cudf::experimental::transform
  *
- * @param stream        CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
 std::unique_ptr<column> transform(
   column_view const& input,
@@ -37,7 +37,7 @@ std::unique_ptr<column> transform(
 /**
  * @copydoc cudf::experimental::nans_to_nulls
  *
- * @param stream        CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
   column_view const& input,
@@ -47,7 +47,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
 /**
  * @copydoc cudf::experimental::bools_to_mask
  *
- * @param stream        CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input,
