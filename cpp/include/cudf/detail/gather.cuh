@@ -113,7 +113,7 @@ struct column_gatherer_impl {
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
    * @param mr Device memory resource used to allocate the returned column
-   * @param stream CUDA stream on which to execute kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::unique_ptr<column> operator()(column_view const& source_column,
                                      MapIterator gather_map_begin,
@@ -172,7 +172,7 @@ struct column_gatherer_impl<string_view, MapItType> {
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
    * @param mr Device memory resource used to allocate the returned column
-   * @param stream CUDA stream on which to execute kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::unique_ptr<column> operator()(column_view const& source_column,
                                      MapItType gather_map_begin,
@@ -206,7 +206,7 @@ struct column_gatherer_impl<dictionary32, MapItType> {
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
    * @param mr Device memory resource used to allocate the returned column
-   * @param stream CUDA stream on which to execute kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return New dictionary column with gathered rows.
    */
   std::unique_ptr<column> operator()(column_view const& source_column,
@@ -273,7 +273,7 @@ struct column_gatherer {
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
    * @param mr Device memory resource used to allocate the returned column
-   * @param stream CUDA stream on which to execute kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   template <typename Element, typename MapIterator>
   std::unique_ptr<column> operator()(column_view const& source_column,
