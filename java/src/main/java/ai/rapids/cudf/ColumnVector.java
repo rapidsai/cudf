@@ -386,14 +386,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
-   * TRUE for any entry that is an integer, and FALSE if its not an integer
+   * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
+   * for null entries
    *
    * NOTE: Integer doesn't mean a 32-bit integer. It means a number that is not a fraction.
-   * i.e. If this method returns true for a value could still result in an overflow or underflow.
-   *
-   * Also note that exponents are handled but might not be what the user expects. This method will
-   * convert the mantissa without regarding the exponent before ending the conversion when it hits
-   * the decimal. e.g. 1.2e-4 => 1 but 0.00012 => 0
+   * i.e. If this method returns true for a value it could still result in an overflow or underflow
+   * if you convert it to a Java integral type
    *
    * @return - Boolean vector
    */
@@ -404,10 +402,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
-   * TRUE for any entry that is a float, and FALSE if its not a float
+   * TRUE for any entry that is a float, and FALSE if its not a float. A null will be returned
+   * for null entries
    *
-   * NOTE: Float doesn't mean a 32-bit float. It means a number that is a fraction.
-   * i.e. If this method returns true for a value could still result in an overflow or underflow
+   * NOTE: Float doesn't mean a 32-bit float. It means a number that is a fraction or can be written
+   * as a fraction. i.e. This method will return true for integers as well as floats. Also note if
+   * this method returns true for a value it could still result in an overflow or underflow if you
+   * convert it to a Java float or double
    *
    * @return - Boolean vector
    */

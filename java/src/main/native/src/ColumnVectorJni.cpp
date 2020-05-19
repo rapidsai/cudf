@@ -1341,6 +1341,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isFloat(JNIEnv *env, jo
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
   try {
+    cudf::jni::auto_set_device(env);
     cudf::column_view * view = reinterpret_cast<cudf::column_view *>(handle);
     std::unique_ptr<cudf::column> result = cudf::strings::is_float(*view);
     return reinterpret_cast<jlong>(result.release());
@@ -1353,6 +1354,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isInteger(JNIEnv *env, 
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
   try {
+    cudf::jni::auto_set_device(env);
     cudf::column_view * view = reinterpret_cast<cudf::column_view *>(handle);
     std::unique_ptr<cudf::column> result = cudf::strings::is_integer(*view);
     return reinterpret_cast<jlong>(result.release());
