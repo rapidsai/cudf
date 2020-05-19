@@ -160,8 +160,7 @@ size_type estimate_join_output_size(table_device_view build_table,
  * JoinNoneValue, i.e. -1.
  *
  * @param left  Table of left columns to join
- * @param stream stream on which all memory allocations and copies
- * will be performed
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @returns Join output indices vector pair
  */
@@ -189,8 +188,7 @@ get_trivial_left_join_indices(table_view const& left, cudaStream_t stream)
  * @param right Table of right  columns to join
  * @param flip_join_indices Flag that indicates whether the left and right
  * tables have been flipped, meaning the output indices should also be flipped.
- * @param stream stream on which all memory allocations and copies
- * will be performed
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @tparam join_kind The type of join to be performed
  *
  * @returns Join output indices vector pair
