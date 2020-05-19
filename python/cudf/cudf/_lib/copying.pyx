@@ -237,7 +237,7 @@ def _scatter_scalar(scalars, Column scatter_map,
 def scatter(object input, object scatter_map, Table target,
             bool bounds_check=True):
     """
-    Scattering input into taregt as per the scatter map,
+    Scattering input into target as per the scatter map,
     input can be a list of scalars or can be a table
     """
 

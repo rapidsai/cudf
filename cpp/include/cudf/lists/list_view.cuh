@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,20 +15,19 @@
  */
 #pragma once
 
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
+/**
+ * @file list_view.cuh
+ * @brief Class definition for cudf::list_view.
+ */
 
 namespace cudf {
-namespace detail {
-/**
- * @copydoc cudf::transpose
- *
- * @param stream Optional CUDA stream on which to execute kernels
- */
-std::pair<std::unique_ptr<column>, table_view> transpose(
-  table_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0);
 
-}  // namespace detail
+/**
+ * @brief A non-owning, immutable view of device data that represents
+ * a list of elements of arbitrary type (including further nested lists).
+ *
+ */
+class list_view {
+};
+
 }  // namespace cudf

@@ -279,7 +279,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 if is_scalar(arg[0]):
                     # If a scalar, there is possibility of having duplicates.
                     # Join would get all the duplicates. So, coverting it to
-                    # a array kind.
+                    # an array kind.
                     tmp_arg = ([tmp_arg[0]], tmp_arg[1])
                 if len(tmp_arg[0]) == 0:
                     return columns_df._empty_like(keep_index=True)

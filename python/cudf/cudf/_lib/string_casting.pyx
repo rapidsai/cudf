@@ -484,7 +484,7 @@ def htoi(Column input_col, **kwargs):
 
     Returns
     -------
-    A Column with strings representd as integer
+    A Column of integers parsed from hexadecimal string values.
     """
 
     cdef column_view input_column_view = input_col.view()

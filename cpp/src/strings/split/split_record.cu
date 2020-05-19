@@ -256,7 +256,7 @@ struct whitespace_token_reader_fn {
       if (spaces != (ch <= ' ')) {
         if (spaces) {  // from whitespace(s) to a new token
           to_token_pos = cur_pos;
-        } else {  // from a token to whiltespace(s)
+        } else {  // from a token to whitespace(s)
           if (token_count < max_tokens - 1) {
             token_count++;
             token_size_sum += compute_token_char_bytes<false>(d_str, cur_pos, to_token_pos);
@@ -341,7 +341,7 @@ struct whitespace_token_copier_fn {
       if (spaces != (ch <= ' ')) {
         if (spaces) {  // from whitespace(s) to a new token
           to_token_pos = cur_pos;
-        } else {  // from a token to whiltespace(s)
+        } else {  // from a token to whitespace(s)
           if (token_idx < info.token_count - 1) {
             auto const offset_size_pair = compute_src_byte_offset_and_token_char_bytes<false>(
               d_str, cur_pos, to_token_pos, info.token_size_sum - char_bytes_copied);

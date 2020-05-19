@@ -31,7 +31,7 @@ def pad(Column source_strings,
         side=PadSide.LEFT):
     """
     Returns a Column by padding strings in `source_strings`
-    upto the given `width`. Direction of padding is to be specified by `side`.
+    up to the given `width`. Direction of padding is to be specified by `side`.
     The additional characters being filled can be changed by specifying
     `fill_char`.
     """
@@ -59,7 +59,7 @@ def zfill(Column source_strings,
           size_type width):
     """
     Returns a Column by prepending strings in `source_strings`
-    with ‘0’ characters upto the given `width`.
+    with ‘0’ characters up to the given `width`.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
@@ -79,7 +79,7 @@ def center(Column source_strings,
     """
     Returns a Column by filling left and right side of strings
     in `source_strings` with additional character, `fill_char`
-    upto the given `width`.
+    up to the given `width`.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
@@ -103,7 +103,7 @@ def ljust(Column source_strings,
           fill_char):
     """
     Returns a Column by filling right side of strings in `source_strings`
-    with additional character, `fill_char` upto the given `width`.
+    with additional character, `fill_char` up to the given `width`.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
