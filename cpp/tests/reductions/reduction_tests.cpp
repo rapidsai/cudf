@@ -21,7 +21,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <cudf/cudf.h>
 #include <cudf/copying.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/wrappers/timestamps.hpp>

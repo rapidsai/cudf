@@ -24,8 +24,6 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <cudf/cudf.h>
-
 #include <thrust/device_vector.h>
 
 #include <gtest/gtest.h>

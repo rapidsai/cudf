@@ -15,7 +15,6 @@
  */
 
 #include <benchmark/benchmark.h>
-#include <cudf/cudf.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/join.hpp>

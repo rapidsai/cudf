@@ -26,7 +26,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <cudf/cudf.h>
 #include <cudf/reduction.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>

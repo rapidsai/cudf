@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>

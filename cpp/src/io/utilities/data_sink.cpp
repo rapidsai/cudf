@@ -16,7 +16,6 @@
 
 #include <fstream>
 
-#include <cudf/cudf.h>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/utilities/error.hpp>
 
