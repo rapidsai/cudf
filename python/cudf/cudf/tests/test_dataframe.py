@@ -4010,10 +4010,16 @@ def test_isin_dataframe(data, values):
         with pytest.raises(TypeError):
             gdf.isin(values)
     else:
-        expected = pdf.isin(values)
-        if isinstance(values, (pd.DataFrame, pd.Series)):
-            values = gd.from_pandas(values)
-        got = gdf.isin(values)
+        try:
+            expected = pdf.isin(values)
+            if isinstance(values, (pd.DataFrame, pd.Series)):
+                values = gd.from_pandas(values)
+            got = gdf.isin(values)
+        except ValueError as e:
+            if str(e) == "Lengths must match.":
+                import pdb
+                pdb.set_trace()
+                pytest.xfail(reason='xref https://github.com/pandas-dev/pandas/issues/34256')
 
         assert_eq(got, expected)
 
