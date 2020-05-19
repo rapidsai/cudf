@@ -114,7 +114,7 @@ def test_json_reader(json_files):
 
         assert_eq(expect_series, got_series)
 
-
+@pytest.mark.xfail(reason='https://github.com/pandas-dev/pandas/pull/33373')
 @pytest.mark.filterwarnings("ignore:Can't infer compression")
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_json_writer(tmpdir, pdf, gdf):
