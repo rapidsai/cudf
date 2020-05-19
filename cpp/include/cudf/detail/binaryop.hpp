@@ -26,7 +26,7 @@ namespace detail {
  * @copydoc cudf::experimental::binary_operation(scalar const&, column_view const&, binary_operator,
  * data_type, rmm::mr::device_memory_resource *)
  *
- * @param stream CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
@@ -40,7 +40,7 @@ std::unique_ptr<column> binary_operation(
  * @copydoc cudf::experimental::binary_operation(column_view const&, scalar const&, binary_operator,
  * data_type, rmm::mr::device_memory_resource *)
  *
- * @param stream CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -54,7 +54,7 @@ std::unique_ptr<column> binary_operation(
  * @copydoc cudf::experimental::binary_operation(column_view const&, column_view const&,
  * binary_operator, data_type, rmm::mr::device_memory_resource *)
  *
- * @param stream CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -68,7 +68,7 @@ std::unique_ptr<column> binary_operation(
  * @copydoc cudf::experimental::binary_operation(column_view const&, column_view const&,
  * std::string const&, data_type, rmm::mr::device_memory_resource *)
  *
- * @param stream CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,

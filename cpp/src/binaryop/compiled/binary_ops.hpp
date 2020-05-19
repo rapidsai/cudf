@@ -59,7 +59,7 @@ namespace compiled {
  * @param rhs         The right operand string column
  * @param output_type The desired data type of the output column
  * @param mr          Device memory resource used to allocate the returned column
- * @param stream      CUDA stream on which to execute kernels
+ * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
@@ -85,7 +85,7 @@ std::unique_ptr<column> binary_operation(
  * @param rhs         The right operand string scalar
  * @param output_type The desired data type of the output column
  * @param mr          Device memory resource used to allocate the returned column
- * @param stream      CUDA stream on which to execute kernels
+ * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
@@ -111,7 +111,7 @@ std::unique_ptr<column> binary_operation(
  * @param rhs         The right operand string column
  * @param output_type The desired data type of the output column
  * @param mr          Device memory resource used to allocate the returned column
- * @param stream      CUDA stream on which to execute kernels
+ * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
