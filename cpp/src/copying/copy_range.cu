@@ -91,7 +91,7 @@ struct out_of_place_copy_range_dispatch {
   cudf::column_view const& target;
 
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> operator()(
+  std::unique_ptr<cudf::column> operator()(
     cudf::size_type source_begin,
     cudf::size_type source_end,
     cudf::size_type target_begin,
@@ -111,51 +111,62 @@ struct out_of_place_copy_range_dispatch {
 
     return p_ret;
   }
-
-  template <typename T>
-  std::enable_if_t<std::is_same<cudf::string_view, T>::value, std::unique_ptr<cudf::column>>
-  operator()(cudf::size_type source_begin,
-             cudf::size_type source_end,
-             cudf::size_type target_begin,
-             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-             cudaStream_t stream                 = 0)
-  {
-    auto target_end           = target_begin + (source_end - source_begin);
-    auto p_source_device_view = cudf::column_device_view::create(source, stream);
-    if (source.has_nulls()) {
-      return cudf::strings::detail::copy_range(
-        cudf::experimental::detail::make_null_replacement_iterator<cudf::string_view>(
-          *p_source_device_view, cudf::string_view()) +
-          source_begin,
-        cudf::experimental::detail::make_validity_iterator(*p_source_device_view) + source_begin,
-        cudf::strings_column_view(target),
-        target_begin,
-        target_end,
-        mr,
-        stream);
-    } else {
-      return cudf::strings::detail::copy_range(
-        p_source_device_view->begin<cudf::string_view>() + source_begin,
-        thrust::make_constant_iterator(true),
-        cudf::strings_column_view(target),
-        target_begin,
-        target_end,
-        mr,
-        stream);
-    }
-  }
-
-  template <typename T>
-  std::enable_if_t<std::is_same<cudf::dictionary32, T>::value, std::unique_ptr<cudf::column>>
-  operator()(cudf::size_type source_begin,
-             cudf::size_type source_end,
-             cudf::size_type target_begin,
-             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-             cudaStream_t stream                 = 0)
-  {
-    CUDF_FAIL("dictionary type not supported");
-  }
 };
+
+template <>
+std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf::string_view>(
+  cudf::size_type source_begin,
+  cudf::size_type source_end,
+  cudf::size_type target_begin,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  auto target_end           = target_begin + (source_end - source_begin);
+  auto p_source_device_view = cudf::column_device_view::create(source, stream);
+  if (source.has_nulls()) {
+    return cudf::strings::detail::copy_range(
+      cudf::experimental::detail::make_null_replacement_iterator<cudf::string_view>(
+        *p_source_device_view, cudf::string_view()) +
+        source_begin,
+      cudf::experimental::detail::make_validity_iterator(*p_source_device_view) + source_begin,
+      cudf::strings_column_view(target),
+      target_begin,
+      target_end,
+      mr,
+      stream);
+  } else {
+    return cudf::strings::detail::copy_range(
+      p_source_device_view->begin<cudf::string_view>() + source_begin,
+      thrust::make_constant_iterator(true),
+      cudf::strings_column_view(target),
+      target_begin,
+      target_end,
+      mr,
+      stream);
+  }
+}
+
+template <>
+std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf::dictionary32>(
+  cudf::size_type source_begin,
+  cudf::size_type source_end,
+  cudf::size_type target_begin,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("dictionary type not supported");
+}
+
+template <>
+std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf::list_view>(
+  cudf::size_type source_begin,
+  cudf::size_type source_end,
+  cudf::size_type target_begin,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("list_view type not supported");
+}
 
 }  // namespace
 

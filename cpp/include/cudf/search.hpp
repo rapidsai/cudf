@@ -63,8 +63,7 @@ namespace experimental {
  * @param null_precedence Vector of null_precedence enums
  * values
  * @param mr              Device memory resource used to allocate the returned column
- * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
- * containing the insertion points.
+ * @return A non-nullable column of cudf::size_type elements containing the insertion points.
  */
 std::unique_ptr<column> lower_bound(
   table_view const& t,
@@ -106,8 +105,7 @@ std::unique_ptr<column> lower_bound(
  * @param null_precedence Vector of null_precedence enums
  * values
  * @param mr              Device memory resource used to allocate the returned column
- * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
- * containing the insertion points.
+ * @return A non-nullable column of cudf::size_type elements containing the insertion points.
  */
 std::unique_ptr<column> upper_bound(
   table_view const& t,
@@ -162,9 +160,8 @@ bool contains(column_view const& col,
  * @param needles   A column of values to search for in `col`
  * @param mr        Device memory resource used to allocate the returned column
  *
- * @return std::unique_ptr<column> A column of bool elements containing
- * true if the corresponding entry in haystack is contained in needles and false
- * if it is not.
+ * @return A column of bool elements containing true if the corresponding entry in haystack is
+ * contained in needles and false if it is not.
  */
 std::unique_ptr<column> contains(
   column_view const& haystack,

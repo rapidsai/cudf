@@ -27,38 +27,9 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 /**
- * @brief Find smallest indices in a sorted table where values should be
- *  inserted to maintain order
+ * @copydoc cudf::experimental::lower_bound
  *
- * For each row v in @p values, find the first index in @p t where
- *  inserting the row will maintain the sort order of @p t
- *
- * Example:
- *
- *  Single column:
- *      idx      0   1   2   3   4
- *   column = { 10, 20, 20, 30, 50 }
- *   values = { 20 }
- *   result = {  1 }
- *
- *  Multi Column:
- *      idx        0    1    2    3    4
- *   t      = {{  10,  20,  20,  20,  20 },
- *             { 5.0,  .5,  .5,  .7,  .7 },
- *             {  90,  77,  78,  61,  61 }}
- *   values = {{ 20 },
- *             { .7 },
- *             { 61 }}
- *   result =  {  3 }
- *
- * @param t               Table to search
- * @param values          Find insert locations for these values
- * @param column_order    Vector of column sort order
- * @param null_precedence Vector of null_precedence enums values
- * @param mr              Device memory resource used to allocate the returned column
- * @param stream          Stream to use for any kernel launches.
- * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
- * containing the insertion points.
+ * @param stream Stream to use for any kernel launches.
  */
 std::unique_ptr<column> lower_bound(
   table_view const& t,
@@ -69,40 +40,9 @@ std::unique_ptr<column> lower_bound(
   cudaStream_t steam                  = 0);
 
 /**
- * @brief Find largest indices in a sorted table where values should be
- *  inserted to maintain order
+ * @copydoc cudf::experimental::upper_bound
  *
- * For each row v in @p values, find the last index in @p t where
- *  inserting the row will maintain the sort order of @p t
- *
- * @code{.pseudo}
- * Example:
- *
- *  Single Column:
- *      idx      0   1   2   3   4
- *   column = { 10, 20, 20, 30, 50 }
- *   values = { 20 }
- *   result = {  3 }
- *
- *  Multi Column:
- *      idx        0    1    2    3    4
- *   t      = {{  10,  20,  20,  20,  20 },
- *             { 5.0,  .5,  .5,  .7,  .7 },
- *             {  90,  77,  78,  61,  61 }}
- *   values = {{ 20 },
- *             { .7 },
- *             { 61 }}
- *   result =  {  5  }
- * @endcode
- *
- * @param column          Table to search
- * @param values          Find insert locations for these values
- * @param column_order    Vector of column sort order
- * @param null_precedence Vector of null_precedence enums values
- * @param mr              Device memory resource used to allocate the returned column
- * @param stream          Stream to use for any kernel launches.
- * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
- * containing the insertion points.
+ * @param stream Stream to use for any kernel launches.
  */
 std::unique_ptr<column> upper_bound(
   table_view const& t,
@@ -113,25 +53,10 @@ std::unique_ptr<column> upper_bound(
   cudaStream_t stream                 = 0);
 
 /**
- * @brief Find if the `value` is present in the `col`
+ * @copydoc cudf::experimental::contains(column_view const&, scalar const&,
+ *                                       rmm::mr::device_memory_resource*)
  *
- * @throws cudf::logic_error
- * If `col.type() != values.type()`
- *
- * @code{.pseudo}
- *  Single Column:
- *      idx      0   1   2   3   4
- *      col = { 10, 20, 20, 30, 50 }
- *  Scalar:
- *   value = { 20 }
- *   result = true
- * @endcode
- *
- * @param col      A column object
- * @param value    A scalar value to search for in `col`
- * @param mr       Device memory resource used to allocate the returned column
- * @param stream   Stream to use for any kernel launches.
- * @return bool    If `value` is found in `column` true, else false.
+ * @param stream Stream to use for any kernel launches.
  */
 bool contains(column_view const& col,
               scalar const& value,
@@ -139,29 +64,10 @@ bool contains(column_view const& col,
               cudaStream_t stream                 = 0);
 
 /**
- * @brief  Returns a new column of type bool identifying for each element of @p haystack column,
- *         if that element is contained in @p needles column.
+ * @copydoc cudf::experimental::contains(column_view const&, column_view const&,
+ *                                       rmm::mr::device_memory_resource*)
  *
- * The new column will have the same dimension and null status as the @p haystack column.  That is,
- * any element that is invalid in the @p haystack column will be invalid in the returned column.
- *
- * @throws cudf::logic_error
- * If `haystack.type() != needles.type()`
- *
- * @code{.pseudo}
- *   haystack = { 10, 20, 30, 40, 50 }
- *   needles  = { 20, 40, 60, 80 }
- *
- *   result = { false, true, false, true, false }
- * @endcode
- *
- * @param haystack  A column object
- * @param needles   A column of values to search for in `col`
- * @param mr        Device memory resource used to allocate the returned column
- * @param stream    Stream to use for any kernel launches.
- * @return std::unique_ptr<column> A column of bool elements containing
- * true if the corresponding entry in haystack is contained in needles and false
- * if it is not.
+ * @param stream Stream to use for any kernel launches.
  */
 std::unique_ptr<column> contains(
   column_view const& haystack,

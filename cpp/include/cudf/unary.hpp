@@ -58,7 +58,7 @@ enum class unary_op : int32_t {
  * @param op operation to perform
  * @param mrDevice memory resource used to allocate the returned column
  *
- * @returns std::unique_ptr<cudf::column> Result of the operation
+ * @returns Column of same size as `input` containing result of the operation
  */
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
@@ -72,7 +72,7 @@ std::unique_ptr<cudf::column> unary_operation(
  * @param input A `column_view` as input
  * @param mr Device memory resource used to allocate the returned column
  *
- * @returns std::unique_ptr<cudf::column> A non-nullable column of `BOOL8` elements with `true`
+ * @returns A non-nullable column of `BOOL8` elements with `true`
  * representing `null` values.
  */
 std::unique_ptr<cudf::column> is_null(
@@ -86,7 +86,7 @@ std::unique_ptr<cudf::column> is_null(
  * @param input A `column_view` as input
  * @param mr Device memory resource used to allocate the returned column
  *
- * @returns std::unique_ptr<cudf::column> A non-nullable column of `BOOL8` elements with `false`
+ * @returns A non-nullable column of `BOOL8` elements with `false`
  * representing `null` values.
  */
 std::unique_ptr<cudf::column> is_valid(
@@ -101,7 +101,7 @@ std::unique_ptr<cudf::column> is_valid(
  * @param out_type Desired datatype of output column
  * @param mr Device memory resource used to allocate the returned column
  *
- * @returns unique_ptr<column> Result of the cast operation
+ * @returns Column of same size as `input` containing result of the cast operation
  * @throw cudf::logic_error if `out_type` is not a fixed-width type
  */
 std::unique_ptr<column> cast(column_view const& input,
@@ -118,8 +118,7 @@ std::unique_ptr<column> cast(column_view const& input,
  * @param input A column of floating-point elements
  * @param mr Device memory resource used to allocate the returned column.
  *
- * @returns unique_ptr<column> A non-nullable column of `BOOL8` elements with `true`
- * representing `NAN` values
+ * @returns A non-nullable column of `BOOL8` elements with `true` representing `NAN` values
  */
 std::unique_ptr<column> is_nan(
   cudf::column_view const& input,
@@ -135,8 +134,7 @@ std::unique_ptr<column> is_nan(
  * @param input A column of floating-point elements
  * @param mr Device memory resource used to allocate the returned column.
  *
- * @returns unique_ptr<column> A non-nullable column of `BOOL8` elements with `false`
- * representing `NAN` values
+ * @returns A non-nullable column of `BOOL8` elements with `false` representing `NAN` values
  */
 std::unique_ptr<column> is_not_nan(
   cudf::column_view const& input,

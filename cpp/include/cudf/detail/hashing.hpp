@@ -19,24 +19,11 @@
 
 namespace cudf {
 namespace detail {
-/** --------------------------------------------------------------------------*
- * @brief Partitions rows from the input table into multiple output tables.
+/**
+ * @copydoc cudf::experimental::hash_partition
  *
- * Partitions rows of `input` into `num_partitions` bins based on the hash
- * value of the columns specified by `columns_to_hash`. Rows partitioned into
- * the same bin are grouped consecutively in the output table. Returns a vector
- * of row offsets to the start of each partition in the output table.
- *
- * @throw std::out_of_range if index is `columns_to_hash` is invalid
- *
- * @param input The table to partition
- * @param columns_to_hash Indices of input columns to hash
- * @param num_partitions The number of partitions to use
- * @param mr Device memory resource used to allocate the returned table
  * @param stream Optional stream to use for allocations and copies
- *
- * @returns An output table and a vector of row offsets to each partition
- * -------------------------------------------------------------------------**/
+ */
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
@@ -44,17 +31,11 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
-/** --------------------------------------------------------------------------*
- * @brief Computes the hash value of each row in the input set of columns.
+/**
+ * @copydoc cudf::hash
  *
- * @param input The table of columns to hash
- * @param initial_hash Optional vector of initial hash values for each column.
- * If this vector is empty then each element will be hashed as-is.
- * @param mr Device memory resource used to allocate the returned column
  * @param stream Optional stream to use for allocations and copies
- *
- * @returns A column where each row is the hash of a column from the input
- * -------------------------------------------------------------------------**/
+ */
 std::unique_ptr<column> hash(table_view const& input,
                              std::vector<uint32_t> const& initial_hash = {},
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),

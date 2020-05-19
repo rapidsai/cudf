@@ -78,7 +78,7 @@ namespace detail {
  * Elements outside the range are copied from @p target into the new target
  * column to return.
  *
- * @throws `cudf::logic_error` for invalid range (if @p target_begin < 0,
+ * @throws cudf::logic_error for invalid range (if @p target_begin < 0,
  * target_begin >= @p target.size(), or @p target_end > @p target.size()).
  *
  * @tparam SourceValueIterator Iterator for retrieving source values

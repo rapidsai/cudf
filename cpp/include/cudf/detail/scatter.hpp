@@ -43,7 +43,7 @@ namespace detail {
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
  *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * @throws cudf::logic_error if `check_bounds == true` and an index exists in
  * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
  * the target table. If `check_bounds == false`, the behavior is undefined.
  *
@@ -84,7 +84,7 @@ std::unique_ptr<table> scatter(
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
  *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * @throws cudf::logic_error if `check_bounds == true` and an index exists in
  * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
  * the target table. If `check_bounds == false`, the behavior is undefined.
  *
