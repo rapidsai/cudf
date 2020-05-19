@@ -60,7 +60,6 @@ struct dispatch_map_type {
     }
   }
 
-  // TODO args
   template <typename map_type,
             typename... Args,
             std::enable_if_t<not std::is_integral<map_type>::value or
