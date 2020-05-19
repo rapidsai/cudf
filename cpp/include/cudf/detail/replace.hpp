@@ -51,7 +51,7 @@ std::unique_ptr<column> replace_nulls(
  * @copydoc cudf::experimental::replace_nans(column_view const&, column_view const&,
  * rmm::mr::device_memory_resource*)
  *
- * @param stream Optional CUDA stream to use for operations
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> replace_nans(
   column_view const& input,
@@ -63,7 +63,7 @@ std::unique_ptr<column> replace_nans(
  * @copydoc cudf::experimental::replace_nans(column_view const&, scalar const&,
  * rmm::mr::device_memory_resource*)
  *
- * @param stream Optional CUDA stream to use for operations
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> replace_nans(
   column_view const& input,
@@ -74,7 +74,7 @@ std::unique_ptr<column> replace_nans(
 /**
  * @copydoc cudf::experimental::find_and_replace_all
  *
- * @param stream Optional CUDA stream to use for operations
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> find_and_replace_all(
   column_view const& input_col,
