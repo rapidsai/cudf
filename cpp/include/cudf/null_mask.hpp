@@ -74,8 +74,7 @@ size_type num_bitmask_words(size_type number_of_bits);
  *
  * @param size The number of elements to be represented by the mask
  * @param state The desired state of the mask
- * @param stream Optional, stream on which all memory allocations/operations
- * will be submitted
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned device_buffer.
  * @return rmm::device_buffer A `device_buffer` for use as a null bitmask
  * satisfying the desired size and state
@@ -97,8 +96,7 @@ rmm::device_buffer create_null_mask(
  * @param begin_bit Index of the first bit to set (inclusive)
  * @param end_bit Index of the last bit to set (exclusive)
  * @param valid If true set all entries to valid; otherwise, set all to null.
- * @param stream Optional, stream on which all memory allocations/operations
- * will be submitted
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
 void set_null_mask(bitmask_type* bitmask,
                    size_type begin_bit,
@@ -188,8 +186,7 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
  * @param mask Bitmask residing in device memory whose bits will be copied
  * @param begin_bit Index of the first bit to be copied (inclusive)
  * @param end_bit Index of the last bit to be copied (exclusive)
- * @param stream Optional, stream on which all memory allocations and copies
- * will be performed
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned device_buffer
  * @return rmm::device_buffer A `device_buffer` containing the bits
  * `[begin_bit, end_bit)` from `mask`.
@@ -208,8 +205,7 @@ rmm::device_buffer copy_bitmask(
  * Returns empty `device_buffer` if the column is not nullable
  *
  * @param view Column view whose bitmask needs to be copied
- * @param stream Optional, stream on which all memory allocations and copies
- * will be performed
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned device_buffer
  * @return rmm::device_buffer A `device_buffer` containing the bits
  * `[view.offset(), view.offset() + view.size())` from `view`'s bitmask.
@@ -226,7 +222,7 @@ rmm::device_buffer copy_bitmask(
  * If no column in the table is nullable, an empty bitmask is returned.
  *
  * @param view The table of columns
- * @param stream CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned device_buffer
  * @return rmm::device_buffer Output bitmask
  */
