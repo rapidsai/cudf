@@ -45,6 +45,7 @@ class RmmMemoryAccessorTest extends CudfTestBase {
     try (DeviceMemoryBuffer address = Rmm.alloc(10, Cuda.DEFAULT_STREAM)) {
       assertNotEquals(0, address);
     }
+    Rmm.shutdown();
     StringBuilder log = new StringBuilder();
     try (Stream<String> stream = Files.lines(f.toPath(), StandardCharsets.UTF_8))
     {
