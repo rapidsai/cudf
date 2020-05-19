@@ -134,11 +134,9 @@ std::unique_ptr<column> is_integer(
  * Any null entry or empty string will cause this function to return `false`.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
  * @return true if all string are valid
  */
-bool all_integer(strings_column_view const& strings,
-                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+bool all_integer(strings_column_view const& strings);
 
 /**
  * @brief Returns a boolean column identifying strings in which all
@@ -174,11 +172,9 @@ std::unique_ptr<column> is_float(
  * Any null entry or empty string will cause this function to return `false`.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
  * @return true if all string are valid
  */
-bool all_float(strings_column_view const& strings,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+bool all_float(strings_column_view const& strings);
 
 /** @} */  // end of doxygen group
 }  // namespace strings
