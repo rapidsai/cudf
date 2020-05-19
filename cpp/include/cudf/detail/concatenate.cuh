@@ -29,7 +29,7 @@ namespace detail {
  * @copydoc cudf::concatenate_masks(std::vector<column_view>
  * const&,rmm::mr::device_memory_resource*)
  *
- * @param stream stream on which all memory allocations and copies will be performed
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
                        rmm::device_vector<size_t> const& d_offsets,
@@ -40,7 +40,7 @@ void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
 /**
  * @copydoc cudf::concatenate_masks(std::vector<column_view> const&,bitmask_type*)
  *
- * @param stream stream on which all memory allocations and copies will be performed
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 void concatenate_masks(std::vector<column_view> const& views,
                        bitmask_type* dest_mask,
@@ -49,7 +49,7 @@ void concatenate_masks(std::vector<column_view> const& views,
 /**
  * @copydoc cudf::concatenate(std::vector<column_view> const&,rmm::mr::device_memory_resource*)
  *
- * @param stream Optional The stream on which to execute all allocations and copies
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns_to_concat,
@@ -59,7 +59,7 @@ std::unique_ptr<column> concatenate(
 /**
  * @copydoc cudf::concatenate(std::vector<table_view> const&,rmm::mr::device_memory_resource*)
  *
- * @param stream Optional The stream on which to execute all allocations and copies
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<experimental::table> concatenate(
   std::vector<table_view> const& tables_to_concat,

@@ -33,7 +33,7 @@ namespace detail {
  * @param end End of the sequence of elements
  * @param p Predicate to be applied to each element in `[begin,end)`
  * @param mr Optional, The resource to use for all allocations
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing
  * predicate is satisfied.
@@ -60,7 +60,7 @@ std::unique_ptr<column> true_if(
 /**
  * @copydoc cudf::experimental::unary_operation
  *
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
@@ -71,7 +71,7 @@ std::unique_ptr<cudf::column> unary_operation(
 /**
  * @copydoc cudf::experimental::cast
  *
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,

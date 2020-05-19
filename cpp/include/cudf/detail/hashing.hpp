@@ -22,7 +22,7 @@ namespace detail {
 /**
  * @copydoc cudf::experimental::hash_partition
  *
- * @param stream Optional stream to use for allocations and copies
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition(
   table_view const& input,
@@ -34,7 +34,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
 /**
  * @copydoc cudf::hash
  *
- * @param stream Optional stream to use for allocations and copies
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> hash(table_view const& input,
                              std::vector<uint32_t> const& initial_hash = {},
