@@ -317,15 +317,51 @@ class Series(Frame):
         ----------
         lower : Scalar value, default None
             Minimum threshold value. All values below this
-            threshold will be set to it.
+            threshold will be set to it. If it is None,
+            there will be no clipping based on lower.
         upper : Scalar value, default None
             Maximum threshold value. All values above this
-            threshold will be set to it.
+            threshold will be set to it. If it is None,
+            there will be no clipping based on upper.
         inplace : bool, default False
 
         Returns
         -------
         Returns clipped series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series([1, 2, 3, 4])
+        >>> sr.clip(lower=2, upper=3)
+        0    2
+        1    2
+        2    3
+        3    3
+        dtype: int64
+
+        >>> sr.clip(lower=None, upper=3)
+        0    1
+        1    2
+        2    3
+        3    3
+        dtype: int64
+
+        >>> sr.clip(lower=2, upper=None)
+        0    2
+        1    2
+        2    3
+        3    4
+        dtype: int64
+
+        >>> sr.clip(lower=2, upper=None, inplace=True)
+        >>> sr
+        0    2
+        1    2
+        2    3
+        3    4
+        dtype: int64
+
         """
 
         if not is_scalar(lower) or not is_scalar(upper):

@@ -4465,15 +4465,58 @@ class DataFrame(Frame):
         ----------
         lower : scalar or array_like, default None
             Minimum threshold value. All values below this
-            threshold will be set to it.
+            threshold will be set to it. If it is None,
+            there will be no clipping based on lower.
         upper : scalar or array_like, default None
             Maximum threshold value. All values below this
-            threshold will be set to it.
+            threshold will be set to it. If it is None,
+            there will be no clipping based on upper.
         inplace : bool, default False
 
         Returns
         -------
         Clipped DataFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3, 4], "b":['a', 'b', 'c', 'd']})
+        >>> df.clip(lower=[2, 'b'], upper=[3, 'c'])
+           a  b
+        0  2  b
+        1  2  b
+        2  3  c
+        3  3  c
+
+        >>> df.clip(lower=None, upper=[3, 'c'])
+           a  b
+        0  1  a
+        1  2  b
+        2  3  c
+        3  3  c
+
+        >>> df.clip(lower=[2, 'b'], upper=None)
+           a  b
+        0  2  b
+        1  2  b
+        2  3  c
+        3  4  d
+
+        >>> df = cudf.DataFrame({"a":[1, 2, 3, 4], "b":[2, 3, 4, 5]})
+        >>> df.clip(lower=2, upper=4)
+           a  b
+        0  2  2
+        1  2  3
+        2  3  4
+        3  4  4
+
+        >>> df.clip(lower=2, upper=3, inplace=True)
+        >>> df
+           a  b
+        0  2  2
+        1  2  3
+        2  3  3
+        3  3  3
         """
 
         if lower is None and upper is None:
