@@ -30,6 +30,7 @@
 - PR #5149 Add Java bindings for PMOD
 - PR #5153 Add Java bindings for extract
 - PR #5196 Add Java bindings for NULL_EQUALS, NULL_MAX and NULL_MIN
+- PR #5203 Add Java bindings for is_integer and is_float
 - PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
 
 ## Improvements
@@ -181,6 +182,7 @@
 - PR #5198 Add detail headers for strings converter functions
 - PR #5199 Add index support in `DataFrame.query`
 - PR #5227 Refactor `detail::gather` API to use scoped enumerators
+- PR #5209 Add `nan_as_null` support to `cudf.from_pandas`
 - PR #5207 Break up backref_re.cu into multiple source files to improve compile time
 - PR #5214 Move docs build script into repository
 - PR #5155 Fix cudf documentation misspellings
