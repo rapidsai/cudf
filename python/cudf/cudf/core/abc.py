@@ -42,7 +42,7 @@ class Serializable(abc.ABC):
 
     def host_serialize(self):
         header, frames = self.device_serialize()
-        frames = [f.to_host_array().data for f in frames]
+        frames = [f.to_host_array().view("u1").data for f in frames]
         return header, frames
 
     @classmethod
