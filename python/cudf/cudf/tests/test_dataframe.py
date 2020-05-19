@@ -4201,7 +4201,7 @@ def test_df_astype_string_to_other(as_dtype):
     ],
 )
 def test_df_astype_datetime_to_other(as_dtype):
-    data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
+    data = ["1991-11-20 00:00:00.000000", "2004-12-04 00:00:00.000000", "2016-09-13 00:00:00.000000", None]
 
     gdf = DataFrame()
     expect = DataFrame()
