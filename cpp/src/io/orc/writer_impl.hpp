@@ -82,7 +82,7 @@ class writer::impl {
    *
    * @param table The set of columns
    * @param metadata The metadata associated with the table
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void write(table_view const& table, const table_metadata* metadata, cudaStream_t stream);
 
@@ -121,7 +121,7 @@ class writer::impl {
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dict List of dictionary chunks
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void init_dictionaries(orc_column_view* columns,
                          size_t num_rows,
@@ -141,7 +141,7 @@ class writer::impl {
    * @param dict List of dictionary chunks
    * @param dict_index List of dictionary indices
    * @param stripe_dict List of stripe dictionaries
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void build_dictionaries(orc_column_view* columns,
                           size_t num_rows,
@@ -182,7 +182,7 @@ class writer::impl {
    * @param streams List of columns' index and data streams
    * @param strm_ids List of unique stream identifiers
    * @param chunks List of column data chunks
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Device buffer containing encoded data
    **/
@@ -208,7 +208,7 @@ class writer::impl {
    * @param stripe_list List of stripe boundaries
    * @param chunks List of column data chunks
    * @param strm_desc List of stream descriptors
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The stripes' information
    **/
@@ -232,7 +232,7 @@ class writer::impl {
    * @param stripe_list List of stripe boundaries
    * @param stripes Stripe information
    * @param chunks List of column data chunks
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The statistic blobs
    **/
@@ -285,7 +285,7 @@ class writer::impl {
    * @param stream_out Temporary host output buffer
    * @param stripe Stream's parent stripe
    * @param streams List of all streams
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void write_data_stream(gpu::StripeStream const& strm_desc,
                          gpu::EncChunk const& chunk,
