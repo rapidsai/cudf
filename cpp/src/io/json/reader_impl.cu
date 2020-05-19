@@ -160,11 +160,10 @@ void reader::impl::decompress_input()
     uncomp_data_ = reinterpret_cast<const char *>(buffer_->data());
     uncomp_size_ = buffer_->size();
   } else {
-    CUDF_EXPECTS(getUncompressedHostData(reinterpret_cast<const char *>(buffer_->data()),
-                                         buffer_->size(),
-                                         compression_type,
-                                         uncomp_data_owner_) == GDF_SUCCESS,
-                 "Input data decompression failed.\n");
+    getUncompressedHostData(reinterpret_cast<const char *>(buffer_->data()),
+                            buffer_->size(),
+                            compression_type,
+                            uncomp_data_owner_);
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();
   }
