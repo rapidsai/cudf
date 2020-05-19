@@ -197,9 +197,9 @@ class Merge(object):
         """
 
         # must actually support the requested merge type
-        if how not in ["left", "inner", "outer", "leftanti", "leftsemi"]:
+        if how not in {"left", "inner", "outer", "leftanti", "leftsemi"}:
             raise NotImplementedError(
-                "{!r} merge not supported yet".format(how)
+                f"{how} merge not supported yet"
             )
 
         # Passing 'on' with 'left_on' or 'right_on' is ambiguous
@@ -225,7 +225,7 @@ class Merge(object):
                 on_keys = on
             for key in on_keys:
                 if not (key in lhs._data.keys() and key in rhs._data.keys()):
-                    raise KeyError("on key {} not in both operands".format(on))
+                    raise KeyError(f"on key {on} not in both operands")
         elif left_on and right_on:
             left_on_keys = (
                 [left_on] if not isinstance(left_on, list) else left_on
@@ -236,10 +236,10 @@ class Merge(object):
 
             for key in left_on_keys:
                 if key not in lhs._data.keys():
-                    raise KeyError('Key "{}" not in left operand'.format(key))
+                    raise KeyError(f'Key "{key}" not in left operand')
             for key in right_on_keys:
                 if key not in rhs._data.keys():
-                    raise KeyError('Key "{}" not in right operand'.format(key))
+                    raise KeyError(f'Key "{key}" not in right operand')
 
         # Require same total number of columns to join on in both operands
         len_left_on = 0
@@ -381,7 +381,7 @@ class Merge(object):
             if how == "left":
                 raise ValueError(ctgry_err.format(lcol, "left"))
             libcudf_join_type = rcol.cat().categories.dtype
-        elif how in ["inner", "outer"]:
+        elif how in {"inner", "outer"}:
             if (np.issubdtype(dtype_l, np.number)) and (
                 np.issubdtype(dtype_r, np.number)
             ):
@@ -414,7 +414,7 @@ class Merge(object):
             dtype_r, CategoricalDtype
         ):
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-                if how in ["inner", "left"]:
+                if how in {"inner", "left"}:
                     merge_return_type = dtype_l
                 elif how == "outer" and not (
                     dtype_l.ordered or dtype_r.ordered

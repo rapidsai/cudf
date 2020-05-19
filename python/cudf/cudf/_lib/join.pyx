@@ -210,10 +210,10 @@ def compute_result_col_names(lhs, rhs, how):
     as well as the type of join that was performed.
     """
     if how in ("left", "inner", "outer", "leftsemi", "leftanti"):
-        a = list(lhs._data.keys())
-        b = [] if how not in ("left", "inner", "outer") else \
-            [k for k in rhs._data.keys() if k not in lhs._data.keys()]
-        return a+b
+        a = lhs._data.keys()
+        if how in ("leftsemi", "leftanti"):
+            return [*a, *(k for k in rhs._data.keys() if k not in lhs._data.keys())]
+        return list(a)
     else:
         raise NotImplementedError(
             "{!r} merge not supported yet".format(how)
