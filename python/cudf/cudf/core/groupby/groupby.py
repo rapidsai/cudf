@@ -7,9 +7,9 @@ import pickle
 import pandas as pd
 
 import cudf
-from cudf.core.abc import Serializable
 import cudf._lib.groupby as libgroupby
 from cudf._lib.nvtx import annotate
+from cudf.core.abc import Serializable
 
 
 class GroupBy(Serializable):
