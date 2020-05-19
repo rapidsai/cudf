@@ -163,7 +163,8 @@ class Series(Frame):
         return item in self._index
 
     @classmethod
-    def from_pandas(cls, s, nan_as_null=True):
+    def from_pandas(cls, s, nan_as_null=None):
+        # TODO: Revisit
         """
         Convert from a Pandas Series.
 

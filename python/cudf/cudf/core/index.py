@@ -8,7 +8,6 @@ import pickle
 import cupy
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import cudf
 from cudf._lib.nvtx import annotate
@@ -501,11 +500,11 @@ class Index(Frame):
         return self._values._memory_usage(deep=deep)
 
     @classmethod
-    def from_pandas(cls, index):
+    def from_pandas(cls, index, nan_as_null=None):
         if not isinstance(index, pd.Index):
             raise TypeError("not a pandas.Index")
 
-        ind = as_index(pa.Array.from_pandas(index))
+        ind = as_index(column.as_column(index, nan_as_null=nan_as_null))
         ind.name = index.name
         return ind
 

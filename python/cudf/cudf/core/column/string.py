@@ -190,7 +190,24 @@ class StringMethods(object):
 
     def htoi(self):
         """
-        This converts hex strings to integers
+        Returns integer value represented by each hex string.
+        String is interpretted to have hex (base-16) characters.
+
+        Returns
+        -------
+        Series/Index of str dtype
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["1234", "ABCDEF", "1A2", "cafe"])
+        >>> s.str.htoi()
+        0        4660
+        1    11259375
+        2         418
+        3       51966
+        dtype: int64
+
         """
 
         out = str_cast.htoi(self._column)
@@ -200,6 +217,29 @@ class StringMethods(object):
     def ip2int(self):
         """
         This converts ip strings to integers
+
+        Returns
+        -------
+        Series/Index of str dtype
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["12.168.1.1", "10.0.0.1"])
+        >>> s.str.ip2int()
+        0    212336897
+        1    167772161
+        dtype: int64
+
+        Returns 0's if any string is not an IP.
+
+        >>> s = cudf.Series(["12.168.1.1", "10.0.0.1", "abc"])
+        >>> s.str.ip2int()
+        0    212336897
+        1    167772161
+        2            0
+        dtype: int64
+
         """
 
         out = str_cast.ip2int(self._column)
@@ -276,7 +316,7 @@ class StringMethods(object):
         """
         Concatenate strings in the Series/Index with given separator.
 
-        If *others* is specified, this function concatenates the Series/Index
+        If ``others`` is specified, this function concatenates the Series/Index
         and elements of others element-wise. If others is not passed, then all
         values in the Series/Index are concatenated into a single string with
         a given sep.
@@ -285,7 +325,7 @@ class StringMethods(object):
         ----------
             others : Series or List of str
                 Strings to be appended.
-                The number of strings must match size() of this instance.
+                The number of strings must match ``size()`` of this instance.
                 This must be either a Series of string dtype or a Python
                 list of strings.
 
@@ -297,17 +337,65 @@ class StringMethods(object):
                 This character will take the place of any null strings
                 (not empty strings) in either list.
 
-                - If `na_rep` is None, and `others` is None, missing values in
-                the Series/Index are omitted from the result.
-                - If `na_rep` is None, and `others` is not None, a row
-                containing a missing value in any of the columns (before
-                concatenation) will have a missing value in the result.
+                -  If ``na_rep`` is ``None``, and ``others`` is ``None``,
+                   missing values in the Series/Index are
+                   omitted from the result.
+
+                -  If ``na_rep`` is ``None``, and ``others`` is
+                   not ``None``, a row containing a missing value
+                   in any of the columns (before concatenation)
+                   will have a missing value in the result.
 
         Returns
         -------
         concat : str or Series/Index of str dtype
-            If `others` is None, `str` is returned, otherwise a `Series/Index`
-            (same type as caller) of str dtype is returned.
+            If ``others`` is ``None``, ``str`` is returned,
+            otherwise a ``Series/Index`` (same type as caller)
+            of str dtype is returned.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['a', 'b', None, 'd'])
+        >>> s.str.cat(sep=' ')
+        'a b d'
+
+        By default, NA values in the Series are ignored. Using na_rep, they
+        can be given a representation:
+
+        >>> s.str.cat(sep=' ', na_rep='?')
+        'a b ? d'
+
+        If others is specified, corresponding values are concatenated with
+        the separator. Result will be a Series of strings.
+
+        >>> s.str.cat(['A', 'B', 'C', 'D'], sep=',')
+        0     a,A
+        1     b,B
+        2    None
+        3     d,D
+        dtype: object
+
+        Missing values will remain missing in the result, but can again be
+        represented using na_rep
+
+        >>> s.str.cat(['A', 'B', 'C', 'D'], sep=',', na_rep='-')
+        0    a,A
+        1    b,B
+        2    -,C
+        3    d,D
+        dtype: object
+
+        If sep is not specified, the values are concatenated without
+        separation.
+
+        >>> s.str.cat(['A', 'B', 'C', 'D'], na_rep='-')
+        0    aA
+        1    bB
+        2    -C
+        3    dD
+        dtype: object
+
         """
         from cudf.core import DataFrame
 
@@ -374,6 +462,34 @@ class StringMethods(object):
         -----
         The `flags` parameter is not yet supported and will raise a
         NotImplementedError if anything other than the default value is passed.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['a1', 'b2', 'c3'])
+        >>> s.str.extract(r'([ab])(\d)')                                # noqa W605
+              0     1
+        0     a     1
+        1     b     2
+        2  None  None
+
+        A pattern with one group will return a DataFrame with one
+        column if expand=True.
+
+        >>> s.str.extract(r'[ab](\d)', expand=True)                     # noqa W605
+              0
+        0     1
+        1     2
+        2  None
+
+        A pattern with one group will return a Series if expand=False.
+
+        >>> s.str.extract(r'[ab](\d)', expand=False)                    # noqa W605
+        0       1
+        1       2
+        2    None
+        dtype: object
+
         """
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
@@ -415,6 +531,67 @@ class StringMethods(object):
         The parameters `case`, `flags`, and `na` are not yet supported and
         will raise a NotImplementedError if anything other than the default
         value is set.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s1 = cudf.Series(['Mouse', 'dog', 'house and parrot', '23', None])
+        >>> s1
+        0               Mouse
+        1                 dog
+        2    house and parrot
+        3                  23
+        4                None
+        dtype: object
+        >>> s1.str.contains('og', regex=False)
+        0    False
+        1     True
+        2    False
+        3    False
+        4     null
+        dtype: bool
+
+        Returning an Index of booleans using only a literal pattern.
+
+        >>> data = ['Mouse', 'dog', 'house and parrot', '23.0', np.NaN]
+        >>> ind = cudf.core.index.StringIndex(data)
+        >>> ind.str.contains('23', regex=False)
+        Index(['False', 'False', 'False', 'True', 'null'], dtype='object')
+
+        Returning ‘house’ or ‘dog’ when either expression occurs in a string.
+
+        >>> s1.str.contains('house|dog', regex=True)
+        0    False
+        1     True
+        2     True
+        3    False
+        4     null
+        dtype: bool
+
+        Returning any digit using regular expression.
+
+        >>> s1.str.contains('\d', regex=True)                               # noqa W605
+        0    False
+        1    False
+        2    False
+        3     True
+        4     null
+        dtype: bool
+
+        Ensure ``pat`` is a not a literal pattern when ``regex`` is set
+        to True. Note in the following example one might expect
+        only `s2[1]` and `s2[3]` to return True. However,
+        ‘.0’ as a regex matches any character followed by a 0.
+
+        >>> s2 = cudf.Series(['40', '40.0', '41', '41.0', '35'])
+        >>> s2.str.contains('.0', regex=True)
+        0     True
+        1     True
+        2    False
+        3     True
+        4    False
+        dtype: bool
+
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
@@ -556,63 +733,125 @@ class StringMethods(object):
 
     def isdecimal(self, **kwargs):
         """
-        Returns a Series/Column/Index of boolean values with True for strings
-        that contain only decimal characters -- those that can be used
-        to extract base10 numbers.
+        Check whether all characters in each string are decimal.
 
-        Returns
-        -------
-        Series/Index of bool dtype
+        This is equivalent to running the Python string method
+        str.isdecimal() for each element of the Series/Index.
+        If a string has zero characters, False is returned for
+        that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
 
         """
         return self._return_or_inplace(cpp_is_decimal(self._column), **kwargs)
 
     def isalnum(self, **kwargs):
         """
-        Returns a Series/Index of boolean values with True for strings
-        that contain only alpha-numeric characters.
+        Check whether all characters are alphanumeric.
+
         Equivalent to: isalpha() or isdigit() or isnumeric() or isdecimal()
 
         Returns
         -------
-        Series/Index of bool dtype
+        Series or Index of boolean values with True for strings
+        that contain only alpha-numeric characters.
+
+        See also
+        --------
+        isalpha
+            Check whether all characters are alphabetic.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isalnum
+            Check whether all characters are alphanumeric.
+
+        isdigit
+            Check whether all characters are digits.
+
+        isdecimal
+            Check whether all characters are decimal.
+
+        isspace
+            Check whether all characters are whitespace.
+
+        islower
+            Check whether all characters are lowercase.
+
+        isupper
+            Check whether all characters are uppercase.
+
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s1 = cudf.Series(['one', 'one1', '1', ''])
+        >>> s1.str.isalnum()
+        0     True
+        1     True
+        2     True
+        3    False
+        dtype: bool
+
+        Note that checks against characters mixed with
+        any additional punctuation or whitespace will
+        evaluate to false for an alphanumeric check.
+
+        >>> s2 = cudf.Series(['A B', '1.5', '3,000'])
+        >>> s2.str.isalnum()
+        0    False
+        1    False
+        2    False
+        dtype: bool
 
         """
         return self._return_or_inplace(cpp_is_alnum(self._column), **kwargs)
 
     def isalpha(self, **kwargs):
         """
-        Returns a Series/Index of boolean values with True for strings
-        that contain only alphabetic characters.
+        Check whether all characters in each string are alphabetic.
 
-        Returns
-        -------
-        Series/Index of bool dtype
+        This is equivalent to running the Python string method
+        str.isalpha() for each element of the Series/Index.
+        If a string has zero characters, False is returned for that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same length
+            as the original Series/Index.
 
         """
         return self._return_or_inplace(cpp_is_alpha(self._column), **kwargs)
 
     def isdigit(self, **kwargs):
         """
-        Returns a Series/Index of boolean values with True for strings
-        that contain only decimal and digit characters.
+        Check whether all characters in each string are digits.
 
-        Returns
-        -------
-        Series/Index of bool dtype
+        This is equivalent to running the Python string method
+        str.isdigit() for each element of the Series/Index.
+        If a string has zero characters, False is returned
+        for that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
 
         """
         return self._return_or_inplace(cpp_is_digit(self._column), **kwargs)
 
     def isnumeric(self, **kwargs):
         """
-        Returns a Series/Index of boolean values with True for strings
-        that contain only numeric characters. These include digit and
-        numeric characters.
+        Check whether all characters in each string are numeric.
 
-        Returns
-        -------
-        Series/Index of bool dtype
+        This is equivalent to running the Python string method
+        str.isnumeric() for each element of the Series/Index. If a
+        string has zero characters, False is returned for that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
 
         """
         return self._return_or_inplace(cpp_is_numeric(self._column), **kwargs)
@@ -670,15 +909,29 @@ class StringMethods(object):
 
     def capitalize(self, **kwargs):
         """
-        Capitalize first character of each string.
+        Convert strings in the Series/Index to be capitalized.
         This only applies to ASCII characters at this time.
+
+        Returns
+        -------
+        Series or Index of object
 
         Examples
         --------
         >>> import cudf
+        >>> data = ['lower', 'CAPITALS', 'this is a sentence', 'SwApCaSe']
+        >>> s = cudf.Series(data)
+        >>> s.str.capitalize()
+        0                 Lower
+        1              Capitals
+        2    This is a sentence
+        3              Swapcase
+        dtype: object
         >>> s = cudf.Series(["hello, friend","goodbye, friend"])
-        >>> print(s.str.capitalize())
-        ['Hello, friend", "Goodbye, friend"]
+        >>> s.str.capitalize()
+        0      Hello, friend
+        1    Goodbye, friend
+        dtype: object
 
         """
         return self._return_or_inplace(cpp_capitalize(self._column), **kwargs)
@@ -799,6 +1052,29 @@ class StringMethods(object):
             A new string series with the specified string
             inserted at the specified position.
 
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["abcdefghij", "0123456789"])
+        >>> s.str.insert(2, '_')
+        0    ab_cdefghij
+        1    01_23456789
+        dtype: object
+
+        When no `repl` is passed, nothing is inserted.
+
+        >>> s.str.insert(2)
+        0    abcdefghij
+        1    0123456789
+        dtype: object
+
+        Negative values are also supported for `start`.
+
+        >>> s.str.insert(-1,'_')
+        0    abcdefghij_
+        1    0123456789_
+        dtype: object
+
         """
         if repl is None:
             repl = ""
@@ -821,6 +1097,34 @@ class StringMethods(object):
         Returns
         -------
         Series/Index of str dtype
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["hello world", "rapids", "cudf"])
+        >>> s
+        0    hello world
+        1         rapids
+        2           cudf
+        dtype: object
+        >>> s.str.get(10)
+        0    d
+        1
+        2
+        dtype: object
+        >>> s.str.get(1)
+        0    e
+        1    a
+        2    u
+        dtype: object
+
+        ``get`` also accepts negative index number.
+
+        >>> s.str.get(-1)
+        0    d
+        1    s
+        2    f
+        dtype: object
 
         """
 
@@ -1099,13 +1403,48 @@ class StringMethods(object):
             additional characters will be filled
             with fillchar.
 
-        fillchar : str, default ' ' (whitespace)
-            Additional character for filling, default is whitespace.
+        fillchar : str, default is ' ' (whitespace)
+            Additional character for filling.
 
         Returns
         -------
         Series/Index of str dtype
             Returns Series or Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['a', 'b', None, 'd'])
+        >>> s.str.center(1)
+        0       a
+        1       b
+        2    None
+        3       d
+        dtype: object
+        >>> s.str.center(1, fillchar='-')
+        0       a
+        1       b
+        2    None
+        3       d
+        dtype: object
+        >>> s.str.center(2, fillchar='-')
+        0      a-
+        1      b-
+        2    None
+        3      d-
+        dtype: object
+        >>> s.str.center(5, fillchar='-')
+        0    --a--
+        1    --b--
+        2     None
+        3    --d--
+        dtype: object
+        >>> s.str.center(6, fillchar='-')
+        0    --a---
+        1    --b---
+        2      None
+        3    --d---
+        dtype: object
 
         """
         if not isinstance(fillchar, str):
@@ -1392,6 +1731,45 @@ class StringMethods(object):
         -------
         Series or Index
 
+        Notes
+        -----
+            -  `flags` parameter is currently not supported.
+            -  Some characters need to be escaped when passing
+               in pat. eg. ``'$'`` has a special meaning in regex
+               and must be escaped when finding this literal character.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['A', 'B', 'Aaba', 'Baca', None, 'CABA', 'cat'])
+        >>> s.str.count('a')
+        0       0
+        1       0
+        2       2
+        3       2
+        4    null
+        5       0
+        6       1
+        dtype: int32
+
+        Escape ``'$'`` to find the literal dollar sign.
+
+        >>> s = cudf.Series(['$', 'B', 'Aab$', '$$ca', 'C$B$', 'cat'])
+        >>> s.str.count('\$')                                       # noqa W605
+        0    1
+        1    0
+        2    1
+        3    2
+        4    2
+        5    0
+        dtype: int32
+
+        This is also available on Index.
+
+        >>> index = cudf.core.index.StringIndex(['A', 'A', 'Aaba', 'cat'])
+        >>> index.str.count('a')
+        Int64Index([0, 0, 2, 1], dtype='int64')
+
         """
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
@@ -1415,6 +1793,51 @@ class StringMethods(object):
         DataFrame
             All non-overlapping matches of pattern or
             regular expression in each string of this Series/Index.
+
+        Notes
+        -----
+        `flags` parameter is currently not supported.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['Lion', 'Monkey', 'Rabbit'])
+
+        The search for the pattern ‘Monkey’ returns one match:
+
+        >>> s.str.findall('Monkey')
+                0
+        0    None
+        1  Monkey
+        2    None
+
+        When the pattern matches more than one string
+        in the Series, all matches are returned:
+
+        >>> s.str.findall('on')
+              0
+        0    on
+        1    on
+        2  None
+
+        Regular expressions are supported too. For instance,
+        the search for all the strings ending with
+        the word ‘on’ is shown next:
+
+        >>> s.str.findall('on$')
+              0
+        0    on
+        1  None
+        2  None
+
+        If the pattern is found more than once in the same
+        string, then multiple strings are returned as columns:
+
+        >>> s.str.findall('b')
+              0     1
+        0  None  None
+        1  None  None
+        2     b     b
 
         """
         if flags != 0:
@@ -1461,6 +1884,28 @@ class StringMethods(object):
         Series or Index of bool
             A Series of booleans indicating whether the given
             pattern matches the end of each string element.
+
+        Notes
+        -----
+        `na` parameter is not yet supported, as cudf uses
+        native strings instead of Python objects.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['bat', 'bear', 'caT', None])
+        >>> s
+        0     bat
+        1    bear
+        2     caT
+        3    None
+        dtype: object
+        >>> s.str.endswith('t')
+        0     True
+        1    False
+        2    False
+        3     null
+        dtype: bool
 
         """
         if "na" in kwargs:
@@ -1534,6 +1979,26 @@ class StringMethods(object):
         -------
         Series or Index of int
 
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['abc', 'a','b' ,'ddb'])
+        >>> s.str.find('b')
+        0    1
+        1   -1
+        2    0
+        3    2
+        dtype: int32
+
+        Parameters such as `start` and `end` can also be used.
+
+        >>> s.str.find('b', start=1, end=5)
+        0    1
+        1   -1
+        2   -1
+        3    2
+        dtype: int32
+
         """
         if not isinstance(sub, str):
             msg = "expected a string object, not {0}"
@@ -1604,6 +2069,25 @@ class StringMethods(object):
         Returns
         -------
         Series or Index of object
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['abc', 'a','b' ,'ddb'])
+        >>> s.str.index('b')
+        Traceback (most recent call last):
+        File "<stdin>", line 1, in <module>
+        ValueError: substring not found
+
+        Parameters such as `start` and `end` can also be used.
+
+        >>> s = cudf.Series(['abc', 'abb','ab' ,'ddb'])
+        >>> s.str.index('b', start=1, end=5)
+        0    1
+        1    1
+        2    1
+        3    2
+        dtype: int32
 
         """
         if not isinstance(sub, str):
@@ -1733,6 +2217,27 @@ class StringMethods(object):
         Returns
         -------
         Series or Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["a","xyz", "éee"])
+        >>> s.str.code_points()
+        0       97
+        1      120
+        2      121
+        3      122
+        4    50089
+        5      101
+        6      101
+        dtype: int32
+        >>> s = cudf.Series(["abc"])
+        >>> s.str.code_points()
+        0    97
+        1    98
+        2    99
+        dtype: int32
+
         """
         from cudf.core.series import Series, Index
 
