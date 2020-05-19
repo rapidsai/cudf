@@ -174,6 +174,7 @@
 - PR #5194 Update Series.fillna to reflect dtype behavior
 - PR #5159 Add `make_meta_object` in `dask_cudf` backend and add `str.split` test
 - PR #5199 Add index support in `DataFrame.query`
+- PR #5227 Refactor `detail::gather` API to use scoped enumerators
 
 ## Bug Fixes
 
