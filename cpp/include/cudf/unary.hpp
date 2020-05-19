@@ -56,7 +56,7 @@ enum class unary_op : int32_t {
  *
  * @param input A `column_view` as input
  * @param op operation to perform
- * @param mrDevice memory resource used to allocate the returned column
+ * @param mr Device memory resource used to allocate the returned column
  *
  * @returns Column of same size as `input` containing result of the operation
  */
