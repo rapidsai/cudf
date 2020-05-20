@@ -197,9 +197,7 @@ class Merge(object):
 
         # must actually support the requested merge type
         if how not in {"left", "inner", "outer", "leftanti", "leftsemi"}:
-            raise NotImplementedError(
-                f"{how} merge not supported yet"
-            )
+            raise NotImplementedError(f"{how} merge not supported yet")
 
         # Passing 'on' with 'left_on' or 'right_on' is ambiguous
         if on and (left_on or right_on):
@@ -493,10 +491,11 @@ class Merge(object):
 
         index_dtypes, data_dtypes = output_dtypes
         if output._index and len(index_dtypes) > 0:
-            for i, (index_col_lbl, index_col) in enumerate(
-                output._index._data.items()
+            for index_dtype, index_col_lbl, index_col in zip(
+                index_dtypes.values(),
+                output._index._data.keys(),
+                output._index._data.values(),
             ):
-                index_dtype = index_dtypes[i]
                 if index_dtype:
                     output._index._data[
                         index_col_lbl
