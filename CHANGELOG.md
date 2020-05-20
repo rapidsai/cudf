@@ -15,6 +15,7 @@
 - PR #4900 Add `get_element` to obtain scalar from a column given an index
 - PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
+- PR #4972 Add list_view (cudf::LIST) type
 - PR #5004 Added a null considering min/max binary op
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
@@ -30,10 +31,11 @@
 - PR #5153 Add Java bindings for extract
 - PR #5196 Add Java bindings for NULL_EQUALS, NULL_MAX and NULL_MIN
 - PR #5192 Add support for `cudf.to_datetime`
+- PR #5203 Add Java bindings for is_integer and is_float
+- PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
 
 ## Improvements
 
-- PR #5184 Fix style checks
 - PR #4995 Add CMake option for per-thread default stream
 - PR #5033 Fix Numba deprecations warnings with Numba 0.49+
 - PR #4950 Fix import errors with Numba 0.49+
@@ -157,6 +159,7 @@
 - PR #5039 Make `annotate` picklable
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
 - PR #5049 Add grouping of libcudf apis into doxygen modules
+- PR #5069 Remove duplicate documentation from detail headers
 - PR #5075 Add simple row-group aggregation mechanism in dask_cudf read_parquet
 - PR #5084 Improve downcasting in `Series.label_encoding()` to reduce memory usage
 - PR #5085 Print more precise numerical strings in unit tests
@@ -175,7 +178,16 @@
 - PR #5137 Add java bindings for getSizeInBytes in DType
 - PR #5194 Update Series.fillna to reflect dtype behavior
 - PR #5159 Add `make_meta_object` in `dask_cudf` backend and add `str.split` test
+- PR #5147 Use logging_resource_adaptor from RMM in the JNI code
+- PR #5184 Fix style checks
+- PR #5198 Add detail headers for strings converter functions
 - PR #5199 Add index support in `DataFrame.query`
+- PR #5209 Add `nan_as_null` support to `cudf.from_pandas`
+- PR #5207 Break up backref_re.cu into multiple source files to improve compile time
+- PR #5214 Move docs build script into repository
+- PR #5155 Fix cudf documentation misspellings
+- PR #5214 Move docs build script into repository
+- PR #5219 Add per context cache for JIT kernels
 
 ## Bug Fixes
 
@@ -296,6 +308,8 @@
 - PR #5185 Fix flake8 configuration and issues from new flake8 version
 - PR #5193 Fix OOB read in csv reader
 - PR #5191 Fix the use of the device memory resource
+- PR #5212 Fix memory leak in `dlpack.pyx:from_dlpack()`
+- PR #5224 Add new headers from 5198 to libcudf/meta.yaml
 
 
 # cuDF 0.13.0 (31 Mar 2020)

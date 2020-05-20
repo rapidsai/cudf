@@ -68,7 +68,7 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
 }  // namespace detail
 
 /*
- * @brief A specialization for floating-point `Element` type rerlational comparison
+ * @brief A specialization for floating-point `Element` type relational comparison
  * to derive the order of the elements with respect to `lhs`. Specialization is to
  * handle `nan` in the order shown below.
  * `[-Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN, null] (for null_order::AFTER)`
@@ -152,7 +152,7 @@ class element_equality_comparator {
    * @note `lhs` and `rhs` may be the same.
    *
    * @param lhs The column containing the first element
-   * @param rhs The column containg the second element (may be the same as lhs)
+   * @param rhs The column containing the second element (may be the same as lhs)
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    **/
   __host__ __device__ element_equality_comparator(column_device_view lhs,
@@ -167,8 +167,10 @@ class element_equality_comparator {
    *
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
-   **/
-  template <typename Element>
+   *
+   */
+  template <typename Element,
+            std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index) const
     noexcept
   {
@@ -184,6 +186,14 @@ class element_equality_comparator {
 
     return equality_compare(lhs.element<Element>(lhs_element_index),
                             rhs.element<Element>(rhs_element_index));
+  }
+
+  template <typename Element,
+            std::enable_if_t<not cudf::is_equality_comparable<Element, Element>()>* = nullptr>
+  __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
+  {
+    release_assert(false && "Attempted to compare elements of uncomparable types.");
+    return false;
   }
 
  private:
@@ -235,7 +245,7 @@ class element_relational_comparator {
    * @note `lhs` and `rhs` may be the same.
    *
    * @param lhs The column containing the first element
-   * @param rhs The column containg the second element (may be the same as lhs)
+   * @param rhs The column containing the second element (may be the same as lhs)
    * @param null_precedence Indicates how null values are ordered with other
    * values
    **/
@@ -285,6 +295,7 @@ class element_relational_comparator {
   __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
     release_assert(false && "Attempted to compare elements of uncomparable types.");
+    return weak_ordering::LESS;
   }
 
  private:

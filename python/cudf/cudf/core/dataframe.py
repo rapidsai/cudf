@@ -954,10 +954,10 @@ class DataFrame(Frame):
                 right_cols = -(int(ncols) - left_cols + 1)
             else:
                 # If right_cols is 0 or negative, it means
-                # self has lesser number of columns thans ncols.
+                # self has lesser number of columns than ncols.
                 # Hence assign len(self._data.names) which
                 # will result in empty `*_right` quadrants.
-                # This is because `*_left` quadransts will
+                # This is because `*_left` quadrants will
                 # contain all columns.
                 right_cols = len(self._data.names)
 
@@ -1923,7 +1923,7 @@ class DataFrame(Frame):
         if isinstance(mapper, Mapping):
             postfix = 1
             # It is possible for DataFrames with a MultiIndex columns object
-            # to have columns with the same name. The followig use of
+            # to have columns with the same name. The following use of
             # _cols.items and ("_1", "_2"... allows the use of
             # rename in this case
             for key, col in self._data.items():
@@ -2224,7 +2224,7 @@ class DataFrame(Frame):
         Notes
         -----
         Difference from pandas:
-        Not supporting *copy* because default and only behaviour is copy=True
+        Not supporting *copy* because default and only behavior is copy=True
         """
         # Never transpose a MultiIndex - remove the existing columns and
         # replace with a RangeIndex. Afterward, reassign.
@@ -2832,7 +2832,7 @@ class DataFrame(Frame):
 
         By looping over the range
         ``range(cuda.threadIdx.x, in1.size, cuda.blockDim.x)``, the *kernel*
-        function can be used with any *tpb* in a efficient manner.
+        function can be used with any *tpb* in an efficient manner.
 
         >>> from numba import cuda
         >>> @cuda.jit
@@ -2939,7 +2939,7 @@ class DataFrame(Frame):
                   replaced with replacement*.
         value : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with. If a dict is provided, then
-            its keys must match the keys in *to_replace*, and correponding
+            its keys must match the keys in *to_replace*, and corresponding
             values must be compatible (e.g., if they are lists, then they must
             match in length).
         inplace : bool, default False
@@ -3199,7 +3199,7 @@ class DataFrame(Frame):
         return out_df
 
     @classmethod
-    def from_pandas(cls, dataframe, nan_as_null=True):
+    def from_pandas(cls, dataframe, nan_as_null=None):
         """
         Convert from a Pandas DataFrame.
 
@@ -3213,7 +3213,7 @@ class DataFrame(Frame):
         >>> import pandas as pd
         >>> data = [[0,1], [1,2], [3,4]]
         >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
-        >>> cudf.from_pandas(pdf)
+        >>> cudf.DataFrame.from_pandas(pdf)
         <cudf.DataFrame ncols=2 nrows=3 >
         """
         if not isinstance(dataframe, pd.DataFrame):
@@ -3248,7 +3248,7 @@ class DataFrame(Frame):
 
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):
-            index = cudf.from_pandas(dataframe.index)
+            index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         else:
             index = dataframe.index
         result = df.set_index(index)
@@ -4862,7 +4862,7 @@ class DataFrame(Frame):
         return df
 
 
-def from_pandas(obj):
+def from_pandas(obj, nan_as_null=None):
     """
     Convert certain Pandas objects into the cudf equivalent.
 
@@ -4882,11 +4882,11 @@ def from_pandas(obj):
     <cudf.DataFrame ncols=2 nrows=3 >
     """
     if isinstance(obj, pd.DataFrame):
-        return DataFrame.from_pandas(obj)
+        return DataFrame.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.Series):
-        return Series.from_pandas(obj)
+        return Series.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.MultiIndex):
-        return cudf.MultiIndex.from_pandas(obj)
+        return cudf.MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.RangeIndex):
         if obj._step and obj._step != 1:
             raise ValueError("cudf RangeIndex requires step == 1")
@@ -4894,7 +4894,7 @@ def from_pandas(obj):
             obj._start, stop=obj._stop, name=obj.name
         )
     elif isinstance(obj, pd.Index):
-        return cudf.Index.from_pandas(obj)
+        return cudf.Index.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(obj)
     else:
@@ -4909,7 +4909,7 @@ def merge(left, right, *args, **kwargs):
     return left.merge(right, *args, **kwargs)
 
 
-# a bit of fanciness to inject doctstring with left parameter
+# a bit of fanciness to inject docstring with left parameter
 merge_doc = DataFrame.merge.__doc__
 idx = merge_doc.find("right")
 merge.__doc__ = "".join(

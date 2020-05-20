@@ -24,6 +24,8 @@
 #include <unistd.h>
 #include <boost/filesystem.hpp>
 
+#include <cuda.h>
+
 namespace cudf {
 namespace jit {
 // Get the directory in home to use for storing the cache
@@ -51,7 +53,7 @@ boost::filesystem::path get_user_home_cache_dir()
  *
  * This path can be overridden at runtime by defining an environment variable
  * named `LIBCUDF_KERNEL_CACHE_PATH`. The value of this variable must be a path
- * under which the process' user has read/write priveleges.
+ * under which the process' user has read/write privileges.
  *
  * This function returns a path to the cache directory, creating it if it
  * doesn't exist.
@@ -120,6 +122,11 @@ named_prog<jitify::experimental::KernelInstantiation> cudfJitCache::getKernelIns
   // Make instance name e.g. "prog_binop.kernel_v_v_int_int_long int_Add"
   std::string kern_inst_name = prog_name + '.' + kern_name;
   for (auto&& arg : arguments) kern_inst_name += '_' + arg;
+
+  CUcontext c;
+  cuCtxGetCurrent(&c);
+
+  auto& kernel_inst_map = kernel_inst_context_map[c];
 
   return getCached(kern_inst_name, kernel_inst_map, [&]() {
     return program.kernel(kern_name).instantiate(arguments);
