@@ -53,13 +53,6 @@ Groupby
   Thus, manually specify the following for legacy_groupby.Groupby's docstring inclusion.
   Other methods in the class are legacy duplicates of cudf.groupby.groupby.Groupby
 
-Legacy Groupby
---------------
-.. currentmodule:: cudf.core.groupby.legacy_groupby
-
-.. autoclass:: Groupby
-    :members:
-    :exclude-members: serialize, deserialize
 
 IO
 --
