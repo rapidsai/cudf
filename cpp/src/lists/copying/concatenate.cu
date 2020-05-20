@@ -46,13 +46,14 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
   // outgoing offsets
   auto merged_offsets = cudf::make_fixed_width_column(data_type{INT32}, total_list_count + 1);
   mutable_column_device_view d_merged_offsets(*merged_offsets, 0, 0);
-
+  
   // merge offsets
+  // TODO : this could probably be done as a single gpu operation if done as a kernel.
   size_type shift = 0;
   size_type count = 0;
   thrust::for_each(columns.begin(), columns.end(), [&](lists_column_view const& c) {
     column_device_view offsets(c.offsets(), 0, 0);
-    thrust::transform(rmm::exec_policy(0)->on(0),
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
                       offsets.begin<size_type>(),
                       offsets.end<size_type>(),
                       d_merged_offsets.begin<size_type>() + count,
@@ -64,7 +65,7 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
   return merged_offsets;
 }
 
-}  // namespace
+}  // namespace anonymous
 
 /**
  * @copydoc cudf::lists::detail::concatenate
@@ -81,19 +82,19 @@ std::unique_ptr<column> concatenate(
       return lists_column_view(c);
     });
 
-  // concatenate data. also prep data needed for offset merging
-  std::vector<column_view> leaves;
+  // concatenate children. also prep data needed for offset merging
+  std::vector<column_view> children;
   size_type total_list_count = 0;
   std::transform(lists_columns.begin(),
                  lists_columns.end(),
-                 std::back_inserter(leaves),
+                 std::back_inserter(children),
                  [&](lists_column_view const& l) {
                    // count total # of lists
                    total_list_count += l.size();
-                   // child data. a leaf type (float, int, string, etc)
+                   // child column. could be a leaf type (string, float, int, etc) or more nested lists
                    return l.child();
                  });
-  auto data = cudf::concatenate(leaves);
+  auto data = cudf::concatenate(children);
 
   // merge offsets
   auto offsets = merge_offsets(lists_columns, total_list_count, mr, stream);

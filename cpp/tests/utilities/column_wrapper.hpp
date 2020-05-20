@@ -533,8 +533,9 @@ class lists_column_wrapper : public detail::column_wrapper {
    * Example:
    * ```c++
    * // Creates a LIST column with 1 lists composed of 2 total integers
-   * // [{0, 1}]
-   * lists_column_wrapper l{0, 1}
+   * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
+   * // [{0, NULL}]
+   * lists_column_wrapper l{{0, 1}, validity}
    * ```
    *
    * @param elements The list of elements
@@ -553,9 +554,10 @@ class lists_column_wrapper : public detail::column_wrapper {
    * Example:
    * ```c++
    * // Creates a LIST column with 1 lists composed of 5 total integers
-   * * auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
-   * // [{0, 1, 2, 3, 4}]
-   * lists_column_wrapper l(elements, elements+5);
+   * auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
+   * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
+   * // [{0, NULL, 2, NULL, 4}]
+   * lists_column_wrapper l(elements, elements+5, validity);
    * ```
    *
    * @param elements The list of elements
@@ -598,8 +600,9 @@ class lists_column_wrapper : public detail::column_wrapper {
    * Example:
    * ```c++
    * // Creates a LIST column with 1 lists composed of 2 total strings
-   * // [{"abc", "def"}]
-   * lists_column_wrapper l{"abc", "def"}
+   * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
+   * // [{"abc", NULL}]
+   * lists_column_wrapper l{{"abc", "def"}, validity};
    * ```
    *
    * @param elements The list of elements
@@ -647,8 +650,9 @@ class lists_column_wrapper : public detail::column_wrapper {
    * Example:
    * ```c++
    * // Creates a LIST column with 3 lists
-   * // [{0, 1}, {2, 3}, {4, 5}]
-   * lists_column_wrapper l{ {0, 1}, {2, 3}, {4, 5} }
+   * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
+   * // [{0, 1}, NULL, {4, 5}]
+   * lists_column_wrapper l{ {{0, 1}, {2, 3}, {4, 5}, validity} }
    * ```
    *
    * Automatically handles nesting
@@ -656,8 +660,9 @@ class lists_column_wrapper : public detail::column_wrapper {
    * ```c++
    * // Creates a LIST of LIST columns with 2 lists on the top level and
    * // 4 below
-   * // [ {{0, 1}, {2, 3}}, {{4, 5}, {6, 7}} ]
-   * lists_column_wrapper l{ {{0, 1}, {2, 3}}, {{4, 5}, {6, 7}} }
+   * * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
+   * // [ {{0, 1}, NULL}, {{4, 5}, NULL} ]
+   * lists_column_wrapper l{ {{{0, 1}, {2, 3}}, validity}, {{{4, 5}, {6, 7}}, validity} }
    * ```
    *
    * @param elements The list of elements
