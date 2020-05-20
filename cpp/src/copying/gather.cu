@@ -90,17 +90,16 @@ std::unique_ptr<table> gather(table_view const& source_table,
 {
   CUDF_EXPECTS(gather_map.has_nulls() == false, "gather_map contains nulls");
 
-  std::unique_ptr<table> destination_table =
-    cudf::type_dispatcher(gather_map.type(),
-                                        dispatch_map_type{},
-                                        source_table,
-                                        gather_map,
-                                        gather_map.size(),
-                                        check_bounds,
-                                        ignore_out_of_bounds,
-                                        allow_negative_indices,
-                                        mr,
-                                        stream);
+  std::unique_ptr<table> destination_table = cudf::type_dispatcher(gather_map.type(),
+                                                                   dispatch_map_type{},
+                                                                   source_table,
+                                                                   gather_map,
+                                                                   gather_map.size(),
+                                                                   check_bounds,
+                                                                   ignore_out_of_bounds,
+                                                                   allow_negative_indices,
+                                                                   mr,
+                                                                   stream);
 
   return destination_table;
 }

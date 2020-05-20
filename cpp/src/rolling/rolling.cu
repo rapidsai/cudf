@@ -540,8 +540,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
 
   auto udf_agg = static_cast<udf_aggregation*>(agg.get());
 
-  std::string hash =
-    "prog_rolling." + std::to_string(std::hash<std::string>{}(udf_agg->_source));
+  std::string hash = "prog_rolling." + std::to_string(std::hash<std::string>{}(udf_agg->_source));
 
   std::string cuda_source;
   switch (udf_agg->kind) {
@@ -637,14 +636,14 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   min_periods = std::max(min_periods, 0);
 
   return cudf::type_dispatcher(input.type(),
-                                             dispatch_rolling{},
-                                             input,
-                                             preceding_window_begin,
-                                             following_window_begin,
-                                             min_periods,
-                                             agg,
-                                             mr,
-                                             stream);
+                               dispatch_rolling{},
+                               input,
+                               preceding_window_begin,
+                               following_window_begin,
+                               min_periods,
+                               agg,
+                               mr,
+                               stream);
 }
 
 }  // namespace detail
@@ -663,14 +662,14 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
   if (agg->kind == aggregation::CUDA || agg->kind == aggregation::PTX) {
     return cudf::detail::rolling_window_udf(input,
-                                                          preceding_window,
-                                                          "cudf::size_type",
-                                                          following_window,
-                                                          "cudf::size_type",
-                                                          min_periods,
-                                                          agg,
-                                                          mr,
-                                                          0);
+                                            preceding_window,
+                                            "cudf::size_type",
+                                            following_window,
+                                            "cudf::size_type",
+                                            min_periods,
+                                            agg,
+                                            mr,
+                                            0);
   } else {
     auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
     auto following_window_begin = thrust::make_constant_iterator(following_window);
@@ -700,22 +699,22 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
   if (agg->kind == aggregation::CUDA || agg->kind == aggregation::PTX) {
     return cudf::detail::rolling_window_udf(input,
-                                                          preceding_window.begin<size_type>(),
-                                                          "cudf::size_type*",
-                                                          following_window.begin<size_type>(),
-                                                          "cudf::size_type*",
-                                                          min_periods,
-                                                          agg,
-                                                          mr,
-                                                          0);
+                                            preceding_window.begin<size_type>(),
+                                            "cudf::size_type*",
+                                            following_window.begin<size_type>(),
+                                            "cudf::size_type*",
+                                            min_periods,
+                                            agg,
+                                            mr,
+                                            0);
   } else {
     return cudf::detail::rolling_window(input,
-                                                      preceding_window.begin<size_type>(),
-                                                      following_window.begin<size_type>(),
-                                                      min_periods,
-                                                      agg,
-                                                      mr,
-                                                      0);
+                                        preceding_window.begin<size_type>(),
+                                        following_window.begin<size_type>(),
+                                        min_periods,
+                                        agg,
+                                        mr,
+                                        0);
   }
 }
 
@@ -790,14 +789,14 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
       group_offsets.data().get(), group_labels.data().get(), following_window};
 
     return cudf::detail::rolling_window_udf(input,
-                                                          grouped_preceding_window,
-                                                          "cudf::detail::preceding_window_wrapper",
-                                                          grouped_following_window,
-                                                          "cudf::detail::following_window_wrapper",
-                                                          min_periods,
-                                                          aggr,
-                                                          mr,
-                                                          0);
+                                            grouped_preceding_window,
+                                            "cudf::detail::preceding_window_wrapper",
+                                            grouped_following_window,
+                                            "cudf::detail::following_window_wrapper",
+                                            min_periods,
+                                            aggr,
+                                            mr,
+                                            0);
   } else {
     return cudf::detail::rolling_window(
       input,

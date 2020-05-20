@@ -41,8 +41,7 @@ void run_sort_test(table_view input,
   expect_tables_equal(expected_sorted_table->view(), got_sorted_table->view());
 
   // Sorted by key
-  auto got_sort_by_key_table =
-    sort_by_key(input, input, column_order, null_precedence);
+  auto got_sort_by_key_table      = sort_by_key(input, input, column_order, null_precedence);
   auto expected_sort_by_key_table = gather(input, expected_sorted_indices);
 
   expect_tables_equal(expected_sort_by_key_table->view(), got_sort_by_key_table->view());
@@ -206,8 +205,8 @@ TYPED_TEST(Sort, Stable)
   fixed_width_column_wrapper<R> expected{{4, 3, 6, 1, 5, 7, 2, 0}};
 
   auto got = stable_sorted_order(table_view({col1, col2}),
-                                               {order::ASCENDING, order::ASCENDING},
-                                               {null_order::AFTER, null_order::BEFORE});
+                                 {order::ASCENDING, order::ASCENDING},
+                                 {null_order::AFTER, null_order::BEFORE});
 
   expect_columns_equal(expected, got->view());
 }
@@ -242,8 +241,7 @@ TYPED_TEST(Sort, MisMatchInNullPrecedenceSize)
   std::vector<null_order> null_precedence{null_order::AFTER, null_order::BEFORE};
 
   EXPECT_THROW(sorted_order(input, column_order, null_precedence), logic_error);
-  EXPECT_THROW(stable_sorted_order(input, column_order, null_precedence),
-               logic_error);
+  EXPECT_THROW(stable_sorted_order(input, column_order, null_precedence), logic_error);
   EXPECT_THROW(sort(input, column_order, null_precedence), logic_error);
   EXPECT_THROW(sort_by_key(input, input, column_order, null_precedence), logic_error);
 }

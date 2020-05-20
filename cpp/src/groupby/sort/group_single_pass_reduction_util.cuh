@@ -79,7 +79,7 @@ struct reduce_functor {
                        [d_values     = *valuesview,
                         d_result     = *resultview,
                         dest_indices = group_labels.data().get()] __device__(auto i) {
-                        cudf::detail::update_target_element<T, K, true, true>{}(
+                         cudf::detail::update_target_element<T, K, true, true>{}(
                            d_result, dest_indices[i], d_values, i);
                        });
 

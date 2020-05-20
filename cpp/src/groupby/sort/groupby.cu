@@ -100,10 +100,10 @@ struct store_result_functor {
   };
 
  private:
-  size_type col_idx;                          ///< Index of column in requests being operated on
-  sort::sort_groupby_helper& helper;          ///< Sort helper
+  size_type col_idx;                  ///< Index of column in requests being operated on
+  sort::sort_groupby_helper& helper;  ///< Sort helper
   cudf::detail::result_cache& cache;  ///< cache of results to store into
-  column_view const& values;                  ///< Column of values to group and aggregate
+  column_view const& values;          ///< Column of values to group and aggregate
 
   cudaStream_t stream;                  ///< CUDA stream on which to execute kernels
   rmm::mr::device_memory_resource* mr;  ///< Memory resource to allocate space for results
@@ -252,13 +252,13 @@ void store_result_functor::operator()<aggregation::MEAN>(aggregation const& agg)
 
   // TODO (dm): Special case for timestamp. Add target_type_impl for it.
   //            Blocked until we support operator+ on timestamps
-  auto result = cudf::detail::binary_operation(
-    sum_result,
-    count_result,
-    binary_operator::DIV,
-    cudf::detail::target_type(values.type(), aggregation::MEAN),
-    mr,
-    stream);
+  auto result =
+    cudf::detail::binary_operation(sum_result,
+                                   count_result,
+                                   binary_operator::DIV,
+                                   cudf::detail::target_type(values.type(), aggregation::MEAN),
+                                   mr,
+                                   stream);
   cache.add_result(col_idx, agg, std::move(result));
 };
 
@@ -295,8 +295,7 @@ void store_result_functor::operator()<aggregation::STD>(aggregation const& agg)
   operator()<aggregation::VARIANCE>(*var_agg);
   column_view var_result = cache.get_result(col_idx, *var_agg);
 
-  auto result =
-    cudf::detail::unary_operation(var_result, unary_op::SQRT, mr, stream);
+  auto result = cudf::detail::unary_operation(var_result, unary_op::SQRT, mr, stream);
   cache.add_result(col_idx, agg, std::move(result));
 };
 
@@ -404,7 +403,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
       detail::store_result_functor(i, requests[i].values, helper(), cache, stream, mr);
     for (size_t j = 0; j < requests[i].aggregations.size(); j++) {
       // TODO (dm): single pass compute all supported reductions
-        cudf::detail::aggregation_dispatcher(
+      cudf::detail::aggregation_dispatcher(
         requests[i].aggregations[j]->kind, store_functor, *requests[i].aggregations[j]);
     }
   }

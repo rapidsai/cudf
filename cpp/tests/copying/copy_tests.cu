@@ -73,8 +73,8 @@ struct copy_if_else_tiny_grid_functor {
                                            cudaStream_t stream)
   {
     // output
-    std::unique_ptr<cudf::column> out = cudf::allocate_like(
-      lhs, lhs.size(), cudf::mask_allocation_policy::RETAIN, mr);
+    std::unique_ptr<cudf::column> out =
+      cudf::allocate_like(lhs, lhs.size(), cudf::mask_allocation_policy::RETAIN, mr);
 
     // device views
     auto lhs_view = cudf::column_device_view::create(lhs);
@@ -84,8 +84,7 @@ struct copy_if_else_tiny_grid_functor {
     auto out_dv   = cudf::mutable_column_device_view::create(*out);
 
     // call the kernel with an artificially small grid
-    cudf::detail::
-      copy_if_else_kernel<32, T, decltype(lhs_iter), decltype(rhs_iter), Filter, false>
+    cudf::detail::copy_if_else_kernel<32, T, decltype(lhs_iter), decltype(rhs_iter), Filter, false>
       <<<1, 32, 0, stream>>>(lhs_iter, rhs_iter, filter, *out_dv, nullptr);
 
     return out;
@@ -112,12 +111,12 @@ std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs,
     return bool_mask_device.element<bool>(i);
   };
   return cudf::type_dispatcher(lhs.type(),
-                                             copy_if_else_tiny_grid_functor{},
-                                             lhs,
-                                             rhs,
-                                             filter,
-                                             rmm::mr::get_default_resource(),
-                                             (cudaStream_t)0);
+                               copy_if_else_tiny_grid_functor{},
+                               lhs,
+                               rhs,
+                               filter,
+                               rmm::mr::get_default_resource(),
+                               (cudaStream_t)0);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseTestTinyGrid)

@@ -192,11 +192,11 @@ rmm::device_vector<index_type> generate_merged_indices(
   if (nullable) {
     rmm::device_vector<null_order> d_null_precedence(null_precedence);
 
-    auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
-      *lhs_device_view,
-      *rhs_device_view,
-      d_column_order.data().get(),
-      d_null_precedence.data().get());
+    auto ineq_op =
+      detail::row_lexicographic_tagged_comparator<true>(*lhs_device_view,
+                                                        *rhs_device_view,
+                                                        d_column_order.data().get(),
+                                                        d_null_precedence.data().get());
     thrust::merge(exec_pol->on(stream),
                   left_begin_zip_iterator,
                   left_end_zip_iterator,
@@ -374,8 +374,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
             right_table.begin(),
             std::back_inserter(merged_cols),
             [&](auto const& left_col, auto const& right_col) {
-              return cudf::type_dispatcher(
-                left_col.type(), merger, left_col, right_col);
+              return cudf::type_dispatcher(left_col.type(), merger, left_col, right_col);
             });
 
   return std::make_unique<cudf::table>(std::move(merged_cols));

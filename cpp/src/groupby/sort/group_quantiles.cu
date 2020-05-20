@@ -76,15 +76,14 @@ struct quantiles_functor {
                            return d_values.element<T>(d_group_offset[i] + j);
                          };
 
-                         thrust::transform(
-                           thrust::seq,
-                           d_quantiles,
-                           d_quantiles + num_quantiles,
-                           d_result.data<ResultType>() + i * num_quantiles,
-                           [selector, segment_size, interpolation](auto q) {
-                             return cudf::detail::select_quantile<ResultType>(
-                               selector, segment_size, q, interpolation);
-                           });
+                         thrust::transform(thrust::seq,
+                                           d_quantiles,
+                                           d_quantiles + num_quantiles,
+                                           d_result.data<ResultType>() + i * num_quantiles,
+                                           [selector, segment_size, interpolation](auto q) {
+                                             return cudf::detail::select_quantile<ResultType>(
+                                               selector, segment_size, q, interpolation);
+                                           });
 
                          for (size_t j = 0; j < num_quantiles; j++) {
                            size_type group_size = d_group_size.element<size_type>(i);

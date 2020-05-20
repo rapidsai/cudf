@@ -31,10 +31,9 @@ std::unique_ptr<cudf::scalar> cudf::reduction::standard_deviation(
 {
   // TODO: add cuda version check when the fix is available
 #if !defined(__CUDACC_DEBUG__)
-  using reducer = cudf::reduction::compound::element_type_dispatcher<
-    cudf::reduction::op::standard_deviation>;
-  return cudf::type_dispatcher(
-    col.type(), reducer(), col, output_dtype, ddof, mr, stream);
+  using reducer =
+    cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::standard_deviation>;
+  return cudf::type_dispatcher(col.type(), reducer(), col, output_dtype, ddof, mr, stream);
 #else
   // workaround for bug 200529165 which causes compilation error only at device
   // debug build the bug will be fixed at cuda 10.2

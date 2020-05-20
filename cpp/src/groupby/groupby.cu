@@ -84,13 +84,13 @@ auto empty_results(std::vector<aggregation_request> const& requests)
     requests.begin(), requests.end(), std::back_inserter(empty_results), [](auto const& request) {
       std::vector<std::unique_ptr<column>> results;
 
-      std::transform(request.aggregations.begin(),
-                     request.aggregations.end(),
-                     std::back_inserter(results),
-                     [&request](auto const& agg) {
-                       return make_empty_column(
-                         cudf::detail::target_type(request.values.type(), agg->kind));
-                     });
+      std::transform(
+        request.aggregations.begin(),
+        request.aggregations.end(),
+        std::back_inserter(results),
+        [&request](auto const& agg) {
+          return make_empty_column(cudf::detail::target_type(request.values.type(), agg->kind));
+        });
 
       return aggregation_result{std::move(results)};
     });
@@ -145,8 +145,8 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
 
   std::unique_ptr<table> grouped_values{nullptr};
   if (values.num_columns()) {
-    grouped_values = cudf::detail::gather(
-      values, helper().key_sort_order(), false, false, false, mr);
+    grouped_values =
+      cudf::detail::gather(values, helper().key_sort_order(), false, false, false, mr);
     return groupby::groups{
       std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};
   } else {

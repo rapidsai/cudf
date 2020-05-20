@@ -38,10 +38,9 @@ static constexpr bool is_rolling_supported()
                                                 std::is_same<AggOp, DeviceCount>::value;
 
     constexpr bool is_operation_supported =
-      (op == aggregation::SUM) or (op == aggregation::MIN) or
-      (op == aggregation::MAX) or (op == aggregation::COUNT_VALID) or
-      (op == aggregation::COUNT_ALL) or (op == aggregation::MEAN) or
-      (op == aggregation::ROW_NUMBER);
+      (op == aggregation::SUM) or (op == aggregation::MIN) or (op == aggregation::MAX) or
+      (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
+      (op == aggregation::MEAN) or (op == aggregation::ROW_NUMBER);
 
     constexpr bool is_valid_numeric_agg =
       (cudf::is_numeric<ColumnType>() or is_comparable_countable_op) and is_operation_supported;
@@ -50,19 +49,16 @@ static constexpr bool is_rolling_supported()
 
   } else if (cudf::is_timestamp<ColumnType>()) {
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
-           (op == aggregation::COUNT_VALID) or
-           (op == aggregation::COUNT_ALL) or
+           (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
            (op == aggregation::MEAN) or (op == aggregation::ROW_NUMBER);
 
   } else if (std::is_same<ColumnType, cudf::string_view>()) {
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
-           (op == aggregation::COUNT_VALID) or
-           (op == aggregation::COUNT_ALL) or
+           (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
            (op == aggregation::ROW_NUMBER);
 
   } else if (std::is_same<ColumnType, cudf::list_view>()) {
-    return (op == aggregation::COUNT_VALID) or
-           (op == aggregation::COUNT_ALL) or
+    return (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
            (op == aggregation::ROW_NUMBER);
   }
 

@@ -209,8 +209,8 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
 
     // >>> test UDFs <<<
     if (input.type() == cudf::data_type{cudf::INT32} && !input.has_nulls()) {
-      auto cuda_udf_agg = cudf::make_udf_aggregation(
-        cudf::udf_type::CUDA, cuda_func, cudf::data_type{cudf::INT64});
+      auto cuda_udf_agg =
+        cudf::make_udf_aggregation(cudf::udf_type::CUDA, cuda_func, cudf::data_type{cudf::INT64});
       run_test_col(keys,
                    input,
                    expected_grouping,
@@ -219,8 +219,8 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                    min_periods,
                    cuda_udf_agg);
 
-      auto ptx_udf_agg = cudf::make_udf_aggregation(
-        cudf::udf_type::PTX, ptx_func, cudf::data_type{cudf::INT64});
+      auto ptx_udf_agg =
+        cudf::make_udf_aggregation(cudf::udf_type::PTX, ptx_func, cudf::data_type{cudf::INT64});
       run_test_col(keys,
                    input,
                    expected_grouping,
@@ -414,23 +414,23 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
     // unroll aggregation types
     switch (op->kind) {
       case cudf::aggregation::SUM:
-        return create_reference_output<
-          cudf::DeviceSum,
-          cudf::aggregation::SUM,
-          cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
-          false>(input, group_offsets, preceding_window, following_window, min_periods);
+        return create_reference_output<cudf::DeviceSum,
+                                       cudf::aggregation::SUM,
+                                       cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
+                                       false>(
+          input, group_offsets, preceding_window, following_window, min_periods);
       case cudf::aggregation::MIN:
-        return create_reference_output<
-          cudf::DeviceMin,
-          cudf::aggregation::MIN,
-          cudf::detail::target_type_t<T, cudf::aggregation::MIN>,
-          false>(input, group_offsets, preceding_window, following_window, min_periods);
+        return create_reference_output<cudf::DeviceMin,
+                                       cudf::aggregation::MIN,
+                                       cudf::detail::target_type_t<T, cudf::aggregation::MIN>,
+                                       false>(
+          input, group_offsets, preceding_window, following_window, min_periods);
       case cudf::aggregation::MAX:
-        return create_reference_output<
-          cudf::DeviceMax,
-          cudf::aggregation::MAX,
-          cudf::detail::target_type_t<T, cudf::aggregation::MAX>,
-          false>(input, group_offsets, preceding_window, following_window, min_periods);
+        return create_reference_output<cudf::DeviceMax,
+                                       cudf::aggregation::MAX,
+                                       cudf::detail::target_type_t<T, cudf::aggregation::MAX>,
+                                       false>(
+          input, group_offsets, preceding_window, following_window, min_periods);
       case cudf::aggregation::COUNT_VALID:
         return create_count_reference_output<false>(
           input, group_offsets, preceding_window, following_window, min_periods);
@@ -441,24 +441,24 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
         return create_row_number_reference_output(
           input, group_offsets, preceding_window, following_window, min_periods);
       case cudf::aggregation::MEAN:
-        return create_reference_output<
-          cudf::DeviceSum,
-          cudf::aggregation::MEAN,
-          cudf::detail::target_type_t<T, cudf::aggregation::MEAN>,
-          true>(input, group_offsets, preceding_window, following_window, min_periods);
+        return create_reference_output<cudf::DeviceSum,
+                                       cudf::aggregation::MEAN,
+                                       cudf::detail::target_type_t<T, cudf::aggregation::MEAN>,
+                                       true>(
+          input, group_offsets, preceding_window, following_window, min_periods);
       // >>> UDFs <<<
       case cudf::aggregation::CUDA:
-        return create_reference_output<
-          cudf::DeviceSum,
-          cudf::aggregation::SUM,
-          cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
-          false>(input, group_offsets, preceding_window, following_window, min_periods);
+        return create_reference_output<cudf::DeviceSum,
+                                       cudf::aggregation::SUM,
+                                       cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
+                                       false>(
+          input, group_offsets, preceding_window, following_window, min_periods);
       case cudf::aggregation::PTX:
-        return create_reference_output<
-          cudf::DeviceSum,
-          cudf::aggregation::SUM,
-          cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
-          false>(input, group_offsets, preceding_window, following_window, min_periods);
+        return create_reference_output<cudf::DeviceSum,
+                                       cudf::aggregation::SUM,
+                                       cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
+                                       false>(
+          input, group_offsets, preceding_window, following_window, min_periods);
       default: return fixed_width_column_wrapper<T>({}).release();
     }
   }
@@ -484,9 +484,9 @@ TEST_F(GroupedRollingErrorTest, NegativeMinPeriods)
     grouping_key_vec.begin(), grouping_key_vec.end(), col_valid.begin());
   const cudf::table_view grouping_keys{std::vector<cudf::column_view>{grouping_keys_col}};
 
-  EXPECT_THROW(cudf::grouped_rolling_window(
-                 grouping_keys, input, 2, 2, -2, cudf::make_sum_aggregation()),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::grouped_rolling_window(grouping_keys, input, 2, 2, -2, cudf::make_sum_aggregation()),
+    cudf::logic_error);
 }
 
 TEST_F(GroupedRollingErrorTest, EmptyInput)
@@ -519,21 +519,21 @@ TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported)
   const cudf::table_view grouping_keys{std::vector<cudf::column_view>{
     fixed_width_column_wrapper<size_type>(grouping_keys_vec.begin(), grouping_keys_vec.end())}};
 
-  EXPECT_THROW(cudf::grouped_rolling_window(
-                 grouping_keys, input_D, 2, 2, 0, cudf::make_sum_aggregation()),
-               cudf::logic_error);
-  EXPECT_THROW(cudf::grouped_rolling_window(
-                 grouping_keys, input_s, 2, 2, 0, cudf::make_sum_aggregation()),
-               cudf::logic_error);
-  EXPECT_THROW(cudf::grouped_rolling_window(
-                 grouping_keys, input_ms, 2, 2, 0, cudf::make_sum_aggregation()),
-               cudf::logic_error);
-  EXPECT_THROW(cudf::grouped_rolling_window(
-                 grouping_keys, input_us, 2, 2, 0, cudf::make_sum_aggregation()),
-               cudf::logic_error);
-  EXPECT_THROW(cudf::grouped_rolling_window(
-                 grouping_keys, input_ns, 2, 2, 0, cudf::make_sum_aggregation()),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::grouped_rolling_window(grouping_keys, input_D, 2, 2, 0, cudf::make_sum_aggregation()),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf::grouped_rolling_window(grouping_keys, input_s, 2, 2, 0, cudf::make_sum_aggregation()),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf::grouped_rolling_window(grouping_keys, input_ms, 2, 2, 0, cudf::make_sum_aggregation()),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf::grouped_rolling_window(grouping_keys, input_us, 2, 2, 0, cudf::make_sum_aggregation()),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf::grouped_rolling_window(grouping_keys, input_ns, 2, 2, 0, cudf::make_sum_aggregation()),
+    cudf::logic_error);
 }
 
 TYPED_TEST_CASE(GroupedRollingTest, cudf::test::FixedWidthTypes);
@@ -656,12 +656,11 @@ TEST_F(GroupedRollingTestStrings, StringsUnsupportedOperators)
   const cudf::table_view key_cols{std::vector<cudf::column_view>{
     fixed_width_column_wrapper<size_type>(key_col_vec.begin(), key_col_vec.end())}};
 
-  EXPECT_THROW(cudf::grouped_rolling_window(
-                 key_cols, input, 2, 2, 0, cudf::make_sum_aggregation()),
+  EXPECT_THROW(cudf::grouped_rolling_window(key_cols, input, 2, 2, 0, cudf::make_sum_aggregation()),
                cudf::logic_error);
-  EXPECT_THROW(cudf::grouped_rolling_window(
-                 key_cols, input, 2, 2, 0, cudf::make_mean_aggregation()),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::grouped_rolling_window(key_cols, input, 2, 2, 0, cudf::make_mean_aggregation()),
+    cudf::logic_error);
 }
 
 template <typename T>
@@ -681,8 +680,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     std::unique_ptr<cudf::column> output;
 
     // wrap windows
-    EXPECT_NO_THROW(
-      output = cudf::grouped_time_range_rolling_window(keys,
+    EXPECT_NO_THROW(output = cudf::grouped_time_range_rolling_window(keys,
                                                                      timestamp_column,
                                                                      timestamp_order,
                                                                      input,
@@ -1056,41 +1054,38 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     // unroll aggregation types
     switch (op->kind) {
       case cudf::aggregation::SUM:
-        return create_reference_output<
-          cudf::DeviceSum,
-          cudf::aggregation::SUM,
-          cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
-          false>(timestamp_column,
-                 timestamp_order,
-                 input,
-                 group_offsets,
-                 preceding_window,
-                 following_window,
-                 min_periods);
+        return create_reference_output<cudf::DeviceSum,
+                                       cudf::aggregation::SUM,
+                                       cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
+                                       false>(timestamp_column,
+                                              timestamp_order,
+                                              input,
+                                              group_offsets,
+                                              preceding_window,
+                                              following_window,
+                                              min_periods);
       case cudf::aggregation::MIN:
-        return create_reference_output<
-          cudf::DeviceMin,
-          cudf::aggregation::MIN,
-          cudf::detail::target_type_t<T, cudf::aggregation::MIN>,
-          false>(timestamp_column,
-                 timestamp_order,
-                 input,
-                 group_offsets,
-                 preceding_window,
-                 following_window,
-                 min_periods);
+        return create_reference_output<cudf::DeviceMin,
+                                       cudf::aggregation::MIN,
+                                       cudf::detail::target_type_t<T, cudf::aggregation::MIN>,
+                                       false>(timestamp_column,
+                                              timestamp_order,
+                                              input,
+                                              group_offsets,
+                                              preceding_window,
+                                              following_window,
+                                              min_periods);
       case cudf::aggregation::MAX:
-        return create_reference_output<
-          cudf::DeviceMax,
-          cudf::aggregation::MAX,
-          cudf::detail::target_type_t<T, cudf::aggregation::MAX>,
-          false>(timestamp_column,
-                 timestamp_order,
-                 input,
-                 group_offsets,
-                 preceding_window,
-                 following_window,
-                 min_periods);
+        return create_reference_output<cudf::DeviceMax,
+                                       cudf::aggregation::MAX,
+                                       cudf::detail::target_type_t<T, cudf::aggregation::MAX>,
+                                       false>(timestamp_column,
+                                              timestamp_order,
+                                              input,
+                                              group_offsets,
+                                              preceding_window,
+                                              following_window,
+                                              min_periods);
       case cudf::aggregation::COUNT_VALID:
         return create_count_reference_output<false>(timestamp_column,
                                                     timestamp_order,
@@ -1116,17 +1111,16 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                                                   following_window,
                                                   min_periods);
       case cudf::aggregation::MEAN:
-        return create_reference_output<
-          cudf::DeviceSum,
-          cudf::aggregation::MEAN,
-          cudf::detail::target_type_t<T, cudf::aggregation::MEAN>,
-          true>(timestamp_column,
-                timestamp_order,
-                input,
-                group_offsets,
-                preceding_window,
-                following_window,
-                min_periods);
+        return create_reference_output<cudf::DeviceSum,
+                                       cudf::aggregation::MEAN,
+                                       cudf::detail::target_type_t<T, cudf::aggregation::MEAN>,
+                                       true>(timestamp_column,
+                                             timestamp_order,
+                                             input,
+                                             group_offsets,
+                                             preceding_window,
+                                             following_window,
+                                             min_periods);
       default: return fixed_width_column_wrapper<T>({}).release();
     }
   }

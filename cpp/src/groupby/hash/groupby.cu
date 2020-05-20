@@ -245,20 +245,20 @@ void compute_single_pass_aggs(table_view const& keys,
 
   // make table that will hold sparse results
   std::vector<std::unique_ptr<column>> sparse_columns;
-  std::transform(
-    flattened_values.begin(),
-    flattened_values.end(),
-    aggs.begin(),
-    std::back_inserter(sparse_columns),
-    [stream](auto const& col, auto const& agg) {
-      bool nullable = (agg == aggregation::COUNT_VALID or agg == aggregation::COUNT_ALL)
-                        ? false
-                        : col.has_nulls();
-      auto mask_flag = (nullable) ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
+  std::transform(flattened_values.begin(),
+                 flattened_values.end(),
+                 aggs.begin(),
+                 std::back_inserter(sparse_columns),
+                 [stream](auto const& col, auto const& agg) {
+                   bool nullable =
+                     (agg == aggregation::COUNT_VALID or agg == aggregation::COUNT_ALL)
+                       ? false
+                       : col.has_nulls();
+                   auto mask_flag = (nullable) ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
 
-      return make_fixed_width_column(
-        cudf::detail::target_type(col.type(), agg), col.size(), mask_flag, stream);
-    });
+                   return make_fixed_width_column(
+                     cudf::detail::target_type(col.type(), agg), col.size(), mask_flag, stream);
+                 });
 
   table sparse_table(std::move(sparse_columns));
   mutable_table_view table_view = sparse_table.mutable_view();
@@ -421,7 +421,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   cudaStream_t stream,
   rmm::mr::device_memory_resource* mr)
 {
-    cudf::detail::result_cache cache(requests.size());
+  cudf::detail::result_cache cache(requests.size());
 
   std::unique_ptr<table> unique_keys;
   if (has_nulls(keys)) {

@@ -61,8 +61,7 @@ TEST_F(ReplaceErrorTest, TypeMismatchScalar)
                                                                {0, 0, 1, 1, 1, 1, 1, 1}};
   cudf::numeric_scalar<float> replacement(1);
 
-  EXPECT_THROW(cudf::replace_nulls(input_column, replacement, mr()),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input_column, replacement, mr()), cudf::logic_error);
 }
 
 struct ReplaceNullsStringsTest : public cudf::test::BaseFixture {

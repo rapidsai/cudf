@@ -460,13 +460,13 @@ __global__ void convert_json_to_columns_kernel(const char *data,
         atomicAdd(&num_valid_fields[col], 1);
       } else {
         if (cudf::type_dispatcher(dtypes[col],
-                                                ConvertFunctor{},
-                                                data,
-                                                output_columns[col],
-                                                rec_id,
-                                                start,
-                                                field_data_last,
-                                                opts)) {
+                                  ConvertFunctor{},
+                                  data,
+                                  output_columns[col],
+                                  rec_id,
+                                  start,
+                                  field_data_last,
+                                  opts)) {
           // set the valid bitmap - all bits were set to 0 to start
           set_bit(valid_fields[col], rec_id);
           atomicAdd(&num_valid_fields[col], 1);
@@ -518,9 +518,8 @@ __global__ void detect_json_data_types(const char *data,
 
   for (int col = 0; col < num_columns; col++) {
     if (is_object) { start = seek_field_name_end(data, opts, start, stop); }
-    auto field_start = start;
-    const long field_end =
-      cudf::io::gpu::seek_field_end(data, opts, field_start, stop);
+    auto field_start     = start;
+    const long field_end = cudf::io::gpu::seek_field_end(data, opts, field_start, stop);
     long field_data_last = field_end - 1;
     trim_field_start_end(data, &field_start, &field_data_last);
     const int field_len = field_data_last - field_start + 1;

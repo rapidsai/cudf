@@ -545,8 +545,7 @@ TEST_F(ContiguousSplitStringTableTest, StringWithInvalids)
     [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits) {
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::table_view const& expected,
-       cudf::contiguous_split_result const& result) {
+    [](cudf::table_view const& expected, cudf::contiguous_split_result const& result) {
       return cudf::test::expect_tables_equal(expected, result.table);
     });
 }
@@ -574,8 +573,7 @@ TYPED_TEST(ContiguousSplitTableTest, SplitEndLessThanSize)
     [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits) {
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::table_view const& expected,
-       cudf::contiguous_split_result const& result) {
+    [](cudf::table_view const& expected, cudf::contiguous_split_result const& result) {
       return cudf::test::expect_tables_equal(expected, result.table);
     });
 }
@@ -586,8 +584,7 @@ TYPED_TEST(ContiguousSplitTableTest, SplitEndToSize)
     [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits) {
       return cudf::contiguous_split(t, splits);
     },
-    [](cudf::table_view const& expected,
-       cudf::contiguous_split_result const& result) {
+    [](cudf::table_view const& expected, cudf::contiguous_split_result const& result) {
       return cudf::test::expect_tables_equal(expected, result.table);
     });
 }

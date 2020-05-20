@@ -103,14 +103,13 @@ std::unique_ptr<column> set_keys(
   CUDF_EXPECTS(keys.type() == new_keys.type(), "keys types must match");
 
   // copy the keys -- use drop_duplicates to make sure they are sorted and unique
-  auto table_keys =
-    cudf::detail::drop_duplicates(table_view{{new_keys}},
-                                          std::vector<size_type>{0},
-                                          duplicate_keep_option::KEEP_FIRST,
-                                          null_equality::EQUAL,
-                                          mr,
-                                          stream)
-      ->release();
+  auto table_keys = cudf::detail::drop_duplicates(table_view{{new_keys}},
+                                                  std::vector<size_type>{0},
+                                                  duplicate_keep_option::KEEP_FIRST,
+                                                  null_equality::EQUAL,
+                                                  mr,
+                                                  stream)
+                      ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
   // compute the new nulls
@@ -131,11 +130,11 @@ std::unique_ptr<column> set_keys(
 
   // compute the new indices
   auto indices_column = type_dispatcher(keys_column->type(),
-                                                      dispatch_compute_indices{},
-                                                      dictionary_column,
-                                                      keys_column->view(),
-                                                      mr,
-                                                      stream);
+                                        dispatch_compute_indices{},
+                                        dictionary_column,
+                                        keys_column->view(),
+                                        mr,
+                                        stream);
 
   // create column with keys_column and indices_column
   return make_dictionary_column(std::move(keys_column),

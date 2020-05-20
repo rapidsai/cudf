@@ -58,8 +58,7 @@ void BM_pre_sorted_nth(benchmark::State& state)
   auto sorted_keys = cudf::gather(keys_table, *sort_order);
   // No need to sort values using sort_order because they were generated randomly
 
-  cudf::groupby::groupby gb_obj(
-    *sorted_keys, cudf::null_policy::EXCLUDE, cudf::sorted::YES);
+  cudf::groupby::groupby gb_obj(*sorted_keys, cudf::null_policy::EXCLUDE, cudf::sorted::YES);
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());

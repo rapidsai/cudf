@@ -40,9 +40,9 @@ TEST_F(SearchTest, empty_table)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::lower_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -58,9 +58,9 @@ TEST_F(SearchTest, empty_values)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::lower_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -76,9 +76,9 @@ TEST_F(SearchTest, non_null_column__find_first)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::lower_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -94,9 +94,9 @@ TEST_F(SearchTest, non_null_column__find_last)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::upper_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -112,9 +112,9 @@ TEST_F(SearchTest, non_null_column_desc__find_first)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::lower_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::DESCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::DESCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -130,9 +130,9 @@ TEST_F(SearchTest, non_null_column_desc__find_last)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::upper_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::DESCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::DESCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -151,9 +151,9 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::upper_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -172,9 +172,9 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::lower_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -192,9 +192,9 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::upper_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::AFTER}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::AFTER}));
 
   expect_columns_equal(*result, expect);
 }
@@ -212,9 +212,9 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::lower_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::AFTER}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::AFTER}));
 
   expect_columns_equal(*result, expect);
 }
@@ -256,8 +256,8 @@ TEST_F(SearchTest, table__find_first)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::lower_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -299,8 +299,8 @@ TEST_F(SearchTest, table__find_last)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::upper_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -342,8 +342,8 @@ TEST_F(SearchTest, table_partial_desc__find_first)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::lower_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -385,8 +385,8 @@ TEST_F(SearchTest, table_partial_desc__find_last)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::upper_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -426,8 +426,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::lower_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -467,8 +467,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::upper_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -508,8 +508,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::lower_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -549,8 +549,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::upper_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -663,9 +663,9 @@ TEST_F(SearchTest, empty_table_string)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::lower_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -692,9 +692,9 @@ TEST_F(SearchTest, empty_values_string)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::lower_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -722,9 +722,9 @@ TEST_F(SearchTest, non_null_column__find_first_string)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::lower_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -752,9 +752,9 @@ TEST_F(SearchTest, non_null_column__find_last_string)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::upper_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -782,9 +782,9 @@ TEST_F(SearchTest, non_null_column_desc__find_first_string)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::lower_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::DESCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::DESCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -812,9 +812,9 @@ TEST_F(SearchTest, non_null_column_desc__find_last_string)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::upper_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::DESCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::DESCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -842,9 +842,9 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest_string)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::upper_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -872,9 +872,9 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest_string)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::lower_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::BEFORE}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::BEFORE}));
 
   expect_columns_equal(*result, expect);
 }
@@ -902,9 +902,9 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest_string)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::upper_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::AFTER}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::AFTER}));
 
   expect_columns_equal(*result, expect);
 }
@@ -921,9 +921,9 @@ TEST_F(SearchTest, non_null_column__nullable_values__find_last__nulls_as_largest
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::upper_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::AFTER}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::AFTER}));
 
   expect_columns_equal(*result, expect);
 }
@@ -951,9 +951,9 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest_string)
   std::unique_ptr<cudf::column> result{};
 
   EXPECT_NO_THROW(result = cudf::lower_bound({cudf::table_view{{column}}},
-                                                           {cudf::table_view{{values}}},
-                                                           {cudf::order::ASCENDING},
-                                                           {cudf::null_order::AFTER}));
+                                             {cudf::table_view{{values}}},
+                                             {cudf::order::ASCENDING},
+                                             {cudf::null_order::AFTER}));
 
   expect_columns_equal(*result, expect);
 }
@@ -1021,8 +1021,8 @@ TEST_F(SearchTest, table__find_first_string)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::lower_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -1090,8 +1090,8 @@ TEST_F(SearchTest, table__find_last_string)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::upper_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -1159,8 +1159,8 @@ TEST_F(SearchTest, table_partial_desc__find_first_string)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::lower_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -1229,8 +1229,8 @@ TEST_F(SearchTest, table_partial_desc__find_last_string)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::upper_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -1296,8 +1296,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest_string)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::lower_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -1363,8 +1363,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest_string)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::upper_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -1430,8 +1430,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest_string)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::lower_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }
@@ -1497,8 +1497,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest_string)
 
   std::unique_ptr<cudf::column> result{};
 
-  EXPECT_NO_THROW(result = cudf::upper_bound(
-                    input_table, values_table, order_flags, null_order_flags));
+  EXPECT_NO_THROW(result =
+                    cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
   expect_columns_equal(*result, expect);
 }

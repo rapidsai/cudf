@@ -105,5 +105,4 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   return type_dispatcher(dtype, detail::interleave_columns_functor{}, input, output_needs_mask, mr);
 }
 
-
 }  // namespace cudf

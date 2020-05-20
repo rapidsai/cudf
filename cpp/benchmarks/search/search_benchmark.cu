@@ -47,9 +47,9 @@ void BM_non_null_column(benchmark::State& state)
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
     auto col = cudf::upper_bound(cudf::table_view({column}),
-                                               cudf::table_view({values}),
-                                               {cudf::order::ASCENDING},
-                                               {cudf::null_order::BEFORE});
+                                 cudf::table_view({values}),
+                                 {cudf::order::ASCENDING},
+                                 {cudf::null_order::BEFORE});
   }
 }
 
@@ -91,9 +91,9 @@ void BM_nullable_column(benchmark::State& state)
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
     auto col = cudf::upper_bound(sorted->view(),
-                                               cudf::table_view({values}),
-                                               {cudf::order::ASCENDING},
-                                               {cudf::null_order::BEFORE});
+                                 cudf::table_view({values}),
+                                 {cudf::order::ASCENDING},
+                                 {cudf::null_order::BEFORE});
   }
 }
 

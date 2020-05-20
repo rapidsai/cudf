@@ -54,8 +54,7 @@ TEST_F(JoinTest, InvalidCommonColumnIndices)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  EXPECT_THROW(cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}), cudf::logic_error);
 }
 
 TEST_F(JoinTest, FullJoinNoCommon)

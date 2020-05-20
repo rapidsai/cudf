@@ -164,8 +164,7 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
   }
 
   // Compute total valid count for this block and add it to global count
-  uint32_t block_valid_count =
-    cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
+  uint32_t block_valid_count = cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
   // one thread computes and adds to output_valid_count
   if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
 }
@@ -326,11 +325,7 @@ struct replace_kernel_forwarder {
     std::unique_ptr<cudf::column> output;
     if (input_col.has_nulls() || replacement_values.has_nulls()) {
       output = cudf::detail::allocate_like(
-        input_col,
-        input_col.size(),
-        cudf::mask_allocation_policy::ALWAYS,
-        mr,
-        stream);
+        input_col, input_col.size(), cudf::mask_allocation_policy::ALWAYS, mr, stream);
     } else {
       output = cudf::detail::allocate_like(
         input_col, input_col.size(), cudf::mask_allocation_policy::NEVER, mr, stream);
@@ -477,12 +472,12 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
   }
 
   return cudf::type_dispatcher(input_col.type(),
-                                             replace_kernel_forwarder{},
-                                             input_col,
-                                             values_to_replace,
-                                             replacement_values,
-                                             mr,
-                                             stream);
+                               replace_kernel_forwarder{},
+                               input_col,
+                               values_to_replace,
+                               replacement_values,
+                               mr,
+                               stream);
 }
 
 }  // namespace detail
@@ -561,8 +556,7 @@ __global__ void replace_nulls_strings(cudf::column_device_view input,
   }
 
   // Compute total valid count for this block and add it to global count
-  uint32_t block_valid_count =
-    cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
+  uint32_t block_valid_count = cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
   // one thread computes and adds to output_valid_count
   if (threadIdx.x == 0) { atomicAdd(valid_counter, block_valid_count); }
 }
@@ -757,8 +751,8 @@ struct replace_nulls_scalar_kernel_forwarder {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream = 0)
   {
-    std::unique_ptr<cudf::column> output = cudf::allocate_like(
-      input, cudf::mask_allocation_policy::NEVER, mr);
+    std::unique_ptr<cudf::column> output =
+      cudf::allocate_like(input, cudf::mask_allocation_policy::NEVER, mr);
     auto output_view = output->mutable_view();
 
     using ScalarType = cudf::scalar_type_t<col_type>;

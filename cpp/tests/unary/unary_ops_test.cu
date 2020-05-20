@@ -162,8 +162,7 @@ TYPED_TEST(cudf_math_test, SQRT)
   cudf::test::fixed_width_column_wrapper<T> const expected(std::cbegin(h_expect_v),
                                                            std::cend(h_expect_v));
 
-  auto const output =
-    cudf::unary_operation(input, cudf::unary_op::SQRT);
+  auto const output = cudf::unary_operation(input, cudf::unary_op::SQRT);
 
   cudf::test::expect_columns_equal(expected, output->view());
 }
@@ -326,15 +325,13 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleRINT)
 TYPED_TEST(cudf_math_with_floating_point_test, RINTNonFloatingFail)
 {
   cudf::test::fixed_width_column_wrapper<int64_t> input{{1, 2, 3, 4, 5}};
-  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_op::RINT),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_op::RINT), cudf::logic_error);
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, IntegralTypeFail)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{1.0};
-  EXPECT_THROW(auto output = cudf::unary_operation(
-                 input, cudf::unary_op::BIT_INVERT),
+  EXPECT_THROW(auto output = cudf::unary_operation(input, cudf::unary_op::BIT_INVERT),
                cudf::logic_error);
 }
 
@@ -357,17 +354,13 @@ TYPED_TEST_CASE(cudf_math_with_char_test, just_char);
 TYPED_TEST(cudf_math_with_char_test, ArithmeticTypeFail)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{'c'};
-  EXPECT_THROW(
-    auto output = cudf::unary_operation(input, cudf::unary_op::SQRT),
-    cudf::logic_error);
+  EXPECT_THROW(auto output = cudf::unary_operation(input, cudf::unary_op::SQRT), cudf::logic_error);
 }
 
 TYPED_TEST(cudf_math_with_char_test, LogicalOpTypeFail)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{'h'};
-  EXPECT_THROW(
-    auto output = cudf::unary_operation(input, cudf::unary_op::NOT),
-    cudf::logic_error);
+  EXPECT_THROW(auto output = cudf::unary_operation(input, cudf::unary_op::NOT), cudf::logic_error);
 }
 
 template <typename T>
@@ -601,21 +594,14 @@ TEST_F(CastTimestampsSimple, IsIdempotent)
   auto timestamps_us = make_column<cudf::timestamp_us>(test_timestamps_us);
   auto timestamps_ns = make_column<cudf::timestamp_ns>(test_timestamps_ns);
 
-  auto timestamps_D_rep =
-    cudf::cast(timestamps_D, make_data_type<cudf::timestamp_D::rep>());
-  auto timestamps_s_rep =
-    cudf::cast(timestamps_s, make_data_type<cudf::timestamp_s::rep>());
-  auto timestamps_ms_rep =
-    cudf::cast(timestamps_ms, make_data_type<cudf::timestamp_ms::rep>());
-  auto timestamps_us_rep =
-    cudf::cast(timestamps_us, make_data_type<cudf::timestamp_us::rep>());
-  auto timestamps_ns_rep =
-    cudf::cast(timestamps_ns, make_data_type<cudf::timestamp_ns::rep>());
+  auto timestamps_D_rep  = cudf::cast(timestamps_D, make_data_type<cudf::timestamp_D::rep>());
+  auto timestamps_s_rep  = cudf::cast(timestamps_s, make_data_type<cudf::timestamp_s::rep>());
+  auto timestamps_ms_rep = cudf::cast(timestamps_ms, make_data_type<cudf::timestamp_ms::rep>());
+  auto timestamps_us_rep = cudf::cast(timestamps_us, make_data_type<cudf::timestamp_us::rep>());
+  auto timestamps_ns_rep = cudf::cast(timestamps_ns, make_data_type<cudf::timestamp_ns::rep>());
 
-  auto timestamps_D_got =
-    cudf::cast(*timestamps_D_rep, cudf::data_type{cudf::TIMESTAMP_DAYS});
-  auto timestamps_s_got =
-    cudf::cast(*timestamps_s_rep, cudf::data_type{cudf::TIMESTAMP_SECONDS});
+  auto timestamps_D_got = cudf::cast(*timestamps_D_rep, cudf::data_type{cudf::TIMESTAMP_DAYS});
+  auto timestamps_s_got = cudf::cast(*timestamps_s_rep, cudf::data_type{cudf::TIMESTAMP_SECONDS});
   auto timestamps_ms_got =
     cudf::cast(*timestamps_ms_rep, cudf::data_type{cudf::TIMESTAMP_MILLISECONDS});
   auto timestamps_us_got =
@@ -666,8 +652,7 @@ TYPED_TEST(CastTimestampsTyped, DownCastingFloorsValues)
   // timestamp_ms -> {timestamp_ms, timestamp_us, timestamp_ns};
   // timestamp_us -> {timestamp_us, timestamp_ns};
   // etc.
-  auto higher_precision_type_ids =
-    get_higher_precision_timestamp_type_ids(cudf::type_to_id<T>());
+  auto higher_precision_type_ids = get_higher_precision_timestamp_type_ids(cudf::type_to_id<T>());
   // For each higher-precision type, down-cast to TypeParam and validate
   // that the values were floored.
   for (cudf::type_id higher_precision_type_id : higher_precision_type_ids) {
@@ -710,16 +695,11 @@ TYPED_TEST(CastToTimestamps, AllValid)
   auto timestamps_us = make_column<T>(test_timestamps_us);
   auto timestamps_ns = make_column<T>(test_timestamps_ns);
 
-  auto timestamps_D_got =
-    cudf::cast(timestamps_D, cudf::data_type{cudf::TIMESTAMP_DAYS});
-  auto timestamps_s_got =
-    cudf::cast(timestamps_s, cudf::data_type{cudf::TIMESTAMP_SECONDS});
-  auto timestamps_ms_got =
-    cudf::cast(timestamps_ms, cudf::data_type{cudf::TIMESTAMP_MILLISECONDS});
-  auto timestamps_us_got =
-    cudf::cast(timestamps_us, cudf::data_type{cudf::TIMESTAMP_MICROSECONDS});
-  auto timestamps_ns_got =
-    cudf::cast(timestamps_ns, cudf::data_type{cudf::TIMESTAMP_NANOSECONDS});
+  auto timestamps_D_got  = cudf::cast(timestamps_D, cudf::data_type{cudf::TIMESTAMP_DAYS});
+  auto timestamps_s_got  = cudf::cast(timestamps_s, cudf::data_type{cudf::TIMESTAMP_SECONDS});
+  auto timestamps_ms_got = cudf::cast(timestamps_ms, cudf::data_type{cudf::TIMESTAMP_MILLISECONDS});
+  auto timestamps_us_got = cudf::cast(timestamps_us, cudf::data_type{cudf::TIMESTAMP_MICROSECONDS});
+  auto timestamps_ns_got = cudf::cast(timestamps_ns, cudf::data_type{cudf::TIMESTAMP_NANOSECONDS});
 
   validate_cast_result<T, cudf::timestamp_D>(timestamps_D, *timestamps_D_got);
   validate_cast_result<T, cudf::timestamp_s>(timestamps_s, *timestamps_s_got);
@@ -846,8 +826,7 @@ TYPED_TEST(IsNAN, NonFloatingColumn)
 
   cudf::test::fixed_width_column_wrapper<int32_t> col{{1, 2, 5, 3, 5, 6, 7}, {1, 0, 1, 1, 0, 1, 1}};
 
-  EXPECT_THROW(std::unique_ptr<cudf::column> got = cudf::is_nan(col),
-               cudf::logic_error);
+  EXPECT_THROW(std::unique_ptr<cudf::column> got = cudf::is_nan(col), cudf::logic_error);
 }
 
 template <typename T>
@@ -902,8 +881,7 @@ TYPED_TEST(IsNotNAN, NonFloatingColumn)
 
   cudf::test::fixed_width_column_wrapper<int64_t> col{{1, 2, 5, 3, 5, 6, 7}, {1, 0, 1, 1, 0, 1, 1}};
 
-  EXPECT_THROW(std::unique_ptr<cudf::column> got = cudf::is_not_nan(col),
-               cudf::logic_error);
+  EXPECT_THROW(std::unique_ptr<cudf::column> got = cudf::is_not_nan(col), cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

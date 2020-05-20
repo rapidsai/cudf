@@ -436,13 +436,13 @@ struct copy_block_partitions_dispatcher {
 
     // Use gather instead for non-fixed width types
     return type_dispatcher(input.type(),
-                                         detail::column_gatherer{},
-                                         input,
-                                         gather_map.begin(),
-                                         gather_map.end(),
-                                         false,
-                                         mr,
-                                         stream);
+                           detail::column_gatherer{},
+                           input,
+                           gather_map.begin(),
+                           gather_map.end(),
+                           false,
+                           mr,
+                           stream);
   }
 };
 
@@ -572,16 +572,16 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     // Copy input to output by partition per column
     std::transform(input.begin(), input.end(), output_cols.begin(), [=](auto const& col) {
       return cudf::type_dispatcher(col.type(),
-                                                 copy_block_partitions_dispatcher{},
-                                                 col,
-                                                 num_partitions,
-                                                 row_partition_numbers_ptr,
-                                                 row_partition_offset_ptr,
-                                                 block_partition_sizes_ptr,
-                                                 scanned_block_partition_sizes_ptr,
-                                                 grid_size,
-                                                 mr,
-                                                 stream);
+                                   copy_block_partitions_dispatcher{},
+                                   col,
+                                   num_partitions,
+                                   row_partition_numbers_ptr,
+                                   row_partition_offset_ptr,
+                                   block_partition_sizes_ptr,
+                                   scanned_block_partition_sizes_ptr,
+                                   grid_size,
+                                   mr,
+                                   stream);
     });
 
     if (has_nulls(input)) {
@@ -596,12 +596,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
                                            stream);
 
       // Handle bitmask using gather to take advantage of ballot_sync
-      detail::gather_bitmask(input,
-                                           gather_map.begin(),
-                                           output_cols,
-                                           detail::gather_bitmask_op::DONT_CHECK,
-                                           mr,
-                                           stream);
+      detail::gather_bitmask(
+        input, gather_map.begin(), output_cols, detail::gather_bitmask_op::DONT_CHECK, mr, stream);
     }
 
     auto output{std::make_unique<table>(std::move(output_cols))};
@@ -706,8 +702,8 @@ struct dispatch_map_type {
                       });
 
     // Scatter the rows into their partitions
-    auto scattered = cudf::detail::scatter(
-      t, scatter_map.begin(), scatter_map.end(), t, false, mr, stream);
+    auto scattered =
+      cudf::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t, false, mr, stream);
 
     return std::make_pair(std::move(scattered), std::move(partition_offsets));
   }
@@ -727,7 +723,7 @@ struct dispatch_map_type {
 }  // namespace
 
 namespace detail {
-namespace local{
+namespace local {
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
@@ -748,7 +744,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
     return hash_partition_table<false>(input, table_to_hash, num_partitions, mr, stream);
   }
 }
-} // local
+}  // namespace local
 
 std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,

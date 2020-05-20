@@ -48,11 +48,11 @@ void in_place_fill(cudf::mutable_column_view& destination,
   T fill_value     = p_scalar->value(stream);
   bool is_valid    = p_scalar->is_valid();
   cudf::detail::copy_range(thrust::make_constant_iterator(fill_value),
-                                         thrust::make_constant_iterator(is_valid),
-                                         destination,
-                                         begin,
-                                         end,
-                                         stream);
+                           thrust::make_constant_iterator(is_valid),
+                           destination,
+                           begin,
+                           end,
+                           stream);
 }
 
 struct in_place_fill_range_dispatch {

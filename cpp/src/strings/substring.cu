@@ -304,12 +304,12 @@ std::unique_ptr<column> slice_strings(
 
   // perhaps another candidate for index-normalizer
   return cudf::type_dispatcher(starts_column.type(),
-                                             dispatch_substring_from_fn{},
-                                             strings,
-                                             starts_column,
-                                             stops_column,
-                                             mr,
-                                             stream);
+                               dispatch_substring_from_fn{},
+                               strings,
+                               starts_column,
+                               stops_column,
+                               mr,
+                               stream);
 }
 
 }  // namespace detail

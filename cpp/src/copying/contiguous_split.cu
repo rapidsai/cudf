@@ -233,8 +233,7 @@ struct column_copy_functor {
     }
 
     // custom copy kernel (which could probably just be an in-place copy() function in cudf).
-    cudf::size_type num_els =
-      cudf::util::round_up_safe(in.size(), cudf::detail::warp_size);
+    cudf::size_type num_els  = cudf::util::round_up_safe(in.size(), cudf::detail::warp_size);
     constexpr int block_size = 256;
     cudf::detail::grid_1d grid{num_els, block_size, 1};
 
@@ -273,9 +272,9 @@ void column_copy_functor::operator()<string_view>(column_view const& in,
   column_view in_offsets = strings_c.offsets();
   // note, incoming columns are sliced, so their size is fundamentally different from their child
   // offset columns, which are unsliced.
-  size_type num_offsets       = in.size() + 1;
-  cudf::size_type num_threads = cudf::util::round_up_safe(
-    std::max(split_info.num_chars, num_offsets), cudf::detail::warp_size);
+  size_type num_offsets = in.size() + 1;
+  cudf::size_type num_threads =
+    cudf::util::round_up_safe(std::max(split_info.num_chars, num_offsets), cudf::detail::warp_size);
   column_view in_chars = strings_c.chars();
 
   // a column with no strings will still have a single offset.
@@ -423,8 +422,8 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t,
   size_type column_index = 0;
   std::for_each(
     t.begin(), t.end(), [&total_size, &column_index, &split_info](cudf::column_view const& c) {
-      total_size += cudf::type_dispatcher(
-        c.type(), column_buffer_size_functor{}, c, split_info[column_index]);
+      total_size +=
+        cudf::type_dispatcher(c.type(), column_buffer_size_functor{}, c, split_info[column_index]);
       column_index++;
     });
 

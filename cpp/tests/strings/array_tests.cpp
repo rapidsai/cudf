@@ -165,8 +165,7 @@ TEST_F(StringsColumnTest, GatherZeroSizeStringsColumn)
 {
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   cudf::column_view map_view(cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
-  auto results =
-    cudf::gather(cudf::table_view{{zero_size_strings_column}}, map_view)->release();
+  auto results = cudf::gather(cudf::table_view{{zero_size_strings_column}}, map_view)->release();
   cudf::test::expect_strings_empty(results.front()->view());
 }
 

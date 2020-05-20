@@ -103,8 +103,7 @@ size_type sort_groupby_helper::num_keys(cudaStream_t stream)
 column_view sort_groupby_helper::key_sort_order(cudaStream_t stream)
 {
   auto sliced_key_sorted_order = [stream, this]() {
-    return cudf::detail::slice(
-      this->_key_sorted_order->view(), 0, this->num_keys(stream));
+    return cudf::detail::slice(this->_key_sorted_order->view(), 0, this->num_keys(stream));
   };
 
   if (_key_sorted_order) { return sliced_key_sorted_order(); }
@@ -127,12 +126,12 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream)
   }
 
   if (_include_null_keys == null_policy::INCLUDE || !cudf::has_nulls(_keys)) {  // SQL style
-    _key_sorted_order = cudf::detail::sorted_order(
-      _keys,
-      {},
-      std::vector<null_order>(_keys.num_columns(), null_order::AFTER),
-      rmm::mr::get_default_resource(),
-      stream);
+    _key_sorted_order =
+      cudf::detail::sorted_order(_keys,
+                                 {},
+                                 std::vector<null_order>(_keys.num_columns(), null_order::AFTER),
+                                 rmm::mr::get_default_resource(),
+                                 stream);
   } else {  // Pandas style
     // Temporarily prepend the keys table with a column that indicates the
     // presence of a null value within a row. This allows moving all rows that
@@ -225,11 +224,11 @@ column_view sort_groupby_helper::unsorted_keys_labels(cudaStream_t stream)
 
   std::unique_ptr<table> t_unsorted_keys_labels =
     cudf::detail::scatter(table_view({group_labels_view}),
-                                        scatter_map,
-                                        table_view({temp_labels->view()}),
-                                        false,
-                                        rmm::mr::get_default_resource(),
-                                        stream);
+                          scatter_map,
+                          table_view({temp_labels->view()}),
+                          false,
+                          rmm::mr::get_default_resource(),
+                          stream);
 
   _unsorted_keys_labels = std::move(t_unsorted_keys_labels->release()[0]);
 
@@ -263,17 +262,16 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
 {
   column_ptr values_sort_order =
     cudf::detail::sorted_order(table_view({unsorted_keys_labels(), values}),
-                                             {},
-                                             std::vector<null_order>(2, null_order::AFTER),
-                                             mr,
-                                             stream);
+                               {},
+                               std::vector<null_order>(2, null_order::AFTER),
+                               mr,
+                               stream);
 
   // Zero-copy slice this sort order so that its new size is num_keys()
-  column_view gather_map =
-    cudf::detail::slice(values_sort_order->view(), 0, num_keys(stream));
+  column_view gather_map = cudf::detail::slice(values_sort_order->view(), 0, num_keys(stream));
 
-  auto sorted_values_table = cudf::detail::gather(
-    table_view({values}), gather_map, false, false, false, mr, stream);
+  auto sorted_values_table =
+    cudf::detail::gather(table_view({values}), gather_map, false, false, false, mr, stream);
 
   return std::move(sorted_values_table->release()[0]);
 }
@@ -283,8 +281,8 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
 {
   auto gather_map = key_sort_order();
 
-  auto grouped_values_table = cudf::detail::gather(
-    table_view({values}), gather_map, false, false, false, mr, stream);
+  auto grouped_values_table =
+    cudf::detail::gather(table_view({values}), gather_map, false, false, false, mr, stream);
 
   return std::move(grouped_values_table->release()[0]);
 }
@@ -304,8 +302,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::mr::device_memory_r
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::mr::device_memory_resource* mr,
                                                         cudaStream_t stream)
 {
-  return cudf::detail::gather(
-    _keys, key_sort_order(), false, false, false, mr, stream);
+  return cudf::detail::gather(_keys, key_sort_order(), false, false, false, mr, stream);
 }
 
 }  // namespace sort

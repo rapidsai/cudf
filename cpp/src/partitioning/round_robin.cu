@@ -96,11 +96,11 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     thrust::sequence(exec->on(stream), partition_offsets.begin(), partition_offsets.end());
 
     auto uniq_tbl = cudf::detail::gather(input,
-                                                       rotated_iter_begin,
-                                                       rotated_iter_begin + nrows,  // map
-                                                       false,
-                                                       mr,
-                                                       stream);
+                                         rotated_iter_begin,
+                                         rotated_iter_begin + nrows,  // map
+                                         false,
+                                         mr,
+                                         stream);
 
     auto ret_pair =
       std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
@@ -131,11 +131,11 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     //...and then use the result, d_row_indices, as gather map:
     //
     auto uniq_tbl = cudf::detail::gather(input,
-                                                       d_row_indices.begin(),
-                                                       d_row_indices.end(),  // map
-                                                       false,
-                                                       mr,
-                                                       stream);
+                                         d_row_indices.begin(),
+                                         d_row_indices.end(),  // map
+                                         false,
+                                         mr,
+                                         stream);
 
     auto ret_pair =
       std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
@@ -251,8 +251,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
       return num_partitions * index_within_partition + partition_index;
     });
 
-  auto uniq_tbl =
-    cudf::detail::gather(input, iter_begin, iter_begin + nrows, false, mr, stream);
+  auto uniq_tbl = cudf::detail::gather(input, iter_begin, iter_begin + nrows, false, mr, stream);
   auto ret_pair = std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
 
   // this has the effect of rotating the set of partition sizes
@@ -289,8 +288,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robi
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::round_robin_partition(
-    input, num_partitions, start_partition, mr);
+  return cudf::detail::round_robin_partition(input, num_partitions, start_partition, mr);
 }
 
 }  // namespace cudf

@@ -157,9 +157,8 @@ std::unique_ptr<column> remove_unused_keys(
                            dictionary_column.offset());
 
   // search the indices values with key indices to look for any holes
-  auto const matches =
-    cudf::detail::contains(keys_positions_view, indices_view, mr, stream);
-  auto d_matches = matches->view().data<bool>();
+  auto const matches = cudf::detail::contains(keys_positions_view, indices_view, mr, stream);
+  auto d_matches     = matches->view().data<bool>();
 
   // call common utility method to keep the keys that match
   auto key_matcher = [d_matches] __device__(size_type idx) { return d_matches[idx]; };

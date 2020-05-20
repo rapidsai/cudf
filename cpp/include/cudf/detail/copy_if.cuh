@@ -102,8 +102,7 @@ __launch_bounds__(block_size) __global__
   cudf::size_type block_offset = block_offsets[blockIdx.x];
 
   // one extra warp worth in case the block is not aligned
-  __shared__ bool
-    temp_valids[has_validity ? block_size + cudf::detail::warp_size : 1];
+  __shared__ bool temp_valids[has_validity ? block_size + cudf::detail::warp_size : 1];
   __shared__ T temp_data[block_size];
 
   cudf::size_type warp_valid_counts{0};
@@ -122,8 +121,7 @@ __launch_bounds__(block_size) __global__
 
     if (has_validity) {
       temp_valids[threadIdx.x] = false;  // init shared memory
-      if (threadIdx.x < cudf::detail::warp_size)
-        temp_valids[block_size + threadIdx.x] = false;
+      if (threadIdx.x < cudf::detail::warp_size) temp_valids[block_size + threadIdx.x] = false;
       __syncthreads();  // wait for init
     }
 
@@ -133,7 +131,7 @@ __launch_bounds__(block_size) __global__
       // scatter validity mask to shared memory
       if (has_validity and input_view.is_valid(tid)) {
         // determine aligned offset for this warp's output
-        const cudf::size_type aligned_offset = block_offset % cudf::detail::warp_size;
+        const cudf::size_type aligned_offset      = block_offset % cudf::detail::warp_size;
         temp_valids[local_index + aligned_offset] = true;
       }
     }
@@ -153,11 +151,10 @@ __launch_bounds__(block_size) __global__
 
       constexpr int num_warps = block_size / cudf::detail::warp_size;
       // account for partial blocks with non-warp-aligned offsets
-      const int last_index =
-        tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
-      const int last_warp = min(num_warps, last_index / cudf::detail::warp_size);
-      const int wid       = threadIdx.x / cudf::detail::warp_size;
-      const int lane      = threadIdx.x % cudf::detail::warp_size;
+      const int last_index = tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
+      const int last_warp  = min(num_warps, last_index / cudf::detail::warp_size);
+      const int wid        = threadIdx.x / cudf::detail::warp_size;
+      const int lane       = threadIdx.x % cudf::detail::warp_size;
 
       if (tmp_block_sum > 0 && wid <= last_warp) {
         int valid_index = (block_offset / cudf::detail::warp_size) + wid;
@@ -193,8 +190,7 @@ __launch_bounds__(block_size) __global__
   }
   // Compute total null_count for this block and add it to global count
   cudf::size_type block_valid_count =
-    cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(
-      warp_valid_counts);
+    cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_counts);
   if (threadIdx.x == 0) {  // one thread computes and adds to null count
     atomicAdd(output_null_count, block_sum - block_valid_count);
   }
@@ -359,13 +355,13 @@ std::unique_ptr<table> copy_if(
     std::vector<std::unique_ptr<column>> out_columns(input.num_columns());
     std::transform(input.begin(), input.end(), out_columns.begin(), [&](auto col_view) {
       return cudf::type_dispatcher(col_view.type(),
-                                                 scatter_gather_functor<Filter, block_size>{},
-                                                 col_view,
-                                                 output_size,
-                                                 thrust::raw_pointer_cast(block_offsets),
-                                                 filter,
-                                                 mr,
-                                                 stream);
+                                   scatter_gather_functor<Filter, block_size>{},
+                                   col_view,
+                                   output_size,
+                                   thrust::raw_pointer_cast(block_offsets),
+                                   filter,
+                                   mr,
+                                   stream);
     });
 
     return std::make_unique<table>(std::move(out_columns));

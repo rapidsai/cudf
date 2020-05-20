@@ -174,8 +174,7 @@ std::unique_ptr<column> make_column_from_scalar(scalar const& s,
                                                 cudaStream_t stream)
 {
   if (size == 0) return make_empty_column(s.type());
-  return type_dispatcher(
-    s.type(), column_from_scalar_dispatch{}, s, size, mr, stream);
+  return type_dispatcher(s.type(), column_from_scalar_dispatch{}, s, size, mr, stream);
 }
 
 }  // namespace cudf

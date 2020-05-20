@@ -97,8 +97,7 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
 
   if (has_validity) {
     auto block_null_change =
-      cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(
-        warp_null_change);
+      cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_null_change);
     if (threadIdx.x == 0) {  // if the first thread in a block
       atomicAdd(null_count, block_null_change);
     }

@@ -75,12 +75,8 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                                        cudaStream_t stream = 0)
 {
   // Allocate result column
-  std::unique_ptr<column> result =
-    make_numeric_column(data_type{type_to_id<size_type>()},
-                        values.num_rows(),
-                        mask_state::UNALLOCATED,
-                        stream,
-                        mr);
+  std::unique_ptr<column> result = make_numeric_column(
+    data_type{type_to_id<size_type>()}, values.num_rows(), mask_state::UNALLOCATED, stream, mr);
 
   mutable_column_view result_view = result.get()->mutable_view();
 
@@ -205,8 +201,7 @@ bool contains(column_view const& col,
 
   if (not value.is_valid()) { return col.has_nulls(); }
 
-  return cudf::type_dispatcher(
-    col.type(), contains_scalar_dispatch{}, col, value, stream, mr);
+  return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream, mr);
 }
 
 struct multi_contains_dispatch {
@@ -216,13 +211,12 @@ struct multi_contains_dispatch {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    std::unique_ptr<column> result =
-      make_numeric_column(data_type{type_to_id<bool>()},
-                          haystack.size(),
-                          copy_bitmask(haystack),
-                          haystack.null_count(),
-                          stream,
-                          mr);
+    std::unique_ptr<column> result = make_numeric_column(data_type{type_to_id<bool>()},
+                                                         haystack.size(),
+                                                         copy_bitmask(haystack),
+                                                         haystack.null_count(),
+                                                         stream,
+                                                         mr);
 
     if (haystack.size() == 0) { return result; }
 

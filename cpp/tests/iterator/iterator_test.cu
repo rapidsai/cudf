@@ -467,14 +467,12 @@ TYPED_TEST(IteratorTest, error_handling)
   }
   // expects error: data type mismatch
   if (!(std::is_same<T, float>::value)) {
-    CUDF_EXPECT_THROW_MESSAGE(
-      (cudf::detail::make_null_replacement_iterator(*d_col_null, float{0})),
-      "the data type mismatch");
+    CUDF_EXPECT_THROW_MESSAGE((cudf::detail::make_null_replacement_iterator(*d_col_null, float{0})),
+                              "the data type mismatch");
   }
 
-  CUDF_EXPECT_THROW_MESSAGE(
-    (cudf::detail::make_null_replacement_iterator(*d_col_no_null, T{0})),
-    "Unexpected non-nullable column.");
+  CUDF_EXPECT_THROW_MESSAGE((cudf::detail::make_null_replacement_iterator(*d_col_no_null, T{0})),
+                            "Unexpected non-nullable column.");
 
   CUDF_EXPECT_THROW_MESSAGE((d_col_no_null->pair_begin<T, true>()),
                             "Unexpected non-nullable column.");

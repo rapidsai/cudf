@@ -157,8 +157,7 @@ void column_comparison(cudf::column_view const& lhs,
 
       fixed_width_column_wrapper<int32_t> diff_column(differences.begin(), differences.end());
 
-      std::unique_ptr<cudf::table> diff_table =
-        cudf::gather(source_table, diff_column);
+      std::unique_ptr<cudf::table> diff_table = cudf::gather(source_table, diff_column);
 
       //
       //  Need to pull back the differences

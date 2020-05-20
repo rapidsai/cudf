@@ -390,8 +390,7 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
   if (strings_count == 0) return make_timestamp_column(timestamp_type, 0);
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
-  timestamp_units units =
-    cudf::type_dispatcher(timestamp_type, dispatch_timestamp_to_units_fn());
+  timestamp_units units = cudf::type_dispatcher(timestamp_type, dispatch_timestamp_to_units_fn());
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
@@ -755,14 +754,14 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   // fill in chars column with timestamps
   // dispatcher is called to handle the different timestamp types
   cudf::type_dispatcher(timestamps.type(),
-                                      dispatch_from_timestamps_fn(),
-                                      d_column,
-                                      d_format_items,
-                                      compiler.items_count(),
-                                      units,
-                                      d_new_offsets,
-                                      d_chars,
-                                      stream);
+                        dispatch_from_timestamps_fn(),
+                        d_column,
+                        d_format_items,
+                        compiler.items_count(),
+                        units,
+                        d_new_offsets,
+                        d_chars,
+                        stream);
   //
   return make_strings_column(strings_count,
                              std::move(offsets_column),

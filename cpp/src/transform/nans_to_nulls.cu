@@ -79,8 +79,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
 {
   if (input.size() == 0) { return std::make_pair(std::make_unique<rmm::device_buffer>(), 0); }
 
-  return cudf::type_dispatcher(
-    input.type(), dispatch_nan_to_null{}, input, mr, stream);
+  return cudf::type_dispatcher(input.type(), dispatch_nan_to_null{}, input, mr, stream);
 }
 
 }  // namespace detail

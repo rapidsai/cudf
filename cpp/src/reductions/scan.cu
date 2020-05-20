@@ -47,8 +47,8 @@ struct ScanDispatcher {
                       cudaStream_t stream)
   {
     const size_type size = input_view.size();
-    auto output_column   = detail::allocate_like(
-      input_view, size, mask_allocation_policy::NEVER, mr, stream);
+    auto output_column =
+      detail::allocate_like(input_view, size, mask_allocation_policy::NEVER, mr, stream);
     if (null_handling == null_policy::EXCLUDE) {
       output_column->set_null_mask(copy_bitmask(input_view, stream, mr), input_view.null_count());
     }
@@ -114,8 +114,8 @@ struct ScanDispatcher {
                       cudaStream_t stream)
   {
     const size_type size = input_view.size();
-    auto output_column   = detail::allocate_like(
-      input_view, size, mask_allocation_policy::NEVER, mr, stream);
+    auto output_column =
+      detail::allocate_like(input_view, size, mask_allocation_policy::NEVER, mr, stream);
     if (null_handling == null_policy::EXCLUDE) {
       output_column->set_null_mask(copy_bitmask(input_view, stream, mr), input_view.null_count());
     } else {
@@ -232,36 +232,36 @@ std::unique_ptr<column> scan(const column_view& input,
   switch (agg->kind) {
     case aggregation::SUM:
       return cudf::type_dispatcher(input.type(),
-                                                 ScanDispatcher<cudf::DeviceSum>(),
-                                                 input,
-                                                 inclusive,
-                                                 null_handling,
-                                                 mr,
-                                                 stream);
+                                   ScanDispatcher<cudf::DeviceSum>(),
+                                   input,
+                                   inclusive,
+                                   null_handling,
+                                   mr,
+                                   stream);
     case aggregation::MIN:
       return cudf::type_dispatcher(input.type(),
-                                                 ScanDispatcher<cudf::DeviceMin>(),
-                                                 input,
-                                                 inclusive,
-                                                 null_handling,
-                                                 mr,
-                                                 stream);
+                                   ScanDispatcher<cudf::DeviceMin>(),
+                                   input,
+                                   inclusive,
+                                   null_handling,
+                                   mr,
+                                   stream);
     case aggregation::MAX:
       return cudf::type_dispatcher(input.type(),
-                                                 ScanDispatcher<cudf::DeviceMax>(),
-                                                 input,
-                                                 inclusive,
-                                                 null_handling,
-                                                 mr,
-                                                 stream);
+                                   ScanDispatcher<cudf::DeviceMax>(),
+                                   input,
+                                   inclusive,
+                                   null_handling,
+                                   mr,
+                                   stream);
     case aggregation::PRODUCT:
       return cudf::type_dispatcher(input.type(),
-                                                 ScanDispatcher<cudf::DeviceProduct>(),
-                                                 input,
-                                                 inclusive,
-                                                 null_handling,
-                                                 mr,
-                                                 stream);
+                                   ScanDispatcher<cudf::DeviceProduct>(),
+                                   input,
+                                   inclusive,
+                                   null_handling,
+                                   mr,
+                                   stream);
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }

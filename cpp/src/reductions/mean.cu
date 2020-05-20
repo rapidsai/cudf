@@ -18,14 +18,12 @@
 #include <cudf/detail/reduction_functions.hpp>
 #include "compound.cuh"
 
-std::unique_ptr<cudf::scalar> cudf::reduction::mean(
-  column_view const& col,
-  cudf::data_type const output_dtype,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
+std::unique_ptr<cudf::scalar> cudf::reduction::mean(column_view const& col,
+                                                    cudf::data_type const output_dtype,
+                                                    rmm::mr::device_memory_resource* mr,
+                                                    cudaStream_t stream)
 {
-  using reducer = cudf::reduction::compound::element_type_dispatcher<
-    cudf::reduction::op::mean>;
+  using reducer = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::mean>;
   return cudf::type_dispatcher(
     col.type(), reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, mr, stream);
 }

@@ -166,13 +166,12 @@ TYPED_TEST(TimestampColumnTest, TimestampsCanBeComparedInDeviceCode)
 TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsParm)
 {
   rmm::device_buffer null_mask{create_null_mask(this->size(), cudf::mask_state::ALL_NULL)};
-  auto column =
-    cudf::make_timestamp_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                this->size(),
-                                null_mask,
-                                this->size(),
-                                this->stream(),
-                                this->mr());
+  auto column = cudf::make_timestamp_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
+                                            this->size(),
+                                            null_mask,
+                                            this->size(),
+                                            this->stream(),
+                                            this->mr());
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(this->size(), column->null_count());
@@ -184,13 +183,12 @@ TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsParm)
 TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsEmptyParm)
 {
   rmm::device_buffer null_mask{};
-  auto column =
-    cudf::make_timestamp_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                this->size(),
-                                null_mask,
-                                0,
-                                this->stream(),
-                                this->mr());
+  auto column = cudf::make_timestamp_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
+                                            this->size(),
+                                            null_mask,
+                                            0,
+                                            this->stream(),
+                                            this->mr());
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(0, column->null_count());

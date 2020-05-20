@@ -167,11 +167,11 @@ table_with_metadata read_orc(read_orc_args const& args, rmm::mr::device_memory_r
 {
   CUDF_FUNC_RANGE();
   detail_orc::reader_options options{args.columns,
-                              args.use_index,
-                              args.use_np_dtypes,
-                              args.timestamp_type,
-                              args.decimals_as_float,
-                              args.forced_decimals_scale};
+                                     args.use_index,
+                                     args.use_np_dtypes,
+                                     args.timestamp_type,
+                                     args.decimals_as_float,
+                                     args.forced_decimals_scale};
   auto reader = make_reader<detail_orc::reader>(args.source, options, mr);
 
   if (args.stripe_list.size() > 0) {
@@ -199,8 +199,8 @@ void write_orc(write_orc_args const& args, rmm::mr::device_memory_resource* mr)
  * @copydoc cudf::io::write_orc_chunked_begin
  *
  **/
-std::shared_ptr<detail_orc::orc_chunked_state> write_orc_chunked_begin(write_orc_chunked_args const& args,
-                                                                rmm::mr::device_memory_resource* mr)
+std::shared_ptr<detail_orc::orc_chunked_state> write_orc_chunked_begin(
+  write_orc_chunked_args const& args, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   detail_orc::writer_options options{args.compression, args.enable_statistics};
@@ -223,7 +223,8 @@ std::shared_ptr<detail_orc::orc_chunked_state> write_orc_chunked_begin(write_orc
  * @copydoc cudf::io::write_orc_chunked
  *
  **/
-void write_orc_chunked(table_view const& table, std::shared_ptr<detail_orc::orc_chunked_state> state)
+void write_orc_chunked(table_view const& table,
+                       std::shared_ptr<detail_orc::orc_chunked_state> state)
 {
   CUDF_FUNC_RANGE();
   state->wp->write_chunked(table, *state);

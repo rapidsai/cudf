@@ -311,17 +311,17 @@ std::unique_ptr<table> construct_join_output_df(
       joined_indices.second, left.num_rows(), right.num_rows(), stream);
     if (not columns_in_common.empty()) {
       auto common_from_right = detail::gather(right.select(right_common_col),
-                                                            complement_indices.second.begin(),
-                                                            complement_indices.second.end(),
-                                                            nullify_out_of_bounds,
-                                                            rmm::mr::get_default_resource(),
-                                                            stream);
+                                              complement_indices.second.begin(),
+                                              complement_indices.second.end(),
+                                              nullify_out_of_bounds,
+                                              rmm::mr::get_default_resource(),
+                                              stream);
       auto common_from_left  = detail::gather(left.select(left_common_col),
-                                                           joined_indices.first.begin(),
-                                                           joined_indices.first.end(),
-                                                           nullify_out_of_bounds,
-                                                           rmm::mr::get_default_resource(),
-                                                           stream);
+                                             joined_indices.first.begin(),
+                                             joined_indices.first.end(),
+                                             nullify_out_of_bounds,
+                                             rmm::mr::get_default_resource(),
+                                             stream);
       common_table           = cudf::detail::concatenate(
         {common_from_right->view(), common_from_left->view()}, mr, stream);
     }
@@ -329,29 +329,28 @@ std::unique_ptr<table> construct_join_output_df(
   } else {
     if (not columns_in_common.empty()) {
       common_table = detail::gather(left.select(left_common_col),
-                                                  joined_indices.first.begin(),
-                                                  joined_indices.first.end(),
-                                                  nullify_out_of_bounds,
-                                                  mr,
-                                                  stream);
+                                    joined_indices.first.begin(),
+                                    joined_indices.first.end(),
+                                    nullify_out_of_bounds,
+                                    mr,
+                                    stream);
     }
   }
 
   // Construct the left non common columns
   std::unique_ptr<table> left_table = detail::gather(left.select(left_noncommon_col),
-                                                                   joined_indices.first.begin(),
-                                                                   joined_indices.first.end(),
-                                                                   nullify_out_of_bounds,
-                                                                   mr,
-                                                                   stream);
+                                                     joined_indices.first.begin(),
+                                                     joined_indices.first.end(),
+                                                     nullify_out_of_bounds,
+                                                     mr,
+                                                     stream);
 
-  std::unique_ptr<table> right_table =
-    detail::gather(right.select(right_noncommon_col),
-                                 joined_indices.second.begin(),
-                                 joined_indices.second.end(),
-                                 nullify_out_of_bounds,
-                                 mr,
-                                 stream);
+  std::unique_ptr<table> right_table = detail::gather(right.select(right_noncommon_col),
+                                                      joined_indices.second.begin(),
+                                                      joined_indices.second.end(),
+                                                      nullify_out_of_bounds,
+                                                      mr,
+                                                      stream);
 
   return std::make_unique<table>(combine_join_columns(left_table->release(),
                                                       left_noncommon_col,

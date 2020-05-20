@@ -34,8 +34,7 @@ TEST_F(ReplaceNaNsErrorTest, SizeMismatch)
   cudf::test::fixed_width_column_wrapper<float> input_column{7, 5, 6, 3, 1, 8, 4};
   cudf::test::fixed_width_column_wrapper<float> replacement_column{{10, 11, 12, 13}};
 
-  EXPECT_THROW(cudf::replace_nans(input_column, replacement_column),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nans(input_column, replacement_column), cudf::logic_error);
 }
 
 // Error : column type mismatch
@@ -44,8 +43,7 @@ TEST_F(ReplaceNaNsErrorTest, TypeMismatch)
   cudf::test::fixed_width_column_wrapper<float> input_column{7, 5, 6, 3, 1, 2, 8, 4};
   cudf::test::fixed_width_column_wrapper<double> replacement_column{10, 11, 12, 13, 14, 15, 16, 17};
 
-  EXPECT_THROW(cudf::replace_nans(input_column, replacement_column),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nans(input_column, replacement_column), cudf::logic_error);
 }
 
 // Error: column type mismatch

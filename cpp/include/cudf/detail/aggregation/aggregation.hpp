@@ -70,8 +70,8 @@ struct quantile_aggregation final : derived_aggregation<quantile_aggregation> {
     : derived_aggregation{QUANTILE}, _quantiles{q}, _interpolation{i}
   {
   }
-  std::vector<double> _quantiles;              ///< Desired quantile(s)
-  interpolation _interpolation;  ///< Desired interpolation
+  std::vector<double> _quantiles;  ///< Desired quantile(s)
+  interpolation _interpolation;    ///< Desired interpolation
 
  protected:
   friend class derived_aggregation<quantile_aggregation>;

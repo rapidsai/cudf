@@ -131,8 +131,7 @@ std::unique_ptr<column> cast(column_view const& input,
 {
   CUDF_EXPECTS(is_fixed_width(type), "Unary cast type must be fixed-width.");
 
-  return type_dispatcher(
-    input.type(), detail::dispatch_unary_cast_from{input}, type, mr, stream);
+  return type_dispatcher(input.type(), detail::dispatch_unary_cast_from{input}, type, mr, stream);
 }
 
 }  // namespace detail

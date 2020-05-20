@@ -173,8 +173,7 @@ class fixed_width_scalar : public scalar {
                      bool is_valid                       = true,
                      cudaStream_t stream                 = 0,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : scalar(data_type(type_to_id<T>()), is_valid, stream, mr),
-      _data(value, stream, mr)
+    : scalar(data_type(type_to_id<T>()), is_valid, stream, mr), _data(value, stream, mr)
   {
   }
 

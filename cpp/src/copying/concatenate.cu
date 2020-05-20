@@ -116,9 +116,7 @@ __global__ void concatenate_masks_kernel(column_device_view const* views,
     }
     bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
 
-    if (threadIdx.x % detail::warp_size == 0) {
-      dest_mask[word_index(mask_index)] = new_word;
-    }
+    if (threadIdx.x % detail::warp_size == 0) { dest_mask[word_index(mask_index)] = new_word; }
 
     mask_index += blockDim.x * gridDim.x;
     active_mask = __ballot_sync(active_mask, mask_index < number_of_mask_bits);
@@ -225,8 +223,7 @@ std::unique_ptr<column> fused_concatenate(std::vector<column_view> const& views,
 
   // Allocate output
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
-  auto out_col =
-    detail::allocate_like(views.front(), output_size, policy, mr, stream);
+  auto out_col      = detail::allocate_like(views.front(), output_size, policy, mr, stream);
   out_col->set_null_count(0);  // prevent null count from being materialized
   auto out_view   = out_col->mutable_view();
   auto d_out_view = mutable_column_device_view::create(out_view, stream);
@@ -263,7 +260,7 @@ std::unique_ptr<column> for_each_concatenate(std::vector<column_view> const& vie
 
   using mask_policy = cudf::mask_allocation_policy;
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
-  auto col = cudf::allocate_like(views.front(), total_element_count, policy, mr);
+  auto col          = cudf::allocate_like(views.front(), total_element_count, policy, mr);
 
   col->set_null_count(0);             // prevent null count from being materialized...
   auto m_view = col->mutable_view();  // ...when we take a mutable view

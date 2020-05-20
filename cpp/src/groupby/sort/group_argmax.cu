@@ -49,12 +49,12 @@ std::unique_ptr<column> group_argmax(column_view const& values,
     indices->size(),
     static_cast<void const*>(indices->view().template data<size_type>()));
   auto result_table = cudf::detail::gather(table_view({key_sort_order}),
-                                                         null_removed_indices,
-                                                         false,
-                                                         indices->nullable(),
-                                                         false,
-                                                         mr,
-                                                         stream);
+                                           null_removed_indices,
+                                           false,
+                                           indices->nullable(),
+                                           false,
+                                           mr,
+                                           stream);
 
   return std::move(result_table->release()[0]);
 }
