@@ -21,7 +21,6 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @copydoc cudf::sequence(size_type size, scalar const& init, scalar const& step,
@@ -51,5 +50,4 @@ std::unique_ptr<column> sequence(
   cudaStream_t stream                 = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

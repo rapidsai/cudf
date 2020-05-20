@@ -21,10 +21,9 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
- * @copydoc cudf::experimental::drop_nulls(table_view const&, std::vector<size_type> const&,
+ * @copydoc cudf::drop_nulls(table_view const&, std::vector<size_type> const&,
  *                                         cudf::size_type, rmm::mr::device_memory_resource*)
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
@@ -37,7 +36,7 @@ std::unique_ptr<table> drop_nulls(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::apply_boolean_mask
+ * @copydoc cudf::apply_boolean_mask
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
@@ -48,7 +47,7 @@ std::unique_ptr<table> apply_boolean_mask(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::drop_duplicates
+ * @copydoc cudf::drop_duplicates
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
@@ -61,7 +60,7 @@ std::unique_ptr<table> drop_duplicates(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::unique_count
+ * @copydoc cudf::unique_count
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
@@ -71,5 +70,4 @@ cudf::size_type unique_count(column_view const& input,
                              cudaStream_t stream = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

@@ -116,7 +116,7 @@ __global__ void concatenate_masks_kernel(column_device_view const* views,
     }
     bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
 
-    if (threadIdx.x % experimental::detail::warp_size == 0) {
+    if (threadIdx.x % detail::warp_size == 0) {
       dest_mask[word_index(mask_index)] = new_word;
     }
 
@@ -132,7 +132,7 @@ void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
                        cudaStream_t stream)
 {
   constexpr size_type block_size{256};
-  cudf::experimental::detail::grid_1d config(output_size, block_size);
+  cudf::detail::grid_1d config(output_size, block_size);
   concatenate_masks_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
     d_views.data().get(),
     d_offsets.data().get(),
@@ -188,7 +188,7 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
       bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
 
       // First thread writes bitmask word
-      if (threadIdx.x % experimental::detail::warp_size == 0) {
+      if (threadIdx.x % detail::warp_size == 0) {
         output_view.null_mask()[word_index(output_index)] = new_word;
       }
 
@@ -200,7 +200,7 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
   }
 
   if (Nullable) {
-    using experimental::detail::single_lane_block_sum_reduce;
+    using detail::single_lane_block_sum_reduce;
     auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
     if (threadIdx.x == 0) { atomicAdd(out_valid_count, block_valid_count); }
   }
@@ -235,7 +235,7 @@ std::unique_ptr<column> fused_concatenate(std::vector<column_view> const& views,
 
   // Launch kernel
   constexpr size_type block_size{256};
-  cudf::experimental::detail::grid_1d config(output_size, block_size);
+  cudf::detail::grid_1d config(output_size, block_size);
   auto const kernel = has_nulls ? fused_concatenate_kernel<T, block_size, true>
                                 : fused_concatenate_kernel<T, block_size, false>;
   kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(

@@ -108,7 +108,7 @@ template <typename T, int base>
 __inline__ __device__ T
 decode_value(const char *data, long start, long end, ParseOptions const &opts)
 {
-  return cudf::experimental::io::gpu::parse_numeric<T, base>(data, start, end, opts);
+  return cudf::io::gpu::parse_numeric<T, base>(data, start, end, opts);
 }
 
 /**
@@ -125,7 +125,7 @@ template <typename T>
 __inline__ __device__ T
 decode_value(const char *data, long start, long end, ParseOptions const &opts)
 {
-  return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts);
+  return cudf::io::gpu::parse_numeric<T>(data, start, end, opts);
 }
 
 /**
@@ -443,7 +443,7 @@ __global__ void convert_json_to_columns_kernel(const char *data,
   for (int col = 0; col < num_columns && start < stop; col++) {
     if (is_object) { start = seek_field_name_end(data, opts, start, stop); }
     // field_end is at the next delimiter/newline
-    const long field_end = cudf::experimental::io::gpu::seek_field_end(data, opts, start, stop);
+    const long field_end = cudf::io::gpu::seek_field_end(data, opts, start, stop);
     long field_data_last = field_end - 1;
     // Modify start & end to ignore whitespace and quotechars
     trim_field_start_end(data, &start, &field_data_last, opts.quotechar);
@@ -521,7 +521,7 @@ __global__ void detect_json_data_types(const char *data,
     if (is_object) { start = seek_field_name_end(data, opts, start, stop); }
     auto field_start = start;
     const long field_end =
-      cudf::experimental::io::gpu::seek_field_end(data, opts, field_start, stop);
+      cudf::io::gpu::seek_field_end(data, opts, field_start, stop);
     long field_data_last = field_end - 1;
     trim_field_start_end(data, &field_start, &field_data_last);
     const int field_len = field_data_last - field_start + 1;

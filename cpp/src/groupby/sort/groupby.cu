@@ -297,7 +297,7 @@ void store_result_functor::operator()<aggregation::STD>(aggregation const& agg)
   column_view var_result = cache.get_result(col_idx, *var_agg);
 
   auto result =
-    experimental::detail::unary_operation(var_result, experimental::unary_op::SQRT, mr, stream);
+    detail::unary_operation(var_result, unary_op::SQRT, mr, stream);
   cache.add_result(col_idx, agg, std::move(result));
 };
 

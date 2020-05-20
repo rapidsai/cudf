@@ -126,7 +126,7 @@ struct binary_op {
       auto rhs_scalar_view = get_scalar_device_view(rhs_scalar);
       if (lhs.has_nulls()) {
         auto lhs_itr =
-          cudf::experimental::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
+          cudf::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
         reversed
           ? thrust::transform(rmm::exec_policy(stream)->on(stream),
                               lhs_itr,
@@ -179,9 +179,9 @@ struct binary_op {
       auto rhs_device_view = column_device_view::create(rhs, stream);
       if (lhs.has_nulls() && rhs.has_nulls()) {
         auto lhs_itr =
-          cudf::experimental::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
+          cudf::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
         auto rhs_itr =
-          cudf::experimental::detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
+          cudf::detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
         thrust::transform(rmm::exec_policy(stream)->on(stream),
                           lhs_itr,
                           lhs_itr + lhs.size(),
@@ -190,7 +190,7 @@ struct binary_op {
                           apply_binop<Lhs, Rhs, Out>{op});
       } else if (lhs.has_nulls()) {
         auto lhs_itr =
-          cudf::experimental::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
+          cudf::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
         auto rhs_itr = thrust::make_transform_iterator(
           thrust::make_counting_iterator(size_type{0}),
           [col = *rhs_device_view] __device__(size_type i) { return col.element<Rhs>(i); });
@@ -205,7 +205,7 @@ struct binary_op {
           thrust::make_counting_iterator(size_type{0}),
           [col = *lhs_device_view] __device__(size_type i) { return col.element<Lhs>(i); });
         auto rhs_itr =
-          cudf::experimental::detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
+          cudf::detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
         thrust::transform(rmm::exec_policy(stream)->on(stream),
                           lhs_itr,
                           lhs_itr + lhs.size(),

@@ -104,9 +104,9 @@ std::unique_ptr<column> set_keys(
 
   // copy the keys -- use drop_duplicates to make sure they are sorted and unique
   auto table_keys =
-    experimental::detail::drop_duplicates(table_view{{new_keys}},
+    detail::drop_duplicates(table_view{{new_keys}},
                                           std::vector<size_type>{0},
-                                          experimental::duplicate_keep_option::KEEP_FIRST,
+                                          duplicate_keep_option::KEEP_FIRST,
                                           null_equality::EQUAL,
                                           mr,
                                           stream)
@@ -118,7 +118,7 @@ std::unique_ptr<column> set_keys(
   auto d_matches   = matches->view().data<bool>();
   auto d_indices   = dictionary_column.indices().data<int32_t>();
   auto d_null_mask = dictionary_column.null_mask();
-  auto new_nulls   = experimental::detail::valid_if(
+  auto new_nulls   = detail::valid_if(
     thrust::make_counting_iterator<size_type>(dictionary_column.offset()),
     thrust::make_counting_iterator<size_type>(dictionary_column.offset() +
                                               dictionary_column.size()),

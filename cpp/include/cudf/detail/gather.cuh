@@ -43,7 +43,6 @@
 #include <cub/cub.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
 /**
@@ -328,7 +327,7 @@ void gather_bitmask(table_device_view input,
   auto kernel =
     valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
 
-  cudf::experimental::detail::grid_1d grid{mask_size, block_size, 1};
+  cudf::detail::grid_1d grid{mask_size, block_size, 1};
   kernel<<<grid.num_blocks, block_size, 0, stream>>>(
     counting_it, counting_it, selector, masks, mask_count, mask_size, valid_counts);
 }
@@ -459,5 +458,4 @@ std::unique_ptr<table> gather(table_view const& source_table,
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

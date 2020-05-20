@@ -40,8 +40,6 @@ class RandomAccessFile;
 
 //! cuDF interfaces
 namespace cudf {
-//! In-development features
-namespace experimental {
 //! IO interfaces
 namespace io {
 namespace detail {
@@ -693,5 +691,4 @@ class reader {
 
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

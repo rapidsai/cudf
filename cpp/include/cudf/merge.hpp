@@ -21,7 +21,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup column_merge
  * @{
@@ -101,5 +100,4 @@ std::unique_ptr<cudf::table> merge(
   rmm::mr::device_memory_resource* mr                  = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

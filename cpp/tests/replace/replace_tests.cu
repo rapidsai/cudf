@@ -41,7 +41,7 @@ TEST_F(ReplaceErrorTest, SizeMismatch)
   cudf::test::fixed_width_column_wrapper<int32_t> values_to_replace_column{{10, 11, 12, 13}};
   cudf::test::fixed_width_column_wrapper<int32_t> replacement_values_column{{15, 16, 17}};
 
-  EXPECT_THROW(cudf::experimental::find_and_replace_all(
+  EXPECT_THROW(cudf::find_and_replace_all(
                  input_column, values_to_replace_column, replacement_values_column, mr()),
                cudf::logic_error);
 }
@@ -53,7 +53,7 @@ TEST_F(ReplaceErrorTest, TypeMismatch)
   cudf::test::fixed_width_column_wrapper<float> values_to_replace_column{{10, 11, 12}};
   cudf::test::fixed_width_column_wrapper<int32_t> replacement_values_column{{15, 16, 17}};
 
-  EXPECT_THROW(cudf::experimental::find_and_replace_all(
+  EXPECT_THROW(cudf::find_and_replace_all(
                  input_column, values_to_replace_column, replacement_values_column, mr()),
                cudf::logic_error);
 }
@@ -66,7 +66,7 @@ TEST_F(ReplaceErrorTest, NullInOldValues)
                                                                            {0, 1, 0, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> replacement_values_column{{15, 16, 17, 18}};
 
-  EXPECT_THROW(cudf::experimental::find_and_replace_all(
+  EXPECT_THROW(cudf::find_and_replace_all(
                  input_column, values_to_replace_column, replacement_values_column, mr()),
                cudf::logic_error);
 }
@@ -87,7 +87,7 @@ TEST_F(ReplaceStringsTest, Strings)
   cudf::test::strings_column_wrapper replacement_wrapper{replacement.begin(), replacement.end()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::find_and_replace_all(
+  ASSERT_NO_THROW(result = cudf::find_and_replace_all(
                     input_wrapper, values_to_replace_wrapper, replacement_wrapper, mr()));
   std::vector<std::string> expected{"z", "b", "c", "d", "e", "f", "g", "h"};
   std::vector<cudf::valid_type> ex_valid{1, 1, 1, 1, 1, 1, 1, 1};
@@ -111,7 +111,7 @@ TEST_F(ReplaceStringsTest, StringsReplacementNulls)
     replacement.begin(), replacement.end(), replacement_valid.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::find_and_replace_all(
+  ASSERT_NO_THROW(result = cudf::find_and_replace_all(
                     input_wrapper, values_to_replace_wrapper, replacement_wrapper, mr()));
   std::vector<std::string> expected{"z", "", "c", "d", "e", "f", "g", "h"};
   std::vector<cudf::valid_type> ex_valid{1, 0, 1, 1, 1, 1, 1, 1};
@@ -137,7 +137,7 @@ TEST_F(ReplaceStringsTest, StringsResultAllNulls)
     replacement.begin(), replacement.end(), replacement_valid.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::find_and_replace_all(
+  ASSERT_NO_THROW(result = cudf::find_and_replace_all(
                     input_wrapper, values_to_replace_wrapper, replacement_wrapper, mr()));
   cudf::test::strings_column_wrapper expected_wrapper{
     expected.begin(), expected.end(), ex_valid.begin()};
@@ -161,7 +161,7 @@ TEST_F(ReplaceStringsTest, StringsResultAllEmpty)
     replacement.begin(), replacement.end(), replacement_valid.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::find_and_replace_all(
+  ASSERT_NO_THROW(result = cudf::find_and_replace_all(
                     input_wrapper, values_to_replace_wrapper, replacement_wrapper, mr()));
   cudf::test::strings_column_wrapper expected_wrapper{
     expected.begin(), expected.end(), ex_valid.begin()};
@@ -182,7 +182,7 @@ TEST_F(ReplaceStringsTest, StringsInputNulls)
   cudf::test::strings_column_wrapper replacement_wrapper{replacement.begin(), replacement.end()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::find_and_replace_all(
+  ASSERT_NO_THROW(result = cudf::find_and_replace_all(
                     input_wrapper, values_to_replace_wrapper, replacement_wrapper, mr()));
   std::vector<std::string> expected{"z", "y", "", "", "e", "f", "g", "h"};
   std::vector<cudf::valid_type> ex_valid{1, 1, 0, 0, 1, 1, 1, 1};
@@ -207,7 +207,7 @@ TEST_F(ReplaceStringsTest, StringsInputAndReplacementNulls)
     replacement.begin(), replacement.end(), replacement_valid.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::find_and_replace_all(
+  ASSERT_NO_THROW(result = cudf::find_and_replace_all(
                     input_wrapper, values_to_replace_wrapper, replacement_wrapper, mr()));
   std::vector<std::string> expected{"z", "", "", "", "e", "f", "g", "h"};
   std::vector<cudf::valid_type> ex_valid{1, 0, 0, 0, 1, 1, 1, 1};
@@ -230,7 +230,7 @@ TEST_F(ReplaceStringsTest, StringsEmptyReplacement)
   cudf::test::strings_column_wrapper replacement_wrapper{replacement.begin(), replacement.end()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::find_and_replace_all(
+  ASSERT_NO_THROW(result = cudf::find_and_replace_all(
                     input_wrapper, values_to_replace_wrapper, replacement_wrapper, mr()));
   std::vector<std::string> expected{"a", "b", "", "", "e", "f", "g", "h"};
   std::vector<cudf::valid_type> ex_valid{1, 1, 0, 0, 1, 1, 1, 1};
@@ -275,7 +275,7 @@ TEST_F(ReplaceStringsTest, StringsLargeScale)
     replacement.begin(), replacement.end(), replacement_valid.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::find_and_replace_all(
+  ASSERT_NO_THROW(result = cudf::find_and_replace_all(
                     input_wrapper, values_to_replace_wrapper, replacement_wrapper, mr()));
 
   cudf::test::expect_columns_equal(*result, expected_wrapper);
@@ -336,7 +336,7 @@ void test_replace(
 
   /* getting the actual result*/
   std::unique_ptr<cudf::column> actual_result;
-  ASSERT_NO_THROW(actual_result = cudf::experimental::find_and_replace_all(
+  ASSERT_NO_THROW(actual_result = cudf::find_and_replace_all(
                     _input_column, _values_to_replace_column, _replacement_values_column));
 
   /* computing the expected result */
@@ -519,7 +519,7 @@ TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
     replacement_values_column.begin(), replacement_values_column.end());
 
   std::unique_ptr<cudf::column> actual_result;
-  ASSERT_NO_THROW(actual_result = cudf::experimental::find_and_replace_all(
+  ASSERT_NO_THROW(actual_result = cudf::find_and_replace_all(
                     _input_column, _values_to_replace_column, _replacement_values_column));
 
   std::for_each(input_column.begin(), input_column.end(), [](TypeParam& d) { d += 1; });

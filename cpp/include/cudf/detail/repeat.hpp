@@ -21,7 +21,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
 /**
@@ -48,5 +47,4 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               cudaStream_t stream                 = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

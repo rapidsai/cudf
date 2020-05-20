@@ -34,7 +34,7 @@ namespace {  // anonym.
 
 using namespace cudf;
 
-using experimental::detail::side;
+using detail::side;
 using index_type = experimental::detail::index_type;
 
 /**
@@ -103,7 +103,7 @@ void materialize_bitmask(column_view const& left_col,
                          cudaStream_t stream)
 {
   constexpr size_type BLOCK_SIZE{256};
-  experimental::detail::grid_1d grid_config{out_col.size(), BLOCK_SIZE};
+  detail::grid_1d grid_config{out_col.size(), BLOCK_SIZE};
 
   auto p_left_dcol  = column_device_view::create(left_col);
   auto p_right_dcol = column_device_view::create(right_col);
@@ -192,7 +192,7 @@ rmm::device_vector<index_type> generate_merged_indices(
   if (nullable) {
     rmm::device_vector<null_order> d_null_precedence(null_precedence);
 
-    auto ineq_op = experimental::detail::row_lexicographic_tagged_comparator<true>(
+    auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
       *lhs_device_view,
       *rhs_device_view,
       d_column_order.data().get(),
@@ -205,7 +205,7 @@ rmm::device_vector<index_type> generate_merged_indices(
                   merged_indices.begin(),
                   ineq_op);
   } else {
-    auto ineq_op = experimental::detail::row_lexicographic_tagged_comparator<false>(
+    auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
       *lhs_device_view, *rhs_device_view, d_column_order.data().get());
     thrust::merge(exec_pol->on(stream),
                   left_begin_zip_iterator,

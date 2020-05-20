@@ -87,7 +87,7 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::experimental::detail::drop_nulls(input, keys, keep_threshold, mr);
+  return cudf::detail::drop_nulls(input, keys, keep_threshold, mr);
 }
 /*
  * Filters a table to remove null elements.
@@ -97,7 +97,7 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::experimental::detail::drop_nulls(input, keys, keys.size(), mr);
+  return cudf::detail::drop_nulls(input, keys, keys.size(), mr);
 }
 
 }  // namespace experimental

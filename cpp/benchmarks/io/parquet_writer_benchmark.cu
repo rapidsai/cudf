@@ -30,7 +30,7 @@
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-namespace cudf_io = cudf::experimental::io;
+namespace cudf_io = cudf::io;
 
 class ParquetWrite : public cudf::benchmark {
 };

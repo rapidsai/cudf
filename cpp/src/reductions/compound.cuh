@@ -59,7 +59,7 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
 
   if (col.has_nulls()) {
     auto it =
-      thrust::make_transform_iterator(experimental::detail::make_null_replacement_iterator(
+      thrust::make_transform_iterator(detail::make_null_replacement_iterator(
                                         *dcol, compound_op.template get_identity<ElementType>()),
                                       compound_op.template get_element_transformer<ResultType>());
     result = detail::reduce<Op, decltype(it), ResultType>(

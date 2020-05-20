@@ -38,7 +38,6 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /** -------------------------------------------------------------------------*
  * @brief value accessor of column with null bitmask
@@ -305,5 +304,4 @@ auto inline make_pair_iterator(scalar const& scalar_value)
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

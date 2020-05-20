@@ -62,5 +62,4 @@ std::unique_ptr<table> sort_by_key(
   cudaStream_t stream                            = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

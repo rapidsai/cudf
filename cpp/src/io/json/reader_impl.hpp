@@ -37,7 +37,7 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace json {
-using namespace cudf::experimental::io::json;
+using namespace cudf::io::json;
 using namespace cudf::io;
 
 /**

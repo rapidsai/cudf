@@ -93,7 +93,7 @@ struct ColumnHandle {
                   int work_per_thread,
                   cudaStream_t stream = 0)
   {
-    cudf::experimental::detail::grid_1d grid_config{source_column.size(), block_size};
+    cudf::detail::grid_1d grid_config{source_column.size(), block_size};
     int grid_size = grid_config.num_blocks;
     // Launch the kernel.
     host_dispatching_kernel<functor_type, ColumnType>
@@ -138,7 +138,7 @@ void launch_kernel(mutable_table_view input, T** d_ptr, int work_per_thread)
   const cudf::size_type n_rows = input.num_rows();
   const cudf::size_type n_cols = input.num_columns();
 
-  cudf::experimental::detail::grid_1d grid_config{n_rows, block_size};
+  cudf::detail::grid_1d grid_config{n_rows, block_size};
   int grid_size = grid_config.num_blocks;
 
   if (dispatching_type == HOST_DISPATCHING) {

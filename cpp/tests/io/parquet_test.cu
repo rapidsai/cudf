@@ -31,7 +31,7 @@
 #include <fstream>
 #include <type_traits>
 
-namespace cudf_io = cudf::experimental::io;
+namespace cudf_io = cudf::io;
 
 template <typename T>
 using column_wrapper = typename std::conditional<std::is_same<T, cudf::string_view>::value,
@@ -543,7 +543,7 @@ TEST_F(ParquetWriterTest, CustomDataSink)
   auto filepath = temp_env->get_temp_filepath("CustomDataSink.parquet");
   custom_test_data_sink custom_sink(filepath);
 
-  namespace cudf_io = cudf::experimental::io;
+  namespace cudf_io = cudf::io;
 
   srand(31337);
   auto expected = create_random_fixed_table<int>(5, 10, false);
@@ -577,7 +577,7 @@ TEST_F(ParquetWriterTest, DeviceWriteLargeishFile)
   auto filepath = temp_env->get_temp_filepath("DeviceWriteLargeishFile.parquet");
   custom_test_data_sink custom_sink(filepath);
 
-  namespace cudf_io = cudf::experimental::io;
+  namespace cudf_io = cudf::io;
 
   // exercises multiple rowgroups
   srand(31337);
@@ -916,7 +916,7 @@ TEST_F(ParquetWriterStressTest, LargeTableWeakCompression)
   mm_buf.reserve(4 * 1024 * 1024 * 16);
   custom_test_memmap_sink<false> custom_sink(&mm_buf);
 
-  namespace cudf_io = cudf::experimental::io;
+  namespace cudf_io = cudf::io;
 
   // exercises multiple rowgroups
   srand(31337);
@@ -937,7 +937,7 @@ TEST_F(ParquetWriterStressTest, LargeTableGoodCompression)
   mm_buf.reserve(4 * 1024 * 1024 * 16);
   custom_test_memmap_sink<false> custom_sink(&mm_buf);
 
-  namespace cudf_io = cudf::experimental::io;
+  namespace cudf_io = cudf::io;
 
   // exercises multiple rowgroups
   srand(31337);
@@ -958,7 +958,7 @@ TEST_F(ParquetWriterStressTest, LargeTableWithValids)
   mm_buf.reserve(4 * 1024 * 1024 * 16);
   custom_test_memmap_sink<false> custom_sink(&mm_buf);
 
-  namespace cudf_io = cudf::experimental::io;
+  namespace cudf_io = cudf::io;
 
   // exercises multiple rowgroups
   srand(31337);
@@ -979,7 +979,7 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWeakCompression)
   mm_buf.reserve(4 * 1024 * 1024 * 16);
   custom_test_memmap_sink<true> custom_sink(&mm_buf);
 
-  namespace cudf_io = cudf::experimental::io;
+  namespace cudf_io = cudf::io;
 
   // exercises multiple rowgroups
   srand(31337);
@@ -1000,7 +1000,7 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableGoodCompression)
   mm_buf.reserve(4 * 1024 * 1024 * 16);
   custom_test_memmap_sink<true> custom_sink(&mm_buf);
 
-  namespace cudf_io = cudf::experimental::io;
+  namespace cudf_io = cudf::io;
 
   // exercises multiple rowgroups
   srand(31337);
@@ -1021,7 +1021,7 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids)
   mm_buf.reserve(4 * 1024 * 1024 * 16);
   custom_test_memmap_sink<true> custom_sink(&mm_buf);
 
-  namespace cudf_io = cudf::experimental::io;
+  namespace cudf_io = cudf::io;
 
   // exercises multiple rowgroups
   srand(31337);

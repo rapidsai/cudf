@@ -53,10 +53,10 @@ void BM_basic_sum(benchmark::State& state)
   wrapper keys(data_it, data_it + column_size);
   wrapper vals(data_it, data_it + column_size);
 
-  cudf::experimental::groupby::groupby gb_obj(cudf::table_view({keys}));
+  cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
 
-  std::vector<cudf::experimental::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::experimental::groupby::aggregation_request());
+  std::vector<cudf::groupby::aggregation_request> requests;
+  requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals;
   requests[0].aggregations.push_back(cudf::make_sum_aggregation());
 
@@ -92,11 +92,11 @@ void BM_pre_sorted_sum(benchmark::State& state)
   auto sorted_keys = cudf::gather(keys_table, *sort_order);
   // No need to sort values using sort_order because they were generated randomly
 
-  cudf::experimental::groupby::groupby gb_obj(
+  cudf::groupby::groupby gb_obj(
     *sorted_keys, cudf::null_policy::EXCLUDE, cudf::sorted::YES);
 
-  std::vector<cudf::experimental::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::experimental::groupby::aggregation_request());
+  std::vector<cudf::groupby::aggregation_request> requests;
+  requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals;
   requests[0].aggregations.push_back(cudf::make_sum_aggregation());
 

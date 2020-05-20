@@ -20,7 +20,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Source table identifier to copy data from.
@@ -143,5 +142,4 @@ struct row_lexicographic_tagged_comparator {
 };
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

@@ -41,7 +41,7 @@
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 
-namespace cudf_io = cudf::experimental::io;
+namespace cudf_io = cudf::io;
 
 template <typename T>
 using column_wrapper = typename std::conditional<std::is_same<T, cudf::string_view>::value,

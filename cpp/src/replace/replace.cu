@@ -130,7 +130,7 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
   cudf::size_type i     = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t active_mask  = 0xffffffff;
   active_mask           = __ballot_sync(active_mask, i < nrows);
-  auto const lane_id{threadIdx.x % cudf::experimental::detail::warp_size};
+  auto const lane_id{threadIdx.x % cudf::detail::warp_size};
   uint32_t valid_sum{0};
 
   while (i < nrows) {
@@ -165,7 +165,7 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
 
   // Compute total valid count for this block and add it to global count
   uint32_t block_valid_count =
-    cudf::experimental::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
+    cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
   // one thread computes and adds to output_valid_count
   if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
 }
@@ -253,7 +253,7 @@ __global__ void replace_kernel(cudf::column_device_view input,
 
   uint32_t active_mask = 0xffffffff;
   active_mask          = __ballot_sync(active_mask, i < nrows);
-  auto const lane_id{threadIdx.x % cudf::experimental::detail::warp_size};
+  auto const lane_id{threadIdx.x % cudf::detail::warp_size};
   uint32_t valid_sum{0};
 
   while (i < nrows) {
@@ -287,7 +287,7 @@ __global__ void replace_kernel(cudf::column_device_view input,
   if (input_has_nulls or replacement_has_nulls) {
     // Compute total valid count for this block and add it to global count
     uint32_t block_valid_count =
-      cudf::experimental::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
+      cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
     // one thread computes and adds to output_valid_count
     if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
   }
@@ -338,7 +338,7 @@ struct replace_kernel_forwarder {
 
     cudf::mutable_column_view outputView = output->mutable_view();
 
-    cudf::experimental::detail::grid_1d grid{outputView.size(), BLOCK_SIZE, 1};
+    cudf::detail::grid_1d grid{outputView.size(), BLOCK_SIZE, 1};
 
     auto device_in                 = cudf::column_device_view::create(input_col);
     auto device_out                = cudf::mutable_column_device_view::create(outputView);
@@ -416,7 +416,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
     cudf::create_null_mask(input_col.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
   // Call first pass kernel to get sizes in offsets
-  cudf::experimental::detail::grid_1d grid{input_col.size(), BLOCK_SIZE, 1};
+  cudf::detail::grid_1d grid{input_col.size(), BLOCK_SIZE, 1};
   replace_first<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(
     *device_in,
     *device_values_to_replace,
@@ -527,7 +527,7 @@ __global__ void replace_nulls_strings(cudf::column_device_view input,
 
   uint32_t active_mask = 0xffffffff;
   active_mask          = __ballot_sync(active_mask, i < nrows);
-  auto const lane_id{threadIdx.x % cudf::experimental::detail::warp_size};
+  auto const lane_id{threadIdx.x % cudf::detail::warp_size};
   uint32_t valid_sum{0};
 
   while (i < nrows) {
@@ -564,7 +564,7 @@ __global__ void replace_nulls_strings(cudf::column_device_view input,
 
   // Compute total valid count for this block and add it to global count
   uint32_t block_valid_count =
-    cudf::experimental::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
+    cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
   // one thread computes and adds to output_valid_count
   if (threadIdx.x == 0) { atomicAdd(valid_counter, block_valid_count); }
 }
@@ -580,7 +580,7 @@ __global__ void replace_nulls(cudf::column_device_view input,
 
   uint32_t active_mask = 0xffffffff;
   active_mask          = __ballot_sync(active_mask, i < nrows);
-  auto const lane_id{threadIdx.x % cudf::experimental::detail::warp_size};
+  auto const lane_id{threadIdx.x % cudf::detail::warp_size};
   uint32_t valid_sum{0};
 
   while (i < nrows) {
@@ -608,7 +608,7 @@ __global__ void replace_nulls(cudf::column_device_view input,
   if (replacement_has_nulls) {
     // Compute total valid count for this block and add it to global count
     uint32_t block_valid_count =
-      cudf::experimental::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
+      cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
     // one thread computes and adds to output_valid_count
     if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
   }
@@ -628,7 +628,7 @@ struct replace_nulls_column_kernel_forwarder {
                                            cudaStream_t stream = 0)
   {
     cudf::size_type nrows = input.size();
-    cudf::experimental::detail::grid_1d grid{nrows, BLOCK_SIZE};
+    cudf::detail::grid_1d grid{nrows, BLOCK_SIZE};
 
     std::unique_ptr<cudf::column> output;
     if (replacement.has_nulls())
@@ -698,7 +698,7 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
     cudf::create_null_mask(input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
   // Call first pass kernel to get sizes in offsets
-  cudf::experimental::detail::grid_1d grid{input.size(), BLOCK_SIZE, 1};
+  cudf::detail::grid_1d grid{input.size(), BLOCK_SIZE, 1};
   replace_first<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(
     *device_in,
     *device_replacement,
@@ -771,7 +771,7 @@ struct replace_nulls_scalar_kernel_forwarder {
     thrust::transform(rmm::exec_policy(stream)->on(stream),
                       input.data<col_type>(),
                       input.data<col_type>() + input.size(),
-                      cudf::experimental::detail::make_validity_iterator(*device_in),
+                      cudf::detail::make_validity_iterator(*device_in),
                       output_view.data<col_type>(),
                       func);
     return output;

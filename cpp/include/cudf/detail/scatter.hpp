@@ -22,7 +22,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
@@ -139,5 +138,4 @@ std::unique_ptr<table> boolean_mask_scatter(
   cudaStream_t stream                 = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

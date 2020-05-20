@@ -45,7 +45,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
 
   if (input.nullable()) {
     auto input_begin =
-      cudf::experimental::detail::make_null_replacement_iterator<string_view>(input, string_view{});
+      cudf::detail::make_null_replacement_iterator<string_view>(input, string_view{});
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input_begin, offsets_transformer);
     offsets_column = cudf::strings::detail::make_offsets_child_column(
@@ -288,7 +288,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::list_view>(
 }
 
 /**
- * @copydoc cudf::experimental::clamp(column_view const& input,
+ * @copydoc cudf::clamp(column_view const& input,
                                       scalar const& lo,
                                       scalar const& lo_replace,
                                       scalar const& hi,

@@ -234,7 +234,7 @@ get_base_hash_join_indices(table_view const& left,
     row_hash hash_build{*build_table};
     rmm::device_scalar<int> failure(0, stream);
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-    experimental::detail::grid_1d config(build_table_num_rows, block_size);
+    detail::grid_1d config(build_table_num_rows, block_size);
     build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
       *hash_table, hash_build, build_table_num_rows, failure.data());
     // Check error code from the kernel
@@ -264,7 +264,7 @@ get_base_hash_join_indices(table_view const& left,
     right_indices.resize(estimated_size);
 
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-    experimental::detail::grid_1d config(probe_table->num_rows(), block_size);
+    detail::grid_1d config(probe_table->num_rows(), block_size);
     write_index.set_value(0);
 
     row_hash hash_probe{*probe_table};

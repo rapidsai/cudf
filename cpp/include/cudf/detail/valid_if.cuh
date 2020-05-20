@@ -27,7 +27,6 @@
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Generate a bitmask where every bit is set for which a predicate is
@@ -188,5 +187,4 @@ __global__ void valid_if_n_kernel(InputIterator1 begin1,
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

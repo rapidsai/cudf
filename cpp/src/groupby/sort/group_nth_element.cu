@@ -64,7 +64,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
     // Returns index of nth value.
     auto values_view = column_device_view::create(values);
     auto bitmask_iterator =
-      thrust::make_transform_iterator(experimental::detail::make_validity_iterator(*values_view),
+      thrust::make_transform_iterator(detail::make_validity_iterator(*values_view),
                                       [] __device__(auto b) { return static_cast<size_type>(b); });
     rmm::device_vector<size_type> intra_group_index(values.size());
     // intra group index for valids only.

@@ -437,7 +437,7 @@ struct copy_block_partitions_dispatcher {
 
     // Use gather instead for non-fixed width types
     return experimental::type_dispatcher(input.type(),
-                                         experimental::detail::column_gatherer{},
+                                         detail::column_gatherer{},
                                          input,
                                          gather_map.begin(),
                                          gather_map.end(),

@@ -22,7 +22,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup reorder_compact
  * @{
@@ -185,5 +184,4 @@ cudf::size_type unique_count(column_view const& input,
                              nan_policy nan_handling);
 
 /** @} */
-}  // namespace experimental
 }  // namespace cudf

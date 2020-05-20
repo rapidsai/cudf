@@ -103,7 +103,7 @@ __launch_bounds__(block_size) __global__
 
   // one extra warp worth in case the block is not aligned
   __shared__ bool
-    temp_valids[has_validity ? block_size + cudf::experimental::detail::warp_size : 1];
+    temp_valids[has_validity ? block_size + cudf::detail::warp_size : 1];
   __shared__ T temp_data[block_size];
 
   cudf::size_type warp_valid_counts{0};
@@ -122,7 +122,7 @@ __launch_bounds__(block_size) __global__
 
     if (has_validity) {
       temp_valids[threadIdx.x] = false;  // init shared memory
-      if (threadIdx.x < cudf::experimental::detail::warp_size)
+      if (threadIdx.x < cudf::detail::warp_size)
         temp_valids[block_size + threadIdx.x] = false;
       __syncthreads();  // wait for init
     }
@@ -133,7 +133,7 @@ __launch_bounds__(block_size) __global__
       // scatter validity mask to shared memory
       if (has_validity and input_view.is_valid(tid)) {
         // determine aligned offset for this warp's output
-        const cudf::size_type aligned_offset = block_offset % cudf::experimental::detail::warp_size;
+        const cudf::size_type aligned_offset = block_offset % cudf::detail::warp_size;
         temp_valids[local_index + aligned_offset] = true;
       }
     }
@@ -151,16 +151,16 @@ __launch_bounds__(block_size) __global__
       // memory. Only the first and last 32-bit mask elements of each block must
       // use an atomicOr, because these are where other blocks may overlap.
 
-      constexpr int num_warps = block_size / cudf::experimental::detail::warp_size;
+      constexpr int num_warps = block_size / cudf::detail::warp_size;
       // account for partial blocks with non-warp-aligned offsets
       const int last_index =
-        tmp_block_sum + (block_offset % cudf::experimental::detail::warp_size) - 1;
-      const int last_warp = min(num_warps, last_index / cudf::experimental::detail::warp_size);
-      const int wid       = threadIdx.x / cudf::experimental::detail::warp_size;
-      const int lane      = threadIdx.x % cudf::experimental::detail::warp_size;
+        tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
+      const int last_warp = min(num_warps, last_index / cudf::detail::warp_size);
+      const int wid       = threadIdx.x / cudf::detail::warp_size;
+      const int lane      = threadIdx.x % cudf::detail::warp_size;
 
       if (tmp_block_sum > 0 && wid <= last_warp) {
-        int valid_index = (block_offset / cudf::experimental::detail::warp_size) + wid;
+        int valid_index = (block_offset / cudf::detail::warp_size) + wid;
 
         // compute the valid mask for this warp
         uint32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[threadIdx.x]);
@@ -193,7 +193,7 @@ __launch_bounds__(block_size) __global__
   }
   // Compute total null_count for this block and add it to global count
   cudf::size_type block_valid_count =
-    cudf::experimental::detail::single_lane_block_sum_reduce<block_size, leader_lane>(
+    cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(
       warp_valid_counts);
   if (threadIdx.x == 0) {  // one thread computes and adds to null count
     atomicAdd(output_null_count, block_sum - block_valid_count);
@@ -253,8 +253,8 @@ struct scatter_gather_functor {
                                : scatter_kernel<T, Filter, block_size, false>;
 
     cudf::size_type per_thread =
-      cudf::experimental::detail::elements_per_thread(scatter, input.size(), block_size);
-    cudf::experimental::detail::grid_1d grid{input.size(), block_size, per_thread};
+      cudf::detail::elements_per_thread(scatter, input.size(), block_size);
+    cudf::detail::grid_1d grid{input.size(), block_size, per_thread};
 
     rmm::device_scalar<cudf::size_type> null_count{0, stream};
     if (output.nullable()) {
@@ -283,7 +283,6 @@ struct scatter_gather_functor {
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Filters `input` using a Filter function object
@@ -312,7 +311,7 @@ std::unique_ptr<table> copy_if(
   constexpr int block_size = 256;
   cudf::size_type per_thread =
     elements_per_thread(compute_block_counts<Filter, block_size>, input.num_rows(), block_size);
-  cudf::experimental::detail::grid_1d grid{input.num_rows(), block_size, per_thread};
+  cudf::detail::grid_1d grid{input.num_rows(), block_size, per_thread};
 
   // allocate temp storage for block counts and offsets
   // TODO: use an uninitialized vector to avoid the initialization kernel

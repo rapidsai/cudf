@@ -20,7 +20,7 @@ namespace cudf {
 namespace experimental {
 namespace io {
 /**
- * @copydoc cudf::experimental::io:convert_string_to_dtype
+ * @copydoc cudf::io:convert_string_to_dtype
  *
  **/
 data_type convert_string_to_dtype(const std::string &dtype)

@@ -29,12 +29,12 @@ namespace unary {
 template <typename T, typename Tout, typename F>
 struct launcher {
   static std::unique_ptr<cudf::column> launch(cudf::column_view const& input,
-                                              cudf::experimental::unary_op op,
+                                              cudf::unary_op op,
                                               rmm::mr::device_memory_resource* mr,
                                               cudaStream_t stream = 0)
   {
     std::unique_ptr<cudf::column> output = [&] {
-      if (op == cudf::experimental::unary_op::NOT) {
+      if (op == cudf::unary_op::NOT) {
         auto type = cudf::data_type{cudf::BOOL8};
         auto size = input.size();
 

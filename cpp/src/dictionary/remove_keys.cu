@@ -95,7 +95,7 @@ std::unique_ptr<column> remove_keys_fn(
   // compute new nulls -- merge the existing nulls with the newly created ones (value<0)
   auto d_null_mask = dictionary_column.null_mask();
   auto d_indices   = indices_column->view().data<int32_t>();
-  auto new_nulls   = experimental::detail::valid_if(
+  auto new_nulls   = detail::valid_if(
     thrust::make_counting_iterator<size_type>(dictionary_column.offset()),
     thrust::make_counting_iterator<size_type>(dictionary_column.offset() +
                                               dictionary_column.size()),

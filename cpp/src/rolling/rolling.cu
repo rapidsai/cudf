@@ -259,7 +259,7 @@ __launch_bounds__(block_size) __global__
     cudf::bitmask_type result_mask{__ballot_sync(active_threads, output_is_valid)};
 
     // only one thread writes the mask
-    if (0 == threadIdx.x % cudf::experimental::detail::warp_size) {
+    if (0 == threadIdx.x % cudf::detail::warp_size) {
       output.set_mask_word(cudf::word_index(i), result_mask);
       warp_valid_count += __popc(result_mask);
     }
@@ -271,7 +271,7 @@ __launch_bounds__(block_size) __global__
 
   // sum the valid counts across the whole block
   size_type block_valid_count =
-    cudf::experimental::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
+    cudf::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
 
   if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
 }
@@ -294,7 +294,7 @@ struct rolling_window_launcher {
     cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
     constexpr cudf::size_type block_size = 256;
-    cudf::experimental::detail::grid_1d grid(input.size(), block_size);
+    cudf::detail::grid_1d grid(input.size(), block_size);
 
     auto input_device_view  = column_device_view::create(input, stream);
     auto output_device_view = mutable_column_device_view::create(output, stream);
@@ -740,7 +740,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     return rolling_window(input, preceding_window, following_window, min_periods, aggr, mr);
   }
 
-  using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
+  using sort_groupby_helper = cudf::groupby::detail::sort::sort_groupby_helper;
 
   sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
   auto group_offsets{helper.group_offsets()};
@@ -1142,7 +1142,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
 
   CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
 
-  using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
+  using sort_groupby_helper = cudf::groupby::detail::sort::sort_groupby_helper;
   using index_vector        = sort_groupby_helper::index_vector;
 
   index_vector group_offsets, group_labels;

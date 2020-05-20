@@ -79,8 +79,8 @@ struct copy_if_else_tiny_grid_functor {
     // device views
     auto lhs_view = cudf::column_device_view::create(lhs);
     auto rhs_view = cudf::column_device_view::create(rhs);
-    auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T>(*lhs_view);
-    auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T>(*rhs_view);
+    auto lhs_iter = cudf::detail::make_pair_iterator<T>(*lhs_view);
+    auto rhs_iter = cudf::detail::make_pair_iterator<T>(*rhs_view);
     auto out_dv   = cudf::mutable_column_device_view::create(*out);
 
     // call the kernel with an artificially small grid
