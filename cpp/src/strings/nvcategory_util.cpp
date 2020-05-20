@@ -134,7 +134,7 @@ gdf_error concat_categories(const gdf_column* const input_columns[],
   GDF_REQUIRE(err == GDF_SUCCESS, err);
   GDF_REQUIRE(total_count <= output_column->size, GDF_COLUMN_SIZE_MISMATCH);
   GDF_REQUIRE(output_column->dtype == GDF_STRING_CATEGORY, GDF_UNSUPPORTED_DTYPE);
-  // TODO: we have no way to jsut copy a category this will fail if someone calls concat
+  // TODO: we have no way to just copy a category this will fail if someone calls concat
   // on a single input
   GDF_REQUIRE(num_columns >= 1, GDF_DATASET_EMPTY);
 
@@ -174,7 +174,7 @@ gdf_error sync_column_categories(const gdf_column* const input_columns[],
                         size_to_copy,
                         cudaMemcpyDeviceToDevice));
 
-    // TODO: becuase of how gather works we are making a copy to preserve dictionaries as the same
+    // TODO: because of how gather works we are making a copy to preserve dictionaries as the same
     // this has an overhead of having to store more than is necessary. remove when gather preserving
     // dictionary is available for nvcategory
     output_columns[column_index]->dtype_info.category = combined_category->copy();

@@ -24,6 +24,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
 
 #include <io/csv/datetime.cuh>
@@ -66,7 +67,7 @@ __device__ void limit_range_to_brackets(const char *data, long &start, long &sto
  * @brief CUDA kernel that finds the end position of the next field name,
  * including the colon that separates the name from the field value.
  *
- * Returns the position after the colon that preceeds the value token.
+ * Returns the position after the colon that precedes the value token.
  *
  * @param[in] data Pointer to the device buffer containing the data to process
  * @param[in] opts Parsing options (e.g. delimiter and quotation character)
@@ -243,6 +244,14 @@ __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
 {
   return cudf::dictionary32{};
 }
+template <>
+__inline__ __device__ cudf::list_view decode_value(const char *data,
+                                                   long start,
+                                                   long end,
+                                                   ParseOptions const &opts)
+{
+  return cudf::list_view{};
+}
 
 /**
  * @brief Functor for converting plain text data to cuDF data type value.
@@ -349,7 +358,7 @@ __inline__ __device__ void trim_field_start_end(const char *data,
  * @brief Returns true is the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  *
- * @param c Chracter to check
+ * @param c Character to check
  * @param is_hex Whether to check as a hexadecimal
  *
  * @return `true` if it is digit-like, `false` otherwise

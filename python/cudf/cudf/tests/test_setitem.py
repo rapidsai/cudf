@@ -62,7 +62,7 @@ def test_dataframe_setitem_new_columns(df, arg, value):
     assert_eq(df, gdf, check_dtype=True)
 
 
-# we dont raise keyerror
+# we don't raise keyerror
 # pandas raises it
 # inconsistent with dataframe again
 @pytest.mark.xfail()

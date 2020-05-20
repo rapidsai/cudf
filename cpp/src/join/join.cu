@@ -233,7 +233,7 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> get_base
  * @param right_noncommon_cols Table obtained by gathering non common right
  * columns.
  *
- * @Returns  Table containing rearranged columns.
+ * @Returns  Rearranged columns.
  */
 /* ----------------------------------------------------------------------------*/
 std::vector<std::unique_ptr<column>> combine_join_columns(

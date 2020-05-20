@@ -2,16 +2,15 @@
 
 from __future__ import division, print_function
 
-import functools
 import pickle
 
 import cupy
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import cudf
 from cudf._lib.nvtx import annotate
+from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -57,7 +56,7 @@ def _to_frame(this_index, index=True, name=None):
     )
 
 
-class Index(Frame):
+class Index(Frame, Serializable):
     """The root interface for all Series indexes.
     """
 
@@ -346,19 +345,31 @@ class Index(Frame):
             out.name = name
             return out.copy(deep=True)
 
-    def astype(self, dtype):
-        """Convert to the given ``dtype``.
-
+    def astype(self, dtype, copy=False):
+        """
+        Create an Index with values cast to dtypes. The class of a new Index
+        is determined by dtype. When conversion is impossible, a ValueError
+        exception is raised.
+        Parameters
+        ----------
+        dtype : numpy dtype
+            Use a numpy.dtype to cast entire Index object to.
+        copy : bool, default False
+            By default, astype always returns a newly allocated object.
+            If copy is set to False and internal requirements on dtype are
+            satisfied, the original data is used to create a new Index
+            or the original Index is returned.
         Returns
         -------
-        If the dtype changed, a new ``Index`` is returned by casting each
-        values to the given dtype.
-        If the dtype is not changed, ``self`` is returned.
+        Index
+            Index with values cast to specified dtype.
         """
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
-            return self
+            return self.copy(deep=copy)
 
-        return as_index(self._values.astype(dtype), name=self.name)
+        return as_index(
+            self.copy(deep=copy)._values.astype(dtype), name=self.name
+        )
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
@@ -488,11 +499,11 @@ class Index(Frame):
         return self._values._memory_usage(deep=deep)
 
     @classmethod
-    def from_pandas(cls, index):
+    def from_pandas(cls, index, nan_as_null=None):
         if not isinstance(index, pd.Index):
             raise TypeError("not a pandas.Index")
 
-        ind = as_index(pa.Array.from_pandas(index))
+        ind = as_index(column.as_column(index, nan_as_null=nan_as_null))
         ind.name = index.name
         return ind
 
@@ -645,9 +656,6 @@ class RangeIndex(Index):
 
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
-
-    def __reduce__(self):
-        return (RangeIndex, (self._start, self._stop, self.name))
 
     def equals(self, other):
         if self is other:
@@ -828,13 +836,6 @@ class GenericIndex(Index):
 
     def __sizeof__(self):
         return self._values.__sizeof__()
-
-    def __reduce__(self):
-        _maker = functools.partial(
-            self.__class__, self._values, name=self.name
-        )
-
-        return _maker, ()
 
     def __len__(self):
         return len(self._values)

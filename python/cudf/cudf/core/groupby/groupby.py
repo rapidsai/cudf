@@ -9,9 +9,10 @@ import pandas as pd
 import cudf
 import cudf._lib.groupby as libgroupby
 from cudf._lib.nvtx import annotate
+from cudf.core.abc import Serializable
 
 
-class GroupBy(object):
+class GroupBy(Serializable):
     """
     Group a DataFrame or Series by a set of columns.
 
@@ -434,7 +435,7 @@ class GroupBy(object):
                             total += val[j]
                         avg[i] = total / win_size
 
-            # Compute moving avgs on all groups
+            # Compute moving averages on all groups
             results = groups.apply_grouped(rolling_avg,
                                            incols=['val'],
                                            outcols=dict(avg=np.float64))
@@ -513,7 +514,7 @@ class Grouper(object):
         self.level = level
 
 
-class _Grouping(object):
+class _Grouping(Serializable):
     def __init__(self, obj, by=None, level=None):
         self._obj = obj
         self._key_columns = []

@@ -100,7 +100,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 
   size_type null_count{0};
   if (size > 0) {
-    rmm::device_scalar<size_type> valid_count{0, stream, mr};
+    rmm::device_scalar<size_type> valid_count{0, stream};
 
     constexpr size_type block_size{256};
     grid_1d grid{size, block_size};
@@ -136,7 +136,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
  *
  * @note If any mask in `masks` is `nullptr`, that mask will be ignored.
  *
- * @param begin1        LHS arguments to binary predicte. ex: column/mask idx
+ * @param begin1        LHS arguments to binary predicate. ex: column/mask idx
  * @param begin2        RHS arguments to binary predicate. ex: row/bit idx
  * @param p             Predicate: `bit = p(begin1 + mask_idx, begin2 + bit_idx)`
  * @param masks         Masks for which bits will be obtained and assigned.
