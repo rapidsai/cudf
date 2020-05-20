@@ -30,6 +30,12 @@ Strings
 .. autoclass:: StringMethods
     :members:
 
+Categories
+----------
+.. currentmodule:: cudf.core.column.categorical
+
+.. autoclass:: CategoricalAccessor
+    :members:
 
 Groupby
 -------
