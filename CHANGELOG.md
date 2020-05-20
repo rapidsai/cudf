@@ -191,6 +191,7 @@
 
 ## Bug Fixes
 
+- PR #5221 Fix the use of user-provided resource on temporary values
 - PR #5181 Allocate null count using the default resource in `copy_if`
 - PR #5141 Use user-provided resource correctly in `unary_operation()` and `shift()`
 - PR #5064 Fix `hash()` and `construct_join_output_df()` to use user-provided memory resource correctly
