@@ -396,9 +396,10 @@ class NumericalColumn(column.ColumnBase):
             else:
                 from cudf import Series
 
+                filled = self.fillna(0)
                 if (
-                    Series(self).astype(to_dtype).astype(self.dtype)
-                    == Series(self)
+                    Series(filled).astype(to_dtype).astype(filled.dtype)
+                    == Series(filled)
                 ).all():
                     return True
                 else:
@@ -412,7 +413,8 @@ class NumericalColumn(column.ColumnBase):
             if (self.min() >= min_) and (self.max() <= max_):
                 from cudf import Series
 
-                if (Series(self) % 1 == 0).all():
+                filled = self.fillna(0)
+                if (Series(filled) % 1 == 0).all():
                     return True
                 else:
                     return False
