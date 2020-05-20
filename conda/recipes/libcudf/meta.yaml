@@ -52,9 +52,7 @@ test:
     - test -f $PREFIX/include/cudf/column/column.hpp
     - test -f $PREFIX/include/cudf/column/column_view.hpp
     - test -f $PREFIX/include/cudf/concatenate.hpp
-    - test -f $PREFIX/include/cudf/convert_types.h
     - test -f $PREFIX/include/cudf/copying.hpp
-    - test -f $PREFIX/include/cudf/cudf.h
     - test -f $PREFIX/include/cudf/datetime.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
@@ -153,7 +151,6 @@ test:
     - test -f $PREFIX/include/cudf/table/table_view.hpp
     - test -f $PREFIX/include/cudf/transform.hpp
     - test -f $PREFIX/include/cudf/transpose.hpp
-    - test -f $PREFIX/include/cudf/types.h
     - test -f $PREFIX/include/cudf/types.hpp
     - test -f $PREFIX/include/cudf/unary.hpp
     - test -f $PREFIX/include/cudf/utilities/bit.hpp
