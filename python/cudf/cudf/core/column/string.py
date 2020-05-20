@@ -302,10 +302,21 @@ class StringMethods(object):
         """
         Computes the length of each element in the Series/Index.
 
-        Returns
-        -------
-          Series or Index of int: A Series or Index of integer values
+        Returns : Series or Index of int
+            A Series or Index of integer values
             indicating the length of each element in the Series or Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["dog", "", "\\n", None])
+        >>> s.str.len()
+        0       3
+        1       0
+        2       1
+        3    null
+        dtype: int32
+
         """
 
         return self._return_or_inplace(
@@ -430,6 +441,10 @@ class StringMethods(object):
         """
         Join lists contained as elements in the Series/Index with passed
         delimiter.
+
+        Raises : NotImplementedError
+            Columns of arrays / lists are not yet supported.
+
         """
         raise NotImplementedError(
             "Columns of arrays / lists are not yet " "supported"
@@ -736,27 +751,15 @@ class StringMethods(object):
         Check whether all characters in each string are decimal.
 
         This is equivalent to running the Python string method
-        str.isdecimal() for each element of the Series/Index.
+        `str.isdecimal()
+        <https://docs.python.org/3/library/stdtypes.html#str.isdecimal>`_
+        for each element of the Series/Index.
         If a string has zero characters, False is returned for
         that check.
 
         Returns : Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
-
-        """
-        return self._return_or_inplace(cpp_is_decimal(self._column), **kwargs)
-
-    def isalnum(self, **kwargs):
-        """
-        Check whether all characters are alphanumeric.
-
-        Equivalent to: isalpha() or isdigit() or isnumeric() or isdecimal()
-
-        Returns
-        -------
-        Series or Index of boolean values with True for strings
-        that contain only alpha-numeric characters.
 
         See also
         --------
@@ -768,6 +771,61 @@ class StringMethods(object):
 
         isalnum
             Check whether all characters are alphanumeric.
+
+        isdigit
+            Check whether all characters are digits.
+
+        isspace
+            Check whether all characters are whitespace.
+
+        islower
+            Check whether all characters are lowercase.
+
+        isupper
+            Check whether all characters are uppercase.
+
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s3 = cudf.Series(['23', '³', '⅕', ''])
+
+        The s3.str.isdecimal method checks for characters used to form
+        numbers in base 10.
+
+        >>> s3.str.isdecimal()
+        0     True
+        1    False
+        2    False
+        3    False
+        dtype: bool
+
+        """
+        return self._return_or_inplace(cpp_is_decimal(self._column), **kwargs)
+
+    def isalnum(self, **kwargs):
+        """
+        Check whether all characters in each string are alphanumeric.
+
+        This is equivalent to running the Python string method
+        `str.isalnum()
+        <https://docs.python.org/3/library/stdtypes.html#str.isalnum>`_
+        for each element of the Series/Index. If a string has zero
+        characters, False is returned for that check.
+
+        Equivalent to: ``isalpha() or isdigit() or isnumeric() or isdecimal()``
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the
+            same length as the original Series/Index.
+
+        See also
+        --------
+        isalpha
+            Check whether all characters are alphabetic.
+
+        isnumeric
+            Check whether all characters are numeric.
 
         isdigit
             Check whether all characters are digits.
@@ -815,12 +873,48 @@ class StringMethods(object):
         Check whether all characters in each string are alphabetic.
 
         This is equivalent to running the Python string method
-        str.isalpha() for each element of the Series/Index.
+        `str.isalpha()
+        <https://docs.python.org/3/library/stdtypes.html#str.isalpha>`_
+        for each element of the Series/Index.
         If a string has zero characters, False is returned for that check.
 
         Returns : Series or Index of bool
             Series or Index of boolean values with the same length
             as the original Series/Index.
+
+        See also
+        --------
+        isnumeric
+            Check whether all characters are numeric.
+
+        isalnum
+            Check whether all characters are alphanumeric.
+
+        isdigit
+            Check whether all characters are digits.
+
+        isdecimal
+            Check whether all characters are decimal.
+
+        isspace
+            Check whether all characters are whitespace.
+
+        islower
+            Check whether all characters are lowercase.
+
+        isupper
+            Check whether all characters are uppercase.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s1 = cudf.Series(['one', 'one1', '1', ''])
+        >>> s1.str.isalpha()
+        0     True
+        1    False
+        2    False
+        3    False
+        dtype: bool
 
         """
         return self._return_or_inplace(cpp_is_alpha(self._column), **kwargs)
@@ -830,13 +924,55 @@ class StringMethods(object):
         Check whether all characters in each string are digits.
 
         This is equivalent to running the Python string method
-        str.isdigit() for each element of the Series/Index.
+        `str.isdigit()
+        <https://docs.python.org/3/library/stdtypes.html#str.isdigit>`_
+        for each element of the Series/Index.
         If a string has zero characters, False is returned
         for that check.
 
         Returns : Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
+
+        See also
+        --------
+        isalpha
+            Check whether all characters are alphabetic.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isalnum
+            Check whether all characters are alphanumeric.
+
+        isdecimal
+            Check whether all characters are decimal.
+
+        isspace
+            Check whether all characters are whitespace.
+
+        islower
+            Check whether all characters are lowercase.
+
+        isupper
+            Check whether all characters are uppercase.
+
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['23', '³', '⅕', ''])
+
+        The ``s.str.isdigit`` method is the same as ``s.str.isdecimal`` but
+        also includes special digits, like superscripted and
+        subscripted digits in unicode.
+
+        >>> s.str.isdigit()
+        0     True
+        1     True
+        2    False
+        3    False
+        dtype: bool
 
         """
         return self._return_or_inplace(cpp_is_digit(self._column), **kwargs)
@@ -846,36 +982,164 @@ class StringMethods(object):
         Check whether all characters in each string are numeric.
 
         This is equivalent to running the Python string method
-        str.isnumeric() for each element of the Series/Index. If a
+        `str.isnumeric()
+        <https://docs.python.org/3/library/stdtypes.html#str.isnumeric>`_
+        for each element of the Series/Index. If a
         string has zero characters, False is returned for that check.
 
         Returns : Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
+        See also
+        --------
+        isalpha
+            Check whether all characters are alphabetic.
+
+        isalnum
+            Check whether all characters are alphanumeric.
+
+        isdigit
+            Check whether all characters are digits.
+
+        isdecimal
+            Check whether all characters are decimal.
+
+        isspace
+            Check whether all characters are whitespace.
+
+        islower
+            Check whether all characters are lowercase.
+
+        isupper
+            Check whether all characters are uppercase.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s1 = cudf.Series(['one', 'one1', '1', ''])
+        >>> s1.str.isnumeric()
+        0    False
+        1    False
+        2     True
+        3    False
+        dtype: bool
+
+        The ``s1.str.isnumeric`` method is the same as ``s2.str.isdigit`` but
+        also includes other characters that can represent
+        quantities such as unicode fractions.
+
+        >>> s2 = pd.Series(['23', '³', '⅕', ''])
+        >>> s2.str.isnumeric()
+        0     True
+        1     True
+        2     True
+        3    False
+        dtype: bool
+
         """
         return self._return_or_inplace(cpp_is_numeric(self._column), **kwargs)
 
     def isupper(self, **kwargs):
         """
-        Returns a Series/Index of boolean values with True for strings
-        that contain only upper-case characters.
+        Check whether all characters in each string are uppercase.
 
-        Returns
-        -------
-        Series/Index of bool dtype
+        This is equivalent to running the Python string method
+        `str.isupper()
+        <https://docs.python.org/3/library/stdtypes.html#str.isupper>`_
+        for each element of the Series/Index.
+        If a string has zero characters, False is returned
+        for that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
+
+        See also
+        --------
+        isalpha
+            Check whether all characters are alphabetic.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isalnum
+            Check whether all characters are alphanumeric.
+
+        isdigit
+            Check whether all characters are digits.
+
+        isdecimal
+            Check whether all characters are decimal.
+
+        isspace
+            Check whether all characters are whitespace.
+
+        islower
+            Check whether all characters are lowercase.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['leopard', 'Golden Eagle', 'SNAKE', ''])
+        >>> s.str.isupper()
+        0    False
+        1    False
+        2     True
+        3    False
+        dtype: bool
 
         """
         return self._return_or_inplace(cpp_is_upper(self._column), **kwargs)
 
     def islower(self, **kwargs):
         """
-        Returns a Series/Index of boolean values with True for strings
-        that contain only lower-case characters.
+        Check whether all characters in each string are lowercase.
 
-        Returns
-        -------
-        Series/Index of bool dtype
+        This is equivalent to running the Python string method
+        `str.islower()
+        <https://docs.python.org/3/library/stdtypes.html#str.islower>`_
+        for each element of the Series/Index.
+        If a string has zero characters, False is returned
+        for that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
+
+        See also
+        --------
+        isalpha
+            Check whether all characters are alphabetic.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isalnum
+            Check whether all characters are alphanumeric.
+
+        isdigit
+            Check whether all characters are digits.
+
+        isdecimal
+            Check whether all characters are decimal.
+
+        isspace
+            Check whether all characters are whitespace.
+
+        isupper
+            Check whether all characters are uppercase.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['leopard', 'Golden Eagle', 'SNAKE', ''])
+        >>> s.str.islower()
+        0     True
+        1    False
+        2    False
+        3    False
+        dtype: bool
 
         """
         return self._return_or_inplace(cpp_is_lower(self._column), **kwargs)
@@ -1467,14 +1731,15 @@ class StringMethods(object):
     def ljust(self, width, fillchar=" ", **kwargs):
         """
         Filling right side of strings in the Series/Index with an additional
-        character.
+        character. Equivalent to `str.ljust()
+        <https://docs.python.org/3/library/stdtypes.html#str.ljust>`_.
 
         Parameters
         ----------
         width : int
             Minimum width of resulting string;
             additional characters will be filled
-            with fillchar.
+            with ``fillchar``.
 
         fillchar : str, default ' ' (whitespace)
             Additional character for filling, default is whitespace.
@@ -1483,6 +1748,22 @@ class StringMethods(object):
         -------
         Series/Index of str dtype
             Returns Series or Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["hello world", "rapids ai"])
+        >>> s.str.ljust(10, fillchar="_")
+        0    hello world
+        1     rapids ai_
+        dtype: object
+        >>> s = cudf.Series(["a", "",  "ab", "__"])
+        >>> s.str.ljust(1, fillchar="-")
+        0     a
+        1     -
+        2    ab
+        3    __
+        dtype: object
 
         """
         if not isinstance(fillchar, str):
@@ -1855,6 +2136,19 @@ class StringMethods(object):
         Returns : Series or Index of bool
             Series or Index of boolean values with the same length as
             the original Series/Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["1", "abc", "", " ", None])
+        >>> s.str.isempty()
+        0    False
+        1    False
+        2     True
+        3    False
+        4    False
+        dtype: bool
+
         """
         return self._return_or_inplace(
             (self._parent == "").fillna(False), **kwargs
@@ -1864,9 +2158,51 @@ class StringMethods(object):
         """
         Check whether all characters in each string are whitespace.
 
+        This is equivalent to running the Python string method
+        `str.isspace()
+        <https://docs.python.org/3/library/stdtypes.html#str.isspace>`_
+        for each element of the Series/Index.
+        If a string has zero characters, False is returned
+        for that check.
+
         Returns : Series or Index of bool
             Series or Index of boolean values with the same length as
             the original Series/Index.
+
+        See also
+        --------
+        isalpha
+            Check whether all characters are alphabetic.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isalnum
+            Check whether all characters are alphanumeric.
+
+        isdigit
+            Check whether all characters are digits.
+
+        isdecimal
+            Check whether all characters are decimal.
+
+        islower
+            Check whether all characters are lowercase.
+
+        isupper
+            Check whether all characters are uppercase.
+
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([' ', '\\t\\r\\n ', ''])
+        >>> s.str.isspace()
+        0     True
+        1     True
+        2    False
+        dtype: bool
+
         """
         return self._return_or_inplace(cpp_isspace(self._column), **kwargs)
 
