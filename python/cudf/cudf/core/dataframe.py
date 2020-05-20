@@ -25,6 +25,7 @@ import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
 from cudf.core import column
+from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -87,7 +88,7 @@ def _reverse_op(fn):
     }[fn]
 
 
-class DataFrame(Frame):
+class DataFrame(Frame, Serializable):
     """
     A GPU Dataframe object.
 
@@ -1684,9 +1685,6 @@ class DataFrame(Frame):
             memo = {}
         return self.copy(deep=True)
 
-    def __reduce__(self):
-        return (DataFrame, (self._data, self.index))
-
     @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):
         """ Add a column to DataFrame at the index specified by loc.
@@ -3199,7 +3197,7 @@ class DataFrame(Frame):
         return out_df
 
     @classmethod
-    def from_pandas(cls, dataframe, nan_as_null=True):
+    def from_pandas(cls, dataframe, nan_as_null=None):
         """
         Convert from a Pandas DataFrame.
 
@@ -3213,7 +3211,7 @@ class DataFrame(Frame):
         >>> import pandas as pd
         >>> data = [[0,1], [1,2], [3,4]]
         >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
-        >>> cudf.from_pandas(pdf)
+        >>> cudf.DataFrame.from_pandas(pdf)
         <cudf.DataFrame ncols=2 nrows=3 >
         """
         if not isinstance(dataframe, pd.DataFrame):
@@ -3248,7 +3246,7 @@ class DataFrame(Frame):
 
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):
-            index = cudf.from_pandas(dataframe.index)
+            index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         else:
             index = dataframe.index
         result = df.set_index(index)
@@ -4862,7 +4860,7 @@ class DataFrame(Frame):
         return df
 
 
-def from_pandas(obj):
+def from_pandas(obj, nan_as_null=None):
     """
     Convert certain Pandas objects into the cudf equivalent.
 
@@ -4882,11 +4880,11 @@ def from_pandas(obj):
     <cudf.DataFrame ncols=2 nrows=3 >
     """
     if isinstance(obj, pd.DataFrame):
-        return DataFrame.from_pandas(obj)
+        return DataFrame.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.Series):
-        return Series.from_pandas(obj)
+        return Series.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.MultiIndex):
-        return cudf.MultiIndex.from_pandas(obj)
+        return cudf.MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.RangeIndex):
         if obj._step and obj._step != 1:
             raise ValueError("cudf RangeIndex requires step == 1")
@@ -4894,7 +4892,7 @@ def from_pandas(obj):
             obj._start, stop=obj._stop, name=obj.name
         )
     elif isinstance(obj, pd.Index):
-        return cudf.Index.from_pandas(obj)
+        return cudf.Index.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(obj)
     else:

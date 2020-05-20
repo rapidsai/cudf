@@ -22,23 +22,9 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 /**
- * @brief Creates a new column by applying a unary function against every
- * element of an input column.
+ * @copydoc cudf::experimental::transform
  *
- * Computes:
- * `out[i] = F(in[i])`
- *
- * The output null mask is the same is the input null mask so if input[i] is
- * null then output[i] is also null
- *
- * @param input         An immutable view of the input column to transform
- * @param unary_udf     The PTX/CUDA string of the unary function to apply
- * @param outout_type   The output type that is compatible with the output type in the UDF
- * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
- * @param mr            The memory resource to use for for all device allocations
  * @param stream        CUDA stream on which to execute kernels
- * @return cudf::column The column resulting from applying the unary function to
- *                      every element of the input
  **/
 std::unique_ptr<column> transform(
   column_view const& input,
