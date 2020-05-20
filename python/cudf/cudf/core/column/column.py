@@ -24,6 +24,7 @@ from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import as_scalar
 from cudf._lib.stream_compaction import unique_count as cpp_unique_count
 from cudf._lib.transform import bools_to_mask
+from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
@@ -33,12 +34,13 @@ from cudf.utils.dtypes import (
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
+    min_scalar_type,
     np_to_pa_dtype,
 )
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
 
-class ColumnBase(Column):
+class ColumnBase(Column, Serializable):
     def __init__(
         self,
         data,
@@ -65,20 +67,6 @@ class ColumnBase(Column):
             mask=mask,
             offset=offset,
             children=children,
-        )
-
-    def __reduce__(self):
-        return (
-            build_column,
-            (
-                self.data,
-                self.dtype,
-                self.mask,
-                self.size,
-                0,
-                self.null_count,
-                self.children,
-            ),
         )
 
     def as_frame(self):
@@ -862,7 +850,10 @@ class ColumnBase(Column):
         # columns include null index in factorization; remove:
         if self.has_nulls:
             cats = cats.dropna()
+            min_type = min_scalar_type(len(cats), 8)
             labels = labels - 1
+            if np.dtype(min_type).itemsize < labels.dtype.itemsize:
+                labels = labels.astype(min_type)
 
         return build_categorical_column(
             categories=cats._column,

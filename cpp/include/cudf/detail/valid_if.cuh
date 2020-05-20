@@ -100,7 +100,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 
   size_type null_count{0};
   if (size > 0) {
-    rmm::device_scalar<size_type> valid_count{0, stream, mr};
+    rmm::device_scalar<size_type> valid_count{0, stream};
 
     constexpr size_type block_size{256};
     grid_1d grid{size, block_size};

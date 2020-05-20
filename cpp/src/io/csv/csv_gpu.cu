@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include "datetime.cuh"
 
 #include <cudf/detail/utilities/trie.cuh>
+#include <cudf/lists/list_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/bit.hpp>
@@ -351,6 +352,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
 }
 
 // The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
 template <>
 __inline__ __device__ cudf::string_view decode_value(const char *data,
                                                      long start,
@@ -359,6 +361,8 @@ __inline__ __device__ cudf::string_view decode_value(const char *data,
 {
   return cudf::string_view{};
 }
+
+// The purpose of this is merely to allow compilation ONLY
 template <>
 __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
                                                       long start,
@@ -366,6 +370,17 @@ __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
                                                       ParseOptions const &opts)
 {
   return cudf::dictionary32{};
+}
+
+// The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
+template <>
+__inline__ __device__ cudf::list_view decode_value(const char *data,
+                                                   long start,
+                                                   long end,
+                                                   ParseOptions const &opts)
+{
+  return cudf::list_view{};
 }
 
 /**

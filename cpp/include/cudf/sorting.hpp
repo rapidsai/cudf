@@ -43,8 +43,7 @@ namespace experimental {
  */
 
 /**
- * @brief Computes the row indices that would produce `input`  in a
- * lexicographical sorted order.
+ * @brief Computes the row indices that would produce `input` in a lexicographical sorted order.
  *
  * @param input The table to sort
  * @param column_order The desired sort order for each column. Size must be
@@ -53,8 +52,9 @@ namespace experimental {
  * @param null_precedence The desired order of null compared to other elements
  * for each column.  Size must be equal to `input.num_columns()` or empty.
  * If empty, all columns will be sorted in `null_order::BEFORE`.
- * @return std::unique_ptr<column> A non-nullable column of `size_type` elements
- * containing the permuted row indices of `input` if it were sorted
+ * @param mr Optional, The resource to use for all allocations
+ * @return A non-nullable column of `size_type` elements containing the permuted row indices of
+ * `input` if it were sorted
  */
 std::unique_ptr<column> sorted_order(
   table_view input,
@@ -121,7 +121,7 @@ std::unique_ptr<table> sort(table_view input,
  * Creates a new table that reorders the rows of `values` according to the
  * lexicographic ordering of the rows of `keys`.
  *
- * @throws `cudf::logic_error` if `values.num_rows() != keys.num_rows()`.
+ * @throws cudf::logic_error if `values.num_rows() != keys.num_rows()`.
  *
  * @param values The table to reorder
  * @param keys The table that determines the ordering
