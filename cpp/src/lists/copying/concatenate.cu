@@ -27,6 +27,17 @@ namespace lists {
 namespace detail {
 
 namespace {
+
+/**
+ * @brief Merges the offsets child columns of multiple list columns into one.
+ *
+ * Since offsets are all relative to the start of their respective column,
+ * all offsets are shifted to account for the new starting position
+ *
+ * @param columns               Vector of lists columns to concatenate
+ * @param total_list_count      Total number of lists contains in the columns
+ * @param print_all_differences If true display all differences
+ **/
 std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& columns,
                                       size_type total_list_count,
                                       rmm::mr::device_memory_resource* mr,
@@ -52,8 +63,13 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
 
   return merged_offsets;
 }
+
 }  // namespace
 
+/**
+ * @copydoc cudf::lists::detail::concatenate
+ *
+ */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),

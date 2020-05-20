@@ -19,6 +19,10 @@
 
 namespace cudf {
 
+/**
+ * @copydoc cudf::make_lists_column
+ *
+ */
 std::unique_ptr<column> make_lists_column(size_type num_rows,
                                           std::unique_ptr<column> offsets_column,
                                           std::unique_ptr<column> child_column,

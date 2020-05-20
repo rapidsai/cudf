@@ -394,6 +394,26 @@ std::unique_ptr<column> make_strings_column(
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Constructs a LIST type column given offsets column, child column,
+ * and null mask and null count. The columns and mask are moved into the
+ * resulting lists column.
+ *
+ * @param num_lists The number of lists the column represents.
+ * @param offsets_column The column of offset values for this column.
+ *                       The number of elements is one more than the total number
+ *                       of lists.
+ * @param child_column The child column referenced by the lists formed by the
+ *                     offsets_column. Note : the child column may itself be
+ *                     further nested.
+ * @param null_count The number of null list entries.
+ * @param null_mask The bits specifying the null lists in device memory.
+ *                  Arrow format for nulls is used for interpeting this bitmask.
+ * @param stream Optional stream for use with all memory allocation
+ *               and device kernels
+ * @param mr Optional resource to use for device memory
+ *           allocation of the column's `null_mask` and children.
+ */
 std::unique_ptr<cudf::column> make_lists_column(
   size_type num_lists,
   std::unique_ptr<column> offsets_column,
