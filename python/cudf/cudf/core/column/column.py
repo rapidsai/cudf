@@ -34,6 +34,7 @@ from cudf.utils.dtypes import (
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
+    min_scalar_type,
     np_to_pa_dtype,
 )
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
@@ -849,7 +850,10 @@ class ColumnBase(Column, Serializable):
         # columns include null index in factorization; remove:
         if self.has_nulls:
             cats = cats.dropna()
+            min_type = min_scalar_type(len(cats), 8)
             labels = labels - 1
+            if np.dtype(min_type).itemsize < labels.dtype.itemsize:
+                labels = labels.astype(min_type)
 
         return build_categorical_column(
             categories=cats._column,
