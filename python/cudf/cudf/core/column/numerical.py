@@ -5,6 +5,7 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
+import cudf
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar
@@ -394,12 +395,11 @@ class NumericalColumn(column.ColumnBase):
             ):
                 return True
             else:
-                from cudf import Series
 
                 filled = self.fillna(0)
                 if (
-                    Series(filled).astype(to_dtype).astype(filled.dtype)
-                    == Series(filled)
+                    cudf.Series(filled).astype(to_dtype).astype(filled.dtype)
+                    == cudf.Series(filled)
                 ).all():
                     return True
                 else:
@@ -411,10 +411,9 @@ class NumericalColumn(column.ColumnBase):
             min_, max_ = info.min, info.max
             # best we can do is hope to catch it here and avoid compare
             if (self.min() >= min_) and (self.max() <= max_):
-                from cudf import Series
 
                 filled = self.fillna(0)
-                if (Series(filled) % 1 == 0).all():
+                if (cudf.Series(filled) % 1 == 0).all():
                     return True
                 else:
                     return False
