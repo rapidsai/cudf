@@ -207,7 +207,6 @@ class StringMethods(object):
         2         418
         3       51966
         dtype: int64
-
         """
 
         out = str_cast.htoi(self._column)
@@ -239,7 +238,6 @@ class StringMethods(object):
         1    167772161
         2            0
         dtype: int64
-
         """
 
         out = str_cast.ip2int(self._column)
@@ -267,9 +265,14 @@ class StringMethods(object):
                 from cudf._lib.table import Table
 
                 if isinstance(table, Table):
-                    return self._parent._constructor_expanddim(
-                        data=table._data, index=self._parent.index
-                    )
+                    if isinstance(self._parent, Index):
+                        return self._parent._constructor_expanddim._from_table(
+                            table=table
+                        )
+                    else:
+                        return self._parent._constructor_expanddim(
+                            data=table._data, index=self._parent.index
+                        )
                 else:
                     return self._parent._constructor_expanddim(
                         {index: value for index, value in enumerate(table)},
@@ -316,7 +319,6 @@ class StringMethods(object):
         2       1
         3    null
         dtype: int32
-
         """
 
         return self._return_or_inplace(
@@ -406,7 +408,6 @@ class StringMethods(object):
         2    -C
         3    dD
         dtype: object
-
         """
         from cudf.core import DataFrame
 
@@ -444,7 +445,6 @@ class StringMethods(object):
 
         Raises : NotImplementedError
             Columns of arrays / lists are not yet supported.
-
         """
         raise NotImplementedError(
             "Columns of arrays / lists are not yet " "supported"
@@ -504,7 +504,6 @@ class StringMethods(object):
         1       2
         2    None
         dtype: object
-
         """
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
@@ -606,7 +605,6 @@ class StringMethods(object):
         3     True
         4    False
         dtype: bool
-
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
@@ -629,7 +627,10 @@ class StringMethods(object):
     ):
         """
         Replace occurrences of pattern/regex in the Series/Index with some
-        other string.
+        other string. Equivalent to `str.replace()
+        <https://docs.python.org/3/library/stdtypes.html#str.replace>`_
+        or `re.sub()
+        <https://docs.python.org/3/library/re.html#re.sub>`_.
 
         Parameters
         ----------
@@ -653,11 +654,43 @@ class StringMethods(object):
         Notes
         -----
         The parameters `case` and `flags` are not yet supported and will raise
-        a NotImplementedError if anything other than the default value is set.
+        a `NotImplementedError` if anything other than the default value
+        is set.
+
+        Examples
+        --------
+
+        >>> import cudf
+        >>> s = cudf.Series(['foo', 'fuz', None])
+        >>> s
+        0     foo
+        1     fuz
+        2    None
+        dtype: object
+
+        When pat is a string and regex is True (the default), the given pat
+        is compiled as a regex. When repl is a string, it replaces matching
+        regex patterns as with ``re.sub()``. NaN value(s) in the Series
+        are left as is:
+
+        >>> s.str.replace('f.', 'ba', regex=True)
+        0     bao
+        1     baz
+        2    None
+        dtype: object
+
+        When pat is a string and `regex` is False, every pat is replaced
+        with repl as with ``str.replace()``:
+
+        >>> s.str.replace('f.', 'ba', regex=False)
+        0     foo
+        1     fuz
+        2    None
+        dtype: object
         """
         if case is not None:
             raise NotImplementedError("`case` parameter is not yet supported")
-        elif flags != 0:
+        if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
         from cudf.core import Series, Index
 
@@ -716,6 +749,15 @@ class StringMethods(object):
         Returns
         -------
         Series/Index of str dtype
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["A543","Z756"])
+        >>> s.str.replace_with_backrefs('(\\d)(\\d)', 'V\\2\\1')
+        0    AV453
+        1    ZV576
+        dtype: object
         """
         return self._return_or_inplace(
             cpp_replace_with_backrefs(self._column, pat, repl), **kwargs
@@ -727,11 +769,11 @@ class StringMethods(object):
 
         Parameters
         ----------
-        start : int
+        start : int, optional
             Start position for slice operation.
-        stop : int
+        stop : int, optional
             Stop position for slice operation.
-        step : int
+        step : int, optional
             Step size for slice operation.
 
         Returns
@@ -740,6 +782,50 @@ class StringMethods(object):
             Series or Index from sliced substring from
             original string object.
 
+        See also
+        --------
+        slice_replace
+            Replace a slice with a string.
+
+        get
+            Return element at position. Equivalent
+            to ``Series.str.slice(start=i, stop=i+1)``
+            with ``i`` being the position.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["koala", "fox", "chameleon"])
+        >>> s
+        0        koala
+        1          fox
+        2    chameleon
+        dtype: object
+        >>> s.str.slice(start=1)
+        0        oala
+        1          ox
+        2    hameleon
+        dtype: object
+        >>> s.str.slice(start=-1)
+        0    a
+        1    x
+        2    n
+        dtype: object
+        >>> s.str.slice(stop=2)
+        0    ko
+        1    fo
+        2    ch
+        dtype: object
+        >>> s.str.slice(step=2)
+        0      kaa
+        1       fx
+        2    caeen
+        dtype: object
+        >>> s.str.slice(start=0, stop=5, step=3)
+        0    kl
+        1     f
+        2    cm
+        dtype: object
         """
 
         return self._return_or_inplace(
@@ -799,7 +885,6 @@ class StringMethods(object):
         2    False
         3    False
         dtype: bool
-
         """
         return self._return_or_inplace(cpp_is_decimal(self._column), **kwargs)
 
@@ -864,7 +949,6 @@ class StringMethods(object):
         1    False
         2    False
         dtype: bool
-
         """
         return self._return_or_inplace(cpp_is_alnum(self._column), **kwargs)
 
@@ -915,7 +999,6 @@ class StringMethods(object):
         2    False
         3    False
         dtype: bool
-
         """
         return self._return_or_inplace(cpp_is_alpha(self._column), **kwargs)
 
@@ -973,7 +1056,6 @@ class StringMethods(object):
         2    False
         3    False
         dtype: bool
-
         """
         return self._return_or_inplace(cpp_is_digit(self._column), **kwargs)
 
@@ -1036,7 +1118,6 @@ class StringMethods(object):
         2     True
         3    False
         dtype: bool
-
         """
         return self._return_or_inplace(cpp_is_numeric(self._column), **kwargs)
 
@@ -1088,7 +1169,6 @@ class StringMethods(object):
         2     True
         3    False
         dtype: bool
-
         """
         return self._return_or_inplace(cpp_is_upper(self._column), **kwargs)
 
@@ -1140,19 +1220,45 @@ class StringMethods(object):
         2    False
         3    False
         dtype: bool
-
         """
         return self._return_or_inplace(cpp_is_lower(self._column), **kwargs)
 
     def lower(self, **kwargs):
         """
-        Convert strings in the Series/Index to lowercase.
+        Converts all characters to lowercase.
 
-        Returns
-        -------
-        Series/Index of str dtype
+        Equivalent to `str.lower()
+        <https://docs.python.org/3/library/stdtypes.html#str.lower>`_.
+
+        Returns : Series or Index of object
             A copy of the object with all strings converted to lowercase.
 
+        See also
+        --------
+        upper
+            Converts all characters to uppercase.
+
+        title
+            Converts first character of each word to uppercase and remaining
+            to lowercase.
+
+        capitalize
+            Converts first character to uppercase and remaining to lowercase.
+
+        swapcase
+            Converts uppercase to lowercase and lowercase to uppercase.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['lower', 'CAPITALS', 'this is a sentence',
+        ... 'SwApCaSe'])
+        >>> s.str.lower()
+        0                 lower
+        1              capitals
+        2    this is a sentence
+        3              swapcase
+        dtype: object
         """
         return self._return_or_inplace(cpp_to_lower(self._column), **kwargs)
 
@@ -1161,13 +1267,47 @@ class StringMethods(object):
         Convert each string to uppercase.
         This only applies to ASCII characters at this time.
 
+        Equivalent to `str.upper()
+        <https://docs.python.org/3/library/stdtypes.html#str.upper>`_.
+
+        Returns : Series or Index of object
+
+        See also
+        --------
+            lower
+                Converts all characters to lowercase.
+
+            upper
+                Converts all characters to uppercase.
+
+            title
+                Converts first character of each word to uppercase and
+                remaining to lowercase.
+
+            capitalize
+                Converts first character to uppercase and remaining to
+                lowercase.
+
+            swapcase
+                Converts uppercase to lowercase and lowercase to uppercase.
+
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(["Hello, friend","Goodbye, friend"])
-        >>> print(s.str.upper())
-        ['HELLO, FRIEND', 'GOODBYE, FRIEND']
-
+        >>> s = cudf.Series(['lower', 'CAPITALS', 'this is a sentence',
+        ... 'SwApCaSe'])
+        >>> s
+        0                 lower
+        1              CAPITALS
+        2    this is a sentence
+        3              SwApCaSe
+        dtype: object
+        >>> s.str.upper()
+        0                 LOWER
+        1              CAPITALS
+        2    THIS IS A SENTENCE
+        3              SWAPCASE
+        dtype: object
         """
         return self._return_or_inplace(cpp_to_upper(self._column), **kwargs)
 
@@ -1196,7 +1336,6 @@ class StringMethods(object):
         0      Hello, friend
         1    Goodbye, friend
         dtype: object
-
         """
         return self._return_or_inplace(cpp_capitalize(self._column), **kwargs)
 
@@ -1205,13 +1344,43 @@ class StringMethods(object):
         Change each lowercase character to uppercase and vice versa.
         This only applies to ASCII characters at this time.
 
+        Equivalent to `str.swapcase()
+        <https://docs.python.org/3/library/stdtypes.html#str.swapcase>`_.
+
+        Returns : Series or Index of object
+
+        See also
+        --------
+        lower
+            Converts all characters to lowercase.
+
+        upper
+            Converts all characters to uppercase.
+
+        title
+            Converts first character of each word to uppercase and remaining
+            to lowercase.
+
+        capitalize
+            Converts first character to uppercase and remaining to lowercase.
+
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(["Hello, Friend","Goodbye, Friend"])
-        >>> print(s.str.swapcase())
-        ['hELLO, fRIEND', 'gOODBYE, fRIEND']
-
+        >>> s = cudf.Series(['lower', 'CAPITALS', 'this is a sentence',
+        ... 'SwApCaSe'])
+        >>> s
+        0                 lower
+        1              CAPITALS
+        2    this is a sentence
+        3              SwApCaSe
+        dtype: object
+        >>> s.str.swapcase()
+        0                 LOWER
+        1              capitals
+        2    THIS IS A SENTENCE
+        3              sWaPcAsE
+        dtype: object
         """
         return self._return_or_inplace(cpp_swapcase(self._column), **kwargs)
 
@@ -1221,17 +1390,46 @@ class StringMethods(object):
         and lowercase the rest.
         This only applies to ASCII characters at this time.
 
+        Equivalent to `str.title()
+        <https://docs.python.org/3/library/stdtypes.html#str.title>`_.
+
+        Returns : Series or Index of object
+
+        See also
+        --------
+        lower
+            Converts all characters to lowercase.
+
+        upper
+            Converts all characters to uppercase.
+
+        capitalize
+            Converts first character to uppercase and remaining to lowercase.
+
+        swapcase
+            Converts uppercase to lowercase and lowercase to uppercase.
+
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(["Hello friend","goodnight moon"])
-        >>> print(s.str.title())
-        ['Hello Friend', 'Goodnight Moon']
-
+        >>> s = cudf.Series(['lower', 'CAPITALS', 'this is a sentence',
+        ... 'SwApCaSe'])
+        >>> s
+        0                 lower
+        1              CAPITALS
+        2    this is a sentence
+        3              SwApCaSe
+        dtype: object
+        >>> s.str.title()
+        0                 Lower
+        1              Capitals
+        2    This Is A Sentence
+        3              Swapcase
+        dtype: object
         """
         return self._return_or_inplace(cpp_title(self._column), **kwargs)
 
-    def slice_from(self, starts=0, stops=0, **kwargs):
+    def slice_from(self, starts, stops, **kwargs):
         """
         Return substring of each string using positions for each string.
 
@@ -1239,10 +1437,10 @@ class StringMethods(object):
 
         Parameters
         ----------
-        starts : Column
+        starts : Series
             Beginning position of each the string to extract.
             Default is beginning of the each string.
-        stops : Column
+        stops : Series
             Ending position of the each string to extract.
             Default is end of each string.
             Use -1 to specify to the end of that string.
@@ -1252,10 +1450,27 @@ class StringMethods(object):
         Series/Index of str dtype
             A substring of each string using positions for each string.
 
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["hello","there"])
+        >>> s
+        0    hello
+        1    there
+        dtype: object
+        >>> starts = cudf.Series([1, 3])
+        >>> stops = cudf.Series([5, 5])
+        >>> s.str.slice_from(starts, stops)
+        0    ello
+        1      re
+        dtype: object
         """
 
         return self._return_or_inplace(
-            cpp_slice_from(self._column, starts, stops), **kwargs
+            cpp_slice_from(
+                self._column, column.as_column(starts), column.as_column(stops)
+            ),
+            **kwargs,
         )
 
     def slice_replace(self, start=None, stop=None, repl=None, **kwargs):
@@ -1264,13 +1479,13 @@ class StringMethods(object):
 
         Parameters
         ----------
-        start : int
+        start : int, optional
             Beginning position of the string to replace.
             Default is beginning of the each string.
-        stop : int
+        stop : int, optional
             Ending position of the string to replace.
             Default is end of each string.
-        repl : str
+        repl : str, optional
             String to insert into the specified position values.
 
         Returns
@@ -1279,6 +1494,56 @@ class StringMethods(object):
             A new string with the specified section of the string
             replaced with `repl` string.
 
+        See also
+        --------
+        slice
+            Just slicing without replacement.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['a', 'ab', 'abc', 'abdc', 'abcde'])
+        >>> s
+        0        a
+        1       ab
+        2      abc
+        3     abdc
+        4    abcde
+        dtype: object
+
+        Specify just `start`, meaning replace `start` until the `end` of
+        the string with `repl`.
+
+        >>> s.str.slice_replace(1, repl='X')
+        0    aX
+        1    aX
+        2    aX
+        3    aX
+        4    aX
+        dtype: object
+
+        Specify just `stop`, meaning the `start` of the string to `stop`
+        is replaced with `repl`, and the rest of the string is included.
+
+        >>> s.str.slice_replace(stop=2, repl='X')
+        0       X
+        1       X
+        2      Xc
+        3     Xdc
+        4    Xcde
+        dtype: object
+
+        Specify `start` and `stop`, meaning the slice from `start`
+        to `stop` is replaced with `repl`. Everything before or
+        after `start` and `stop` is included as is.
+
+        >>> s.str.slice_replace(start=1, stop=3, repl='X')
+        0      aX
+        1      aX
+        2      aX
+        3     aXc
+        4    aXde
+        dtype: object
         """
         if start is None:
             start = 0
@@ -1338,7 +1603,6 @@ class StringMethods(object):
         0    abcdefghij_
         1    0123456789_
         dtype: object
-
         """
         if repl is None:
             repl = ""
@@ -1389,7 +1653,6 @@ class StringMethods(object):
         1    s
         2    f
         dtype: object
-
         """
 
         return self._return_or_inplace(
@@ -1401,7 +1664,8 @@ class StringMethods(object):
         Split strings around given separator/delimiter.
 
         Splits the string in the Series/Index from the beginning, at the
-        specified delimiter string.
+        specified delimiter string. Equivalent to `str.split()
+        <https://docs.python.org/3/library/stdtypes.html#str.split>`_.
 
         Parameters
         ----------
@@ -1416,10 +1680,57 @@ class StringMethods(object):
         DataFrame
             Returns a DataFrame with each split as a column.
 
+        See also
+        --------
+        rsplit
+            Splits string around given separator/delimiter, starting from
+            the right.
+
+        str.split
+            Standard library version for split.
+
+        str.rsplit
+            Standard library version for rsplit.
+
         Notes
         -----
         The parameter `expand` is not yet supported and will raise a
-        NotImplementedError if anything other than the default value is set.
+        NotImplementedError if anything other than the default value
+        is set. The handling of the n keyword depends on the number
+        of found splits:
+
+            - If found splits > n, make first n splits only
+            - If found splits <= n, make all splits
+            - If for a certain row the number of found
+              splits < n, append None for padding up to n
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["this is a regular sentence",
+        ... "https://docs.python.org/index.html", None])
+        >>> s
+        0            this is a regular sentence
+        1    https://docs.python.org/index.html
+        2                                  None
+        dtype: object
+
+        The `n` parameter can be used to limit the number of
+        splits on the delimiter.
+
+        >>> s.str.split(n=2)
+                                            0     1                   2
+        0                                this    is  a regular sentence
+        1  https://docs.python.org/index.html  None                None
+        2                                None  None                None
+
+        The `pat` parameter can be used to split by other characters.
+
+        >>> s.str.split(pat = "/")
+                                    0     1                2           3
+        0  this is a regular sentence  None             None        None
+        1                      https:        docs.python.org  index.html
+        2                        None  None             None        None
         """
         if expand is None:
             expand = True
@@ -1453,7 +1764,8 @@ class StringMethods(object):
         Split strings around given separator/delimiter.
 
         Splits the string in the Series/Index from the end, at the
-        specified delimiter string.
+        specified delimiter string. Equivalent to `str.rsplit()
+        <https://docs.python.org/3/library/stdtypes.html#str.rsplit>`_.
 
         Parameters
         ----------
@@ -1465,13 +1777,52 @@ class StringMethods(object):
 
         Returns
         -------
-        DataFrame
-            Returns a DataFrame with each split as a column.
+        DataFrame or MultiIndex
+            Returns a DataFrame/MultiIndex with each split as a column.
+
+        See also
+        --------
+        split
+            Split strings around given separator/delimiter.
+
+        str.split
+            Standard library version for split.
+
+        str.rsplit
+            Standard library version for rsplit.
 
         Notes
         -----
         The parameter `expand` is not yet supported and will raise a
-        NotImplementedError if anything other than the default value is set.
+        `NotImplementedError` if anything other than the default value is
+        set. The handling of the n keyword depends on the number of
+        found splits:
+            - If found splits > n, make first n splits only
+            - If found splits <= n, make all splits
+            - If for a certain row the number of found splits < n,
+              append None for padding up to n.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["this is a regular sentence",
+        ...                  "https://docs.python.org/3/tutorial/index.html",
+        ...                  None])
+        >>> s.str.rsplit(n=2)
+                                                       0        1         2
+        0                                      this is a  regular  sentence
+        1  https://docs.python.org/3/tutorial/index.html     None      None
+        2                                           None     None      None
+
+        For slightly more complex use cases like splitting the
+        html document name from a url, a combination of parameter
+        settings can be used.
+
+        >>> s.str.rsplit("/", n=1, expand=True)
+                                            0           1
+        0          this is a regular sentence        None
+        1  https://docs.python.org/3/tutorial  index.html
+        2                                None        None
         """
         if expand is None:
             expand = True
@@ -1518,13 +1869,61 @@ class StringMethods(object):
 
         Returns
         -------
-        DataFrame
-            Returns a DataFrame
+        DataFrame or MultiIndex
+            Returns a DataFrame / MultiIndex
 
         Notes
         -----
         The parameter `expand` is not yet supported and will raise a
-        NotImplementedError if anything other than the default value is set.
+        `NotImplementedError` if anything other than the default value is set.
+
+        See also
+        --------
+        rpartition
+            Split the string at the last occurrence of sep.
+
+        split
+            Split strings around given separators.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['Linda van der Berg', 'George Pitt-Rivers'])
+        >>> s
+        0    Linda van der Berg
+        1    George Pitt-Rivers
+        dtype: object
+
+        >>> s.str.partition()
+                0  1             2
+        0   Linda     van der Berg
+        1  George      Pitt-Rivers
+
+        To partition by something different than a space:
+
+        >>> s.str.partition('-')
+                            0  1       2
+        0  Linda van der Berg
+        1         George Pitt  -  Rivers
+
+        Also available on indices:
+
+        >>> idx = cudf.core.index.StringIndex(['X 123', 'Y 999'])
+        >>> idx
+        StringIndex(['X 123' 'Y 999'], dtype='object')
+
+        Which will create a MultiIndex:
+
+        >>> idx.str.partition()
+        MultiIndex(levels=[0    X
+        1    Y
+        dtype: object, 0
+        dtype: object, 0    123
+        1    999
+        dtype: object],
+        codes=   0  1  2
+        0  0  0  0
+        1  1  0  1)
         """
         if expand is not True:
             raise NotImplementedError(
@@ -1559,13 +1958,45 @@ class StringMethods(object):
 
         Returns
         -------
-        DataFrame
-            Returns a DataFrame
+        DataFrame or MultiIndex
+            Returns a DataFrame / MultiIndex
 
         Notes
         -----
         The parameter `expand` is not yet supported and will raise a
-        NotImplementedError if anything other than the default value is set.
+        `NotImplementedError` if anything other than the default value is set.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['Linda van der Berg', 'George Pitt-Rivers'])
+        >>> s
+        0    Linda van der Berg
+        1    George Pitt-Rivers
+        dtype: object
+        >>> s.str.rpartition()
+                    0  1            2
+        0  Linda van der            Berg
+        1         George     Pitt-Rivers
+
+        Also available on indices:
+
+        >>> idx = cudf.core.index.StringIndex(['X 123', 'Y 999'])
+        >>> idx
+        StringIndex(['X 123' 'Y 999'], dtype='object')
+
+        Which will create a MultiIndex:
+
+        >>> idx.str.rpartition()
+        MultiIndex(levels=[0    X
+        1    Y
+        dtype: object, 0
+        dtype: object, 0    123
+        1    999
+        dtype: object],
+        codes=   0  1  2
+        0  0  0  0
+        1  1  0  1)
         """
         if expand is not True:
             raise NotImplementedError(
@@ -1601,10 +2032,47 @@ class StringMethods(object):
 
         Returns
         -------
-        Series/Index of str dtype
+        Series/Index of object
             Returns Series or Index with minimum number
             of char in object.
 
+        See also
+        --------
+        rjust
+            Fills the left side of strings with an arbitrary character.
+            Equivalent to ``Series.str.pad(side='left')``.
+
+        ljust
+            Fills the right side of strings with an arbitrary character.
+            Equivalent to ``Series.str.pad(side='right')``.
+
+        center
+            Fills boths sides of strings with an arbitrary character.
+            Equivalent to ``Series.str.pad(side='both')``.
+
+        zfill
+            Pad strings in the Series/Index by prepending ‘0’ character.
+            Equivalent to ``Series.str.pad(side='left', fillchar='0')``.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["caribou", "tiger"])
+
+        >>> s.str.pad(width=10)
+        0       caribou
+        1         tiger
+        dtype: object
+
+        >>> s.str.pad(width=10, side='right', fillchar='-')
+        0    caribou---
+        1    tiger-----
+        dtype: object
+
+        >>> s.str.pad(width=10, side='both', fillchar='-')
+        0    -caribou--
+        1    --tiger---
+        dtype: object
         """
         if not isinstance(fillchar, str):
             msg = (
@@ -1634,6 +2102,11 @@ class StringMethods(object):
         """
         Pad strings in the Series/Index by prepending ‘0’ characters.
 
+        Strings in the Series/Index are padded with ‘0’ characters
+        on the left of the string to reach a total string length
+        width. Strings in the Series/Index with length greater
+        or equal to width are unchanged.
+
         Parameters
         ----------
         width : int
@@ -1646,6 +2119,51 @@ class StringMethods(object):
         Series/Index of str dtype
             Returns Series or Index with prepended ‘0’ characters.
 
+        See also
+        --------
+        rjust
+            Fills the left side of strings with an arbitrary character.
+
+        ljust
+            Fills the right side of strings with an arbitrary character.
+
+        pad
+            Fills the specified sides of strings with an arbitrary character.
+
+        center
+            Fills boths sides of strings with an arbitrary character.
+
+        Notes
+        -----
+        Differs from `str.zfill()
+        <https://docs.python.org/3/library/stdtypes.html#str.zfill>`_
+        which has special handling for ‘+’/’-‘ in the string.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['-1', '1', '1000',  None])
+        >>> s
+        0      -1
+        1       1
+        2    1000
+        3    None
+        dtype: object
+
+        Note that ``None`` is not string, therefore it is converted
+        to ``None``. The minus sign in ``'-1'`` is treated as a
+        regular character and the zero is added to the left
+        of it (`str.zfill()
+        <https://docs.python.org/3/library/stdtypes.html#str.zfill>`_
+        would have moved it to the left). ``1000`` remains unchanged as
+        it is longer than width.
+
+        >>> s.str.zfill(3)
+        0     0-1
+        1     001
+        2    1000
+        3    None
+        dtype: object
         """
         if not pd.api.types.is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
@@ -1709,7 +2227,6 @@ class StringMethods(object):
         2      None
         3    --d---
         dtype: object
-
         """
         if not isinstance(fillchar, str):
             msg = (
@@ -1764,7 +2281,6 @@ class StringMethods(object):
         2    ab
         3    __
         dtype: object
-
         """
         if not isinstance(fillchar, str):
             msg = (
@@ -1786,7 +2302,8 @@ class StringMethods(object):
     def rjust(self, width, fillchar=" ", **kwargs):
         """
         Filling left side of strings in the Series/Index with an additional
-        character.
+        character. Equivalent to `str.rjust()
+        <https://docs.python.org/3/library/stdtypes.html#str.rjust>`_.
 
         Parameters
         ----------
@@ -1803,6 +2320,21 @@ class StringMethods(object):
         Series/Index of str dtype
             Returns Series or Index.
 
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["hello world", "rapids ai"])
+        >>> s.str.rjust(20, fillchar="_")
+        0    _________hello world
+        1    ___________rapids ai
+        dtype: object
+        >>> s = cudf.Series(["a", "",  "ab", "__"])
+        >>> s.str.rjust(1, fillchar="-")
+        0     a
+        1     -
+        2    ab
+        3    __
+        dtype: object
         """
         if not isinstance(fillchar, str):
             msg = (
@@ -1827,7 +2359,8 @@ class StringMethods(object):
 
         Strip whitespaces (including newlines) or a set of
         specified characters from each string in the Series/Index
-        from left and right sides.
+        from left and right sides. Equivalent to `str.strip()
+        <https://docs.python.org/3/library/stdtypes.html#str.strip>`_.
 
         Parameters
         ----------
@@ -1841,6 +2374,36 @@ class StringMethods(object):
         Series/Index of str dtype
             Returns Series or Index.
 
+        See also
+        --------
+        lstrip
+            Remove leading characters in Series/Index.
+
+        rstrip
+            Remove trailing characters in Series/Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\\n', '3. Cat?\\t', None])
+        >>> s
+        0    1. Ant.
+        1    2. Bee!\\n
+        2    3. Cat?\\t
+        3         None
+        dtype: object
+        >>> s.str.strip()
+        0    1. Ant.
+        1    2. Bee!
+        2    3. Cat?
+        3       None
+        dtype: object
+        >>> s.str.strip('123.!? \\n\\t')
+        0     Ant
+        1     Bee
+        2     Cat
+        3    None
+        dtype: object
         """
         if to_strip is None:
             to_strip = ""
@@ -1858,6 +2421,8 @@ class StringMethods(object):
         Strip whitespaces (including newlines)
         or a set of specified characters from
         each string in the Series/Index from left side.
+        Equivalent to `str.lstrip()
+        <https://docs.python.org/3/library/stdtypes.html#str.lstrip>`_.
 
         Parameters
         ----------
@@ -1868,9 +2433,26 @@ class StringMethods(object):
 
         Returns
         -------
-        Series/Index of str dtype
-            Returns Series or Index.
+            Series or Index of object
 
+        See also
+        --------
+        strip
+            Remove leading and trailing characters in Series/Index.
+
+        rstrip
+            Remove trailing characters in Series/Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\\n', '3. Cat?\\t', None])
+        >>> s.str.lstrip('123.')
+        0     Ant.
+        1     Bee!\\n
+        2     Cat?\\t
+        3       None
+        dtype: object
         """
         if to_strip is None:
             to_strip = ""
@@ -1888,6 +2470,8 @@ class StringMethods(object):
         Strip whitespaces (including newlines)
         or a set of specified characters from each
         string in the Series/Index from right side.
+        Equivalent to `str.rstrip()
+        <https://docs.python.org/3/library/stdtypes.html#str.rstrip>`_.
 
         Parameters
         ----------
@@ -1902,6 +2486,30 @@ class StringMethods(object):
         Series/Index of str dtype
             Returns Series or Index.
 
+        See also
+        --------
+        strip
+            Remove leading and trailing characters in Series/Index.
+
+        lstrip
+            Remove leading characters in Series/Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\\n', '3. Cat?\\t', None])
+        >>> s
+        0    1. Ant.
+        1    2. Bee!\\n
+        2    3. Cat?\\t
+        3         None
+        dtype: object
+        >>> s.str.rstrip('.!? \\n\\t')
+        0    1. Ant
+        1    2. Bee
+        2    3. Cat
+        3      None
+        dtype: object
         """
         if to_strip is None:
             to_strip = ""
@@ -1947,6 +2555,16 @@ class StringMethods(object):
             break_long_words = False
 
             break_on_hyphens = False
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['line to be wrapped',
+        ... 'another line to be wrapped'])
+        >>> s.str.wrap(12)
+        0             line to be\\nwrapped
+        1    another line\\nto be\\nwrapped
+        dtype: object
         """
         if not pd.api.types.is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
@@ -2050,7 +2668,6 @@ class StringMethods(object):
         >>> index = cudf.core.index.StringIndex(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
-
         """
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
@@ -2119,7 +2736,6 @@ class StringMethods(object):
         0  None  None
         1  None  None
         2     b     b
-
         """
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
@@ -2148,7 +2764,6 @@ class StringMethods(object):
         3    False
         4    False
         dtype: bool
-
         """
         return self._return_or_inplace(
             (self._parent == "").fillna(False), **kwargs
@@ -2202,7 +2817,6 @@ class StringMethods(object):
         1     True
         2    False
         dtype: bool
-
         """
         return self._return_or_inplace(cpp_isspace(self._column), **kwargs)
 
@@ -2242,7 +2856,6 @@ class StringMethods(object):
         2    False
         3     null
         dtype: bool
-
         """
         if "na" in kwargs:
             warnings.warn(
@@ -2265,6 +2878,9 @@ class StringMethods(object):
         """
         Test if the start of each string element matches a pattern.
 
+        Equivalent to `str.startswith()
+        <https://docs.python.org/3/library/stdtypes.html#str.startswith>`_.
+
         Parameters
         ----------
         pat : str
@@ -2276,6 +2892,29 @@ class StringMethods(object):
             A Series of booleans indicating whether the given
             pattern matches the start of each string element.
 
+        See also
+        --------
+        endswith
+            Same as startswith, but tests the end of string.
+
+        contains
+            Tests if string element contains a pattern.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s
+        0     bat
+        1    Bear
+        2     cat
+        3    None
+        dtype: object
+        >>> s.str.startswith('b')
+        0     True
+        1    False
+        2    False
+        3     null
+        dtype: bool
         """
         if "na" in kwargs:
             warnings.warn(
@@ -2334,7 +2973,6 @@ class StringMethods(object):
         2   -1
         3    2
         dtype: int32
-
         """
         if not isinstance(sub, str):
             msg = "expected a string object, not {0}"
@@ -2353,7 +2991,8 @@ class StringMethods(object):
         """
         Return highest indexes in each strings in the Series/Index
         where the substring is fully contained between ``[start:end]``.
-        Return -1 on failure.
+        Return -1 on failure. Equivalent to standard `str.rfind()
+        <https://docs.python.org/3/library/stdtypes.html#str.rfind>`_.
 
         Parameters
         ----------
@@ -2370,6 +3009,28 @@ class StringMethods(object):
         -------
         Series or Index of int
 
+        See also
+        --------
+        find
+            Return lowest indexes in each strings.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["abc", "hello world", "rapids ai"])
+        >>> s.str.rfind('a')
+        0    0
+        1   -1
+        2    7
+        dtype: int32
+
+        Using `start` and `end` parameters.
+
+        >>> s.str.rfind('a', start=2, end=5)
+        0   -1
+        1   -1
+        2   -1
+        dtype: int32
         """
         if not isinstance(sub, str):
             msg = "expected a string object, not {0}"
@@ -2424,7 +3085,6 @@ class StringMethods(object):
         2    1
         3    2
         dtype: int32
-
         """
         if not isinstance(sub, str):
             msg = "expected a string object, not {0}"
@@ -2466,6 +3126,24 @@ class StringMethods(object):
         -------
         Series or Index of object
 
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['abc', 'a','b' ,'ddb'])
+        >>> s.str.rindex('b')
+        Traceback (most recent call last):
+        File "<stdin>", line 1, in <module>
+        ValueError: substring not found
+
+        Parameters such as `start` and `end` can also be used.
+
+        >>> s = cudf.Series(['abc', 'abb','ab' ,'ddb'])
+        >>> s.str.rindex('b', start=1, end=5)
+        0    1
+        1    2
+        2    1
+        3    2
+        dtype: int32
         """
         if not isinstance(sub, str):
             msg = "expected a string object, not {0}"
@@ -2498,10 +3176,34 @@ class StringMethods(object):
         -------
         Series or Index of boolean values.
 
+        Notes
+        -----
+        Parameters currently not supported are: `case`, `flags` and `na`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["rapids", "ai", "cudf"])
+
+        Checking for strings starting with `a`.
+
+        >>> s.str.match('a')
+        0    False
+        1     True
+        2    False
+        dtype: bool
+
+        Checking for strings starting with any of `a` or `c`.
+
+        >>> s.str.match('[ac]')
+        0    False
+        1     True
+        2     True
+        dtype: bool
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
-        elif flags != 0:
+        if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
         if "na" in kwargs:
@@ -2524,6 +3226,21 @@ class StringMethods(object):
         -------
         Series or Index.
 
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['A%2FB-C%2FD', 'e%20f.g', '4-5%2C6'])
+        >>> s.str.url_decode()
+        0    A/B-C/D
+        1      e f.g
+        2      4-5,6
+        dtype: object
+        >>> s = cudf.Series(["https%3A%2F%2Frapids.ai%2Fstart.html",
+        ... "https%3A%2F%2Fmedium.com%2Frapids-ai"])
+        >>> s.str.url_decode()
+        0    https://rapids.ai/start.html
+        1    https://medium.com/rapids-ai
+        dtype: object
         """
 
         return self._return_or_inplace(cpp_url_decode(self._column), **kwargs)
@@ -2540,6 +3257,21 @@ class StringMethods(object):
         -------
         Series or Index.
 
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['A/B-C/D', 'e f.g', '4-5,6'])
+        >>> s.str.url_encode()
+        0    A%2FB-C%2FD
+        1        e%20f.g
+        2        4-5%2C6
+        dtype: object
+        >>> s = cudf.Series(["https://rapids.ai/start.html",
+        ... "https://medium.com/rapids-ai"])
+        >>> s.str.url_encode()
+        0    https%3A%2F%2Frapids.ai%2Fstart.html
+        1    https%3A%2F%2Fmedium.com%2Frapids-ai
+        dtype: object
         """
         return self._return_or_inplace(cpp_url_encode(self._column), **kwargs)
 
@@ -2573,7 +3305,6 @@ class StringMethods(object):
         1    98
         2    99
         dtype: int32
-
         """
         from cudf.core.series import Series, Index
 
@@ -2590,17 +3321,40 @@ class StringMethods(object):
         Map all characters in the string through the given
         mapping table.
 
+        Equivalent to standard `str.translate()
+        <https://docs.python.org/3/library/stdtypes.html#str.translate>`_.
+
         Parameters
         ----------
         table : dict
             Table is a mapping of Unicode ordinals to Unicode
             ordinals, strings, or None.
             Unmapped characters are left untouched.
-            str.maketrans() is a helper function for making translation tables.
+            `str.maketrans()
+            <https://docs.python.org/3/library/stdtypes.html#str.maketrans>`_
+            is a helper function for making translation tables.
 
         Returns
         -------
         Series or Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['lower', 'CAPITALS', 'this is a sentence',
+        ... 'SwApCaSe'])
+        >>> s.str.translate({'a': "1"})
+        0                 lower
+        1              CAPITALS
+        2    this is 1 sentence
+        3              SwApC1Se
+        dtype: object
+        >>> s.str.translate({'a': "1", "e":"#"})
+        0                 low#r
+        1              CAPITALS
+        2    this is 1 s#nt#nc#
+        3              SwApC1S#
+        dtype: object
         """
         table = str.maketrans(table)
         return self._return_or_inplace(
@@ -2619,12 +3373,11 @@ class StringMethods(object):
         Examples
         --------
         >>> import cudf
-        >>> ser = cudf.Series(["hello \t world"," test string  "])
+        >>> ser = cudf.Series(["hello \\t world"," test string  "])
         >>> ser.str.normalize_spaces()
         0    hello world
         1    test string
         dtype: object
-
         """
         return self._return_or_inplace(
             cpp_normalize_spaces(self._column), **kwargs
@@ -2658,7 +3411,6 @@ class StringMethods(object):
         4      hello
         5    goodbye
         dtype: object
-
         """
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         kwargs.setdefault("retain_index", False)
@@ -2691,7 +3443,6 @@ class StringMethods(object):
         1    1
         2    0
         dtype: int32
-
         """
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         return self._return_or_inplace(
@@ -2755,7 +3506,6 @@ class StringMethods(object):
         1       is_the
         2    best_book
         dtype: object
-
         """
         delimiter = _massage_string_arg(delimiter, "delimiter")
         separator = _massage_string_arg(separator, "separator")
