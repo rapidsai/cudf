@@ -20,7 +20,7 @@
 namespace cudf {
 namespace detail {
 /**
- * @copydoc cudf::experimental::hash_partition
+ * @copydoc cudf::hash_partition
  *
  * @param stream Optional stream to use for allocations and copies
  */

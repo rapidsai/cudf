@@ -64,7 +64,7 @@ void BM_pre_sorted_nth(benchmark::State& state)
   std::vector<cudf::experimental::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::experimental::groupby::aggregation_request());
   requests[0].values = vals;
-  requests[0].aggregations.push_back(cudf::experimental::make_nth_element_aggregation(-1));
+  requests[0].aggregations.push_back(cudf::make_nth_element_aggregation(-1));
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);

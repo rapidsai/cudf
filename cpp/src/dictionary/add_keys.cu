@@ -67,7 +67,7 @@ std::unique_ptr<column> add_keys(
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
   // create a map for the indices
   // lower_bound([a,b,c,d,e,f],[a,b,c,d,f]) = [0,1,2,3,5]
-  auto map_indices = cudf::experimental::detail::lower_bound(
+  auto map_indices = cudf::detail::lower_bound(
     table_view{{keys_column->view()}},
     table_view{{old_keys}},
     std::vector<order>{order::ASCENDING},

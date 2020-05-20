@@ -48,7 +48,7 @@ TYPED_TEST(PartitionTest, EmptyInputs)
   fixed_width_column_wrapper<value_type> empty_column{};
   fixed_width_column_wrapper<map_type> empty_map{};
 
-  auto result = cudf::experimental::partition(cudf::table_view{{empty_column}}, empty_map, 10);
+  auto result = cudf::partition(cudf::table_view{{empty_column}}, empty_map, 10);
 
   auto result_offsets = result.second;
 
@@ -65,7 +65,7 @@ TYPED_TEST(PartitionTest, MapInputSizeMismatch)
   fixed_width_column_wrapper<value_type> input{1, 2, 3};
   fixed_width_column_wrapper<map_type> map{1, 2};
 
-  EXPECT_THROW(cudf::experimental::partition(cudf::table_view{{input}}, map, 3), cudf::logic_error);
+  EXPECT_THROW(cudf::partition(cudf::table_view{{input}}, map, 3), cudf::logic_error);
 }
 
 TYPED_TEST(PartitionTest, MapWithNullsThrows)
@@ -76,7 +76,7 @@ TYPED_TEST(PartitionTest, MapWithNullsThrows)
   fixed_width_column_wrapper<value_type> input{1, 2, 3};
   fixed_width_column_wrapper<map_type> map{{1, 2}, {1, 0}};
 
-  EXPECT_THROW(cudf::experimental::partition(cudf::table_view{{input}}, map, 3), cudf::logic_error);
+  EXPECT_THROW(cudf::partition(cudf::table_view{{input}}, map, 3), cudf::logic_error);
 }
 
 /**
@@ -116,7 +116,7 @@ void run_partition_test(cudf::table_view table_to_partition,
                         cudf::table_view expected_partitioned_table,
                         std::vector<cudf::size_type> const& expected_offsets)
 {
-  auto result = cudf::experimental::partition(table_to_partition, partition_map, num_partitions);
+  auto result = cudf::partition(table_to_partition, partition_map, num_partitions);
   auto const& actual_partitioned_table = result.first;
   auto const& actual_offsets           = result.second;
   EXPECT_EQ(actual_offsets, expected_offsets);

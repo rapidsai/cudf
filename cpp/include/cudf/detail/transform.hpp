@@ -19,10 +19,9 @@
 #include <cudf/transform.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
- * @copydoc cudf::experimental::transform
+ * @copydoc cudf::transform
  *
  * @param stream        CUDA stream on which to execute kernels
  **/
@@ -35,7 +34,7 @@ std::unique_ptr<column> transform(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::nans_to_nulls
+ * @copydoc cudf::nans_to_nulls
  *
  * @param stream        CUDA stream on which to execute kernels
  **/
@@ -45,7 +44,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::bools_to_mask
+ * @copydoc cudf::bools_to_mask
  *
  * @param stream        CUDA stream on which to execute kernels
  **/

@@ -21,7 +21,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup reorder_partition
  * @{
@@ -234,5 +233,4 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robi
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

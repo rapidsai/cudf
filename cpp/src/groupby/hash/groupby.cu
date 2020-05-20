@@ -263,7 +263,7 @@ void compute_single_pass_aggs(table_view const& keys,
 
   table sparse_table(std::move(sparse_columns));
   mutable_table_view table_view = sparse_table.mutable_view();
-  experimental::detail::initialize_with_identity(table_view, aggs, stream);
+  detail::initialize_with_identity(table_view, aggs, stream);
 
   // prepare to launch kernel to do the actual aggregation
   auto d_sparse_table = mutable_table_device_view::create(sparse_table);

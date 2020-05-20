@@ -62,7 +62,7 @@ inline void test_single_agg(column_view const& keys,
                             column_view const& values,
                             column_view const& expect_keys,
                             column_view const& expect_vals,
-                            std::unique_ptr<experimental::aggregation>&& agg,
+                            std::unique_ptr<aggregation>&& agg,
                             force_use_sort_impl use_sort           = force_use_sort_impl::NO,
                             null_policy include_null_keys          = null_policy::EXCLUDE,
                             sorted keys_are_sorted                 = sorted::NO,
@@ -77,7 +77,7 @@ inline void test_single_agg(column_view const& keys,
 
   if (use_sort == force_use_sort_impl::YES) {
     // WAR to force groupby to use sort implementation
-    requests[0].aggregations.push_back(experimental::make_nth_element_aggregation(0));
+    requests[0].aggregations.push_back(make_nth_element_aggregation(0));
   }
 
   experimental::groupby::groupby gb_obj(

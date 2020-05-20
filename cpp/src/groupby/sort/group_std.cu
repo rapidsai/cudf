@@ -71,7 +71,7 @@ struct var_functor {
 // `reduce_by_key failed on 2nd step: invalid device function`
 #if !defined(__CUDACC_DEBUG__)
     using ResultType =
-      experimental::detail::target_type_t<T, experimental::aggregation::Kind::VARIANCE>;
+      experimental::detail::target_type_t<T, aggregation::Kind::VARIANCE>;
     size_type const* d_group_labels = group_labels.data().get();
     auto values_view                = column_device_view::create(values);
     auto means_view                 = column_device_view::create(group_means);

@@ -68,7 +68,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
   // this returns a column with no null entries
   // - it appears to ignore the null entries in the input and tries to place the value regardless
   auto indices_column =
-    cudf::experimental::detail::lower_bound(table_view{{keys_column->view()}},
+    cudf::detail::lower_bound(table_view{{keys_column->view()}},
                                             table_view{{input_column}},
                                             std::vector<order>{order::ASCENDING},
                                             std::vector<null_order>{null_order::AFTER},

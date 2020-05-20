@@ -160,7 +160,6 @@ enum class mask_state : int32_t {
   ALL_NULL        ///< Null mask allocated, initialized to all elements NULL
 };
 
-namespace experimental {
 /**
  * @brief Interpolation method to use when the desired quantile lies between
  * two data points i and j
@@ -174,8 +173,6 @@ enum class interpolation : int32_t {
   MIDPOINT,  ///< (i + j)/2
   NEAREST    ///< i or j, whichever is nearest
 };
-
-}  // namespace experimental
 
 /**
  * @brief Identifies a column's logical element type

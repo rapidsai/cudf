@@ -69,7 +69,7 @@ struct reduce_functor {
     if (values.size() == 0) { return result; }
 
     auto result_table = mutable_table_view({*result});
-    experimental::detail::initialize_with_identity(result_table, {K}, stream);
+    detail::initialize_with_identity(result_table, {K}, stream);
 
     auto resultview = mutable_column_device_view::create(result->mutable_view());
     auto valuesview = column_device_view::create(values);

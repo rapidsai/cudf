@@ -73,7 +73,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
   {
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(
-      result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+      result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
     auto p_outputTable = std::move(result.first);
 
@@ -113,7 +113,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
   {
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(
-      result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+      result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
     auto p_outputTable = std::move(result.first);
 
@@ -153,7 +153,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
   {
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(
-      result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+      result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
     auto p_outputTable = std::move(result.first);
 
@@ -215,7 +215,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
   {
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(
-      result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+      result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
     auto p_outputTable = std::move(result.first);
 
@@ -252,7 +252,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
   {
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(
-      result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+      result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
     auto p_outputTable = std::move(result.first);
 
@@ -289,7 +289,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
   {
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(
-      result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+      result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
     auto p_outputTable = std::move(result.first);
 
@@ -348,7 +348,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
   {
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(
-      result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+      result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
     auto p_outputTable = std::move(result.first);
 
@@ -386,7 +386,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
   {
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(
-      result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+      result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
     auto p_outputTable = std::move(result.first);
 
@@ -424,7 +424,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
   {
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(
-      result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+      result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
     auto p_outputTable = std::move(result.first);
 
@@ -484,7 +484,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11)
   {
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(
-      result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+      result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
     auto p_outputTable = std::move(result.first);
 
@@ -559,7 +559,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
   {
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(
-      result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+      result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
     auto p_outputTable = std::move(result.first);
 
@@ -607,7 +607,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
   {
     std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
     EXPECT_NO_THROW(
-      result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+      result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
     auto p_outputTable = std::move(result.first);
 
@@ -668,7 +668,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition)
   cudf::size_type start_partition = 0;
   std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result;
   EXPECT_NO_THROW(
-    result = cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition));
+    result = cudf::round_robin_partition(rr_view, num_partitions, start_partition));
 
   auto p_outputTable = std::move(result.first);
 
@@ -722,7 +722,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinIncorrectNumPartitions)
   cudf::size_type num_partitions  = 0;
   cudf::size_type start_partition = 0;
 
-  EXPECT_THROW(cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition),
+  EXPECT_THROW(cudf::round_robin_partition(rr_view, num_partitions, start_partition),
                cudf::logic_error);
 }
 
@@ -748,6 +748,6 @@ TYPED_TEST(RoundRobinTest, RoundRobinIncorrectStartPartition)
   cudf::size_type num_partitions  = 4;
   cudf::size_type start_partition = 5;
 
-  EXPECT_THROW(cudf::experimental::round_robin_partition(rr_view, num_partitions, start_partition),
+  EXPECT_THROW(cudf::round_robin_partition(rr_view, num_partitions, start_partition),
                cudf::logic_error);
 }
