@@ -2,7 +2,7 @@
 
 ## New Features
 
- - PR #5237 Build Arrow with shared library, compute, and Python support for Xavier devices not using Conda
+ - PR #5238 Build Arrow with shared library, compute, and Python support for Xavier devices not using Conda
 
 ## Improvements
 
