@@ -13,49 +13,6 @@ from cudf.core.dtypes import CategoricalDtype
 
 
 class Merge(object):
-    """
-    Manage the merging of two Frames.
-
-    Parameters
-    ----------
-    lhs : Series or DataFrame
-        The left operand of the merge
-    rhs : Series or DataFrame
-        The right operand of the merge
-    on : string or list like
-        A set of key columns in the left and right operands
-        elements must be common to both frames
-    left_on : string or list like
-        A set of key columns in the left operand. Must be
-        specified with right_on or right_index concurrently
-    right_on : string or list like
-        A set of key columns in the right operand. Must be
-        specified with left_on or left_index concurrently
-    left_index : bool
-        Boolean flag indicating the left index column or columns
-        are to be used as join keys in order.
-    right_index : bool
-        Boolean flag indicating the right index column or coumns
-        are to be used as join keys in order.
-    how : string
-        The type of join. Possible values are
-        'inner', 'outer', 'left', 'leftsemi' and 'leftanti'
-    sort : bool
-        Boolean flag indicating if the output Frame is to be
-        sorted on the output's join keys, in left to right order.
-    lsuffix : string
-        The suffix to be appended to left hand column names that
-        are found to exist in the right frame, but are not specified
-        as join keys themselves.
-    rsuffix : string
-        The suffix to be appended to right hand column names that
-        are found to exist in the left frame, but are not specified
-        as join keys themselves.
-    suffixes : list like
-        Left and right suffixes specified together, unpacked into lsuffix
-        and rsuffix.
-    """
-
     def __init__(
         self,
         lhs,
@@ -73,6 +30,48 @@ class Merge(object):
         indicator,
         suffixes,
     ):
+        """
+        Manage the merging of two Frames.
+
+        Parameters
+        ----------
+        lhs : Series or DataFrame
+            The left operand of the merge
+        rhs : Series or DataFrame
+            The right operand of the merge
+        on : string or list like
+            A set of key columns in the left and right operands
+            elements must be common to both frames
+        left_on : string or list like
+            A set of key columns in the left operand. Must be
+            specified with right_on or right_index concurrently
+        right_on : string or list like
+            A set of key columns in the right operand. Must be
+            specified with left_on or left_index concurrently
+        left_index : bool
+            Boolean flag indicating the left index column or columns
+            are to be used as join keys in order.
+        right_index : bool
+            Boolean flag indicating the right index column or coumns
+            are to be used as join keys in order.
+        how : string
+            The type of join. Possible values are
+            'inner', 'outer', 'left', 'leftsemi' and 'leftanti'
+        sort : bool
+            Boolean flag indicating if the output Frame is to be
+            sorted on the output's join keys, in left to right order.
+        lsuffix : string
+            The suffix to be appended to left hand column names that
+            are found to exist in the right frame, but are not specified
+            as join keys themselves.
+        rsuffix : string
+            The suffix to be appended to right hand column names that
+            are found to exist in the left frame, but are not specified
+            as join keys themselves.
+        suffixes : list like
+            Left and right suffixes specified together, unpacked into lsuffix
+            and rsuffix.
+        """
         self.lhs = lhs
         self.rhs = rhs
         self.left_index = left_index
