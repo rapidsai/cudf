@@ -54,15 +54,13 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
   auto execpol        = rmm::exec_policy(stream);
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
-  // copy the null mask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
   // create output column
-  auto results =
-    std::make_unique<cudf::column>(cudf::data_type{INT32},
-                                   strings_count,
-                                   rmm::device_buffer(strings_count * sizeof(int32_t), stream, mr),
-                                   null_mask,
-                                   strings.null_count());
+  auto results = std::make_unique<cudf::column>(
+    cudf::data_type{INT32},
+    strings_count,
+    rmm::device_buffer(strings_count * sizeof(int32_t), stream, mr),
+    copy_bitmask(strings.parent(), stream, mr),  // copy the null mask
+    strings.null_count());
   auto results_view = results->mutable_view();
   auto d_lengths    = results_view.data<int32_t>();
   // fill in the lengths

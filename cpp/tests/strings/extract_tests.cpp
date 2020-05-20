@@ -147,6 +147,28 @@ TEST_F(StringsExtractTests, ExtractEventTest)
   }
 }
 
+TEST_F(StringsExtractTests, EmptyExtractTest)
+{
+  std::vector<const char*> h_strings{nullptr, "AAA", "AAA_A", "AAA_AAA_", "A__", ""};
+  cudf::test::strings_column_wrapper strings(
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  auto strings_view = cudf::strings_column_view(strings);
+
+  auto results = cudf::strings::extract(strings_view, "([^_]*)\\Z");
+
+  std::vector<const char*> h_expected{nullptr, "AAA", "A", "", "", ""};
+  cudf::test::strings_column_wrapper expected(
+    h_expected.data(),
+    h_expected.data() + h_strings.size(),
+    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(expected.release());
+  cudf::experimental::table table_expected(std::move(columns));
+  cudf::test::expect_tables_equal(*results, table_expected);
+}
+
 TEST_F(StringsExtractTests, MediumRegex)
 {
   // This results in 95 regex instructions and falls in the 'medium' range.

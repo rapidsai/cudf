@@ -288,7 +288,8 @@ struct concatenate_dispatch {
   rmm::mr::device_memory_resource* mr;
   cudaStream_t stream;
 
-  template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+  // fixed width
+  template <typename T>
   std::unique_ptr<column> operator()()
   {
     bool const has_nulls =
@@ -301,19 +302,25 @@ struct concatenate_dispatch {
       return for_each_concatenate<T>(views, has_nulls, mr, stream);
     }
   }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::dictionary32>::value>* = nullptr>
-  std::unique_ptr<column> operator()()
-  {
-    CUDF_FAIL("dictionary concatenate not yet supported");
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  std::unique_ptr<column> operator()()
-  {
-    return cudf::strings::detail::concatenate(views, mr, stream);
-  }
 };
+
+template <>
+std::unique_ptr<column> concatenate_dispatch::operator()<cudf::dictionary32>()
+{
+  CUDF_FAIL("dictionary concatenate not yet supported");
+}
+
+template <>
+std::unique_ptr<column> concatenate_dispatch::operator()<cudf::string_view>()
+{
+  return cudf::strings::detail::concatenate(views, mr, stream);
+}
+
+template <>
+std::unique_ptr<column> concatenate_dispatch::operator()<cudf::list_view>()
+{
+  CUDF_FAIL("list_view concatenate not yet supported");
+}
 
 // Concatenates the elements from a vector of column_views
 std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_concat,
@@ -337,6 +344,33 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
   return experimental::type_dispatcher(type, concatenate_dispatch{columns_to_concat, mr, stream});
 }
 
+std::unique_ptr<experimental::table> concatenate(std::vector<table_view> const& tables_to_concat,
+                                                 rmm::mr::device_memory_resource* mr,
+                                                 cudaStream_t stream)
+{
+  if (tables_to_concat.empty()) { return std::make_unique<experimental::table>(); }
+
+  table_view const first_table = tables_to_concat.front();
+  CUDF_EXPECTS(std::all_of(tables_to_concat.cbegin(),
+                           tables_to_concat.cend(),
+                           [&first_table](auto const& t) {
+                             return t.num_columns() == first_table.num_columns() &&
+                                    have_same_types(first_table, t);
+                           }),
+               "Mismatch in table columns to concatenate.");
+
+  std::vector<std::unique_ptr<column>> concat_columns;
+  for (size_type i = 0; i < first_table.num_columns(); ++i) {
+    std::vector<column_view> cols;
+    std::transform(tables_to_concat.cbegin(),
+                   tables_to_concat.cend(),
+                   std::back_inserter(cols),
+                   [i](auto const& t) { return t.column(i); });
+    concat_columns.emplace_back(detail::concatenate(cols, mr, stream));
+  }
+  return std::make_unique<experimental::table>(std::move(concat_columns));
+}
+
 }  // namespace detail
 
 rmm::device_buffer concatenate_masks(std::vector<column_view> const& views,
@@ -358,7 +392,7 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const& views,
     return null_mask;
   }
   // no nulls, so return an empty device buffer
-  return rmm::device_buffer{};
+  return rmm::device_buffer{0, (cudaStream_t)0, mr};
 }
 
 // Concatenates the elements from a vector of column_views
@@ -369,30 +403,11 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
   return detail::concatenate(columns_to_concat, mr, 0);
 }
 
-namespace experimental {
-std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
-                                   rmm::mr::device_memory_resource* mr)
+std::unique_ptr<experimental::table> concatenate(std::vector<table_view> const& tables_to_concat,
+                                                 rmm::mr::device_memory_resource* mr)
 {
-  if (tables_to_concat.size() == 0) { return std::make_unique<table>(); }
-
-  table_view const first_table = tables_to_concat.front();
-  CUDF_EXPECTS(std::all_of(tables_to_concat.begin(),
-                           tables_to_concat.end(),
-                           [&first_table](auto const& t) {
-                             return t.num_columns() == first_table.num_columns() &&
-                                    have_same_types(first_table, t);
-                           }),
-               "Mismatch in table columns to concatenate.");
-
-  std::vector<std::unique_ptr<column>> concat_columns;
-  for (size_type i = 0; i < first_table.num_columns(); ++i) {
-    std::vector<column_view> cols;
-    for (auto& t : tables_to_concat) { cols.emplace_back(t.column(i)); }
-    concat_columns.emplace_back(cudf::concatenate(cols, mr));
-  }
-  return std::make_unique<table>(std::move(concat_columns));
+  CUDF_FUNC_RANGE();
+  return detail::concatenate(tables_to_concat, mr, 0);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

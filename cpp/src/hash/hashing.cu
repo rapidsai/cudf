@@ -534,7 +534,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
                          global_partition_sizes.end(),
                          scanned_global_partition_sizes);
 
-  // Copy the result of the exlusive scan to the output offsets array
+  // Copy the result of the exclusive scan to the output offsets array
   // to indicate the starting point for each partition in the output
   std::vector<size_type> partition_offsets(num_partitions);
   CUDA_TRY(cudaMemcpyAsync(partition_offsets.data(),
@@ -643,7 +643,8 @@ std::unique_ptr<column> hash(table_view const& input,
                              cudaStream_t stream)
 {
   // TODO this should be UINT32
-  auto output = make_numeric_column(data_type(INT32), input.num_rows());
+  auto output =
+    make_numeric_column(data_type(INT32), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
 
   // Return early if there's nothing to hash
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }

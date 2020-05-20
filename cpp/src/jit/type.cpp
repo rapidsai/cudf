@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,9 +70,12 @@ const void* get_data_ptr(scalar const& s)
 std::string get_type_name(data_type type)
 {
   // TODO: Remove in JIT type utils PR
-  if (type.id() == type_id::BOOL8) {
-    assert(sizeof(bool) == 1);
-    return CUDF_STRINGIFY(bool);
+  switch (type.id()) {
+    case type_id::BOOL8: return CUDF_STRINGIFY(bool);
+
+    case type_id::LIST: return CUDF_STRINGIFY(List);
+
+    default: break;
   }
 
   return experimental::type_dispatcher(type, experimental::type_to_name{});

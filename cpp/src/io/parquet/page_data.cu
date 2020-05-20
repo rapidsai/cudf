@@ -675,7 +675,7 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
   ofs <<= 3;    // bytes -> bits
   if (dict_pos + 4 < dict_size) {
     uint3 v;
-    int64_t nanos, secs;
+    int64_t nanos, secs, days;
     v.x = *(const uint32_t *)(src8 + dict_pos + 0);
     v.y = *(const uint32_t *)(src8 + dict_pos + 4);
     v.z = *(const uint32_t *)(src8 + dict_pos + 8);
@@ -689,7 +689,8 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
     nanos <<= 32;
     nanos |= v.x;
     // Convert from Julian day at noon to UTC seconds
-    secs = (v.z - 2440588) *
+    days = static_cast<int32_t>(v.z);
+    secs = (days - 2440588) *
            (24 * 60 * 60);  // TBD: Should be noon instead of midnight, but this matches pyarrow
     if (s->col.ts_clock_rate)
       ts = (secs * s->col.ts_clock_rate) +
@@ -929,7 +930,7 @@ static __device__ void gpuOutputGeneric(volatile page_state_s *s,
  *
  * This function will write the page data and the page data's validity to the
  * output specified in the page's column chunk. If necessary, additional
- * conversion will be perfomed to translate from the Parquet datatype to
+ * conversion will be performed to translate from the Parquet datatype to
  * desired output datatype (ex. 32-bit to 16-bit, string to hash).
  *
  * @param[in] pages List of pages

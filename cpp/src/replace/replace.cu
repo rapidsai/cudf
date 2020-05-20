@@ -37,9 +37,11 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
+#include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
@@ -57,6 +59,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <cub/cub.cuh>
+
 namespace {  // anonymous
 
 static constexpr int BLOCK_SIZE = 256;
@@ -395,12 +398,8 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   }
 
   // Create new offsets column to use in kernel
-  std::unique_ptr<cudf::column> sizes =
-    cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT32),
-                              input_col.size(),
-                              cudf::mask_state::UNALLOCATED,
-                              stream,
-                              mr);
+  std::unique_ptr<cudf::column> sizes = cudf::make_numeric_column(
+    cudf::data_type(cudf::type_id::INT32), input_col.size(), cudf::mask_state::UNALLOCATED, stream);
   std::unique_ptr<cudf::column> indices = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::INT32), input_col.size(), cudf::mask_state::UNALLOCATED, stream);
 
@@ -446,14 +445,13 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(
     *device_in, *device_replacement, *device_offsets, *device_chars, *device_indices);
 
-  std::unique_ptr<cudf::column> output = cudf::make_strings_column(input_col.size(),
-                                                                   std::move(offsets),
-                                                                   std::move(output_chars),
-                                                                   null_count,
-                                                                   std::move(valid_bits),
-                                                                   stream,
-                                                                   mr);
-  return output;
+  return cudf::make_strings_column(input_col.size(),
+                                   std::move(offsets),
+                                   std::move(output_chars),
+                                   null_count,
+                                   std::move(valid_bits),
+                                   stream,
+                                   mr);
 }
 
 }  // end anonymous namespace
@@ -732,15 +730,13 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
     output_chars_view.data<char>(),
     valid_count);
 
-  std::unique_ptr<cudf::column> output =
-    cudf::make_strings_column(input.size(),
-                              std::move(offsets),
-                              std::move(output_chars),
-                              input.size() - valid_counter.value(stream),
-                              std::move(valid_bits),
-                              stream,
-                              mr);
-  return output;
+  return cudf::make_strings_column(input.size(),
+                                   std::move(offsets),
+                                   std::move(output_chars),
+                                   input.size() - valid_counter.value(stream),
+                                   std::move(valid_bits),
+                                   stream,
+                                   mr);
 }
 
 template <typename T>
@@ -858,6 +854,133 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   CUDF_FUNC_RANGE();
   return cudf::detail::replace_nulls(input, replacement, mr, 0);
 }
+}  // namespace experimental
+}  // namespace cudf
+
+namespace cudf {
+namespace experimental {
+namespace detail {
+namespace {
+
+struct replace_nans_functor {
+  template <typename T, typename Replacement>
+  std::enable_if_t<std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(
+    column_view const& input,
+    Replacement const& replacement,
+    bool replacement_nullable,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream)
+  {
+    CUDF_EXPECTS(input.type() == replacement.type(),
+                 "Input and replacement must be of the same type");
+
+    if (input.size() == 0) { return cudf::make_empty_column(input.type()); }
+
+    auto input_device_view = column_device_view::create(input);
+    size_type size         = input.size();
+
+    auto predicate = [dinput = *input_device_view] __device__(auto i) {
+      return dinput.is_null(i) or !std::isnan(dinput.element<T>(i));
+    };
+
+    if (input.has_nulls()) {
+      auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
+      if (replacement_nullable) {
+        auto replacement_pair_iterator = make_pair_iterator<T, true>(replacement);
+        return copy_if_else(true,
+                            input_pair_iterator,
+                            input_pair_iterator + size,
+                            replacement_pair_iterator,
+                            predicate,
+                            mr,
+                            stream);
+      } else {
+        auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
+        return copy_if_else(true,
+                            input_pair_iterator,
+                            input_pair_iterator + size,
+                            replacement_pair_iterator,
+                            predicate,
+                            mr,
+                            stream);
+      }
+    } else {
+      auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
+      if (replacement_nullable) {
+        auto replacement_pair_iterator = make_pair_iterator<T, true>(replacement);
+        return copy_if_else(true,
+                            input_pair_iterator,
+                            input_pair_iterator + size,
+                            replacement_pair_iterator,
+                            predicate,
+                            mr,
+                            stream);
+      } else {
+        auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
+        return copy_if_else(false,
+                            input_pair_iterator,
+                            input_pair_iterator + size,
+                            replacement_pair_iterator,
+                            predicate,
+                            mr,
+                            stream);
+      }
+    }
+  }
+
+  template <typename T, typename... Args>
+  std::enable_if_t<!std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(
+    Args&&... args)
+  {
+    CUDF_FAIL("NAN is not supported in a Non-floating point type column");
+  }
+};
+
+}  // namespace
+std::unique_ptr<column> replace_nans(column_view const& input,
+                                     column_view const& replacement,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(input.size() == replacement.size(),
+               "Input and replacement must be of the same size");
+
+  return type_dispatcher(input.type(),
+                         replace_nans_functor{},
+                         input,
+                         *column_device_view::create(replacement),
+                         replacement.nullable(),
+                         mr,
+                         stream);
+}
+
+std::unique_ptr<column> replace_nans(column_view const& input,
+                                     scalar const& replacement,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  return type_dispatcher(
+    input.type(), replace_nans_functor{}, input, replacement, true, mr, stream);
+}
+
+}  // namespace detail
+
+std::unique_ptr<column> replace_nans(column_view const& input,
+                                     column_view const& replacement,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::replace_nans(input, replacement, 0, mr);
+}
+
+std::unique_ptr<column> replace_nans(column_view const& input,
+                                     scalar const& replacement,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::replace_nans(input, replacement, 0, mr);
+}
+
 }  // namespace experimental
 }  // namespace cudf
 

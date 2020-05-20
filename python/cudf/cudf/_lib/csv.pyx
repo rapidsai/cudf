@@ -1,5 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
+from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.string cimport string
+
 import cudf
 
 import collections.abc as abc
@@ -15,17 +19,22 @@ from libc.stdint cimport int32_t
 
 from cudf._lib.cpp.io.functions cimport (
     read_csv as cpp_read_csv,
-    read_csv_args
+    read_csv_args,
+    write_csv as cpp_write_csv,
+    write_csv_args
 )
 from cudf._lib.cpp.io.types cimport (
     compression_type,
     quote_style,
+    sink_info,
     source_info,
+    table_metadata,
     table_with_metadata
 )
 from cudf._lib.io.utils cimport make_source_info
 from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
+from cudf._lib.cpp.table.table_view cimport table_view
 
 ctypedef int32_t underlying_type_t_compression
 
@@ -127,7 +136,11 @@ cdef read_csv_args make_read_csv_args(
 
     if names is not None:
         # explicitly mentioned name, so don't check header
-        read_csv_args_c.header = -1
+        if header is None or header == 'infer':
+            read_csv_args_c.header = -1
+        else:
+            read_csv_args_c.header = header
+
         read_csv_args_c.names.reserve(len(names))
         for name in names:
             read_csv_args_c.names.push_back(str(name).encode())
@@ -339,3 +352,51 @@ def read_csv(
             df = df.set_index(index_col)
 
     return df
+
+
+cpdef write_csv(
+    Table table,
+    file_path=None,
+    sep=",",
+    na_rep="",
+    header=True,
+    line_terminator="\n",
+    rows_per_chunk=8,
+
+):
+    """
+    Cython function to call into libcudf API, see `write_csv`.
+
+    See Also
+    --------
+    cudf.io.csv.write_csv
+    """
+
+    # Index already been reset and added as main column, so just data_view
+    cdef table_view input_table_view = table.data_view()
+    cdef bool include_header_c = header
+    cdef char delim_c = ord(sep)
+    cdef string line_term_c = line_terminator.encode()
+    cdef string na_c = na_rep.encode()
+    cdef int rows_per_hunk_c = rows_per_chunk
+    cdef table_metadata metadata_ = table_metadata()
+    cdef string true_value_c = 'True'.encode()
+    cdef string false_value_c = 'False'.encode()
+    file_path = str(os.path.expanduser(str(file_path))).encode()
+    cdef sink_info snk = sink_info(<string>file_path)
+
+    if header is True and table._column_names is not None:
+        metadata_.column_names.reserve(len(table._column_names))
+        for col_name in table._column_names:
+            metadata_.column_names.push_back(str(col_name).encode())
+
+    cdef unique_ptr[write_csv_args] write_csv_args_c = (
+        make_unique[write_csv_args](
+            snk, input_table_view, na_c, include_header_c,
+            rows_per_hunk_c, line_term_c, delim_c, true_value_c,
+            false_value_c, &metadata_
+        )
+    )
+
+    with nogil:
+        cpp_write_csv(write_csv_args_c.get()[0])

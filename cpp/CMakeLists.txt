@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.14.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.15.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -276,6 +276,16 @@ if(JITIFY_USE_CACHE)
 endif(JITIFY_USE_CACHE)
 
 ###################################################################################################
+# - per-thread default stream option --------------------------------------------------------------
+# This needs to be defined first so tests and benchmarks can inherit it.
+
+option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+if(PER_THREAD_DEFAULT_STREAM)
+    message(STATUS "Using per-thread default stream")
+    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
+endif(PER_THREAD_DEFAULT_STREAM)
+
+###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
@@ -518,6 +528,7 @@ add_library(cudf
             src/io/csv/legacy/csv_gpu.cu
             src/io/csv/csv_gpu.cu
             src/io/csv/reader_impl.cu
+            src/io/csv/writer_impl.cu
             src/io/json/legacy/json_reader_impl.cu
             src/io/json/reader_impl.cu
             src/io/json/json_gpu.cu
@@ -628,6 +639,8 @@ add_library(cudf
             src/strings/regex/regexec.cu
             src/strings/replace/replace_re.cu
             src/strings/replace/backref_re.cu
+            src/strings/replace/backref_re_medium.cu
+            src/strings/replace/backref_re_large.cu
             src/strings/replace/multi_re.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu

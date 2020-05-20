@@ -86,7 +86,7 @@ def test_categorical_compare_unordered():
     assert np.all(out.to_array())
     assert np.all(pdsr == pdsr)
 
-    # test inequal
+    # test inequality
     out = sr != sr
     assert not np.any(out.to_array())
     assert not np.any(pdsr != pdsr)
@@ -125,7 +125,7 @@ def test_categorical_compare_ordered():
     assert np.all(out.to_array())
     assert np.all(pdsr1 == pdsr1)
 
-    # test inequal
+    # test inequality
     out = sr1 != sr1
     assert not np.any(out.to_array())
     assert not np.any(pdsr1 != pdsr1)
@@ -598,3 +598,19 @@ def test_categorical_dtype(categories, ordered):
     expected = pd.CategoricalDtype(categories=categories, ordered=ordered)
     got = gd.CategoricalDtype(categories=categories, ordered=ordered)
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        (gd.Series([1]), np.int8),
+        (gd.Series([1, None]), np.int8),
+        (gd.Series(list(range(np.iinfo(np.int8).max))), np.int8),
+        (gd.Series(list(range(np.iinfo(np.int8).max)) + [None]), np.int8),
+        (gd.Series(list(range(np.iinfo(np.int16).max))), np.int16),
+        (gd.Series(list(range(np.iinfo(np.int16).max)) + [None]), np.int16),
+    ],
+)
+def test_astype_dtype(data, expected):
+    got = data.astype("category").cat.codes.dtype
+    np.testing.assert_equal(got, expected)

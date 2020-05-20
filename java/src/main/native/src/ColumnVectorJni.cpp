@@ -32,6 +32,7 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/contains.hpp>
+#include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strip.hpp>
@@ -43,6 +44,7 @@
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
+#include <cudf/strings/char_types/char_types.hpp>
 
 #include "jni_utils.hpp"
 
@@ -360,7 +362,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_split(JNIEnv *env,
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_lengths(JNIEnv *env, jclass clazz,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_charLengths(JNIEnv *env, jclass clazz,
                                                                  jlong view_handle) {
   JNI_NULL_CHECK(env, view_handle, "input column is null", 0);
   try {
@@ -902,6 +904,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringStrip(JNIEnv *env
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_extractRe(JNIEnv *env, jobject j_object,
+                                                                        jlong j_view_handle,
+                                                                        jstring patternObj) {
+  JNI_NULL_CHECK(env, j_view_handle, "column is null", nullptr);
+  JNI_NULL_CHECK(env, patternObj, "pattern is null", nullptr);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view* column_view = reinterpret_cast<cudf::column_view*>(j_view_handle);
+    cudf::strings_column_view strings_column(*column_view);
+    cudf::jni::native_jstring pattern(env, patternObj);
+
+    std::unique_ptr<cudf::experimental::table> table_result =
+        cudf::strings::extract(strings_column, pattern.get());
+    return cudf::jni::convert_table_for_return(env, table_result);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_normalizeNANsAndZeros(JNIEnv *env,
                                                                                 jclass clazz,
                                                                                 jlong input_column) {
@@ -1311,6 +1332,32 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_nansToNulls(JNIEnv *env
     // set the null mask with nans set to null
     copy->set_null_mask(std::move(*pair.first), pair.second);
     return reinterpret_cast<jlong>(copy.release());
+  }
+  CATCH_STD(env, 0)
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isFloat(JNIEnv *env, jobject j_object, jlong handle) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view * view = reinterpret_cast<cudf::column_view *>(handle);
+    std::unique_ptr<cudf::column> result = cudf::strings::is_float(*view);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0)
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isInteger(JNIEnv *env, jobject j_object, jlong handle) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view * view = reinterpret_cast<cudf::column_view *>(handle);
+    std::unique_ptr<cudf::column> result = cudf::strings::is_integer(*view);
+    return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0)
 }

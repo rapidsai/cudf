@@ -24,6 +24,7 @@ from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import as_scalar
 from cudf._lib.stream_compaction import unique_count as cpp_unique_count
 from cudf._lib.transform import bools_to_mask
+from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
@@ -33,12 +34,13 @@ from cudf.utils.dtypes import (
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
+    min_scalar_type,
     np_to_pa_dtype,
 )
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
 
-class ColumnBase(Column):
+class ColumnBase(Column, Serializable):
     def __init__(
         self,
         data,
@@ -65,20 +67,6 @@ class ColumnBase(Column):
             mask=mask,
             offset=offset,
             children=children,
-        )
-
-    def __reduce__(self):
-        return (
-            build_column,
-            (
-                self.data,
-                self.dtype,
-                self.mask,
-                self.size,
-                0,
-                self.null_count,
-                self.children,
-            ),
         )
 
     def as_frame(self):
@@ -418,8 +406,8 @@ class ColumnBase(Column):
         index = np.int32(index)
         if index < 0:
             index = len(self) + index
-        if index > len(self) - 1:
-            raise IndexError
+        if index > len(self) - 1 or index < 0:
+            raise IndexError("single positional indexer is out-of-bounds")
 
         return libcudf.copying.get_element(self, index).value
 
@@ -655,7 +643,7 @@ class ColumnBase(Column):
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
 
-        # get sorted indicies and exclude nulls
+        # get sorted indices and exclude nulls
         sorted_indices = self.as_frame()._get_sorted_inds(True, "after")
         sorted_indices = sorted_indices[self.null_count :]
 
@@ -846,12 +834,26 @@ class ColumnBase(Column):
             ordered = False
 
         sr = cudf.Series(self)
+
+        # Re-label self w.r.t. the provided categories
+        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+            labels = sr.label_encoding(cats=dtype.categories)
+            return build_categorical_column(
+                categories=dtype.categories,
+                codes=labels._column,
+                mask=self.mask,
+                ordered=ordered,
+            ).astype(dtype)
+
         labels, cats = sr.factorize()
 
         # columns include null index in factorization; remove:
         if self.has_nulls:
             cats = cats.dropna()
+            min_type = min_scalar_type(len(cats), 8)
             labels = labels - 1
+            if np.dtype(min_type).itemsize < labels.dtype.itemsize:
+                labels = labels.astype(min_type)
 
         return build_categorical_column(
             categories=cats._column,
@@ -1038,11 +1040,11 @@ def build_column(
     Parameters
     ----------
     data : Buffer
-        The data buffer (can be None if constructin certain Column
+        The data buffer (can be None if constructing certain Column
         types like StringColumn or CategoricalColumn)
     dtype
         The dtype associated with the Column to construct
-    mask : Buffer, optionapl
+    mask : Buffer, optional
         The mask buffer
     size : int, optional
     offset : int, optional
@@ -1145,7 +1147,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         no mask passed along with it. If True, combines the mask and NaNs to
         form a new validity mask. If False, leaves NaN values as is.
     dtype : optional
-        Optionally typecast the construted Column to the given
+        Optionally typecast the constructed Column to the given
         dtype.
     length : int, optional
         If `arbitrary` is a scalar, broadcast into a Column of
@@ -1215,7 +1217,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
     elif isinstance(arbitrary, Buffer):
         if dtype is None:
-            raise TypeError(f"dtype cannot be None if 'arbitrary' is a Buffer")
+            raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
         data = build_column(arbitrary, dtype=dtype)
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
@@ -1269,9 +1271,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             if is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
             else:
-                if nan_as_null:
-                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
-                else:
+                if nan_as_null is False:
                     # casting a null array doesn't make nans valid
                     # so we create one with valid nans from scratch:
                     if new_dtype == np.dtype("object"):
@@ -1282,6 +1282,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                         arbitrary = utils.scalar_broadcast_to(
                             np.nan, (len(arbitrary),), dtype=new_dtype
                         )
+                else:
+                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             codes = as_column(arbitrary.indices)
@@ -1463,7 +1465,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
             buffer = Buffer(arbitrary)
             mask = None
-            if nan_as_null:
+            if nan_as_null is None or nan_as_null is True:
                 data = as_column(
                     buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
                 )
@@ -1567,7 +1569,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
 
 def column_applymap(udf, column, out_dtype):
-    """Apply a elemenwise function to transform the values in the Column.
+    """Apply an element-wise function to transform the values in the Column.
 
     Parameters
     ----------
