@@ -637,15 +637,15 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
   min_periods = std::max(min_periods, 0);
 
-  return cudf::experimental::type_dispatcher(input.type(),
-                                             dispatch_rolling{},
-                                             input,
-                                             preceding_window_begin,
-                                             following_window_begin,
-                                             min_periods,
-                                             agg,
-                                             mr,
-                                             stream);
+  return cudf::type_dispatcher(input.type(),
+                               dispatch_rolling{},
+                               input,
+                               preceding_window_begin,
+                               following_window_begin,
+                               min_periods,
+                               agg,
+                               mr,
+                               stream);
 }
 
 }  // namespace detail

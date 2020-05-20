@@ -45,7 +45,7 @@ struct size_of_helper {
 std::size_t size_of(data_type element_type)
 {
   CUDF_EXPECTS(is_fixed_width(element_type), "Invalid element type.");
-  return cudf::experimental::type_dispatcher(element_type, size_of_helper{});
+  return cudf::type_dispatcher(element_type, size_of_helper{});
 }
 
 // Empty column of specified type
@@ -174,8 +174,7 @@ std::unique_ptr<column> make_column_from_scalar(scalar const& s,
                                                 cudaStream_t stream)
 {
   if (size == 0) return make_empty_column(s.type());
-  return experimental::type_dispatcher(
-    s.type(), column_from_scalar_dispatch{}, s, size, mr, stream);
+  return type_dispatcher(s.type(), column_from_scalar_dispatch{}, s, size, mr, stream);
 }
 
 }  // namespace cudf

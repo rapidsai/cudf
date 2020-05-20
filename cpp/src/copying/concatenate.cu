@@ -341,7 +341,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
     return experimental::empty_like(columns_to_concat.front());
   }
 
-  return experimental::type_dispatcher(type, concatenate_dispatch{columns_to_concat, mr, stream});
+  return type_dispatcher(type, concatenate_dispatch{columns_to_concat, mr, stream});
 }
 
 std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,

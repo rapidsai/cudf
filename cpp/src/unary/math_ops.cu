@@ -315,72 +315,72 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
 {
   switch (op) {
     case cudf::experimental::unary_op::SIN:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceSin>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::COS:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceCos>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::TAN:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceTan>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::ARCSIN:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceArcSin>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::ARCCOS:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceArcCos>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::ARCTAN:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceArcTan>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::SINH:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceSinH>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::COSH:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceCosH>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::TANH:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceTanH>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::ARCSINH:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceArcSinH>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::ARCCOSH:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceArcCosH>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::ARCTANH:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceArcTanH>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::EXP:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceExp>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::LOG:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceLog>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::SQRT:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceSqrt>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::CBRT:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceCbrt>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::CEIL:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceCeil>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::FLOOR:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceFloor>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::ABS:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceAbs>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::RINT:
       CUDF_EXPECTS((input.type().id() == FLOAT32) or (input.type().id() == FLOAT64),
                    "rint expects floating point values");
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceRInt>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::BIT_INVERT:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::BitwiseOpDispatcher<detail::DeviceInvert>{}, input, op, mr, stream);
     case cudf::experimental::unary_op::NOT:
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         input.type(), detail::LogicalOpDispatcher<detail::DeviceNot>{}, input, op, mr, stream);
     default: CUDF_FAIL("Undefined unary operation");
   }

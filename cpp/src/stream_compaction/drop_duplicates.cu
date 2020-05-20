@@ -300,7 +300,7 @@ cudf::size_type unique_count(column_view const& input,
   // be an extra if nan_handling was NAN_IS_NULL and input also had null, which
   // will increase the count by 1.
   if (input.has_nulls() and nan_handling == nan_policy::NAN_IS_NULL) {
-    has_nan = cudf::experimental::type_dispatcher(input.type(), has_nans{}, input, stream);
+    has_nan = cudf::type_dispatcher(input.type(), has_nans{}, input, stream);
   }
 
   auto count = detail::unique_count(table_view{{input}}, null_equality::EQUAL, stream);

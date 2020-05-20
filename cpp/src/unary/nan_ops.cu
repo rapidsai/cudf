@@ -65,8 +65,7 @@ std::unique_ptr<column> is_nan(cudf::column_view const& input,
     return element_validity_pair.second and std::isnan(element_validity_pair.first);
   };
 
-  return cudf::experimental::type_dispatcher(
-    input.type(), nan_dispatcher{}, input, predicate, mr, stream);
+  return cudf::type_dispatcher(input.type(), nan_dispatcher{}, input, predicate, mr, stream);
 }
 
 std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
@@ -77,8 +76,7 @@ std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
     return !element_validity_pair.second or !std::isnan(element_validity_pair.first);
   };
 
-  return cudf::experimental::type_dispatcher(
-    input.type(), nan_dispatcher{}, input, predicate, mr, stream);
+  return cudf::type_dispatcher(input.type(), nan_dispatcher{}, input, predicate, mr, stream);
 }
 
 }  // namespace detail

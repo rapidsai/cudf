@@ -232,37 +232,37 @@ std::unique_ptr<column> scan(const column_view& input,
 
   switch (agg->kind) {
     case aggregation::SUM:
-      return cudf::experimental::type_dispatcher(input.type(),
-                                                 ScanDispatcher<cudf::DeviceSum>(),
-                                                 input,
-                                                 inclusive,
-                                                 null_handling,
-                                                 mr,
-                                                 stream);
+      return cudf::type_dispatcher(input.type(),
+                                   ScanDispatcher<cudf::DeviceSum>(),
+                                   input,
+                                   inclusive,
+                                   null_handling,
+                                   mr,
+                                   stream);
     case aggregation::MIN:
-      return cudf::experimental::type_dispatcher(input.type(),
-                                                 ScanDispatcher<cudf::DeviceMin>(),
-                                                 input,
-                                                 inclusive,
-                                                 null_handling,
-                                                 mr,
-                                                 stream);
+      return cudf::type_dispatcher(input.type(),
+                                   ScanDispatcher<cudf::DeviceMin>(),
+                                   input,
+                                   inclusive,
+                                   null_handling,
+                                   mr,
+                                   stream);
     case aggregation::MAX:
-      return cudf::experimental::type_dispatcher(input.type(),
-                                                 ScanDispatcher<cudf::DeviceMax>(),
-                                                 input,
-                                                 inclusive,
-                                                 null_handling,
-                                                 mr,
-                                                 stream);
+      return cudf::type_dispatcher(input.type(),
+                                   ScanDispatcher<cudf::DeviceMax>(),
+                                   input,
+                                   inclusive,
+                                   null_handling,
+                                   mr,
+                                   stream);
     case aggregation::PRODUCT:
-      return cudf::experimental::type_dispatcher(input.type(),
-                                                 ScanDispatcher<cudf::DeviceProduct>(),
-                                                 input,
-                                                 inclusive,
-                                                 null_handling,
-                                                 mr,
-                                                 stream);
+      return cudf::type_dispatcher(input.type(),
+                                   ScanDispatcher<cudf::DeviceProduct>(),
+                                   input,
+                                   inclusive,
+                                   null_handling,
+                                   mr,
+                                   stream);
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }

@@ -26,6 +26,6 @@ std::unique_ptr<cudf::scalar> cudf::experimental::reduction::mean(
 {
   using reducer = cudf::experimental::reduction::compound::element_type_dispatcher<
     cudf::experimental::reduction::op::mean>;
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     col.type(), reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, mr, stream);
 }

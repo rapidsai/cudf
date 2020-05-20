@@ -121,8 +121,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
   if (input_table.num_rows() == 0) { return cudf::experimental::empty_like(input_table); }
 
-  auto offsets =
-    cudf::experimental::type_dispatcher(count.type(), compute_offsets{&count}, check_count, stream);
+  auto offsets = cudf::type_dispatcher(count.type(), compute_offsets{&count}, check_count, stream);
 
   size_type output_size{offsets.back()};
   rmm::device_vector<size_type> indices(output_size);
@@ -142,7 +141,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               cudaStream_t stream)
 {
   CUDF_EXPECTS(count.is_valid(), "count cannot be null");
-  auto stride = cudf::experimental::type_dispatcher(count.type(), count_accessor{&count}, stream);
+  auto stride = cudf::type_dispatcher(count.type(), count_accessor{&count}, stream);
   CUDF_EXPECTS(stride >= 0, "count value should be non-negative");
   CUDF_EXPECTS(
     static_cast<int64_t>(input_table.num_rows()) * stride <= std::numeric_limits<size_type>::max(),

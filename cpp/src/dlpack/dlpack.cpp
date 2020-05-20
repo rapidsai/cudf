@@ -34,7 +34,7 @@ struct get_column_data_impl {
 
 void const* get_column_data(column_view const& col)
 {
-  return experimental::type_dispatcher(col.type(), get_column_data_impl{}, col);
+  return type_dispatcher(col.type(), get_column_data_impl{}, col);
 }
 
 data_type DLDataType_to_data_type(DLDataType type)
@@ -89,7 +89,7 @@ struct data_type_to_DLDataType_impl {
 
 DLDataType data_type_to_DLDataType(data_type type)
 {
-  return experimental::type_dispatcher(type, data_type_to_DLDataType_impl{});
+  return type_dispatcher(type, data_type_to_DLDataType_impl{});
 }
 
 // Context object to own memory allocated for DLManagedTensor

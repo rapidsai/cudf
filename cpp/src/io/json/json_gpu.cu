@@ -460,14 +460,14 @@ __global__ void convert_json_to_columns_kernel(const char *data,
         set_bit(valid_fields[col], rec_id);
         atomicAdd(&num_valid_fields[col], 1);
       } else {
-        if (cudf::experimental::type_dispatcher(dtypes[col],
-                                                ConvertFunctor{},
-                                                data,
-                                                output_columns[col],
-                                                rec_id,
-                                                start,
-                                                field_data_last,
-                                                opts)) {
+        if (cudf::type_dispatcher(dtypes[col],
+                                  ConvertFunctor{},
+                                  data,
+                                  output_columns[col],
+                                  rec_id,
+                                  start,
+                                  field_data_last,
+                                  opts)) {
           // set the valid bitmap - all bits were set to 0 to start
           set_bit(valid_fields[col], rec_id);
           atomicAdd(&num_valid_fields[col], 1);

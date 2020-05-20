@@ -197,6 +197,8 @@ using scalar_type_t = typename type_to_scalar_type_impl<T>::ScalarType;
 template <typename T>
 using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceType;
 
+}  // namespace experimental
+
 /**
  * @brief Invokes an `operator()` template with the type instantiation based on
  * the specified `cudf::data_type`'s `id()`.
@@ -292,7 +294,7 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
 #pragma nv_exec_check_disable
-template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
+template <template <cudf::type_id> typename IdTypeMap = experimental::id_to_type_impl,
           typename Functor,
           typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_type dtype,
@@ -356,5 +358,4 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
 }
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

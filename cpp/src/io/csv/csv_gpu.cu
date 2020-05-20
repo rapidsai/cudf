@@ -564,15 +564,15 @@ __global__ void __launch_bounds__(csvparse_block_dim)
           str_list[rec_id].first = raw_csv + start;
           str_list[rec_id].second = end - start;
         } else {
-          if (cudf::experimental::type_dispatcher(dtype[actual_col],
-                                                  decode_op{},
-                                                  raw_csv,
-                                                  data[actual_col],
-                                                  rec_id,
-                                                  start,
-                                                  tempPos,
-                                                  opts,
-                                                  flags[col])) {
+          if (cudf::type_dispatcher(dtype[actual_col],
+                                    decode_op{},
+                                    raw_csv,
+                                    data[actual_col],
+                                    rec_id,
+                                    start,
+                                    tempPos,
+                                    opts,
+                                    flags[col])) {
             // set the valid bitmap - all bits were set to 0 to start
             set_bit(valid[actual_col], rec_id);
           }

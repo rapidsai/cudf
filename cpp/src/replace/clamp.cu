@@ -322,7 +322,7 @@ std::unique_ptr<column> clamp(column_view const& input,
     CUDF_EXPECTS(hi_replace.is_valid(stream), "hi_replace can't be null if hi is not null");
   }
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     input.type(), dispatch_clamp{}, input, lo, lo_replace, hi, hi_replace, mr, stream);
 }
 

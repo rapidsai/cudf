@@ -45,8 +45,8 @@ struct type_tester {
 
 TYPED_TEST(TypedDispatcherTest, TypeToId)
 {
-  EXPECT_TRUE(cudf::experimental::type_dispatcher(
-    cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, type_tester<TypeParam>{}));
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
+                                    type_tester<TypeParam>{}));
 }
 
 namespace {
@@ -61,8 +61,7 @@ struct verify_dispatched_type {
 __global__ void dispatch_test_kernel(cudf::type_id id, bool* d_result)
 {
   if (0 == threadIdx.x + blockIdx.x * blockDim.x)
-    *d_result =
-      cudf::experimental::type_dispatcher(cudf::data_type{id}, verify_dispatched_type{}, id);
+    *d_result = cudf::type_dispatcher(cudf::data_type{id}, verify_dispatched_type{}, id);
 }
 }  // namespace
 
@@ -82,7 +81,7 @@ INSTANTIATE_TEST_CASE_P(TestAllIds, IdDispatcherTest, testing::ValuesIn(cudf::te
 TEST_P(IdDispatcherTest, IdToType)
 {
   auto t = GetParam();
-  EXPECT_TRUE(cudf::experimental::type_dispatcher(cudf::data_type{t}, verify_dispatched_type{}, t));
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{t}, verify_dispatched_type{}, t));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

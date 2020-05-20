@@ -78,7 +78,7 @@ void expect_scalars_equal(cudf::scalar const& lhs, cudf::scalar const& rhs)
   EXPECT_EQ(lhs.is_valid(), rhs.is_valid());
 
   if (lhs.is_valid() && rhs.is_valid() && lhs.type() == rhs.type()) {
-    experimental::type_dispatcher(lhs.type(), compare_scalar_functor{}, lhs, rhs);
+    type_dispatcher(lhs.type(), compare_scalar_functor{}, lhs, rhs);
   }
 }
 

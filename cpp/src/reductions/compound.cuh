@@ -131,7 +131,7 @@ struct element_type_dispatcher {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    return cudf::experimental::type_dispatcher(
+    return cudf::type_dispatcher(
       output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, mr, stream);
   }
 

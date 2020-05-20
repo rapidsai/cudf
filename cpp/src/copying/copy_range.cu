@@ -191,12 +191,12 @@ void copy_range_in_place(column_view const& source,
                "target should be nullable if source has null values.");
 
   if (source_end != source_begin) {  // otherwise no-op
-    cudf::experimental::type_dispatcher(target.type(),
-                                        in_place_copy_range_dispatch{source, target},
-                                        source_begin,
-                                        source_end,
-                                        target_begin,
-                                        stream);
+    cudf::type_dispatcher(target.type(),
+                          in_place_copy_range_dispatch{source, target},
+                          source_begin,
+                          source_end,
+                          target_begin,
+                          stream);
   }
 }
 
@@ -214,13 +214,13 @@ std::unique_ptr<column> copy_range(column_view const& source,
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
 
-  return cudf::experimental::type_dispatcher(target.type(),
-                                             out_of_place_copy_range_dispatch{source, target},
-                                             source_begin,
-                                             source_end,
-                                             target_begin,
-                                             mr,
-                                             stream);
+  return cudf::type_dispatcher(target.type(),
+                               out_of_place_copy_range_dispatch{source, target},
+                               source_begin,
+                               source_end,
+                               target_begin,
+                               mr,
+                               stream);
 }
 
 }  // namespace detail

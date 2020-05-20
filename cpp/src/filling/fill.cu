@@ -202,7 +202,7 @@ void fill_in_place(mutable_column_view& destination,
   CUDF_EXPECTS(destination.type() == value.type(), "Data type mismatch.");
 
   if (end != begin) {  // otherwise no-op
-    cudf::experimental::type_dispatcher(
+    cudf::type_dispatcher(
       destination.type(), in_place_fill_range_dispatch{value, destination}, begin, end, stream);
   }
 
@@ -218,7 +218,7 @@ std::unique_ptr<column> fill(column_view const& input,
 {
   CUDF_EXPECTS((begin >= 0) && (end <= input.size()) && (begin <= end), "Range is out of bounds.");
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     input.type(), out_of_place_fill_range_dispatch{value, input}, begin, end, mr, stream);
 }
 

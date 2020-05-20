@@ -130,12 +130,12 @@ std::unique_ptr<column> set_keys(
     mr);
 
   // compute the new indices
-  auto indices_column = experimental::type_dispatcher(keys_column->type(),
-                                                      dispatch_compute_indices{},
-                                                      dictionary_column,
-                                                      keys_column->view(),
-                                                      mr,
-                                                      stream);
+  auto indices_column = type_dispatcher(keys_column->type(),
+                                        dispatch_compute_indices{},
+                                        dictionary_column,
+                                        keys_column->view(),
+                                        mr,
+                                        stream);
 
   // create column with keys_column and indices_column
   return make_dictionary_column(std::move(keys_column),

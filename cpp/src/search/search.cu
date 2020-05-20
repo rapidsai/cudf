@@ -206,8 +206,7 @@ bool contains(column_view const& col,
 
   if (not value.is_valid()) { return col.has_nulls(); }
 
-  return cudf::experimental::type_dispatcher(
-    col.type(), contains_scalar_dispatch{}, col, value, stream, mr);
+  return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream, mr);
 }
 
 struct multi_contains_dispatch {
@@ -293,7 +292,7 @@ std::unique_ptr<column> contains(column_view const& haystack,
 {
   CUDF_EXPECTS(haystack.type() == needles.type(), "DTYPE mismatch");
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     haystack.type(), multi_contains_dispatch{}, haystack, needles, mr, stream);
 }
 

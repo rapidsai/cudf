@@ -84,8 +84,7 @@ std::unique_ptr<numeric_scalar<int32_t>> get_index(dictionary_column_view const&
                                                    rmm::mr::device_memory_resource* mr,
                                                    cudaStream_t stream)
 {
-  return experimental::type_dispatcher(
-    dictionary.keys().type(), find_index_fn(), dictionary, key, mr, stream);
+  return type_dispatcher(dictionary.keys().type(), find_index_fn(), dictionary, key, mr, stream);
 }
 
 }  // namespace detail
