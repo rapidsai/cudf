@@ -35,13 +35,18 @@ std::unique_ptr<reader> make_reader(source_info const& source,
 {
   if (source.type == io_type::FILEPATH) {
     return std::make_unique<reader>(source.filepath, options, mr);
-  } else if (source.type == io_type::HOST_BUFFER) {
-    return std::make_unique<reader>(source.buffer.first, source.buffer.second, options, mr);
-  } else if (source.type == io_type::ARROW_RANDOM_ACCESS_FILE) {
-    return std::make_unique<reader>(source.file, options, mr);
-  } else {
-    CUDF_FAIL("Unsupported source type");
   }
+  if (source.type == io_type::HOST_BUFFER) {
+    return std::make_unique<reader>(
+      cudf::io::datasource::create(source.buffer.first, source.buffer.second), options, mr);
+  }
+  if (source.type == io_type::ARROW_RANDOM_ACCESS_FILE) {
+    return std::make_unique<reader>(cudf::io::datasource::create(source.file), options, mr);
+  }
+  if (source.type == io_type::USER_IMPLEMENTED) {
+    return std::make_unique<reader>(cudf::io::datasource::create(source.user_source), options, mr);
+  }
+  CUDF_FAIL("Unsupported source type");
 }
 
 template <typename writer, typename writer_options>
@@ -58,11 +63,10 @@ std::unique_ptr<writer> make_writer(sink_info const& sink,
   if (sink.type == io_type::VOID) {
     return std::make_unique<writer>(cudf::io::data_sink::create(), options, mr);
   }
-  if (sink.type == io_type::USER_SINK) {
+  if (sink.type == io_type::USER_IMPLEMENTED) {
     return std::make_unique<writer>(cudf::io::data_sink::create(sink.user_sink), options, mr);
-  } else {
-    CUDF_FAIL("Unsupported sink type");
   }
+  CUDF_FAIL("Unsupported sink type");
 }
 
 }  // namespace

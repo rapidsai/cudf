@@ -24,6 +24,7 @@
 #include "types.hpp"
 
 #include <cudf/types.hpp>
+#include <io/utilities/datasource.hpp>
 
 #include <memory>
 #include <string>
@@ -73,9 +74,9 @@ class reader {
 
  public:
   /**
-   * @brief Constructor for a filepath to dataset.
+   * @brief Constructor from a file path
    *
-   * @param filepath Path to whole dataset
+   * @param filepath Path to the file contatining the whole dataset
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -84,26 +85,13 @@ class reader {
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor for a memory buffer to dataset.
+   * @brief Constructor from a datasource
    *
-   * @param buffer Pointer to whole dataset
-   * @param length Host buffer size in bytes
+   * @param source Input data source object to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
-  explicit reader(const char *buffer,
-                  size_t length,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor for an Arrow file to dataset.
-   *
-   * @param file Arrow file object of dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+  explicit reader(std::unique_ptr<cudf::io::datasource> source,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -177,9 +165,9 @@ class reader {
 
  public:
   /**
-   * @brief Constructor for a filepath to dataset.
+   * @brief Constructor from a file path
    *
-   * @param filepath Path to whole dataset
+   * @param filepath Path to the file contatining the whole dataset
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -188,26 +176,13 @@ class reader {
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor for a memory buffer to dataset.
+   * @brief Constructor from a datasource
    *
-   * @param buffer Pointer to whole dataset
-   * @param length Host buffer size in bytes
+   * @param source Input data source object to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
-  explicit reader(const char *buffer,
-                  size_t length,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor for an Arrow file to dataset.
-   *
-   * @param file Arrow file object of dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+  explicit reader(std::unique_ptr<cudf::io::datasource> source,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -338,9 +313,9 @@ class reader {
 
  public:
   /**
-   * @brief Constructor for a filepath to dataset.
+   * @brief Constructor from a file path
    *
-   * @param filepath Path to whole dataset
+   * @param filepath Path to the file contatining the whole dataset
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -349,26 +324,13 @@ class reader {
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor for a memory buffer to dataset.
+   * @brief Constructor from a datasource
    *
-   * @param buffer Pointer to whole dataset
-   * @param length Host buffer size in bytes
+   * @param source Input data source object to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
-  explicit reader(const char *buffer,
-                  size_t length,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor for an Arrow file to dataset.
-   *
-   * @param file Arrow file object of dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+  explicit reader(std::unique_ptr<cudf::io::datasource> source,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -468,9 +430,9 @@ class reader {
 
  public:
   /**
-   * @brief Constructor for a filepath to dataset.
+   * @brief Constructor from a file path
    *
-   * @param filepath Path to whole dataset
+   * @param filepath Path to the file contatining the whole dataset
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -479,26 +441,13 @@ class reader {
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor for a memory buffer to dataset.
+   * @brief Constructor from a datasource
    *
-   * @param buffer Pointer to whole dataset
-   * @param length Host buffer size in bytes
+   * @param source Input data source object to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
-  explicit reader(const char *buffer,
-                  size_t length,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor for an Arrow file to dataset.
-   *
-   * @param file Arrow file object of dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+  explicit reader(std::unique_ptr<cudf::io::datasource> source,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -601,9 +550,9 @@ class reader {
 
  public:
   /**
-   * @brief Constructor for a filepath to dataset.
+   * @brief Constructor from a file path
    *
-   * @param filepath Path to whole dataset
+   * @param filepath Path to the file contatining the whole dataset
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -612,26 +561,13 @@ class reader {
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor for a memory buffer to dataset.
+   * @brief Constructor from a datasource
    *
-   * @param buffer Pointer to whole dataset
-   * @param length Host buffer size in bytes
+   * @param source Input data source object to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
-  explicit reader(const char *buffer,
-                  size_t length,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor for an Arrow file to dataset.
-   *
-   * @param file Arrow file object of dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+  explicit reader(std::unique_ptr<cudf::io::datasource> source,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 

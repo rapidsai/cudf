@@ -36,7 +36,7 @@ cdef extern from "cudf/io/types.hpp" \
         ARROW_RANDOM_ACCESS_FILE \
             "cudf::experimental::io::io_type::ARROW_RANDOM_ACCESS_FILE"
         VOID "cudf::experimental::io::io_type::VOID"
-        USER_SINK "cudf::experimental::io::io_type::USER_SINK"
+        USER_IMPLEMENTED "cudf::experimental::io::io_type::USER_IMPLEMENTED"
 
     ctypedef enum statistics_freq:
         STATISTICS_NONE = 0,
