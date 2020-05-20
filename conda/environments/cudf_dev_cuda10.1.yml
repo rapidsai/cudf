@@ -48,6 +48,7 @@ dependencies:
   - hypothesis
   - pip:
       - sphinx-markdown-tables
+      - sphinx-copybutton
       - git+https://github.com/dask/dask.git
       - git+https://github.com/dask/distributed.git
       - git+https://github.com/python-streamz/streamz.git
