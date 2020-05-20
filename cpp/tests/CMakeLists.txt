@@ -80,14 +80,14 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
-                    "${DLPACK_ROOT}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${GTEST_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
-                    "${RMM_INCLUDE}")
+                    "${RMM_INCLUDE}"
+                    "${DLPACK_INCLUDE}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------

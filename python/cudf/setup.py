@@ -50,7 +50,7 @@ extensions = [
             "../../cpp/build/include",
             "../../thirdparty/cub",
             "../../thirdparty/libcudacxx/include",
-            ARROW_HOME + "/include",
+            os.path.join(ARROW_HOME, "include"),
             DLPACK_INCLUDE,
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
@@ -59,10 +59,10 @@ extensions = [
         library_dirs=[
             get_python_lib(),
             os.path.join(os.sys.prefix, "lib"),
-            ARROW_HOME + "/lib",
+            os.path.join(ARROW_HOME, "lib"),
             cuda_lib_dir,
         ],
-        libraries=["cudf", "cudart", "cuda", "nvrtc"],
+        libraries=["cudf", "cudart", "cuda", "nvrtc", "arrow"],
         language="c++",
         extra_compile_args=["-std=c++14"],
     )
