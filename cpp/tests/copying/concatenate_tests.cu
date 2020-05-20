@@ -326,6 +326,7 @@ TEST_F(ListsColumnTest, ConcatenateListsWithNulls)
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
+  // nulls in the leaves
   {
     cudf::test::lists_column_wrapper a{{{0, 1, 2, 3}, valids}};
     cudf::test::lists_column_wrapper b{{{4, 5, 6, 7}, valids}};
@@ -379,16 +380,30 @@ TEST_F(ListsColumnTest, ConcatenateNestedListsWithNulls)
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
+  // nulls in the lists
   {
-    cudf::test::lists_column_wrapper a{{{{0, 1}, {2, 3}}, valids}, {{4, 5}}};
-    cudf::test::lists_column_wrapper b{{{6, 7}}, {{{8, 9, 10}, {11, 12}}, valids}};
-    cudf::test::lists_column_wrapper expected{
-      {{{0, 1}, {2, 3}}, valids}, {{4, 5}}, {{6, 7}}, {{{8, 9, 10}, {11, 12}}, valids}};
+    cudf::test::lists_column_wrapper a{{{{0, 1}, {2, 3}}, valids}};
+    cudf::test::lists_column_wrapper b{{{{4, 5}, {6, 7}}, valids}};
+
+    cudf::test::lists_column_wrapper expected{{{{0, 1}, {2, 3}}, valids},
+                                              {{{4, 5}, {6, 7}}, valids}};
 
     auto result = cudf::concatenate({a, b});
 
     cudf::test::expect_columns_equal(*result, expected);
+  }
 
-    cudf::test::print(expected);
+  // nulls in the lists -and- the values
+  {
+    cudf::test::lists_column_wrapper a{{{{{0, 1}, valids}, {2, 3}}, valids}, {{4, 5}}};
+    cudf::test::lists_column_wrapper b{{{6, 7}}, {{{{8, 9, 10}, valids}, {11, 12}}, valids}};
+    cudf::test::lists_column_wrapper expected{{{{{0, 1}, valids}, {2, 3}}, valids},
+                                              {{4, 5}},
+                                              {{6, 7}},
+                                              {{{{8, 9, 10}, valids}, {11, 12}}, valids}};
+
+    auto result = cudf::concatenate({a, b});
+
+    cudf::test::expect_columns_equal(*result, expected);
   }
 }

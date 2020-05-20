@@ -488,11 +488,13 @@ struct column_view_printer {
   {
     lists_column_view lcv(col);
 
-    std::string tmp = get_nested_type_str(col) + ":\n" + indent +
-                      "Length : " + std::to_string(lcv.size()) + "\n" + indent +
-                      "Offsets : " + to_string(lcv.offsets(), ", ") + "\n" +
-                      (lcv.has_nulls() ? indent + "Has nulls\n" : "") + indent + "Children :\n" +
-                      to_string(lcv.child(), ", ", indent + "   ") + "\n";
+    std::string tmp =
+      get_nested_type_str(col) + ":\n" + indent + "Length : " + std::to_string(lcv.size()) + "\n" +
+      indent + "Offsets : " + to_string(lcv.offsets(), ", ") + "\n" +
+      (lcv.has_nulls() ? indent + "Null count: " + std::to_string(lcv.null_count()) + "\n" +
+                           to_string(bitmask_to_host(col), col.size(), indent) + "\n"
+                       : "") +
+      indent + "Children :\n" + to_string(lcv.child(), ", ", indent + "   ") + "\n";
 
     out.push_back(tmp);
   }
@@ -512,7 +514,7 @@ std::vector<std::string> to_strings(cudf::column_view const& col, std::string co
 }
 
 /**
- * @copydoc cudf::test::to_string
+ * @copydoc cudf::test::to_string(cudf::column_view, std::string, std::string)
  *
  */
 std::string to_string(cudf::column_view const& col,
@@ -528,6 +530,22 @@ std::string to_string(cudf::column_view const& col,
             std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
   if (!h_data.empty()) buffer << h_data.back();
 
+  return buffer.str();
+}
+
+/**
+ * @copydoc cudf::test::to_string(std::vector<bitmask_type>, size_type, std::string)
+ *
+ */
+std::string to_string(std::vector<bitmask_type> const& null_mask,
+                      size_type null_mask_size,
+                      std::string const& indent)
+{
+  std::ostringstream buffer;
+  buffer << indent;
+  for (int idx = null_mask_size - 1; idx >= 0; idx--) {
+    buffer << (cudf::bit_is_set(null_mask.data(), idx) ? "1" : "0");
+  }
   return buffer.str();
 }
 

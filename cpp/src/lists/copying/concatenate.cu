@@ -19,8 +19,11 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/detail/concatenate.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <memory>
+
+//#include <../tests/utilities/column_utilities.hpp>
 
 namespace cudf {
 namespace lists {
@@ -46,7 +49,7 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
   // outgoing offsets
   auto merged_offsets = cudf::make_fixed_width_column(data_type{INT32}, total_list_count + 1);
   mutable_column_device_view d_merged_offsets(*merged_offsets, 0, 0);
-  
+
   // merge offsets
   // TODO : this could probably be done as a single gpu operation if done as a kernel.
   size_type shift = 0;
@@ -65,7 +68,7 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
   return merged_offsets;
 }
 
-}  // namespace anonymous
+}  // namespace
 
 /**
  * @copydoc cudf::lists::detail::concatenate
@@ -91,7 +94,8 @@ std::unique_ptr<column> concatenate(
                  [&](lists_column_view const& l) {
                    // count total # of lists
                    total_list_count += l.size();
-                   // child column. could be a leaf type (string, float, int, etc) or more nested lists
+                   // child column. could be a leaf type (string, float, int, etc) or more nested
+                   // lists
                    return l.child();
                  });
   auto data = cudf::concatenate(children);
@@ -99,12 +103,21 @@ std::unique_ptr<column> concatenate(
   // merge offsets
   auto offsets = merge_offsets(lists_columns, total_list_count, mr, stream);
 
+  // if any of the input columns have nulls, construct the output mask
+  bool const has_nulls =
+    std::any_of(columns.cbegin(), columns.cend(), [](auto const& col) { return col.has_nulls(); });
+  rmm::device_buffer null_mask = create_null_mask(
+    total_list_count, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED);
+  if (has_nulls) {
+    cudf::detail::concatenate_masks(columns, static_cast<bitmask_type*>(null_mask.data()), stream);
+  }
+
   // assemble into outgoing list column
   return make_lists_column(total_list_count,
                            std::move(offsets),
                            std::move(data),
-                           0,
-                           rmm::device_buffer{0, stream, mr},
+                           has_nulls ? UNKNOWN_NULL_COUNT : 0,
+                           std::move(null_mask),
                            stream,
                            mr);
 }

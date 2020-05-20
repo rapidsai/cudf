@@ -83,14 +83,25 @@ void expect_columns_equivalent(cudf::column_view const& lhs,
 void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes);
 
 /**
- * @brief Displays a column view as a string
+ * @brief Formats a column view as a string
  *
  * @param col The column view
  * @param delimiter The delimiter to put between strings
  * @param indent Indentation for all output
- **/
+ */
 std::string to_string(cudf::column_view const& col,
                       std::string const& delimiter,
+                      std::string const& indent = "");
+
+/**
+ * @brief Formats a null mask as a string
+ *
+ * @param null_mask The null mask buffer
+ * @param null_mask_size Size of the null mask (in rows)
+ * @param indent Indentation for all output
+ */
+std::string to_string(std::vector<bitmask_type> const& null_mask,
+                      size_type null_mask_size,
                       std::string const& indent = "");
 
 /**
@@ -98,7 +109,7 @@ std::string to_string(cudf::column_view const& col,
  *
  * @param col The column view
  * @param indent Indentation for all output
- **/
+ */
 std::vector<std::string> to_strings(cudf::column_view const& col, std::string const& indent = "");
 
 /**
