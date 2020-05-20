@@ -33,7 +33,7 @@ struct ColumnUtilitiesTest : public cudf::test::BaseFixture {
 
   auto size() { return random.generate(); }
 
-  auto data_type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto data_type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 template <typename T>

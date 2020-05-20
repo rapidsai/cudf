@@ -89,7 +89,7 @@ auto empty_results(std::vector<aggregation_request> const& requests)
                      std::back_inserter(results),
                      [&request](auto const& agg) {
                        return make_empty_column(
-                         detail::target_type(request.values.type(), agg->kind));
+                         cudf::detail::target_type(request.values.type(), agg->kind));
                      });
 
       return aggregation_result{std::move(results)};
@@ -107,7 +107,7 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests)
                              return std::all_of(request.aggregations.begin(),
                                                 request.aggregations.end(),
                                                 [&request](auto const& agg) {
-                                                  return detail::is_valid_aggregation(
+                                                  return cudf::detail::is_valid_aggregation(
                                                     request.values.type(), agg->kind);
                                                 });
                            }),

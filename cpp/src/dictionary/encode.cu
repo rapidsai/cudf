@@ -45,7 +45,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
   // - resulting column elements are sorted ascending
   // - nulls are sorted to the beginning
   auto table_keys =
-    detail::drop_duplicates(table_view{{input_column}},
+    cudf::detail::drop_duplicates(table_view{{input_column}},
                                           std::vector<size_type>{0},
                                           duplicate_keep_option::KEEP_FIRST,
                                           null_equality::EQUAL,

@@ -440,7 +440,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
 
   for (auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
-    destination_columns.push_back(cudf::experimental::type_dispatcher(source_column.type(),
+    destination_columns.push_back(cudf::type_dispatcher(source_column.type(),
                                                                       column_gatherer{},
                                                                       source_column,
                                                                       gather_map_begin,

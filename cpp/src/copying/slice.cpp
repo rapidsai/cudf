@@ -84,7 +84,7 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
   std::transform(input.begin(),
                  input.end(),
                  std::back_inserter(sliced_table),
-                 [&indices](cudf::column_view const& c) { return slice(c, indices); });
+                 [&indices](cudf::column_view const& c) { return cudf::slice(c, indices); });
 
   // distribute columns into outgoing table_views
   size_t num_output_tables = indices.size() / 2;

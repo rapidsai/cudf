@@ -51,7 +51,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
 
   if (col.has_nulls()) {
     auto it =
-      thrust::make_transform_iterator(detail::make_null_replacement_iterator(
+      thrust::make_transform_iterator(cudf::detail::make_null_replacement_iterator(
                                         *dcol, simple_op.template get_identity<ElementType>()),
                                       simple_op.template get_element_transformer<ResultType>());
     result = detail::reduce(it, col.size(), Op{}, mr, stream);
@@ -128,7 +128,7 @@ struct element_type_dispatcher {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    return cudf::experimental::type_dispatcher(
+    return cudf::type_dispatcher(
       output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, mr, stream);
   }
 

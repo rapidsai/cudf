@@ -43,7 +43,7 @@ struct quantiles_functor {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0)
   {
-    using ResultType = detail::target_type_t<T, aggregation::QUANTILE>;
+    using ResultType = cudf::detail::target_type_t<T, aggregation::QUANTILE>;
 
     auto result = make_numeric_column(data_type(type_to_id<ResultType>()),
                                       group_sizes.size() * quantile.size(),
@@ -82,7 +82,7 @@ struct quantiles_functor {
                            d_quantiles + num_quantiles,
                            d_result.data<ResultType>() + i * num_quantiles,
                            [selector, segment_size, interpolation](auto q) {
-                             return detail::select_quantile<ResultType>(
+                             return cudf::detail::select_quantile<ResultType>(
                                selector, segment_size, q, interpolation);
                            });
 

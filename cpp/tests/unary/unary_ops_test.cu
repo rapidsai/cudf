@@ -505,7 +505,7 @@ static const auto test_timestamps_ns = std::vector<int64_t>{
 template <typename T>
 inline auto make_data_type()
 {
-  return cudf::data_type{cudf::experimental::type_to_id<T>()};
+  return cudf::data_type{cudf::type_to_id<T>()};
 }
 
 template <typename T, typename R>
@@ -667,7 +667,7 @@ TYPED_TEST(CastTimestampsTyped, DownCastingFloorsValues)
   // timestamp_us -> {timestamp_us, timestamp_ns};
   // etc.
   auto higher_precision_type_ids =
-    get_higher_precision_timestamp_type_ids(cudf::experimental::type_to_id<T>());
+    get_higher_precision_timestamp_type_ids(cudf::type_to_id<T>());
   // For each higher-precision type, down-cast to TypeParam and validate
   // that the values were floored.
   for (cudf::type_id higher_precision_type_id : higher_precision_type_ids) {

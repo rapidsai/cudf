@@ -133,8 +133,8 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
  * @see groupby_null_templated()
  */
 void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
-                             detail::result_cache const& sparse_results,
-                             detail::result_cache* dense_results,
+                             cudf::detail::result_cache const& sparse_results,
+                             cudf::detail::result_cache* dense_results,
                              rmm::device_vector<size_type> const& gather_map,
                              size_type map_size,
                              cudaStream_t stream,
@@ -149,7 +149,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
     auto to_dense_agg_result =
       [&sparse_results, &gather_map, map_size, i, mr, stream](auto const& agg) {
         auto s                  = sparse_results.get_result(i, agg);
-        auto dense_result_table = detail::gather(
+        auto dense_result_table = cudf::detail::gather(
           table_view({s}), gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
         return std::move(dense_result_table->release()[0]);
       };
@@ -167,7 +167,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
         data_type(type_to_id<size_type>()),
         arg_result->size(),
         static_cast<void const*>(arg_result->view().template data<size_type>()));
-      auto transformed_result = detail::gather(
+      auto transformed_result = cudf::detail::gather(
         table_view({col}), null_removed_map, false, arg_result->nullable(), false, mr, stream);
       return std::move(transformed_result->release()[0]);
     };
@@ -232,7 +232,7 @@ auto create_hash_map(table_device_view const& d_keys,
 template <bool keys_have_nulls, typename Map>
 void compute_single_pass_aggs(table_view const& keys,
                               std::vector<aggregation_request> const& requests,
-                              detail::result_cache* sparse_results,
+                              cudf::detail::result_cache* sparse_results,
                               Map& map,
                               null_policy include_null_keys,
                               cudaStream_t stream)
@@ -257,12 +257,12 @@ void compute_single_pass_aggs(table_view const& keys,
       auto mask_flag = (nullable) ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
 
       return make_fixed_width_column(
-        detail::target_type(col.type(), agg), col.size(), mask_flag, stream);
+        cudf::detail::target_type(col.type(), agg), col.size(), mask_flag, stream);
     });
 
   table sparse_table(std::move(sparse_columns));
   mutable_table_view table_view = sparse_table.mutable_view();
-  detail::initialize_with_identity(table_view, aggs, stream);
+  cudf::detail::initialize_with_identity(table_view, aggs, stream);
 
   // prepare to launch kernel to do the actual aggregation
   auto d_sparse_table = mutable_table_device_view::create(sparse_table);
@@ -360,7 +360,7 @@ std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(Map m
 template <bool keys_have_nulls>
 std::unique_ptr<table> groupby_null_templated(table_view const& keys,
                                               std::vector<aggregation_request> const& requests,
-                                              detail::result_cache* cache,
+                                              cudf::detail::result_cache* cache,
                                               null_policy include_null_keys,
                                               cudaStream_t stream,
                                               rmm::mr::device_memory_resource* mr)
@@ -370,7 +370,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash map
-  detail::result_cache sparse_results(requests.size());
+  cudf::detail::result_cache sparse_results(requests.size());
 
   // Compute all single pass aggs first
   compute_single_pass_aggs<keys_have_nulls>(
@@ -388,7 +388,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(requests, sparse_results, cache, gather_map, map_size, stream, mr);
 
-  return detail::gather(
+  return cudf::detail::gather(
     keys, gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
 }
 
@@ -421,7 +421,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   cudaStream_t stream,
   rmm::mr::device_memory_resource* mr)
 {
-  detail::result_cache cache(requests.size());
+    cudf::detail::result_cache cache(requests.size());
 
   std::unique_ptr<table> unique_keys;
   if (has_nulls(keys)) {

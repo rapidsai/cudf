@@ -37,7 +37,7 @@ TYPED_TEST(groupby_mean_test, basic)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = detail::target_type_t<V, aggregation::MEAN>;
+    using R = cudf::detail::target_type_t<V, aggregation::MEAN>;
 
     fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
     fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -53,7 +53,7 @@ TYPED_TEST(groupby_mean_test, empty_cols)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = detail::target_type_t<V, aggregation::MEAN>;
+    using R = cudf::detail::target_type_t<V, aggregation::MEAN>;
 
     fixed_width_column_wrapper<K> keys        { };
     fixed_width_column_wrapper<V> vals        { };
@@ -69,7 +69,7 @@ TYPED_TEST(groupby_mean_test, zero_valid_keys)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = detail::target_type_t<V, aggregation::MEAN>;
+    using R = cudf::detail::target_type_t<V, aggregation::MEAN>;
 
     fixed_width_column_wrapper<K> keys      ( { 1, 2, 3}, all_null() );
     fixed_width_column_wrapper<V> vals        { 3, 4, 5};
@@ -85,7 +85,7 @@ TYPED_TEST(groupby_mean_test, zero_valid_values)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = detail::target_type_t<V, aggregation::MEAN>;
+    using R = cudf::detail::target_type_t<V, aggregation::MEAN>;
 
     fixed_width_column_wrapper<K> keys        { 1, 1, 1};
     fixed_width_column_wrapper<V> vals      ( { 3, 4, 5}, all_null() );
@@ -101,7 +101,7 @@ TYPED_TEST(groupby_mean_test, null_keys_and_values)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = detail::target_type_t<V, aggregation::MEAN>;
+    using R = cudf::detail::target_type_t<V, aggregation::MEAN>;
 
     fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
                                               { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});

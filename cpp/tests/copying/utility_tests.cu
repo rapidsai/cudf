@@ -38,9 +38,9 @@ TYPED_TEST(EmptyLikeTest, ColumnNumericTests)
   cudf::size_type size   = 10;
   cudf::mask_state state = cudf::mask_state::ALL_VALID;
   auto input =
-    make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
+    make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()}, size, state);
   auto expected =
-    make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, 0);
+    make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()}, 0);
   auto got = cudf::empty_like(input->view());
   cudf::test::expect_columns_equal(*expected, *got);
 }
@@ -123,8 +123,8 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize)
   cudf::size_type size   = 10;
   cudf::mask_state state = cudf::mask_state::ALL_VALID;
   auto input =
-    make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
-  auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
+    make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()}, size, state);
+  auto expected = make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                       size,
                                       cudf::mask_state::UNINITIALIZED);
   auto got      = cudf::allocate_like(input->view());
@@ -138,8 +138,8 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize)
   cudf::size_type specified_size = 5;
   cudf::mask_state state         = cudf::mask_state::ALL_VALID;
   auto input =
-    make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
-  auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
+    make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()}, size, state);
+  auto expected = make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                       specified_size,
                                       cudf::mask_state::UNINITIALIZED);
   auto got      = cudf::allocate_like(input->view(), specified_size);

@@ -49,7 +49,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                               rmm::mr::device_memory_resource* mr,
                               cudaStream_t stream)
 {
-  using detail::side;
+  using cudf::detail::side;
   size_type strings_count = static_cast<size_type>(std::distance(begin, end));
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
   auto execpol    = rmm::exec_policy(stream);

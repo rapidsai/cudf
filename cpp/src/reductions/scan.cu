@@ -231,7 +231,7 @@ std::unique_ptr<column> scan(const column_view& input,
 
   switch (agg->kind) {
     case aggregation::SUM:
-      return cudf::experimental::type_dispatcher(input.type(),
+      return cudf::type_dispatcher(input.type(),
                                                  ScanDispatcher<cudf::DeviceSum>(),
                                                  input,
                                                  inclusive,
@@ -239,7 +239,7 @@ std::unique_ptr<column> scan(const column_view& input,
                                                  mr,
                                                  stream);
     case aggregation::MIN:
-      return cudf::experimental::type_dispatcher(input.type(),
+      return cudf::type_dispatcher(input.type(),
                                                  ScanDispatcher<cudf::DeviceMin>(),
                                                  input,
                                                  inclusive,
@@ -247,7 +247,7 @@ std::unique_ptr<column> scan(const column_view& input,
                                                  mr,
                                                  stream);
     case aggregation::MAX:
-      return cudf::experimental::type_dispatcher(input.type(),
+      return cudf::type_dispatcher(input.type(),
                                                  ScanDispatcher<cudf::DeviceMax>(),
                                                  input,
                                                  inclusive,
@@ -255,7 +255,7 @@ std::unique_ptr<column> scan(const column_view& input,
                                                  mr,
                                                  stream);
     case aggregation::PRODUCT:
-      return cudf::experimental::type_dispatcher(input.type(),
+      return cudf::type_dispatcher(input.type(),
                                                  ScanDispatcher<cudf::DeviceProduct>(),
                                                  input,
                                                  inclusive,

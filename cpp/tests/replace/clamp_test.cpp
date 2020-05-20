@@ -147,29 +147,29 @@ struct ClampTestNumeric : public cudf::test::BaseFixture {
                                           T hi_replace,
                                           bool hi_replace_validity)
   {
-    using ScalarType = cudf::experimental::scalar_type_t<T>;
+    using ScalarType = cudf::scalar_type_t<T>;
     std::unique_ptr<cudf::scalar> lo_scalar{nullptr};
     std::unique_ptr<cudf::scalar> hi_scalar{nullptr};
     std::unique_ptr<cudf::scalar> lo_replace_scalar{nullptr};
     std::unique_ptr<cudf::scalar> hi_replace_scalar{nullptr};
     if (cudf::is_numeric<T>()) {
       lo_scalar = cudf::make_numeric_scalar(
-        cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+        cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
       hi_scalar = cudf::make_numeric_scalar(
-        cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+        cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
       lo_replace_scalar = cudf::make_numeric_scalar(
-        cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+        cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
       hi_replace_scalar = cudf::make_numeric_scalar(
-        cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+        cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
     } else if (cudf::is_timestamp<T>()) {
       lo_scalar = cudf::make_timestamp_scalar(
-        cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+        cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
       hi_scalar = cudf::make_timestamp_scalar(
-        cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+        cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
       lo_replace_scalar = cudf::make_timestamp_scalar(
-        cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+        cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
       hi_replace_scalar = cudf::make_timestamp_scalar(
-        cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+        cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
     }
 
     static_cast<ScalarType*>(lo_scalar.get())->set_value(lo);
@@ -289,14 +289,14 @@ TYPED_TEST_CASE(ClampFloatTest, cudf::test::FloatingPointTypes);
 TYPED_TEST(ClampFloatTest, WithNANandNoNull)
 {
   using T          = TypeParam;
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
 
   cudf::test::fixed_width_column_wrapper<T> input(
     {T(8.0), T(6.0), T(NAN), T(3.0), T(4.0), T(5.0), T(1.0), T(NAN), T(2.0), T(9.0)});
   auto lo_scalar = cudf::make_numeric_scalar(
-    cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+    cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
   auto hi_scalar = cudf::make_numeric_scalar(
-    cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+    cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
 
   static_cast<ScalarType*>(lo_scalar.get())->set_value(2.0);
   static_cast<ScalarType*>(lo_scalar.get())->set_valid(true);
@@ -313,15 +313,15 @@ TYPED_TEST(ClampFloatTest, WithNANandNoNull)
 TYPED_TEST(ClampFloatTest, WithNANandNull)
 {
   using T          = TypeParam;
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
 
   cudf::test::fixed_width_column_wrapper<T> input(
     {T(8.0), T(6.0), T(NAN), T(3.0), T(4.0), T(5.0), T(1.0), T(NAN), T(2.0), T(9.0)},
     {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
   auto lo_scalar = cudf::make_numeric_scalar(
-    cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+    cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
   auto hi_scalar = cudf::make_numeric_scalar(
-    cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+    cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
 
   static_cast<ScalarType*>(lo_scalar.get())->set_value(2.0);
   static_cast<ScalarType*>(lo_scalar.get())->set_valid(true);
@@ -339,19 +339,19 @@ TYPED_TEST(ClampFloatTest, WithNANandNull)
 TYPED_TEST(ClampFloatTest, SignOfAFloat)
 {
   using T          = TypeParam;
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
 
   cudf::test::fixed_width_column_wrapper<T> input(
     {T(2.0), T(0.0), T(NAN), T(4.0), T(-0.5), T(-1.0), T(1.0), T(NAN), T(0.5), T(9.0)},
     {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
   auto lo_scalar = cudf::make_numeric_scalar(
-    cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+    cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
   auto lo_replace_scalar = cudf::make_numeric_scalar(
-    cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+    cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
   auto hi_scalar = cudf::make_numeric_scalar(
-    cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+    cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
   auto hi_replace_scalar = cudf::make_numeric_scalar(
-    cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+    cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
 
   static_cast<ScalarType*>(lo_scalar.get())->set_value(0.0);
   static_cast<ScalarType*>(lo_scalar.get())->set_valid(true);

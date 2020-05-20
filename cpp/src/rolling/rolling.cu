@@ -388,7 +388,7 @@ struct rolling_window_launcher {
   {
     if (input.is_empty()) return empty_like(input);
 
-    auto output = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<size_type>()},
+    auto output = make_numeric_column(cudf::data_type{cudf::type_to_id<size_type>()},
                                       input.size(),
                                       cudf::mask_state::UNINITIALIZED,
                                       stream,
@@ -636,7 +636,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
   min_periods = std::max(min_periods, 0);
 
-  return cudf::experimental::type_dispatcher(input.type(),
+  return cudf::type_dispatcher(input.type(),
                                              dispatch_rolling{},
                                              input,
                                              preceding_window_begin,

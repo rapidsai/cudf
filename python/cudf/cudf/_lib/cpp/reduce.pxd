@@ -9,18 +9,18 @@ from cudf._lib.aggregation cimport aggregation
 from libcpp.memory cimport unique_ptr
 
 
-cdef extern from "cudf/reduction.hpp" namespace "cudf::experimental" nogil:
-    cdef unique_ptr[scalar] cpp_reduce "cudf::experimental::reduce" (
+cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
+    cdef unique_ptr[scalar] cpp_reduce "cudf::reduce" (
         column_view col,
         const unique_ptr[aggregation] agg,
         data_type type
     ) except +
 
     ctypedef enum scan_type:
-        INCLUSIVE "cudf::experimental::scan_type::INCLUSIVE",
-        EXCLUSIVE "cudf::experimental::scan_type::EXCLUSIVE",
+        INCLUSIVE "cudf::scan_type::INCLUSIVE",
+        EXCLUSIVE "cudf::scan_type::EXCLUSIVE",
 
-    cdef unique_ptr[column] cpp_scan "cudf::experimental::scan" (
+    cdef unique_ptr[column] cpp_scan "cudf::scan" (
         column_view col,
         const unique_ptr[aggregation] agg,
         scan_type inclusive

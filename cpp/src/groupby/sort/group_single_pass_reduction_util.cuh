@@ -68,7 +68,7 @@ struct reduce_functor {
     if (values.size() == 0) { return result; }
 
     auto result_table = mutable_table_view({*result});
-    detail::initialize_with_identity(result_table, {K}, stream);
+    cudf::detail::initialize_with_identity(result_table, {K}, stream);
 
     auto resultview = mutable_column_device_view::create(result->mutable_view());
     auto valuesview = column_device_view::create(values);
@@ -79,7 +79,7 @@ struct reduce_functor {
                        [d_values     = *valuesview,
                         d_result     = *resultview,
                         dest_indices = group_labels.data().get()] __device__(auto i) {
-                         detail::update_target_element<T, K, true, true>{}(
+                        cudf::detail::update_target_element<T, K, true, true>{}(
                            d_result, dest_indices[i], d_values, i);
                        });
 

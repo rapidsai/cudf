@@ -81,7 +81,7 @@ TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_FP32_FP32_FP32)
   auto rhs = make_random_wrapped_column<TypeRhs>(500);
 
   auto out = cudf::binary_operation(
-    lhs, rhs, ptx, data_type(experimental::type_to_id<TypeOut>()));
+    lhs, rhs, ptx, data_type(type_to_id<TypeOut>()));
 
   // pow has a max ULP error of 2 per CUDA programming guide
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, CADD, NearEqualComparator<TypeOut>{2});
@@ -142,7 +142,7 @@ TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT32)
   auto rhs = make_random_wrapped_column<TypeRhs>(500);
 
   auto out = cudf::binary_operation(
-    lhs, rhs, ptx, data_type(experimental::type_to_id<TypeOut>()));
+    lhs, rhs, ptx, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, CADD);
 }
@@ -204,7 +204,7 @@ TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT64)
   auto rhs = make_random_wrapped_column<TypeRhs>(500);
 
   auto out = cudf::binary_operation(
-    lhs, rhs, ptx, data_type(experimental::type_to_id<TypeOut>()));
+    lhs, rhs, ptx, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, CADD);
 }

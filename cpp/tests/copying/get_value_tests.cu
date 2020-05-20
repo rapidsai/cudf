@@ -40,7 +40,7 @@ TYPED_TEST(FixedWidthGetValueTest, BasicGet)
   fixed_width_column_wrapper<TypeParam> col{9, 8, 7, 6};
   auto s = get_element(col, 0);
 
-  using ScalarType = experimental::scalar_type_t<TypeParam>;
+  using ScalarType = scalar_type_t<TypeParam>;
   auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
@@ -52,7 +52,7 @@ TYPED_TEST(FixedWidthGetValueTest, GetFromNullable)
   fixed_width_column_wrapper<TypeParam> col({9, 8, 7, 6}, {0, 1, 0, 1});
   auto s = get_element(col, 1);
 
-  using ScalarType = experimental::scalar_type_t<TypeParam>;
+  using ScalarType = scalar_type_t<TypeParam>;
   auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
@@ -133,7 +133,7 @@ TYPED_TEST(DictionaryGetValueTest, BasicGet)
 
   auto s = get_element(*col, 2);
 
-  using ScalarType = experimental::scalar_type_t<TypeParam>;
+  using ScalarType = scalar_type_t<TypeParam>;
   auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
@@ -148,7 +148,7 @@ TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
 
   auto s = get_element(*col, 3);
 
-  using ScalarType = experimental::scalar_type_t<TypeParam>;
+  using ScalarType = scalar_type_t<TypeParam>;
   auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());

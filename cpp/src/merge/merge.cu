@@ -374,7 +374,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
             right_table.begin(),
             std::back_inserter(merged_cols),
             [&](auto const& left_col, auto const& right_col) {
-              return cudf::experimental::type_dispatcher(
+              return cudf::type_dispatcher(
                 left_col.type(), merger, left_col, right_col);
             });
 

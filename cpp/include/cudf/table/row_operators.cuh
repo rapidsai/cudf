@@ -213,7 +213,7 @@ class row_equality_comparator {
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
-      return cudf::experimental::type_dispatcher(
+      return cudf::type_dispatcher(
         l.type(),
         element_equality_comparator<has_nulls>{l, r, nulls_are_equal},
         lhs_row_index,
@@ -368,7 +368,7 @@ class row_lexicographic_comparator {
       auto comparator =
         element_relational_comparator<has_nulls>{_lhs.column(i), _rhs.column(i), null_precedence};
 
-      state = cudf::experimental::type_dispatcher(
+      state = cudf::type_dispatcher(
         _lhs.column(i).type(), comparator, lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
@@ -423,7 +423,7 @@ class row_hasher {
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
-      return cudf::experimental::type_dispatcher(_table.column(column_index).type(),
+      return cudf::type_dispatcher(_table.column(column_index).type(),
                                                  element_hasher<hash_function, has_nulls>{},
                                                  _table.column(column_index),
                                                  row_index);
@@ -467,7 +467,7 @@ class row_hasher_initial_values {
     // Hashes an element in a column and combines with an initial value
     auto hasher = [=](size_type column_index) {
       auto hash_value =
-        cudf::experimental::type_dispatcher(_table.column(column_index).type(),
+        cudf::type_dispatcher(_table.column(column_index).type(),
                                             element_hasher<hash_function, has_nulls>{},
                                             _table.column(column_index),
                                             row_index);

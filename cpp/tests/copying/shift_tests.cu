@@ -30,7 +30,7 @@
 using cudf::test::fixed_width_column_wrapper;
 using TestTypes = cudf::test::Types<int32_t>;
 
-template <typename T, typename ScalarType = cudf::experimental::scalar_type_t<T>>
+template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   cudaStream_t stream = 0, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
@@ -38,7 +38,7 @@ std::unique_ptr<cudf::scalar> make_scalar(
   return std::unique_ptr<cudf::scalar>(s);
 }
 
-template <typename T, typename ScalarType = cudf::experimental::scalar_type_t<T>>
+template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   T value,
   cudaStream_t stream                 = 0,

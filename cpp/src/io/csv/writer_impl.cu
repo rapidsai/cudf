@@ -507,7 +507,7 @@ void writer::impl::write(table_view const& table,
                      sub_view.end(),
                      std::back_inserter(str_column_vec),
                      [converter](auto const& current_col) {
-                       return cudf::experimental::type_dispatcher(
+                       return cudf::type_dispatcher(
                          current_col.type(), converter, current_col);
                      });
 

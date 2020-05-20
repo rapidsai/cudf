@@ -156,7 +156,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
       bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
 
       // First thread writes bitmask word
-      if (threadIdx.x % detail::warp_size == 0) {
+      if (threadIdx.x % cudf::detail::warp_size == 0) {
         output_mask[word_index(output_index)] = new_word;
       }
 
@@ -173,7 +173,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
   }
 
   if (Nullable) {
-    using detail::single_lane_block_sum_reduce;
+    using cudf::detail::single_lane_block_sum_reduce;
     auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
     if (threadIdx.x == 0) { atomicAdd(out_valid_count, block_valid_count); }
   }

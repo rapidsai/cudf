@@ -52,7 +52,7 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize)
   EXPECT_THROW(cudf::binary_operation(lhs,
                                                     rhs,
                                                     cudf::binary_operator::ADD,
-                                                    data_type(experimental::type_to_id<TypeOut>())),
+                                                    data_type(type_to_id<TypeOut>())),
                cudf::logic_error);
 }
 

@@ -476,7 +476,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
     return std::make_unique<cudf::column>(input_col);
   }
 
-  return cudf::experimental::type_dispatcher(input_col.type(),
+  return cudf::type_dispatcher(input_col.type(),
                                              replace_kernel_forwarder{},
                                              input_col,
                                              values_to_replace,
@@ -761,7 +761,7 @@ struct replace_nulls_scalar_kernel_forwarder {
       input, cudf::mask_allocation_policy::NEVER, mr);
     auto output_view = output->mutable_view();
 
-    using ScalarType = cudf::experimental::scalar_type_t<col_type>;
+    using ScalarType = cudf::scalar_type_t<col_type>;
     auto s1          = static_cast<ScalarType const&>(replacement);
     auto device_in   = cudf::column_device_view::create(input);
 
@@ -813,7 +813,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
   if (!input.has_nulls()) { return std::make_unique<cudf::column>(input); }
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     input.type(), replace_nulls_column_kernel_forwarder{}, input, replacement, mr, stream);
 }
 
@@ -830,7 +830,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
   CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     input.type(), replace_nulls_scalar_kernel_forwarder{}, input, replacement, mr, stream);
 }
 
@@ -1043,7 +1043,7 @@ void normalize_nans_and_zeros(mutable_column_view in_out, cudaStream_t stream = 
   auto device_out = mutable_column_device_view::create(in_out);
 
   // invoke the actual kernel.
-  cudf::experimental::type_dispatcher(
+  cudf::type_dispatcher(
     input.type(), normalize_nans_and_zeros_kernel_forwarder{}, *device_in, *device_out, stream);
 }
 

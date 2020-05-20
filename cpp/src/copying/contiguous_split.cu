@@ -423,7 +423,7 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t,
   size_type column_index = 0;
   std::for_each(
     t.begin(), t.end(), [&total_size, &column_index, &split_info](cudf::column_view const& c) {
-      total_size += cudf::experimental::type_dispatcher(
+      total_size += cudf::type_dispatcher(
         c.type(), column_buffer_size_functor{}, c, split_info[column_index]);
       column_index++;
     });
@@ -440,7 +440,7 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t,
   column_index = 0;
   std::for_each(
     t.begin(), t.end(), [&out_cols, &buf, &column_index, &split_info](cudf::column_view const& c) {
-      cudf::experimental::type_dispatcher(
+      cudf::type_dispatcher(
         c.type(), column_copy_functor{}, c, split_info[column_index], buf, out_cols);
       column_index++;
     });

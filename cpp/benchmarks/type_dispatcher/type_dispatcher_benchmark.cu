@@ -125,7 +125,7 @@ __global__ void device_dispatching_kernel(mutable_table_device_view source)
 
   while (index < n_rows) {
     for (cudf::size_type i = 0; i < source.num_columns(); i++) {
-      cudf::experimental::type_dispatcher(
+      cudf::type_dispatcher(
         source.column(i).type(), RowHandle<functor_type>{}, source.column(i), index);
     }
     index += blockDim.x * gridDim.x;
@@ -145,7 +145,7 @@ void launch_kernel(mutable_table_view input, T** d_ptr, int work_per_thread)
     // std::vector<cudf::util::cuda::scoped_stream> v_stream(n_cols);
     for (int c = 0; c < n_cols; c++) {
       auto d_column = mutable_column_device_view::create(input.column(c));
-      cudf::experimental::type_dispatcher(
+      cudf::type_dispatcher(
         d_column->type(), ColumnHandle<functor_type>{}, *d_column, work_per_thread);
     }
   } else if (dispatching_type == DEVICE_DISPATCHING) {

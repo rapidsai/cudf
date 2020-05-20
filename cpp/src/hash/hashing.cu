@@ -426,7 +426,7 @@ struct copy_block_partitions_dispatcher {
                                          stream);
 
     // Use gather instead for non-fixed width types
-    return experimental::type_dispatcher(input.type(),
+    return type_dispatcher(input.type(),
                                          detail::column_gatherer{},
                                          input,
                                          gather_map.begin(),
@@ -557,7 +557,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
     // Copy input to output by partition per column
     std::transform(input.begin(), input.end(), output_cols.begin(), [=](auto const& col) {
-      return cudf::experimental::type_dispatcher(col.type(),
+      return cudf::type_dispatcher(col.type(),
                                                  copy_block_partitions_dispatcher{},
                                                  col,
                                                  num_partitions,

@@ -391,7 +391,7 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
   timestamp_units units =
-    cudf::experimental::type_dispatcher(timestamp_type, dispatch_timestamp_to_units_fn());
+    cudf::type_dispatcher(timestamp_type, dispatch_timestamp_to_units_fn());
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
@@ -403,7 +403,7 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
                                        stream,
                                        mr);
   auto results_view = results->mutable_view();
-  cudf::experimental::type_dispatcher(
+  cudf::type_dispatcher(
     timestamp_type, dispatch_to_timestamps_fn(), d_column, format, units, results_view, stream);
   results->set_null_count(strings.null_count());
   return results;
@@ -722,7 +722,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
   timestamp_units units =
-    cudf::experimental::type_dispatcher(timestamps.type(), dispatch_timestamp_to_units_fn());
+    cudf::type_dispatcher(timestamps.type(), dispatch_timestamp_to_units_fn());
 
   format_compiler compiler(format.c_str(), units);
   auto d_format_items = compiler.compile_to_device();
@@ -754,7 +754,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   auto d_chars    = chars_view.template data<char>();
   // fill in chars column with timestamps
   // dispatcher is called to handle the different timestamp types
-  cudf::experimental::type_dispatcher(timestamps.type(),
+  cudf::type_dispatcher(timestamps.type(),
                                       dispatch_from_timestamps_fn(),
                                       d_column,
                                       d_format_items,

@@ -358,7 +358,7 @@ std::unique_ptr<table> copy_if(
   } else if (output_size > 0) {
     std::vector<std::unique_ptr<column>> out_columns(input.num_columns());
     std::transform(input.begin(), input.end(), out_columns.begin(), [&](auto col_view) {
-      return cudf::experimental::type_dispatcher(col_view.type(),
+      return cudf::type_dispatcher(col_view.type(),
                                                  scatter_gather_functor<Filter, block_size>{},
                                                  col_view,
                                                  output_size,

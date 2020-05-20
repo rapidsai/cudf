@@ -110,7 +110,7 @@ struct dispatch_unary_cast_from {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    return experimental::type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, mr, stream);
+    return type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, mr, stream);
   }
 
   template <
@@ -131,7 +131,7 @@ std::unique_ptr<column> cast(column_view const& input,
 {
   CUDF_EXPECTS(is_fixed_width(type), "Unary cast type must be fixed-width.");
 
-  return experimental::type_dispatcher(
+  return type_dispatcher(
     input.type(), detail::dispatch_unary_cast_from{input}, type, mr, stream);
 }
 

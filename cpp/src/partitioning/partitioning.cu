@@ -435,7 +435,7 @@ struct copy_block_partitions_dispatcher {
                                          stream);
 
     // Use gather instead for non-fixed width types
-    return experimental::type_dispatcher(input.type(),
+    return type_dispatcher(input.type(),
                                          detail::column_gatherer{},
                                          input,
                                          gather_map.begin(),
@@ -571,7 +571,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
     // Copy input to output by partition per column
     std::transform(input.begin(), input.end(), output_cols.begin(), [=](auto const& col) {
-      return cudf::experimental::type_dispatcher(col.type(),
+      return cudf::type_dispatcher(col.type(),
                                                  copy_block_partitions_dispatcher{},
                                                  col,
                                                  num_partitions,
@@ -727,6 +727,7 @@ struct dispatch_map_type {
 }  // namespace
 
 namespace detail {
+namespace local{
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
@@ -747,6 +748,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
     return hash_partition_table<false>(input, table_to_hash, num_partitions, mr, stream);
   }
 }
+} // local
 
 std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
@@ -763,7 +765,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
     return std::make_pair(empty_like(t), std::vector<size_type>{});
   }
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     partition_map.type(), dispatch_map_type{}, t, partition_map, num_partitions, mr, stream);
 }
 }  // namespace detail
@@ -776,7 +778,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash_partition(input, columns_to_hash, num_partitions, mr);
+  return detail::local::hash_partition(input, columns_to_hash, num_partitions, mr);
 }
 
 // Partition based on an explicit partition map

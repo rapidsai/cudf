@@ -63,8 +63,8 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
   cudf::table_view input_table{{input}};
 
   auto p_count     = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
-  using T_int      = cudf::experimental::id_to_type<cudf::INT32>;
-  using ScalarType = cudf::experimental::scalar_type_t<T_int>;
+  using T_int      = cudf::id_to_type<cudf::INT32>;
+  using ScalarType = cudf::scalar_type_t<T_int>;
   static_cast<ScalarType*>(p_count.get())->set_value(repeat_count);
 
   auto p_ret = cudf::repeat(input_table, *p_count);

@@ -57,7 +57,7 @@ std::unique_ptr<column> add_keys(
   // sort and remove any duplicates from the combined keys
   // drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
   auto table_keys =
-    detail::drop_duplicates(table_view{{*combined_keys}},
+    cudf::detail::drop_duplicates(table_view{{*combined_keys}},
                                           std::vector<size_type>{0},  // only one key column
                                           duplicate_keep_option::KEEP_FIRST,
                                           null_equality::EQUAL,

@@ -110,7 +110,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   d_integers.push_back(std::numeric_limits<TypeParam>::min());
   d_integers.push_back(std::numeric_limits<TypeParam>::max());
   auto integers =
-    cudf::make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
+    cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                               (cudf::size_type)d_integers.size());
   auto integers_view = integers->mutable_view();
   CUDA_TRY(cudaMemcpy(integers_view.data<TypeParam>(),
@@ -133,7 +133,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   // convert back to integers
   auto strings_view     = cudf::strings_column_view(results_strings->view());
   auto results_integers = cudf::strings::to_integers(
-    strings_view, cudf::data_type(cudf::experimental::type_to_id<TypeParam>()));
+    strings_view, cudf::data_type(cudf::type_to_id<TypeParam>()));
   cudf::test::expect_columns_equal(*results_integers, integers->view());
 }
 
@@ -147,7 +147,7 @@ TYPED_TEST_CASE(StringsFloatConvertTest, FloatTypes);
 
 TYPED_TEST(StringsFloatConvertTest, FromToIntegerError)
 {
-  auto dtype  = cudf::data_type{cudf::experimental::type_to_id<TypeParam>()};
+  auto dtype  = cudf::data_type{cudf::type_to_id<TypeParam>()};
   auto column = cudf::make_numeric_column(dtype, 100);
   EXPECT_THROW(cudf::strings::from_integers(column->view()), cudf::logic_error);
 

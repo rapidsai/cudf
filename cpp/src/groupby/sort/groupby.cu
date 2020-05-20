@@ -53,7 +53,7 @@ struct store_result_functor {
   store_result_functor(size_type col_idx,
                        column_view const& values,
                        sort::sort_groupby_helper& helper,
-                       detail::result_cache& cache,
+                       cudf::detail::result_cache& cache,
                        cudaStream_t stream,
                        rmm::mr::device_memory_resource* mr)
     : col_idx(col_idx), values(values), helper(helper), cache(cache), stream(stream), mr(mr)
@@ -102,7 +102,7 @@ struct store_result_functor {
  private:
   size_type col_idx;                          ///< Index of column in requests being operated on
   sort::sort_groupby_helper& helper;          ///< Sort helper
-  detail::result_cache& cache;  ///< cache of results to store into
+  cudf::detail::result_cache& cache;  ///< cache of results to store into
   column_view const& values;                  ///< Column of values to group and aggregate
 
   cudaStream_t stream;                  ///< CUDA stream on which to execute kernels
@@ -198,7 +198,7 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
         data_type(type_to_id<size_type>()),
         argmin_result.size(),
         static_cast<void const*>(argmin_result.template data<size_type>()));
-      auto transformed_result = detail::gather(
+      auto transformed_result = cudf::detail::gather(
         table_view({values}), null_removed_map, false, argmin_result.nullable(), false, mr, stream);
       return std::move(transformed_result->release()[0]);
     }
@@ -229,7 +229,7 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
         data_type(type_to_id<size_type>()),
         argmax_result.size(),
         static_cast<void const*>(argmax_result.template data<size_type>()));
-      auto transformed_result = detail::gather(
+      auto transformed_result = cudf::detail::gather(
         table_view({values}), null_removed_map, false, argmax_result.nullable(), false, mr, stream);
       return std::move(transformed_result->release()[0]);
     }
@@ -267,7 +267,7 @@ void store_result_functor::operator()<aggregation::VARIANCE>(aggregation const& 
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto var_agg   = static_cast<detail::std_var_aggregation const&>(agg);
+  auto var_agg   = static_cast<cudf::detail::std_var_aggregation const&>(agg);
   auto mean_agg  = make_mean_aggregation();
   auto count_agg = make_count_aggregation();
   operator()<aggregation::MEAN>(*mean_agg);
@@ -290,13 +290,13 @@ void store_result_functor::operator()<aggregation::STD>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto std_agg = static_cast<detail::std_var_aggregation const&>(agg);
+  auto std_agg = static_cast<cudf::detail::std_var_aggregation const&>(agg);
   auto var_agg = make_variance_aggregation(std_agg._ddof);
   operator()<aggregation::VARIANCE>(*var_agg);
   column_view var_result = cache.get_result(col_idx, *var_agg);
 
   auto result =
-    detail::unary_operation(var_result, unary_op::SQRT, mr, stream);
+    cudf::detail::unary_operation(var_result, unary_op::SQRT, mr, stream);
   cache.add_result(col_idx, agg, std::move(result));
 };
 
@@ -308,7 +308,7 @@ void store_result_functor::operator()<aggregation::QUANTILE>(aggregation const& 
   auto count_agg = make_count_aggregation();
   operator()<aggregation::COUNT_VALID>(*count_agg);
   column_view group_sizes = cache.get_result(col_idx, *count_agg);
-  auto quantile_agg       = static_cast<detail::quantile_aggregation const&>(agg);
+  auto quantile_agg       = static_cast<cudf::detail::quantile_aggregation const&>(agg);
 
   auto result = detail::group_quantiles(get_sorted_values(),
                                         group_sizes,
@@ -346,7 +346,7 @@ void store_result_functor::operator()<aggregation::NUNIQUE>(aggregation const& a
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto nunique_agg = static_cast<detail::nunique_aggregation const&>(agg);
+  auto nunique_agg = static_cast<cudf::detail::nunique_aggregation const&>(agg);
 
   auto result = detail::group_nunique(get_sorted_values(),
                                       helper.group_labels(),
@@ -363,7 +363,7 @@ void store_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation cons
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto nth_element_agg = static_cast<detail::nth_element_aggregation const&>(agg);
+  auto nth_element_agg = static_cast<cudf::detail::nth_element_aggregation const&>(agg);
 
   auto count_agg = make_count_aggregation(nth_element_agg._null_handling);
   if (count_agg->kind == aggregation::COUNT_VALID)
@@ -397,14 +397,14 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
   // We're going to start by creating a cache of results so that aggs that
   // depend on other aggs will not have to be recalculated. e.g. mean depends on
   // sum and count. std depends on mean and count
-  detail::result_cache cache(requests.size());
+  cudf::detail::result_cache cache(requests.size());
 
   for (size_t i = 0; i < requests.size(); i++) {
     auto store_functor =
       detail::store_result_functor(i, requests[i].values, helper(), cache, stream, mr);
     for (size_t j = 0; j < requests[i].aggregations.size(); j++) {
       // TODO (dm): single pass compute all supported reductions
-      detail::aggregation_dispatcher(
+        cudf::detail::aggregation_dispatcher(
         requests[i].aggregations[j]->kind, store_functor, *requests[i].aggregations[j]);
     }
   }

@@ -37,7 +37,7 @@ struct get_element_functor {
   {
     auto s = make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
 
-    using ScalarType = cudf::experimental::scalar_type_t<T>;
+    using ScalarType = cudf::scalar_type_t<T>;
     auto typed_s     = static_cast<ScalarType *>(s.get());
 
     auto device_s   = get_scalar_device_view(*typed_s);

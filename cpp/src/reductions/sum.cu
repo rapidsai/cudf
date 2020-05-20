@@ -26,5 +26,5 @@ std::unique_ptr<cudf::scalar> cudf::reduction::sum(
 {
   using reducer = cudf::reduction::simple::element_type_dispatcher<
     cudf::reduction::op::sum>;
-  return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, mr, stream);
+  return cudf::type_dispatcher(col.type(), reducer(), col, output_dtype, mr, stream);
 }

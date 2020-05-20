@@ -158,7 +158,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
     auto filter = [bool_mask_device] __device__(cudf::size_type i) {
       return bool_mask_device.is_valid_nocheck(i) and bool_mask_device.element<bool>(i);
     };
-    return cudf::experimental::type_dispatcher(lhs.type(),
+    return cudf::type_dispatcher(lhs.type(),
                                                copy_if_else_functor{},
                                                lhs,
                                                rhs,
@@ -172,7 +172,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
     auto filter = [bool_mask_device] __device__(cudf::size_type i) {
       return bool_mask_device.element<bool>(i);
     };
-    return cudf::experimental::type_dispatcher(lhs.type(),
+    return cudf::type_dispatcher(lhs.type(),
                                                copy_if_else_functor{},
                                                lhs,
                                                rhs,

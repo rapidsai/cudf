@@ -112,7 +112,7 @@ class corresponding_rows_not_equivalent {
     if (not comp(index, index)) {
       auto lhs_col = this->d_lhs.column(0);
       auto rhs_col = this->d_rhs.column(0);
-      return experimental::type_dispatcher(
+      return type_dispatcher(
         lhs_col.type(), typed_element_not_equivalent{}, lhs_col, rhs_col, index);
     }
     return false;
@@ -348,7 +348,7 @@ struct column_view_printer {
 std::vector<std::string> to_strings(cudf::column_view const& col)
 {
   std::vector<std::string> reply;
-  cudf::experimental::type_dispatcher(col.type(), column_view_printer{}, col, reply);
+  cudf::type_dispatcher(col.type(), column_view_printer{}, col, reply);
   return reply;
 }
 

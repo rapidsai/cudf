@@ -41,7 +41,7 @@ template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
   static std::size_t data_size() { return 1000; }
   static std::size_t mask_size() { return 100; }
-  cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest()
     : data{_num_elements * cudf::size_of(type())},

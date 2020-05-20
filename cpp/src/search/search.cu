@@ -76,7 +76,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 {
   // Allocate result column
   std::unique_ptr<column> result =
-    make_numeric_column(data_type{experimental::type_to_id<size_type>()},
+    make_numeric_column(data_type{type_to_id<size_type>()},
                         values.num_rows(),
                         mask_state::UNALLOCATED,
                         stream,
@@ -151,7 +151,7 @@ struct contains_scalar_dispatch {
                   cudaStream_t stream,
                   rmm::mr::device_memory_resource* mr)
   {
-    using ScalarType = cudf::experimental::scalar_type_t<Element>;
+    using ScalarType = cudf::scalar_type_t<Element>;
     auto d_col       = column_device_view::create(col, stream);
     auto s           = static_cast<const ScalarType*>(&value);
 
@@ -205,7 +205,7 @@ bool contains(column_view const& col,
 
   if (not value.is_valid()) { return col.has_nulls(); }
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     col.type(), contains_scalar_dispatch{}, col, value, stream, mr);
 }
 
@@ -217,7 +217,7 @@ struct multi_contains_dispatch {
                                      cudaStream_t stream)
   {
     std::unique_ptr<column> result =
-      make_numeric_column(data_type{experimental::type_to_id<bool>()},
+      make_numeric_column(data_type{type_to_id<bool>()},
                           haystack.size(),
                           copy_bitmask(haystack),
                           haystack.null_count(),
@@ -292,7 +292,7 @@ std::unique_ptr<column> contains(column_view const& haystack,
 {
   CUDF_EXPECTS(haystack.type() == needles.type(), "DTYPE mismatch");
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     haystack.type(), multi_contains_dispatch{}, haystack, needles, mr, stream);
 }
 

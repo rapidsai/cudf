@@ -44,9 +44,9 @@ static void BM_join(benchmark::State &state)
   // Generate build and probe tables
 
   auto build_key_column = cudf::make_numeric_column(
-    cudf::data_type(cudf::experimental::type_to_id<key_type>()), build_table_size);
+    cudf::data_type(cudf::type_to_id<key_type>()), build_table_size);
   auto probe_key_column = cudf::make_numeric_column(
-    cudf::data_type(cudf::experimental::type_to_id<key_type>()), probe_table_size);
+    cudf::data_type(cudf::type_to_id<key_type>()), probe_table_size);
 
   generate_input_tables<key_type, cudf::size_type>(
     build_key_column->mutable_view().data<key_type>(),

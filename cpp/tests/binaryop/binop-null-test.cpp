@@ -67,7 +67,7 @@ TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_Valid)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -86,7 +86,7 @@ TEST_F(BinaryOperationNullTest, Scalar_Valid_Vector_NonNullable)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -106,7 +106,7 @@ TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_NonNullable)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -125,7 +125,7 @@ TEST_F(BinaryOperationNullTest, Vector_Null_Scalar_Valid)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -144,7 +144,7 @@ TEST_F(BinaryOperationNullTest, Vector_Null_Vector_Valid)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -163,7 +163,7 @@ TEST_F(BinaryOperationNullTest, Vector_Null_Vector_NonNullable)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -182,7 +182,7 @@ TEST_F(BinaryOperationNullTest, Vector_Valid_Vector_NonNullable)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -201,7 +201,7 @@ TEST_F(BinaryOperationNullTest, Vector_NonNullable_Vector_NonNullable)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }

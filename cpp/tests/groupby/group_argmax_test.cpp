@@ -35,7 +35,7 @@ TYPED_TEST(groupby_argmax_test, basic)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = detail::target_type_t<V, aggregation::ARGMAX>;
+    using R = cudf::detail::target_type_t<V, aggregation::ARGMAX>;
 
     if (std::is_same<V, bool>::value) return;
 
@@ -56,7 +56,7 @@ TYPED_TEST(groupby_argmax_test, zero_valid_keys)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = detail::target_type_t<V, aggregation::ARGMAX>;
+    using R = cudf::detail::target_type_t<V, aggregation::ARGMAX>;
 
     if (std::is_same<V, bool>::value) return;
 
@@ -77,7 +77,7 @@ TYPED_TEST(groupby_argmax_test, zero_valid_values)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = detail::target_type_t<V, aggregation::ARGMAX>;
+    using R = cudf::detail::target_type_t<V, aggregation::ARGMAX>;
 
     if (std::is_same<V, bool>::value) return;
 
@@ -98,7 +98,7 @@ TYPED_TEST(groupby_argmax_test, null_keys_and_values)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = detail::target_type_t<V, aggregation::ARGMAX>;
+    using R = cudf::detail::target_type_t<V, aggregation::ARGMAX>;
 
     if (std::is_same<V, bool>::value) return;
 
@@ -127,7 +127,7 @@ TEST_F(groupby_argmax_string_test, basic)
 {
     using K = int32_t;
     using V = string_view;
-    using R = detail::target_type_t<V, aggregation::ARGMAX>;
+    using R = cudf::detail::target_type_t<V, aggregation::ARGMAX>;
 
     fixed_width_column_wrapper<K> keys        {     1,     2,    3,     1,     2,     2,     1,    3,    3,    2 };
     strings_column_wrapper        vals        { "año", "bit", "₹1", "aaa", "zit", "bat", "aab", "$1", "€1", "wut"};
@@ -146,7 +146,7 @@ TEST_F(groupby_argmax_string_test, zero_valid_values)
 {
     using K = int32_t;
     using V = string_view;
-    using R = detail::target_type_t<V, aggregation::ARGMAX>;
+    using R = cudf::detail::target_type_t<V, aggregation::ARGMAX>;
 
     fixed_width_column_wrapper<K> keys        { 1, 1, 1};
     strings_column_wrapper        vals      ( { "año", "bit", "₹1"}, all_null() );

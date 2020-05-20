@@ -482,7 +482,7 @@ TYPED_TEST(IteratorTest, error_handling)
   CUDF_EXPECT_NO_THROW((d_col_null->pair_begin<T, true>()));
 
   // scalar iterator
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
   std::unique_ptr<cudf::scalar> s(new ScalarType{T{1}, false});
   CUDF_EXPECT_THROW_MESSAGE((cudf::detail::make_scalar_iterator<T>(*s)),
                             "the scalar value must be valid");
@@ -635,7 +635,7 @@ TYPED_TEST(IteratorTest, scalar_iterator)
   std::vector<bool> host_bools(100, true);
 
   // create a scalar
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
   std::unique_ptr<cudf::scalar> s(new ScalarType{init, true});
 
   // calculate the expected value by CPU.
@@ -679,7 +679,7 @@ TEST_F(StringIteratorTest, string_scalar_iterator)
   });
 
   // create a scalar
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
   std::unique_ptr<cudf::scalar> s(new ScalarType{zero, true});
 
   // GPU test
@@ -699,7 +699,7 @@ TYPED_TEST(IteratorTest, null_scalar_iterator)
   std::vector<bool> host_bools(100, true);
 
   // create a scalar
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
   std::unique_ptr<cudf::scalar> s(new ScalarType{init, true});
 
   // calculate the expected value by CPU.

@@ -42,7 +42,7 @@ TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_SI32_FP32_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -61,7 +61,7 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP32_FP32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -80,7 +80,7 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_SI32_FP32_FP32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::SUB,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
 }
@@ -98,7 +98,7 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_SI08_SI16_SI32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -116,7 +116,7 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP64_SI08)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -134,7 +134,7 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::SUB,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
 }
@@ -153,7 +153,7 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Scalar_SI64_FP64_SI32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::SUB,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
 }
@@ -171,7 +171,7 @@ TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::MUL,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
 }
@@ -189,7 +189,7 @@ TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64_FP32_FP32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::MUL,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
 }
@@ -207,7 +207,7 @@ TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::DIV,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, DIV());
 }
@@ -225,7 +225,7 @@ TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64_FP32_FP32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::DIV,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, DIV());
 }
@@ -243,7 +243,7 @@ TEST_F(BinaryOperationIntegrationTest, TrueDiv_Vector_Vector_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::TRUE_DIV,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, TRUEDIV());
 }
@@ -261,7 +261,7 @@ TEST_F(BinaryOperationIntegrationTest, FloorDiv_Vector_Vector_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::FLOOR_DIV,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, FLOORDIV());
 }
@@ -279,7 +279,7 @@ TEST_F(BinaryOperationIntegrationTest, FloorDiv_Vector_Vector_SI64_FP32_FP32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::FLOOR_DIV,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, FLOORDIV());
 }
@@ -297,7 +297,7 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::MOD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
 }
@@ -315,7 +315,7 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::MOD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
 }
@@ -333,7 +333,7 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_SI64_FP32_FP32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::MOD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
 }
@@ -351,7 +351,7 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::MOD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
 }
@@ -369,7 +369,7 @@ TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_FP64_SI64_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::POW,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   /**
    * According to CUDA Programming Guide, 'E.1. Standard Functions', 'Table 7 - Double-Precision
@@ -392,7 +392,7 @@ TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_FP32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::POW,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
   /**
    * According to CUDA Programming Guide, 'E.1. Standard Functions', 'Table 7 - Double-Precision
    * Mathematical Standard Library Functions with Maximum ULP Error'
@@ -414,7 +414,7 @@ TEST_F(BinaryOperationIntegrationTest, And_Vector_Vector_SI16_SI64_SI32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::BITWISE_AND,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, AND());
 }
@@ -432,7 +432,7 @@ TEST_F(BinaryOperationIntegrationTest, Or_Vector_Vector_SI64_SI16_SI32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::BITWISE_OR,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, OR());
 }
@@ -450,7 +450,7 @@ TEST_F(BinaryOperationIntegrationTest, Xor_Vector_Vector_SI32_SI16_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::BITWISE_XOR,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, XOR());
 }
@@ -468,7 +468,7 @@ TEST_F(BinaryOperationIntegrationTest, Logical_And_Vector_Vector_SI16_FP64_SI8)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::LOGICAL_AND,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, AND());
 }
@@ -486,7 +486,7 @@ TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::LOGICAL_OR,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, OR());
 }
@@ -504,7 +504,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_TSS_TSS)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::LESS,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
 }
@@ -522,7 +522,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Scalar_Vector_B8_TSMS_TSS)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::GREATER,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER());
 }
@@ -540,7 +540,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_TSS_TSS)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::LESS,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
 }
@@ -563,7 +563,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::GREATER,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER());
 }
@@ -581,7 +581,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_STR_STR)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::LESS,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
 }
@@ -599,7 +599,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Scalar_B8_STR_STR)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::LESS,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
 }
@@ -617,7 +617,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_STR_STR)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::LESS,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
 }
@@ -635,7 +635,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_STR_STR)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::GREATER,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER());
 }
@@ -653,7 +653,7 @@ TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Vector_B8_STR_STR)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::EQUAL,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, EQUAL());
 }
@@ -671,7 +671,7 @@ TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Scalar_B8_STR_STR)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::EQUAL,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, EQUAL());
 }
@@ -689,7 +689,7 @@ TEST_F(BinaryOperationIntegrationTest, LessEqual_Vector_Vector_B8_STR_STR)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::LESS_EQUAL,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS_EQUAL());
 }
@@ -708,7 +708,7 @@ TEST_F(BinaryOperationIntegrationTest, GreaterEqual_Vector_Vector_B8_STR_STR)
     cudf::binary_operation(lhs,
                                          rhs,
                                          cudf::binary_operator::GREATER_EQUAL,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER_EQUAL());
 }
@@ -727,7 +727,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftLeft_Vector_Vector_SI32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::SHIFT_LEFT,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
 }
@@ -746,7 +746,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftLeft_Vector_Vector_SI32_SI16_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::SHIFT_LEFT,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
 }
@@ -765,7 +765,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftLeft_Scalar_Vector_SI32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::SHIFT_LEFT,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
 }
@@ -784,7 +784,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftLeft_Vector_Scalar_SI32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::SHIFT_LEFT,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
 }
@@ -803,7 +803,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRight_Vector_Vector_SI32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::SHIFT_RIGHT,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
 }
@@ -822,7 +822,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRight_Vector_Vector_SI32_SI16_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::SHIFT_RIGHT,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
 }
@@ -841,7 +841,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRight_Scalar_Vector_SI32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::SHIFT_RIGHT,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
 }
@@ -860,7 +860,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRight_Vector_Scalar_SI32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::SHIFT_RIGHT,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
 }
@@ -889,7 +889,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Vector_SI32)
     cudf::binary_operation(lhs_w,
                                          shift_w,
                                          cudf::binary_operator::SHIFT_RIGHT_UNSIGNED,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   cudf::test::expect_columns_equal(*out, expected_w);
 }
@@ -910,7 +910,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Vector_SI32_SI1
     cudf::binary_operation(lhs,
                                          rhs,
                                          cudf::binary_operator::SHIFT_RIGHT_UNSIGNED,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
 }
@@ -931,7 +931,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Scalar_Vector_SI32)
     cudf::binary_operation(lhs,
                                          rhs,
                                          cudf::binary_operator::SHIFT_RIGHT_UNSIGNED,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
 }
@@ -952,7 +952,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Scalar_SI32)
     cudf::binary_operation(lhs,
                                          rhs,
                                          cudf::binary_operator::SHIFT_RIGHT_UNSIGNED,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
 }
@@ -973,7 +973,7 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Scalar_SI32_SI32_float)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::LOG_BASE,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
 }
@@ -994,7 +994,7 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Scalar_Vector_float_SI32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::LOG_BASE,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
 }
@@ -1017,7 +1017,7 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Vector_double_SI64_SI32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::LOG_BASE,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
 }
@@ -1030,13 +1030,13 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_SI32_SI32
 
   auto int_col =
     fixed_width_column_wrapper<TypeLhs>{{999, -37, 0, INT32_MAX}, {true, true, true, false}};
-  auto int_scalar = cudf::experimental::scalar_type_t<TypeRhs>(999);
+  auto int_scalar = cudf::scalar_type_t<TypeRhs>(999);
 
   auto op_col =
     cudf::binary_operation(int_col,
                                          int_scalar,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1053,14 +1053,14 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_ScalarInvalid_B8_SI
 
   auto int_col    = fixed_width_column_wrapper<TypeLhs>{{-INT32_MAX, -37, 0, 499, 44, INT32_MAX},
                                                      {false, true, false, true, true, false}};
-  auto int_scalar = cudf::experimental::scalar_type_t<TypeRhs>(999);
+  auto int_scalar = cudf::scalar_type_t<TypeRhs>(999);
   int_scalar.set_valid(false);
 
   auto op_col =
     cudf::binary_operation(int_col,
                                          int_scalar,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(*op_col,
@@ -1090,13 +1090,13 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
     },
     {false, true, true, true, false, true, true, false},
   };
-  auto ts_scalar = cudf::experimental::scalar_type_t<TypeRhs>(44376);
+  auto ts_scalar = cudf::scalar_type_t<TypeRhs>(44376);
 
   auto op_col =
     cudf::binary_operation(ts_scalar,
                                          ts_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(*op_col,
@@ -1122,7 +1122,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
     cudf::binary_operation(str_col,
                                          str_scalar,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1147,7 +1147,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
     cudf::binary_operation(str_scalar,
                                          str_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1173,7 +1173,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
     cudf::binary_operation(str_col,
                                          str_scalar,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1200,7 +1200,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
     cudf::binary_operation(str_scalar,
                                          str_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1227,7 +1227,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
     cudf::binary_operation(str_scalar,
                                          str_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1255,7 +1255,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
     cudf::binary_operation(str_scalar,
                                          str_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(*op_col,
@@ -1279,7 +1279,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
     cudf::binary_operation(str_scalar,
                                          str_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1305,7 +1305,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_InvalidScalar_B8_st
     cudf::binary_operation(str_col,
                                          str_scalar,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1341,7 +1341,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_tsD_tsD_N
     cudf::binary_operation(lhs_col,
                                          rhs_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(*op_col,
@@ -1370,7 +1370,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     cudf::binary_operation(lhs_col,
                                          rhs_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1396,7 +1396,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     cudf::binary_operation(lhs_col,
                                          rhs_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1423,7 +1423,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     cudf::binary_operation(lhs_col,
                                          rhs_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1448,7 +1448,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     cudf::binary_operation(lhs_col,
                                          rhs_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(*op_col,
@@ -1473,7 +1473,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     cudf::binary_operation(lhs_col,
                                          rhs_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1500,7 +1500,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     cudf::binary_operation(lhs_col,
                                          rhs_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(*op_col,
@@ -1524,7 +1524,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_VectorAllInvalid_B8
     cudf::binary_operation(lhs_col,
                                          rhs_col,
                                          cudf::binary_operator::NULL_EQUALS,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(*op_col,
@@ -1544,13 +1544,13 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_SI8)
   auto int_col = fixed_width_column_wrapper<TypeLhs>{
     {999, -37, 0, INT32_MAX},
   };
-  auto int_scalar = cudf::experimental::scalar_type_t<TypeRhs>(77);
+  auto int_scalar = cudf::scalar_type_t<TypeRhs>(77);
 
   auto op_col =
     cudf::binary_operation(int_col,
                                          int_scalar,
                                          cudf::binary_operator::NULL_MIN,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1566,13 +1566,13 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_FP64_SI32_SI64
   auto int_col =
     fixed_width_column_wrapper<TypeLhs>{{999, -37, 0, INT32_MAX, -INT32_MAX, -4379, 55},
                                         {false, true, false, true, false, true, false}};
-  auto int_scalar = cudf::experimental::scalar_type_t<TypeRhs>(INT32_MAX);
+  auto int_scalar = cudf::scalar_type_t<TypeRhs>(INT32_MAX);
 
   auto op_col =
     cudf::binary_operation(int_scalar,
                                          int_col,
                                          cudf::binary_operator::NULL_MAX,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1592,14 +1592,14 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_FP32
   auto int_col =
     fixed_width_column_wrapper<TypeLhs>{{999, -37, 0, INT32_MAX, -INT32_MAX, -4379, 55},
                                         {false, true, false, true, false, true, false}};
-  auto float_scalar = cudf::experimental::scalar_type_t<TypeRhs>(-3.14f);
+  auto float_scalar = cudf::scalar_type_t<TypeRhs>(-3.14f);
   float_scalar.set_valid(false);
 
   auto op_col =
     cudf::binary_operation(int_col,
                                          float_scalar,
                                          cudf::binary_operator::NULL_MIN,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1617,14 +1617,14 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_SI8_SI8_FP32)
 
   auto int_col = fixed_width_column_wrapper<TypeLhs>{
     {9, -37, 0, 32, -47, -4, 55}, {false, false, false, false, false, false, false}};
-  auto float_scalar = cudf::experimental::scalar_type_t<TypeRhs>(-3.14f);
+  auto float_scalar = cudf::scalar_type_t<TypeRhs>(-3.14f);
   float_scalar.set_valid(false);
 
   auto op_col =
     cudf::binary_operation(float_scalar,
                                          int_col,
                                          cudf::binary_operator::NULL_MAX,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(*op_col,
@@ -1649,7 +1649,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_SI64_SI32_SI8)
     cudf::binary_operation(int_col,
                                          another_int_col,
                                          cudf::binary_operator::NULL_MIN,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(*op_col,
@@ -1673,7 +1673,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI64_SI32_SI8)
     cudf::binary_operation(int_col,
                                          another_int_col,
                                          cudf::binary_operator::NULL_MAX,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(
@@ -1708,7 +1708,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
     cudf::binary_operation(lhs_col,
                                          rhs_col,
                                          cudf::binary_operator::NULL_MIN,
-                                         data_type(experimental::type_to_id<cudf::timestamp_D>()));
+                                         data_type(type_to_id<cudf::timestamp_D>()));
 
   // Every row has a value
   expect_columns_equal(*op_col,
@@ -1735,7 +1735,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI32_SI64_SI8)
     cudf::binary_operation(int_col,
                                          another_int_col,
                                          cudf::binary_operator::NULL_MAX,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
   expect_columns_equal(*op_col,
@@ -1815,7 +1815,7 @@ TEST_F(BinaryOperationIntegrationTest, CastAdd_Vector_Vector_SI32_float_float)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -1829,14 +1829,14 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Scalar_Vector_SI64_SI6
   using SHIFT_RIGHT_UNSIGNED =
     cudf::library::operation::ShiftRightUnsigned<TypeOut, TypeLhs, TypeRhs>;
 
-  auto lhs = cudf::experimental::scalar_type_t<TypeLhs>(-12);
+  auto lhs = cudf::scalar_type_t<TypeLhs>(-12);
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
   auto out =
     cudf::binary_operation(lhs,
                                          rhs,
                                          cudf::binary_operator::SHIFT_RIGHT_UNSIGNED,
-                                         data_type(experimental::type_to_id<TypeOut>()));
+                                         data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
 }
@@ -1849,13 +1849,13 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Scalar_Vector_FP32)
 
   using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
 
-  auto lhs = cudf::experimental::scalar_type_t<TypeLhs>(-86099.68377);
+  auto lhs = cudf::scalar_type_t<TypeLhs>(-86099.68377);
   auto rhs = fixed_width_column_wrapper<TypeRhs>{{90770.74881, -15456.4335, 32213.22119}};
 
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::PMOD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   auto expected_result =
     fixed_width_column_wrapper<TypeOut>{{4671.0625, -8817.51953125, 10539.974609375}};
@@ -1871,12 +1871,12 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Scalar_FP64)
   using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
 
   auto lhs = fixed_width_column_wrapper<TypeLhs>{{90770.74881, -15456.4335, 32213.22119}};
-  auto rhs = cudf::experimental::scalar_type_t<TypeRhs>(-86099.68377);
+  auto rhs = cudf::scalar_type_t<TypeRhs>(-86099.68377);
 
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::PMOD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   auto expected_result = fixed_width_column_wrapper<TypeOut>{
     {4671.0650400000013178, -15456.433499999999185, 32213.221190000000206}};
@@ -1905,7 +1905,7 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_FP32_FP64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::PMOD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   auto expected_result = fixed_width_column_wrapper<TypeOut>{{24854.55859375,
                                                               2664.7075000000040745,
@@ -1932,7 +1932,7 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_SI32_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::PMOD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
 }
@@ -1951,7 +1951,7 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_SI64_SI32_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::PMOD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
 }
@@ -1970,7 +1970,7 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_SI64_FP64_FP64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::PMOD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
 }
@@ -1989,7 +1989,7 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Scalar_Vector_FP32)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ATAN2,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   // atan2 has a max ULP error of 2 per CUDA programming guide
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
@@ -2009,7 +2009,7 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Scalar_FP64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ATAN2,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   // atan2 has a max ULP error of 2 per CUDA programming guide
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
@@ -2029,7 +2029,7 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Vector_FP64_FP32_FP64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ATAN2,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   // atan2 has a max ULP error of 2 per CUDA programming guide
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
@@ -2049,7 +2049,7 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Vector_FP64_SI32_SI64)
   auto out = cudf::binary_operation(lhs,
                                                   rhs,
                                                   cudf::binary_operator::ATAN2,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+                                                  data_type(type_to_id<TypeOut>()));
 
   // atan2 has a max ULP error of 2 per CUDA programming guide
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});

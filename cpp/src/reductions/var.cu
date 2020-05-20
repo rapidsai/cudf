@@ -34,7 +34,7 @@ std::unique_ptr<cudf::scalar> cudf::reduction::variance(
 #if !defined(__CUDACC_DEBUG__)
   using reducer = cudf::reduction::compound::element_type_dispatcher<
     cudf::reduction::op::variance>;
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     col.type(), reducer(), col, output_dtype, ddof, mr, stream);
 #else
   // workaround for bug 200529165 which causes compilation error only at device
