@@ -84,7 +84,7 @@ struct copy_if_else_tiny_grid_functor {
     auto out_dv   = cudf::mutable_column_device_view::create(*out);
 
     // call the kernel with an artificially small grid
-    cudf::experimental::detail::
+    cudf::detail::
       copy_if_else_kernel<32, T, decltype(lhs_iter), decltype(rhs_iter), Filter, false>
       <<<1, 32, 0, stream>>>(lhs_iter, rhs_iter, filter, *out_dv, nullptr);
 

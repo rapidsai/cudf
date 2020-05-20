@@ -80,7 +80,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnOrderCountMismatch)
 
   EXPECT_THROW(quantiles(input,
                                        {0.0f},
-                                       experimental::interpolation::NEAREST,
+                                       interpolation::NEAREST,
                                        sorted::NO,
                                        {order::ASCENDING},
                                        {null_order::AFTER, null_order::AFTER}),
@@ -97,7 +97,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnNullOrderCountMismatch)
 
   EXPECT_THROW(quantiles(input,
                                        {0.0f},
-                                       experimental::interpolation::NEAREST,
+                                       interpolation::NEAREST,
                                        sorted::NO,
                                        {order::ASCENDING, order::ASCENDING},
                                        {null_order::AFTER}),
@@ -112,10 +112,10 @@ TYPED_TEST(QuantilesTest, TestMultiColumnArithmeticInterpolation)
   auto input_b = fixed_width_column_wrapper<T>({});
   auto input   = table_view({input_a});
 
-  EXPECT_THROW(quantiles(input, {0.0f}, experimental::interpolation::LINEAR),
+  EXPECT_THROW(quantiles(input, {0.0f}, interpolation::LINEAR),
                logic_error);
 
-  EXPECT_THROW(quantiles(input, {0.0f}, experimental::interpolation::MIDPOINT),
+  EXPECT_THROW(quantiles(input, {0.0f}, interpolation::MIDPOINT),
                logic_error);
 }
 
@@ -136,7 +136,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
 
   auto actual = quantiles(input,
                                         {0.0f, 0.5f, 0.7f, 0.25f, 1.0f},
-                                        experimental::interpolation::NEAREST,
+                                        interpolation::NEAREST,
                                         sorted::NO,
                                         {order::ASCENDING, order::DESCENDING});
 
@@ -165,7 +165,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
   auto input = table_view({input_a, input_b});
 
   auto actual = quantiles(
-    input, {0.0f, 0.5f, 0.7f, 0.25f, 1.0f}, experimental::interpolation::NEAREST, sorted::YES);
+    input, {0.0f, 0.5f, 0.7f, 0.25f, 1.0f}, interpolation::NEAREST, sorted::YES);
 
   auto expected_a = strings_column_wrapper({"C", "D", "C", "D", "A"}, {1, 1, 1, 1, 1});
 

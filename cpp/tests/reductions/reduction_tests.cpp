@@ -124,7 +124,7 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   this->reduction_test(
     col, expected_min_result, result_error, cudf::make_min_aggregation());
   this->reduction_test(
-    col, expected_max_result, result_error, cudf::experimental::make_max_aggregation());
+    col, expected_max_result, result_error, cudf::make_max_aggregation());
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
@@ -140,7 +140,7 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   this->reduction_test(
     col_nulls, expected_min_null_result, result_error, cudf::make_min_aggregation());
   this->reduction_test(
-    col_nulls, expected_max_null_result, result_error, cudf::experimental::make_max_aggregation());
+    col_nulls, expected_max_null_result, result_error, cudf::make_max_aggregation());
 }
 
 TYPED_TEST_CASE(ReductionTest, cudf::test::NumericTypes);
@@ -760,9 +760,9 @@ TEST_P(StringReductionTest, MinMax)
     col_nulls, expected_min_null_result, succeed, cudf::make_min_aggregation());
   // MAX
   this->reduction_test(
-    col, expected_max_result, succeed, cudf::experimental::make_max_aggregation());
+    col, expected_max_result, succeed, cudf::make_max_aggregation());
   this->reduction_test(
-    col_nulls, expected_max_null_result, succeed, cudf::experimental::make_max_aggregation());
+    col_nulls, expected_max_null_result, succeed, cudf::make_max_aggregation());
 }
 
 TEST_F(StringReductionTest, AllNull)
@@ -783,7 +783,7 @@ TEST_F(StringReductionTest, AllNull)
   EXPECT_FALSE(minresult->is_valid());
   // MAX
   std::unique_ptr<cudf::scalar> maxresult =
-    cudf::reduce(col_nulls, cudf::experimental::make_max_aggregation(), output_dtype);
+    cudf::reduce(col_nulls, cudf::make_max_aggregation(), output_dtype);
   EXPECT_FALSE(maxresult->is_valid());
 }
 
@@ -831,7 +831,7 @@ TYPED_TEST(ReductionTest, Quantile)
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
   std::vector<bool> host_bools({1, 1, 1, 0, 1, 1, 1, 1});
   std::vector<T> v = convert_values<T>(int_values);
-  cudf::experimental::interpolation interp{cudf::experimental::interpolation::LINEAR};
+  cudf::interpolation interp{cudf::interpolation::LINEAR};
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());

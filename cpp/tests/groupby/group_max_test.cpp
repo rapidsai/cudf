@@ -43,10 +43,10 @@ TYPED_TEST(groupby_max_test, basic)
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
     fixed_width_column_wrapper<R> expect_vals { 6, 9, 8 };
 
-    auto agg = cudf::experimental::make_max_aggregation();
+    auto agg = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_max_aggregation();
+    auto agg2 = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -62,10 +62,10 @@ TYPED_TEST(groupby_max_test, empty_cols)
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
 
-    auto agg = cudf::experimental::make_max_aggregation();
+    auto agg = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_max_aggregation();
+    auto agg2 = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -81,10 +81,10 @@ TYPED_TEST(groupby_max_test, zero_valid_keys)
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
 
-    auto agg = cudf::experimental::make_max_aggregation();
+    auto agg = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_max_aggregation();
+    auto agg2 = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -100,10 +100,10 @@ TYPED_TEST(groupby_max_test, zero_valid_values)
     fixed_width_column_wrapper<K> expect_keys { 1 };
     fixed_width_column_wrapper<R> expect_vals({ 0 }, all_null());
 
-    auto agg = cudf::experimental::make_max_aggregation();
+    auto agg = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_max_aggregation();
+    auto agg2 = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -124,10 +124,10 @@ TYPED_TEST(groupby_max_test, null_keys_and_values)
     fixed_width_column_wrapper<R> expect_vals({ 3,        5,         8,       0},
                                               { 1,        1,         1,       0});
 
-    auto agg = cudf::experimental::make_max_aggregation();
+    auto agg = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_max_aggregation();
+    auto agg2 = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -144,10 +144,10 @@ TEST_F(groupby_max_string_test, basic)
     fixed_width_column_wrapper<K> expect_keys {     1,     2,    3 };
     strings_column_wrapper        expect_vals({ "año", "zit", "₹1" });
 
-    auto agg = cudf::experimental::make_max_aggregation();
+    auto agg = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_max_aggregation();
+    auto agg2 = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -161,10 +161,10 @@ TEST_F(groupby_max_string_test, zero_valid_values)
     fixed_width_column_wrapper<K> expect_keys { 1 };
     strings_column_wrapper        expect_vals({ "" }, all_null());
 
-    auto agg = cudf::experimental::make_max_aggregation();
+    auto agg = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_max_aggregation();
+    auto agg2 = cudf::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 // clang-format on

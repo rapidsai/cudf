@@ -126,7 +126,7 @@ std::unique_ptr<column> remove_keys(
   CUDF_EXPECTS(keys_view.type() == keys_to_remove.type(), "keys types must match");
 
   // locate keys to remove by searching the keys column
-  auto const matches = experimental::detail::contains(keys_view, keys_to_remove, mr, stream);
+  auto const matches = detail::contains(keys_view, keys_to_remove, mr, stream);
   auto d_matches     = matches->view().data<bool>();
   // call common utility method to keep the keys not matched to keys_to_remove
   auto key_matcher = [d_matches] __device__(size_type idx) { return !d_matches[idx]; };
@@ -158,7 +158,7 @@ std::unique_ptr<column> remove_unused_keys(
 
   // search the indices values with key indices to look for any holes
   auto const matches =
-    experimental::detail::contains(keys_positions_view, indices_view, mr, stream);
+    detail::contains(keys_positions_view, indices_view, mr, stream);
   auto d_matches = matches->view().data<bool>();
 
   // call common utility method to keep the keys that match

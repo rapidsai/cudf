@@ -836,7 +836,6 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
 }  // namespace detail
 
-namespace experimental {
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
                                             rmm::mr::device_memory_resource* mr)
@@ -852,11 +851,9 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   CUDF_FUNC_RANGE();
   return cudf::detail::replace_nulls(input, replacement, mr, 0);
 }
-}  // namespace experimental
 }  // namespace cudf
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 
@@ -979,7 +976,6 @@ std::unique_ptr<column> replace_nans(column_view const& input,
   return detail::replace_nans(input, replacement, 0, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf
 
 namespace {  // anonymous

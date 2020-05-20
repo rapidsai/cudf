@@ -54,7 +54,7 @@ TEST_F(RollingStringTest, NoNullStringMinMaxCount)
   auto got_min = cudf::rolling_window(
     input, window[0], window[0], 1, cudf::make_min_aggregation());
   auto got_max = cudf::rolling_window(
-    input, window[0], window[0], 1, cudf::experimental::make_max_aggregation());
+    input, window[0], window[0], 1, cudf::make_max_aggregation());
   auto got_count_valid = cudf::rolling_window(
     input, window[0], window[0], 1, cudf::make_count_aggregation());
   auto got_count_all = cudf::rolling_window(
@@ -90,7 +90,7 @@ TEST_F(RollingStringTest, NullStringMinMaxCount)
   auto got_min = cudf::rolling_window(
     input, window[0], window[0], 1, cudf::make_min_aggregation());
   auto got_max = cudf::rolling_window(
-    input, window[0], window[0], 1, cudf::experimental::make_max_aggregation());
+    input, window[0], window[0], 1, cudf::make_max_aggregation());
   auto got_count_valid = cudf::rolling_window(
     input, window[0], window[0], 1, cudf::make_count_aggregation());
   auto got_count_all = cudf::rolling_window(
@@ -126,7 +126,7 @@ TEST_F(RollingStringTest, MinPeriods)
   auto got_min = cudf::rolling_window(
     input, window[0], window[0], 3, cudf::make_min_aggregation());
   auto got_max = cudf::rolling_window(
-    input, window[0], window[0], 3, cudf::experimental::make_max_aggregation());
+    input, window[0], window[0], 3, cudf::make_max_aggregation());
   auto got_count_valid = cudf::rolling_window(
     input, window[0], window[0], 3, cudf::make_count_aggregation());
   auto got_count_all = cudf::rolling_window(
@@ -228,7 +228,7 @@ class RollingTest : public cudf::test::BaseFixture {
                  preceding_window,
                  following_window,
                  min_periods,
-                 cudf::experimental::make_max_aggregation());
+                 cudf::make_max_aggregation());
     run_test_col(input,
                  preceding_window,
                  following_window,

@@ -114,7 +114,7 @@ std::unique_ptr<column> set_keys(
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
   // compute the new nulls
-  auto matches     = experimental::detail::contains(keys, keys_column->view(), mr, stream);
+  auto matches     = detail::contains(keys, keys_column->view(), mr, stream);
   auto d_matches   = matches->view().data<bool>();
   auto d_indices   = dictionary_column.indices().data<int32_t>();
   auto d_null_mask = dictionary_column.null_mask();

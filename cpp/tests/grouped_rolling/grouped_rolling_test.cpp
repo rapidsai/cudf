@@ -191,7 +191,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                  preceding_window,
                  following_window,
                  min_periods,
-                 cudf::experimental::make_max_aggregation());
+                 cudf::make_max_aggregation());
     run_test_col(keys,
                  input,
                  expected_grouping,
@@ -764,7 +764,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                  preceding_window_in_days,
                  following_window_in_days,
                  min_periods,
-                 cudf::experimental::make_max_aggregation());
+                 cudf::make_max_aggregation());
     run_test_col(keys,
                  timestamp_column,
                  timestamp_order,

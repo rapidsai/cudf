@@ -332,7 +332,7 @@ std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> unsorted()
 template <typename T>
 void test(testdata::test_case<T> test_case)
 {
-  using namespace cudf::experimental;
+  using namespace cudf;
 
   for (auto& expected : test_case.expectations) {
     auto q = std::vector<double>{expected.quantile};
