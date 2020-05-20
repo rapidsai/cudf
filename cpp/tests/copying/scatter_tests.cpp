@@ -62,7 +62,7 @@ TEST_F(ScatterUntypedTests, ScatterMapNulls)
 // Throw logic error if scatter map has nulls
 TEST_F(ScatterUntypedTests, ScatterScalarMapNulls)
 {
-  using cudf::experimental::scalar_type_t;
+  using cudf::scalar_type_t;
   using cudf::test::expect_tables_equal;
   using cudf::test::fixed_width_column_wrapper;
   using scalar_ptr    = std::unique_ptr<cudf::scalar>;
@@ -102,7 +102,7 @@ TEST_F(ScatterUntypedTests, ScatterColumnNumberMismatch)
 // Throw logic error if number of scalars doesn't match number of columns
 TEST_F(ScatterUntypedTests, ScatterScalarColumnNumberMismatch)
 {
-  using cudf::experimental::scalar_type_t;
+  using cudf::scalar_type_t;
   using cudf::test::expect_tables_equal;
   using cudf::test::fixed_width_column_wrapper;
   using scalar_ptr    = std::unique_ptr<cudf::scalar>;
@@ -142,7 +142,7 @@ TEST_F(ScatterUntypedTests, ScatterDataTypeMismatch)
 // Throw logic error if source and target have different data types
 TEST_F(ScatterUntypedTests, ScatterScalarDataTypeMismatch)
 {
-  using cudf::experimental::scalar_type_t;
+  using cudf::scalar_type_t;
   using cudf::test::expect_tables_equal;
   using cudf::test::fixed_width_column_wrapper;
   using scalar_ptr    = std::unique_ptr<cudf::scalar>;
@@ -192,7 +192,7 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterOutOfBounds)
 // Throw logic error if check_bounds is set and index is out of bounds
 TYPED_TEST(ScatterIndexTypeTests, ScatterScalarOutOfBounds)
 {
-  using cudf::experimental::scalar_type_t;
+  using cudf::scalar_type_t;
   using cudf::test::expect_tables_equal;
   using cudf::test::fixed_width_column_wrapper;
   using scalar_ptr    = std::unique_ptr<cudf::scalar>;
@@ -238,7 +238,7 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterIndexType)
 // Validate that each of the index types work
 TYPED_TEST(ScatterIndexTypeTests, ScatterScalarIndexType)
 {
-  using cudf::experimental::scalar_type_t;
+  using cudf::scalar_type_t;
   using cudf::test::expect_tables_equal;
   using cudf::test::fixed_width_column_wrapper;
   using scalar_ptr    = std::unique_ptr<cudf::scalar>;
@@ -290,7 +290,7 @@ TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterInvalidIndexType)
 // Throw logic error if scatter map column has invalid data type
 TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterScalarInvalidIndexType)
 {
-  using cudf::experimental::scalar_type_t;
+  using cudf::scalar_type_t;
   using cudf::test::expect_tables_equal;
   using cudf::test::fixed_width_column_wrapper;
   using scalar_ptr    = std::unique_ptr<cudf::scalar>;
@@ -338,7 +338,7 @@ TYPED_TEST(ScatterDataTypeTests, EmptyScatterMap)
 // Empty scatter map returns copy of input
 TYPED_TEST(ScatterDataTypeTests, EmptyScalarScatterMap)
 {
-  using cudf::experimental::scalar_type_t;
+  using cudf::scalar_type_t;
   using cudf::test::expect_tables_equal;
   using cudf::test::fixed_width_column_wrapper;
   using scalar_ptr    = std::unique_ptr<cudf::scalar>;
@@ -443,7 +443,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterTargetNulls)
 
 TYPED_TEST(ScatterDataTypeTests, ScatterScalarNoNulls)
 {
-  using cudf::experimental::scalar_type_t;
+  using cudf::scalar_type_t;
   using cudf::test::expect_tables_equal;
   using cudf::test::fixed_width_column_wrapper;
   using scalar_ptr    = std::unique_ptr<cudf::scalar>;
@@ -468,7 +468,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarNoNulls)
 
 TYPED_TEST(ScatterDataTypeTests, ScatterScalarTargetNulls)
 {
-  using cudf::experimental::scalar_type_t;
+  using cudf::scalar_type_t;
   using cudf::test::expect_tables_equal;
   using cudf::test::fixed_width_column_wrapper;
   using scalar_ptr    = std::unique_ptr<cudf::scalar>;
@@ -495,7 +495,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarTargetNulls)
 
 TYPED_TEST(ScatterDataTypeTests, ScatterScalarSourceNulls)
 {
-  using cudf::experimental::scalar_type_t;
+  using cudf::scalar_type_t;
   using cudf::test::expect_tables_equal;
   using cudf::test::fixed_width_column_wrapper;
   using scalar_ptr    = std::unique_ptr<cudf::scalar>;
@@ -522,7 +522,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarSourceNulls)
 
 TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
 {
-  using cudf::experimental::scalar_type_t;
+  using cudf::scalar_type_t;
   using cudf::test::expect_tables_equal;
   using cudf::test::fixed_width_column_wrapper;
   using scalar_ptr    = std::unique_ptr<cudf::scalar>;
@@ -795,7 +795,7 @@ template <typename T>
 struct BooleanMaskScalarScatter : public cudf::test::BaseFixture {
   std::unique_ptr<cudf::scalar> form_scalar(T value, bool validity = true)
   {
-    using ScalarType = cudf::experimental::scalar_type_t<T>;
+    using ScalarType = cudf::scalar_type_t<T>;
     std::unique_ptr<cudf::scalar> scalar{nullptr};
 
     if (cudf::is_numeric<T>()) {

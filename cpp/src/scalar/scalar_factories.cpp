@@ -23,7 +23,7 @@
 namespace cudf {
 namespace {
 struct scalar_construction_helper {
-  template <typename T, typename ScalarType = experimental::scalar_type_t<T>>
+  template <typename T, typename ScalarType = scalar_type_t<T>>
   std::enable_if_t<is_fixed_width<T>(), std::unique_ptr<scalar>> operator()(
     cudaStream_t stream, rmm::mr::device_memory_resource* mr) const
   {
@@ -74,7 +74,7 @@ struct default_scalar_functor {
   template <typename T>
   std::unique_ptr<cudf::scalar> operator()()
   {
-    using ScalarType = experimental::scalar_type_t<T>;
+    using ScalarType = scalar_type_t<T>;
     return std::unique_ptr<scalar>(new ScalarType);
   }
 };

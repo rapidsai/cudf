@@ -147,7 +147,7 @@ struct ClampTestNumeric : public cudf::test::BaseFixture {
                                           T hi_replace,
                                           bool hi_replace_validity)
   {
-    using ScalarType = cudf::experimental::scalar_type_t<T>;
+    using ScalarType = cudf::scalar_type_t<T>;
     std::unique_ptr<cudf::scalar> lo_scalar{nullptr};
     std::unique_ptr<cudf::scalar> hi_scalar{nullptr};
     std::unique_ptr<cudf::scalar> lo_replace_scalar{nullptr};
@@ -289,7 +289,7 @@ TYPED_TEST_CASE(ClampFloatTest, cudf::test::FloatingPointTypes);
 TYPED_TEST(ClampFloatTest, WithNANandNoNull)
 {
   using T          = TypeParam;
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
 
   cudf::test::fixed_width_column_wrapper<T> input(
     {T(8.0), T(6.0), T(NAN), T(3.0), T(4.0), T(5.0), T(1.0), T(NAN), T(2.0), T(9.0)});
@@ -313,7 +313,7 @@ TYPED_TEST(ClampFloatTest, WithNANandNoNull)
 TYPED_TEST(ClampFloatTest, WithNANandNull)
 {
   using T          = TypeParam;
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
 
   cudf::test::fixed_width_column_wrapper<T> input(
     {T(8.0), T(6.0), T(NAN), T(3.0), T(4.0), T(5.0), T(1.0), T(NAN), T(2.0), T(9.0)},
@@ -339,7 +339,7 @@ TYPED_TEST(ClampFloatTest, WithNANandNull)
 TYPED_TEST(ClampFloatTest, SignOfAFloat)
 {
   using T          = TypeParam;
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
 
   cudf::test::fixed_width_column_wrapper<T> input(
     {T(2.0), T(0.0), T(NAN), T(4.0), T(-0.5), T(-1.0), T(1.0), T(NAN), T(0.5), T(9.0)},

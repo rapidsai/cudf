@@ -25,7 +25,7 @@
 #include <type_traits>
 #include "gtest/gtest.h"
 
-using cudf::experimental::scalar_type_t;
+using cudf::scalar_type_t;
 
 namespace cudf {
 namespace test {

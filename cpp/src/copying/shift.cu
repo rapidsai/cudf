@@ -57,7 +57,7 @@ struct shift_functor {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
-    using ScalarType = cudf::experimental::scalar_type_t<T>;
+    using ScalarType = cudf::scalar_type_t<T>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
 
     auto device_input = column_device_view::create(input);

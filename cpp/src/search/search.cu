@@ -152,7 +152,7 @@ struct contains_scalar_dispatch {
                   cudaStream_t stream,
                   rmm::mr::device_memory_resource* mr)
   {
-    using ScalarType = cudf::experimental::scalar_type_t<Element>;
+    using ScalarType = cudf::scalar_type_t<Element>;
     auto d_col       = column_device_view::create(col, stream);
     auto s           = static_cast<const ScalarType*>(&value);
 

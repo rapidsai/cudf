@@ -74,9 +74,8 @@ struct apply_binop {
 
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
-  cudf::experimental::scalar_device_type_t<Rhs> scalar;
-  apply_binop_scalar_lhs_rhs(binary_operator op,
-                             cudf::experimental::scalar_device_type_t<Rhs> scalar)
+  cudf::scalar_device_type_t<Rhs> scalar;
+  apply_binop_scalar_lhs_rhs(binary_operator op, cudf::scalar_device_type_t<Rhs> scalar)
     : apply_binop<Lhs, Rhs, Out>(op), scalar(scalar)
   {
   }
@@ -88,9 +87,8 @@ struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
 
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop_scalar_rhs_lhs : apply_binop<Rhs, Lhs, Out> {
-  cudf::experimental::scalar_device_type_t<Rhs> scalar;
-  apply_binop_scalar_rhs_lhs(binary_operator op,
-                             cudf::experimental::scalar_device_type_t<Rhs> scalar)
+  cudf::scalar_device_type_t<Rhs> scalar;
+  apply_binop_scalar_rhs_lhs(binary_operator op, cudf::scalar_device_type_t<Rhs> scalar)
     : apply_binop<Rhs, Lhs, Out>(op), scalar(scalar)
   {
   }
@@ -122,7 +120,7 @@ struct binary_op {
       auto out_view        = out->mutable_view();
       auto out_itr         = out_view.begin<Out>();
       auto lhs_device_view = column_device_view::create(lhs, stream);
-      auto rhs_scalar      = static_cast<cudf::experimental::scalar_type_t<Rhs> const&>(rhs);
+      auto rhs_scalar      = static_cast<cudf::scalar_type_t<Rhs> const&>(rhs);
       auto rhs_scalar_view = get_scalar_device_view(rhs_scalar);
       if (lhs.has_nulls()) {
         auto lhs_itr =
@@ -302,8 +300,7 @@ struct null_considering_binop {
   auto get_device_view(cudf::scalar const& scalar_item) const
   {
     return get_scalar_device_view(
-      static_cast<cudf::experimental::scalar_type_t<cudf::string_view>&>(
-        const_cast<scalar&>(scalar_item)));
+      static_cast<cudf::scalar_type_t<cudf::string_view>&>(const_cast<scalar&>(scalar_item)));
   }
 
   auto get_device_view(column_device_view const& col_item) const { return col_item; }

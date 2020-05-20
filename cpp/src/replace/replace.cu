@@ -763,7 +763,7 @@ struct replace_nulls_scalar_kernel_forwarder {
       input, cudf::experimental::mask_allocation_policy::NEVER, mr);
     auto output_view = output->mutable_view();
 
-    using ScalarType = cudf::experimental::scalar_type_t<col_type>;
+    using ScalarType = cudf::scalar_type_t<col_type>;
     auto s1          = static_cast<ScalarType const&>(replacement);
     auto device_in   = cudf::column_device_view::create(input);
 

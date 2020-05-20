@@ -124,6 +124,8 @@ CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
 CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
 CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
 
+}  // namespace experimental
+
 template <typename T>
 struct type_to_scalar_type_impl {
   using ScalarType = cudf::scalar;
@@ -196,8 +198,6 @@ using scalar_type_t = typename type_to_scalar_type_impl<T>::ScalarType;
 
 template <typename T>
 using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceType;
-
-}  // namespace experimental
 
 /**
  * @brief Invokes an `operator()` template with the type instantiation based on

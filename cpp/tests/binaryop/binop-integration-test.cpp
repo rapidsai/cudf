@@ -1030,7 +1030,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_SI32_SI32
 
   auto int_col =
     fixed_width_column_wrapper<TypeLhs>{{999, -37, 0, INT32_MAX}, {true, true, true, false}};
-  auto int_scalar = cudf::experimental::scalar_type_t<TypeRhs>(999);
+  auto int_scalar = cudf::scalar_type_t<TypeRhs>(999);
 
   auto op_col =
     cudf::experimental::binary_operation(int_col,
@@ -1053,7 +1053,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_ScalarInvalid_B8_SI
 
   auto int_col    = fixed_width_column_wrapper<TypeLhs>{{-INT32_MAX, -37, 0, 499, 44, INT32_MAX},
                                                      {false, true, false, true, true, false}};
-  auto int_scalar = cudf::experimental::scalar_type_t<TypeRhs>(999);
+  auto int_scalar = cudf::scalar_type_t<TypeRhs>(999);
   int_scalar.set_valid(false);
 
   auto op_col =
@@ -1090,7 +1090,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
     },
     {false, true, true, true, false, true, true, false},
   };
-  auto ts_scalar = cudf::experimental::scalar_type_t<TypeRhs>(44376);
+  auto ts_scalar = cudf::scalar_type_t<TypeRhs>(44376);
 
   auto op_col =
     cudf::experimental::binary_operation(ts_scalar,
@@ -1544,7 +1544,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_SI8)
   auto int_col = fixed_width_column_wrapper<TypeLhs>{
     {999, -37, 0, INT32_MAX},
   };
-  auto int_scalar = cudf::experimental::scalar_type_t<TypeRhs>(77);
+  auto int_scalar = cudf::scalar_type_t<TypeRhs>(77);
 
   auto op_col =
     cudf::experimental::binary_operation(int_col,
@@ -1566,7 +1566,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_FP64_SI32_SI64
   auto int_col =
     fixed_width_column_wrapper<TypeLhs>{{999, -37, 0, INT32_MAX, -INT32_MAX, -4379, 55},
                                         {false, true, false, true, false, true, false}};
-  auto int_scalar = cudf::experimental::scalar_type_t<TypeRhs>(INT32_MAX);
+  auto int_scalar = cudf::scalar_type_t<TypeRhs>(INT32_MAX);
 
   auto op_col =
     cudf::experimental::binary_operation(int_scalar,
@@ -1592,7 +1592,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_FP32
   auto int_col =
     fixed_width_column_wrapper<TypeLhs>{{999, -37, 0, INT32_MAX, -INT32_MAX, -4379, 55},
                                         {false, true, false, true, false, true, false}};
-  auto float_scalar = cudf::experimental::scalar_type_t<TypeRhs>(-3.14f);
+  auto float_scalar = cudf::scalar_type_t<TypeRhs>(-3.14f);
   float_scalar.set_valid(false);
 
   auto op_col =
@@ -1617,7 +1617,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_SI8_SI8_FP32)
 
   auto int_col = fixed_width_column_wrapper<TypeLhs>{
     {9, -37, 0, 32, -47, -4, 55}, {false, false, false, false, false, false, false}};
-  auto float_scalar = cudf::experimental::scalar_type_t<TypeRhs>(-3.14f);
+  auto float_scalar = cudf::scalar_type_t<TypeRhs>(-3.14f);
   float_scalar.set_valid(false);
 
   auto op_col =
@@ -1829,7 +1829,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Scalar_Vector_SI64_SI6
   using SHIFT_RIGHT_UNSIGNED =
     cudf::library::operation::ShiftRightUnsigned<TypeOut, TypeLhs, TypeRhs>;
 
-  auto lhs = cudf::experimental::scalar_type_t<TypeLhs>(-12);
+  auto lhs = cudf::scalar_type_t<TypeLhs>(-12);
   // this generates values in the range 1-10 which should be reasonable for the shift
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
   auto out =
@@ -1849,7 +1849,7 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Scalar_Vector_FP32)
 
   using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
 
-  auto lhs = cudf::experimental::scalar_type_t<TypeLhs>(-86099.68377);
+  auto lhs = cudf::scalar_type_t<TypeLhs>(-86099.68377);
   auto rhs = fixed_width_column_wrapper<TypeRhs>{{90770.74881, -15456.4335, 32213.22119}};
 
   auto out = cudf::experimental::binary_operation(lhs,
@@ -1871,7 +1871,7 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Scalar_FP64)
   using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
 
   auto lhs = fixed_width_column_wrapper<TypeLhs>{{90770.74881, -15456.4335, 32213.22119}};
-  auto rhs = cudf::experimental::scalar_type_t<TypeRhs>(-86099.68377);
+  auto rhs = cudf::scalar_type_t<TypeRhs>(-86099.68377);
 
   auto out = cudf::experimental::binary_operation(lhs,
                                                   rhs,

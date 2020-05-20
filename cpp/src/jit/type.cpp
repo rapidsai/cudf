@@ -44,7 +44,7 @@ struct get_data_ptr_functor {
   template <typename T>
   std::enable_if_t<is_fixed_width<T>(), const void*> operator()(scalar const& s)
   {
-    using ScalarType = experimental::scalar_type_t<T>;
+    using ScalarType = scalar_type_t<T>;
     auto s1          = static_cast<ScalarType const*>(&s);
     return static_cast<const void*>(s1->data());
   }

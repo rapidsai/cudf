@@ -63,7 +63,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
     } else {
       EXPECT_TRUE(false);  // should not be reached
     }
-    using ScalarType = cudf::experimental::scalar_type_t<T>;
+    using ScalarType = cudf::scalar_type_t<T>;
     static_cast<ScalarType*>(p_val.get())->set_value(value);
     static_cast<ScalarType*>(p_val.get())->set_valid(value_is_valid);
 
@@ -184,7 +184,7 @@ class FillStringTestFixture : public cudf::test::BaseFixture {
       cudf::test::make_counting_transform_iterator(0, destination_validity));
 
     auto p_val       = cudf::make_string_scalar(value);
-    using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
+    using ScalarType = cudf::scalar_type_t<cudf::string_view>;
     static_cast<ScalarType*>(p_val.get())->set_valid(value_is_valid);
 
     auto p_chars   = value.c_str();
@@ -279,7 +279,7 @@ TEST_F(FillErrorTestFixture, InvalidInplaceCall)
 {
   auto p_val_int   = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   using T_int      = cudf::experimental::id_to_type<cudf::INT32>;
-  using ScalarType = cudf::experimental::scalar_type_t<T_int>;
+  using ScalarType = cudf::scalar_type_t<T_int>;
   static_cast<ScalarType*>(p_val_int.get())->set_value(5);
   static_cast<ScalarType*>(p_val_int.get())->set_valid(false);
 
@@ -304,7 +304,7 @@ TEST_F(FillErrorTestFixture, InvalidRange)
 {
   auto p_val       = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   using T          = cudf::experimental::id_to_type<cudf::INT32>;
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
   static_cast<ScalarType*>(p_val.get())->set_value(5);
 
   auto destination =
@@ -359,7 +359,7 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
 
   auto p_val       = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   using T          = cudf::experimental::id_to_type<cudf::INT32>;
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
   static_cast<ScalarType*>(p_val.get())->set_value(5);
 
   auto destination = cudf::test::fixed_width_column_wrapper<float>(

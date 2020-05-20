@@ -47,7 +47,7 @@ struct count_accessor {
   template <typename T>
   std::enable_if_t<std::is_integral<T>::value, cudf::size_type> operator()(cudaStream_t stream = 0)
   {
-    using ScalarType = cudf::experimental::scalar_type_t<T>;
+    using ScalarType = cudf::scalar_type_t<T>;
 #if 1
     // TODO: temporary till cudf::scalar's value() function is marked as const
     auto p_count = const_cast<ScalarType*>(static_cast<ScalarType const*>(this->p_scalar));

@@ -48,7 +48,7 @@ TYPED_TEST(NumericScalarFactory, TypeCast)
   std::unique_ptr<cudf::scalar> s = this->factory(
     cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, this->stream(), this->mr());
 
-  auto numeric_s = static_cast<cudf::experimental::scalar_type_t<TypeParam>*>(s.get());
+  auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 
   TypeParam value(37);
   numeric_s->set_value(value);
@@ -78,7 +78,7 @@ TYPED_TEST(TimestampScalarFactory, TypeCast)
   std::unique_ptr<cudf::scalar> s = this->factory(
     cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, this->stream(), this->mr());
 
-  auto numeric_s = static_cast<cudf::experimental::scalar_type_t<TypeParam>*>(s.get());
+  auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 
   TypeParam value(37);
   numeric_s->set_value(value);
@@ -109,7 +109,7 @@ TYPED_TEST(DefaultScalarFactory, TypeCast)
   std::unique_ptr<cudf::scalar> s =
     this->factory(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
 
-  auto numeric_s = static_cast<cudf::experimental::scalar_type_t<TypeParam>*>(s.get());
+  auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 
   EXPECT_NO_THROW(numeric_s->value());
   EXPECT_FALSE(numeric_s->is_valid());
@@ -129,7 +129,7 @@ TYPED_TEST(FixedWidthScalarFactory, ValueProvided)
   std::unique_ptr<cudf::scalar> s =
     cudf::make_fixed_width_scalar<TypeParam>(value, this->stream(), this->mr());
 
-  auto numeric_s = static_cast<cudf::experimental::scalar_type_t<TypeParam>*>(s.get());
+  auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 
   EXPECT_EQ(s->type(), cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
   EXPECT_EQ(numeric_s->value(), value);

@@ -66,10 +66,10 @@ struct sequence_functor {
     auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, mr);
     auto result_device_view = mutable_column_device_view::create(*result, stream);
 
-    auto n_init = get_scalar_device_view(
-      static_cast<cudf::experimental::scalar_type_t<T>&>(const_cast<scalar&>(init)));
-    auto n_step = get_scalar_device_view(
-      static_cast<cudf::experimental::scalar_type_t<T>&>(const_cast<scalar&>(step)));
+    auto n_init =
+      get_scalar_device_view(static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(init)));
+    auto n_step =
+      get_scalar_device_view(static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(step)));
 
     // not using thrust::sequence because it requires init and step to be passed as
     // constants, not iterators. to do that we would have to retrieve the scalar values off the gpu,
@@ -105,8 +105,8 @@ struct sequence_functor {
     auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, mr);
     auto result_device_view = mutable_column_device_view::create(*result, stream);
 
-    auto n_init = get_scalar_device_view(
-      static_cast<cudf::experimental::scalar_type_t<T>&>(const_cast<scalar&>(init)));
+    auto n_init =
+      get_scalar_device_view(static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(init)));
 
     // not using thrust::sequence because it requires init and step to be passed as
     // constants, not iterators. to do that we would have to retrieve the scalar values off the gpu,

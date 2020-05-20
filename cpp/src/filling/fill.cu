@@ -43,7 +43,7 @@ void in_place_fill(cudf::mutable_column_view& destination,
                    cudf::scalar const& value,
                    cudaStream_t stream = 0)
 {
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
   auto p_scalar    = static_cast<ScalarType const*>(&value);
   T fill_value     = p_scalar->value(stream);
   bool is_valid    = p_scalar->is_valid();
@@ -122,7 +122,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   cudaStream_t stream)
 {
   CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
-  using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
+  using ScalarType = cudf::scalar_type_t<cudf::string_view>;
   auto p_scalar    = static_cast<ScalarType const*>(&value);
   return cudf::strings::detail::fill(
     cudf::strings_column_view(input), begin, end, *p_scalar, mr, stream);

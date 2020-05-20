@@ -186,8 +186,8 @@ auto inline make_validity_iterator(column_device_view const& column)
  */
 template <typename Element>
 struct scalar_value_accessor {
-  using ScalarType       = experimental::scalar_type_t<Element>;
-  using ScalarDeviceType = experimental::scalar_device_type_t<Element>;
+  using ScalarType       = scalar_type_t<Element>;
+  using ScalarDeviceType = scalar_device_type_t<Element>;
   ScalarDeviceType const dscalar;  ///< scalar device view
 
   scalar_value_accessor(scalar const& scalar_value)

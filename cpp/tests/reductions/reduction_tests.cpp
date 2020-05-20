@@ -84,7 +84,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
     auto statement = [&]() {
       std::unique_ptr<cudf::scalar> result =
         cudf::experimental::reduce(underlying_column, agg, output_dtype);
-      using ScalarType = cudf::experimental::scalar_type_t<T_out>;
+      using ScalarType = cudf::scalar_type_t<T_out>;
       auto result1     = static_cast<ScalarType *>(result.get());
       EXPECT_EQ(expected_value, result1->value());
     };
@@ -473,7 +473,7 @@ struct ReductionDtypeTest : public cudf::test::BaseFixture {
 
     auto statement = [&]() {
       std::unique_ptr<cudf::scalar> result = cudf::experimental::reduce(col, agg, out_dtype);
-      using ScalarType                     = cudf::experimental::scalar_type_t<T_out>;
+      using ScalarType                     = cudf::scalar_type_t<T_out>;
       auto result1                         = static_cast<ScalarType *>(result.get());
       if (result1->is_valid() && !expected_overflow) {
         EXPECT_EQ(expected_value, result1->value());
@@ -698,7 +698,7 @@ struct StringReductionTest : public cudf::test::BaseFixture,
     auto statement = [&]() {
       std::unique_ptr<cudf::scalar> result =
         cudf::experimental::reduce(underlying_column, agg, output_dtype);
-      using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
+      using ScalarType = cudf::scalar_type_t<cudf::string_view>;
       auto result1     = static_cast<ScalarType *>(result.get());
       EXPECT_TRUE(result1->is_valid());
       std::cout << "expected=" << expected_value << ",got=" << result1->to_string() << std::endl;
