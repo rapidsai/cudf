@@ -1251,8 +1251,8 @@ class StringMethods(object):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['lower', 'CAPITALS', 'this is a sentence',
-        ... 'SwApCaSe'])
+        >>> data = ['lower', 'CAPITALS', 'this is a sentence', 'SwApCaSe']
+        >>> s = cudf.Series(data)
         >>> s.str.lower()
         0                 lower
         1              capitals
@@ -1294,8 +1294,8 @@ class StringMethods(object):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['lower', 'CAPITALS', 'this is a sentence',
-        ... 'SwApCaSe'])
+        >>> data = ['lower', 'CAPITALS', 'this is a sentence', 'SwApCaSe']
+        >>> s = cudf.Series(data)
         >>> s
         0                 lower
         1              CAPITALS
@@ -1367,8 +1367,8 @@ class StringMethods(object):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['lower', 'CAPITALS', 'this is a sentence',
-        ... 'SwApCaSe'])
+        >>> data = ['lower', 'CAPITALS', 'this is a sentence', 'SwApCaSe']
+        >>> s = cudf.Series(data)
         >>> s
         0                 lower
         1              CAPITALS
@@ -1412,8 +1412,8 @@ class StringMethods(object):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['lower', 'CAPITALS', 'this is a sentence',
-        ... 'SwApCaSe'])
+        >>> data = ['lower', 'CAPITALS', 'this is a sentence', 'SwApCaSe'])
+        >>> s = cudf.Series(data)
         >>> s
         0                 lower
         1              CAPITALS
@@ -1707,8 +1707,8 @@ class StringMethods(object):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(["this is a regular sentence",
-        ... "https://docs.python.org/index.html", None])
+        >>> data = ["this is a regular sentence", "https://docs.python.org/index.html", None]       # noqa E501
+        >>> s = cudf.Series(data)
         >>> s
         0            this is a regular sentence
         1    https://docs.python.org/index.html
@@ -1805,9 +1805,8 @@ class StringMethods(object):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(["this is a regular sentence",
-        ...                  "https://docs.python.org/3/tutorial/index.html",
-        ...                  None])
+        >>> data = ["this is a regular sentence","https://docs.python.org/3/tutorial/index.html",None]      # noqa E501
+        >>> s = cudf.Series(data)
         >>> s.str.rsplit(n=2)
                                                        0        1         2
         0                                      this is a  regular  sentence
@@ -2559,8 +2558,8 @@ class StringMethods(object):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['line to be wrapped',
-        ... 'another line to be wrapped'])
+        >>> data = ['line to be wrapped', 'another line to be wrapped']
+        >>> s = cudf.Series(data)
         >>> s.str.wrap(12)
         0             line to be\\nwrapped
         1    another line\\nto be\\nwrapped
@@ -3235,8 +3234,8 @@ class StringMethods(object):
         1      e f.g
         2      4-5,6
         dtype: object
-        >>> s = cudf.Series(["https%3A%2F%2Frapids.ai%2Fstart.html",
-        ... "https%3A%2F%2Fmedium.com%2Frapids-ai"])
+        >>> data = ["https%3A%2F%2Frapids.ai%2Fstart.html", "https%3A%2F%2Fmedium.com%2Frapids-ai"]     # noqa E501
+        >>> s = cudf.Series(data)
         >>> s.str.url_decode()
         0    https://rapids.ai/start.html
         1    https://medium.com/rapids-ai
@@ -3266,8 +3265,8 @@ class StringMethods(object):
         1        e%20f.g
         2        4-5%2C6
         dtype: object
-        >>> s = cudf.Series(["https://rapids.ai/start.html",
-        ... "https://medium.com/rapids-ai"])
+        >>> data = ["https://rapids.ai/start.html", "https://medium.com/rapids-ai"]         # noqa E501
+        >>> s = cudf.Series(data)
         >>> s.str.url_encode()
         0    https%3A%2F%2Frapids.ai%2Fstart.html
         1    https%3A%2F%2Fmedium.com%2Frapids-ai
@@ -3341,8 +3340,8 @@ class StringMethods(object):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['lower', 'CAPITALS', 'this is a sentence',
-        ... 'SwApCaSe'])
+        >>> data = ['lower', 'CAPITALS', 'this is a sentence','SwApCaSe']
+        >>> s = cudf.Series(data)
         >>> s.str.translate({'a': "1"})
         0                 lower
         1              CAPITALS
@@ -3401,8 +3400,8 @@ class StringMethods(object):
         Examples
         --------
         >>> import cudf
-        >>> ser = cudf.Series(["hello world", "goodbye world",
-        ...                          "hello goodbye"])
+        >>> data = ["hello world", "goodbye world", "hello goodbye"]
+        >>> ser = cudf.Series(data)
         >>> ser.str.tokenize()
         0      hello
         1      world
