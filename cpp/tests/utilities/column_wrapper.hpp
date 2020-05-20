@@ -484,10 +484,10 @@ class strings_column_wrapper : public detail::column_wrapper {
  * @brief `column_wrapper` derived class for wrapping columns of lists.
  */
 class lists_column_wrapper : public detail::column_wrapper {
-public:
+ public:
   /**
    * @brief Construct a column of lists of size 1 of fixed-width type from an initializer
-   * list of values   
+   * list of values
    *
    * Example:
    * ```c++
@@ -500,8 +500,8 @@ public:
    */
   template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
   lists_column_wrapper(std::initializer_list<T> elements) : column_wrapper{}
-  { 
-    build_from_non_nested(std::move(cudf::test::fixed_width_column_wrapper<T>(elements).release()));     
+  {
+    build_from_non_nested(std::move(cudf::test::fixed_width_column_wrapper<T>(elements).release()));
   }
 
   /**
@@ -521,7 +521,9 @@ public:
             std::enable_if_t<is_fixed_width<typename InputIterator::value_type>()>* = nullptr>
   lists_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    build_from_non_nested(std::move(cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end).release()));
+    build_from_non_nested(std::move(
+      cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end)
+        .release()));
   }
 
   /**
@@ -540,9 +542,10 @@ public:
   template <typename T, typename ValidityIterator, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
   lists_column_wrapper(std::initializer_list<T> elements, ValidityIterator v) : column_wrapper{}
   {
-    build_from_non_nested(std::move(cudf::test::fixed_width_column_wrapper<T>(elements, v).release()));
+    build_from_non_nested(
+      std::move(cudf::test::fixed_width_column_wrapper<T>(elements, v).release()));
   }
-  
+
   /**
    * @brief Construct a column of lists of size 1 of fixed-width type from an iterator range
    * and a validity iterator
@@ -563,12 +566,14 @@ public:
   lists_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator valids)
     : column_wrapper{}
   {
-    build_from_non_nested(std::move(cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end, valids).release()));
+    build_from_non_nested(std::move(
+      cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end, valids)
+        .release()));
   }
 
   /**
    * @brief Construct a column of lists of size 1 of strings from an initializer
-   * list of values   
+   * list of values
    *
    * Example:
    * ```c++
@@ -582,7 +587,8 @@ public:
   template <typename T, std::enable_if_t<std::is_convertible<T, std::string>::value>* = nullptr>
   lists_column_wrapper(std::initializer_list<T> elements) : column_wrapper{}
   {
-    build_from_non_nested(std::move(cudf::test::strings_column_wrapper(elements.begin(), elements.end()).release()));
+    build_from_non_nested(
+      std::move(cudf::test::strings_column_wrapper(elements.begin(), elements.end()).release()));
   }
 
   /**
@@ -603,7 +609,8 @@ public:
             std::enable_if_t<std::is_convertible<T, std::string>::value>* = nullptr>
   lists_column_wrapper(std::initializer_list<T> t, ValidityIterator v) : column_wrapper{}
   {
-    build_from_non_nested(std::move(cudf::test::strings_column_wrapper(t.begin(), t.end(), v).release()));
+    build_from_non_nested(
+      std::move(cudf::test::strings_column_wrapper(t.begin(), t.end(), v).release()));
   }
 
   /**
@@ -615,7 +622,7 @@ public:
    * // [{0, 1}, {2, 3}, {4, 5}]
    * lists_column_wrapper l{ {0, 1}, {2, 3}, {4, 5} }
    * ```
-   * 
+   *
    * Automatically handles nesting
    * * Example:
    * ```c++
@@ -628,7 +635,7 @@ public:
    * @param elements The list of elements
    */
   lists_column_wrapper(std::initializer_list<lists_column_wrapper> elements) : column_wrapper{}
-  {    
+  {
     std::vector<bool> valids;
     build_from_nested(elements, valids);
   }
@@ -643,7 +650,7 @@ public:
    * // [{0, 1}, {2, 3}, {4, 5}]
    * lists_column_wrapper l{ {0, 1}, {2, 3}, {4, 5} }
    * ```
-   * 
+   *
    * Automatically handles nesting
    * * Example:
    * ```c++
@@ -669,7 +676,8 @@ public:
   }
 
  private:
-  void build_from_nested(std::initializer_list<lists_column_wrapper> elements, std::vector<bool> const& v);
+  void build_from_nested(std::initializer_list<lists_column_wrapper> elements,
+                         std::vector<bool> const& v);
   void build_from_non_nested(std::unique_ptr<column> c);
   bool root = false;
 };

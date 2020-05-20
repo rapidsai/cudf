@@ -405,7 +405,7 @@ std::unique_ptr<column> make_strings_column(
  *                       of lists.
  * @param child_column The child column referenced by the lists formed by the
  *                     offsets_column. Note : the child column may itself be
- *                     further nested. 
+ *                     further nested.
  * @param null_count The number of null list entries.
  * @param null_mask The bits specifying the null lists in device memory.
  *                  Arrow format for nulls is used for interpeting this bitmask.

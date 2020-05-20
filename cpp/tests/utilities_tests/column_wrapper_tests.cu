@@ -322,9 +322,9 @@ TEST_F(ListColumnWrapperTest, ListOfIntsFromIterator)
   // Offsets : 0, 5
   // Children :
   //    0, 1, 2, 3, 4
-  //  
+  //
   auto sequence =
-  cudf::test::make_counting_transform_iterator(0, [](auto i) { return static_cast<int>(i); });
+    cudf::test::make_counting_transform_iterator(0, [](auto i) { return static_cast<int>(i); });
 
   test::lists_column_wrapper list{sequence, sequence + 5};
 
@@ -356,9 +356,9 @@ TEST_F(ListColumnWrapperTest, ListOfIntsFromIteratorWithValidity)
   // Offsets : 0, 5
   // Children :
   //    0, NULL, 2, NULL, 4
-  //  
+  //
   auto sequence =
-  cudf::test::make_counting_transform_iterator(0, [](auto i) { return static_cast<int>(i); });
+    cudf::test::make_counting_transform_iterator(0, [](auto i) { return static_cast<int>(i); });
 
   test::lists_column_wrapper list{sequence, sequence + 5, valids};
 
@@ -586,7 +586,7 @@ TEST_F(ListColumnWrapperTest, ListOfListOfStrings)
   //      one, two, three, four, five, eight, nine, ten
   {
     test::lists_column_wrapper list{{{"one", "two"}, {"three", "four", "five"}},
-                                   {{"eight"}, {"nine", "ten"}}};
+                                    {{"eight"}, {"nine", "ten"}}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);
@@ -634,7 +634,7 @@ TEST_F(ListColumnWrapperTest, ListOfListOfListOfInts)
   //          1, 2, 3, 4, 5, 6, 7, 0, -1, -2, -3, -4, -5, -6, -7, 0
   {
     test::lists_column_wrapper list{{{{1, 2}, {3, 4}}, {{5, 6, 7}, {0}}},
-                                   {{{-1, -2}, {-3, -4}}, {{-5, -6, -7}, {0}}}};
+                                    {{{-1, -2}, {-3, -4}}, {{-5, -6, -7}, {0}}}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);
@@ -839,7 +839,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListListOfTypes)
   //          1, 2, 3, 4, 5, 6, 7, 0, -1, -2, -3, -4, -5, -6, -7, 0
   {
     test::lists_column_wrapper list{{{L{1, 2}, L{3, 4}}, {L{5, 6, 7}, L{0}}},
-                                   {{L{-1, -2}, L{-3, -4}}, {L{-5, -6, -7}, L{0}}}};
+                                    {{L{-1, -2}, L{-3, -4}}, {L{-5, -6, -7}, L{0}}}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);

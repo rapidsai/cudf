@@ -31,7 +31,7 @@ namespace {
 /**
  * @brief Merges the offsets child columns of multiple list columns into one.
  *
- * Since offsets are all relative to the start of their respective column, 
+ * Since offsets are all relative to the start of their respective column,
  * all offsets are shifted to account for the new starting position
  *
  * @param columns               Vector of lists columns to concatenate
