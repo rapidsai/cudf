@@ -209,12 +209,12 @@ def compute_result_col_names(lhs, rhs, how):
     a libcudf join, based on the original left and right frames
     as well as the type of join that was performed.
     """
-    if how in ("left", "inner", "outer", "leftsemi", "leftanti"):
+    if how in {"left", "inner", "outer", "leftsemi", "leftanti"}:
         a = lhs._data.keys()
-        if how not in ("leftsemi", "leftanti"):
+        if how not in {"leftsemi", "leftanti"}:
             return [*a, *(k for k in rhs._data.keys() if k not in lhs._data.keys())]
         return list(a)
     else:
         raise NotImplementedError(
-            "{!r} merge not supported yet".format(how)
+            f"{how} merge not supported yet"
         )
