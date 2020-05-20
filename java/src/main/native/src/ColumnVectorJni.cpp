@@ -44,6 +44,7 @@
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
+#include <cudf/strings/char_types/char_types.hpp>
 
 #include "jni_utils.hpp"
 
@@ -1331,6 +1332,32 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_nansToNulls(JNIEnv *env
     // set the null mask with nans set to null
     copy->set_null_mask(std::move(*pair.first), pair.second);
     return reinterpret_cast<jlong>(copy.release());
+  }
+  CATCH_STD(env, 0)
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isFloat(JNIEnv *env, jobject j_object, jlong handle) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view * view = reinterpret_cast<cudf::column_view *>(handle);
+    std::unique_ptr<cudf::column> result = cudf::strings::is_float(*view);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0)
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isInteger(JNIEnv *env, jobject j_object, jlong handle) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view * view = reinterpret_cast<cudf::column_view *>(handle);
+    std::unique_ptr<cudf::column> result = cudf::strings::is_integer(*view);
+    return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0)
 }
