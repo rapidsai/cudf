@@ -24,6 +24,7 @@ from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import as_scalar
 from cudf._lib.stream_compaction import unique_count as cpp_unique_count
 from cudf._lib.transform import bools_to_mask
+from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
@@ -38,7 +39,7 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
 
-class ColumnBase(Column):
+class ColumnBase(Column, Serializable):
     def __init__(
         self,
         data,
@@ -65,20 +66,6 @@ class ColumnBase(Column):
             mask=mask,
             offset=offset,
             children=children,
-        )
-
-    def __reduce__(self):
-        return (
-            build_column,
-            (
-                self.data,
-                self.dtype,
-                self.mask,
-                self.size,
-                0,
-                self.null_count,
-                self.children,
-            ),
         )
 
     def as_frame(self):
