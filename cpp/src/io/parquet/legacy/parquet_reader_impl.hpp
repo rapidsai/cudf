@@ -24,8 +24,9 @@
 #include <vector>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/legacy/table.hpp>
-#include <io/utilities/datasource.hpp>
+
 #include <io/utilities/legacy/wrapper_utils.hpp>
 
 namespace cudf {

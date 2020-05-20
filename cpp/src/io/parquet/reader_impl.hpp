@@ -25,9 +25,9 @@
 #include "parquet_gpu.h"
 
 #include <io/utilities/column_buffer.hpp>
-#include <io/utilities/datasource.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/readers.hpp>
 
 #include <memory>

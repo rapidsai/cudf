@@ -21,6 +21,7 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -1073,6 +1074,66 @@ TEST_F(CsvReaderTest, EmptyFileWithWriter)
 
   // TODO is it ok for write_csv to throw instead of just writing an empty file?
   EXPECT_THROW(write_csv_helper(filepath, empty_table, false), cudf::logic_error);
+}
+
+class TestBuffer : public cudf::io::buffer {
+  uint8_t* _data;
+  size_t _size;
+
+ public:
+  TestBuffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
+
+  virtual size_t size() const override { return _size; }
+
+  virtual const uint8_t* data() const override { return _data; }
+};
+
+class TestSource : public cudf::io::datasource {
+ public:
+  std::string str;
+
+  TestSource(std::string s) : str(std::move(s)) {}
+  std::unique_ptr<cudf::io::buffer> host_read(size_t offset, size_t size) override
+  {
+    size = min(size, str.size() - offset);
+    return std::make_unique<TestBuffer>((uint8_t*)str.data() + offset, size);
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    size = min(size, str.size() - offset);
+    memcpy(dst, str.data() + offset, size);
+    return size;
+  }
+
+  size_t size() const override { return str.size(); }
+};
+
+TEST_F(CsvReaderTest, UserSource)
+{
+  constexpr auto num_rows = 10;
+  auto int8_values        = random_values<int8_t>(num_rows);
+  auto int16_values       = random_values<int16_t>(num_rows);
+  auto int32_values       = random_values<int32_t>(num_rows);
+
+  std::ostringstream line;
+  auto filepath = temp_env->get_temp_dir() + "MultiColumn.csv";
+  {
+    for (int i = 0; i < num_rows; ++i) {
+      line << std::to_string(int8_values[i]) << "," << int16_values[i] << "," << int32_values[i]
+           << "\n";
+    }
+  }
+  TestSource source{line.str()};
+  cudf_io::read_csv_args in_args{cudf_io::source_info{&source}};
+  in_args.dtype  = {"int8", "int16", "int32"};
+  in_args.header = -1;
+  auto result    = cudf_io::read_csv(in_args);
+
+  const auto view = result.tbl->view();
+  expect_column_data_equal(int8_values, view.column(0));
+  expect_column_data_equal(int16_values, view.column(1));
+  expect_column_data_equal(int32_values, view.column(2));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
