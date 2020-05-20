@@ -211,7 +211,7 @@ def compute_result_col_names(lhs, rhs, how):
     """
     if how in ("left", "inner", "outer", "leftsemi", "leftanti"):
         a = lhs._data.keys()
-        if how in ("leftsemi", "leftanti"):
+        if how not in ("leftsemi", "leftanti"):
             return [*a, *(k for k in rhs._data.keys() if k not in lhs._data.keys())]
         return list(a)
     else:
