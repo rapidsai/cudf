@@ -828,8 +828,8 @@ cdef extern from "cudf/legacy/copying.hpp" namespace "cudf" nogil:
 |        `is_nullable()`       |               `*view::nullable()`               |                                                                              |
 |         `has_nulls()`        |               `*view::has_nulls()`              |                                                                              |
 |        `cudf::copy()`        | `column::column(const&)` `table::table(const&)` |                               Copy constructors                              |
-|    `cudf::allocate_like()`   |      `cudf::experimental::allocate_like()`      |                      This applies to both columns/tables                     |
-|     `cudf::empty_like()`     |        `cudf::experimental::empty_like()`       |                      This applies to both columns/tables                     |
+|    `cudf::allocate_like()`   |      `cudf::allocate_like()`      |                      This applies to both columns/tables                     |
+|     `cudf::empty_like()`     |        `cudf::empty_like()`       |                      This applies to both columns/tables                     |
 
 ## Strings Support<a name="string_support"></a>
 

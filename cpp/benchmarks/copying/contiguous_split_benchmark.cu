@@ -50,7 +50,7 @@ void BM_contiguous_split_common(benchmark::State& state,
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    auto result = cudf::experimental::contiguous_split(src_table, splits);
+    auto result = cudf::contiguous_split(src_table, splits);
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * bytes_total);

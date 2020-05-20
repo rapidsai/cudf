@@ -119,7 +119,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   CUDF_EXPECTS(input_table.num_rows() == count.size(), "in and count must have equal size");
   CUDF_EXPECTS(count.has_nulls() == false, "count cannot contain nulls");
 
-  if (input_table.num_rows() == 0) { return cudf::experimental::empty_like(input_table); }
+  if (input_table.num_rows() == 0) { return cudf::empty_like(input_table); }
 
   auto offsets =
     cudf::experimental::type_dispatcher(count.type(), compute_offsets{&count}, check_count, stream);
@@ -149,7 +149,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
     "The resulting table has more rows than size_type's limit.");
 
   if ((input_table.num_rows() == 0) || (stride == 0)) {
-    return cudf::experimental::empty_like(input_table);
+    return cudf::empty_like(input_table);
   }
 
   auto output_size = input_table.num_rows() * stride;

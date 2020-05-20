@@ -45,7 +45,7 @@ struct launcher {
                                         input.null_count());
 
       } else {
-        return cudf::experimental::detail::allocate_like(
+        return cudf::detail::allocate_like(
           input, input.size(), mask_allocation_policy::NEVER, mr, stream);
       }
     }();

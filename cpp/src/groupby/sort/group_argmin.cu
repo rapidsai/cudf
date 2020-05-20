@@ -49,7 +49,7 @@ std::unique_ptr<column> group_argmin(column_view const& values,
     data_type(type_to_id<size_type>()),
     indices->size(),
     static_cast<void const*>(indices->view().template data<size_type>()));
-  auto result_table = cudf::experimental::detail::gather(table_view({key_sort_order}),
+  auto result_table = cudf::detail::gather(table_view({key_sort_order}),
                                                          null_removed_indices,
                                                          false,
                                                          indices->nullable(),

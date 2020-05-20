@@ -72,7 +72,7 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
 
   auto keys_device_view = cudf::table_device_view::create(keys_view, stream);
 
-  return cudf::experimental::detail::copy_if(
+  return cudf::detail::copy_if(
     input, valid_table_filter{*keys_device_view, keep_threshold}, mr, stream);
 }
 

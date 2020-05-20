@@ -31,7 +31,6 @@
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {  // anonymous
 
@@ -203,7 +202,5 @@ std::unique_ptr<column> copy_if_else(
 }
 
 }  // namespace detail
-
-}  // namespace experimental
 
 }  // namespace cudf

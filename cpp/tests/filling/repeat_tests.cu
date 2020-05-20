@@ -67,7 +67,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
   using ScalarType = cudf::experimental::scalar_type_t<T_int>;
   static_cast<ScalarType*>(p_count.get())->set_value(repeat_count);
 
-  auto p_ret = cudf::experimental::repeat(input_table, *p_count);
+  auto p_ret = cudf::repeat(input_table, *p_count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
@@ -102,7 +102,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
     cudf::test::fixed_width_column_wrapper<T>(expected_values.begin(), expected_values.end());
 
   cudf::table_view input_table{{input}};
-  auto p_ret = cudf::experimental::repeat(input_table, count);
+  auto p_ret = cudf::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
@@ -144,7 +144,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
     expected_values.begin(), expected_values.end(), expected_valids.begin());
 
   cudf::table_view input_table{{input}};
-  auto p_ret = cudf::experimental::repeat(input_table, count);
+  auto p_ret = cudf::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
@@ -165,7 +165,7 @@ TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
                                                             thrust::make_counting_iterator(0));
 
   cudf::table_view input_table{{input}};
-  auto p_ret = cudf::experimental::repeat(input_table, count);
+  auto p_ret = cudf::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
@@ -214,7 +214,7 @@ TEST_F(RepeatStringTestFixture, RepeatNullable)
     expected_values.begin(), expected_values.end(), expected_valids.begin());
 
   cudf::table_view input_table{{input}};
-  auto p_ret = cudf::experimental::repeat(input_table, count);
+  auto p_ret = cudf::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
@@ -231,7 +231,7 @@ TEST_F(RepeatStringTestFixture, ZeroSizeInput)
   auto expected = cudf::test::strings_column_wrapper(input_values.begin(), input_values.end());
 
   cudf::table_view input_table{{input}};
-  auto p_ret = cudf::experimental::repeat(input_table, count);
+  auto p_ret = cudf::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
@@ -251,7 +251,7 @@ TEST_F(RepeatErrorTestFixture, LengthMismatch)
   cudf::table_view input_table{{input}};
 
   // input_table.num_rows() != count.size()
-  EXPECT_THROW(auto p_ret = cudf::experimental::repeat(input_table, count), cudf::logic_error);
+  EXPECT_THROW(auto p_ret = cudf::repeat(input_table, count), cudf::logic_error);
 }
 
 TEST_F(RepeatErrorTestFixture, CountHasNulls)
@@ -267,7 +267,7 @@ TEST_F(RepeatErrorTestFixture, CountHasNulls)
   cudf::table_view input_table{{input}};
 
   // input_table.has_nulls() == true
-  EXPECT_THROW(auto ret = cudf::experimental::repeat(input_table, count), cudf::logic_error);
+  EXPECT_THROW(auto ret = cudf::repeat(input_table, count), cudf::logic_error);
 }
 
 TEST_F(RepeatErrorTestFixture, NegativeCountOrOverflow)
@@ -285,10 +285,10 @@ TEST_F(RepeatErrorTestFixture, NegativeCountOrOverflow)
   cudf::table_view input_table{{input}};
 
   // negative
-  EXPECT_THROW(auto p_ret = cudf::experimental::repeat(input_table, count_neg, true),
+  EXPECT_THROW(auto p_ret = cudf::repeat(input_table, count_neg, true),
                cudf::logic_error);
 
   // overflow
-  EXPECT_THROW(auto p_ret = cudf::experimental::repeat(input_table, count_overflow, true),
+  EXPECT_THROW(auto p_ret = cudf::repeat(input_table, count_overflow, true),
                cudf::logic_error);
 }

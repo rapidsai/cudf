@@ -18,7 +18,7 @@
 #include <cudf/detail/reduction_functions.hpp>
 #include "simple.cuh"
 
-std::unique_ptr<cudf::scalar> cudf::experimental::reduction::any(
+std::unique_ptr<cudf::scalar> cudf::reduction::any(
   column_view const& col,
   cudf::data_type const output_dtype,
   rmm::mr::device_memory_resource* mr,
@@ -26,5 +26,5 @@ std::unique_ptr<cudf::scalar> cudf::experimental::reduction::any(
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::BOOL8),
                "any() operation can be applied with output type `bool8` only");
-  return cudf::experimental::reduction::max(col, cudf::data_type(cudf::BOOL8), mr, stream);
+  return cudf::reduction::max(col, cudf::data_type(cudf::BOOL8), mr, stream);
 }

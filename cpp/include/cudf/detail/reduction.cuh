@@ -27,7 +27,6 @@
 #include "reduction_operators.cuh"
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 namespace detail {
 /** --------------------------------------------------------------------------*
@@ -215,5 +214,4 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 
 }  // namespace detail
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

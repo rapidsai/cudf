@@ -40,7 +40,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
 
-  if (num_groups == 0) { return experimental::empty_like(values); }
+  if (num_groups == 0) { return empty_like(values); }
 
   auto nth_index = rmm::device_vector<size_type>(num_groups, values.size());
 
@@ -104,7 +104,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                          return (bitmask_iterator[i] && intra_group_index[i] == nth);
                        });
   }
-  auto output_table = experimental::detail::gather(
+  auto output_table = detail::gather(
     table_view{{values}}, nth_index.begin(), nth_index.end(), true, mr, stream);
   if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);
   return std::make_unique<column>(std::move(output_table->get_column(0)));

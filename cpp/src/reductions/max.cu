@@ -18,13 +18,13 @@
 #include <cudf/detail/reduction_functions.hpp>
 #include "simple.cuh"
 
-std::unique_ptr<cudf::scalar> cudf::experimental::reduction::max(
+std::unique_ptr<cudf::scalar> cudf::reduction::max(
   column_view const& col,
   cudf::data_type const output_dtype,
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  using reducer = cudf::experimental::reduction::simple::element_type_dispatcher<
-    cudf::experimental::reduction::op::max>;
+  using reducer = cudf::reduction::simple::element_type_dispatcher<
+    cudf::reduction::op::max>;
   return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, mr, stream);
 }

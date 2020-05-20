@@ -38,7 +38,7 @@ TEST_F(ScatterUntypedTests, ScatterMapTooLong)
   auto const source_table = cudf::table_view({source, source});
   auto const target_table = cudf::table_view({target, target});
 
-  EXPECT_THROW(cudf::experimental::scatter(source_table, scatter_map, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table, true),
                cudf::logic_error);
 }
 
@@ -55,7 +55,7 @@ TEST_F(ScatterUntypedTests, ScatterMapNulls)
   auto const source_table = cudf::table_view({source, source});
   auto const target_table = cudf::table_view({target, target});
 
-  EXPECT_THROW(cudf::experimental::scatter(source_table, scatter_map, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table, true),
                cudf::logic_error);
 }
 
@@ -78,7 +78,7 @@ TEST_F(ScatterUntypedTests, ScatterScalarMapNulls)
 
   auto const target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::scatter(source_vector, scatter_map, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_vector, scatter_map, target_table, true),
                cudf::logic_error);
 }
 
@@ -95,7 +95,7 @@ TEST_F(ScatterUntypedTests, ScatterColumnNumberMismatch)
   auto const source_table = cudf::table_view({source});
   auto const target_table = cudf::table_view({target, target});
 
-  EXPECT_THROW(cudf::experimental::scatter(source_table, scatter_map, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table, true),
                cudf::logic_error);
 }
 
@@ -118,7 +118,7 @@ TEST_F(ScatterUntypedTests, ScatterScalarColumnNumberMismatch)
 
   auto const target_table = cudf::table_view({target, target});
 
-  EXPECT_THROW(cudf::experimental::scatter(source_vector, scatter_map, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_vector, scatter_map, target_table, true),
                cudf::logic_error);
 }
 
@@ -135,7 +135,7 @@ TEST_F(ScatterUntypedTests, ScatterDataTypeMismatch)
   auto const source_table = cudf::table_view({source});
   auto const target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::scatter(source_table, scatter_map, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table, true),
                cudf::logic_error);
 }
 
@@ -158,7 +158,7 @@ TEST_F(ScatterUntypedTests, ScatterScalarDataTypeMismatch)
 
   auto const target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::scatter(source_vector, scatter_map, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_vector, scatter_map, target_table, true),
                cudf::logic_error);
 }
 
@@ -183,9 +183,9 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterOutOfBounds)
   auto const source_table = cudf::table_view({source, source});
   auto const target_table = cudf::table_view({target, target});
 
-  EXPECT_THROW(cudf::experimental::scatter(source_table, upper_bound, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_table, upper_bound, target_table, true),
                cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::scatter(source_table, lower_bound, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_table, lower_bound, target_table, true),
                cudf::logic_error);
 }
 
@@ -209,9 +209,9 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarOutOfBounds)
 
   auto const target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::scatter(source_vector, upper_bound, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_vector, upper_bound, target_table, true),
                cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::scatter(source_vector, lower_bound, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_vector, lower_bound, target_table, true),
                cudf::logic_error);
 }
 
@@ -230,7 +230,7 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterIndexType)
   auto const target_table   = cudf::table_view({target, target});
   auto const expected_table = cudf::table_view({expected, expected});
 
-  auto const result = cudf::experimental::scatter(source_table, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_table, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -256,7 +256,7 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarIndexType)
   auto const target_table   = cudf::table_view({target});
   auto const expected_table = cudf::table_view({expected});
 
-  auto const result = cudf::experimental::scatter(source_vector, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_vector, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -283,7 +283,7 @@ TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterInvalidIndexType)
   auto const source_table = cudf::table_view({source, source});
   auto const target_table = cudf::table_view({target, target});
 
-  EXPECT_THROW(cudf::experimental::scatter(source_table, scatter_map, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table, true),
                cudf::logic_error);
 }
 
@@ -306,7 +306,7 @@ TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterScalarInvalidIndexType)
 
   auto const target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::scatter(source_vector, scatter_map, target_table, true),
+  EXPECT_THROW(cudf::scatter(source_vector, scatter_map, target_table, true),
                cudf::logic_error);
 }
 
@@ -329,7 +329,7 @@ TYPED_TEST(ScatterDataTypeTests, EmptyScatterMap)
   auto const source_table = cudf::table_view({source, source});
   auto const target_table = cudf::table_view({target, target});
 
-  auto const result = cudf::experimental::scatter(source_table, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_table, scatter_map, target_table, true);
 
   // Expect a copy of the input table
   expect_tables_equal(result->view(), target_table);
@@ -354,7 +354,7 @@ TYPED_TEST(ScatterDataTypeTests, EmptyScalarScatterMap)
 
   auto const target_table = cudf::table_view({target});
 
-  auto const result = cudf::experimental::scatter(source_vector, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_vector, scatter_map, target_table, true);
 
   // Expect a copy of the input table
   expect_tables_equal(result->view(), target_table);
@@ -374,7 +374,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterNoNulls)
   auto const target_table   = cudf::table_view({target, target});
   auto const expected_table = cudf::table_view({expected, expected});
 
-  auto const result = cudf::experimental::scatter(source_table, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_table, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -395,7 +395,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterBothNulls)
   auto const target_table   = cudf::table_view({target, target});
   auto const expected_table = cudf::table_view({expected, expected});
 
-  auto const result = cudf::experimental::scatter(source_table, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_table, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -415,7 +415,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterSourceNulls)
   auto const target_table   = cudf::table_view({target, target});
   auto const expected_table = cudf::table_view({expected, expected});
 
-  auto const result = cudf::experimental::scatter(source_table, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_table, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -436,7 +436,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterTargetNulls)
   auto const target_table   = cudf::table_view({target, target});
   auto const expected_table = cudf::table_view({expected, expected});
 
-  auto const result = cudf::experimental::scatter(source_table, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_table, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -461,7 +461,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarNoNulls)
   auto const target_table   = cudf::table_view({target});
   auto const expected_table = cudf::table_view({expected});
 
-  auto const result = cudf::experimental::scatter(source_vector, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_vector, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -488,7 +488,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarTargetNulls)
   auto const target_table   = cudf::table_view({target});
   auto const expected_table = cudf::table_view({expected});
 
-  auto const result = cudf::experimental::scatter(source_vector, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_vector, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -515,7 +515,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarSourceNulls)
   auto const target_table   = cudf::table_view({target});
   auto const expected_table = cudf::table_view({expected});
 
-  auto const result = cudf::experimental::scatter(source_vector, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_vector, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -543,7 +543,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
   auto const target_table   = cudf::table_view({target});
   auto const expected_table = cudf::table_view({expected});
 
-  auto const result = cudf::experimental::scatter(source_vector, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_vector, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -569,7 +569,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterSourceNullsLarge)
   auto const target_table   = cudf::table_view({target, target});
   auto const expected_table = cudf::table_view({expected, expected});
 
-  auto const result = cudf::experimental::scatter(source_table, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_table, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -600,7 +600,7 @@ TEST_F(ScatterStringsTests, ScatterNoNulls)
   auto const target_table   = cudf::table_view({target, target});
   auto const expected_table = cudf::table_view({expected, expected});
 
-  auto const result = cudf::experimental::scatter(source_table, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_table, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -632,7 +632,7 @@ TEST_F(ScatterStringsTests, ScatterScalarNoNulls)
   auto const target_table   = cudf::table_view({target});
   auto const expected_table = cudf::table_view({expected});
 
-  auto const result = cudf::experimental::scatter(source_vector, scatter_map, target_table, true);
+  auto const result = cudf::scatter(source_vector, scatter_map, target_table, true);
 
   expect_tables_equal(result->view(), expected_table);
 }
@@ -656,7 +656,7 @@ TYPED_TEST(BooleanMaskScatter, WithNoNullElementsInTarget)
   auto target_table   = cudf::table_view({target});
   auto expected_table = cudf::table_view({expected});
 
-  auto got = cudf::experimental::boolean_mask_scatter(source_table, target_table, mask);
+  auto got = cudf::boolean_mask_scatter(source_table, target_table, mask);
 
   cudf::test::expect_tables_equal(expected_table, got->view());
 }
@@ -683,7 +683,7 @@ TYPED_TEST(BooleanMaskScatter, WithNull)
   auto target_table   = cudf::table_view({target_col1, target_col2});
   auto expected_table = cudf::table_view({expected_col1, expected_col2});
 
-  auto got = cudf::experimental::boolean_mask_scatter(source_table, target_table, mask);
+  auto got = cudf::boolean_mask_scatter(source_table, target_table, mask);
 
   cudf::test::expect_tables_equal(expected_table, got->view());
 }
@@ -702,7 +702,7 @@ TEST_F(BooleanMaskScatterString, NoNUll)
   auto target_table   = cudf::table_view({target});
   auto expected_table = cudf::table_view({expected});
 
-  auto got = cudf::experimental::boolean_mask_scatter(source_table, target_table, mask);
+  auto got = cudf::boolean_mask_scatter(source_table, target_table, mask);
 
   cudf::test::expect_tables_equal(expected_table, got->view());
 }
@@ -718,7 +718,7 @@ TEST_F(BooleanMaskScatterString, WithNUll)
   auto target_table   = cudf::table_view({target});
   auto expected_table = cudf::table_view({expected});
 
-  auto got = cudf::experimental::boolean_mask_scatter(source_table, target_table, mask);
+  auto got = cudf::boolean_mask_scatter(source_table, target_table, mask);
 
   cudf::test::expect_tables_equal(expected_table, got->view());
 }
@@ -735,7 +735,7 @@ TEST_F(BooleanMaskScatterFails, SourceAndTargetTypeMismatch)
   auto source_table = cudf::table_view({source});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::boolean_mask_scatter(source_table, target_table, mask),
+  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask),
                cudf::logic_error);
 }
 
@@ -748,7 +748,7 @@ TEST_F(BooleanMaskScatterFails, BooleanMaskTypeMismatch)
   auto source_table = cudf::table_view({source});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::boolean_mask_scatter(source_table, target_table, mask),
+  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask),
                cudf::logic_error);
 }
 
@@ -761,7 +761,7 @@ TEST_F(BooleanMaskScatterFails, BooleanMaskTargetSizeMismatch)
   auto source_table = cudf::table_view({source});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::boolean_mask_scatter(source_table, target_table, mask),
+  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask),
                cudf::logic_error);
 }
 
@@ -774,7 +774,7 @@ TEST_F(BooleanMaskScatterFails, NumberOfColumnMismatch)
   auto source_table = cudf::table_view({source, source});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::boolean_mask_scatter(source_table, target_table, mask),
+  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask),
                cudf::logic_error);
 }
 
@@ -787,7 +787,7 @@ TEST_F(BooleanMaskScatterFails, MoreTruesInMaskThanSourceSize)
   auto source_table = cudf::table_view({source, source});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::boolean_mask_scatter(source_table, target_table, mask),
+  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask),
                cudf::logic_error);
 }
 
@@ -831,7 +831,7 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNoNullElementsInTarget)
   auto target_table   = cudf::table_view({target});
   auto expected_table = cudf::table_view({expected});
 
-  auto got = cudf::experimental::boolean_mask_scatter(scalar_vect, target_table, mask);
+  auto got = cudf::boolean_mask_scatter(scalar_vect, target_table, mask);
 
   cudf::test::expect_tables_equal(expected_table, got->view());
 }
@@ -862,7 +862,7 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNull)
   auto target_table   = cudf::table_view({target_col1, target_col2});
   auto expected_table = cudf::table_view({expected_col1, expected_col2});
 
-  auto got = cudf::experimental::boolean_mask_scatter(scalar_vect, target_table, mask);
+  auto got = cudf::boolean_mask_scatter(scalar_vect, target_table, mask);
 
   cudf::test::expect_tables_equal(expected_table, got->view());
 }
@@ -884,7 +884,7 @@ TEST_F(BooleanMaskScatterScalarString, NoNUll)
   auto target_table   = cudf::table_view({target});
   auto expected_table = cudf::table_view({expected});
 
-  auto got = cudf::experimental::boolean_mask_scatter(scalar_vect, target_table, mask);
+  auto got = cudf::boolean_mask_scatter(scalar_vect, target_table, mask);
 
   cudf::test::expect_tables_equal(expected_table, got->view());
 }
@@ -902,7 +902,7 @@ TEST_F(BooleanMaskScatterScalarString, WithNUll)
                                               {1, 0, 1, 1, 1});
   auto target_table   = cudf::table_view({target});
   auto expected_table = cudf::table_view({expected});
-  auto got            = cudf::experimental::boolean_mask_scatter(scalar_vect, target_table, mask);
+  auto got            = cudf::boolean_mask_scatter(scalar_vect, target_table, mask);
 
   cudf::test::expect_tables_equal(expected_table, got->view());
 }
@@ -921,7 +921,7 @@ TEST_F(BooleanMaskScatterScalarFails, SourceAndTargetTypeMismatch)
     {true, false, false, false, true, true, false, true, true, false});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::boolean_mask_scatter(scalar_vect, target_table, mask),
+  EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask),
                cudf::logic_error);
 }
 
@@ -936,7 +936,7 @@ TEST_F(BooleanMaskScatterScalarFails, BooleanMaskTypeMismatch)
     {true, false, false, false, true, true, false, true, true, false});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::boolean_mask_scatter(scalar_vect, target_table, mask),
+  EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask),
                cudf::logic_error);
 }
 
@@ -951,7 +951,7 @@ TEST_F(BooleanMaskScatterScalarFails, BooleanMaskTargetSizeMismatch)
     {true, false, false, false, true, true, false, true, true});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::boolean_mask_scatter(scalar_vect, target_table, mask),
+  EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask),
                cudf::logic_error);
 }
 
@@ -967,6 +967,6 @@ TEST_F(BooleanMaskScatterScalarFails, NumberOfColumnAndScalarMismatch)
     {true, false, false, false, true, true, false, true, true});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::experimental::boolean_mask_scatter(scalar_vect, target_table, mask),
+  EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask),
                cudf::logic_error);
 }

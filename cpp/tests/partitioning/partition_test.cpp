@@ -97,14 +97,14 @@ void expect_equal_partitions(cudf::table_view expected,
   std::copy(std::next(offsets.begin()), std::prev(offsets.end()), std::back_inserter(split_points));
 
   // Split the partitions, sort each partition, then compare for equality
-  auto actual_split   = cudf::experimental::split(actual, split_points);
-  auto expected_split = cudf::experimental::split(expected, split_points);
+  auto actual_split   = cudf::split(actual, split_points);
+  auto expected_split = cudf::split(expected, split_points);
   std::equal(expected_split.begin(),
              expected_split.end(),
              actual_split.begin(),
              [](cudf::table_view expected, cudf::table_view actual) {
-               auto sorted_expected = cudf::experimental::sort(expected);
-               auto sorted_actual   = cudf::experimental::sort(actual);
+               auto sorted_expected = cudf::sort(expected);
+               auto sorted_actual   = cudf::sort(actual);
                cudf::test::expect_tables_equal(*sorted_expected, *sorted_actual);
                return true;
              });

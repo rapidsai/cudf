@@ -41,7 +41,7 @@ TYPED_TEST(EmptyLikeTest, ColumnNumericTests)
     make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
   auto expected =
     make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, 0);
-  auto got = cudf::experimental::empty_like(input->view());
+  auto got = cudf::empty_like(input->view());
   cudf::test::expect_columns_equal(*expected, *got);
 }
 
@@ -70,7 +70,7 @@ TEST_F(EmptyLikeStringTest, ColumnStringTest)
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
-  auto got = cudf::experimental::empty_like(strings);
+  auto got = cudf::empty_like(strings);
   check_empty_string_columns(got->view(), strings);
 }
 
@@ -105,7 +105,7 @@ TEST_F(EmptyLikeTableTest, TableTest)
   cudf::size_type size   = 10;
   auto input             = create_table(size, state);
   auto expected          = create_table(0, cudf::mask_state::UNINITIALIZED);
-  auto got               = cudf::experimental::empty_like(input->view());
+  auto got               = cudf::empty_like(input->view());
 
   expect_tables_prop_equal(got->view(), expected->view());
 }
@@ -127,7 +127,7 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize)
   auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
                                       size,
                                       cudf::mask_state::UNINITIALIZED);
-  auto got      = cudf::experimental::allocate_like(input->view());
+  auto got      = cudf::allocate_like(input->view());
   cudf::test::expect_column_properties_equal(*expected, *got);
 }
 
@@ -142,7 +142,7 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize)
   auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
                                       specified_size,
                                       cudf::mask_state::UNINITIALIZED);
-  auto got      = cudf::experimental::allocate_like(input->view(), specified_size);
+  auto got      = cudf::allocate_like(input->view(), specified_size);
   cudf::test::expect_column_properties_equal(*expected, *got);
 }
 

@@ -36,7 +36,7 @@ TEST_F(DictionaryGatherTest, Gather)
 
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map{0, 4, 3, 1};
   auto table_result =
-    cudf::experimental::gather(cudf::table_view{{view.parent()}}, gather_map)->release();
+    cudf::gather(cudf::table_view{{view.parent()}}, gather_map)->release();
   auto result = cudf::dictionary_column_view(table_result.front()->view());
 
   cudf::test::strings_column_wrapper expected{"eee", "ccc", "bbb", "aaa"};
@@ -53,7 +53,7 @@ TEST_F(DictionaryGatherTest, GatherWithNulls)
 
   cudf::test::fixed_width_column_wrapper<int16_t> gather_map{{4, 1, 2, 4}};
   auto table_result =
-    cudf::experimental::gather(cudf::table_view{{dictionary->view()}}, gather_map);
+    cudf::gather(cudf::table_view{{dictionary->view()}}, gather_map);
   auto result = cudf::dictionary_column_view(table_result->view().column(0));
 
   cudf::test::fixed_width_column_wrapper<int64_t> expected{{7, 5, 5, 7}, {1, 1, 0, 1}};
@@ -70,7 +70,7 @@ TEST_F(DictionaryGatherTest, SortStrings)
   cudf::dictionary_column_view view(dictionary->view());
 
   std::vector<cudf::order> column_order{cudf::order::ASCENDING};
-  auto result = cudf::experimental::sort(cudf::table_view{{dictionary->view()}},
+  auto result = cudf::sort(cudf::table_view{{dictionary->view()}},
                                          std::vector<cudf::order>{cudf::order::ASCENDING})
                   ->release();
 
@@ -89,7 +89,7 @@ TEST_F(DictionaryGatherTest, SortFloat)
   cudf::dictionary_column_view view(dictionary->view());
 
   std::vector<cudf::order> column_order{cudf::order::ASCENDING};
-  auto result = cudf::experimental::sort(cudf::table_view{{dictionary->view()}},
+  auto result = cudf::sort(cudf::table_view{{dictionary->view()}},
                                          std::vector<cudf::order>{cudf::order::ASCENDING})
                   ->release();
 

@@ -86,7 +86,7 @@ void BM_nullable_column(benchmark::State& state)
   cudf::test::fixed_width_column_wrapper<float> values(
     val_data_it, val_data_it + values_size, make_validity_iter());
 
-  auto sorted = cudf::experimental::sort(cudf::table_view({column}));
+  auto sorted = cudf::sort(cudf::table_view({column}));
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
@@ -133,7 +133,7 @@ void BM_table(benchmark::State& state)
 
   std::vector<cudf::order> orders(num_columns, cudf::order::ASCENDING);
   std::vector<cudf::null_order> null_orders(num_columns, cudf::null_order::BEFORE);
-  auto sorted = cudf::experimental::sort(data_table);
+  auto sorted = cudf::sort(data_table);
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);

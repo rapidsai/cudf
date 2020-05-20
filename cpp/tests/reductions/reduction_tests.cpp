@@ -83,7 +83,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
 
     auto statement = [&]() {
       std::unique_ptr<cudf::scalar> result =
-        cudf::experimental::reduce(underlying_column, agg, output_dtype);
+        cudf::reduce(underlying_column, agg, output_dtype);
       using ScalarType = cudf::experimental::scalar_type_t<T_out>;
       auto result1     = static_cast<ScalarType *>(result.get());
       EXPECT_EQ(expected_value, result1->value());
@@ -401,7 +401,7 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
                              cudf::data_type output_dtype)
   {
     const cudf::column_view underlying_column = col;
-    auto statement = [&]() { cudf::experimental::reduce(underlying_column, agg, output_dtype); };
+    auto statement = [&]() { cudf::reduce(underlying_column, agg, output_dtype); };
 
     if (succeeded_condition) {
       CUDF_EXPECT_NO_THROW(statement());
@@ -472,7 +472,7 @@ struct ReductionDtypeTest : public cudf::test::BaseFixture {
                                                            input_values.end());
 
     auto statement = [&]() {
-      std::unique_ptr<cudf::scalar> result = cudf::experimental::reduce(col, agg, out_dtype);
+      std::unique_ptr<cudf::scalar> result = cudf::reduce(col, agg, out_dtype);
       using ScalarType                     = cudf::experimental::scalar_type_t<T_out>;
       auto result1                         = static_cast<ScalarType *>(result.get());
       if (result1->is_valid() && !expected_overflow) {
@@ -600,7 +600,7 @@ TEST_F(ReductionErrorTest, empty_column)
 {
   using T        = int32_t;
   auto statement = [](const cudf::column_view col) {
-    std::unique_ptr<cudf::scalar> result = cudf::experimental::reduce(
+    std::unique_ptr<cudf::scalar> result = cudf::reduce(
       col, cudf::make_sum_aggregation(), cudf::data_type(cudf::INT64));
     EXPECT_EQ(result->is_valid(), false);
   };
@@ -697,7 +697,7 @@ struct StringReductionTest : public cudf::test::BaseFixture,
 
     auto statement = [&]() {
       std::unique_ptr<cudf::scalar> result =
-        cudf::experimental::reduce(underlying_column, agg, output_dtype);
+        cudf::reduce(underlying_column, agg, output_dtype);
       using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
       auto result1     = static_cast<ScalarType *>(result.get());
       EXPECT_TRUE(result1->is_valid());
@@ -779,11 +779,11 @@ TEST_F(StringReductionTest, AllNull)
 
   // MIN
   std::unique_ptr<cudf::scalar> minresult =
-    cudf::experimental::reduce(col_nulls, cudf::make_min_aggregation(), output_dtype);
+    cudf::reduce(col_nulls, cudf::make_min_aggregation(), output_dtype);
   EXPECT_FALSE(minresult->is_valid());
   // MAX
   std::unique_ptr<cudf::scalar> maxresult =
-    cudf::experimental::reduce(col_nulls, cudf::experimental::make_max_aggregation(), output_dtype);
+    cudf::reduce(col_nulls, cudf::experimental::make_max_aggregation(), output_dtype);
   EXPECT_FALSE(maxresult->is_valid());
 }
 
@@ -801,7 +801,7 @@ TYPED_TEST(ReductionTest, Median)
   this->reduction_test(
     col, expected_value, this->ret_non_arithmetic, cudf::make_median_aggregation());
 
-  auto col_odd              = cudf::experimental::split(col, {1})[1];
+  auto col_odd              = cudf::split(col, {1})[1];
   double expected_value_odd = std::is_same<T, bool>::value ? 1.0 : 0.0;
   this->reduction_test(col_odd,
                        expected_value_odd,
@@ -816,7 +816,7 @@ TYPED_TEST(ReductionTest, Median)
                        this->ret_non_arithmetic,
                        cudf::make_median_aggregation());
 
-  auto col_nulls_odd             = cudf::experimental::split(col_nulls, {1})[1];
+  auto col_nulls_odd             = cudf::split(col_nulls, {1})[1];
   double expected_null_value_odd = std::is_same<T, bool>::value ? 1.0 : -6.5;
   this->reduction_test(col_nulls_odd,
                        expected_null_value_odd,

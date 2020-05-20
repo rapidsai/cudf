@@ -63,7 +63,7 @@ std::unique_ptr<column> remove_keys_fn(
   // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
   rmm::device_vector<int32_t> map_indices(keys_view.size(), -1);  // init -1 to identify new nulls
   std::unique_ptr<column> keys_column = [&] {
-    auto table_keys = experimental::detail::copy_if(
+    auto table_keys = detail::copy_if(
                         table_view{{keys_view, keys_positions_view}}, keys_to_keep_fn, mr, stream)
                         ->release();
     keys_positions_view = table_keys[1]->view();
@@ -87,7 +87,7 @@ std::unique_ptr<column> remove_keys_fn(
   // Example: gather([4,0,3,1,2,2,2,4,0],[0,-1,1,-1,2]) => [2,0,-1,-1,1,1,1,2,0]
   column_view map_indices_view(data_type{INT32}, keys_view.size(), map_indices.data().get());
   auto table_indices =
-    experimental::detail::gather(
+    detail::gather(
       table_view{{map_indices_view}}, indices_view, false, false, false, mr, stream)
       ->release();
   std::unique_ptr<column> indices_column(std::move(table_indices.front()));

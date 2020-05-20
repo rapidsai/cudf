@@ -24,7 +24,7 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 /**
- * @copydoc cudf::experimental::sequence(size_type size, scalar const& init, scalar const& step,
+ * @copydoc cudf::sequence(size_type size, scalar const& init, scalar const& step,
  *                                       rmm::mr::device_memory_resource* mr =
  *rmm::mr::get_default_resource())
  *
@@ -38,7 +38,7 @@ std::unique_ptr<column> sequence(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::sequence(size_type size, scalar const& init,
+ * @copydoc cudf::sequence(size_type size, scalar const& init,
                                          rmm::mr::device_memory_resource* mr =
  rmm::mr::get_default_resource())
  *

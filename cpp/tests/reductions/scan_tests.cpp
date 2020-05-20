@@ -32,7 +32,7 @@
 using aggregation = cudf::aggregation;
 using cudf::column_view;
 using cudf::null_policy;
-using cudf::experimental::scan_type;
+using cudf::scan_type;
 
 void print_view(column_view const& view, const char* msg = nullptr)
 {
@@ -59,7 +59,7 @@ struct ScanTest : public cudf::test::BaseFixture {
     const column_view input_view = col_in;
     std::unique_ptr<cudf::column> col_out;
 
-    CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view, agg, inclusive));
+    CUDF_EXPECT_NO_THROW(col_out = cudf::scan(input_view, agg, inclusive));
     const column_view result_view = col_out->view();
 
     cudf::test::expect_column_properties_equal(input_view, result_view);
@@ -254,7 +254,7 @@ struct ScanStringTest : public cudf::test::BaseFixture {
     const column_view input_view = col_in;
     std::unique_ptr<cudf::column> col_out;
 
-    CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view, agg, inclusive));
+    CUDF_EXPECT_NO_THROW(col_out = cudf::scan(input_view, agg, inclusive));
     const column_view result_view = col_out->view();
 
     cudf::test::expect_column_properties_equal(input_view, result_view);
@@ -358,7 +358,7 @@ TYPED_TEST(ScanTest, skip_nulls)
 
   // skipna=true (default)
   CUDF_EXPECT_NO_THROW(col_out =
-                         cudf::experimental::scan(input_view,
+                         cudf::scan(input_view,
                                                   cudf::make_sum_aggregation(),
                                                   scan_type::INCLUSIVE,
                                                   null_policy::EXCLUDE));
@@ -373,7 +373,7 @@ TYPED_TEST(ScanTest, skip_nulls)
 
   // skipna=false
   CUDF_EXPECT_NO_THROW(col_out =
-                         cudf::experimental::scan(input_view,
+                         cudf::scan(input_view,
                                                   cudf::make_sum_aggregation(),
                                                   scan_type::INCLUSIVE,
                                                   null_policy::INCLUDE));
@@ -414,7 +414,7 @@ TEST_F(ScanStringTest, skip_nulls)
   std::unique_ptr<cudf::column> col_out;
   // skipna=false
   CUDF_EXPECT_NO_THROW(col_out =
-                         cudf::experimental::scan(col_nulls,
+                         cudf::scan(col_nulls,
                                                   cudf::experimental::make_max_aggregation(),
                                                   scan_type::INCLUSIVE,
                                                   null_policy::INCLUDE));
@@ -426,13 +426,13 @@ TEST_F(ScanStringTest, skip_nulls)
   cudf::test::expect_columns_equal(expected2, col_out->view());
 
   // Exclusive scan string not supported.
-  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::scan(col_nulls,
+  CUDF_EXPECT_THROW_MESSAGE((cudf::scan(col_nulls,
                                                       cudf::make_min_aggregation(),
                                                       scan_type::EXCLUSIVE,
                                                       null_policy::EXCLUDE)),
                             "String types supports only inclusive min/max for `cudf::scan`");
 
-  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::scan(col_nulls,
+  CUDF_EXPECT_THROW_MESSAGE((cudf::scan(col_nulls,
                                                       cudf::make_min_aggregation(),
                                                       scan_type::EXCLUSIVE,
                                                       null_policy::INCLUDE)),
@@ -453,7 +453,7 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
 
   // skipna=true (default)
   CUDF_EXPECT_NO_THROW(col_out =
-                         cudf::experimental::scan(col_in,
+                         cudf::scan(col_in,
                                                   cudf::make_sum_aggregation(),
                                                   scan_type::INCLUSIVE,
                                                   null_policy::EXCLUDE));
@@ -468,7 +468,7 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
 
   // skipna=false
   CUDF_EXPECT_NO_THROW(col_out =
-                         cudf::experimental::scan(col_in,
+                         cudf::scan(col_in,
                                                   cudf::make_sum_aggregation(),
                                                   scan_type::INCLUSIVE,
                                                   null_policy::INCLUDE));

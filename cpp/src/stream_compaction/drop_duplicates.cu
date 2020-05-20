@@ -126,7 +126,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                   comp,
                                   keep);
 
-    return cudf::experimental::detail::slice(
+    return cudf::detail::slice(
       column_view(unique_indices),
       0,
       thrust::distance(unique_indices.begin<cudf::size_type>(), result_end));
@@ -140,7 +140,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                   comp,
                                   keep);
 
-    return cudf::experimental::detail::slice(
+    return cudf::detail::slice(
       column_view(unique_indices),
       0,
       thrust::distance(unique_indices.begin<cudf::size_type>(), result_end));
@@ -190,7 +190,7 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
                                        cudaStream_t stream)
 {
   if (0 == input.num_rows() || 0 == input.num_columns() || 0 == keys.size()) {
-    return experimental::empty_like(input);
+    return empty_like(input);
   }
 
   auto keys_view = input.select(keys);

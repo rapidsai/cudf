@@ -272,11 +272,11 @@ void run_fixed_width_test(size_t cols,
   // Sort partition numbers by the corresponding row hashes of each output
   auto hash1 = cudf::hash(output1->view());
   cudf::table_view hash1_table({hash1->view()});
-  auto sorted_partitions1 = cudf::experimental::sort_by_key(partitions_table, hash1_table);
+  auto sorted_partitions1 = cudf::sort_by_key(partitions_table, hash1_table);
 
   auto hash2 = cudf::hash(output2->view());
   cudf::table_view hash2_table({hash2->view()});
-  auto sorted_partitions2 = cudf::experimental::sort_by_key(partitions_table, hash2_table);
+  auto sorted_partitions2 = cudf::sort_by_key(partitions_table, hash2_table);
 
   // After sorting by row hashes, the corresponding partition numbers should be
   // equal

@@ -25,7 +25,7 @@ namespace experimental {
 namespace detail {
 
 /**
- * @copydoc cudf::experimental::repeat(table_view const&, column_view const&, bool,
+ * @copydoc cudf::repeat(table_view const&, column_view const&, bool,
  * rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream to run this function
@@ -37,7 +37,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::repeat(table_view const&, scalar const&,
+ * @copydoc cudf::repeat(table_view const&, scalar const&,
  * rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream to run this function

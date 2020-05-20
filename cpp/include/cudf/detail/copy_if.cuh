@@ -226,7 +226,7 @@ struct scatter_gather_functor {
                     indices.begin(),
                     filter);
 
-    auto output_table = cudf::experimental::detail::gather(
+    auto output_table = cudf::detail::gather(
       cudf::table_view{{input}}, indices.begin(), indices.end(), false, mr, stream);
 
     // There will be only one column
@@ -243,8 +243,8 @@ struct scatter_gather_functor {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream                 = 0)
   {
-    auto output_column = cudf::experimental::detail::allocate_like(
-      input, output_size, cudf::experimental::mask_allocation_policy::RETAIN, mr, stream);
+    auto output_column = cudf::detail::allocate_like(
+      input, output_size, cudf::mask_allocation_policy::RETAIN, mr, stream);
     auto output = output_column->mutable_view();
 
     bool has_valid = input.nullable();
@@ -307,7 +307,7 @@ std::unique_ptr<table> copy_if(
 {
   CUDF_FUNC_RANGE();
 
-  if (0 == input.num_rows() || 0 == input.num_columns()) { return experimental::empty_like(input); }
+  if (0 == input.num_rows() || 0 == input.num_columns()) { return empty_like(input); }
 
   constexpr int block_size = 256;
   cudf::size_type per_thread =
@@ -371,10 +371,9 @@ std::unique_ptr<table> copy_if(
 
     return std::make_unique<table>(std::move(out_columns));
   } else {
-    return experimental::empty_like(input);
+    return empty_like(input);
   }
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

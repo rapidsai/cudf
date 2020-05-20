@@ -456,7 +456,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                                                       rmm::mr::device_memory_resource* mr,
                                                       cudaStream_t stream)
 {
-  auto subtables = cudf::experimental::split(input, splits);
+  auto subtables = cudf::split(input, splits);
 
   // optimization : for large numbers of splits this allocation can dominate total time
   //                spent if done inside alloc_and_copy().  so we'll allocate it once
@@ -485,7 +485,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::experimental::detail::contiguous_split(input, splits, mr, (cudaStream_t)0);
+  return cudf::detail::contiguous_split(input, splits, mr, (cudaStream_t)0);
 }
 
 };  // namespace experimental

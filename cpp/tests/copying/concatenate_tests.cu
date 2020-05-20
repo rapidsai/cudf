@@ -96,7 +96,7 @@ TYPED_TEST(TypedColumnTest, ConcatenateColumnView)
                                        this->num_elements() / 2,
                                        this->num_elements() / 2,
                                        this->num_elements()};
-  std::vector<cudf::column_view> views = cudf::experimental::slice(original, indices);
+  std::vector<cudf::column_view> views = cudf::slice(original, indices);
 
   auto concatenated_col = cudf::concatenate(views);
 
@@ -196,11 +196,11 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
 
   std::vector<cudf::size_type> split_indexes1{3};
   std::vector<cudf::table_view> partitioned1 =
-    cudf::experimental::split(table_view_in1, split_indexes1);
+    cudf::split(table_view_in1, split_indexes1);
 
   std::vector<cudf::size_type> split_indexes2{3};
   std::vector<cudf::table_view> partitioned2 =
-    cudf::experimental::split(table_view_in2, split_indexes2);
+    cudf::split(table_view_in2, split_indexes2);
 
   {
     std::vector<cudf::table_view> table_views_to_concat;
@@ -255,11 +255,11 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
 
   std::vector<cudf::size_type> split_indexes1{3};
   std::vector<cudf::table_view> partitioned1 =
-    cudf::experimental::split(table_view_in1, split_indexes1);
+    cudf::split(table_view_in1, split_indexes1);
 
   std::vector<cudf::size_type> split_indexes2{3};
   std::vector<cudf::table_view> partitioned2 =
-    cudf::experimental::split(table_view_in2, split_indexes2);
+    cudf::split(table_view_in2, split_indexes2);
 
   {
     std::vector<cudf::table_view> table_views_to_concat;

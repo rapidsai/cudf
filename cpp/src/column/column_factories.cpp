@@ -116,7 +116,7 @@ struct column_from_scalar_dispatch {
     auto output_column =
       make_fixed_width_column(value.type(), size, mask_state::UNALLOCATED, stream, mr);
     auto view = output_column->mutable_view();
-    experimental::detail::fill_in_place(view, 0, size, value, stream);
+    detail::fill_in_place(view, 0, size, value, stream);
     return output_column;
   }
 };

@@ -397,7 +397,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
 
     return std::make_unique<table>(std::move(out_columns));
   } else {
-    return experimental::empty_like(target);
+    return empty_like(target);
   }
 }
 
@@ -436,7 +436,7 @@ std::unique_ptr<table> boolean_mask_scatter(
 
     return std::make_unique<table>(std::move(out_columns));
   } else {
-    return experimental::empty_like(target);
+    return empty_like(target);
   }
 }
 

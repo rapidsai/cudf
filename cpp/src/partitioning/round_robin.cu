@@ -95,7 +95,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     auto exec = rmm::exec_policy(stream);
     thrust::sequence(exec->on(stream), partition_offsets.begin(), partition_offsets.end());
 
-    auto uniq_tbl = cudf::experimental::detail::gather(input,
+    auto uniq_tbl = cudf::detail::gather(input,
                                                        rotated_iter_begin,
                                                        rotated_iter_begin + nrows,  // map
                                                        false,
@@ -130,7 +130,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
 
     //...and then use the result, d_row_indices, as gather map:
     //
-    auto uniq_tbl = cudf::experimental::detail::gather(input,
+    auto uniq_tbl = cudf::detail::gather(input,
                                                        d_row_indices.begin(),
                                                        d_row_indices.end(),  // map
                                                        false,
@@ -253,7 +253,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
     });
 
   auto uniq_tbl =
-    cudf::experimental::detail::gather(input, iter_begin, iter_begin + nrows, false, mr, stream);
+    cudf::detail::gather(input, iter_begin, iter_begin + nrows, false, mr, stream);
   auto ret_pair = std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
 
   // this has the effect of rotating the set of partition sizes

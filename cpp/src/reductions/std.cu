@@ -22,7 +22,7 @@
 //                 The divisor used in calculations is N - ddof, where N
 //                 represents the number of elements.
 
-std::unique_ptr<cudf::scalar> cudf::experimental::reduction::standard_deviation(
+std::unique_ptr<cudf::scalar> cudf::reduction::standard_deviation(
   column_view const& col,
   cudf::data_type const output_dtype,
   cudf::size_type ddof,
@@ -31,8 +31,8 @@ std::unique_ptr<cudf::scalar> cudf::experimental::reduction::standard_deviation(
 {
   // TODO: add cuda version check when the fix is available
 #if !defined(__CUDACC_DEBUG__)
-  using reducer = cudf::experimental::reduction::compound::element_type_dispatcher<
-    cudf::experimental::reduction::op::standard_deviation>;
+  using reducer = cudf::reduction::compound::element_type_dispatcher<
+    cudf::reduction::op::standard_deviation>;
   return cudf::experimental::type_dispatcher(
     col.type(), reducer(), col, output_dtype, ddof, mr, stream);
 #else

@@ -189,7 +189,7 @@ void copy_range(SourceValueIterator source_value_begin,
 }
 
 /**
- * @copydoc cudf::experimental::copy_range_in_place
+ * @copydoc cudf::copy_range_in_place
  * @param stream Optional CUDA stream to run this function
  */
 void copy_range_in_place(column_view const& source,
@@ -200,7 +200,7 @@ void copy_range_in_place(column_view const& source,
                          cudaStream_t stream = 0);
 
 /**
- * @copydoc cudf::experimental::copy_range
+ * @copydoc cudf::copy_range
  * @param stream CUDA stream to run this function
  * @return std::unique_ptr<column> The result target column
  */

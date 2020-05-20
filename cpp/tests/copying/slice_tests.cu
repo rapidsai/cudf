@@ -51,7 +51,7 @@ TYPED_TEST(SliceTest, NumericColumnsWithNulls)
   std::vector<cudf::size_type> indices{1, 3, 2, 2, 5, 9};
   std::vector<cudf::test::fixed_width_column_wrapper<T>> expected =
     create_expected_columns<T>(indices, true);
-  std::vector<cudf::column_view> result = cudf::experimental::slice(col, indices);
+  std::vector<cudf::column_view> result = cudf::slice(col, indices);
 
   EXPECT_EQ(expected.size(), result.size());
 
@@ -74,7 +74,7 @@ TYPED_TEST(SliceTest, NumericColumnsWithNullsAsColumn)
   std::vector<cudf::size_type> indices{1, 3, 2, 2, 5, 9};
   std::vector<cudf::test::fixed_width_column_wrapper<T>> expected =
     create_expected_columns<T>(indices, true);
-  std::vector<cudf::column_view> result = cudf::experimental::slice(col, indices);
+  std::vector<cudf::column_view> result = cudf::slice(col, indices);
 
   EXPECT_EQ(expected.size(), result.size());
 
@@ -99,7 +99,7 @@ TEST_F(SliceStringTest, StringWithNulls)
 
   std::vector<cudf::test::strings_column_wrapper> expected =
     create_expected_string_columns(strings, indices, true);
-  std::vector<cudf::column_view> result = cudf::experimental::slice(s, indices);
+  std::vector<cudf::column_view> result = cudf::slice(s, indices);
 
   EXPECT_EQ(expected.size(), result.size());
 
@@ -120,7 +120,7 @@ TEST_F(SliceStringTest, StringWithNullsAsColumn)
 
   std::vector<cudf::test::strings_column_wrapper> expected =
     create_expected_string_columns(strings, indices, true);
-  std::vector<cudf::column_view> result = cudf::experimental::slice(s, indices);
+  std::vector<cudf::column_view> result = cudf::slice(s, indices);
 
   EXPECT_EQ(expected.size(), result.size());
 
@@ -139,7 +139,7 @@ TEST_F(SliceCornerCases, EmptyColumn)
   cudf::column col{};
   std::vector<cudf::size_type> indices{1, 3, 2, 4, 5, 9};
 
-  std::vector<cudf::column_view> result = cudf::experimental::slice(col.view(), indices);
+  std::vector<cudf::column_view> result = cudf::slice(col.view(), indices);
 
   unsigned long expected = 0;
 
@@ -157,7 +157,7 @@ TEST_F(SliceCornerCases, EmptyIndices)
     create_fixed_columns<int8_t>(start, size, valids);
   std::vector<cudf::size_type> indices{};
 
-  std::vector<cudf::column_view> result = cudf::experimental::slice(col, indices);
+  std::vector<cudf::column_view> result = cudf::slice(col, indices);
 
   unsigned long expected = 0;
 
@@ -174,7 +174,7 @@ TEST_F(SliceCornerCases, InvalidSetOfIndices)
     create_fixed_columns<int8_t>(start, size, valids);
   std::vector<cudf::size_type> indices{11, 12};
 
-  EXPECT_THROW(cudf::experimental::slice(col, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::slice(col, indices), cudf::logic_error);
 }
 
 TEST_F(SliceCornerCases, ImproperRange)
@@ -188,7 +188,7 @@ TEST_F(SliceCornerCases, ImproperRange)
     create_fixed_columns<int8_t>(start, size, valids);
   std::vector<cudf::size_type> indices{5, 4};
 
-  EXPECT_THROW(cudf::experimental::slice(col, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::slice(col, indices), cudf::logic_error);
 }
 
 TEST_F(SliceCornerCases, NegativeOffset)
@@ -202,7 +202,7 @@ TEST_F(SliceCornerCases, NegativeOffset)
     create_fixed_columns<int8_t>(start, size, valids);
   std::vector<cudf::size_type> indices{-1, 4};
 
-  EXPECT_THROW(cudf::experimental::slice(col, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::slice(col, indices), cudf::logic_error);
 }
 
 template <typename T>
@@ -226,7 +226,7 @@ TYPED_TEST(SliceTableTest, NumericColumnsWithNulls)
   std::vector<cudf::size_type> indices{1, 3, 2, 2, 5, 9};
   std::vector<cudf::table> expected = create_expected_tables<T>(num_cols, indices, true);
 
-  std::vector<cudf::table_view> result = cudf::experimental::slice(src_table, indices);
+  std::vector<cudf::table_view> result = cudf::slice(src_table, indices);
 
   EXPECT_EQ(expected.size(), result.size());
 
@@ -258,7 +258,7 @@ TEST_F(SliceStringTableTest, StringWithNulls)
 
   std::vector<cudf::table> expected = create_expected_string_tables(strings, indices, true);
 
-  std::vector<cudf::table_view> result = cudf::experimental::slice(src_table, indices);
+  std::vector<cudf::table_view> result = cudf::slice(src_table, indices);
 
   EXPECT_EQ(expected.size(), result.size());
 
@@ -275,7 +275,7 @@ TEST_F(SliceTableCornerCases, EmptyTable)
   std::vector<cudf::size_type> indices{1, 3, 2, 4, 5, 9};
 
   cudf::table src_table{};
-  std::vector<cudf::table_view> result = cudf::experimental::slice(src_table.view(), indices);
+  std::vector<cudf::table_view> result = cudf::slice(src_table.view(), indices);
 
   unsigned long expected = 0;
 
@@ -293,7 +293,7 @@ TEST_F(SliceTableCornerCases, EmptyIndices)
   cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
   std::vector<cudf::size_type> indices{};
 
-  std::vector<cudf::table_view> result = cudf::experimental::slice(src_table, indices);
+  std::vector<cudf::table_view> result = cudf::slice(src_table, indices);
 
   unsigned long expected = 0;
 
@@ -312,7 +312,7 @@ TEST_F(SliceTableCornerCases, InvalidSetOfIndices)
 
   std::vector<cudf::size_type> indices{11, 12};
 
-  EXPECT_THROW(cudf::experimental::slice(src_table, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::slice(src_table, indices), cudf::logic_error);
 }
 
 TEST_F(SliceTableCornerCases, ImproperRange)
@@ -327,7 +327,7 @@ TEST_F(SliceTableCornerCases, ImproperRange)
 
   std::vector<cudf::size_type> indices{5, 4};
 
-  EXPECT_THROW(cudf::experimental::slice(src_table, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::slice(src_table, indices), cudf::logic_error);
 }
 
 TEST_F(SliceTableCornerCases, NegativeOffset)
@@ -342,5 +342,5 @@ TEST_F(SliceTableCornerCases, NegativeOffset)
 
   std::vector<cudf::size_type> indices{-1, 4};
 
-  EXPECT_THROW(cudf::experimental::slice(src_table, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::slice(src_table, indices), cudf::logic_error);
 }

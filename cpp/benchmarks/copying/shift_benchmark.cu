@@ -68,7 +68,7 @@ static void BM_shift(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    auto output = cudf::experimental::shift(input, offset, *fill);
+    auto output = cudf::shift(input, offset, *fill);
   }
 }
 

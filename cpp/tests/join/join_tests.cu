@@ -54,7 +54,7 @@ TEST_F(JoinTest, InvalidCommonColumnIndices)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  EXPECT_THROW(cudf::experimental::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}),
+  EXPECT_THROW(cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}),
                cudf::logic_error);
 }
 
@@ -76,12 +76,12 @@ TEST_F(JoinTest, FullJoinNoCommon)
   exp_cols.push_back(exp_col0_1.release());
   Table gold(std::move(exp_cols));
 
-  auto result            = cudf::experimental::full_join(t0, t1, {0}, {0}, {});
-  auto result_sort_order = cudf::experimental::sorted_order(result->view());
-  auto sorted_result     = cudf::experimental::gather(result->view(), *result_sort_order);
+  auto result            = cudf::full_join(t0, t1, {0}, {0}, {});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
-  auto sorted_gold     = cudf::experimental::gather(gold.view(), *gold_sort_order);
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
@@ -106,9 +106,9 @@ TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = cudf::experimental::left_join(t0, t1, {0}, {0}, {});
-  auto result_sort_order = cudf::experimental::sorted_order(result->view());
-  auto sorted_result     = cudf::experimental::gather(result->view(), *result_sort_order);
+  auto result            = cudf::left_join(t0, t1, {0}, {0}, {});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> col_gold_0{{3, 1, 2, 2, 0, 3}, {1, 1, 1, 1, 1, 1}};
   strcol_wrapper col_gold_1({"s0", "s1", "s2", "s2", "s4", "s1"}, {1, 1, 1, 1, 1, 1});
@@ -125,8 +125,8 @@ TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon)
   cols_gold.push_back(col_gold_5.release());
   Table gold(std::move(cols_gold));
 
-  auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
-  auto sorted_gold     = cudf::experimental::gather(gold.view(), *gold_sort_order);
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
 
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
@@ -152,9 +152,9 @@ TEST_F(JoinTest, FullJoinNoNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = cudf::experimental::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  auto result_sort_order = cudf::experimental::sorted_order(result->view());
-  auto sorted_result     = cudf::experimental::gather(result->view(), *result_sort_order);
+  auto result            = cudf::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> col_gold_0{{2, 2, 0, 4, 3, 3, 1, 2, 0}};
   strcol_wrapper col_gold_1({"s1", "s0", "s1", "s2", "s1", "s0", "s1", "s2", "s4"});
@@ -167,8 +167,8 @@ TEST_F(JoinTest, FullJoinNoNulls)
   cols_gold.push_back(col_gold_3.release());
   Table gold(std::move(cols_gold));
 
-  auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
-  auto sorted_gold     = cudf::experimental::gather(gold.view(), *gold_sort_order);
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
@@ -193,9 +193,9 @@ TEST_F(JoinTest, FullJoinWithNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = cudf::experimental::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  auto result_sort_order = cudf::experimental::sorted_order(result->view());
-  auto sorted_result     = cudf::experimental::gather(result->view(), *result_sort_order);
+  auto result            = cudf::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> col_gold_0{{2, 2, 0, -1, 3, 3, 1, 2, 0}, {1, 1, 1, 0, 1, 1, 1, 1, 1}};
   strcol_wrapper col_gold_1({"s1", "s0", "s1", "s2", "s1", "s0", "s1", "s2", "s4"});
@@ -208,8 +208,8 @@ TEST_F(JoinTest, FullJoinWithNulls)
   cols_gold.push_back(col_gold_3.release());
   Table gold(std::move(cols_gold));
 
-  auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
-  auto sorted_gold     = cudf::experimental::gather(gold.view(), *gold_sort_order);
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
@@ -234,9 +234,9 @@ TEST_F(JoinTest, LeftJoinNoNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = cudf::experimental::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  auto result_sort_order = cudf::experimental::sorted_order(result->view());
-  auto sorted_result     = cudf::experimental::gather(result->view(), *result_sort_order);
+  auto result            = cudf::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> col_gold_0{{3, 3, 1, 2, 0}, {1, 1, 1, 1, 1}};
   strcol_wrapper col_gold_1({"s1", "s0", "s1", "s2", "s4"}, {1, 1, 1, 1, 1, 1});
@@ -249,8 +249,8 @@ TEST_F(JoinTest, LeftJoinNoNulls)
   cols_gold.push_back(col_gold_3.release());
   Table gold(std::move(cols_gold));
 
-  auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
-  auto sorted_gold     = cudf::experimental::gather(gold.view(), *gold_sort_order);
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
@@ -275,9 +275,9 @@ TEST_F(JoinTest, LeftJoinWithNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = cudf::experimental::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  auto result_sort_order = cudf::experimental::sorted_order(result->view());
-  auto sorted_result     = cudf::experimental::gather(result->view(), *result_sort_order);
+  auto result            = cudf::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> col_gold_0{{3, 2, 1, 2, 0}, {1, 1, 1, 1, 1}};
   strcol_wrapper col_gold_1({"s1", "s0", "s1", "", "s4"}, {1, 1, 1, 0, 1});
@@ -290,8 +290,8 @@ TEST_F(JoinTest, LeftJoinWithNulls)
   cols_gold.push_back(col_gold_3.release());
   Table gold(std::move(cols_gold));
 
-  auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
-  auto sorted_gold     = cudf::experimental::gather(gold.view(), *gold_sort_order);
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
@@ -316,9 +316,9 @@ TEST_F(JoinTest, InnerJoinNoNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = cudf::experimental::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  auto result_sort_order = cudf::experimental::sorted_order(result->view());
-  auto sorted_result     = cudf::experimental::gather(result->view(), *result_sort_order);
+  auto result            = cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> col_gold_0{{3, 2, 2}};
   strcol_wrapper col_gold_1({"s1", "s0", "s0"});
@@ -331,8 +331,8 @@ TEST_F(JoinTest, InnerJoinNoNulls)
   cols_gold.push_back(col_gold_3.release());
   Table gold(std::move(cols_gold));
 
-  auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
-  auto sorted_gold     = cudf::experimental::gather(gold.view(), *gold_sort_order);
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
@@ -357,9 +357,9 @@ TEST_F(JoinTest, InnerJoinWithNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = cudf::experimental::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  auto result_sort_order = cudf::experimental::sorted_order(result->view());
-  auto sorted_result     = cudf::experimental::gather(result->view(), *result_sort_order);
+  auto result            = cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> col_gold_0{{3, 2}};
   strcol_wrapper col_gold_1({"s1", "s0"}, {1, 1});
@@ -372,8 +372,8 @@ TEST_F(JoinTest, InnerJoinWithNulls)
   cols_gold.push_back(col_gold_3.release());
   Table gold(std::move(cols_gold));
 
-  auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
-  auto sorted_gold     = cudf::experimental::gather(gold.view(), *gold_sort_order);
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
@@ -395,7 +395,7 @@ TEST_F(JoinTest, EmptyLeftTableInnerJoin)
   Table empty0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result = cudf::experimental::inner_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result = cudf::inner_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
   cudf::test::expect_tables_equal(empty0, *result);
 }
 
@@ -416,7 +416,7 @@ TEST_F(JoinTest, EmptyLeftTableLeftJoin)
   Table empty0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result = cudf::experimental::left_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result = cudf::left_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
   cudf::test::expect_tables_equal(empty0, *result);
 }
 
@@ -437,7 +437,7 @@ TEST_F(JoinTest, EmptyLeftTableFullJoin)
   Table empty0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result = cudf::experimental::full_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result = cudf::full_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
   cudf::test::expect_tables_equal(t1, *result);
 }
 
@@ -459,7 +459,7 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin)
   Table t0(std::move(cols0));
   Table empty1(std::move(cols1));
 
-  auto result = cudf::experimental::inner_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result = cudf::inner_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
   cudf::test::expect_tables_equal(empty1, *result);
 }
 
@@ -480,7 +480,7 @@ TEST_F(JoinTest, EmptyRightTableLeftJoin)
   Table t0(std::move(cols0));
   Table empty1(std::move(cols1));
 
-  auto result = cudf::experimental::left_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result = cudf::left_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
   cudf::test::expect_tables_equal(t0, *result);
 }
 
@@ -501,7 +501,7 @@ TEST_F(JoinTest, EmptyRightTableFullJoin)
   Table t0(std::move(cols0));
   Table empty1(std::move(cols1));
 
-  auto result = cudf::experimental::full_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result = cudf::full_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
   cudf::test::expect_tables_equal(t0, *result);
 }
 
@@ -523,7 +523,7 @@ TEST_F(JoinTest, BothEmptyInnerJoin)
   Table t0(std::move(cols0));
   Table empty1(std::move(cols1));
 
-  auto result = cudf::experimental::inner_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result = cudf::inner_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
   cudf::test::expect_tables_equal(empty1, *result);
 }
 
@@ -544,7 +544,7 @@ TEST_F(JoinTest, BothEmptyLeftJoin)
   Table t0(std::move(cols0));
   Table empty1(std::move(cols1));
 
-  auto result = cudf::experimental::left_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result = cudf::left_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
   cudf::test::expect_tables_equal(empty1, *result);
 }
 
@@ -565,7 +565,7 @@ TEST_F(JoinTest, BothEmptyFullJoin)
   Table t0(std::move(cols0));
   Table empty1(std::move(cols1));
 
-  auto result = cudf::experimental::full_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result = cudf::full_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
   cudf::test::expect_tables_equal(empty1, *result);
 }
 
@@ -588,7 +588,7 @@ TEST_F(JoinTest, EqualValuesInnerJoin)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result = cudf::experimental::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result = cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 
   column_wrapper<int32_t> col_gold_0{{0, 0, 0, 0}};
   strcol_wrapper col_gold_1({"s0", "s0", "s0", "s0"});
@@ -617,7 +617,7 @@ TEST_F(JoinTest, EqualValuesLeftJoin)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result = cudf::experimental::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result = cudf::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 
   column_wrapper<int32_t> col_gold_0{{0, 0, 0, 0}, {1, 1, 1, 1}};
   strcol_wrapper col_gold_1({"s0", "s0", "s0", "s0"}, {1, 1, 1, 1});
@@ -646,7 +646,7 @@ TEST_F(JoinTest, EqualValuesFullJoin)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result = cudf::experimental::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result = cudf::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 
   column_wrapper<int32_t> col_gold_0{{0, 0, 0, 0}};
   strcol_wrapper col_gold_1({"s0", "s0", "s0", "s0"});
@@ -670,17 +670,17 @@ TEST_F(JoinTest, InnerJoinCornerCase)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = cudf::experimental::inner_join(t0, t1, {0}, {0}, {{0, 0}});
-  auto result_sort_order = cudf::experimental::sorted_order(result->view());
-  auto sorted_result     = cudf::experimental::gather(result->view(), *result_sort_order);
+  auto result            = cudf::inner_join(t0, t1, {0}, {0}, {{0, 0}});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int64_t> col_gold_0{{2, 2, 2, 2}};
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
   Table gold(std::move(cols_gold));
 
-  auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
-  auto sorted_gold     = cudf::experimental::gather(gold.view(), *gold_sort_order);
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 

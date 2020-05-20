@@ -76,7 +76,7 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset)
   cudf::test::fixed_width_column_wrapper<TypeParam> col(data.begin(), data.end());
 
   std::vector<cudf::size_type> splits{split};
-  std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
+  std::vector<cudf::column_view> result = cudf::split(col, splits);
 
   auto host_data = cudf::test::to_host<TypeParam>(result.back());
 
@@ -97,7 +97,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
   cudf::test::fixed_width_column_wrapper<TypeParam> col(data.begin(), data.end(), valid);
 
   std::vector<cudf::size_type> splits{split};
-  std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
+  std::vector<cudf::column_view> result = cudf::split(col, splits);
 
   auto host_data = cudf::test::to_host<TypeParam>(result.back());
 

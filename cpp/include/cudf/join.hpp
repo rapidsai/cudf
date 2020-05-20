@@ -22,7 +22,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup column_join
  * @{
@@ -327,5 +326,4 @@ std::unique_ptr<cudf::table> left_anti_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

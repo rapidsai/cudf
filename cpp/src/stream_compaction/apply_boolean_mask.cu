@@ -65,7 +65,7 @@ std::unique_ptr<table> apply_boolean_mask(table_view const& input,
                                           rmm::mr::device_memory_resource* mr,
                                           cudaStream_t stream)
 {
-  if (boolean_mask.size() == 0) { return experimental::empty_like(input); }
+  if (boolean_mask.size() == 0) { return empty_like(input); }
 
   CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be Boolean type");
   // zero-size inputs are OK, but otherwise input size must match mask size

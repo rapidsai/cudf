@@ -582,10 +582,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
                                            stream);
 
       // Handle bitmask using gather to take advantage of ballot_sync
-      experimental::detail::gather_bitmask(input,
+      detail::gather_bitmask(input,
                                            gather_map.begin(),
                                            output_cols,
-                                           experimental::detail::gather_bitmask_op::DONT_CHECK,
+                                           detail::gather_bitmask_op::DONT_CHECK,
                                            mr,
                                            stream);
     }
@@ -604,7 +604,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
       row_output_locations, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
 
     // Use the resulting scatter map to materialize the output
-    auto output = experimental::detail::scatter(
+    auto output = detail::scatter(
       input, row_partition_numbers.begin(), row_partition_numbers.end(), input, false, mr, stream);
 
     return std::make_pair(std::move(output), std::move(partition_offsets));
@@ -627,7 +627,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
-    return std::make_pair(experimental::empty_like(input), std::vector<size_type>{});
+    return std::make_pair(empty_like(input), std::vector<size_type>{});
   }
 
   if (has_nulls(table_to_hash)) {

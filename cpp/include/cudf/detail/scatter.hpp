@@ -109,7 +109,7 @@ std::unique_ptr<table> scatter(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::boolean_mask_scatter(
+ * @copydoc cudf::boolean_mask_scatter(
                       table_view const& source, table_view const& target,
  *                    column_view const& boolean_mask,
  *                    rmm::mr::device_memory_resource *mr)
@@ -123,7 +123,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& source,
                                             cudaStream_t stream = 0);
 
 /**
- * @copydoc cudf::experimental::boolean_mask_scatter(
+ * @copydoc cudf::boolean_mask_scatter(
  *                    std::vector<std::reference_wrapper<scalar>> const& source,
  *                    table_view const& target,
  *                    column_view const& boolean_mask,

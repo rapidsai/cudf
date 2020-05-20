@@ -65,7 +65,7 @@ TYPED_TEST(QuantilesTest, TestZeroRequestedQuantiles)
   auto input   = table_view(std::vector<column_view>{input_a});
 
   auto actual   = quantiles(input, {});
-  auto expected = experimental::empty_like(input);
+  auto expected = empty_like(input);
 
   expect_tables_equal(expected->view(), actual->view());
 }

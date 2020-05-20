@@ -82,7 +82,7 @@ std::unique_ptr<column> add_keys(
                            nullptr,
                            0,
                            dictionary_column.offset());
-  auto table_indices = cudf::experimental::detail::gather(table_view{{map_indices->view()}},
+  auto table_indices = cudf::detail::gather(table_view{{map_indices->view()}},
                                                           indices_view,
                                                           false,
                                                           true,

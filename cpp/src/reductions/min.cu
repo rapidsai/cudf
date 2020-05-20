@@ -18,13 +18,13 @@
 #include <cudf/detail/reduction_functions.hpp>
 #include "simple.cuh"
 
-std::unique_ptr<cudf::scalar> cudf::experimental::reduction::min(
+std::unique_ptr<cudf::scalar> cudf::reduction::min(
   column_view const& col,
   data_type const output_dtype,
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  using reducer = cudf::experimental::reduction::simple::element_type_dispatcher<
-    cudf::experimental::reduction::op::min>;
+  using reducer = cudf::reduction::simple::element_type_dispatcher<
+    cudf::reduction::op::min>;
   return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, mr, stream);
 }

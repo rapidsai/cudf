@@ -69,8 +69,8 @@ std::unique_ptr<table> get_empty_joined_table(
                  columns_in_common.end(),
                  right_columns_in_common.begin(),
                  [](auto& col) { return col.second; });
-  std::unique_ptr<table> empty_left  = experimental::empty_like(left);
-  std::unique_ptr<table> empty_right = experimental::empty_like(right);
+  std::unique_ptr<table> empty_left  = empty_like(left);
+  std::unique_ptr<table> empty_right = empty_like(right);
   std::vector<size_type> right_non_common_indices =
     non_common_column_indices(right.num_columns(), right_columns_in_common);
   table_view tmp_right_table = (*empty_right).select(right_non_common_indices);
@@ -311,13 +311,13 @@ std::unique_ptr<table> construct_join_output_df(
     auto complement_indices = get_left_join_indices_complement(
       joined_indices.second, left.num_rows(), right.num_rows(), stream);
     if (not columns_in_common.empty()) {
-      auto common_from_right = experimental::detail::gather(right.select(right_common_col),
+      auto common_from_right = detail::gather(right.select(right_common_col),
                                                             complement_indices.second.begin(),
                                                             complement_indices.second.end(),
                                                             nullify_out_of_bounds,
                                                             rmm::mr::get_default_resource(),
                                                             stream);
-      auto common_from_left  = experimental::detail::gather(left.select(left_common_col),
+      auto common_from_left  = detail::gather(left.select(left_common_col),
                                                            joined_indices.first.begin(),
                                                            joined_indices.first.end(),
                                                            nullify_out_of_bounds,
@@ -329,7 +329,7 @@ std::unique_ptr<table> construct_join_output_df(
     joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
   } else {
     if (not columns_in_common.empty()) {
-      common_table = experimental::detail::gather(left.select(left_common_col),
+      common_table = detail::gather(left.select(left_common_col),
                                                   joined_indices.first.begin(),
                                                   joined_indices.first.end(),
                                                   nullify_out_of_bounds,
@@ -339,7 +339,7 @@ std::unique_ptr<table> construct_join_output_df(
   }
 
   // Construct the left non common columns
-  std::unique_ptr<table> left_table = experimental::detail::gather(left.select(left_noncommon_col),
+  std::unique_ptr<table> left_table = detail::gather(left.select(left_noncommon_col),
                                                                    joined_indices.first.begin(),
                                                                    joined_indices.first.end(),
                                                                    nullify_out_of_bounds,
@@ -347,7 +347,7 @@ std::unique_ptr<table> construct_join_output_df(
                                                                    stream);
 
   std::unique_ptr<table> right_table =
-    experimental::detail::gather(right.select(right_noncommon_col),
+    detail::gather(right.select(right_noncommon_col),
                                  joined_indices.second.begin(),
                                  joined_indices.second.end(),
                                  nullify_out_of_bounds,

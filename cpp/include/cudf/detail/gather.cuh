@@ -123,9 +123,9 @@ struct column_gatherer_impl {
                                      cudaStream_t stream)
   {
     size_type num_destination_rows = std::distance(gather_map_begin, gather_map_end);
-    cudf::experimental::mask_allocation_policy policy =
-      cudf::experimental::mask_allocation_policy::NEVER;
-    std::unique_ptr<column> destination_column = cudf::experimental::detail::allocate_like(
+    cudf::mask_allocation_policy policy =
+      cudf::mask_allocation_policy::NEVER;
+    std::unique_ptr<column> destination_column = cudf::detail::allocate_like(
       source_column, num_destination_rows, policy, mr, stream);
     Element const* source_data{source_column.data<Element>()};
     Element* destination_data{destination_column->mutable_view().data<Element>()};

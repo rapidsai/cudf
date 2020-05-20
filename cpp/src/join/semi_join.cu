@@ -66,10 +66,10 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   CUDF_EXPECTS(0 != right.num_columns(), "Right table is empty");
   CUDF_EXPECTS(left_on.size() == right_on.size(), "Mismatch in number of columns to be joined on");
 
-  if (0 == return_columns.size()) { return experimental::empty_like(left.select(return_columns)); }
+  if (0 == return_columns.size()) { return empty_like(left.select(return_columns)); }
 
   if (is_trivial_join(left, right, left_on, right_on, JoinKind)) {
-    return experimental::empty_like(left.select(return_columns));
+    return empty_like(left.select(return_columns));
   }
 
   if ((join_kind::LEFT_ANTI_JOIN == JoinKind) && (0 == right.num_rows())) {
@@ -126,7 +126,7 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
       return (pos != hash_table.end()) == join_type_boolean;
     });
 
-  return cudf::experimental::detail::gather(
+  return cudf::detail::gather(
     left.select(return_columns), gather_map.begin(), gather_map_end, false, mr);
 }
 }  // namespace detail

@@ -212,7 +212,7 @@ std::unique_ptr<column> fused_concatenate(std::vector<column_view> const& views,
                                           rmm::mr::device_memory_resource* mr,
                                           cudaStream_t stream)
 {
-  using mask_policy = cudf::experimental::mask_allocation_policy;
+  using mask_policy = cudf::mask_allocation_policy;
 
   // Preprocess and upload inputs to device memory
   auto const device_views = create_device_views(views, stream);
@@ -226,7 +226,7 @@ std::unique_ptr<column> fused_concatenate(std::vector<column_view> const& views,
   // Allocate output
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
   auto out_col =
-    experimental::detail::allocate_like(views.front(), output_size, policy, mr, stream);
+    detail::allocate_like(views.front(), output_size, policy, mr, stream);
   out_col->set_null_count(0);  // prevent null count from being materialized
   auto out_view   = out_col->mutable_view();
   auto d_out_view = mutable_column_device_view::create(out_view, stream);
@@ -261,9 +261,9 @@ std::unique_ptr<column> for_each_concatenate(std::vector<column_view> const& vie
       return accumulator + v.size();
     });
 
-  using mask_policy = cudf::experimental::mask_allocation_policy;
+  using mask_policy = cudf::mask_allocation_policy;
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
-  auto col = cudf::experimental::allocate_like(views.front(), total_element_count, policy, mr);
+  auto col = cudf::allocate_like(views.front(), total_element_count, policy, mr);
 
   col->set_null_count(0);             // prevent null count from being materialized...
   auto m_view = col->mutable_view();  // ...when we take a mutable view
@@ -338,7 +338,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
   if (std::all_of(columns_to_concat.begin(), columns_to_concat.end(), [](column_view const& c) {
         return c.is_empty();
       })) {
-    return experimental::empty_like(columns_to_concat.front());
+    return empty_like(columns_to_concat.front());
   }
 
   return experimental::type_dispatcher(type, concatenate_dispatch{columns_to_concat, mr, stream});

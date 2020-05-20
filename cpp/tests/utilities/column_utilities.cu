@@ -158,7 +158,7 @@ void column_comparison(cudf::column_view const& lhs,
       fixed_width_column_wrapper<int32_t> diff_column(differences.begin(), differences.end());
 
       std::unique_ptr<cudf::table> diff_table =
-        cudf::experimental::gather(source_table, diff_column);
+        cudf::gather(source_table, diff_column);
 
       //
       //  Need to pull back the differences
@@ -178,8 +178,8 @@ void column_comparison(cudf::column_view const& lhs,
       //
       int index = differences[0];
 
-      auto diff_lhs = cudf::experimental::detail::slice(lhs, index, index + 1);
-      auto diff_rhs = cudf::experimental::detail::slice(rhs, index, index + 1);
+      auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
+      auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
 
       std::vector<std::string> h_left_strings  = to_strings(diff_lhs);
       std::vector<std::string> h_right_strings = to_strings(diff_rhs);

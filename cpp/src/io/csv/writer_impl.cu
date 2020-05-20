@@ -493,7 +493,7 @@ void writer::impl::write(table_view const& table,
 
       // split table_view into chunks:
       //
-      vector_views = cudf::experimental::split(table, splits);
+      vector_views = cudf::split(table, splits);
     }
 
     // convert each chunk to CSV:

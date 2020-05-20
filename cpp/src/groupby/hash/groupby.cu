@@ -150,7 +150,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
     auto to_dense_agg_result =
       [&sparse_results, &gather_map, map_size, i, mr, stream](auto const& agg) {
         auto s                  = sparse_results.get_result(i, agg);
-        auto dense_result_table = experimental::detail::gather(
+        auto dense_result_table = detail::gather(
           table_view({s}), gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
         return std::move(dense_result_table->release()[0]);
       };
@@ -168,7 +168,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
         data_type(type_to_id<size_type>()),
         arg_result->size(),
         static_cast<void const*>(arg_result->view().template data<size_type>()));
-      auto transformed_result = experimental::detail::gather(
+      auto transformed_result = detail::gather(
         table_view({col}), null_removed_map, false, arg_result->nullable(), false, mr, stream);
       return std::move(transformed_result->release()[0]);
     };
@@ -389,7 +389,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(requests, sparse_results, cache, gather_map, map_size, stream, mr);
 
-  return experimental::detail::gather(
+  return detail::gather(
     keys, gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
 }
 

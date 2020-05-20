@@ -63,7 +63,7 @@ std::unique_ptr<cudf::column> sort(strings_column_view strings,
   column_view indices_view(data_type{INT32}, num_strings, indices.data().get(), nullptr, 0);
   // now build a new strings column from the indices
   auto table_sorted =
-    experimental::detail::gather(table_view{{strings.parent()}}, indices_view, stream, mr)
+    detail::gather(table_view{{strings.parent()}}, indices_view, stream, mr)
       ->release();
   return std::move(table_sorted.front());
 }
