@@ -81,13 +81,13 @@ struct OrcWriterTest : public cudf::test::BaseFixture {
 // Typed test fixture for numeric type tests
 template <typename T>
 struct OrcWriterNumericTypeTest : public OrcWriterTest {
-  auto type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 // Typed test fixture for timestamp type tests
 template <typename T>
 struct OrcWriterTimestampTypeTest : public OrcWriterTest {
-  auto type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 // Declare typed test cases
@@ -104,7 +104,7 @@ struct OrcChunkedWriterTest : public cudf::test::BaseFixture {
 // Typed test fixture for numeric type tests
 template <typename T>
 struct OrcChunkedWriterNumericTypeTest : public OrcChunkedWriterTest {
-  auto type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 // Declare typed test cases

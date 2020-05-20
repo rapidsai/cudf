@@ -36,17 +36,17 @@ TYPED_TEST_CASE(NumericScalarFactory, cudf::test::NumericTypes);
 
 TYPED_TEST(NumericScalarFactory, FactoryDefault)
 {
-  std::unique_ptr<cudf::scalar> s = this->factory(
-    cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, this->stream(), this->mr());
+  std::unique_ptr<cudf::scalar> s =
+    this->factory(cudf::data_type{cudf::type_to_id<TypeParam>()}, this->stream(), this->mr());
 
-  EXPECT_EQ(s->type(), cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+  EXPECT_EQ(s->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_FALSE(s->is_valid());
 }
 
 TYPED_TEST(NumericScalarFactory, TypeCast)
 {
-  std::unique_ptr<cudf::scalar> s = this->factory(
-    cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, this->stream(), this->mr());
+  std::unique_ptr<cudf::scalar> s =
+    this->factory(cudf::data_type{cudf::type_to_id<TypeParam>()}, this->stream(), this->mr());
 
   auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 
@@ -66,17 +66,17 @@ TYPED_TEST_CASE(TimestampScalarFactory, cudf::test::TimestampTypes);
 
 TYPED_TEST(TimestampScalarFactory, FactoryDefault)
 {
-  std::unique_ptr<cudf::scalar> s = this->factory(
-    cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, this->stream(), this->mr());
+  std::unique_ptr<cudf::scalar> s =
+    this->factory(cudf::data_type{cudf::type_to_id<TypeParam>()}, this->stream(), this->mr());
 
-  EXPECT_EQ(s->type(), cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+  EXPECT_EQ(s->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_FALSE(s->is_valid());
 }
 
 TYPED_TEST(TimestampScalarFactory, TypeCast)
 {
-  std::unique_ptr<cudf::scalar> s = this->factory(
-    cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, this->stream(), this->mr());
+  std::unique_ptr<cudf::scalar> s =
+    this->factory(cudf::data_type{cudf::type_to_id<TypeParam>()}, this->stream(), this->mr());
 
   auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 
@@ -97,17 +97,15 @@ TYPED_TEST_CASE(DefaultScalarFactory, MixedTypes);
 
 TYPED_TEST(DefaultScalarFactory, FactoryDefault)
 {
-  std::unique_ptr<cudf::scalar> s =
-    this->factory(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+  std::unique_ptr<cudf::scalar> s = this->factory(cudf::data_type{cudf::type_to_id<TypeParam>()});
 
-  EXPECT_EQ(s->type(), cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+  EXPECT_EQ(s->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_FALSE(s->is_valid());
 }
 
 TYPED_TEST(DefaultScalarFactory, TypeCast)
 {
-  std::unique_ptr<cudf::scalar> s =
-    this->factory(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+  std::unique_ptr<cudf::scalar> s = this->factory(cudf::data_type{cudf::type_to_id<TypeParam>()});
 
   auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 
@@ -131,7 +129,7 @@ TYPED_TEST(FixedWidthScalarFactory, ValueProvided)
 
   auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 
-  EXPECT_EQ(s->type(), cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+  EXPECT_EQ(s->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(numeric_s->value(), value);
   EXPECT_TRUE(numeric_s->is_valid());
   EXPECT_TRUE(s->is_valid());

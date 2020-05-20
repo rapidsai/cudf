@@ -29,7 +29,6 @@
  * and concrete C++ types.
  **/
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup utility_dispatcher
  * @{
@@ -123,8 +122,6 @@ CUDF_TYPE_MAPPING(cudf::timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
 CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
 CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
-
-}  // namespace experimental
 
 template <typename T>
 struct type_to_scalar_type_impl {
@@ -294,7 +291,7 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
 #pragma nv_exec_check_disable
-template <template <cudf::type_id> typename IdTypeMap = experimental::id_to_type_impl,
+template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
           typename Functor,
           typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_type dtype,

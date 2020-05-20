@@ -171,9 +171,9 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
 
   auto output = make_fixed_width_column(
     output_col_type, size, copy_bitmask(column, stream, mr), column.null_count(), stream, mr);
-  auto launch = launch_functor<TransformFunctor,
-                               typename cudf::experimental::id_to_type_impl<OutputColCudfT>::type>{
-    column, static_cast<mutable_column_view>(*output)};
+  auto launch =
+    launch_functor<TransformFunctor, typename cudf::id_to_type_impl<OutputColCudfT>::type>{
+      column, static_cast<mutable_column_view>(*output)};
 
   type_dispatcher(column.type(), launch, stream);
 

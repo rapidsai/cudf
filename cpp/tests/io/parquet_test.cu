@@ -105,13 +105,13 @@ struct ParquetWriterStressTest : public cudf::test::BaseFixture {
 // Typed test fixture for numeric type tests
 template <typename T>
 struct ParquetWriterNumericTypeTest : public ParquetWriterTest {
-  auto type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 // Typed test fixture for timestamp type tests
 template <typename T>
 struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
-  auto type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 // Declare typed test cases
@@ -126,7 +126,7 @@ struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {
 // Typed test fixture for numeric type tests
 template <typename T>
 struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
-  auto type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 // Declare typed test cases

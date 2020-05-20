@@ -67,8 +67,7 @@ struct null_replaced_value_accessor {
   null_replaced_value_accessor(column_device_view const& _col, Element null_val)
     : col{_col}, null_replacement{null_val}
   {
-    CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == col.type(),
-                 "the data type mismatch");
+    CUDF_EXPECTS(data_type(type_to_id<Element>()) == col.type(), "the data type mismatch");
     // verify valid is non-null, otherwise, is_valid_nocheck() will crash
     CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
   }
@@ -193,8 +192,7 @@ struct scalar_value_accessor {
   scalar_value_accessor(scalar const& scalar_value)
     : dscalar(get_scalar_device_view(static_cast<ScalarType&>(const_cast<scalar&>(scalar_value))))
   {
-    CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == scalar_value.type(),
-                 "the data type mismatch");
+    CUDF_EXPECTS(data_type(type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
   }
 
   /**
@@ -235,8 +233,7 @@ struct scalar_value_accessor {
 template <typename Element>
 auto inline make_scalar_iterator(scalar const& scalar_value)
 {
-  CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == scalar_value.type(),
-               "the data type mismatch");
+  CUDF_EXPECTS(data_type(type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
   CUDF_EXPECTS(scalar_value.is_valid(), "the scalar value must be valid");
   return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
                                          scalar_value_accessor<Element>{scalar_value});
@@ -298,8 +295,7 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
 template <typename Element, bool = false>
 auto inline make_pair_iterator(scalar const& scalar_value)
 {
-  CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == scalar_value.type(),
-               "the data type mismatch");
+  CUDF_EXPECTS(data_type(type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
   return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
                                          scalar_pair_accessor<Element>{scalar_value});
 }

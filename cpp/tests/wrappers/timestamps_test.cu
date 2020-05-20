@@ -31,7 +31,7 @@ template <typename T>
 struct TimestampColumnTest : public cudf::test::BaseFixture {
   cudaStream_t stream() { return cudaStream_t(0); }
   cudf::size_type size() { return cudf::size_type(100); }
-  cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 template <typename Timestamp>
@@ -166,14 +166,13 @@ TYPED_TEST(TimestampColumnTest, TimestampsCanBeComparedInDeviceCode)
 TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsParm)
 {
   rmm::device_buffer null_mask{create_null_mask(this->size(), cudf::mask_state::ALL_NULL)};
-  auto column =
-    cudf::make_timestamp_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
-                                this->size(),
-                                null_mask,
-                                this->size(),
-                                this->stream(),
-                                this->mr());
-  EXPECT_EQ(column->type(), cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+  auto column = cudf::make_timestamp_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
+                                            this->size(),
+                                            null_mask,
+                                            this->size(),
+                                            this->stream(),
+                                            this->mr());
+  EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(this->size(), column->null_count());
   EXPECT_TRUE(column->nullable());
@@ -184,14 +183,13 @@ TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsParm)
 TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsEmptyParm)
 {
   rmm::device_buffer null_mask{};
-  auto column =
-    cudf::make_timestamp_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
-                                this->size(),
-                                null_mask,
-                                0,
-                                this->stream(),
-                                this->mr());
-  EXPECT_EQ(column->type(), cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+  auto column = cudf::make_timestamp_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
+                                            this->size(),
+                                            null_mask,
+                                            0,
+                                            this->stream(),
+                                            this->mr());
+  EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(0, column->null_count());
   EXPECT_FALSE(column->nullable());

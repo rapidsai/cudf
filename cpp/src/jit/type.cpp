@@ -78,7 +78,7 @@ std::string get_type_name(data_type type)
     default: break;
   }
 
-  return type_dispatcher(type, experimental::type_to_name{});
+  return type_dispatcher(type, type_to_name{});
 }
 
 }  // namespace jit
