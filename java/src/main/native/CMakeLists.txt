@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 project(CUDF_JNI VERSION 0.7.0 LANGUAGES C CXX CUDA)
 
@@ -103,6 +103,20 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODUL
 include(FeatureSummary)
 include(CheckIncludeFiles)
 include(CheckLibraryExists)
+
+###################################################################################################
+# - SPDLOG ----------------------------------------------------------------------------------------
+
+include(FetchContent)
+
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.6.0
+    GIT_SHALLOW    true
+)
+
+FetchContent_MakeAvailable(spdlog)
 
 ###################################################################################################
 # - CUDF ------------------------------------------------------------------------------------------
@@ -243,6 +257,6 @@ endif(PER_THREAD_DEFAULT_STREAM)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni cudf rmm ${CUDART_LIBRARY} cuda nvrtc)
+target_link_libraries(cudfjni spdlog_header_only cudf rmm ${CUDART_LIBRARY} cuda nvrtc)
 
 
