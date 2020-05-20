@@ -11,6 +11,7 @@ from pandas.api.types import is_dict_like
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
+from cudf.core.abc import Serializable
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
@@ -39,7 +40,7 @@ from cudf.utils.dtypes import (
 )
 
 
-class Series(Frame):
+class Series(Frame, Serializable):
     """
     Data and null-masks.
 
