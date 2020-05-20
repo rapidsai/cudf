@@ -294,3 +294,97 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
     cudf::test::expect_tables_equal(concatenated_tables->view(), table_view_exp1);
   }
 }
+
+struct ListsColumnTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(ListsColumnTest, ConcatenateLists)
+{
+  {
+    cudf::test::lists_column_wrapper a{ 0, 1, 2, 3 };
+    cudf::test::lists_column_wrapper b{ 4, 5, 6, 7 };
+    cudf::test::lists_column_wrapper expected{ {0, 1, 2, 3}, {4, 5, 6, 7} };
+
+    auto result = cudf::concatenate({a, b});
+
+    cudf::test::expect_columns_equal(*result, expected);
+  }
+
+  {
+    cudf::test::lists_column_wrapper a{ {0, 1}, {2, 3}, {4, 5} };
+    cudf::test::lists_column_wrapper b{ {6, 7}, {8, 9}, {10, 11} };
+    cudf::test::lists_column_wrapper expected{ {0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}, {10, 11} };
+
+    auto result = cudf::concatenate({a, b});
+
+    cudf::test::expect_columns_equal(*result, expected);
+  }
+}
+
+TEST_F(ListsColumnTest, ConcatenateListsWithNulls)
+{
+  auto valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? true : false; });
+
+  {
+    cudf::test::lists_column_wrapper a{ {{0, 1, 2, 3}, valids} };
+    cudf::test::lists_column_wrapper b{ {{4, 5, 6, 7}, valids} };
+    cudf::test::lists_column_wrapper expected{ {{0, 1, 2, 3}, valids}, {{4, 5, 6, 7}, valids} };
+
+    auto result = cudf::concatenate({a, b});
+
+    cudf::test::expect_columns_equal(*result, expected);    
+  }  
+}
+
+TEST_F(ListsColumnTest, ConcatenateNestedLists)
+{  
+  {
+    cudf::test::lists_column_wrapper a{ {{0, 1}, {2, 3}}, {{4, 5}} };
+    cudf::test::lists_column_wrapper b{ {{6, 7}}, {{8, 9, 10}, {11, 12}} };
+    cudf::test::lists_column_wrapper expected{ {{0, 1}, {2, 3}}, {{4, 5}}, {{6, 7}}, {{8, 9, 10}, {11, 12}} };
+
+    auto result = cudf::concatenate({a, b});
+
+    cudf::test::expect_columns_equal(*result, expected);
+  }
+
+  {
+    cudf::test::lists_column_wrapper a{ {{{0, 1, 2}, {3, 4}}, {{5}, {6, 7}}, {{8, 9}}},
+                                        {{{10}, {11, 12}}, {{13, 14}, {15, 16}}, {{17, 18}, {19, 20}}},
+                                        {{{50}, {51, 52}}, {{53, 54}, {55, 16}}, {{57, 18}, {59, 60}}} };
+
+    cudf::test::lists_column_wrapper b{ {{{21, 22}, {23, 24}}, {{25}, {26, 27}}, {{28, 29, 30}}}, 
+                                        {{{31, 32}, {33, 34}}, {{35, 36}, {37, 38}}, {{39, 40}}},
+                                        {{{71, 72}, {73, 74}}, {{75, 76}, {77, 78}}, {{79, 80}}} };
+    
+    cudf::test::lists_column_wrapper expected{ {{{0, 1, 2}, {3, 4}}, {{5}, {6, 7}}, {{8, 9}}},
+                                               {{{10}, {11, 12}}, {{13, 14}, {15, 16}}, {{17, 18}, {19, 20}}},
+                                               {{{50}, {51, 52}}, {{53, 54}, {55, 16}}, {{57, 18}, {59, 60}}},
+                                               {{{21, 22}, {23, 24}}, {{25}, {26, 27}}, {{28, 29, 30}}},
+                                               {{{31, 32}, {33, 34}}, {{35, 36}, {37, 38}}, {{39, 40}}},
+                                               {{{71, 72}, {73, 74}}, {{75, 76}, {77, 78}}, {{79, 80}}} };
+
+    auto result = cudf::concatenate({a, b});
+
+    cudf::test::expect_columns_equal(*result, expected);    
+  }
+}
+
+TEST_F(ListsColumnTest, ConcatenateNestedListsWithNulls)
+{
+  auto valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? true : false; });
+
+  {
+    cudf::test::lists_column_wrapper a{ {{{0, 1}, {2, 3}}, valids}, {{4, 5}} };
+    cudf::test::lists_column_wrapper b{ {{6, 7}}, {{{8, 9, 10}, {11, 12}}, valids} };
+    cudf::test::lists_column_wrapper expected{ {{{0, 1}, {2, 3}}, valids}, {{4, 5}}, {{6, 7}}, {{{8, 9, 10}, {11, 12}}, valids} };
+
+    auto result = cudf::concatenate({a, b});
+
+    cudf::test::expect_columns_equal(*result, expected);
+
+    cudf::test::print(expected);
+  }
+}

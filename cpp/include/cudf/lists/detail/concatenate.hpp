@@ -23,6 +23,22 @@ namespace cudf {
 namespace lists {
 namespace detail {
 
+/**
+ * @brief Returns a single column by concatenating the given vector of
+ * lists columns.
+ *
+ * ```
+ * s1 = [{0, 1}, {2, 3}]
+ * s2 = [{4, 5}, {6, 7}]
+ * r = concatenate(s1, s2)
+ * r is now [{0, 1}, {2, 3}, {4, 5}, {6, 7}]
+ * ```
+ *
+ * @param columns List of strings columns to concatenate.
+ * @param mr Resource for allocating device memory.
+ * @param stream CUDA stream to use for any kernels in this function.
+ * @return New column with concatenated results.
+ */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),

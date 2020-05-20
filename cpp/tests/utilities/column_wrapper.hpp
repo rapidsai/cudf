@@ -480,78 +480,198 @@ class strings_column_wrapper : public detail::column_wrapper {
   }
 };
 
-class list_column_wrapper : public detail::column_wrapper {
- public:
-  // fixed-width
+/**
+ * @brief `column_wrapper` derived class for wrapping columns of lists.
+ */
+class lists_column_wrapper : public detail::column_wrapper {
+public:
+  /**
+   * @brief Construct a column of lists of size 1 of fixed-width type from an initializer
+   * list of values   
+   *
+   * Example:
+   * ```c++
+   * // Creates a LIST column with 1 lists composed of 2 total integers
+   * // [{0, 1}]
+   * lists_column_wrapper l{0, 1}
+   * ```
+   *
+   * @param elements The list of elements
+   */
   template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
-  list_column_wrapper(std::initializer_list<T> t) : column_wrapper{}
-  {
-    wrapped = cudf::test::fixed_width_column_wrapper<T>(t).release();
+  lists_column_wrapper(std::initializer_list<T> elements) : column_wrapper{}
+  { 
+    build_from_non_nested(std::move(cudf::test::fixed_width_column_wrapper<T>(elements).release()));     
   }
+
+  /**
+   * @brief Construct a column of lists of size 1 of fixed-width type from an iterator range
+   *
+   * Example:
+   * ```c++
+   * // Creates a LIST column with 1 lists composed of 5 total integers
+   * * auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
+   * // [{0, 1, 2, 3, 4}]
+   * lists_column_wrapper l(elements, elements+5);
+   * ```
+   *
+   * @param elements The list of elements
+   */
   template <typename InputIterator,
             std::enable_if_t<is_fixed_width<typename InputIterator::value_type>()>* = nullptr>
-  list_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
+  lists_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    wrapped = cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end)
-                .release();
+    build_from_non_nested(std::move(cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end).release()));
   }
-  // fixed-width + validity
+
+  /**
+   * @brief Construct a column of lists of size 1 of fixed-width type from an initializer
+   * list of values and a validity iterator
+   *
+   * Example:
+   * ```c++
+   * // Creates a LIST column with 1 lists composed of 2 total integers
+   * // [{0, 1}]
+   * lists_column_wrapper l{0, 1}
+   * ```
+   *
+   * @param elements The list of elements
+   */
   template <typename T, typename ValidityIterator, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
-  list_column_wrapper(std::initializer_list<T> t, ValidityIterator v) : column_wrapper{}
+  lists_column_wrapper(std::initializer_list<T> elements, ValidityIterator v) : column_wrapper{}
   {
-    wrapped = cudf::test::fixed_width_column_wrapper<T>(t, v).release();
+    build_from_non_nested(std::move(cudf::test::fixed_width_column_wrapper<T>(elements, v).release()));
   }
+  
+  /**
+   * @brief Construct a column of lists of size 1 of fixed-width type from an iterator range
+   * and a validity iterator
+   *
+   * Example:
+   * ```c++
+   * // Creates a LIST column with 1 lists composed of 5 total integers
+   * * auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
+   * // [{0, 1, 2, 3, 4}]
+   * lists_column_wrapper l(elements, elements+5);
+   * ```
+   *
+   * @param elements The list of elements
+   */
   template <typename InputIterator,
             typename ValidityIterator,
             std::enable_if_t<is_fixed_width<typename InputIterator::value_type>()>* = nullptr>
-  list_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator valids)
+  lists_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator valids)
     : column_wrapper{}
   {
-    wrapped =
-      cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end, valids)
-        .release();
+    build_from_non_nested(std::move(cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end, valids).release()));
   }
 
-  // strings
+  /**
+   * @brief Construct a column of lists of size 1 of strings from an initializer
+   * list of values   
+   *
+   * Example:
+   * ```c++
+   * // Creates a LIST column with 1 lists composed of 2 total strings
+   * // [{"abc", "def"}]
+   * lists_column_wrapper l{"abc", "def"}
+   * ```
+   *
+   * @param elements The list of elements
+   */
   template <typename T, std::enable_if_t<std::is_convertible<T, std::string>::value>* = nullptr>
-  list_column_wrapper(std::initializer_list<T> t) : column_wrapper{}
+  lists_column_wrapper(std::initializer_list<T> elements) : column_wrapper{}
   {
-    wrapped = cudf::test::strings_column_wrapper(t.begin(), t.end()).release();
+    build_from_non_nested(std::move(cudf::test::strings_column_wrapper(elements.begin(), elements.end()).release()));
   }
-  // strings + validity
+
+  /**
+   * @brief Construct a column of lists of size 1 of strings from an initializer
+   * list of values and a validity iterator
+   *
+   * Example:
+   * ```c++
+   * // Creates a LIST column with 1 lists composed of 2 total strings
+   * // [{"abc", "def"}]
+   * lists_column_wrapper l{"abc", "def"}
+   * ```
+   *
+   * @param elements The list of elements
+   */
   template <typename T,
             typename ValidityIterator,
             std::enable_if_t<std::is_convertible<T, std::string>::value>* = nullptr>
-  list_column_wrapper(std::initializer_list<T> t, ValidityIterator v) : column_wrapper{}
+  lists_column_wrapper(std::initializer_list<T> t, ValidityIterator v) : column_wrapper{}
   {
-    wrapped = cudf::test::strings_column_wrapper(t.begin(), t.end(), v).release();
+    build_from_non_nested(std::move(cudf::test::strings_column_wrapper(t.begin(), t.end(), v).release()));
   }
 
-  // list
-  list_column_wrapper(std::initializer_list<list_column_wrapper> t) : column_wrapper{}
-  {
+  /**
+   * @brief Construct a LIST column of nested lists from an initializer list of values.
+   *
+   * Example:
+   * ```c++
+   * // Creates a LIST column with 3 lists
+   * // [{0, 1}, {2, 3}, {4, 5}]
+   * lists_column_wrapper l{ {0, 1}, {2, 3}, {4, 5} }
+   * ```
+   * 
+   * Automatically handles nesting
+   * * Example:
+   * ```c++
+   * // Creates a LIST of LIST columns with 2 lists on the top level and
+   * // 4 below
+   * // [ {{0, 1}, {2, 3}}, {{4, 5}, {6, 7}} ]
+   * lists_column_wrapper l{ {{0, 1}, {2, 3}}, {{4, 5}, {6, 7}} }
+   * ```
+   *
+   * @param elements The list of elements
+   */
+  lists_column_wrapper(std::initializer_list<lists_column_wrapper> elements) : column_wrapper{}
+  {    
     std::vector<bool> valids;
-    wrapped = build_wrapper(t, valids);
+    build_from_nested(elements, valids);
   }
 
-  // list + validity
+  /**
+   * @brief Construct a LIST column of nested lists from an initializer list of values
+   * and a validity iterator
+   *
+   * Example:
+   * ```c++
+   * // Creates a LIST column with 3 lists
+   * // [{0, 1}, {2, 3}, {4, 5}]
+   * lists_column_wrapper l{ {0, 1}, {2, 3}, {4, 5} }
+   * ```
+   * 
+   * Automatically handles nesting
+   * * Example:
+   * ```c++
+   * // Creates a LIST of LIST columns with 2 lists on the top level and
+   * // 4 below
+   * // [ {{0, 1}, {2, 3}}, {{4, 5}, {6, 7}} ]
+   * lists_column_wrapper l{ {{0, 1}, {2, 3}}, {{4, 5}, {6, 7}} }
+   * ```
+   *
+   * @param elements The list of elements
+   */
   template <typename ValidityIterator>
-  list_column_wrapper(std::initializer_list<list_column_wrapper> t, ValidityIterator v)
+  lists_column_wrapper(std::initializer_list<lists_column_wrapper> elements, ValidityIterator v)
     : column_wrapper{}
   {
-    // doing this so I can avoid making build_wrapper a template
     std::vector<bool> validity;
-    std::transform(t.begin(),
-                   t.end(),
+    std::transform(elements.begin(),
+                   elements.end(),
                    v,
                    std::back_inserter(validity),
-                   [](list_column_wrapper const& l, bool valid) { return valid; });
-    wrapped = build_wrapper(t, validity);
+                   [](lists_column_wrapper const& l, bool valid) { return valid; });
+    build_from_nested(elements, validity);
   }
 
  private:
-  std::unique_ptr<column> build_wrapper(std::initializer_list<list_column_wrapper> t,
-                                        std::vector<bool> const& v);
+  void build_from_nested(std::initializer_list<lists_column_wrapper> elements, std::vector<bool> const& v);
+  void build_from_non_nested(std::unique_ptr<column> c);
+  bool root = false;
 };
 
 }  // namespace test

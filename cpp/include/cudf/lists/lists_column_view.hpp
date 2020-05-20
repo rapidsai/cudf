@@ -20,11 +20,15 @@
 
 namespace cudf {
 
+/**
+ * @brief Given a column-view of lists type, an instance of this class
+ * provides a wrapper on this compound column for list operations.
+ */
 class lists_column_view : private column_view {
  public:
   lists_column_view(column_view lists_column);
-  lists_column_view(lists_column_view&& strings_view)      = default;
-  lists_column_view(const lists_column_view& strings_view) = default;
+  lists_column_view(lists_column_view&& lists_view)      = default;
+  lists_column_view(const lists_column_view& lists_view) = default;
   ~lists_column_view()                                     = default;
   lists_column_view& operator=(lists_column_view const&) = default;
   lists_column_view& operator=(lists_column_view&&) = default;
@@ -37,10 +41,23 @@ class lists_column_view : private column_view {
   using column_view::offset;
   using column_view::size;
 
+  /**
+   * @brief Returns the parent column.
+   */
   column_view parent() const;
 
+  /**
+   * @brief Returns the internal column of offsets
+   *
+   * @throw cudf::logic error if this is an empty column
+   */
   column_view offsets() const;
-  // child == column_view.child(1) since offsets occupies
+
+  /**
+   * @brief Returns the internal child column
+   *
+   * @throw cudf::logic error if this is an empty column
+   */
   column_view child() const;
 };
 
