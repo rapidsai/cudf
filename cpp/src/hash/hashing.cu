@@ -476,7 +476,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   auto row_partition_offset = rmm::device_vector<size_type>(num_rows);
 
   auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher       = experimental::row_hasher<MurmurHash3_32, hash_has_nulls>(*device_input);
+  auto const hasher       = row_hasher<MurmurHash3_32, hash_has_nulls>(*device_input);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
@@ -663,13 +663,13 @@ std::unique_ptr<column> hash(table_view const& input,
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
-                       experimental::row_hasher_initial_values<MurmurHash3_32, true>(
+                       row_hasher_initial_values<MurmurHash3_32, true>(
                          *device_input, device_initial_hash.data().get()));
     } else {
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
-                       experimental::row_hasher_initial_values<MurmurHash3_32, false>(
+                       row_hasher_initial_values<MurmurHash3_32, false>(
                          *device_input, device_initial_hash.data().get()));
     }
   } else {
@@ -677,12 +677,12 @@ std::unique_ptr<column> hash(table_view const& input,
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
-                       experimental::row_hasher<MurmurHash3_32, true>(*device_input));
+                       row_hasher<MurmurHash3_32, true>(*device_input));
     } else {
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
-                       experimental::row_hasher<MurmurHash3_32, false>(*device_input));
+                       row_hasher<MurmurHash3_32, false>(*device_input));
     }
   }
 

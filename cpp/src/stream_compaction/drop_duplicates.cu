@@ -36,7 +36,6 @@
 #include <cmath>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /*
  * unique_copy copies elements from the range [first, last) to a range beginning
@@ -334,5 +333,4 @@ cudf::size_type unique_count(column_view const& input,
   return detail::unique_count(input, null_handling, nan_handling);
 }
 
-}  // namespace experimental
 }  // namespace cudf

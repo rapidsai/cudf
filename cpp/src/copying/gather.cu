@@ -14,7 +14,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 struct dispatch_map_type {
   template <typename map_type,
@@ -117,5 +116,4 @@ std::unique_ptr<table> gather(table_view const& source_table,
   return detail::gather(source_table, gather_map, check_bounds, false, true, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

@@ -26,7 +26,6 @@
 #include <numeric>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 /**
@@ -487,7 +486,5 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   CUDF_FUNC_RANGE();
   return cudf::detail::contiguous_split(input, splits, mr, (cudaStream_t)0);
 }
-
-};  // namespace experimental
 
 };  // namespace cudf

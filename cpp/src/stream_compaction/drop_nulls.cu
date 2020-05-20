@@ -54,7 +54,6 @@ struct valid_table_filter {
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /*
  * Filters a table to remove null elements.
@@ -100,5 +99,4 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
   return cudf::detail::drop_nulls(input, keys, keys.size(), mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

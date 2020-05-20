@@ -36,7 +36,6 @@
 #include <numeric>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 struct dispatch_map_type {
@@ -481,5 +480,4 @@ std::unique_ptr<table> boolean_mask_scatter(
   return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

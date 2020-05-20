@@ -22,7 +22,6 @@
 #include <cudf/utilities/bit.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 namespace hash {
@@ -117,5 +116,4 @@ struct compute_single_pass_aggs {
 }  // namespace hash
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

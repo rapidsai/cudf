@@ -27,7 +27,6 @@
 #include <join/join_common_utils.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
 /**
@@ -457,7 +456,7 @@ std::unique_ptr<table> inner_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::INNER_JOIN>(
+  return detail::join_call_compute_df<::cudf::detail::join_kind::INNER_JOIN>(
     left, right, left_on, right_on, columns_in_common, mr);
 }
 
@@ -470,7 +469,7 @@ std::unique_ptr<table> left_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::LEFT_JOIN>(
+  return detail::join_call_compute_df<::cudf::detail::join_kind::LEFT_JOIN>(
     left, right, left_on, right_on, columns_in_common, mr);
 }
 
@@ -483,10 +482,8 @@ std::unique_ptr<table> full_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::FULL_JOIN>(
+  return detail::join_call_compute_df<::cudf::detail::join_kind::FULL_JOIN>(
     left, right, left_on, right_on, columns_in_common, mr);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

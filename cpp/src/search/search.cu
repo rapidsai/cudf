@@ -33,7 +33,6 @@
 #include <thrust/logical.h>
 
 namespace cudf {
-namespace experimental {
 namespace {
 template <typename DataIterator,
           typename ValuesIterator,
@@ -355,5 +354,4 @@ std::unique_ptr<column> contains(column_view const& haystack,
   return detail::contains(haystack, needles, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

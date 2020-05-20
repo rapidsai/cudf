@@ -45,7 +45,7 @@ namespace {
  */
 template <bool nullable = true>
 struct permuted_row_equality_comparator {
-  cudf::experimental::row_equality_comparator<nullable> _comparator;
+  cudf::row_equality_comparator<nullable> _comparator;
   cudf::size_type const* _map;
 
   /**
@@ -81,7 +81,6 @@ struct permuted_row_equality_comparator {
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 namespace sort {
@@ -312,5 +311,4 @@ std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::mr::device_memory_r
 }  // namespace sort
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

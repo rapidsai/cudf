@@ -24,7 +24,6 @@
 #include <algorithm>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices,
@@ -100,5 +99,4 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
   return result;
 };
 
-}  // namespace experimental
 }  // namespace cudf

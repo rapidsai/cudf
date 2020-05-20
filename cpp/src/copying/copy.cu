@@ -22,7 +22,6 @@
 #include <cudf/strings/string_view.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 /**
@@ -286,7 +285,5 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
   CUDF_FUNC_RANGE();
   return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

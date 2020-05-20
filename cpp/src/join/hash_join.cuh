@@ -26,7 +26,6 @@
 #include <join/join_kernels.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /* --------------------------------------------------------------------------*/
 /**
@@ -295,7 +294,5 @@ get_base_hash_join_indices(table_view const& left,
 }
 
 }  // namespace detail
-
-}  // namespace experimental
 
 }  // namespace cudf

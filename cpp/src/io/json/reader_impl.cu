@@ -34,7 +34,6 @@
 #include <cudf/table/table.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace json {
@@ -589,5 +588,4 @@ table_with_metadata reader::read_byte_range(size_t offset, size_t size, cudaStre
 }  // namespace json
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

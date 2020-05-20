@@ -27,7 +27,6 @@
 #include <cudf/table/table_device_view.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace {
 // Launch configuration for optimized hash partition
 constexpr size_type OPTIMIZED_BLOCK_SIZE                     = 512;
@@ -486,7 +485,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   auto row_partition_offset = rmm::device_vector<size_type>(num_rows);
 
   auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher       = experimental::row_hasher<MurmurHash3_32, hash_has_nulls>(*device_input);
+  auto const hasher       = row_hasher<MurmurHash3_32, hash_has_nulls>(*device_input);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
@@ -791,5 +790,4 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   return detail::partition(t, partition_map, num_partitions, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

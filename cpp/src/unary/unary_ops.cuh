@@ -24,7 +24,6 @@
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace unary {
 template <typename T, typename Tout, typename F>
 struct launcher {
@@ -76,7 +75,6 @@ struct launcher {
 };
 
 }  // namespace unary
-}  // namespace experimental
 }  // namespace cudf
 
 #endif  // UNARY_OPS_H

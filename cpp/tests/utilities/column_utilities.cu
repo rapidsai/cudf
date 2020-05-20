@@ -63,7 +63,7 @@ class corresponding_rows_unequal {
   {
   }
 
-  cudf::experimental::row_equality_comparator<true> comp;
+  cudf::row_equality_comparator<true> comp;
 
   __device__ bool operator()(size_type index) { return !comp(index, index); }
 };
@@ -105,7 +105,7 @@ class corresponding_rows_not_equivalent {
     }
   };
 
-  cudf::experimental::row_equality_comparator<true> comp;
+  cudf::row_equality_comparator<true> comp;
 
   __device__ bool operator()(size_type index)
   {

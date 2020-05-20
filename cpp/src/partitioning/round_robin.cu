@@ -170,7 +170,6 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
@@ -290,9 +289,8 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robi
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   CUDF_FUNC_RANGE();
-  return cudf::experimental::detail::round_robin_partition(
+  return cudf::detail::round_robin_partition(
     input, num_partitions, start_partition, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

@@ -24,7 +24,6 @@
 #include <type_traits>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 // trig functions
 
@@ -231,7 +230,7 @@ static std::unique_ptr<cudf::column> launch(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr,
                                             cudaStream_t stream)
 {
-  return cudf::experimental::unary::launcher<T, T, F>::launch(input, op, mr, stream);
+  return cudf::unary::launcher<T, T, F>::launch(input, op, mr, stream);
 }
 
 template <typename F>
@@ -295,7 +294,7 @@ struct LogicalOpDispatcher {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
   {
-    return cudf::experimental::unary::launcher<T, bool, F>::launch(input, op, mr, stream);
+    return cudf::unary::launcher<T, bool, F>::launch(input, op, mr, stream);
   }
 
   template <typename T, typename std::enable_if_t<!is_supported<T>()>* = nullptr>
@@ -396,5 +395,4 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
   return detail::unary_operation(input, op, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

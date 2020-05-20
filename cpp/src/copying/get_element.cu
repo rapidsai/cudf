@@ -23,7 +23,6 @@
 #include <cudf/detail/utilities/cuda.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
 namespace {
@@ -137,5 +136,4 @@ std::unique_ptr<scalar> get_element(column_view const &input,
   return detail::get_element(input, index, 0, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

@@ -37,7 +37,7 @@ TYPED_TEST(groupby_quantile_test, basic)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, aggregation::QUANTILE>;
+    using R = detail::target_type_t<V, aggregation::QUANTILE>;
 
     fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
     fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -56,7 +56,7 @@ TYPED_TEST(groupby_quantile_test, empty_cols)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, aggregation::QUANTILE>;
+    using R = detail::target_type_t<V, aggregation::QUANTILE>;
 
     fixed_width_column_wrapper<K> keys        { };
     fixed_width_column_wrapper<V> vals        { };
@@ -73,7 +73,7 @@ TYPED_TEST(groupby_quantile_test, zero_valid_keys)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, aggregation::QUANTILE>;
+    using R = detail::target_type_t<V, aggregation::QUANTILE>;
 
     fixed_width_column_wrapper<K> keys      ( { 1, 2, 3}, all_null() );
     fixed_width_column_wrapper<V> vals        { 3, 4, 5};
@@ -90,7 +90,7 @@ TYPED_TEST(groupby_quantile_test, zero_valid_values)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, aggregation::QUANTILE>;
+    using R = detail::target_type_t<V, aggregation::QUANTILE>;
 
     fixed_width_column_wrapper<K> keys        { 1, 1, 1};
     fixed_width_column_wrapper<V> vals      ( { 3, 4, 5}, all_null() );
@@ -107,7 +107,7 @@ TYPED_TEST(groupby_quantile_test, null_keys_and_values)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, aggregation::QUANTILE>;
+    using R = detail::target_type_t<V, aggregation::QUANTILE>;
 
     fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
                                               { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
@@ -129,7 +129,7 @@ TYPED_TEST(groupby_quantile_test, multiple_quantile)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, aggregation::QUANTILE>;
+    using R = detail::target_type_t<V, aggregation::QUANTILE>;
 
     fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
     fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -149,7 +149,7 @@ TYPED_TEST(groupby_quantile_test, interpolation_types)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, aggregation::QUANTILE>;
+    using R = detail::target_type_t<V, aggregation::QUANTILE>;
 
     fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 2};
     fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 9};

@@ -53,7 +53,6 @@ struct boolean_mask_filter {
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /*
  * Filters a table_view using a column_view of boolean values as a mask.
@@ -93,5 +92,4 @@ std::unique_ptr<table> apply_boolean_mask(table_view const& input,
   CUDF_FUNC_RANGE();
   return detail::apply_boolean_mask(input, boolean_mask, mr);
 }
-}  // namespace experimental
 }  // namespace cudf

@@ -47,7 +47,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {  // anonymous
 /**
@@ -542,24 +541,24 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   auto udf_agg = static_cast<udf_aggregation*>(agg.get());
 
   std::string hash =
-    "prog_experimental_rolling." + std::to_string(std::hash<std::string>{}(udf_agg->_source));
+    "prog_rolling." + std::to_string(std::hash<std::string>{}(udf_agg->_source));
 
   std::string cuda_source;
   switch (udf_agg->kind) {
     case aggregation::Kind::PTX:
-      cuda_source = cudf::experimental::rolling::jit::code::kernel_headers;
+      cuda_source = cudf::rolling::jit::code::kernel_headers;
       cuda_source +=
         cudf::jit::parse_single_function_ptx(udf_agg->_source,
                                              udf_agg->_function_name,
                                              cudf::jit::get_type_name(udf_agg->_output_type),
                                              {0, 5});  // args 0 and 5 are pointers.
-      cuda_source += cudf::experimental::rolling::jit::code::kernel;
+      cuda_source += cudf::rolling::jit::code::kernel;
       break;
     case aggregation::Kind::CUDA:
-      cuda_source = cudf::experimental::rolling::jit::code::kernel_headers;
+      cuda_source = cudf::rolling::jit::code::kernel_headers;
       cuda_source +=
         cudf::jit::parse_single_function_cuda(udf_agg->_source, udf_agg->_function_name);
-      cuda_source += cudf::experimental::rolling::jit::code::kernel;
+      cuda_source += cudf::rolling::jit::code::kernel;
       break;
     default: CUDF_FAIL("Unsupported UDF type.");
   }
@@ -581,7 +580,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                       cuda_source,
                       {cudf_types_hpp,
                        cudf_utilities_bit_hpp,
-                       cudf::experimental::rolling::jit::code::operation_h,
+                       cudf::rolling::jit::code::operation_h,
                        ___src_rolling_rolling_jit_detail_hpp},
                       compiler_flags,
                       nullptr,
@@ -1178,7 +1177,5 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                              aggr,
                                                              mr);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

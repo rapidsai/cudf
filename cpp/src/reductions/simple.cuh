@@ -23,7 +23,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 namespace simple {
 /** --------------------------------------------------------------------------*
@@ -147,5 +146,4 @@ struct element_type_dispatcher {
 
 }  // namespace simple
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

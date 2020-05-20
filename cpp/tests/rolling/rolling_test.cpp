@@ -373,19 +373,19 @@ class RollingTest : public cudf::test::BaseFixture {
         return create_reference_output<
           cudf::DeviceSum,
           cudf::aggregation::SUM,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::SUM>,
+          cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
           false>(input, preceding_window, following_window, min_periods);
       case cudf::aggregation::MIN:
         return create_reference_output<
           cudf::DeviceMin,
           cudf::aggregation::MIN,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::MIN>,
+          cudf::detail::target_type_t<T, cudf::aggregation::MIN>,
           false>(input, preceding_window, following_window, min_periods);
       case cudf::aggregation::MAX:
         return create_reference_output<
           cudf::DeviceMax,
           cudf::aggregation::MAX,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::MAX>,
+          cudf::detail::target_type_t<T, cudf::aggregation::MAX>,
           false>(input, preceding_window, following_window, min_periods);
       case cudf::aggregation::COUNT_VALID:
         return create_count_reference_output<false>(
@@ -397,7 +397,7 @@ class RollingTest : public cudf::test::BaseFixture {
         return create_reference_output<
           cudf::DeviceSum,
           cudf::aggregation::MEAN,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::MEAN>,
+          cudf::detail::target_type_t<T, cudf::aggregation::MEAN>,
           true>(input, preceding_window, following_window, min_periods);
       default: return fixed_width_column_wrapper<T>({}).release();
     }

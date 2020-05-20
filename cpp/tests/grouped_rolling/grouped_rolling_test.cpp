@@ -417,19 +417,19 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
         return create_reference_output<
           cudf::DeviceSum,
           cudf::aggregation::SUM,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::SUM>,
+          cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
           false>(input, group_offsets, preceding_window, following_window, min_periods);
       case cudf::aggregation::MIN:
         return create_reference_output<
           cudf::DeviceMin,
           cudf::aggregation::MIN,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::MIN>,
+          cudf::detail::target_type_t<T, cudf::aggregation::MIN>,
           false>(input, group_offsets, preceding_window, following_window, min_periods);
       case cudf::aggregation::MAX:
         return create_reference_output<
           cudf::DeviceMax,
           cudf::aggregation::MAX,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::MAX>,
+          cudf::detail::target_type_t<T, cudf::aggregation::MAX>,
           false>(input, group_offsets, preceding_window, following_window, min_periods);
       case cudf::aggregation::COUNT_VALID:
         return create_count_reference_output<false>(
@@ -444,20 +444,20 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
         return create_reference_output<
           cudf::DeviceSum,
           cudf::aggregation::MEAN,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::MEAN>,
+          cudf::detail::target_type_t<T, cudf::aggregation::MEAN>,
           true>(input, group_offsets, preceding_window, following_window, min_periods);
       // >>> UDFs <<<
       case cudf::aggregation::CUDA:
         return create_reference_output<
           cudf::DeviceSum,
           cudf::aggregation::SUM,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::SUM>,
+          cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
           false>(input, group_offsets, preceding_window, following_window, min_periods);
       case cudf::aggregation::PTX:
         return create_reference_output<
           cudf::DeviceSum,
           cudf::aggregation::SUM,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::SUM>,
+          cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
           false>(input, group_offsets, preceding_window, following_window, min_periods);
       default: return fixed_width_column_wrapper<T>({}).release();
     }
@@ -1059,7 +1059,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
         return create_reference_output<
           cudf::DeviceSum,
           cudf::aggregation::SUM,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::SUM>,
+          cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
           false>(timestamp_column,
                  timestamp_order,
                  input,
@@ -1071,7 +1071,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
         return create_reference_output<
           cudf::DeviceMin,
           cudf::aggregation::MIN,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::MIN>,
+          cudf::detail::target_type_t<T, cudf::aggregation::MIN>,
           false>(timestamp_column,
                  timestamp_order,
                  input,
@@ -1083,7 +1083,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
         return create_reference_output<
           cudf::DeviceMax,
           cudf::aggregation::MAX,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::MAX>,
+          cudf::detail::target_type_t<T, cudf::aggregation::MAX>,
           false>(timestamp_column,
                  timestamp_order,
                  input,
@@ -1119,7 +1119,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
         return create_reference_output<
           cudf::DeviceSum,
           cudf::aggregation::MEAN,
-          cudf::experimental::detail::target_type_t<T, cudf::aggregation::MEAN>,
+          cudf::detail::target_type_t<T, cudf::aggregation::MEAN>,
           true>(timestamp_column,
                 timestamp_order,
                 input,

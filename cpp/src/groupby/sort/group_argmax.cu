@@ -20,7 +20,6 @@
 #include <thrust/transform.h>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_argmax(column_view const& values,
@@ -62,5 +61,4 @@ std::unique_ptr<column> group_argmax(column_view const& values,
 
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

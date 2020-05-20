@@ -23,7 +23,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 struct nan_dispatcher {
   template <typename T, typename Predicate>
@@ -96,5 +95,4 @@ std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
   return detail::is_not_nan(input, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

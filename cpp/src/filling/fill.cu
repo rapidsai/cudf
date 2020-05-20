@@ -185,7 +185,6 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
@@ -243,5 +242,4 @@ std::unique_ptr<column> fill(column_view const& input,
   return detail::fill(input, begin, end, value, mr, 0);
 }
 
-}  // namespace experimental
 }  // namespace cudf

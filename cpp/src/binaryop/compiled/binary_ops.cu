@@ -24,7 +24,6 @@
 #include "binary_ops.hpp"
 
 namespace cudf {
-namespace experimental {
 namespace binops {
 namespace compiled {
 
@@ -491,5 +490,4 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
 }  // namespace compiled
 }  // namespace binops
-}  // namespace experimental
 }  // namespace cudf

@@ -24,7 +24,6 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 template <typename _T, typename _R>
 struct unary_cast {
@@ -146,5 +145,4 @@ std::unique_ptr<column> cast(column_view const& input,
   return detail::cast(input, type, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

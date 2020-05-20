@@ -21,7 +21,6 @@
 #define GDF_BINARY_OPERATION_JIT_CODE_CODE_H
 
 namespace cudf {
-namespace experimental {
 namespace rolling {
 namespace jit {
 namespace code {
@@ -38,7 +37,6 @@ extern const char* grouped_window_wrapper;
 }  // namespace code
 }  // namespace jit
 }  // namespace rolling
-}  // namespace experimental
 }  // namespace cudf
 
 #endif

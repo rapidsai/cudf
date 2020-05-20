@@ -171,7 +171,6 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
@@ -246,5 +245,4 @@ std::unique_ptr<column> copy_range(column_view const& source,
   return detail::copy_range(source, target, source_begin, source_end, target_begin, mr, 0);
 }
 
-}  // namespace experimental
 }  // namespace cudf

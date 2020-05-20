@@ -57,7 +57,6 @@
 #include <cudf/strings/detail/modify_strings.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace csv {
@@ -543,5 +542,4 @@ void writer::write_all(table_view const& table, const table_metadata* metadata, 
 }  // namespace csv
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

@@ -17,7 +17,6 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 /**
  * @copydoc cudf::io:convert_string_to_dtype
@@ -46,5 +45,4 @@ data_type convert_string_to_dtype(const std::string &dtype)
 }
 
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

@@ -29,7 +29,6 @@
 #include <thrust/transform_reduce.h>
 
 namespace cudf {
-namespace experimental {
 
 /**
  * @brief Result type of the `element_relational_comparator` function object.
@@ -490,5 +489,4 @@ class row_hasher_initial_values {
   hash_value_type* _initial_hash;
 };
 
-}  // namespace experimental
 }  // namespace cudf

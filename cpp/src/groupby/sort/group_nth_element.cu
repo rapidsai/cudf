@@ -24,7 +24,6 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_nth_element(column_view const &values,
@@ -111,5 +110,4 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
 }
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

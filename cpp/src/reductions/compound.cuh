@@ -23,7 +23,6 @@
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 namespace compound {
 /** --------------------------------------------------------------------------*
@@ -150,5 +149,4 @@ struct element_type_dispatcher {
 
 }  // namespace compound
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

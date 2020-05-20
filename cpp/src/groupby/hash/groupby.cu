@@ -44,7 +44,6 @@
 #include <utility>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 namespace hash {
@@ -134,8 +133,8 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
  * @see groupby_null_templated()
  */
 void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
-                             experimental::detail::result_cache const& sparse_results,
-                             experimental::detail::result_cache* dense_results,
+                             detail::result_cache const& sparse_results,
+                             detail::result_cache* dense_results,
                              rmm::device_vector<size_type> const& gather_map,
                              size_type map_size,
                              cudaStream_t stream,
@@ -233,7 +232,7 @@ auto create_hash_map(table_device_view const& d_keys,
 template <bool keys_have_nulls, typename Map>
 void compute_single_pass_aggs(table_view const& keys,
                               std::vector<aggregation_request> const& requests,
-                              experimental::detail::result_cache* sparse_results,
+                              detail::result_cache* sparse_results,
                               Map& map,
                               null_policy include_null_keys,
                               cudaStream_t stream)
@@ -258,7 +257,7 @@ void compute_single_pass_aggs(table_view const& keys,
       auto mask_flag = (nullable) ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
 
       return make_fixed_width_column(
-        experimental::detail::target_type(col.type(), agg), col.size(), mask_flag, stream);
+        detail::target_type(col.type(), agg), col.size(), mask_flag, stream);
     });
 
   table sparse_table(std::move(sparse_columns));
@@ -361,7 +360,7 @@ std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(Map m
 template <bool keys_have_nulls>
 std::unique_ptr<table> groupby_null_templated(table_view const& keys,
                                               std::vector<aggregation_request> const& requests,
-                                              experimental::detail::result_cache* cache,
+                                              detail::result_cache* cache,
                                               null_policy include_null_keys,
                                               cudaStream_t stream,
                                               rmm::mr::device_memory_resource* mr)
@@ -371,7 +370,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash map
-  experimental::detail::result_cache sparse_results(requests.size());
+  detail::result_cache sparse_results(requests.size());
 
   // Compute all single pass aggs first
   compute_single_pass_aggs<keys_have_nulls>(
@@ -422,7 +421,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   cudaStream_t stream,
   rmm::mr::device_memory_resource* mr)
 {
-  experimental::detail::result_cache cache(requests.size());
+  detail::result_cache cache(requests.size());
 
   std::unique_ptr<table> unique_keys;
   if (has_nulls(keys)) {
@@ -438,5 +437,4 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
 }  // namespace hash
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

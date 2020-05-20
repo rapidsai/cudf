@@ -25,7 +25,6 @@
 #include <cudf/detail/iterator.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 // This functor only exists here because using a lambda directly in the tabulate() call generates
@@ -175,5 +174,4 @@ std::unique_ptr<column> sequence(size_type size,
   return detail::sequence(size, init, mr, 0);
 }
 
-}  // namespace experimental
 }  // namespace cudf

@@ -108,7 +108,6 @@ struct compute_offsets {
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
@@ -179,5 +178,4 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   return detail::repeat(input_table, count, mr, 0);
 }
 
-}  // namespace experimental
 }  // namespace cudf

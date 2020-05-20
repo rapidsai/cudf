@@ -14,7 +14,6 @@
 #include <join/hash_join.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief  Performs a left semi or anti join on the specified columns of two
@@ -154,7 +153,5 @@ std::unique_ptr<cudf::table> left_anti_join(cudf::table_view const& left,
   return detail::left_semi_anti_join<detail::join_kind::LEFT_ANTI_JOIN>(
     left, right, left_on, right_on, return_columns, mr, 0);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

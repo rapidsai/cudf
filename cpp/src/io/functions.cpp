@@ -25,7 +25,6 @@
 #include "parquet/chunked_state.hpp"
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace {
 template <typename reader, typename reader_options>
@@ -332,5 +331,4 @@ void write_parquet_chunked_end(std::shared_ptr<pq_chunked_state>& state)
 }
 
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

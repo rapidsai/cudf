@@ -35,7 +35,6 @@
 #include <utility>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 // Constructor
 groupby::groupby(table_view const& keys,
@@ -90,7 +89,7 @@ auto empty_results(std::vector<aggregation_request> const& requests)
                      std::back_inserter(results),
                      [&request](auto const& agg) {
                        return make_empty_column(
-                         experimental::detail::target_type(request.values.type(), agg->kind));
+                         detail::target_type(request.values.type(), agg->kind));
                      });
 
       return aggregation_result{std::move(results)};
@@ -108,7 +107,7 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests)
                              return std::all_of(request.aggregations.begin(),
                                                 request.aggregations.end(),
                                                 [&request](auto const& agg) {
-                                                  return experimental::detail::is_valid_aggregation(
+                                                  return detail::is_valid_aggregation(
                                                     request.values.type(), agg->kind);
                                                 });
                            }),
@@ -165,5 +164,4 @@ detail::sort::sort_groupby_helper& groupby::helper()
 };
 
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

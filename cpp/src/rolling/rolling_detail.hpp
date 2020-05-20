@@ -30,7 +30,7 @@ namespace detail {
 template <typename ColumnType, class AggOp, aggregation::Kind op>
 static constexpr bool is_rolling_supported()
 {
-  if (!cudf::experimental::detail::is_valid_aggregation<ColumnType, op>()) { return false; }
+  if (!cudf::detail::is_valid_aggregation<ColumnType, op>()) { return false; }
 
   if (cudf::is_numeric<ColumnType>()) {
     constexpr bool is_comparable_countable_op = std::is_same<AggOp, DeviceMin>::value or

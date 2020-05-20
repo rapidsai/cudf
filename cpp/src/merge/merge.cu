@@ -35,7 +35,7 @@ namespace {  // anonym.
 using namespace cudf;
 
 using detail::side;
-using index_type = experimental::detail::index_type;
+using index_type = detail::index_type;
 
 /**
  * @brief Merges the bits of two validity bitmasks.
@@ -224,7 +224,6 @@ rmm::device_vector<index_type> generate_merged_indices(
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 // generate merged column
 // given row order of merged tables
@@ -485,5 +484,4 @@ std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merg
   return detail::merge(tables_to_merge, key_cols, column_order, null_precedence, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

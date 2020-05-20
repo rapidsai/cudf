@@ -29,7 +29,6 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 template <typename Transformer>
@@ -349,5 +348,4 @@ std::unique_ptr<column> clamp(column_view const& input,
   CUDF_FUNC_RANGE();
   return detail::clamp(input, lo, lo, hi, hi, mr);
 }
-}  // namespace experimental
 }  // namespace cudf

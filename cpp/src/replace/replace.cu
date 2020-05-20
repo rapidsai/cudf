@@ -487,7 +487,6 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
 
 }  // namespace detail
 
-namespace experimental {
 /* --------------------------------------------------------------------------*/
 /*
  * @brief Replace elements from `input_col` according to the mapping `values_to_replace` to
@@ -509,7 +508,6 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
   return cudf::detail::find_and_replace_all(
     input_col, values_to_replace, replacement_values, mr, 0);
 }
-}  // namespace experimental
 }  // namespace cudf
 
 namespace {  // anonymous

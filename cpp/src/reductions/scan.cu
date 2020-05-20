@@ -16,7 +16,6 @@
 #include <cudf/reduction.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Dispatcher for running Scan operation on input column
@@ -278,5 +277,4 @@ std::unique_ptr<column> scan(const column_view& input,
   return detail::scan(input, agg, inclusive, null_handling, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

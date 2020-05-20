@@ -34,7 +34,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 namespace {
 inline bool __device__ out_of_bounds(size_type size, size_type idx)
 {
@@ -126,5 +125,4 @@ std::unique_ptr<column> shift(column_view const& input,
   return type_dispatcher(input.type(), shift_functor{}, input, offset, fill_value, mr, stream);
 }
 
-}  // namespace experimental
 }  // namespace cudf

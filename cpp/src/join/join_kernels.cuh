@@ -23,7 +23,6 @@
 #include "join_common_utils.hpp"
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /* --------------------------------------------------------------------------*/
 /**
@@ -384,7 +383,5 @@ __global__ void probe_hash_table(multimap_type multi_map,
 }
 
 }  // namespace detail
-
-}  // namespace experimental
 
 }  // namespace cudf
