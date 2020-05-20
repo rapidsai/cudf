@@ -76,11 +76,13 @@ def pdf(request):
     )
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
-    test_pdf.index.name = "test_index"
 
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
     test_pdf = test_pdf.astype("object").rename(renamer, axis=1).astype(typer)
+
+    test_pdf = test_pdf.reset_index(drop=True)
+    test_pdf.index.name = "test_index"
 
     # Create non-numeric categorical data otherwise parquet may typecast it
     data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
@@ -164,7 +166,6 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
     expect = pd.read_parquet(parquet_file, columns=columns)
     got = cudf.read_parquet(parquet_file, engine=engine, columns=columns)
     if len(expect) == 0:
-        expect = expect.reset_index(drop=True)
         if "col_category" in expect.columns:
             expect["col_category"] = expect["col_category"].astype("category")
 
