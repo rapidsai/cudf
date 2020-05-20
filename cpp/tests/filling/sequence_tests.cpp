@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 
 #include <cudf/scalar/scalar.hpp>
 

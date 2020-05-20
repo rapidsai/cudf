@@ -7,7 +7,6 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <utilities/legacy/error_utils.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/count.h>

@@ -23,7 +23,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <gmock/gmock.h>
 #include <vector>
 
 struct RowOperatorTestForNAN : public cudf::test::BaseFixture {

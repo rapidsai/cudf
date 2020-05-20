@@ -20,7 +20,6 @@
 #ifndef GDF_JIT_LAUNCHER_H
 #define GDF_JIT_LAUNCHER_H
 
-#include <cudf/types.h>
 #include <jit/cache.h>
 #include <chrono>
 #include <fstream>

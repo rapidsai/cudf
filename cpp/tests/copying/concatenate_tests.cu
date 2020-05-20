@@ -24,7 +24,6 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <gmock/gmock.h>
 
 #include <thrust/sequence.h>
 

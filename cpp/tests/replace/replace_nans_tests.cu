@@ -16,7 +16,6 @@
 
 #include <cudf/replace.hpp>
 
-#include <cudf/cudf.h>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/error.hpp>

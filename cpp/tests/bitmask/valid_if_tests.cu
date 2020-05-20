@@ -20,7 +20,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 
-#include <gmock/gmock.h>
 
 struct ValidIfTest : public cudf::test::BaseFixture {
 };

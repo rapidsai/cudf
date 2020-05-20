@@ -30,7 +30,6 @@
 #include <thrust/sequence.h>
 #include <random>
 
-#include <gmock/gmock.h>
 
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {

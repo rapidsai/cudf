@@ -26,7 +26,6 @@
 #include <tests/utilities/timestamp_utilities.cuh>
 #include <tests/utilities/type_lists.hpp>
 
-#include <gmock/gmock.h>
 
 template <typename T>
 struct NonTimestampTest : public cudf::test::BaseFixture {

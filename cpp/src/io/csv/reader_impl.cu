@@ -220,11 +220,10 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_uncomp_data = reinterpret_cast<const char *>(buffer->data());
       h_uncomp_size = buffer->size();
     } else {
-      CUDF_EXPECTS(getUncompressedHostData(reinterpret_cast<const char *>(buffer->data()),
-                                           buffer->size(),
-                                           compression_type_,
-                                           h_uncomp_data_owner) == GDF_SUCCESS,
-                   "Cannot decompress data");
+      getUncompressedHostData(reinterpret_cast<const char *>(buffer->data()),
+                              buffer->size(),
+                              compression_type_,
+                              h_uncomp_data_owner);
       h_uncomp_data = h_uncomp_data_owner.data();
       h_uncomp_size = h_uncomp_data_owner.size();
     }

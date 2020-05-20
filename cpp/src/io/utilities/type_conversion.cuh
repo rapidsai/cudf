@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
-
 namespace cudf {
 namespace experimental {
 namespace io {

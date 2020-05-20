@@ -56,6 +56,7 @@
 - PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 - PR #4703 Optimize strings concatenate for many columns
+- PR #4769 Remove legacy code from libcudf
 - PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
 - PR #4520 Fix several single char -> single char case mapping values. Add support for single -> multi char mappings.
@@ -185,6 +186,7 @@
 - PR #5207 Break up backref_re.cu into multiple source files to improve compile time
 - PR #5214 Move docs build script into repository
 - PR #5155 Fix cudf documentation misspellings
+- PR #5208 Port search and join benchmark to libcudf++
 - PR #5214 Move docs build script into repository
 - PR #5219 Add per context cache for JIT kernels
 
