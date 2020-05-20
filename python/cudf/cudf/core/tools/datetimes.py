@@ -1,10 +1,11 @@
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import warnings
 
 import numpy as np
+from pandas.core.tools.datetimes import _unit_map
 
 import cudf
 from cudf.core import column
-from cudf.core.column.datetime import _unit_map
 from cudf.core.index import as_index
 from cudf.utils import utils
 from cudf.utils.dtypes import is_scalar
@@ -102,31 +103,21 @@ def to_datetime(
         if isinstance(arg, cudf.DataFrame):
             # we require at least Ymd
             required = ["year", "month", "day"]
-            req = sorted(list(set(required) - set(arg._data.names)))
+            req = list(set(required) - set(arg._data.names))
             if len(req):
+                req = ",".join(req)
                 raise ValueError(
                     "to assemble mappings requires at least that "
-                    "[year, month, day] be specified: [{required}] "
-                    "is missing".format(required=",".join(req))
+                    f"[year, month, day] be specified: [{req}] "
+                    "is missing"
                 )
 
-                # replace passed unit with _unit_map
-
-            def get_units(value):
-                if value in _unit_map:
-                    return _unit_map[value]
-
-                # m is case significant
-                if value.lower() in _unit_map:
-                    return _unit_map[value.lower()]
-
-                return value
-
+            # replace passed column name with values in _unit_map
             unit = {k: get_units(k) for k in arg._data.names}
             unit_rev = {v: k for k, v in unit.items()}
 
             # keys we don't recognize
-            excess = sorted(set(unit_rev.keys()) - set(_unit_map.values()))
+            excess = set(unit_rev.keys()) - set(_unit_map.values())
             if len(excess):
                 excess = ",".join(excess)
                 raise ValueError(
@@ -146,7 +137,7 @@ def to_datetime(
                 "datetime64[ns]", format=format
             )
 
-            time_delta_col = None
+            times_column = None
             for u in ["h", "m", "s", "ms", "us", "ns"]:
                 value = unit_rev.get(u)
                 if value is not None and value in arg:
@@ -162,21 +153,21 @@ def to_datetime(
                         dtype=current_col.dtype,
                     )
 
-                    if time_delta_col is None:
-                        time_delta_col = current_col.binary_operator(
+                    if times_column is None:
+                        times_column = current_col.binary_operator(
                             binop="mul", rhs=factor
                         )
                     else:
-                        time_delta_col = time_delta_col.binary_operator(
+                        times_column = times_column.binary_operator(
                             binop="add",
                             rhs=current_col.binary_operator(
                                 binop="mul", rhs=factor
                             ),
                         )
-            if time_delta_col is not None:
+            if times_column is not None:
                 col = (
                     col.astype(dtype="int64")
-                    .binary_operator(binop="add", rhs=time_delta_col)
+                    .binary_operator(binop="add", rhs=times_column)
                     .astype(dtype="datetime64[ns]")
                 )
             return cudf.Series(col, index=arg.index)
@@ -263,3 +254,14 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
                 format = column.datetime.infer_format(element=col[0])
             col = col.as_datetime_column(dtype=dtype, format=format)
     return col
+
+
+def get_units(value):
+    if value in _unit_map:
+        return _unit_map[value]
+
+    # m is case significant
+    if value.lower() in _unit_map:
+        return _unit_map[value.lower()]
+
+    return value

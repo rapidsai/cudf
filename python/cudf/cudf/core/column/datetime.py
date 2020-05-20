@@ -1,3 +1,4 @@
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import datetime as dt
 
 import numpy as np
@@ -20,30 +21,6 @@ _numpy_to_pandas_conversion = {
     "m": 60000000000,
     "h": 3600000000000,
     "D": 1000000000 * 86400,
-}
-
-_unit_map = {
-    "year": "year",
-    "years": "year",
-    "month": "month",
-    "months": "month",
-    "day": "day",
-    "days": "day",
-    "hour": "h",
-    "hours": "h",
-    "minute": "m",
-    "minutes": "m",
-    "second": "s",
-    "seconds": "s",
-    "ms": "ms",
-    "millisecond": "ms",
-    "milliseconds": "ms",
-    "us": "us",
-    "microsecond": "us",
-    "microseconds": "us",
-    "ns": "ns",
-    "nanosecond": "ns",
-    "nanoseconds": "ns",
 }
 
 
