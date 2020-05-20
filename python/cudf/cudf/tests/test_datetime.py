@@ -531,7 +531,7 @@ def test_datetime_dataframe():
 
     assert_eq(ps.isnull(), gs.isnull())
 
-    
+
 def test_datetime_can_cast_safely():
 
     sr = cudf.Series(
