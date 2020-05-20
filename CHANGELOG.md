@@ -187,6 +187,7 @@
 - PR #5207 Break up backref_re.cu into multiple source files to improve compile time
 - PR #5155 Fix cudf documentation misspellings
 - PR #5214 Move docs build script into repository
+- PR #5231 Type `Buffer` as `uint8`
 - PR #5219 Add per context cache for JIT kernels
 
 ## Bug Fixes
