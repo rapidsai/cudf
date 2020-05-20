@@ -185,7 +185,7 @@ std::unique_ptr<column> copy_if_else(
 
   // if we have validity in the output
   if (nullable) {
-    rmm::device_scalar<size_type> valid_count{0, stream, mr};
+    rmm::device_scalar<size_type> valid_count{0, stream};
 
     // call the kernel
     copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, true>
