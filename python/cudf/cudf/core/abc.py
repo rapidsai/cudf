@@ -47,9 +47,7 @@ class Serializable(abc.ABC):
 
     @classmethod
     def host_deserialize(cls, header, frames):
-        frames = [
-            rmm.DeviceBuffer.to_device(memoryview(f)) for f in frames
-        ]
+        frames = [rmm.DeviceBuffer.to_device(memoryview(f)) for f in frames]
         obj = cls.device_deserialize(header, frames)
         return obj
 
