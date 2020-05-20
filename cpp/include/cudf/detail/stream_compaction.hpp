@@ -29,7 +29,7 @@ namespace detail {
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
-std::unique_ptr<experimental::table> drop_nulls(
+std::unique_ptr<table> drop_nulls(
   table_view const& input,
   std::vector<size_type> const& keys,
   cudf::size_type keep_threshold,
@@ -41,7 +41,7 @@ std::unique_ptr<experimental::table> drop_nulls(
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
-std::unique_ptr<experimental::table> apply_boolean_mask(
+std::unique_ptr<table> apply_boolean_mask(
   table_view const& input,
   column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -52,7 +52,7 @@ std::unique_ptr<experimental::table> apply_boolean_mask(
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
-std::unique_ptr<experimental::table> drop_duplicates(
+std::unique_ptr<table> drop_duplicates(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,

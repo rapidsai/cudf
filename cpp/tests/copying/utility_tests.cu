@@ -74,8 +74,7 @@ TEST_F(EmptyLikeStringTest, ColumnStringTest)
   check_empty_string_columns(got->view(), strings);
 }
 
-std::unique_ptr<cudf::experimental::table> create_table(cudf::size_type size,
-                                                        cudf::mask_state state)
+std::unique_ptr<cudf::table> create_table(cudf::size_type size, cudf::mask_state state)
 {
   auto num_column_1 = make_numeric_column(cudf::data_type{cudf::INT64}, size, state);
   auto num_column_2 = make_numeric_column(cudf::data_type{cudf::INT32}, size, state);
@@ -87,7 +86,7 @@ std::unique_ptr<cudf::experimental::table> create_table(cudf::size_type size,
   columns.push_back(std::move(num_column_3));
   columns.push_back(std::move(num_column_4));
 
-  return std::make_unique<cudf::experimental::table>(std::move(columns));
+  return std::make_unique<cudf::table>(std::move(columns));
 }
 
 void expect_tables_prop_equal(cudf::table_view lhs, cudf::table_view rhs)

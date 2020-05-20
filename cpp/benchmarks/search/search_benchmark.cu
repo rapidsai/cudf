@@ -125,7 +125,7 @@ void BM_table(benchmark::State& state)
       cols.emplace_back(temp.release());
     }
 
-    return cudf::experimental::table(std::move(cols));
+    return cudf::table(std::move(cols));
   };
 
   auto data_table   = make_table(column_size);

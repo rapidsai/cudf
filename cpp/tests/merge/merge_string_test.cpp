@@ -71,7 +71,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
   std::vector<cudf::order> column_order{cudf::order::ASCENDING};
   std::vector<cudf::null_order> null_precedence{};
 
-  std::unique_ptr<cudf::experimental::table> p_outputTable;
+  std::unique_ptr<cudf::table> p_outputTable;
   EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(
                     {left_view, right_view}, key_cols, column_order, null_precedence));
 
@@ -159,7 +159,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
   std::vector<cudf::order> column_order{cudf::order::ASCENDING, cudf::order::DESCENDING};
   std::vector<cudf::null_order> null_precedence{};
 
-  std::unique_ptr<cudf::experimental::table> p_outputTable;
+  std::unique_ptr<cudf::table> p_outputTable;
   EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(
                     {left_view, right_view}, key_cols, column_order, null_precedence));
 
@@ -251,7 +251,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
   std::vector<cudf::order> column_order{cudf::order::ASCENDING};
   std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER};
 
-  std::unique_ptr<cudf::experimental::table> p_outputTable;
+  std::unique_ptr<cudf::table> p_outputTable;
   EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(
                     {left_view, right_view}, key_cols, column_order, null_precedence));
 
@@ -343,7 +343,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
   std::vector<cudf::order> column_order{cudf::order::ASCENDING, cudf::order::DESCENDING};
   std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER, cudf::null_order::BEFORE};
 
-  std::unique_ptr<cudf::experimental::table> p_outputTable;
+  std::unique_ptr<cudf::table> p_outputTable;
   EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(
                     {left_view, right_view}, key_cols, column_order, null_precedence));
 

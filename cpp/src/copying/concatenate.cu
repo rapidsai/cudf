@@ -344,11 +344,11 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
   return experimental::type_dispatcher(type, concatenate_dispatch{columns_to_concat, mr, stream});
 }
 
-std::unique_ptr<experimental::table> concatenate(std::vector<table_view> const& tables_to_concat,
-                                                 rmm::mr::device_memory_resource* mr,
-                                                 cudaStream_t stream)
+std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
+                                   rmm::mr::device_memory_resource* mr,
+                                   cudaStream_t stream)
 {
-  if (tables_to_concat.empty()) { return std::make_unique<experimental::table>(); }
+  if (tables_to_concat.empty()) { return std::make_unique<table>(); }
 
   table_view const first_table = tables_to_concat.front();
   CUDF_EXPECTS(std::all_of(tables_to_concat.cbegin(),
@@ -368,7 +368,7 @@ std::unique_ptr<experimental::table> concatenate(std::vector<table_view> const& 
                    [i](auto const& t) { return t.column(i); });
     concat_columns.emplace_back(detail::concatenate(cols, mr, stream));
   }
-  return std::make_unique<experimental::table>(std::move(concat_columns));
+  return std::make_unique<table>(std::move(concat_columns));
 }
 
 }  // namespace detail
@@ -403,8 +403,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
   return detail::concatenate(columns_to_concat, mr, 0);
 }
 
-std::unique_ptr<experimental::table> concatenate(std::vector<table_view> const& tables_to_concat,
-                                                 rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
+                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::concatenate(tables_to_concat, mr, 0);

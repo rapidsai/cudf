@@ -182,12 +182,12 @@ cudf::size_type unique_count(table_view const& keys,
   }
 }
 
-std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
-                                                     std::vector<size_type> const& keys,
-                                                     duplicate_keep_option keep,
-                                                     null_equality nulls_equal,
-                                                     rmm::mr::device_memory_resource* mr,
-                                                     cudaStream_t stream)
+std::unique_ptr<table> drop_duplicates(table_view const& input,
+                                       std::vector<size_type> const& keys,
+                                       duplicate_keep_option keep,
+                                       null_equality nulls_equal,
+                                       rmm::mr::device_memory_resource* mr,
+                                       cudaStream_t stream)
 {
   if (0 == input.num_rows() || 0 == input.num_columns() || 0 == keys.size()) {
     return experimental::empty_like(input);
@@ -316,11 +316,11 @@ cudf::size_type unique_count(column_view const& input,
 
 }  // namespace detail
 
-std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
-                                                     std::vector<size_type> const& keys,
-                                                     duplicate_keep_option const keep,
-                                                     null_equality nulls_equal,
-                                                     rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> drop_duplicates(table_view const& input,
+                                       std::vector<size_type> const& keys,
+                                       duplicate_keep_option const keep,
+                                       null_equality nulls_equal,
+                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::drop_duplicates(input, keys, keep, nulls_equal, mr);

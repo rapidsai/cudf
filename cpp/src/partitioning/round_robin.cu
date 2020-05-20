@@ -73,12 +73,12 @@ using VectorT = rmm::device_vector<T>;
  * @Returns A std::pair consisting of a unique_ptr to the partitioned table and the partition
  * offsets for each partition within the table
  */
-std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>>
-degenerate_partitions(cudf::table_view const& input,
-                      cudf::size_type num_partitions,
-                      cudf::size_type start_partition,
-                      rmm::mr::device_memory_resource* mr,
-                      cudaStream_t stream)
+std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate_partitions(
+  cudf::table_view const& input,
+  cudf::size_type num_partitions,
+  cudf::size_type start_partition,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
 {
   auto nrows = input.num_rows();
 
@@ -283,11 +283,11 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
 
 }  // namespace detail
 
-std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>>
-round_robin_partition(table_view const& input,
-                      cudf::size_type num_partitions,
-                      cudf::size_type start_partition     = 0,
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robin_partition(
+  table_view const& input,
+  cudf::size_type num_partitions,
+  cudf::size_type start_partition     = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   CUDF_FUNC_RANGE();
   return cudf::experimental::detail::round_robin_partition(

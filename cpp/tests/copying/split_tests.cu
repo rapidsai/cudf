@@ -61,7 +61,7 @@ std::vector<cudf::test::strings_column_wrapper> create_expected_string_columns_f
 }
 
 template <typename T>
-std::vector<cudf::experimental::table> create_expected_tables_for_splits(
+std::vector<cudf::table> create_expected_tables_for_splits(
   cudf::size_type num_cols,
   std::vector<cudf::size_type> const& splits,
   cudf::size_type col_size,
@@ -71,7 +71,7 @@ std::vector<cudf::experimental::table> create_expected_tables_for_splits(
   return create_expected_tables<T>(num_cols, indices, nullable);
 }
 
-std::vector<cudf::experimental::table> create_expected_string_tables_for_splits(
+std::vector<cudf::table> create_expected_string_tables_for_splits(
   std::vector<std::string> const strings[2],
   std::vector<cudf::size_type> const& splits,
   bool nullable)
@@ -239,11 +239,11 @@ void split_end_less_than_size(SplitFunc Split, CompareFunc Compare)
   auto valids              = cudf::test::make_counting_transform_iterator(
     start, [](auto i) { return i % 2 == 0 ? true : false; });
 
-  cudf::size_type num_cols            = 5;
-  cudf::experimental::table src_table = create_fixed_table<T>(num_cols, start, col_size, valids);
+  cudf::size_type num_cols = 5;
+  cudf::table src_table    = create_fixed_table<T>(num_cols, start, col_size, valids);
 
   std::vector<cudf::size_type> splits{2, 5, 7};
-  std::vector<cudf::experimental::table> expected =
+  std::vector<cudf::table> expected =
     create_expected_tables_for_splits<T>(num_cols, splits, col_size, true);
 
   auto result = Split(src_table, splits);
@@ -263,11 +263,11 @@ void split_end_to_size(SplitFunc Split, CompareFunc Compare)
   auto valids              = cudf::test::make_counting_transform_iterator(
     start, [](auto i) { return i % 2 == 0 ? true : false; });
 
-  cudf::size_type num_cols            = 5;
-  cudf::experimental::table src_table = create_fixed_table<T>(num_cols, start, col_size, valids);
+  cudf::size_type num_cols = 5;
+  cudf::table src_table    = create_fixed_table<T>(num_cols, start, col_size, valids);
 
   std::vector<cudf::size_type> splits{2, 5, 10};
-  std::vector<cudf::experimental::table> expected =
+  std::vector<cudf::table> expected =
     create_expected_tables_for_splits<T>(num_cols, splits, col_size, true);
 
   auto result = Split(src_table, splits);
@@ -284,7 +284,7 @@ void split_empty_table(SplitFunc Split)
 {
   std::vector<cudf::size_type> splits{2, 5, 9};
 
-  cudf::experimental::table src_table{};
+  cudf::table src_table{};
   auto result = Split(src_table, splits);
 
   unsigned long expected = 0;
@@ -301,8 +301,7 @@ void split_empty_indices(SplitFunc Split)
     start, [](auto i) { return i % 2 == 0 ? true : false; });
 
   cudf::size_type num_cols = 5;
-  cudf::experimental::table src_table =
-    create_fixed_table<int8_t>(num_cols, start, col_size, valids);
+  cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
   std::vector<cudf::size_type> splits{};
 
   auto result = Split(src_table, splits);
@@ -321,8 +320,7 @@ void split_invalid_indices(SplitFunc Split)
     start, [](auto i) { return i % 2 == 0 ? true : false; });
 
   cudf::size_type num_cols = 5;
-  cudf::experimental::table src_table =
-    create_fixed_table<int8_t>(num_cols, start, col_size, valids);
+  cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
 
   std::vector<cudf::size_type> splits{11, 12};
 
@@ -338,8 +336,7 @@ void split_improper_range(SplitFunc Split)
     start, [](auto i) { return i % 2 == 0 ? true : false; });
 
   cudf::size_type num_cols = 5;
-  cudf::experimental::table src_table =
-    create_fixed_table<int8_t>(num_cols, start, col_size, valids);
+  cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
 
   std::vector<cudf::size_type> splits{5, 4};
 
@@ -355,8 +352,7 @@ void split_negative_value(SplitFunc Split)
     start, [](auto i) { return i % 2 == 0 ? true : false; });
 
   cudf::size_type num_cols = 5;
-  cudf::experimental::table src_table =
-    create_fixed_table<int8_t>(num_cols, start, col_size, valids);
+  cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
 
   std::vector<cudf::size_type> splits{-1, 4};
 
@@ -372,8 +368,7 @@ void split_empty_output_column_value(SplitFunc Split, CompareFunc Compare)
     start, [](auto i) { return i % 2 == 0 ? true : false; });
 
   cudf::size_type num_cols = 5;
-  cudf::experimental::table src_table =
-    create_fixed_table<int8_t>(num_cols, start, col_size, valids);
+  cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
 
   std::vector<cudf::size_type> splits{0, 2, 2};
 
@@ -473,11 +468,11 @@ void split_string_with_invalids(SplitFunc Split, CompareFunc Compare)
   std::vector<std::unique_ptr<cudf::column>> scols;
   scols.push_back(sw[0].release());
   scols.push_back(sw[1].release());
-  cudf::experimental::table src_table(std::move(scols));
+  cudf::table src_table(std::move(scols));
 
   std::vector<cudf::size_type> splits{2, 5, 9};
 
-  std::vector<cudf::experimental::table> expected =
+  std::vector<cudf::table> expected =
     create_expected_string_tables_for_splits(strings, splits, true);
 
   auto result = Split(src_table, splits);
@@ -504,7 +499,7 @@ void split_empty_output_strings_column_value(SplitFunc Split, CompareFunc Compar
   std::vector<std::unique_ptr<cudf::column>> scols;
   scols.push_back(sw[0].release());
   scols.push_back(sw[1].release());
-  cudf::experimental::table src_table(std::move(scols));
+  cudf::table src_table(std::move(scols));
 
   cudf::size_type num_cols = 2;
 
@@ -675,7 +670,7 @@ TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypes)
   auto c4    = cudf::test::fixed_width_column_wrapper<int>(iter4, iter4 + 10, valids);
   cols.push_back(c4.release());
 
-  auto tbl = cudf::experimental::table(std::move(cols));
+  auto tbl = cudf::table(std::move(cols));
 
   std::vector<cudf::size_type> splits{5};
 

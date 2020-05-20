@@ -133,7 +133,7 @@ TEST_F(ApplyBooleanMask, withoutNullString)
   cudf::test::fixed_width_column_wrapper<bool> bool_filter{{1, 1, 0, 0, 1, 0, 0}};
   cudf::column_view bool_filter_col(bool_filter);
 
-  std::unique_ptr<cudf::experimental::table> filteredTable =
+  std::unique_ptr<cudf::table> filteredTable =
     cudf::experimental::apply_boolean_mask(cudf_table_in_view, bool_filter_col);
   cudf::table_view tableView = filteredTable->view();
 

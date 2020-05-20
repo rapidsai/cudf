@@ -77,8 +77,8 @@ TEST_F(JoinTest, LeftSemiJoin)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
   auto join_table =
     cudf::experimental::left_semi_join(table_a, table_b, {0, 1}, {0, 1}, {0, 1, 2, 3});
@@ -135,8 +135,8 @@ TEST_F(JoinTest, LeftSemiJoin_with_a_string_key)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
   auto join_table =
     cudf::experimental::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
@@ -193,8 +193,8 @@ TEST_F(JoinTest, LeftSemiJoin_with_null)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
   auto join_table =
     cudf::experimental::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
@@ -251,8 +251,8 @@ TEST_F(JoinTest, LeftAntiJoin)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
   auto join_table =
     cudf::experimental::left_anti_join(table_a, table_b, {0, 1}, {0, 1}, {0, 1, 2, 3});
@@ -309,8 +309,8 @@ TEST_F(JoinTest, LeftAntiJoin_with_a_string_key)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
   auto join_table =
     cudf::experimental::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
@@ -367,8 +367,8 @@ TEST_F(JoinTest, LeftAntiJoin_with_null)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
   auto join_table =
     cudf::experimental::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
@@ -400,8 +400,8 @@ TEST_F(JoinTest, LeftSemiAntiJoin_exceptions)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
   //
   //  table_a has no columns, table_b has columns
@@ -480,8 +480,8 @@ TEST_F(JoinTest, LeftSemiJoin_empty_result)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
   auto join_table = cudf::experimental::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {});
 
@@ -544,8 +544,8 @@ TEST_F(JoinTest, LeftAntiJoin_empty_result)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
   auto join_table = cudf::experimental::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {});
 
@@ -607,8 +607,8 @@ TEST_F(JoinTest, LeftSemiAntiJoin_empty_table)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
   auto join_table =
     cudf::experimental::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
@@ -696,8 +696,8 @@ TEST_F(JoinTest, LeftAntiJoin_empty_right_table)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
   auto join_table =
     cudf::experimental::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});

@@ -449,7 +449,7 @@ struct copy_block_partitions_dispatcher {
 
 // NOTE hash_has_nulls must be true if table_to_hash has nulls
 template <bool hash_has_nulls>
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition_table(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   table_view const& input,
   table_view const& table_to_hash,
   size_type num_partitions,
@@ -605,7 +605,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
                                            stream);
     }
 
-    auto output{std::make_unique<experimental::table>(std::move(output_cols))};
+    auto output{std::make_unique<table>(std::move(output_cols))};
     return std::make_pair(std::move(output), std::move(partition_offsets));
   } else {
     // Compute a scatter map from input to output such that the output rows are
@@ -648,7 +648,7 @@ struct dispatch_map_type {
    */
   template <typename MapType>
   std::enable_if_t<std::is_integral<MapType>::value and not is_boolean<MapType>(),
-                   std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>>
+                   std::pair<std::unique_ptr<table>, std::vector<size_type>>>
   operator()(table_view const& t,
              column_view const& partition_map,
              size_type num_partitions,
@@ -715,7 +715,7 @@ struct dispatch_map_type {
 
   template <typename MapType>
   std::enable_if_t<not std::is_integral<MapType>::value or is_boolean<MapType>(),
-                   std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>>
+                   std::pair<std::unique_ptr<table>, std::vector<size_type>>>
   operator()(table_view const& t,
              column_view const& partition_map,
              size_type num_partitions,
@@ -728,7 +728,7 @@ struct dispatch_map_type {
 }  // namespace
 
 namespace detail {
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
@@ -749,7 +749,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
   }
 }
 
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> partition(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
   column_view const& partition_map,
   size_type num_partitions,
@@ -770,7 +770,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> partitio
 }  // namespace detail
 
 // Partition based on hash values
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
@@ -781,7 +781,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
 }
 
 // Partition based on an explicit partition map
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> partition(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
   column_view const& partition_map,
   size_type num_partitions,

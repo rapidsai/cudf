@@ -341,7 +341,7 @@ std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_vie
   CUDF_FAIL("dictionary not supported yet");
 }
 
-using table_ptr_type = std::unique_ptr<cudf::experimental::table>;
+using table_ptr_type = std::unique_ptr<cudf::table>;
 
 namespace {
 table_ptr_type merge(cudf::table_view const& left_table,
@@ -379,7 +379,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
                 left_col.type(), merger, left_col, right_col);
             });
 
-  return std::make_unique<cudf::experimental::table>(std::move(merged_cols));
+  return std::make_unique<cudf::table>(std::move(merged_cols));
 }
 
 struct merge_queue_item {
@@ -415,7 +415,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
                      rmm::mr::device_memory_resource* mr,
                      cudaStream_t stream = 0)
 {
-  if (tables_to_merge.empty()) { return std::make_unique<cudf::experimental::table>(); }
+  if (tables_to_merge.empty()) { return std::make_unique<cudf::table>(); }
 
   auto const& first_table = tables_to_merge.front();
   auto const n_cols       = first_table.num_columns();
@@ -444,9 +444,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
   });
 
   // If there is only one non-empty table_view, return its copy
-  if (merge_queue.size() == 1) {
-    return std::make_unique<cudf::experimental::table>(merge_queue.top().view);
-  }
+  if (merge_queue.size() == 1) { return std::make_unique<cudf::table>(merge_queue.top().view); }
   // No inputs have rows, return a table with same columns as the first one
   if (merge_queue.empty()) { return empty_like(first_table); }
 
@@ -477,12 +475,11 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
 
 }  // namespace detail
 
-std::unique_ptr<cudf::experimental::table> merge(
-  std::vector<table_view> const& tables_to_merge,
-  std::vector<cudf::size_type> const& key_cols,
-  std::vector<cudf::order> const& column_order,
-  std::vector<cudf::null_order> const& null_precedence,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merge,
+                                   std::vector<cudf::size_type> const& key_cols,
+                                   std::vector<cudf::order> const& column_order,
+                                   std::vector<cudf::null_order> const& null_precedence,
+                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::merge(tables_to_merge, key_cols, column_order, null_precedence, mr);

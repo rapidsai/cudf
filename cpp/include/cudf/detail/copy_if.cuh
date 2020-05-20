@@ -299,7 +299,7 @@ namespace detail {
  * @return unique_ptr<table> The table generated from filtered `input`.
  */
 template <typename Filter>
-std::unique_ptr<experimental::table> copy_if(
+std::unique_ptr<table> copy_if(
   table_view const& input,
   Filter filter,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -355,7 +355,7 @@ std::unique_ptr<experimental::table> copy_if(
   CHECK_CUDA(stream);
 
   if (output_size == input.num_rows()) {
-    return std::make_unique<experimental::table>(input, stream, mr);
+    return std::make_unique<table>(input, stream, mr);
   } else if (output_size > 0) {
     std::vector<std::unique_ptr<column>> out_columns(input.num_columns());
     std::transform(input.begin(), input.end(), out_columns.begin(), [&](auto col_view) {
@@ -369,7 +369,7 @@ std::unique_ptr<experimental::table> copy_if(
                                                  stream);
     });
 
-    return std::make_unique<experimental::table>(std::move(out_columns));
+    return std::make_unique<table>(std::move(out_columns));
   } else {
     return experimental::empty_like(input);
   }

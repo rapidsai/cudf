@@ -48,7 +48,7 @@ using column_wrapper = typename std::conditional<std::is_same<T, cudf::string_vi
                                                  cudf::test::strings_column_wrapper,
                                                  cudf::test::fixed_width_column_wrapper<T>>::type;
 using column         = cudf::column;
-using table          = cudf::experimental::table;
+using table          = cudf::table;
 using table_view     = cudf::table_view;
 
 // Global environment for temporary files

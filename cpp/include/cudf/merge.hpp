@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <memory>
 #include <vector>
 
 namespace cudf {
@@ -92,7 +93,7 @@ namespace experimental {
  *
  * @returns A table containing sorted data from all input tables
  */
-std::unique_ptr<cudf::experimental::table> merge(
+std::unique_ptr<cudf::table> merge(
   std::vector<table_view> const& tables_to_merge,
   std::vector<cudf::size_type> const& key_cols,
   std::vector<cudf::order> const& column_order,

@@ -246,8 +246,8 @@ TEST_F(SearchTest, table__find_first)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
@@ -289,8 +289,8 @@ TEST_F(SearchTest, table__find_last)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
@@ -332,8 +332,8 @@ TEST_F(SearchTest, table_partial_desc__find_first)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::DESCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
@@ -375,8 +375,8 @@ TEST_F(SearchTest, table_partial_desc__find_last)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::DESCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
@@ -416,8 +416,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
@@ -457,8 +457,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
@@ -498,8 +498,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
@@ -539,8 +539,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
@@ -1011,8 +1011,8 @@ TEST_F(SearchTest, table__find_first_string)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
@@ -1080,8 +1080,8 @@ TEST_F(SearchTest, table__find_last_string)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
@@ -1149,8 +1149,8 @@ TEST_F(SearchTest, table_partial_desc__find_first_string)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::DESCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
@@ -1219,8 +1219,8 @@ TEST_F(SearchTest, table_partial_desc__find_last_string)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::DESCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
@@ -1286,8 +1286,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest_string)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
@@ -1353,8 +1353,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest_string)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
@@ -1420,8 +1420,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest_string)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
@@ -1487,8 +1487,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest_string)
   values.push_back(values_1.release());
   values.push_back(values_2.release());
 
-  cudf::experimental::table input_table(std::move(columns));
-  cudf::experimental::table values_table(std::move(values));
+  cudf::table input_table(std::move(columns));
+  cudf::table values_table(std::move(values));
 
   std::vector<cudf::order> order_flags{
     {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};

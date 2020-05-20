@@ -54,7 +54,6 @@ device_memory_resource* get_default_resource();
 
 namespace cudf {
 // Forward declaration
-struct table;
 class column;
 class column_view;
 class mutable_column_view;
@@ -76,9 +75,7 @@ class timestamp_scalar_device_view;
 
 class list_scalar;
 
-namespace experimental {
 class table;
-}
 class table_view;
 class mutable_table_view;
 

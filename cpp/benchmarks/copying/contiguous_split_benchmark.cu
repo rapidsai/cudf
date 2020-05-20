@@ -46,7 +46,7 @@ void BM_contiguous_split_common(benchmark::State& state,
     ret->null_count();
     return ret;
   });
-  cudf::experimental::table src_table(std::move(columns));
+  cudf::table src_table(std::move(columns));
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0

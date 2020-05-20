@@ -32,7 +32,7 @@ template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 using strcol_wrapper = cudf::test::strings_column_wrapper;
 using CVector        = std::vector<std::unique_ptr<cudf::column>>;
-using Table          = cudf::experimental::table;
+using Table          = cudf::table;
 
 struct JoinTest : public cudf::test::BaseFixture {
 };

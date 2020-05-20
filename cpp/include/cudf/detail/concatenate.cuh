@@ -61,7 +61,7 @@ std::unique_ptr<column> concatenate(
  *
  * @param stream Optional The stream on which to execute all allocations and copies
  */
-std::unique_ptr<experimental::table> concatenate(
+std::unique_ptr<table> concatenate(
   std::vector<table_view> const& tables_to_concat,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);

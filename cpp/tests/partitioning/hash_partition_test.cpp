@@ -67,7 +67,7 @@ TEST_F(HashPartition, ZeroPartitions)
   auto columns_to_hash = std::vector<cudf::size_type>({2});
 
   cudf::size_type const num_partitions = 0;
-  std::unique_ptr<cudf::experimental::table> output;
+  std::unique_ptr<cudf::table> output;
   std::vector<cudf::size_type> offsets;
   std::tie(output, offsets) =
     cudf::experimental::hash_partition(input, columns_to_hash, num_partitions);
@@ -88,7 +88,7 @@ TEST_F(HashPartition, ZeroRows)
   auto columns_to_hash = std::vector<cudf::size_type>({2});
 
   cudf::size_type const num_partitions = 3;
-  std::unique_ptr<cudf::experimental::table> output;
+  std::unique_ptr<cudf::table> output;
   std::vector<cudf::size_type> offsets;
   std::tie(output, offsets) =
     cudf::experimental::hash_partition(input, columns_to_hash, num_partitions);
@@ -106,7 +106,7 @@ TEST_F(HashPartition, ZeroColumns)
   auto columns_to_hash = std::vector<cudf::size_type>({});
 
   cudf::size_type const num_partitions = 3;
-  std::unique_ptr<cudf::experimental::table> output;
+  std::unique_ptr<cudf::table> output;
   std::vector<cudf::size_type> offsets;
   std::tie(output, offsets) =
     cudf::experimental::hash_partition(input, columns_to_hash, num_partitions);
@@ -127,7 +127,7 @@ TEST_F(HashPartition, MixedColumnTypes)
   auto columns_to_hash = std::vector<cudf::size_type>({0, 2});
 
   cudf::size_type const num_partitions = 3;
-  std::unique_ptr<cudf::experimental::table> output1, output2;
+  std::unique_ptr<cudf::table> output1, output2;
   std::vector<cudf::size_type> offsets1, offsets2;
   std::tie(output1, offsets1) =
     cudf::experimental::hash_partition(input, columns_to_hash, num_partitions);
@@ -153,7 +153,7 @@ TEST_F(HashPartition, NullableStrings)
   std::vector<cudf::size_type> const columns_to_hash({0});
   cudf::size_type const num_partitions = 3;
 
-  std::unique_ptr<cudf::experimental::table> result;
+  std::unique_ptr<cudf::table> result;
   std::vector<cudf::size_type> offsets;
   std::tie(result, offsets) =
     cudf::experimental::hash_partition(input, columns_to_hash, num_partitions);
@@ -173,7 +173,7 @@ TEST_F(HashPartition, ColumnsToHash)
   auto columns_to_hash = std::vector<cudf::size_type>({0});
 
   cudf::size_type const num_partitions = 3;
-  std::unique_ptr<cudf::experimental::table> first_result, second_result;
+  std::unique_ptr<cudf::table> first_result, second_result;
   std::vector<cudf::size_type> first_offsets, second_offsets;
   std::tie(first_result, first_offsets) =
     cudf::experimental::hash_partition(first_input, columns_to_hash, num_partitions);
@@ -203,7 +203,7 @@ TYPED_TEST(HashPartitionFixedWidth, NullableFixedWidth)
   std::vector<cudf::size_type> const columns_to_hash({0});
   cudf::size_type const num_partitions = 3;
 
-  std::unique_ptr<cudf::experimental::table> result;
+  std::unique_ptr<cudf::table> result;
   std::vector<cudf::size_type> offsets;
   std::tie(result, offsets) =
     cudf::experimental::hash_partition(input, columns_to_hash, num_partitions);
@@ -236,7 +236,7 @@ void run_fixed_width_test(size_t cols,
   auto columns_to_hash = std::vector<cudf::size_type>(cols);
   std::iota(columns_to_hash.begin(), columns_to_hash.end(), 0);
 
-  std::unique_ptr<cudf::experimental::table> output1, output2;
+  std::unique_ptr<cudf::table> output1, output2;
   std::vector<cudf::size_type> offsets1, offsets2;
   std::tie(output1, offsets1) =
     cudf::experimental::hash_partition(input, columns_to_hash, num_partitions);

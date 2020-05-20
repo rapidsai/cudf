@@ -220,12 +220,11 @@ TYPED_TEST(SliceTableTest, NumericColumnsWithNulls)
   auto valids              = cudf::test::make_counting_transform_iterator(
     start, [](auto i) { return i % 2 == 0 ? true : false; });
 
-  cudf::size_type num_cols            = 5;
-  cudf::experimental::table src_table = create_fixed_table<T>(num_cols, start, col_size, valids);
+  cudf::size_type num_cols = 5;
+  cudf::table src_table    = create_fixed_table<T>(num_cols, start, col_size, valids);
 
   std::vector<cudf::size_type> indices{1, 3, 2, 2, 5, 9};
-  std::vector<cudf::experimental::table> expected =
-    create_expected_tables<T>(num_cols, indices, true);
+  std::vector<cudf::table> expected = create_expected_tables<T>(num_cols, indices, true);
 
   std::vector<cudf::table_view> result = cudf::experimental::slice(src_table, indices);
 
@@ -253,12 +252,11 @@ TEST_F(SliceStringTableTest, StringWithNulls)
   std::vector<std::unique_ptr<cudf::column>> scols;
   scols.push_back(sw[0].release());
   scols.push_back(sw[1].release());
-  cudf::experimental::table src_table(std::move(scols));
+  cudf::table src_table(std::move(scols));
 
   std::vector<cudf::size_type> indices{1, 3, 2, 4, 1, 9};
 
-  std::vector<cudf::experimental::table> expected =
-    create_expected_string_tables(strings, indices, true);
+  std::vector<cudf::table> expected = create_expected_string_tables(strings, indices, true);
 
   std::vector<cudf::table_view> result = cudf::experimental::slice(src_table, indices);
 
@@ -276,7 +274,7 @@ TEST_F(SliceTableCornerCases, EmptyTable)
 {
   std::vector<cudf::size_type> indices{1, 3, 2, 4, 5, 9};
 
-  cudf::experimental::table src_table{};
+  cudf::table src_table{};
   std::vector<cudf::table_view> result = cudf::experimental::slice(src_table.view(), indices);
 
   unsigned long expected = 0;
@@ -292,8 +290,7 @@ TEST_F(SliceTableCornerCases, EmptyIndices)
     start, [](auto i) { return i % 2 == 0 ? true : false; });
 
   cudf::size_type num_cols = 5;
-  cudf::experimental::table src_table =
-    create_fixed_table<int8_t>(num_cols, start, col_size, valids);
+  cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
   std::vector<cudf::size_type> indices{};
 
   std::vector<cudf::table_view> result = cudf::experimental::slice(src_table, indices);
@@ -311,8 +308,7 @@ TEST_F(SliceTableCornerCases, InvalidSetOfIndices)
     start, [](auto i) { return i % 2 == 0 ? true : false; });
 
   cudf::size_type num_cols = 5;
-  cudf::experimental::table src_table =
-    create_fixed_table<int8_t>(num_cols, start, col_size, valids);
+  cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
 
   std::vector<cudf::size_type> indices{11, 12};
 
@@ -327,8 +323,7 @@ TEST_F(SliceTableCornerCases, ImproperRange)
     start, [](auto i) { return i % 2 == 0 ? true : false; });
 
   cudf::size_type num_cols = 5;
-  cudf::experimental::table src_table =
-    create_fixed_table<int8_t>(num_cols, start, col_size, valids);
+  cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
 
   std::vector<cudf::size_type> indices{5, 4};
 
@@ -343,8 +338,7 @@ TEST_F(SliceTableCornerCases, NegativeOffset)
     start, [](auto i) { return i % 2 == 0 ? true : false; });
 
   cudf::size_type num_cols = 5;
-  cudf::experimental::table src_table =
-    create_fixed_table<int8_t>(num_cols, start, col_size, valids);
+  cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
 
   std::vector<cudf::size_type> indices{-1, 4};
 

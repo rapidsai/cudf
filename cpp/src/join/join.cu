@@ -59,7 +59,7 @@ auto non_common_column_indices(size_type num_columns,
   return non_common_column_indices;
 }
 
-std::unique_ptr<experimental::table> get_empty_joined_table(
+std::unique_ptr<table> get_empty_joined_table(
   table_view const& left,
   table_view const& right,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common)
@@ -69,13 +69,13 @@ std::unique_ptr<experimental::table> get_empty_joined_table(
                  columns_in_common.end(),
                  right_columns_in_common.begin(),
                  [](auto& col) { return col.second; });
-  std::unique_ptr<experimental::table> empty_left  = experimental::empty_like(left);
-  std::unique_ptr<experimental::table> empty_right = experimental::empty_like(right);
+  std::unique_ptr<table> empty_left  = experimental::empty_like(left);
+  std::unique_ptr<table> empty_right = experimental::empty_like(right);
   std::vector<size_type> right_non_common_indices =
     non_common_column_indices(right.num_columns(), right_columns_in_common);
   table_view tmp_right_table = (*empty_right).select(right_non_common_indices);
   table_view tmp_table{{*empty_left, tmp_right_table}};
-  return std::make_unique<experimental::table>(tmp_table);
+  return std::make_unique<table>(tmp_table);
 }
 
 VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b)
@@ -282,7 +282,7 @@ std::vector<std::unique_ptr<column>> combine_join_columns(
  */
 /* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
-std::unique_ptr<experimental::table> construct_join_output_df(
+std::unique_ptr<table> construct_join_output_df(
   table_view const& left,
   table_view const& right,
   VectorPair& joined_indices,
@@ -305,7 +305,7 @@ std::unique_ptr<experimental::table> construct_join_output_df(
 
   bool const nullify_out_of_bounds{JoinKind != join_kind::INNER_JOIN};
 
-  std::unique_ptr<experimental::table> common_table = std::make_unique<experimental::table>();
+  std::unique_ptr<table> common_table = std::make_unique<table>();
   // Construct the joined columns
   if (join_kind::FULL_JOIN == JoinKind) {
     auto complement_indices = get_left_join_indices_complement(
@@ -339,15 +339,14 @@ std::unique_ptr<experimental::table> construct_join_output_df(
   }
 
   // Construct the left non common columns
-  std::unique_ptr<experimental::table> left_table =
-    experimental::detail::gather(left.select(left_noncommon_col),
-                                 joined_indices.first.begin(),
-                                 joined_indices.first.end(),
-                                 nullify_out_of_bounds,
-                                 mr,
-                                 stream);
+  std::unique_ptr<table> left_table = experimental::detail::gather(left.select(left_noncommon_col),
+                                                                   joined_indices.first.begin(),
+                                                                   joined_indices.first.end(),
+                                                                   nullify_out_of_bounds,
+                                                                   mr,
+                                                                   stream);
 
-  std::unique_ptr<experimental::table> right_table =
+  std::unique_ptr<table> right_table =
     experimental::detail::gather(right.select(right_noncommon_col),
                                  joined_indices.second.begin(),
                                  joined_indices.second.end(),
@@ -355,11 +354,11 @@ std::unique_ptr<experimental::table> construct_join_output_df(
                                  mr,
                                  stream);
 
-  return std::make_unique<experimental::table>(combine_join_columns(left_table->release(),
-                                                                    left_noncommon_col,
-                                                                    common_table->release(),
-                                                                    left_common_col,
-                                                                    right_table->release()));
+  return std::make_unique<table>(combine_join_columns(left_table->release(),
+                                                      left_noncommon_col,
+                                                      common_table->release(),
+                                                      left_common_col,
+                                                      right_table->release()));
 }
 
 /* --------------------------------------------------------------------------*/
@@ -408,7 +407,7 @@ std::unique_ptr<experimental::table> construct_join_output_df(
  */
 /* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
-std::unique_ptr<experimental::table> join_call_compute_df(
+std::unique_ptr<table> join_call_compute_df(
   table_view const& left,
   table_view const& right,
   std::vector<size_type> const& left_on,
@@ -449,7 +448,7 @@ std::unique_ptr<experimental::table> join_call_compute_df(
 
 }  // namespace detail
 
-std::unique_ptr<experimental::table> inner_join(
+std::unique_ptr<table> inner_join(
   table_view const& left,
   table_view const& right,
   std::vector<size_type> const& left_on,
@@ -462,7 +461,7 @@ std::unique_ptr<experimental::table> inner_join(
     left, right, left_on, right_on, columns_in_common, mr);
 }
 
-std::unique_ptr<experimental::table> left_join(
+std::unique_ptr<table> left_join(
   table_view const& left,
   table_view const& right,
   std::vector<size_type> const& left_on,
@@ -475,7 +474,7 @@ std::unique_ptr<experimental::table> left_join(
     left, right, left_on, right_on, columns_in_common, mr);
 }
 
-std::unique_ptr<experimental::table> full_join(
+std::unique_ptr<table> full_join(
   table_view const& left,
   table_view const& right,
   std::vector<size_type> const& left_on,
