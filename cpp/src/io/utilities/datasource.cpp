@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "datasource.hpp"
-
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -23,6 +21,7 @@
 #include <unistd.h>
 
 #include <cudf/cudf.h>
+#include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {

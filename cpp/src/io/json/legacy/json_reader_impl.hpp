@@ -24,8 +24,9 @@
 
 #include "../../csv/legacy/type_conversion.cuh"
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/legacy/table.hpp>
-#include <io/utilities/datasource.hpp>
+
 #include <io/utilities/legacy/wrapper_utils.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>

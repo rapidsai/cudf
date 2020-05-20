@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <cudf/utilities/error.hpp>
-
 #include <arrow/buffer.h>
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
@@ -27,14 +25,20 @@
 #include <memory>
 #include <string>
 
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+
 namespace cudf {
+//! IO interfaces
 namespace io {
 
 class buffer {
  public:
   virtual size_t size() const = 0;
 
-  virtual const uint8_t *data() const = 0;
+  virtual const uint8_t* data() const = 0;
+
+  virtual ~buffer() {}
 };
 
 /**
@@ -58,7 +62,7 @@ class datasource {
    *
    * @param[in] filepath Path to the file to use
    **/
-  static std::unique_ptr<datasource> create(const char *data, size_t length);
+  static std::unique_ptr<datasource> create(const char* data, size_t length);
 
   /**
    * @brief Create a source from a from an Arrow file
@@ -72,7 +76,7 @@ class datasource {
    *
    * @param[in] source Non-owning pointer to the datasource object
    **/
-  static std::unique_ptr<datasource> create(datasource *source);
+  static std::unique_ptr<datasource> create(datasource* source);
 
   /**
    * @brief Base class destructor
@@ -98,7 +102,7 @@ class datasource {
    *
    * @return The number of bytes read (can be smaller than size)
    **/
-  virtual size_t host_read(size_t offset, size_t size, uint8_t *dst) = 0;
+  virtual size_t host_read(size_t offset, size_t size, uint8_t* dst) = 0;
 
   /**
    * @brief Whether or not this source supports reading directly into device memory
@@ -133,7 +137,7 @@ class datasource {
    *
    * @return The number of bytes read (can be smaller than size)
    **/
-  virtual size_t device_read(size_t offset, size_t size, uint8_t *dst)
+  virtual size_t device_read(size_t offset, size_t size, uint8_t* dst)
   {
     CUDF_FAIL("datasource classes that support device_read must override this function.");
   }

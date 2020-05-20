@@ -28,8 +28,8 @@
 #include <rmm/device_buffer.hpp>
 
 #include <io/utilities/column_buffer.hpp>
-#include <io/utilities/datasource.hpp>
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/readers.hpp>
 
 namespace cudf {

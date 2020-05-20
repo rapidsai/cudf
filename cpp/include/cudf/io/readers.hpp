@@ -23,8 +23,8 @@
 
 #include "types.hpp"
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
-#include <io/utilities/datasource.hpp>
 
 #include <memory>
 #include <string>
