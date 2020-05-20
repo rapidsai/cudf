@@ -27,6 +27,7 @@
 - PR #4881 Support row_number in rolling_window
 - PR #5068 Add Java bindings for arctan2
 - PR #5132 Support out-of-band buffers in Python pickling
+- PR #5139 Add ``Serializable`` ABC for Python
 - PR #5149 Add Java bindings for PMOD
 - PR #5153 Add Java bindings for extract
 - PR #5196 Add Java bindings for NULL_EQUALS, NULL_MAX and NULL_MIN
@@ -191,6 +192,7 @@
 
 ## Bug Fixes
 
+- PR #5221 Fix the use of user-provided resource on temporary values
 - PR #5181 Allocate null count using the default resource in `copy_if`
 - PR #5141 Use user-provided resource correctly in `unary_operation()` and `shift()`
 - PR #5064 Fix `hash()` and `construct_join_output_df()` to use user-provided memory resource correctly
