@@ -232,8 +232,8 @@ class DatetimeColumn(column.ColumnBase):
     def can_cast_safely(self, to_dtype):
         if np.issubdtype(to_dtype, np.datetime64):
 
-            to_res = to_dtype.name[-3:-1]
-            self_res = self.dtype.name[-3:-1]
+            to_res, _ = np.datetime_data(to_dtype)
+            self_res, _ = np.datetime_data(self.dtype)
 
             epoch = np.datetime64(0, to_res)
             max_int = np.iinfo(np.dtype("int64")).max
@@ -241,10 +241,12 @@ class DatetimeColumn(column.ColumnBase):
             max_dist = self.max() - epoch.astype(self.dtype)
             min_dist = self.min() - epoch.astype(self.dtype)
 
+            self_delta_dtype = np.timedelta64(0, self_res).dtype
+
             if max_dist <= np.timedelta64(max_int, to_res).astype(
-                "m8[" + self_res + "]"
+                self_delta_dtype
             ) and min_dist <= np.timedelta64(max_int, to_res).astype(
-                "m8[" + self_res + "]"
+                self_delta_dtype
             ):
                 return True
             else:
