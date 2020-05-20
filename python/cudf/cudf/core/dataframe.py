@@ -659,7 +659,6 @@ class DataFrame(Frame, Serializable):
         many repeated values.
         >>> df['object'].astype('category').memory_usage(deep=True)
         5048
-
         """
         ind = list(self.columns)
         sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
@@ -811,7 +810,6 @@ class DataFrame(Frame, Serializable):
            key   val
         3    3  13.0
         4    4  14.0
-
         """
         if n == 0:
             return self.iloc[0:0]
@@ -1176,7 +1174,6 @@ class DataFrame(Frame, Serializable):
         circle          1      361
         triangle        4      181
         rectangle       5      361
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -1233,7 +1230,6 @@ class DataFrame(Frame, Serializable):
         circle          1      361
         triangle        4      181
         rectangle       5      361
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -1290,7 +1286,6 @@ class DataFrame(Frame, Serializable):
         circle         -1      358
         triangle        2      178
         rectangle       3      358
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -1347,7 +1342,6 @@ class DataFrame(Frame, Serializable):
         circle          1     -358
         triangle       -2     -178
         rectangle      -3     -358
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -1406,7 +1400,6 @@ class DataFrame(Frame, Serializable):
         circle          0        0
         triangle        9        0
         rectangle      16        0
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -1465,7 +1458,6 @@ class DataFrame(Frame, Serializable):
         circle          0        0
         triangle        9        0
         rectangle      16        0
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -1522,7 +1514,6 @@ class DataFrame(Frame, Serializable):
         circle          0       60
         triangle        3       80
         rectangle       4       60
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -1579,7 +1570,6 @@ class DataFrame(Frame, Serializable):
         circle          0      100
         triangle        1      100
         rectangle       0      100
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -1636,7 +1626,6 @@ class DataFrame(Frame, Serializable):
         circle          0   129600
         triangle        9    32400
         rectangle      16   129600
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -1693,7 +1682,6 @@ class DataFrame(Frame, Serializable):
         circle          1        1
         triangle        1        1
         rectangle       1        1
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -1750,7 +1738,6 @@ class DataFrame(Frame, Serializable):
         circle          0      180
         triangle        1       90
         rectangle       2      180
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -1856,7 +1843,6 @@ class DataFrame(Frame, Serializable):
         circle        0.0     36.0
         triangle      0.3     18.0
         rectangle     0.4     36.0
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -1921,7 +1907,6 @@ class DataFrame(Frame, Serializable):
         circle          inf  0.027778
         triangle   3.333333  0.055556
         rectangle  2.500000  0.027778
-
         """
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
@@ -2016,7 +2001,6 @@ class DataFrame(Frame, Serializable):
         0   10   20
         >>> df.equals(different_column_type)
         True
-
         """
         for col in self._data.names:
             if col not in other._data.names:
@@ -2420,7 +2404,6 @@ class DataFrame(Frame, Serializable):
         1    bird      24.0
         2  mammal      80.5
         3  mammal      null
-
         """
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
@@ -2990,7 +2973,6 @@ class DataFrame(Frame, Serializable):
         - Support axis='index' only.
         - Not supporting: inplace, kind
         - Ascending can be a list of bools to control per column
-
         """
         return self._get_sorted_inds(
             ascending=ascending, na_position=na_position
@@ -4065,7 +4047,6 @@ class DataFrame(Frame, Serializable):
         2  2  0
         >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
-
         """
         out_data = {}
         out_index = self.index.to_pandas()
@@ -4119,7 +4100,6 @@ class DataFrame(Frame, Serializable):
         0  0  1
         1  1  2
         2  3  4
-
         """
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError("not a pandas.DataFrame")
@@ -4257,7 +4237,6 @@ class DataFrame(Frame, Serializable):
         0   1   4
         1   2   5
         2   3   6
-
         """
 
         if not isinstance(table, pa.Table):
@@ -4485,7 +4464,6 @@ class DataFrame(Frame, Serializable):
         -------
 
         DataFrame
-
         """
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
@@ -4541,7 +4519,6 @@ class DataFrame(Frame, Serializable):
         -------
 
         DataFrame
-
         """
         if isinstance(q, numbers.Number):
             q_is_number = True
@@ -4582,7 +4559,6 @@ class DataFrame(Frame, Serializable):
         DataFrame:
             DataFrame of booleans showing whether each element in
             the DataFrame is contained in values.
-
         """
 
         if isinstance(values, dict):
@@ -5550,7 +5526,6 @@ class DataFrame(Frame, Serializable):
             which columns to include based on dtypes
         exclude : str or list
             which columns to exclude based on dtypes
-
         """
 
         # code modified from:

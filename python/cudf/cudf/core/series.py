@@ -201,7 +201,6 @@ class Series(Frame, Serializable):
         2    30.0
         3     NaN
         dtype: float64
-
         """
         return cls(s, nan_as_null=nan_as_null)
 
@@ -225,7 +224,6 @@ class Series(Frame, Serializable):
         array([  1, -10, 100,  20])
         >>> type(ser.values)
         <class 'cupy.core.core.ndarray'>
-
         """
 
         if is_categorical_dtype(self.dtype) or np.issubdtype(
@@ -261,7 +259,6 @@ class Series(Frame, Serializable):
         array([  1, -10, 100,  20])
         >>> type(ser.values)
         <class 'numpy.ndarray'>
-
         """
         if self.dtype == np.dtype("object"):
             return self._column.to_array()
@@ -301,7 +298,6 @@ class Series(Frame, Serializable):
         1    2
         2    3
         dtype: int64
-
         """
         return cls(s)
 
@@ -343,7 +339,6 @@ class Series(Frame, Serializable):
         Raises
         ------
             TypeError if the Series does not contain datetimelike values.
-
         """
         if isinstance(self._column, DatetimeColumn):
             return DatetimeProperties(self)
@@ -471,7 +466,6 @@ class Series(Frame, Serializable):
         a    1
         b    2
         dtype: int64
-
         """
         result = self._copy_construct()
         if deep:
@@ -573,7 +567,6 @@ class Series(Frame, Serializable):
         1    2
         2    3
         dtype: int64
-
         """
         return self.set_index(RangeIndex(len(self)))
 
@@ -618,7 +611,6 @@ class Series(Frame, Serializable):
         null_count : int, optional
             The number of null values.
             If None, it is calculated automatically.
-
         """
         col = self._column.set_mask(mask)
         return self._copy_construct(data=col)
@@ -662,7 +654,6 @@ class Series(Frame, Serializable):
 
         >>> s.memory_usage(index=False)
         24
-
         """
         n = self._column._memory_usage(deep=deep)
         if index:
@@ -798,8 +789,7 @@ class Series(Frame, Serializable):
 
         Examples
         --------
-        >>> ser = cudf.Series(['alligator', 'bee', 'falcon', 'lion',
-        ...                    'monkey', 'parrot', 'shark', 'whale', 'zebra'])
+        >>> ser = cudf.Series(['alligator', 'bee', 'falcon', 'lion', 'monkey', 'parrot', 'shark', 'whale', 'zebra'])        # noqa E501
         >>> ser
         0    alligator
         1          bee
@@ -840,7 +830,6 @@ class Series(Frame, Serializable):
         4       monkey
         5       parrot
         dtype: object
-
         """
         return self.iloc[:n]
 
@@ -1351,7 +1340,6 @@ class Series(Frame, Serializable):
         >>> different = cudf.Series([1.5, 2, 3])
         >>> s.equals(different)
         False
-
         """
         if self is other:
             return True
@@ -1763,7 +1751,6 @@ class Series(Frame, Serializable):
         dtype: int64
         >>> type(pds)
         <class 'pandas.core.series.Series'>
-
         """
         if index is True:
             index = self.index.to_pandas()
@@ -1787,7 +1774,6 @@ class Series(Frame, Serializable):
         15,
         20
         ]
-
         """
         return self._column.to_arrow()
 
@@ -1799,7 +1785,6 @@ class Series(Frame, Serializable):
 
     @property
     def index(self):
-
         """The index object
         """
         return self._index
@@ -2278,7 +2263,6 @@ class Series(Frame, Serializable):
         3    205
         4    105
         dtype: int64
-
         """
         if callable(udf):
             res_col = self._unaryop(udf)
@@ -3431,7 +3415,6 @@ class Series(Frame, Serializable):
         -------
 
         DataFrame
-
         """
 
         if isinstance(q, Number) or is_list_like(q):
@@ -3754,7 +3737,6 @@ class Series(Frame, Serializable):
     def _align_to_index(
         self, index, how="outer", sort=True, allow_non_unique=False
     ):
-
         """
         Align to the given Index. See _align_indices below.
         """
