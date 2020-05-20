@@ -103,11 +103,10 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODUL
 include(FeatureSummary)
 include(CheckIncludeFiles)
 include(CheckLibraryExists)
+include(FetchContent)
 
 ###################################################################################################
 # - SPDLOG ----------------------------------------------------------------------------------------
-
-include(FetchContent)
 
 FetchContent_Declare(
     spdlog
@@ -115,8 +114,11 @@ FetchContent_Declare(
     GIT_TAG        v1.6.0
     GIT_SHALLOW    true
 )
-
-FetchContent_MakeAvailable(spdlog)
+if(NOT spdlog_POPULATED)
+    FetchContent_Populate(spdlog)
+    # We are not using the spdlog CMake targets, so no need to call `add_subdirectory()`.
+endif()
+set(SPDLOG_INCLUDE "${spdlog_SOURCE_DIR}/include")
 
 ###################################################################################################
 # - CUDF ------------------------------------------------------------------------------------------
@@ -208,6 +210,7 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${JNI_INCLUDE_DIRS}"
                     "${CUDF_INCLUDE}"
+                    "${SPDLOG_INCLUDE}"
                     "${RMM_INCLUDE}")
 
 ###################################################################################################
@@ -257,6 +260,6 @@ endif(PER_THREAD_DEFAULT_STREAM)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni spdlog_header_only cudf rmm ${CUDART_LIBRARY} cuda nvrtc)
+target_link_libraries(cudfjni cudf rmm ${CUDART_LIBRARY} cuda nvrtc)
 
 
