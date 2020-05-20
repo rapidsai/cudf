@@ -1097,6 +1097,10 @@ class StringIndex(GenericIndex):
     def str(self):
         return self._values.str(parent=self)
 
+    @property
+    def _constructor_expanddim(self):
+        return cudf.MultiIndex
+
 
 def as_index(arbitrary, **kwargs):
     """Create an Index from an arbitrary object
