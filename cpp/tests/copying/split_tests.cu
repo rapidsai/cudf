@@ -16,7 +16,6 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/legacy/interop.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
