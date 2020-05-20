@@ -23,7 +23,6 @@
 
 #include <thrust/device_vector.h>
 
-
 struct DispatcherTest : public cudf::test::BaseFixture {
 };
 

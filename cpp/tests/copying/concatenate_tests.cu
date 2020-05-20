@@ -24,7 +24,6 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-
 #include <thrust/sequence.h>
 
 template <typename T>

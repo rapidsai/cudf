@@ -27,7 +27,6 @@
 #include <thrust/sequence.h>
 #include <random>
 
-
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
 };

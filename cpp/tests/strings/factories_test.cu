@@ -25,7 +25,6 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
-
 #include <cstring>
 #include <vector>
 

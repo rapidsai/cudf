@@ -26,7 +26,6 @@
 #include <tests/utilities/timestamp_utilities.cuh>
 #include <tests/utilities/type_lists.hpp>
 
-
 template <typename T>
 struct NonTimestampTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }

@@ -26,7 +26,6 @@
 #include <thrust/sequence.h>
 #include <random>
 
-
 template <typename T>
 struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {
 };

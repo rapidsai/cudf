@@ -30,7 +30,6 @@
 #include <thrust/sequence.h>
 #include <random>
 
-
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
