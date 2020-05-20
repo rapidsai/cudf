@@ -235,11 +235,10 @@ class DatetimeColumn(column.ColumnBase):
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
 
-            epoch = np.datetime64(0, to_res)
             max_int = np.iinfo(np.dtype("int64")).max
 
-            max_dist = self.max() - epoch.astype(self.dtype)
-            min_dist = self.min() - epoch.astype(self.dtype)
+            max_dist = self.max().astype(np.timedelta64, copy=False)
+            min_dist = self.min().astype(np.timedelta64, copy=False)
 
             self_delta_dtype = np.timedelta64(0, self_res).dtype
 
