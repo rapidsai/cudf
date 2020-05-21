@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.14.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.15.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -639,6 +639,8 @@ add_library(cudf
             src/strings/regex/regexec.cu
             src/strings/replace/replace_re.cu
             src/strings/replace/backref_re.cu
+            src/strings/replace/backref_re_medium.cu
+            src/strings/replace/backref_re_large.cu
             src/strings/replace/multi_re.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu

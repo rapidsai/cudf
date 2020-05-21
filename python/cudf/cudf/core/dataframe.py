@@ -25,6 +25,7 @@ import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
 from cudf.core import column
+from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -87,7 +88,7 @@ def _reverse_op(fn):
     }[fn]
 
 
-class DataFrame(Frame):
+class DataFrame(Frame, Serializable):
     """
     A GPU Dataframe object.
 
@@ -900,7 +901,7 @@ class DataFrame(Frame):
         ncols = 19 if ncols in [20, 21] else ncols
         return ncols, nrows
 
-    def clean_renderable_dataframe(self, output):
+    def _clean_renderable_dataframe(self, output):
         """
         the below is permissible: null in a datetime to_pandas() becomes
         NaT, which is then replaced with null in this processing step.
@@ -919,7 +920,7 @@ class DataFrame(Frame):
             )
         return "\n".join(lines)
 
-    def get_renderable_dataframe(self):
+    def _get_renderable_dataframe(self):
         """
         takes rows and columns from pandas settings or estimation from size.
         pulls quadrents based off of some known parameters then style for
@@ -983,12 +984,12 @@ class DataFrame(Frame):
         return output
 
     def __repr__(self):
-        output = self.get_renderable_dataframe()
-        return self.clean_renderable_dataframe(output)
+        output = self._get_renderable_dataframe()
+        return self._clean_renderable_dataframe(output)
 
     def _repr_html_(self):
         lines = (
-            self.get_renderable_dataframe()
+            self._get_renderable_dataframe()
             .to_pandas()
             ._repr_html_()
             .split("\n")
@@ -1003,7 +1004,7 @@ class DataFrame(Frame):
         return "\n".join(lines)
 
     def _repr_latex_(self):
-        return self.get_renderable_dataframe().to_pandas()._repr_latex_()
+        return self._get_renderable_dataframe().to_pandas()._repr_latex_()
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
@@ -1683,9 +1684,6 @@ class DataFrame(Frame):
         if memo is None:
             memo = {}
         return self.copy(deep=True)
-
-    def __reduce__(self):
-        return (DataFrame, (self._data, self.index))
 
     @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):
@@ -3199,7 +3197,7 @@ class DataFrame(Frame):
         return out_df
 
     @classmethod
-    def from_pandas(cls, dataframe, nan_as_null=True):
+    def from_pandas(cls, dataframe, nan_as_null=None):
         """
         Convert from a Pandas DataFrame.
 
@@ -3213,7 +3211,7 @@ class DataFrame(Frame):
         >>> import pandas as pd
         >>> data = [[0,1], [1,2], [3,4]]
         >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
-        >>> cudf.from_pandas(pdf)
+        >>> cudf.DataFrame.from_pandas(pdf)
         <cudf.DataFrame ncols=2 nrows=3 >
         """
         if not isinstance(dataframe, pd.DataFrame):
@@ -3248,7 +3246,7 @@ class DataFrame(Frame):
 
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):
-            index = cudf.from_pandas(dataframe.index)
+            index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         else:
             index = dataframe.index
         result = df.set_index(index)
@@ -4953,7 +4951,7 @@ class DataFrame(Frame):
         return df
 
 
-def from_pandas(obj):
+def from_pandas(obj, nan_as_null=None):
     """
     Convert certain Pandas objects into the cudf equivalent.
 
@@ -4973,11 +4971,11 @@ def from_pandas(obj):
     <cudf.DataFrame ncols=2 nrows=3 >
     """
     if isinstance(obj, pd.DataFrame):
-        return DataFrame.from_pandas(obj)
+        return DataFrame.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.Series):
-        return Series.from_pandas(obj)
+        return Series.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.MultiIndex):
-        return cudf.MultiIndex.from_pandas(obj)
+        return cudf.MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.RangeIndex):
         if obj._step and obj._step != 1:
             raise ValueError("cudf RangeIndex requires step == 1")
@@ -4985,7 +4983,7 @@ def from_pandas(obj):
             obj._start, stop=obj._stop, name=obj.name
         )
     elif isinstance(obj, pd.Index):
-        return cudf.Index.from_pandas(obj)
+        return cudf.Index.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(obj)
     else:
