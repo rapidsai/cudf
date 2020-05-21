@@ -196,6 +196,7 @@
 - PR #5209 Add `nan_as_null` support to `cudf.from_pandas`
 - PR #5207 Break up backref_re.cu into multiple source files to improve compile time
 - PR #5155 Fix cudf documentation misspellings
+- PR #5208 Port search and join benchmark to libcudf++
 - PR #5214 Move docs build script into repository
 - PR #5219 Add per context cache for JIT kernels
 
