@@ -21,9 +21,7 @@
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
 
-//#include <algorithm>
 #include <memory>
-#include <string>
 
 #include <cudf/utilities/error.hpp>
 
@@ -40,19 +38,16 @@ class datasource {
    * @brief Interface class for buffers that the datasource returns to the caller.
    *
    * Provides a basic interface to return the data address and size.
-   *
    */
   class buffer {
    public:
     /**
      * @brief Returns the buffer size in bytes.
-     *
      */
     virtual size_t size() const = 0;
 
     /**
      * @brief Returns the address of the data in the buffer.
-     *
      */
     virtual const uint8_t* data() const = 0;
 
@@ -66,8 +61,8 @@ class datasource {
    * @brief Creates a source from a file path.
    *
    * @param[in] filepath Path to the file to use
-   * @param[in] offset Bytes from the start of the file
-   * @param[in] size Bytes from the offset; use zero for entire file
+   * @param[in] offset Bytes from the start of the file (the default is zero)
+   * @param[in] size Bytes from the offset; use zero for entire file (the default is zero)
    */
   static std::unique_ptr<datasource> create(const std::string& filepath,
                                             size_t offset = 0,
@@ -176,7 +171,7 @@ class datasource {
   virtual size_t size() const = 0;
 
   /**
-   * @brief Returns whether the data source contains any data.
+   * @brief Returns whether the source contains any data.
    *
    * @return bool True if there is data, False otherwise
    */
