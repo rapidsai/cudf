@@ -38,20 +38,26 @@ from cudf.tests.utils import assert_eq
         # pd.util.testing.makeMultiIndex, # Indices not serialized on device
     ],
 )
-def test_serialize(df):
+@pytest.mark.parametrize("to_host", [True, False])
+def test_serialize(df, to_host):
     """ This should hopefully replace all functions below """
     a = df()
     if "cudf" not in type(a).__module__:
         a = cudf.from_pandas(a)
-    header, frames = a.serialize()
+    if to_host:
+        header, frames = a.host_serialize()
+    else:
+        header, frames = a.device_serialize()
     msgpack.dumps(header)  # ensure that header is msgpack serializable
     ndevice = 0
     for frame in frames:
-        if not isinstance(frame, (bytes, memoryview)):
+        if hasattr(frame, "__cuda_array_interface__"):
             ndevice += 1
     # Indices etc. will not be DeviceNDArray
     # but data should be...
-    if hasattr(df, "_cols"):
+    if to_host:
+        assert ndevice == 0
+    elif hasattr(df, "_cols"):
         assert ndevice >= len(df._data)
     else:
         assert ndevice > 0
