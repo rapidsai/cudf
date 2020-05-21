@@ -48,7 +48,7 @@ namespace strings {
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match within each string.
- * @param mr Device memory resource used to allocate the returned table.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New table of strings columns.
  */
 std::unique_ptr<experimental::table> findall_re(

@@ -113,7 +113,7 @@ std::unique_ptr<column> fill(column_view const& input,
  * @param input_table Input table
  * @param count Non-nullable column of an integral type
  * @param check_count Whether to check count (negative values and overflow)
- * @param mr Device memory resource used to allocate the returned table
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(
@@ -139,7 +139,7 @@ std::unique_ptr<table> repeat(
  *
  * @param input_table Input table
  * @param count Non-null scalar of an integral type
- * @param mr Device memory resource used to allocate the returned table.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(

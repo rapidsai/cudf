@@ -156,7 +156,7 @@ class groupby {
    *
    * @param requests The set of columns to aggregate and the aggregations to
    * perform
-   * @param mr Device memory resource used to allocate the returned table and columns
+   * @param mr Device memory resource used to allocate the returned table and columns' device memory
    * @return Pair containing the table with each group's unique key and
    * a vector of aggregation_results for each request in the same order as
    * specified in `requests`.
@@ -187,7 +187,8 @@ class groupby {
    * and the `values` of the `groups` object will be `nullptr`.
    *
    * @param values Table representing values on which a groupby operation is to be performed
-   * @param mr Device memory resource used to allocate the returned tables in the returned groups
+   * @param mr Device memory resource used to allocate the returned tables's device memory in the
+   * returned groups
    * @return A `groups` object representing grouped keys and values
    */
   groups get_groups(cudf::table_view values             = {},

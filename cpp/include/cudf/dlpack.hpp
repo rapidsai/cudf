@@ -39,7 +39,7 @@ namespace cudf {
  * @throw cudf::logic_error if the any of the DLTensor fields are unsupported
  *
  * @param managed_tensor a 1D or 2D column-major (Fortran order) tensor
- * @param mr Device memory resource used to allocate the returned table.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  *
  * @return Table with a copy of the tensor data
  */

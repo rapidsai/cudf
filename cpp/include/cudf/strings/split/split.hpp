@@ -45,7 +45,7 @@ namespace strings {
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned table.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New table of strings columns.
  */
 std::unique_ptr<experimental::table> split(
@@ -73,7 +73,7 @@ std::unique_ptr<experimental::table> split(
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned table.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New strings columns.
  */
 std::unique_ptr<experimental::table> rsplit(

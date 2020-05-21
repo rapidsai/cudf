@@ -100,7 +100,7 @@ std::unique_ptr<table> gather(
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr Device memory resource used to allocate the returned table.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(
@@ -140,7 +140,7 @@ std::unique_ptr<table> scatter(
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr Device memory resource used to allocate the returned table.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(

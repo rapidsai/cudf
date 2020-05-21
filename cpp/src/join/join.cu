@@ -393,7 +393,7 @@ std::unique_ptr<experimental::table> construct_join_output_df(
  * full join.
  * Else, for every column in `left_on` and `right_on`, an output column will
  * be produced.
- * @param mr Device memory resource used to allocate the returned table
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @tparam join_kind The type of join to be performed
