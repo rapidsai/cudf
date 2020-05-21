@@ -80,7 +80,7 @@ std::unique_ptr<column> cast(column_view const& input,
 /**
  * @copydoc cudf::experimental::is_nan
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> is_nan(
   cudf::column_view const& input,
@@ -90,7 +90,7 @@ std::unique_ptr<column> is_nan(
 /**
  * @copydoc cudf::experimental::is_not_nan
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> is_not_nan(
   cudf::column_view const& input,

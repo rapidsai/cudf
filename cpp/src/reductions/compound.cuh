@@ -35,7 +35,7 @@ namespace compound {
  *                   The divisor used in calculations is N - ddof, where N
  *                   represents the number of elements.
  * @param[in] mr     Device memory resource used to allocate the returned scalar's device memory
- * @param[in] stream cuda stream
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @returns   Output scalar in device memory
  *
  * @tparam ElementType  the input column cudf dtype

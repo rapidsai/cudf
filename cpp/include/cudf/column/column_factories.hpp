@@ -50,8 +50,7 @@ std::unique_ptr<column> make_empty_column(data_type type);
  * @param[in] size The number of elements in the column
  * @param[in] state Optional, controls allocation/initialization of the
  * column's null mask. By default, no null mask is allocated.
- * @param[in] stream Optional stream on which to issue all memory allocation and
- * device kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> make_numeric_column(
@@ -75,8 +74,7 @@ std::unique_ptr<column> make_numeric_column(
  * @param[in] size The number of elements in the column
  * @param[in] null_mask Null mask to use for this column.
  * @param[in] null_count Optional number of nulls in the null_mask.
- * @param[in] stream Optional stream on which to issue all memory allocation and
- * device kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename B>
@@ -110,8 +108,7 @@ std::unique_ptr<column> make_numeric_column(
  * @param[in] size The number of elements in the column
  * @param[in] state Optional, controls allocation/initialization of the
  * column's null mask. By default, no null mask is allocated.
- * @param[in] stream Optional stream on which to issue all memory allocation and
- * device kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> make_timestamp_column(
@@ -135,8 +132,7 @@ std::unique_ptr<column> make_timestamp_column(
  * @param[in] size The number of elements in the column
  * @param[in] null_mask Null mask to use for this column.
  * @param[in] null_count Optional number of nulls in the null_mask.
- * @param[in] stream Optional stream on which to issue all memory allocation and
- * device kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename B>
@@ -170,8 +166,7 @@ std::unique_ptr<column> make_timestamp_column(
  * @param[in] size The number of elements in the column
  * @param[in] state Optional, controls allocation/initialization of the
  * column's null mask. By default, no null mask is allocated.
- * @param[in] stream Optional stream on which to issue all memory allocation and device
- * kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> make_fixed_width_column(
@@ -195,8 +190,7 @@ std::unique_ptr<column> make_fixed_width_column(
  * @param[in] size The number of elements in the column
  * @param[in] null_mask Null mask to use for this column.
  * @param[in] null_count Optional number of nulls in the null_mask.
- * @param[in] stream Optional stream on which to issue all memory allocation and device
- * kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename B>

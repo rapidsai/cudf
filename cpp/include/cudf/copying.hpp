@@ -478,7 +478,7 @@ struct contiguous_split_result {
  * @param input View of a table to split
  * @param splits A vector of indices where the view will be split
  * @param[in] mr Device memory resource used to allocate the returned result's device memory
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
  * buffer.
  */

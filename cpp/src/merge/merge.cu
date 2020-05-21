@@ -149,7 +149,7 @@ void materialize_bitmask(column_view const& left_col,
  * index columns
  * @param[in] nullable Flag indicating if at least one of the table_view arguments has nulls
  * (defaults to true)
- * @param[in] stream CUDA stream (defaults to nullptr)
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return A vector of merged indices
  */

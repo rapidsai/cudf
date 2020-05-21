@@ -32,7 +32,7 @@ namespace simple {
  *
  * @param[in] col    input column view
  * @param[in] mr Device memory resource used to allocate the returned scalar's device memory
- * @param[in] stream cuda stream
+ * @param[in] CUDA stream used for device memory operations and kernel launches.
  * @returns   Output scalar in device memory
  *
  * @tparam ElementType  the input column cudf dtype

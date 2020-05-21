@@ -89,7 +89,7 @@ std::vector<contiguous_split_result> contiguous_split(
  * @copydoc cudf::experimental::allocate_like(column_view const&, size_type, mask_allocation_policy,
  * rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> allocate_like(
   column_view const& input,
@@ -102,7 +102,7 @@ std::unique_ptr<column> allocate_like(
  * @copydoc cudf::experimental::copy_if_else( column_view const&, column_view const&,
  * column_view const&, rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
@@ -115,7 +115,7 @@ std::unique_ptr<column> copy_if_else(
  * @copydoc cudf::experimental::copy_if_else( scalar const&, column_view const&,
  * column_view const&, rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> copy_if_else(
   scalar const& lhs,
@@ -128,7 +128,7 @@ std::unique_ptr<column> copy_if_else(
  * @copydoc cudf::experimental::copy_if_else( column_view const&, scalar const&,
  * column_view const&, rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
@@ -141,7 +141,7 @@ std::unique_ptr<column> copy_if_else(
  * @copydoc cudf::experimental::copy_if_else( scalar const&, scalar const&,
  * column_view const&, rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> copy_if_else(
   scalar const& lhs,

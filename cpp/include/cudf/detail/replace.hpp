@@ -27,7 +27,7 @@ namespace detail {
  * @copydoc cudf::experimental::replace_nulls(column_view const&, column_view const&,
  * rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional stream in which to perform allocations
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
@@ -39,7 +39,7 @@ std::unique_ptr<column> replace_nulls(
  * @copydoc cudf::experimental::replace_nulls(column_view const&, scalar const&,
  * rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional stream in which to perform allocations
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> replace_nulls(
   column_view const& input,

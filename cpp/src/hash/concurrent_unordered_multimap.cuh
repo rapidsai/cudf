@@ -559,7 +559,7 @@ class concurrent_unordered_multimap {
    * @param[in] hash_function An optional hashing function
    * @param[in] equal An optional functor for comparing if two keys are equal
    * @param[in] a An optional functor for allocating the hash table memory
-   * @param[in] stream CUDA stream to use for device opertions.
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    */
   explicit concurrent_unordered_multimap(size_type n,
                                          const bool init             = true,

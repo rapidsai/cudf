@@ -46,7 +46,7 @@ namespace detail {
  *                             include in the returned table.
  * @param[in] mr               Device memory resource to used to allocate the returned table's
  *                             device memory
- * @param[in] stream           Cuda stream
+ * @param[in] stream           CUDA stream used for device memory operations and kernel launches.
  * @tparam    join_kind        Indicates whether to do LEFT_SEMI_JOIN or LEFT_ANTI_JOIN
  *
  * @returns                    Result of joining `left` and `right` tables on the columns

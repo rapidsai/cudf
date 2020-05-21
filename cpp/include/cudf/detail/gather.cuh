@@ -422,7 +422,7 @@ void gather_bitmask(table_view const& source,
  * source columns to rows in the destination columns
  * @param[in] nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
- * @param[in] stream The CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @return cudf::table Result of the gather
  */
 template <typename MapIterator>

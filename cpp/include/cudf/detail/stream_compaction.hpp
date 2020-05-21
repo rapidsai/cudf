@@ -27,7 +27,7 @@ namespace detail {
  * @copydoc cudf::experimental::drop_nulls(table_view const&, std::vector<size_type> const&,
  *                                         cudf::size_type, rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<experimental::table> drop_nulls(
   table_view const& input,
@@ -39,7 +39,7 @@ std::unique_ptr<experimental::table> drop_nulls(
 /**
  * @copydoc cudf::experimental::apply_boolean_mask
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<experimental::table> apply_boolean_mask(
   table_view const& input,
@@ -50,7 +50,7 @@ std::unique_ptr<experimental::table> apply_boolean_mask(
 /**
  * @copydoc cudf::experimental::drop_duplicates
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<experimental::table> drop_duplicates(
   table_view const& input,
@@ -63,7 +63,7 @@ std::unique_ptr<experimental::table> drop_duplicates(
 /**
  * @copydoc cudf::experimental::unique_count
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 cudf::size_type unique_count(column_view const& input,
                              null_policy null_handling,
