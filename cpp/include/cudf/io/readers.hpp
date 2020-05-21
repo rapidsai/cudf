@@ -76,7 +76,7 @@ class reader {
   /**
    * @brief Constructor from a file path
    *
-   * @param filepath Path to the file contatining the whole dataset
+   * @param filepath Path to the file containing the whole dataset
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -87,7 +87,7 @@ class reader {
   /**
    * @brief Constructor from a datasource
    *
-   * @param source Input data source object to read the dataset from
+   * @param source Input datasource object to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -167,7 +167,7 @@ class reader {
   /**
    * @brief Constructor from a file path
    *
-   * @param filepath Path to the file contatining the whole dataset
+   * @param filepath Path to the file containing the whole dataset
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -178,7 +178,7 @@ class reader {
   /**
    * @brief Constructor from a datasource
    *
-   * @param source Input data source object to read the dataset from
+   * @param source Input datasource object to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -315,7 +315,7 @@ class reader {
   /**
    * @brief Constructor from a file path
    *
-   * @param filepath Path to the file contatining the whole dataset
+   * @param filepath Path to the file containing the whole dataset
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -326,7 +326,7 @@ class reader {
   /**
    * @brief Constructor from a datasource
    *
-   * @param source Input data source object to read the dataset from
+   * @param source Input datasource object to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -432,7 +432,7 @@ class reader {
   /**
    * @brief Constructor from a file path
    *
-   * @param filepath Path to the file contatining the whole dataset
+   * @param filepath Path to the file containing the whole dataset
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -443,7 +443,7 @@ class reader {
   /**
    * @brief Constructor from a datasource
    *
-   * @param source Input data source object to read the dataset from
+   * @param source Input datasource object to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -552,7 +552,7 @@ class reader {
   /**
    * @brief Constructor from a file path
    *
-   * @param filepath Path to the file contatining the whole dataset
+   * @param filepath Path to the file containing the whole dataset
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
@@ -563,7 +563,7 @@ class reader {
   /**
    * @brief Constructor from a datasource
    *
-   * @param source Input data source object to read the dataset from
+   * @param source Input datasource object to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */

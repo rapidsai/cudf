@@ -29,7 +29,7 @@ namespace io {
 /**
  * @brief Implementation class for reading from an Apache Arrow file. The file
  * could be a memory-mapped file or other implementation supported by Arrow.
- **/
+ */
 class arrow_io_source : public datasource {
   class arrow_io_buffer : public buffer {
     std::shared_ptr<arrow::Buffer> arrow_buffer;
@@ -77,7 +77,7 @@ class arrow_io_source : public datasource {
  *
  * Unlike Arrow's memory mapped IO class, this implementation allows memory
  * mapping a subset of the file where the starting offset may not be zero.
- **/
+ */
 class memory_mapped_source : public datasource {
   struct file_wrapper {
     const int fd = -1;
@@ -98,11 +98,10 @@ class memory_mapped_source : public datasource {
  public:
   explicit memory_mapped_source(const char *filepath, size_t offset, size_t size)
   {
-    auto file = file_wrapper(filepath);
+    auto const file = file_wrapper(filepath);
     CUDF_EXPECTS(file.fd != -1, "Cannot open file");
 
-    struct stat st {
-    };
+    struct stat st;
     CUDF_EXPECTS(fstat(file.fd, &st) != -1, "Cannot query file size");
     file_size_ = static_cast<size_t>(st.st_size);
 
@@ -116,22 +115,25 @@ class memory_mapped_source : public datasource {
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    // Clamp length to available data in the mapped region
     CUDF_EXPECTS(offset >= map_offset_, "Requested offset is outside mapping");
-    size = std::min(size, map_size_ - (offset - map_offset_));
+
+    // Clamp length to available data in the mapped region
+    auto const read_size = std::min(size, map_size_ - (offset - map_offset_));
 
     return std::make_unique<memory_mapped_buffer>(
-      static_cast<uint8_t *>(map_addr_) + (offset - map_offset_), size);
+      static_cast<uint8_t *>(map_addr_) + (offset - map_offset_), read_size);
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t *dst) override
   {
     CUDF_EXPECTS(offset >= map_offset_, "Requested offset is outside mapping");
-    size = std::min(size, map_size_ - (offset - map_offset_));
 
-    auto src = static_cast<uint8_t *>(map_addr_) + (offset - map_offset_);
-    std::memcpy(dst, src, size);
-    return size;
+    // Clamp length to available data in the mapped region
+    auto const read_size = std::min(size, map_size_ - (offset - map_offset_));
+
+    auto const src = static_cast<uint8_t *>(map_addr_) + (offset - map_offset_);
+    std::memcpy(dst, src, read_size);
+    return read_size;
   }
 
   size_t size() const override { return file_size_; }
@@ -139,9 +141,10 @@ class memory_mapped_source : public datasource {
  private:
   void map(int fd, size_t offset, size_t size)
   {
-    // Offset for `mmap()` must be page aligned
-    const auto map_offset = offset & ~(sysconf(_SC_PAGESIZE) - 1);
     CUDF_EXPECTS(offset < file_size_, "Offset is past end of file");
+
+    // Offset for `mmap()` must be page aligned
+    auto const map_offset = offset & ~(sysconf(_SC_PAGESIZE) - 1);
 
     // Clamp length to available data in the file
     if (size == 0) {
@@ -170,7 +173,10 @@ class memory_mapped_source : public datasource {
 /**
  * @brief Wrapper class for user implemented data sources
  *
- **/
+ * Holds the user-implemented object with a non-owning pointer; The user object is not deleted
+ * when the wrapper object is destroyed.
+ * All API calls are forwarded to the user datasource object.
+ */
 class user_datasource_wrapper : public datasource {
  public:
   explicit user_datasource_wrapper(datasource *const source) : source(source) {}

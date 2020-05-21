@@ -1078,19 +1078,18 @@ TEST_F(CsvReaderTest, EmptyFileWithWriter)
 
 class TestSource : public cudf::io::datasource {
   class TestBuffer : public buffer {
-    uint8_t* _data;
-    size_t _size;
+    uint8_t* const _data;
+    size_t const _size;
 
    public:
     TestBuffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
 
     virtual size_t size() const override { return _size; }
-
     virtual const uint8_t* data() const override { return _data; }
   };
 
  public:
-  std::string str;
+  std::string const str;
 
   TestSource(std::string s) : str(std::move(s)) {}
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
@@ -1101,36 +1100,33 @@ class TestSource : public cudf::io::datasource {
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
-    size = min(size, str.size() - offset);
+    auto const read_size = min(size, str.size() - offset);
     memcpy(dst, str.data() + offset, size);
-    return size;
+    return read_size;
   }
 
   size_t size() const override { return str.size(); }
 };
 
-TEST_F(CsvReaderTest, UserSource)
+TEST_F(CsvReaderTest, UserImplementedSource)
 {
   constexpr auto num_rows = 10;
   auto int8_values        = random_values<int8_t>(num_rows);
   auto int16_values       = random_values<int16_t>(num_rows);
   auto int32_values       = random_values<int32_t>(num_rows);
 
-  std::ostringstream line;
-  auto filepath = temp_env->get_temp_dir() + "MultiColumn.csv";
-  {
-    for (int i = 0; i < num_rows; ++i) {
-      line << std::to_string(int8_values[i]) << "," << int16_values[i] << "," << int32_values[i]
-           << "\n";
-    }
+  std::ostringstream csv_data;
+  for (int i = 0; i < num_rows; ++i) {
+    csv_data << std::to_string(int8_values[i]) << "," << int16_values[i] << "," << int32_values[i]
+             << "\n";
   }
-  TestSource source{line.str()};
+  TestSource source{csv_data.str()};
   cudf_io::read_csv_args in_args{cudf_io::source_info{&source}};
   in_args.dtype  = {"int8", "int16", "int32"};
   in_args.header = -1;
   auto result    = cudf_io::read_csv(in_args);
 
-  const auto view = result.tbl->view();
+  auto const view = result.tbl->view();
   expect_column_data_equal(int8_values, view.column(0));
   expect_column_data_equal(int16_values, view.column(1));
   expect_column_data_equal(int32_values, view.column(2));

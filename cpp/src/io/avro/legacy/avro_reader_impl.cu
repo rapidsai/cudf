@@ -65,7 +65,7 @@ class avro_metadata : public avro::file_metadata {
    **/
   void init_and_select_rows(int &row_start, int &row_count)
   {
-    const auto buffer{source->host_read(0, source->size())};
+    const auto buffer = source->host_read(0, source->size());
     avro::container pod(buffer->data(), buffer->size());
     CUDF_EXPECTS(pod.parse(this, row_count, row_start), "Cannot parse metadata");
     print_metadata();
