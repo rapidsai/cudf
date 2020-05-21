@@ -109,7 +109,7 @@ def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
         dtype=dtype,
         r_idx_type="i",
     )
-    del test_pdf.columns.name
+    test_pdf.columns.name = None
 
     # Randomly but reproducibly mark subset of rows as invalid
     random.seed(1337)
@@ -426,6 +426,10 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
 def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
     pdf_fname = tmpdir.join("pdf.parquet")
     gdf_fname = tmpdir.join("gdf.parquet")
+
+    if len(pdf) == 0:
+        pdf = pdf.reset_index(drop=True)
+        gdf = gdf.reset_index(drop=True)
 
     pdf.to_parquet(pdf_fname.strpath)
     gdf.to_parquet(gdf_fname.strpath, engine="pyarrow")
