@@ -1076,24 +1076,24 @@ TEST_F(CsvReaderTest, EmptyFileWithWriter)
   EXPECT_THROW(write_csv_helper(filepath, empty_table, false), cudf::logic_error);
 }
 
-class TestBuffer : public cudf::io::buffer {
-  uint8_t* _data;
-  size_t _size;
-
- public:
-  TestBuffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
-
-  virtual size_t size() const override { return _size; }
-
-  virtual const uint8_t* data() const override { return _data; }
-};
-
 class TestSource : public cudf::io::datasource {
+  class TestBuffer : public buffer {
+    uint8_t* _data;
+    size_t _size;
+
+   public:
+    TestBuffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
+
+    virtual size_t size() const override { return _size; }
+
+    virtual const uint8_t* data() const override { return _data; }
+  };
+
  public:
   std::string str;
 
   TestSource(std::string s) : str(std::move(s)) {}
-  std::unique_ptr<cudf::io::buffer> host_read(size_t offset, size_t size) override
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     size = min(size, str.size() - offset);
     return std::make_unique<TestBuffer>((uint8_t*)str.data() + offset, size);

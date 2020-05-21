@@ -203,7 +203,7 @@ class user_datasource_wrapper : public datasource {
   datasource *const source;
 };
 
-std::unique_ptr<datasource> datasource::create(const std::string filepath,
+std::unique_ptr<datasource> datasource::create(const std::string &filepath,
                                                size_t offset,
                                                size_t size)
 {
@@ -211,11 +211,11 @@ std::unique_ptr<datasource> datasource::create(const std::string filepath,
   return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, size);
 }
 
-std::unique_ptr<datasource> datasource::create(const char *data, size_t length)
+std::unique_ptr<datasource> datasource::create(const char *data, size_t size)
 {
   // Use Arrow IO buffer class for zero-copy reads of host memory
   return std::make_unique<arrow_io_source>(
-    std::make_shared<arrow::io::BufferReader>(reinterpret_cast<const uint8_t *>(data), length));
+    std::make_shared<arrow::io::BufferReader>(reinterpret_cast<const uint8_t *>(data), size));
 }
 
 std::unique_ptr<datasource> datasource::create(std::shared_ptr<arrow::io::RandomAccessFile> file)
