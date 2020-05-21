@@ -948,7 +948,7 @@ class DataFrame(Frame, Serializable):
         ncols = 19 if ncols in [20, 21] else ncols
         return ncols, nrows
 
-    def clean_renderable_dataframe(self, output):
+    def _clean_renderable_dataframe(self, output):
         """
         the below is permissible: null in a datetime to_pandas() becomes
         NaT, which is then replaced with null in this processing step.
@@ -967,7 +967,7 @@ class DataFrame(Frame, Serializable):
             )
         return "\n".join(lines)
 
-    def get_renderable_dataframe(self):
+    def _get_renderable_dataframe(self):
         """
         takes rows and columns from pandas settings or estimation from size.
         pulls quadrents based off of some known parameters then style for
@@ -1031,12 +1031,12 @@ class DataFrame(Frame, Serializable):
         return output
 
     def __repr__(self):
-        output = self.get_renderable_dataframe()
-        return self.clean_renderable_dataframe(output)
+        output = self._get_renderable_dataframe()
+        return self._clean_renderable_dataframe(output)
 
     def _repr_html_(self):
         lines = (
-            self.get_renderable_dataframe()
+            self._get_renderable_dataframe()
             .to_pandas()
             ._repr_html_()
             .split("\n")
@@ -1051,7 +1051,7 @@ class DataFrame(Frame, Serializable):
         return "\n".join(lines)
 
     def _repr_latex_(self):
-        return self.get_renderable_dataframe().to_pandas()._repr_latex_()
+        return self._get_renderable_dataframe().to_pandas()._repr_latex_()
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
