@@ -28,7 +28,7 @@ struct dispatch_map_type {
     size_type num_destination_rows,
     bounds check_bounds,
     out_of_bounds oob,
-    negative_indices neg_indices        = negative_indices::NOT_ALLOWED,
+    negative_indices neg_indices,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream                 = 0)
   {

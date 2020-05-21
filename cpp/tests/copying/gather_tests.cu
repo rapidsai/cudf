@@ -72,7 +72,8 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
     cudf::experimental::detail::gather(source_table,
                                        gather_map,
                                        cudf::experimental::detail::bounds::NO_CHECK,
-                                       cudf::experimental::detail::out_of_bounds::IGNORE);
+                                       cudf::experimental::detail::out_of_bounds::IGNORE,
+                                       cudf::experimental::detail::negative_indices::NOT_ALLOWED);
 
   auto expect_data =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i % 2) ? 0 : i; });
@@ -336,7 +337,8 @@ TEST_F(GatherTestStr, Gather)
     cudf::experimental::detail::gather(source_table,
                                        gather_map,
                                        cudf::experimental::detail::bounds::NO_CHECK,
-                                       cudf::experimental::detail::out_of_bounds::IGNORE);
+                                       cudf::experimental::detail::out_of_bounds::IGNORE,
+                                       cudf::experimental::detail::negative_indices::NOT_ALLOWED);
 
   std::vector<const char*> h_expected;
   std::vector<int32_t> expected_validity;
@@ -367,7 +369,8 @@ TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
     cudf::experimental::detail::gather(source_table,
                                        gather_map,
                                        cudf::experimental::detail::bounds::NO_CHECK,
-                                       cudf::experimental::detail::out_of_bounds::IGNORE);
+                                       cudf::experimental::detail::out_of_bounds::IGNORE,
+                                       cudf::experimental::detail::negative_indices::NOT_ALLOWED);
 
   std::vector<const char*> h_expected;
   std::vector<int32_t> expected_validity;

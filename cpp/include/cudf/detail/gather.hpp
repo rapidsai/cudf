@@ -46,9 +46,9 @@ enum class negative_indices : bool { ALLOW, NOT_ALLOWED };
  */
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
-                              bounds check_bounds                 = bounds::NO_CHECK,
-                              out_of_bounds oob                   = out_of_bounds::DONT_IGNORE,
-                              negative_indices neg_indices        = negative_indices::NOT_ALLOWED,
+                              bounds check_bounds,
+                              out_of_bounds oob,
+                              negative_indices neg_indices,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream                 = 0);
 }  // namespace detail
