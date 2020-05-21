@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+- PR #5245 Add column reduction benchmark
 
 ## Bug Fixes
 
