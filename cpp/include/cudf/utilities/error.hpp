@@ -114,9 +114,6 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
  * cudaSuccess, invokes cudaGetLastError() to clear the error and throws an
  * exception detailing the CUDA error that occurred
  *
- * This macro supersedes GDF_REQUIRE and should be preferred in all instances.
- * GDF_REQUIRE should be considered deprecated.
- *
  **/
 #define CUDA_TRY(call)                                            \
   do {                                                            \

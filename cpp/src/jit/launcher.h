@@ -17,8 +17,7 @@
  * limitations under the License.
  */
 
-#ifndef GDF_JIT_LAUNCHER_H
-#define GDF_JIT_LAUNCHER_H
+#pragma once
 
 #include <jit/cache.h>
 #include <chrono>
@@ -88,7 +87,6 @@ class launcher {
    *  contained in the members of `this`
    *
    * @tparam All parameters to launch the kernel
-   * @return Return GDF_SUCCESS if successful
    */
   template <typename... Args>
   void launch(Args... args)
@@ -107,5 +105,3 @@ class launcher {
 
 }  // namespace jit
 }  // namespace cudf
-
-#endif

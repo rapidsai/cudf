@@ -364,17 +364,12 @@ void reader::impl::set_data_types(cudaStream_t stream)
       });
     if (is_dict) {
       std::map<std::string, data_type> col_type_map;
-      // std::map<std::string, gdf_dtype_extra_info> col_type_info_map;
+
       for (const auto &ts : args_.dtype) {
         const size_t colon_idx = ts.find(":");
         const std::string col_name(ts.begin(), ts.begin() + colon_idx);
         const std::string type_str(ts.begin() + colon_idx + 1, ts.end());
-        /*
-        std::tie(
-          col_type_map[col_name],
-          col_type_info_map[col_name]
-        ) = convertStringToDtype(type_str);
-        */
+
         col_type_map[col_name] = convert_string_to_dtype(type_str);
       }
 
@@ -394,9 +389,6 @@ void reader::impl::set_data_types(cudaStream_t stream)
   } else {
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
     const auto num_columns = metadata.column_names.size();
-
-    // dtypes_extra_info_ = std::vector<gdf_dtype_extra_info>(num_columns, gdf_dtype_extra_info{
-    // TIME_UNIT_NONE });
 
     rmm::device_vector<cudf::experimental::io::json::ColumnInfo> d_column_infos(
       num_columns, cudf::experimental::io::json::ColumnInfo{});

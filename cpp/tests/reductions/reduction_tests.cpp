@@ -544,7 +544,7 @@ TEST_F(ReductionDtypeTest, different_precision)
                                                    sum_agg,
                                                    cudf::data_type(cudf::TIMESTAMP_MICROSECONDS));
 
-  /*TODO enable after category support
+  /*TODO reimplement after Dictionary support
     this->reduction_test<cudf::timestamp_s, cudf::category>
         (int_values, static_cast<cudf::category>(expected_value), false,
          sum_agg, cudf::data_type(cudf::CATEGORY));
