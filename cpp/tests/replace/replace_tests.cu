@@ -1,5 +1,5 @@
 /*
- * Copyright 2019, NVIDIA CORPORATION.
+ * Copyright 2019-20, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
@@ -295,7 +295,7 @@ struct ReplaceTest : cudf::test::BaseFixture {
   ~ReplaceTest() {}
 };
 
-/** --------------------------------------------------------------------------*
+/**
  * @brief Main method for testing.
  * Initializes the input columns with the given values. Then compute the actual
  * resultant column by invoking `cudf::find_and_replace_all()` and then
@@ -307,7 +307,7 @@ struct ReplaceTest : cudf::test::BaseFixture {
  * @param input_column_valid The mask for replace column
  * @param replacement_values_valid The mask for new values
  * @param print Optionally print the set of columns for debug
- * -------------------------------------------------------------------------*/
+ */
 template <typename T>
 void test_replace(
   std::vector<T> const& input_column,
