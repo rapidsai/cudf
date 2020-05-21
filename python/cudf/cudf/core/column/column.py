@@ -1271,11 +1271,13 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             )
 
         elif isinstance(arbitrary, pa.NullArray):
-            new_dtype = pd.api.types.pandas_dtype(dtype)
             if (type(dtype) == str and dtype == "empty") or dtype is None:
                 new_dtype = pd.api.types.pandas_dtype(
                     arbitrary.type.to_pandas_dtype()
                 )
+            else:
+                new_dtype = pd.api.types.pandas_dtype(dtype)
+
 
             if is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
