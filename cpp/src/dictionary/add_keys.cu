@@ -86,7 +86,7 @@ std::unique_ptr<column> add_keys(
     cudf::experimental::detail::gather(table_view{{map_indices->view()}},
                                        indices_view,
                                        experimental::detail::out_of_bounds_policy::IGNORE,
-                                       experimental::detail::negative_indices::NOT_ALLOWED,
+                                       experimental::detail::negative_indices_policy::NOT_ALLOWED,
                                        mr,
                                        stream)
       ->release();

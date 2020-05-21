@@ -150,7 +150,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
       cudf::experimental::detail::gather(values,
                                          helper().key_sort_order(),
                                          experimental::detail::out_of_bounds_policy::NULLIFY,
-                                         experimental::detail::negative_indices::NOT_ALLOWED,
+                                         experimental::detail::negative_indices_policy::NOT_ALLOWED,
                                          mr);
     return groupby::groups{
       std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};

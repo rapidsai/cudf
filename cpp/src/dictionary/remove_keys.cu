@@ -90,7 +90,7 @@ std::unique_ptr<column> remove_keys_fn(
     experimental::detail::gather(table_view{{map_indices_view}},
                                  indices_view,
                                  experimental::detail::out_of_bounds_policy::NULLIFY,
-                                 experimental::detail::negative_indices::NOT_ALLOWED,
+                                 experimental::detail::negative_indices_policy::NOT_ALLOWED,
                                  mr,
                                  stream)
       ->release();

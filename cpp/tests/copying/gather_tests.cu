@@ -68,11 +68,11 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
                                                              gather_map_data + (source_size * 2));
 
   cudf::table_view source_table({source_column});
-  std::unique_ptr<cudf::experimental::table> result =
-    cudf::experimental::detail::gather(source_table,
-                                       gather_map,
-                                       cudf::experimental::detail::out_of_bounds_policy::IGNORE,
-                                       cudf::experimental::detail::negative_indices::NOT_ALLOWED);
+  std::unique_ptr<cudf::experimental::table> result = cudf::experimental::detail::gather(
+    source_table,
+    gather_map,
+    cudf::experimental::detail::out_of_bounds_policy::IGNORE,
+    cudf::experimental::detail::negative_indices_policy::NOT_ALLOWED);
 
   auto expect_data =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i % 2) ? 0 : i; });
@@ -332,11 +332,11 @@ TEST_F(GatherTestStr, Gather)
 
   std::vector<int32_t> h_map{4, 1, 5, 2, 7};
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map(h_map.begin(), h_map.end());
-  auto results =
-    cudf::experimental::detail::gather(source_table,
-                                       gather_map,
-                                       cudf::experimental::detail::out_of_bounds_policy::IGNORE,
-                                       cudf::experimental::detail::negative_indices::NOT_ALLOWED);
+  auto results = cudf::experimental::detail::gather(
+    source_table,
+    gather_map,
+    cudf::experimental::detail::out_of_bounds_policy::IGNORE,
+    cudf::experimental::detail::negative_indices_policy::NOT_ALLOWED);
 
   std::vector<const char*> h_expected;
   std::vector<int32_t> expected_validity;
@@ -363,11 +363,11 @@ TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
 
   std::vector<int32_t> h_map{3, 4, 0, 0};
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map(h_map.begin(), h_map.end());
-  auto results =
-    cudf::experimental::detail::gather(source_table,
-                                       gather_map,
-                                       cudf::experimental::detail::out_of_bounds_policy::IGNORE,
-                                       cudf::experimental::detail::negative_indices::NOT_ALLOWED);
+  auto results = cudf::experimental::detail::gather(
+    source_table,
+    gather_map,
+    cudf::experimental::detail::out_of_bounds_policy::IGNORE,
+    cudf::experimental::detail::negative_indices_policy::NOT_ALLOWED);
 
   std::vector<const char*> h_expected;
   std::vector<int32_t> expected_validity;

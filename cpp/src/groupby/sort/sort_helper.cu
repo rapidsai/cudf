@@ -277,7 +277,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
     cudf::experimental::detail::gather(table_view({values}),
                                        gather_map,
                                        experimental::detail::out_of_bounds_policy::NULLIFY,
-                                       experimental::detail::negative_indices::NOT_ALLOWED,
+                                       experimental::detail::negative_indices_policy::NOT_ALLOWED,
                                        mr,
                                        stream);
 
@@ -293,7 +293,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
     cudf::experimental::detail::gather(table_view({values}),
                                        gather_map,
                                        experimental::detail::out_of_bounds_policy::NULLIFY,
-                                       experimental::detail::negative_indices::NOT_ALLOWED,
+                                       experimental::detail::negative_indices_policy::NOT_ALLOWED,
                                        mr,
                                        stream);
 
@@ -315,12 +315,13 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::mr::device_memory_r
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::mr::device_memory_resource* mr,
                                                         cudaStream_t stream)
 {
-  return cudf::experimental::detail::gather(_keys,
-                                            key_sort_order(),
-                                            experimental::detail::out_of_bounds_policy::NULLIFY,
-                                            experimental::detail::negative_indices::NOT_ALLOWED,
-                                            mr,
-                                            stream);
+  return cudf::experimental::detail::gather(
+    _keys,
+    key_sort_order(),
+    experimental::detail::out_of_bounds_policy::NULLIFY,
+    experimental::detail::negative_indices_policy::NOT_ALLOWED,
+    mr,
+    stream);
 }
 
 }  // namespace sort

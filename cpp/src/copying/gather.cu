@@ -27,12 +27,13 @@ struct dispatch_map_type {
     column_view const& gather_map,
     size_type num_destination_rows,
     out_of_bounds_policy bounds,
-    negative_indices neg_indices,
+    negative_indices_policy neg_indices,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream                 = 0)
   {
     if (bounds == out_of_bounds_policy::FAIL) {
-      cudf::size_type begin = neg_indices == negative_indices::ALLOW ? -source_table.num_rows() : 0;
+      cudf::size_type begin =
+        neg_indices == negative_indices_policy::ALLOW ? -source_table.num_rows() : 0;
       CUDF_EXPECTS(num_destination_rows ==
                      thrust::count_if(rmm::exec_policy()->on(0),
                                       gather_map.begin<map_type>(),
@@ -41,7 +42,7 @@ struct dispatch_map_type {
                    "Index out of bounds.");
     }
 
-    if (neg_indices == negative_indices::ALLOW) {
+    if (neg_indices == negative_indices_policy::ALLOW) {
       auto idx_converter = index_converter<map_type>{source_table.num_rows()};
       return gather(source_table,
                     thrust::make_transform_iterator(gather_map.begin<map_type>(), idx_converter),
@@ -72,7 +73,7 @@ struct dispatch_map_type {
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
                               out_of_bounds_policy bounds,
-                              negative_indices neg_indices,
+                              negative_indices_policy neg_indices,
                               rmm::mr::device_memory_resource* mr,
                               cudaStream_t stream)
 {
@@ -104,7 +105,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
     source_table,
     gather_map,
     check_bounds ? detail::out_of_bounds_policy::FAIL : detail::out_of_bounds_policy::NULLIFY,
-    detail::negative_indices::ALLOW,
+    detail::negative_indices_policy::ALLOW,
     mr);
 }
 

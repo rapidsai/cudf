@@ -204,7 +204,7 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
         null_removed_map,
         argmin_result.nullable() ? experimental::detail::out_of_bounds_policy::IGNORE
                                  : experimental::detail::out_of_bounds_policy::NULLIFY,
-        experimental::detail::negative_indices::NOT_ALLOWED,
+        experimental::detail::negative_indices_policy::NOT_ALLOWED,
         mr,
         stream);
       return std::move(transformed_result->release()[0]);
@@ -241,7 +241,7 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
         null_removed_map,
         argmax_result.nullable() ? experimental::detail::out_of_bounds_policy::IGNORE
                                  : experimental::detail::out_of_bounds_policy::NULLIFY,
-        experimental::detail::negative_indices::NOT_ALLOWED,
+        experimental::detail::negative_indices_policy::NOT_ALLOWED,
         mr,
         stream);
       return std::move(transformed_result->release()[0]);

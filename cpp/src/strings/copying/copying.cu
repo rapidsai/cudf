@@ -54,7 +54,7 @@ std::unique_ptr<cudf::column> slice(strings_column_view const& strings,
     experimental::detail::gather(table_view{{strings.parent()}},
                                  indices_view,
                                  experimental::detail::out_of_bounds_policy::NULLIFY,
-                                 experimental::detail::negative_indices::NOT_ALLOWED,
+                                 experimental::detail::negative_indices_policy::NOT_ALLOWED,
                                  mr,
                                  stream)
       ->release();

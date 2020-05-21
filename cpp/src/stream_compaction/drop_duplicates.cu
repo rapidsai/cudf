@@ -208,7 +208,7 @@ std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
   return detail::gather(input,
                         unique_indices_view,
                         experimental::detail::out_of_bounds_policy::NULLIFY,
-                        experimental::detail::negative_indices::NOT_ALLOWED,
+                        experimental::detail::negative_indices_policy::NOT_ALLOWED,
                         mr,
                         stream);
 }

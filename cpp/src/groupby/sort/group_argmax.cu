@@ -54,7 +54,7 @@ std::unique_ptr<column> group_argmax(column_view const& values,
     null_removed_indices,
     indices->nullable() ? experimental::detail::out_of_bounds_policy::IGNORE
                         : experimental::detail::out_of_bounds_policy::NULLIFY,
-    experimental::detail::negative_indices::NOT_ALLOWED,
+    experimental::detail::negative_indices_policy::NOT_ALLOWED,
     mr,
     stream);
 
