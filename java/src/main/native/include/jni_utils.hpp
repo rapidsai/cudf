@@ -657,11 +657,11 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 }
 
-jobject contiguous_table_from(JNIEnv *env, cudf::experimental::contiguous_split_result &split);
+jobject contiguous_table_from(JNIEnv *env, cudf::contiguous_split_result &split);
 
 native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length);
 
-std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
+std::unique_ptr<cudf::aggregation> map_jni_aggregation(jint op);
 
 jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result);
 

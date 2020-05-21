@@ -109,9 +109,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sequence(JNIEnv *env, j
     auto step = reinterpret_cast<cudf::scalar const *>(j_step);
     std::unique_ptr<cudf::column> col;
     if (step) {
-      col = cudf::experimental::sequence(row_count, *initial_val, *step);
+      col = cudf::sequence(row_count, *initial_val, *step);
     } else {
-      col = cudf::experimental::sequence(row_count, *initial_val);
+      col = cudf::sequence(row_count, *initial_val);
     }
     return reinterpret_cast<jlong>(col.release());
   }
@@ -134,7 +134,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
     } else if (cudf::is_fixed_width(dtype)) {
       col = cudf::make_fixed_width_column(dtype, row_count, mask_state);
       auto mut_view = col->mutable_view();
-      cudf::experimental::fill_in_place(mut_view, 0, row_count, *scalar_val);
+      cudf::fill_in_place(mut_view, 0, row_count, *scalar_val);
     } else if (dtype.id() == cudf::type_id::STRING) {
       // create a string column of all empty strings to fill (cheapest string column to create)
       auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, row_count + 1,
@@ -144,7 +144,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
       auto str_col = cudf::make_strings_column(row_count, std::move(offsets), std::move(data), 0,
                                                std::move(mask_buffer));
 
-      col = cudf::experimental::fill(str_col->view(), 0, row_count, *scalar_val);
+      col = cudf::fill(str_col->view(), 0, row_count, *scalar_val);
     } else {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
     }
@@ -161,7 +161,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_replaceNulls(JNIEnv *en
     cudf::jni::auto_set_device(env);
     cudf::column_view col = *reinterpret_cast<cudf::column_view *>(j_col);
     auto val = reinterpret_cast<cudf::scalar *>(j_scalar);
-    std::unique_ptr<cudf::column> result = cudf::experimental::replace_nulls(col, *val);
+    std::unique_ptr<cudf::column> result = cudf::replace_nulls(col, *val);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -179,8 +179,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_ifElseVV(JNIEnv *env, j
     auto pred_vec = reinterpret_cast<cudf::column_view *>(j_pred_vec);
     auto true_vec = reinterpret_cast<cudf::column_view *>(j_true_vec);
     auto false_vec = reinterpret_cast<cudf::column_view *>(j_false_vec);
-    std::unique_ptr<cudf::column> result =
-        cudf::experimental::copy_if_else(*true_vec, *false_vec, *pred_vec);
+    std::unique_ptr<cudf::column> result = cudf::copy_if_else(*true_vec, *false_vec, *pred_vec);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -198,8 +197,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_ifElseVS(JNIEnv *env, j
     auto pred_vec = reinterpret_cast<cudf::column_view *>(j_pred_vec);
     auto true_vec = reinterpret_cast<cudf::column_view *>(j_true_vec);
     auto false_scalar = reinterpret_cast<cudf::scalar *>(j_false_scalar);
-    std::unique_ptr<cudf::column> result =
-        cudf::experimental::copy_if_else(*true_vec, *false_scalar, *pred_vec);
+    std::unique_ptr<cudf::column> result = cudf::copy_if_else(*true_vec, *false_scalar, *pred_vec);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -217,8 +215,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_ifElseSV(JNIEnv *env, j
     auto pred_vec = reinterpret_cast<cudf::column_view *>(j_pred_vec);
     auto true_scalar = reinterpret_cast<cudf::scalar *>(j_true_scalar);
     auto false_vec = reinterpret_cast<cudf::column_view *>(j_false_vec);
-    std::unique_ptr<cudf::column> result =
-        cudf::experimental::copy_if_else(*true_scalar, *false_vec, *pred_vec);
+    std::unique_ptr<cudf::column> result = cudf::copy_if_else(*true_scalar, *false_vec, *pred_vec);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -237,7 +234,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_ifElseSS(JNIEnv *env, j
     auto true_scalar = reinterpret_cast<cudf::scalar *>(j_true_scalar);
     auto false_scalar = reinterpret_cast<cudf::scalar *>(j_false_scalar);
     std::unique_ptr<cudf::column> result =
-        cudf::experimental::copy_if_else(*true_scalar, *false_scalar, *pred_vec);
+        cudf::copy_if_else(*true_scalar, *false_scalar, *pred_vec);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -252,7 +249,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_reduce(JNIEnv *env, jcl
     auto col = reinterpret_cast<cudf::column_view *>(j_col_view);
     auto agg = cudf::jni::map_jni_aggregation(agg_type);
     cudf::data_type out_dtype{static_cast<cudf::type_id>(j_dtype)};
-    std::unique_ptr<cudf::scalar> result = cudf::experimental::reduce(*col, agg, out_dtype);
+    std::unique_ptr<cudf::scalar> result = cudf::reduce(*col, agg, out_dtype);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -269,10 +266,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_quantile(JNIEnv *env, j
     std::vector<double> quantiles(native_quantiles.data(),
                                   native_quantiles.data() + native_quantiles.size());
     cudf::column_view *n_input_column = reinterpret_cast<cudf::column_view *>(input_column);
-    cudf::experimental::interpolation n_quantile_method =
-        static_cast<cudf::experimental::interpolation>(quantile_method);
+    cudf::interpolation n_quantile_method = static_cast<cudf::interpolation>(quantile_method);
     std::unique_ptr<cudf::column> result =
-        cudf::experimental::quantile(*n_input_column, quantiles, n_quantile_method);
+        cudf::quantile(*n_input_column, quantiles, n_quantile_method);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -292,11 +288,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_rollingWindow(
 
     std::unique_ptr<cudf::column> ret;
     if (n_preceding_col != nullptr && n_following_col != nullptr) {
-      ret = cudf::experimental::rolling_window(*n_input_col, *n_preceding_col, *n_following_col,
-                                               min_periods, agg);
-    } else {
       ret =
-          cudf::experimental::rolling_window(*n_input_col, preceding, following, min_periods, agg);
+          cudf::rolling_window(*n_input_col, *n_preceding_col, *n_following_col, min_periods, agg);
+    } else {
+      ret = cudf::rolling_window(*n_input_col, preceding, following, min_periods, agg);
     }
     return reinterpret_cast<jlong>(ret.release());
   }
@@ -319,7 +314,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_slice(JNIEnv *env,
       indices[i] = n_slice_indices[i];
     }
 
-    std::vector<cudf::column_view> result = cudf::experimental::slice(*n_column, indices);
+    std::vector<cudf::column_view> result = cudf::slice(*n_column, indices);
     cudf::jni::native_jlongArray n_result(env, result.size());
     std::vector<std::unique_ptr<cudf::column>> column_result(result.size());
     for (int i = 0; i < result.size(); i++) {
@@ -366,7 +361,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_split(JNIEnv *env,
       indices[i] = n_split_indices[i];
     }
 
-    std::vector<cudf::column_view> result = cudf::experimental::split(*n_column, indices);
+    std::vector<cudf::column_view> result = cudf::split(*n_column, indices);
     cudf::jni::native_jlongArray n_result(env, result.size());
     std::vector<std::unique_ptr<cudf::column>> column_result(result.size());
     for (int i = 0; i < result.size(); i++) {
@@ -425,8 +420,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_findAndReplaceAll(JNIEn
     column_view *old_values_column = reinterpret_cast<column_view *>(old_values_handle);
     column_view *new_values_column = reinterpret_cast<column_view *>(new_values_handle);
 
-    std::unique_ptr<column> result = cudf::experimental::find_and_replace_all(
-        *input_column, *old_values_column, *new_values_column);
+    std::unique_ptr<column> result =
+        cudf::find_and_replace_all(*input_column, *old_values_column, *new_values_column);
 
     return reinterpret_cast<jlong>(result.release());
   }
@@ -439,7 +434,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isNullNative(JNIEnv *en
   try {
     cudf::jni::auto_set_device(env);
     const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(handle);
-    std::unique_ptr<cudf::column> ret = cudf::experimental::is_null(*input);
+    std::unique_ptr<cudf::column> ret = cudf::is_null(*input);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
@@ -451,7 +446,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isNotNullNative(JNIEnv 
   try {
     cudf::jni::auto_set_device(env);
     const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(handle);
-    std::unique_ptr<cudf::column> ret = cudf::experimental::is_valid(*input);
+    std::unique_ptr<cudf::column> ret = cudf::is_valid(*input);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
@@ -463,7 +458,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isNanNative(JNIEnv *env
   try {
     cudf::jni::auto_set_device(env);
     const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(handle);
-    std::unique_ptr<cudf::column> ret = cudf::experimental::is_nan(*input);
+    std::unique_ptr<cudf::column> ret = cudf::is_nan(*input);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
@@ -475,7 +470,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isNotNanNative(JNIEnv *
   try {
     cudf::jni::auto_set_device(env);
     const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(handle);
-    std::unique_ptr<cudf::column> ret = cudf::experimental::is_not_nan(*input);
+    std::unique_ptr<cudf::column> ret = cudf::is_not_nan(*input);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
@@ -488,8 +483,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_unaryOperation(JNIEnv *
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
-    cudf::experimental::unary_op op = static_cast<cudf::experimental::unary_op>(int_op);
-    std::unique_ptr<cudf::column> ret = cudf::experimental::unary_operation(*input, op);
+    cudf::unary_op op = static_cast<cudf::unary_op>(int_op);
+    std::unique_ptr<cudf::column> ret = cudf::unary_operation(*input, op);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
@@ -609,7 +604,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, job
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
     } else {
-      result = cudf::experimental::cast(*column, n_data_type);
+      result = cudf::cast(*column, n_data_type);
     }
     return reinterpret_cast<jlong>(result.release());
   }
@@ -661,7 +656,7 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_ColumnVector_containsScalar(JNIEn
     cudf::column_view *column_view = reinterpret_cast<cudf::column_view *>(j_view_handle);
     cudf::scalar *scalar = reinterpret_cast<cudf::scalar *>(j_scalar_handle);
 
-    return cudf::experimental::contains(*column_view, *scalar);
+    return cudf::contains(*column_view, *scalar);
   }
   CATCH_STD(env, 0);
 }
@@ -677,8 +672,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_containsVector(JNIEnv *
     cudf::column_view *haystack = reinterpret_cast<cudf::column_view *>(j_haystack_handle);
     cudf::column_view *needle = reinterpret_cast<cudf::column_view *>(j_needle_handle);
 
-    std::unique_ptr<cudf::column> result =
-        std::move(cudf::experimental::contains(*haystack, *needle));
+    std::unique_ptr<cudf::column> result = std::move(cudf::contains(*haystack, *needle));
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -693,7 +687,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_transform(JNIEnv *env, 
     cudf::jni::native_jstring n_j_udf(env, j_udf);
     std::string n_udf(n_j_udf.get());
     std::unique_ptr<cudf::column> result =
-        cudf::experimental::transform(*column, n_udf, cudf::data_type(cudf::INT32), j_is_ptx);
+        cudf::transform(*column, n_udf, cudf::data_type(cudf::INT32), j_is_ptx);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -826,9 +820,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_binaryOpVV(JNIEnv *env,
     auto lhs = reinterpret_cast<cudf::column_view *>(lhs_view);
     auto rhs = reinterpret_cast<cudf::column_view *>(rhs_view);
 
-    cudf::experimental::binary_operator op =
-        static_cast<cudf::experimental::binary_operator>(int_op);
-    std::unique_ptr<cudf::column> result = cudf::experimental::binary_operation(
+    cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
+    std::unique_ptr<cudf::column> result = cudf::binary_operation(
         *lhs, *rhs, op, cudf::data_type(static_cast<cudf::type_id>(out_dtype)));
     return reinterpret_cast<jlong>(result.release());
   }
@@ -845,9 +838,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_binaryOpVS(JNIEnv *env,
     auto lhs = reinterpret_cast<cudf::column_view *>(lhs_view);
     cudf::scalar *rhs = reinterpret_cast<cudf::scalar *>(rhs_ptr);
 
-    cudf::experimental::binary_operator op =
-        static_cast<cudf::experimental::binary_operator>(int_op);
-    std::unique_ptr<cudf::column> result = cudf::experimental::binary_operation(
+    cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
+    std::unique_ptr<cudf::column> result = cudf::binary_operation(
         *lhs, *rhs, op, cudf::data_type(static_cast<cudf::type_id>(out_dtype)));
     return reinterpret_cast<jlong>(result.release());
   }
@@ -1319,7 +1311,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_clamper(JNIEnv *env, jo
   JNI_NULL_CHECK(env, j_lo_replace_scalar, "lo scalar replace value is null", 0)
   JNI_NULL_CHECK(env, j_hi_scalar, "lo scalar is null", 0)
   JNI_NULL_CHECK(env, j_hi_replace_scalar, "lo scalar replace value is null", 0)
-  using cudf::experimental::clamp;
+  using cudf::clamp;
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *column_view = reinterpret_cast<cudf::column_view *>(handle);
@@ -1360,7 +1352,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_nansToNulls(JNIEnv *env
     cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
     // get a new null mask by setting all the nans to null
     std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> pair =
-        cudf::experimental::nans_to_nulls(*view);
+        cudf::nans_to_nulls(*view);
     // create a column_view which is a no-copy wrapper around the original column without the null
     // mask
     std::unique_ptr<cudf::column_view> copy_view(
