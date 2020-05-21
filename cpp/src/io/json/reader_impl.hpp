@@ -53,7 +53,7 @@ class reader::impl {
 
   std::unique_ptr<datasource> source_;
   std::string filepath_;
-  std::unique_ptr<buffer> buffer_;
+  std::unique_ptr<datasource::buffer> buffer_;
 
   const char *uncomp_data_ = nullptr;
   size_t uncomp_size_      = 0;

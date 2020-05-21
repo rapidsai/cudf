@@ -34,7 +34,6 @@ class RandomAccessFile;
 }
 }  // namespace arrow
 
-// <io/utilities/data_sink.hpp>
 namespace cudf {
 //! IO interfaces
 namespace io {
