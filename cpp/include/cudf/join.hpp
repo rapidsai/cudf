@@ -259,7 +259,8 @@ std::unique_ptr<cudf::experimental::table> full_join(
  *                             indicated by `left_on[i]`.
  * @param[in] return_columns   A vector of column indices from `left` to
  *                             include in the returned table.
- * @param[in] mr               Device memory resource to use for device memory allocation
+ * @param[in] mr               Device memory resource used to allocate the returned table's device
+ *                             memory
  *
  * @returns                    Result of joining `left` and `right` tables on the columns
  *                             specified by `left_on` and `right_on`. The resulting table
@@ -312,7 +313,8 @@ std::unique_ptr<cudf::experimental::table> left_semi_join(
  *                             indicated by `left_on[i]`.
  * @param[in] return_columns   A vector of column indices from `left` to
  *                             include in the returned table.
- * @param[in] mr               Device memory resource to use for device memory allocation
+ * @param[in] mr               Device memory resource used to allocate the returned table's device
+ *                             memory
  *
  * @returns                    Result of joining `left` and `right` tables on the columns
  *                             specified by `left_on` and `right_on`. The resulting table

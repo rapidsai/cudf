@@ -59,7 +59,7 @@ class column {
    *
    * @param other The `column` to copy
    * @param stream CUDA stream used for device memory operations.
-   * @param mr Device memory resource to use for all allocations
+   * @param mr Device memory resource to use for all device memory allocations
    */
   column(column const& other,
          cudaStream_t stream,
@@ -114,7 +114,7 @@ class column {
    *
    * @param view The view to copy
    * @param stream CUDA stream used for device memory operations.
-   * @param mr Device memory resource to use for all allocations
+   * @param mr Device memory resource to use for all device memory allocations
    */
   explicit column(column_view view,
                   cudaStream_t stream                 = 0,

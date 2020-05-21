@@ -44,7 +44,8 @@ namespace detail {
  *                             indicated by `left_on[i]`.
  * @param[in] return_columns   A vector of column indices from `left` to
  *                             include in the returned table.
- * @param[in] mr               Device memory resource to use for device memory allocation
+ * @param[in] mr               Device memory resource to used to allocate the returned table's
+ *                             device memory
  * @param[in] stream           Cuda stream
  * @tparam    join_kind        Indicates whether to do LEFT_SEMI_JOIN or LEFT_ANTI_JOIN
  *

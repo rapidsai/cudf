@@ -35,7 +35,7 @@ namespace detail {
  * i.e., setting both to `true` is undefined.
  * @param[in] allow_negative_indices Interpret each negative index `i` in the
  * gathermap as the positive index `i+num_source_rows`.
- * @param[in] mr The resource to use for all allocations
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @param[in] stream The CUDA stream on which to execute kernels
  * @return cudf::table Result of the gather
  */

@@ -61,7 +61,7 @@ std::unique_ptr<experimental::table> from_dlpack(
  * or if any of columns have non-zero null count
  *
  * @param input Table to convert to DLPack
- * @param mr Device memory resource used to allocate the returned DLPack tensor.
+ * @param mr Device memory resource used to allocate the returned DLPack tensor's device memory.
  *
  * @return 1D or 2D DLPack tensor with a copy of the table data, or nullptr
  */

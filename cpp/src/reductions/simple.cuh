@@ -31,7 +31,7 @@ namespace simple {
  * which directly compute the reduction by a single step reduction call
  *
  * @param[in] col    input column view
- * @param[in] mr The resource to use for all allocations
+ * @param[in] mr Device memory resource used to allocate the returned scalar's device memory
  * @param[in] stream cuda stream
  * @returns   Output scalar in device memory
  *

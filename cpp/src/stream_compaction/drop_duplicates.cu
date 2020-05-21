@@ -97,7 +97,6 @@ OutputIterator unique_copy(Exec&& exec,
  * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL,
  * nulls are not equal if null_equality::UNEQUAL
- * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
  *
  * @return column_view column_view of unique row index as per specified `keep`, this is actually

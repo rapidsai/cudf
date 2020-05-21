@@ -421,7 +421,7 @@ void gather_bitmask(table_view const& source,
  * @param[in] gather_map_end End of iterator range of integer indices that map the rows in the
  * source columns to rows in the destination columns
  * @param[in] nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds.
- * @param[in] mr The resource to use for all allocations
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @param[in] stream The CUDA stream on which to execute kernels
  * @return cudf::table Result of the gather
  */

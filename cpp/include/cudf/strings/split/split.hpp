@@ -120,7 +120,7 @@ struct contiguous_split_record_result {
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result.
+ * @param mr Device memory resource used to allocate the returned result's device memory.
  * @return contiguous_split_record_result New vector of strings column_view
  *         objects
  *         (each column_view element of the vector holds splits from a string
@@ -152,7 +152,7 @@ contiguous_split_record_result contiguous_split_record(
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result.
+ * @param mr Device memory resource used to allocate the returned result's device memory.
  * @return contiguous_split_record_result New vector of strings column_view
  *         objects
  *         (each column_view element of the vector holds splits from a string

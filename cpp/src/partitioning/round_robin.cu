@@ -67,7 +67,7 @@ using VectorT = rmm::device_vector<T>;
  * @Param[in] input The input table to be round-robin partitioned
  * @Param[in] num_partitions Number of partitions for the table
  * @Param[in] start_partition Index of the 1st partition
- * @Param[in] mr Device memory allocator
+ * @Param[in] mr Device memory resource used to allocate the returned table's device memory
  * @Param[in] stream cuda stream to execute on
  *
  * @Returns A std::pair consisting of a unique_ptr to the partitioned table and the partition

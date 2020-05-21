@@ -221,7 +221,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
  * @param[in] input The input table to be round-robin partitioned
  * @param[in] num_partitions Number of partitions for the table
  * @param[in] start_partition Index of the 1st partition
- * @param[in] mr Device memory allocator
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *
  * @return A std::pair consisting of a unique_ptr to the partitioned table
  * and the partition offsets for each partition within the table.

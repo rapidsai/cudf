@@ -32,11 +32,10 @@ namespace detail {
  * @param begin Begining of the sequence of elements
  * @param end End of the sequence of elements
  * @param p Predicate to be applied to each element in `[begin,end)`
- * @param mr Optional, The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
- * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing
- * predicate is satisfied.
+ * @returns A column of type `BOOL8,` with `true` representing predicate is satisfied.
  */
 
 template <typename InputIterator, typename Predicate>
