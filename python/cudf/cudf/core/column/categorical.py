@@ -67,7 +67,6 @@ class CategoricalAccessor(object):
     2    3
     dtype: category
     Categories (3, int64): [1, 2, 3]
-
     """
 
     def __init__(self, column, parent=None):
@@ -76,16 +75,28 @@ class CategoricalAccessor(object):
 
     @property
     def categories(self):
+        """
+        The categories of this categorical.
+        """
         from cudf.core.index import as_index
 
         return as_index(self._column.categories)
 
     @property
     def codes(self):
-        return cudf.Series(self._column.codes)
+        """
+        Return Series of codes as well as the index.
+        """
+        return cudf.Series(
+            self._column.codes,
+            index=self._parent.index if self._parent is not None else None,
+        )
 
     @property
     def ordered(self):
+        """
+        Whether the categories have an ordered relationship.
+        """
         return self._column.ordered
 
     def as_ordered(self, **kwargs):
