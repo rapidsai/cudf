@@ -431,8 +431,7 @@ struct rolling_window_launcher {
     // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
     auto output_table = detail::gather(table_view{{input}},
                                        output->view(),
-                                       experimental::detail::bounds::NO_CHECK,
-                                       experimental::detail::out_of_bounds::IGNORE,
+                                       experimental::detail::out_of_bounds_policy::IGNORE,
                                        experimental::detail::negative_indices::NOT_ALLOWED,
                                        mr,
                                        stream);

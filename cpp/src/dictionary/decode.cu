@@ -44,8 +44,7 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
   auto table_column =
     experimental::detail::gather(table_view{{source.keys()}},
                                  indices,
-                                 experimental::detail::bounds::NO_CHECK,
-                                 experimental::detail::out_of_bounds::IGNORE,
+                                 experimental::detail::out_of_bounds_policy::IGNORE,
                                  experimental::detail::negative_indices::NOT_ALLOWED,
                                  mr,
                                  stream)

@@ -171,9 +171,8 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
       auto transformed_result = experimental::detail::gather(
         table_view({col}),
         null_removed_map,
-        experimental::detail::bounds::NO_CHECK,
-        arg_result->nullable() ? experimental::detail::out_of_bounds::IGNORE
-                               : experimental::detail::out_of_bounds::DONT_IGNORE,
+        arg_result->nullable() ? experimental::detail::out_of_bounds_policy::IGNORE
+                               : experimental::detail::out_of_bounds_policy::NULLIFY,
         experimental::detail::negative_indices::NOT_ALLOWED,
         mr,
         stream);

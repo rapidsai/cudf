@@ -202,9 +202,8 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
       auto transformed_result = experimental::detail::gather(
         table_view({values}),
         null_removed_map,
-        experimental::detail::bounds::NO_CHECK,
-        argmin_result.nullable() ? experimental::detail::out_of_bounds::IGNORE
-                                 : experimental::detail::out_of_bounds::DONT_IGNORE,
+        argmin_result.nullable() ? experimental::detail::out_of_bounds_policy::IGNORE
+                                 : experimental::detail::out_of_bounds_policy::NULLIFY,
         experimental::detail::negative_indices::NOT_ALLOWED,
         mr,
         stream);
@@ -240,9 +239,8 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
       auto transformed_result = experimental::detail::gather(
         table_view({values}),
         null_removed_map,
-        experimental::detail::bounds::NO_CHECK,
-        argmax_result.nullable() ? experimental::detail::out_of_bounds::IGNORE
-                                 : experimental::detail::out_of_bounds::DONT_IGNORE,
+        argmax_result.nullable() ? experimental::detail::out_of_bounds_policy::IGNORE
+                                 : experimental::detail::out_of_bounds_policy::NULLIFY,
         experimental::detail::negative_indices::NOT_ALLOWED,
         mr,
         stream);

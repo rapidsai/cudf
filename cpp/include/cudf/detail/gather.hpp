@@ -11,8 +11,8 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-enum class bounds : bool { CHECK, NO_CHECK };
-enum class out_of_bounds : bool { IGNORE, DONT_IGNORE };
+enum class out_of_bounds_policy : int8_t { FAIL, NULLIFY, IGNORE };
+
 enum class negative_indices : bool { ALLOW, NOT_ALLOWED };
 
 /**
@@ -46,8 +46,7 @@ enum class negative_indices : bool { ALLOW, NOT_ALLOWED };
  */
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
-                              bounds check_bounds,
-                              out_of_bounds oob,
+                              out_of_bounds_policy bounds,
                               negative_indices neg_indices,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream                 = 0);

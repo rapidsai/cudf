@@ -53,8 +53,7 @@ std::unique_ptr<cudf::column> slice(strings_column_view const& strings,
   auto sliced_table =
     experimental::detail::gather(table_view{{strings.parent()}},
                                  indices_view,
-                                 experimental::detail::bounds::NO_CHECK,
-                                 experimental::detail::out_of_bounds::DONT_IGNORE,
+                                 experimental::detail::out_of_bounds_policy::NULLIFY,
                                  experimental::detail::negative_indices::NOT_ALLOWED,
                                  mr,
                                  stream)

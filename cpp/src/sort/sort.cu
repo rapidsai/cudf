@@ -48,8 +48,7 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
 
   return detail::gather(values,
                         sorted_order->view(),
-                        experimental::detail::bounds::NO_CHECK,
-                        experimental::detail::out_of_bounds::DONT_IGNORE,
+                        experimental::detail::out_of_bounds_policy::NULLIFY,
                         experimental::detail::negative_indices::NOT_ALLOWED,
                         mr,
                         stream);

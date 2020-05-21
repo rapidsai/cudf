@@ -276,8 +276,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
   auto sorted_values_table =
     cudf::experimental::detail::gather(table_view({values}),
                                        gather_map,
-                                       experimental::detail::bounds::NO_CHECK,
-                                       experimental::detail::out_of_bounds::DONT_IGNORE,
+                                       experimental::detail::out_of_bounds_policy::NULLIFY,
                                        experimental::detail::negative_indices::NOT_ALLOWED,
                                        mr,
                                        stream);
@@ -293,8 +292,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
   auto grouped_values_table =
     cudf::experimental::detail::gather(table_view({values}),
                                        gather_map,
-                                       experimental::detail::bounds::NO_CHECK,
-                                       experimental::detail::out_of_bounds::DONT_IGNORE,
+                                       experimental::detail::out_of_bounds_policy::NULLIFY,
                                        experimental::detail::negative_indices::NOT_ALLOWED,
                                        mr,
                                        stream);
@@ -319,8 +317,7 @@ std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::mr::device_memory_r
 {
   return cudf::experimental::detail::gather(_keys,
                                             key_sort_order(),
-                                            experimental::detail::bounds::NO_CHECK,
-                                            experimental::detail::out_of_bounds::DONT_IGNORE,
+                                            experimental::detail::out_of_bounds_policy::NULLIFY,
                                             experimental::detail::negative_indices::NOT_ALLOWED,
                                             mr,
                                             stream);

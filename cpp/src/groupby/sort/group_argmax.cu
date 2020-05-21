@@ -52,9 +52,8 @@ std::unique_ptr<column> group_argmax(column_view const& values,
   auto result_table = cudf::experimental::detail::gather(
     table_view({key_sort_order}),
     null_removed_indices,
-    experimental::detail::bounds::NO_CHECK,
-    indices->nullable() ? experimental::detail::out_of_bounds::IGNORE
-                        : experimental::detail::out_of_bounds::DONT_IGNORE,
+    indices->nullable() ? experimental::detail::out_of_bounds_policy::IGNORE
+                        : experimental::detail::out_of_bounds_policy::NULLIFY,
     experimental::detail::negative_indices::NOT_ALLOWED,
     mr,
     stream);

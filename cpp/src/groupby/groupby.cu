@@ -149,8 +149,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
     grouped_values =
       cudf::experimental::detail::gather(values,
                                          helper().key_sort_order(),
-                                         experimental::detail::bounds::NO_CHECK,
-                                         experimental::detail::out_of_bounds::DONT_IGNORE,
+                                         experimental::detail::out_of_bounds_policy::NULLIFY,
                                          experimental::detail::negative_indices::NOT_ALLOWED,
                                          mr);
     return groupby::groups{

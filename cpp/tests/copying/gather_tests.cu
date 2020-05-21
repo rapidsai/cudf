@@ -71,8 +71,7 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
   std::unique_ptr<cudf::experimental::table> result =
     cudf::experimental::detail::gather(source_table,
                                        gather_map,
-                                       cudf::experimental::detail::bounds::NO_CHECK,
-                                       cudf::experimental::detail::out_of_bounds::IGNORE,
+                                       cudf::experimental::detail::out_of_bounds_policy::IGNORE,
                                        cudf::experimental::detail::negative_indices::NOT_ALLOWED);
 
   auto expect_data =
@@ -336,8 +335,7 @@ TEST_F(GatherTestStr, Gather)
   auto results =
     cudf::experimental::detail::gather(source_table,
                                        gather_map,
-                                       cudf::experimental::detail::bounds::NO_CHECK,
-                                       cudf::experimental::detail::out_of_bounds::IGNORE,
+                                       cudf::experimental::detail::out_of_bounds_policy::IGNORE,
                                        cudf::experimental::detail::negative_indices::NOT_ALLOWED);
 
   std::vector<const char*> h_expected;
@@ -368,8 +366,7 @@ TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
   auto results =
     cudf::experimental::detail::gather(source_table,
                                        gather_map,
-                                       cudf::experimental::detail::bounds::NO_CHECK,
-                                       cudf::experimental::detail::out_of_bounds::IGNORE,
+                                       cudf::experimental::detail::out_of_bounds_policy::IGNORE,
                                        cudf::experimental::detail::negative_indices::NOT_ALLOWED);
 
   std::vector<const char*> h_expected;

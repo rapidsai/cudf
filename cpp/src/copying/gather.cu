@@ -26,13 +26,12 @@ struct dispatch_map_type {
     table_view const& source_table,
     column_view const& gather_map,
     size_type num_destination_rows,
-    bounds check_bounds,
-    out_of_bounds oob,
+    out_of_bounds_policy bounds,
     negative_indices neg_indices,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream                 = 0)
   {
-    if (check_bounds == bounds::CHECK) {
+    if (bounds == out_of_bounds_policy::FAIL) {
       cudf::size_type begin = neg_indices == negative_indices::ALLOW ? -source_table.num_rows() : 0;
       CUDF_EXPECTS(num_destination_rows ==
                      thrust::count_if(rmm::exec_policy()->on(0),
@@ -47,14 +46,14 @@ struct dispatch_map_type {
       return gather(source_table,
                     thrust::make_transform_iterator(gather_map.begin<map_type>(), idx_converter),
                     thrust::make_transform_iterator(gather_map.end<map_type>(), idx_converter),
-                    oob == out_of_bounds::IGNORE,
+                    bounds == out_of_bounds_policy::IGNORE,
                     mr,
                     stream);
     } else {
       return gather(source_table,
                     gather_map.begin<map_type>(),
                     gather_map.end<map_type>(),
-                    oob == out_of_bounds::IGNORE,
+                    bounds == out_of_bounds_policy::IGNORE,
                     mr,
                     stream);
     }
@@ -72,8 +71,7 @@ struct dispatch_map_type {
 
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
-                              bounds check_bounds,
-                              out_of_bounds oob,
+                              out_of_bounds_policy bounds,
                               negative_indices neg_indices,
                               rmm::mr::device_memory_resource* mr,
                               cudaStream_t stream)
@@ -86,8 +84,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                         source_table,
                                         gather_map,
                                         gather_map.size(),
-                                        check_bounds,
-                                        oob,
+                                        bounds,
                                         neg_indices,
                                         mr,
                                         stream);
@@ -103,12 +100,12 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::gather(source_table,
-                        gather_map,
-                        check_bounds ? detail::bounds::CHECK : detail::bounds::NO_CHECK,
-                        detail::out_of_bounds::DONT_IGNORE,
-                        detail::negative_indices::ALLOW,
-                        mr);
+  return detail::gather(
+    source_table,
+    gather_map,
+    check_bounds ? detail::out_of_bounds_policy::FAIL : detail::out_of_bounds_policy::NULLIFY,
+    detail::negative_indices::ALLOW,
+    mr);
 }
 
 }  // namespace experimental

@@ -89,8 +89,7 @@ std::unique_ptr<column> remove_keys_fn(
   auto table_indices =
     experimental::detail::gather(table_view{{map_indices_view}},
                                  indices_view,
-                                 experimental::detail::bounds::NO_CHECK,
-                                 experimental::detail::out_of_bounds::DONT_IGNORE,
+                                 experimental::detail::out_of_bounds_policy::NULLIFY,
                                  experimental::detail::negative_indices::NOT_ALLOWED,
                                  mr,
                                  stream)
