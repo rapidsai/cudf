@@ -11,11 +11,9 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-// clang-format off
-enum class bounds           : bool { CHECK,  NO_CHECK };
-enum class out_of_bounds    : bool { IGNORE, DONT_IGNORE };
-enum class negative_indices : bool { ALLOW,  NOT_ALLOWED };
-// clang-format on
+enum class bounds : bool { CHECK, NO_CHECK };
+enum class out_of_bounds : bool { IGNORE, DONT_IGNORE };
+enum class negative_indices : bool { ALLOW, NOT_ALLOWED };
 
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.
