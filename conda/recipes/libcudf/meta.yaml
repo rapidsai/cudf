@@ -96,6 +96,7 @@ test:
     - test -f $PREFIX/include/cudf/groupby.hpp
     - test -f $PREFIX/include/cudf/hashing.hpp
     - test -f $PREFIX/include/cudf/io/data_sink.hpp
+    - test -f $PREFIX/include/cudf/io/datasource.hpp
     - test -f $PREFIX/include/cudf/io/functions.hpp
     - test -f $PREFIX/include/cudf/io/readers.hpp
     - test -f $PREFIX/include/cudf/io/types.hpp
