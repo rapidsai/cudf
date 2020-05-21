@@ -3450,9 +3450,11 @@ class StringMethods(object):
 
     def ngrams(self, n=2, separator="_", **kwargs):
         """
-        Generate the n-grams from a set of tokens.
-        You can generate tokens from an nvstrings instance using
-        the tokenize() function.
+        Generate the n-grams from a set of tokens, each record
+        in series is treated a token.
+
+        You can generate tokens from a Series instance using
+        the ``Series.str.tokenize()`` function.
 
         Parameters
         ----------
@@ -3465,11 +3467,18 @@ class StringMethods(object):
 
         Examples
         --------
-        # TODO: Check and fix
         >>> import cudf
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
-        >>> print(nvtext.ngrams(dstrings, N=2, sep='_'))
-        ['this_is', 'is_my', 'my_favorite', 'favorite_book']
+        >>> str_series = cudf.Series(['this is my', 'favorite book'])
+        >>> str_series.str.ngrams(2, "_")
+        0    this is my_favorite book
+        dtype: object
+        >>> str_series = cudf.Series(['abc','def','xyz','hhh'])
+        >>> str_series.str.ngrams(2, "_")
+        0    abc_def
+        1    def_xyz
+        2    xyz_hhh
+        dtype: object
         """
         separator = _massage_string_arg(separator, "separator")
         kwargs.setdefault("retain_index", False)
