@@ -325,7 +325,7 @@ For most functions, the top-level `cudf` namespace is sufficient. However, for l
 
 
 ### `experimental`
-During the transition period, symbols in `libcudf++` that conflict with old symbol names should be placed in the `cudf::experimental` namespace to prevent collision with the old symbols, e.g., `cudf::experimental::table` and `cudf::type_dispatcher`. Once the transition is complete, the `experimental` namespace will be removed.
+During the transition period, symbols in `libcudf++` that conflict with old symbol names should be placed in the `cudf::experimental` namespace to prevent collision with the old symbols, e.g., `cudf::experimental::table` and `cudf::experimental::type_dispatcher`. Once the transition is complete, the `experimental` namespace will be removed.
 
 ### Internal
 
