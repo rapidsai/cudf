@@ -106,6 +106,14 @@ set(APPLY_BOOLEAN_MASK_BENCH_SRC
 ConfigureBench(APPLY_BOOLEAN_MASK_BENCH "${APPLY_BOOLEAN_MASK_BENCH_SRC}")
 
 ###################################################################################################
+# - legacy join benchmark --------------------------------------------------------------------------------
+
+set(LEGACY_JOIN_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/join/legacy/join_benchmark.cu")
+
+ConfigureBench(LEGACY_JOIN_BENCH "${LEGACY_JOIN_BENCH_SRC}")
+
+###################################################################################################
 # - join benchmark --------------------------------------------------------------------------------
 
 set(JOIN_BENCH_SRC
@@ -120,6 +128,14 @@ set(ITERATOR_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_benchmark.cu")
 
 ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
+
+###################################################################################################
+# - legacy search benchmark ------------------------------------------------------------------------------
+
+set(LEGACY_SEARCH_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/search/legacy/search_benchmark.cu")
+
+ConfigureBench(LEGACY_SEARCH_BENCH "${LEGACY_SEARCH_BENCH_SRC}")
 
 ###################################################################################################
 # - search benchmark ------------------------------------------------------------------------------
