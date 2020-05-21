@@ -78,7 +78,7 @@ std::unique_ptr<column> replace_nulls(
  *
  * @param input A column whose NaN values will be replaced
  * @param replacement A cudf::column whose values will replace NaN values in input
- * @param mr Device memory resource used to allocate the returned column
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A copy of `input` with the NaN values replaced with corresponding values from
  * `replacement`.
  */
@@ -104,7 +104,7 @@ std::unique_ptr<column> replace_nans(
  *
  * @param input A column whose NaN values will be replaced
  * @param replacement A cudf::scalar whose value will replace NaN values in input
- * @param mr Device memory resource used to allocate the returned column
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A copy of `input` with the NaN values replaced by `replacement`.
  */
 std::unique_ptr<column> replace_nans(
@@ -119,7 +119,7 @@ std::unique_ptr<column> replace_nans(
  * @param input_col The column to find and replace values in.
  * @param values_to_replace The values to replace
  * @param replacement_values The values to replace with
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @returns Copy of `input_col` with specified values replaced.
  */

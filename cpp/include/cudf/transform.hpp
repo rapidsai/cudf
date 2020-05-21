@@ -41,7 +41,7 @@ namespace experimental {
  * @param unary_udf     The PTX/CUDA string of the unary function to apply
  * @param outout_type   The output type that is compatible with the output type in the UDF
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
- * @param mr            Device memory resource used to allocate the returned column
+ * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The column resulting from applying the unary function to
  *                      every element of the input
  **/

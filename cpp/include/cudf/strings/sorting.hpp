@@ -40,7 +40,7 @@ enum sort_type {
  * @param order Sort strings in ascending or descending order.
  * @param null_order Sort nulls to the beginning or the end of the new column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with sorted elements of this instance.
  */
 std::unique_ptr<cudf::column> sort(

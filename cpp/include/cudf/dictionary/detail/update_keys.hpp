@@ -27,7 +27,7 @@ namespace detail {
  *
  * @param dictionary_column Existing dictionary column.
  * @param new_keys New keys to incorporate into the dictionary_column
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New dictionary column.
  */
@@ -43,7 +43,7 @@ std::unique_ptr<column> add_keys(
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys_to_remove The keys to remove from the dictionary_column
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New dictionary column.
  */
@@ -58,7 +58,7 @@ std::unique_ptr<column> remove_keys(
  * const&,mm::mr::device_memory_resource*)
  *
  * @param dictionary_column Existing dictionary column.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New dictionary column.
  */
@@ -73,7 +73,7 @@ std::unique_ptr<column> remove_unused_keys(
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys New keys to use for the output column. Must not contain nulls.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New dictionary column.
  */

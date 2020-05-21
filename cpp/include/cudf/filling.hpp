@@ -77,7 +77,7 @@ void fill_in_place(mutable_column_view& destination,
  * @param begin The starting index of the fill range (inclusive)
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
- * @param mr Device memory resource used to allocate the returned column
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The result output column
  */
 std::unique_ptr<column> fill(column_view const& input,
@@ -167,7 +167,7 @@ std::unique_ptr<table> repeat(
  * @param size Size of the output column
  * @param init First value in the sequence
  * @param step Increment value
- * @param mr Device memory resource used to allocate the returned column
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> The result table containing the sequence
  **/
 std::unique_ptr<column> sequence(
@@ -193,7 +193,7 @@ std::unique_ptr<column> sequence(
  *
  * @param size Size of the output column
  * @param init First value in the sequence
- * @param mr Device memory resource used to allocate the returned column
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> The result table containing the sequence
  **/
 std::unique_ptr<column> sequence(

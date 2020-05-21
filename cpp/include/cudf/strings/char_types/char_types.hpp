@@ -91,7 +91,7 @@ string_character_types& operator|=(string_character_types& lhs, string_character
  * @param verify_types Only verify against these character types.
  *                     Default `ALL_TYPES` means return `true`
  *                     iff all characters match `types`.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> all_characters_of_type(
@@ -117,7 +117,7 @@ std::unique_ptr<column> all_characters_of_type(
  * Any null row results in a null entry for that row in the output column.
  *
  * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> is_integer(
@@ -155,7 +155,7 @@ bool all_integer(strings_column_view const& strings);
  * Any null row results in a null entry for that row in the output column.
  *
  * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> is_float(

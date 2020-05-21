@@ -42,7 +42,7 @@ namespace strings {
  *
  * @param strings Strings instance for this operation.
  * @param chars_table Table of UTF-8 character mappings.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with padded strings.
  */
 std::unique_ptr<column> translate(

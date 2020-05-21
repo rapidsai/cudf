@@ -42,7 +42,7 @@ namespace detail {
  * @param step Increment value between indices.
  *             Default step is 1.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column of size (end-start)/step.
  */
 std::unique_ptr<cudf::column> slice(

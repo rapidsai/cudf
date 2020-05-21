@@ -38,7 +38,7 @@ namespace strings {
  *
  * @param strings Strings instance for this operation.
  * @param output_type Type of float numeric column to return.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with floats converted from strings.
  */
 std::unique_ptr<column> to_floats(
@@ -60,7 +60,7 @@ std::unique_ptr<column> to_floats(
  * @throw cudf::logic_error if floats column is not float type.
  *
  * @param floats Numeric column to convert.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with floats as strings.
  */
 std::unique_ptr<column> from_floats(

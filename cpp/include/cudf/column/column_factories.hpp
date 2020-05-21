@@ -395,7 +395,7 @@ std::unique_ptr<column> make_strings_column(
  * @param s The scalar to use for values in the column.
  * @param size The number of rows for the output column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> make_column_from_scalar(
   scalar const& s,

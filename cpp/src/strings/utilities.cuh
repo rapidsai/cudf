@@ -67,7 +67,7 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  * chars memory.
  * @param strings_count Number of strings.
  * @param null_count Number of nulls in the strings column.
- * @param mr Device memory resource used to allocate the returned columns.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return offsets child column and chars child column for a strings column
  */

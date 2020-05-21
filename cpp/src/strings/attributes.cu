@@ -41,7 +41,7 @@ namespace {
  * @param strings Strings instance for this operation.
  * @param ufn Function returns an integer for each string.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New INT32 column with lengths for each string.
  */
 template <typename UnaryFunction>

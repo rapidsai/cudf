@@ -51,7 +51,7 @@ rmm::device_buffer concatenate_masks(
  *
  * @param columns_to_concat The column views to be concatenated into a single
  * column
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Unique pointer to a single table having all the rows from the
  * elements of `columns_to_concat` respectively in the same order.
  */

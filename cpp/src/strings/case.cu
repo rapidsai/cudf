@@ -124,7 +124,7 @@ struct upper_lower_fn {
  *
  * @param strings Strings to convert.
  * @param case_flag The character type to convert (upper, lower, or both)
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column with characters converted.
  */

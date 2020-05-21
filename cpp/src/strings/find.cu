@@ -43,7 +43,7 @@ namespace {
  * @param start First character position to start the search.
  * @param stop Last character position (exclusive) to end the search.
  * @param pfn Functor used for locating `target` in each string.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New integer column with character position values.
  */
@@ -166,7 +166,7 @@ namespace {
  * @param strings Column of strings to check for target.
  * @param target UTF-8 encoded string to check in strings column.
  * @param pfn Returns bool value if target is found in the given string.
- * @param mr Device memory resource used to allocate the returned column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New BOOL column.
  */
