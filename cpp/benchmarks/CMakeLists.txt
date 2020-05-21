@@ -10,7 +10,8 @@ set(BENCHMARK_LIST CACHE INTERNAL "BENCHMARK_LIST")
 function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     add_executable(${CMAKE_BENCH_NAME}
                    ${CMAKE_BENCH_SRC}
-                   "${CMAKE_CURRENT_SOURCE_DIR}/synchronization/synchronization.cpp")
+                   "${CMAKE_CURRENT_SOURCE_DIR}/synchronization/synchronization.cpp"
+                   "${CMAKE_SOURCE_DIR}/tests/utilities/base_fixture.cpp")
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(${CMAKE_BENCH_NAME} benchmark benchmark_main pthread cudf )
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
@@ -124,6 +125,14 @@ set(LEGACY_APPLY_BOOLEAN_MASK_BENCH_SRC
 ConfigureBench(LEGACY_APPLY_BOOLEAN_MASK_BENCH "${LEGACY_APPLY_BOOLEAN_MASK_BENCH_SRC}")
 
 ###################################################################################################
+# - legacy join benchmark --------------------------------------------------------------------------------
+
+set(LEGACY_JOIN_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/join/legacy/join_benchmark.cu")
+
+ConfigureBench(LEGACY_JOIN_BENCH "${LEGACY_JOIN_BENCH_SRC}")
+
+###################################################################################################
 # - join benchmark --------------------------------------------------------------------------------
 
 set(JOIN_BENCH_SRC
@@ -138,6 +147,14 @@ set(ITERATOR_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_benchmark.cu")
 
 ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
+
+###################################################################################################
+# - legacy search benchmark ------------------------------------------------------------------------------
+
+set(LEGACY_SEARCH_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/search/legacy/search_benchmark.cu")
+
+ConfigureBench(LEGACY_SEARCH_BENCH "${LEGACY_SEARCH_BENCH_SRC}")
 
 ###################################################################################################
 # - search benchmark ------------------------------------------------------------------------------
