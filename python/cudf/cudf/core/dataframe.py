@@ -2299,7 +2299,7 @@ class DataFrame(Frame, Serializable):
             else:
                 df = DataFrame(None, idx).join(df, how="left", sort=True)
                 # double-argsort to map back from sorted to unsorted positions
-                df = df.take(idx.argsort(True).argsort(True))
+                df = df.take(idx.argsort(True).argsort())
 
         idx = idx if idx is not None else df.index
         names = cols if cols is not None else list(df.columns)
