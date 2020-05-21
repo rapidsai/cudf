@@ -89,6 +89,58 @@ class CategoricalAccessor(object):
         return self._column.ordered
 
     def as_ordered(self, **kwargs):
+        """
+        Set the Categorical to be ordered.
+
+        Parameters
+        ----------
+
+        inplace : bool, default False
+            Whether or not to add the categories inplace
+            or return a copy of this categorical with
+            added categories.
+
+        Returns
+        -------
+        Categorical
+            Ordered Categorical or None if inplace.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([10, 1, 1, 2, 10, 2, 10], dtype="category")
+        >>> s
+        0    10
+        1     1
+        2     1
+        3     2
+        4    10
+        5     2
+        6    10
+        dtype: category
+        Categories (3, int64): [1, 2, 10]
+        >>> s.cat.as_ordered()
+        0    10
+        1     1
+        2     1
+        3     2
+        4    10
+        5     2
+        6    10
+        dtype: category
+        Categories (3, int64): [1 < 2 < 10]
+        >>> s.cat.as_ordered(inplace=True)
+        >>> s
+        0    10
+        1     1
+        2     1
+        3     2
+        4    10
+        5     2
+        6    10
+        dtype: category
+        Categories (3, int64): [1 < 2 < 10]
+        """
         out_col = self._column
         if not out_col.ordered:
             kwargs["ordered"] = True
@@ -97,6 +149,69 @@ class CategoricalAccessor(object):
         return self._return_or_inplace(out_col, **kwargs)
 
     def as_unordered(self, **kwargs):
+        """
+        Set the Categorical to be unordered.
+
+        Parameters
+        ----------
+
+        inplace : bool, default False
+            Whether or not to set the ordered attribute
+            in-place or return a copy of this
+            categorical with ordered set to False.
+
+        Returns
+        -------
+        Categorical
+            Unordered Categorical or None if inplace.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([10, 1, 1, 2, 10, 2, 10], dtype="category")
+        >>> s
+        0    10
+        1     1
+        2     1
+        3     2
+        4    10
+        5     2
+        6    10
+        dtype: category
+        Categories (3, int64): [1, 2, 10]
+        >>> s = s.cat.as_ordered()
+        >>> s
+        0    10
+        1     1
+        2     1
+        3     2
+        4    10
+        5     2
+        6    10
+        dtype: category
+        Categories (3, int64): [1 < 2 < 10]
+        >>> s.cat.as_unordered()
+        0    10
+        1     1
+        2     1
+        3     2
+        4    10
+        5     2
+        6    10
+        dtype: category
+        Categories (3, int64): [1, 2, 10]
+        >>> s.cat.as_unordered(inplace=True)
+        >>> s
+        0    10
+        1     1
+        2     1
+        3     2
+        4    10
+        5     2
+        6    10
+        dtype: category
+        Categories (3, int64): [1, 2, 10]
+        """
         out_col = self._column
         if out_col.ordered:
             kwargs["ordered"] = False
@@ -105,6 +220,56 @@ class CategoricalAccessor(object):
         return self._return_or_inplace(out_col, **kwargs)
 
     def add_categories(self, new_categories, **kwargs):
+        """
+        Add new categories.
+
+        `new_categories` will be included at the last/highest
+        place in the categories and will be unused directly
+        after this call.
+
+        Parameters
+        ----------
+
+        new_categories : category or list-like of category
+            The new categories to be included.
+
+        inplace : bool, default False
+            Whether or not to add the categories inplace
+            or return a copy of this categorical with
+            added categories.
+
+        Returns
+        -------
+        cat
+            Categorical with new categories added or
+            None if inplace.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([1, 2], dtype="category")
+        >>> s
+        0    1
+        1    2
+        dtype: category
+        Categories (2, int64): [1, 2]
+        >>> s.cat.add_categories([0, 3, 4])
+        0    1
+        1    2
+        dtype: category
+        Categories (5, int64): [1, 2, 0, 3, 4]
+        >>> s
+        0    1
+        1    2
+        dtype: category
+        Categories (2, int64): [1, 2]
+        >>> s.cat.add_categories([0, 3, 4], inplace=True)
+        >>> s
+        0    1
+        1    2
+        dtype: category
+        Categories (5, int64): [1, 2, 0, 3, 4]
+        """
         new_categories = column.as_column(new_categories)
         new_categories = self._column.categories.append(new_categories)
         out_col = self._column
@@ -114,6 +279,76 @@ class CategoricalAccessor(object):
         return self._return_or_inplace(out_col, **kwargs)
 
     def remove_categories(self, removals, **kwargs):
+        """
+        Remove the specified categories.
+
+        `removals` must be included in the
+        old categories. Values which were in the
+        removed categories will be set to null.
+
+        Parameters
+        ----------
+
+        removals : category or list-like of category
+            The categories which should be removed.
+
+        inplace : bool, default False
+            Whether or not to remove the categories
+            inplace or return a copy of this categorical
+            with removed categories.
+
+        Returns
+        -------
+        cat
+            Categorical with removed categories or None
+            if inplace.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([10, 1, 1, 2, 10, 2, 10], dtype="category")
+        >>> s
+        0    10
+        1     1
+        2     1
+        3     2
+        4    10
+        5     2
+        6    10
+        dtype: category
+        Categories (3, int64): [1, 2, 10]
+        >>> s.cat.remove_categories([1])
+        0     10
+        1   null
+        2   null
+        3      2
+        4     10
+        5      2
+        6     10
+        dtype: category
+        Categories (2, int64): [2, 10]
+        >>> s
+        0    10
+        1     1
+        2     1
+        3     2
+        4    10
+        5     2
+        6    10
+        dtype: category
+        Categories (3, int64): [1, 2, 10]
+        >>> s.cat.remove_categories([10], inplace=True)
+        >>> s
+        0   null
+        1      1
+        2      1
+        3      2
+        4   null
+        5      2
+        6   null
+        dtype: category
+        Categories (2, int64): [1, 2]
+        """
         from cudf import Series
 
         cats = self.categories.to_series()
@@ -135,8 +370,87 @@ class CategoricalAccessor(object):
         return self._return_or_inplace(out_col, **kwargs)
 
     def set_categories(self, new_categories, **kwargs):
-        """Returns a new Series with the categories set to the
-        specified *new_categories*."""
+        """
+        Set the categories to the specified new_categories.
+
+
+        `new_categories` can include new categories (which
+        will result in unused categories) or remove old categories
+        (which results in values set to null). If `rename==True`,
+        the categories will simple be renamed (less or more items
+        than in old categories will result in values set to null or
+        in unused categories respectively).
+
+        This method can be used to perform more than one action
+        of adding, removing, and reordering simultaneously and
+        is therefore faster than performing the individual steps
+        via the more specialised methods.
+
+        On the other hand this methods does not do checks
+        (e.g., whether the old categories are included in the
+        new categories on a reorder), which can result in
+        surprising changes.
+
+        Parameters
+        ----------
+
+        new_categories : list-like
+            The categories in new order.
+
+        ordered : bool, default False
+            Whether or not the categorical is treated as
+            a ordered categorical. If not given, do
+            not change the ordered information.
+
+        rename : bool, default False
+            Whether or not the `new_categories` should be
+            considered as a rename of the old categories
+            or as reordered categories.
+
+        inplace : bool, default False
+            Whether or not to reorder the categories in-place
+            or return a copy of this categorical with
+            reordered categories.
+
+        Returns
+        -------
+        cat
+            Categorical with reordered categories
+            or None if inplace.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([1, 1, 2, 10, 2, 10], dtype='category')
+        >>> s
+        0     1
+        1     1
+        2     2
+        3    10
+        4     2
+        5    10
+        dtype: category
+        Categories (3, int64): [1, 2, 10]
+        >>> s.cat.set_categories([1, 10])
+        0      1
+        1      1
+        2   null
+        3     10
+        4   null
+        5     10
+        dtype: category
+        Categories (2, int64): [1, 10]
+        >>> s.cat.set_categories([1, 10], inplace=True)
+        >>> s
+        0      1
+        1      1
+        2   null
+        3     10
+        4   null
+        5     10
+        dtype: category
+        Categories (2, int64): [1, 10]
+        """
         ordered = kwargs.get("ordered", self.ordered)
         rename = kwargs.pop("rename", False)
         new_categories = column.as_column(new_categories)
@@ -180,6 +494,71 @@ class CategoricalAccessor(object):
         return self._return_or_inplace(out_col, **kwargs)
 
     def reorder_categories(self, new_categories, **kwargs):
+        """
+        Reorder categories as specified in new_categories.
+
+        `new_categories` need to include all old categories
+        and no new category items.
+
+        Parameters
+        ----------
+
+        new_categories : Index-like
+            The categories in new order.
+
+        ordered : bool, optional
+            Whether or not the categorical is treated
+            as a ordered categorical. If not given, do
+            not change the ordered information.
+
+
+        inplace : bool, default False
+            Whether or not to reorder the categories
+            inplace or return a copy of this categorical
+            with reordered categories.
+
+
+        Returns
+        -------
+        cat
+            Categorical with reordered categories or
+            None if inplace.
+
+        Raises
+        ------
+        ValueError
+            If the new categories do not contain all old
+            category items or any new ones.
+
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([10, 1, 1, 2, 10, 2, 10], dtype="category")
+        >>> s
+        0    10
+        1     1
+        2     1
+        3     2
+        4    10
+        5     2
+        6    10
+        dtype: category
+        Categories (3, int64): [1, 2, 10]
+        >>> s.cat.reorder_categories([10, 1, 2])
+        0    10
+        1     1
+        2     1
+        3     2
+        4    10
+        5     2
+        6    10
+        dtype: category
+        Categories (3, int64): [10, 1, 2]
+        >>> s.cat.reorder_categories([10, 1])
+        ValueError: items in new_categories are not the same as in
+        old categories
+        """
         new_categories = column.as_column(new_categories)
         # Compare new_categories against current categories.
         # Ignore order for comparison because we're only interested
