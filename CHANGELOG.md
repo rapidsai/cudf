@@ -44,6 +44,7 @@
 
 ## Improvements
 
+- PR #5235 Make DataFrame.clean_renderable_dataframe() and DataFrame.get_renderable_dataframe non-public methods
 - PR #4995 Add CMake option for per-thread default stream
 - PR #5033 Fix Numba deprecations warnings with Numba 0.49+
 - PR #4950 Fix import errors with Numba 0.49+
