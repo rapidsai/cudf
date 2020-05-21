@@ -165,17 +165,17 @@ class Series(Frame, Serializable):
 
     @classmethod
     def from_pandas(cls, s, nan_as_null=None):
-        # TODO: Revisit
         """
         Convert from a Pandas Series.
 
         Parameters
         ----------
         s : Pandas Series object
-            A Pandads Series object which has to be converted
+            A Pandas Series object which has to be converted
             to cuDF Series.
-        nan_as_null : bool, Default True
-            If ``True``, converts ``np.nan`` values to ``null`` values.
+        nan_as_null : bool, Default None
+            If ``None``/``True``, converts ``np.nan`` values to
+            ``null`` values.
             If ``False``, leaves ``np.nan`` values as is.
 
         Raises
