@@ -179,6 +179,14 @@ set(LEGACY_TD_BENCH_SRC
 ConfigureBench(LEGACY_TYPE_DISPATCHER_BENCH "${LEGACY_TD_BENCH_SRC}")
 
 ###################################################################################################
+# - reduction benchmark ---------------------------------------------------------------------------
+
+set(REDUCTION_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_benchmark.cpp")
+
+ConfigureBench(REDUCTION_BENCH "${REDUCTION_BENCH_SRC}")
+
+###################################################################################################
 # - quantiles benchmark ---------------------------------------------------------------------------
 
 set(LEGACY_QUANTILES_BENCH_SRC
