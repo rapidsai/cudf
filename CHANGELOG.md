@@ -1,6 +1,7 @@
 # cuDF 0.15.0 (Date TBD)
 
 ## New Features
+
 - PR #5222 Adding clip feature support to DataFrame and Series
 
 ## Improvements
