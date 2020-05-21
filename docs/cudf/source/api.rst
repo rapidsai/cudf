@@ -30,6 +30,44 @@ Strings
 .. autoclass:: StringMethods
     :members:
 
+Index
+-----
+.. currentmodule:: cudf.core.index
+.. autoclass:: Index
+    :members:
+    :exclude-members: serialize, deserialize, is_monotonic, is_monotonic_increasing, is_monotonic_decreasing
+
+RangeIndex
+----------
+.. currentmodule:: cudf.core.index
+.. autoclass:: RangeIndex
+    :members:
+    :exclude-members: deserialize, serialize
+
+GenericIndex
+------------
+.. currentmodule:: cudf.core.index
+.. autoclass:: GenericIndex
+    :members:
+
+CategoricalIndex
+----------------
+.. currentmodule:: cudf.core.index
+.. autoclass:: CategoricalIndex
+    :members:
+
+StringIndex
+-----------
+.. currentmodule:: cudf.core.index
+.. autoclass:: StringIndex
+    :members:
+
+DatetimeIndex
+-------------
+.. currentmodule:: cudf.core.index
+.. autoclass:: DatetimeIndex
+    :members:
+
 Categories
 ----------
 .. currentmodule:: cudf.core.column.categorical
