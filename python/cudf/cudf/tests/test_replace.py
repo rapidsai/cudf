@@ -618,19 +618,18 @@ def test_dataframe_clip(lower, upper, inplace):
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dataframe_category_clip(lower, upper, inplace):
-    pdf = pd.DataFrame({"a": ["a", "b", "c", "d", "e"]})
+    data = ["a", "b", "c", "d", "e"]
+    pdf = pd.DataFrame({"a": data})
     gdf = DataFrame.from_pandas(pdf)
     gdf["a"] = gdf["a"].astype("category")
 
-    if lower is None and upper is None:
-        pdf = pdf.astype("category")
     expect = pdf.clip(lower=lower, upper=upper)
     got = gdf.clip(lower=lower, upper=upper, inplace=inplace)
 
     if inplace is True:
-        assert_eq(expect, gdf)
+        assert_eq(expect, gdf.astype("str"))
     else:
-        assert_eq(expect, got)
+        assert_eq(expect, got.astype("str"))
 
 
 @pytest.mark.parametrize(
@@ -659,12 +658,9 @@ def test_dataframe_exceptions_for_clip(lower, upper):
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
-@pytest.mark.parametrize("as_category", [True, False])
-def test_series_clip(data, lower, upper, inplace, as_category):
+def test_series_clip(data, lower, upper, inplace):
     psr = pd.Series(data)
     gsr = Series.from_pandas(data)
-    if as_category is True:
-        gsr = gsr.astype("category")
 
     expect = psr.clip(lower=lower, upper=upper)
     got = gsr.clip(lower=lower, upper=upper, inplace=inplace)
@@ -678,4 +674,7 @@ def test_series_clip(data, lower, upper, inplace, as_category):
 def test_series_exceptions_for_clip():
 
     with pytest.raises(ValueError):
-        Series([1, 2, 3, 4]).clip([1], [2])
+        Series([1, 2, 3, 4]).clip([1, 2], [2, 3])
+
+    with pytest.raises(NotImplementedError):
+        Series([1, 2, 3, 4]).clip(1, 2, axis=0)

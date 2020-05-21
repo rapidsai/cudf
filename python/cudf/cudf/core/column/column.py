@@ -136,14 +136,11 @@ class ColumnBase(Column, Serializable):
         return sr
 
     def clip(self, lo, hi):
-        # If categorical, it returns non categorical column
-        # as there is possibility of change in categories
         if is_categorical_dtype(self):
             input_col = self.astype(self.categories.dtype)
+            return libcudf.replace.clip(input_col, lo, hi).astype(self.dtype)
         else:
-            input_col = self
-
-        return libcudf.replace.clip(input_col, lo, hi)
+            return libcudf.replace.clip(self, lo, hi)
 
     def equals(self, other):
         if self is other:
