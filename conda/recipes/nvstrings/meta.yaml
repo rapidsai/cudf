@@ -3,6 +3,7 @@
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set py_version=environ.get('CONDA_PY', 36) %}
+{% set git_commit_short=environ.get('GIT_COMMIT_SHORT') %}
 
 package:
   name: nvstrings
@@ -13,7 +14,7 @@ source:
 
 build:
   number: {{ git_revision_count }}
-  string: py{{ py_version }}_{{ git_revision_count }}
+  string: py{{ py_version }}_{{ git_revision_count }}_{{ git_commit_short }}
   script_env:
     - CC
     - CXX

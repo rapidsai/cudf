@@ -4,6 +4,7 @@
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set cuda_version='.'.join(environ.get('CUDA_VERSION', '10.0').split('.')[:2]) %}
+{% set git_commit_short=environ.get('GIT_COMMIT_SHORT') %}
 
 package:
   name: libcudf
@@ -14,7 +15,7 @@ source:
 
 build:
   number: {{ git_revision_count }}
-  string: cuda{{ cuda_version }}_{{ git_revision_count }}
+  string: cuda{{ cuda_version }}_{{ git_revision_count }}_{{ git_commit_short }}
   script_env:
     - CC
     - CXX
