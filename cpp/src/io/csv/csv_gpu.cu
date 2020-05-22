@@ -551,7 +551,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
       if (!is_na && start <= (tempPos)) {  // Empty fields are not legal values
 
-        // Type dispatcher does not handle GDF_STRINGS
+        // Type dispatcher does not handle STRING
         if (dtype[actual_col].id() == cudf::type_id::STRING) {
           long end = pos;
           if (opts.keepquotes == false) {

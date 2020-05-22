@@ -288,8 +288,6 @@ int cpu_inflate_vector(std::vector<char> &dst, const uint8_t *comp_data, size_t 
  * @param src_size[in] The size of the compressed data, in bytes
  * @param strm_type[in] Type of compression of the input data
  * @param dst[out] Vector containing the uncompressed output
- *
- * @returns gdf_error with error code on failure, otherwise GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
 void io_uncompress_single_h2d(const void *src,
@@ -425,8 +423,6 @@ void io_uncompress_single_h2d(const void *src,
  * @param[in] num_bytes Size of the input data, in bytes
  * @param[in] compression String describing the compression type
  * @param[out] h_uncomp_data Vector containing the output uncompressed data
- *
- * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
  **/
 void getUncompressedHostData(const char *h_data,
                              size_t num_bytes,

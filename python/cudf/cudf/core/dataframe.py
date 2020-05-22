@@ -25,6 +25,7 @@ import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
 from cudf.core import column
+from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -87,7 +88,7 @@ def _reverse_op(fn):
     }[fn]
 
 
-class DataFrame(Frame):
+class DataFrame(Frame, Serializable):
     """
     A GPU Dataframe object.
 
@@ -900,7 +901,7 @@ class DataFrame(Frame):
         ncols = 19 if ncols in [20, 21] else ncols
         return ncols, nrows
 
-    def clean_renderable_dataframe(self, output):
+    def _clean_renderable_dataframe(self, output):
         """
         the below is permissible: null in a datetime to_pandas() becomes
         NaT, which is then replaced with null in this processing step.
@@ -919,7 +920,7 @@ class DataFrame(Frame):
             )
         return "\n".join(lines)
 
-    def get_renderable_dataframe(self):
+    def _get_renderable_dataframe(self):
         """
         takes rows and columns from pandas settings or estimation from size.
         pulls quadrents based off of some known parameters then style for
@@ -983,12 +984,12 @@ class DataFrame(Frame):
         return output
 
     def __repr__(self):
-        output = self.get_renderable_dataframe()
-        return self.clean_renderable_dataframe(output)
+        output = self._get_renderable_dataframe()
+        return self._clean_renderable_dataframe(output)
 
     def _repr_html_(self):
         lines = (
-            self.get_renderable_dataframe()
+            self._get_renderable_dataframe()
             .to_pandas()
             ._repr_html_()
             .split("\n")
@@ -1003,7 +1004,7 @@ class DataFrame(Frame):
         return "\n".join(lines)
 
     def _repr_latex_(self):
-        return self.get_renderable_dataframe().to_pandas()._repr_latex_()
+        return self._get_renderable_dataframe().to_pandas()._repr_latex_()
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
@@ -1683,9 +1684,6 @@ class DataFrame(Frame):
         if memo is None:
             memo = {}
         return self.copy(deep=True)
-
-    def __reduce__(self):
-        return (DataFrame, (self._data, self.index))
 
     @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):

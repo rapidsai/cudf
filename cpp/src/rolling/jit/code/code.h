@@ -17,8 +17,7 @@
  * limitations under the License.
  */
 
-#ifndef GDF_BINARY_OPERATION_JIT_CODE_CODE_H
-#define GDF_BINARY_OPERATION_JIT_CODE_CODE_H
+#pragma once
 
 namespace cudf {
 namespace rolling {
@@ -38,5 +37,3 @@ extern const char* grouped_window_wrapper;
 }  // namespace jit
 }  // namespace rolling
 }  // namespace cudf
-
-#endif

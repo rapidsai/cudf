@@ -78,7 +78,7 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
  *
  * @param[in] dtype String containing the basic or extended dtype
  *
- * @return std::pair<gdf_dtype, column_parse::flags> Tuple of dtype and flags
+ * @return Tuple of data_type and flags
  */
 std::tuple<data_type, column_parse::flags> get_dtype_info(const std::string &dtype)
 {

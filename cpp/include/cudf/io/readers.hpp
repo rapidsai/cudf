@@ -217,7 +217,7 @@ class reader {
   /*
    * @brief Reads and returns the entire data set.
    *
-   * @return cudf::table object that contains the array of gdf_columns.
+   * @return cudf::table object that contains the array of cudf::column.
    */
   table_with_metadata read_all(cudaStream_t stream = 0);
 
@@ -231,7 +231,7 @@ class reader {
    * @param[in] offset Byte offset from the start
    * @param[in] size Number of bytes from the offset; set to 0 for all remaining
    *
-   * @return cudf::table object that contains the array of gdf_columns
+   * @return cudf::table object that contains the array of cudf::column
    */
   table_with_metadata read_byte_range(size_t offset, size_t size, cudaStream_t stream = 0);
 };
