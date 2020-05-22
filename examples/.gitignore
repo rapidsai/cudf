@@ -1,0 +1,6 @@
+python-kernel-wrapper/cython/*.cpp
+python-kernel-wrapper/cython/*.so
+python-kernel-wrapper/cython/record.txt
+
+# Ignore data files download by the script
+python-kernel-wrapper/data/weather

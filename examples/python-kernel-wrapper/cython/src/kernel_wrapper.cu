@@ -19,7 +19,6 @@
 #include <assert.h>
 #include <iostream>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/table/table_device_view.cuh>
 
 
 CudfWrapper::CudfWrapper(cudf::mutable_table_view table_view) {
@@ -28,23 +27,21 @@ CudfWrapper::CudfWrapper(cudf::mutable_table_view table_view) {
 
 void CudfWrapper::tenth_mm_to_inches(int column_index) {
 
+  // Example of showing num_columns and num_rows only for potential debugging
   printf("kernel_wrapper.cu # of columns: %lu\n", mtv.num_columns());
   printf("kernel_wrapper.cu # of rows: %lu\n", mtv.num_rows());
 
-  for( cudf::size_type c=0; c < mtv.num_columns(); c++ ) {
+  // Raw loop to print out column dtypes for example sake only, not required,
+  for( cudf::size_type c = 0; c < mtv.num_columns(); c++ ) {
     printf("%d type=%d, ptr=%p\n", c, (int)mtv.column(c).type().id(), mtv.column(c).data<char>() );
   }
 
   std::unique_ptr<cudf::mutable_column_device_view, std::function<void(cudf::mutable_column_device_view*)>> 
-  mutable_device_column = cudf::mutable_column_device_view::create(mtv.column(4));
+  mutable_device_column = cudf::mutable_column_device_view::create(mtv.column(column_index));
 
-  printf("kernel_wrapper.cu column.data<int64_t>(): %p\n", mutable_device_column->data<int64_t>());
-  kernel_tenth_mm_to_inches<<<1, 1>>>(*mutable_device_column, mtv.num_rows());
+  // Invoke the Kernel to convert tenth_mm -> inches
+  kernel_tenth_mm_to_inches<<<(mtv.num_rows()+255)/256, 256>>>(*mutable_device_column, mtv.num_rows());
   cudaDeviceSynchronize();
-}
-
-void CudfWrapper::mm_to_inches(int column_index) {
-  printf("mm_to_inches");
 }
 
 CudfWrapper::~CudfWrapper() {

@@ -131,8 +131,8 @@ ext = Extension(
         numpy_include,
         CUDA["include"],
         "src",
-        "../cpp/thirdparty/libcudacxx/include",
-        "../cpp/thirdparty/cub",
+        "../../../cpp/thirdparty/libcudacxx/include",
+        "../../../cpp/thirdparty/cub",
     ],
     # This syntax is specific to this build system
     # we're only going to use certain compiler args with nvcc
@@ -147,10 +147,8 @@ ext = Extension(
 setup(
     name="cudfkernel",
     version="0.1",
-    description="cudfkernel - Use existing CUDA Kernels with RapidsAI \
-        cuDF DataFrames",
-    url="https://github.com/jdye64/libcudf-examples",
-    author="Jeremy Dyer",
+    url="https://github.com/rapidsai/cudf",
+    author="NVIDIA Corporation",
     license="Apache 2.0",
     classifiers=[
         "Intended Audience :: Developers",
@@ -161,8 +159,6 @@ setup(
     ],
     ext_modules=[ext],
     packages=find_packages(include=["cudf", "cudf.*"]),
-    # Inject our custom trigger
     cmdclass={"build_ext": custom_build_ext},
-    # Since the package has c code, the egg cannot be zipped
     zip_safe=False,
 )

@@ -11,8 +11,4 @@ class CudfWrapper {
     ~CudfWrapper();
 
     void tenth_mm_to_inches(int column_index);
-
-    // Performs MM to Inches conversion on the GPU device
-    void mm_to_inches(int column_index);
-
 };
