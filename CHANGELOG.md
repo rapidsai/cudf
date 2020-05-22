@@ -33,6 +33,7 @@
 - PR #5196 Add Java bindings for NULL_EQUALS, NULL_MAX and NULL_MIN
 - PR #5203 Add Java bindings for is_integer and is_float
 - PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
+- PR #5254 Deprecate NVStrings, NVCategory, and NVText
 
 ## Improvements
 
