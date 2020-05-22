@@ -307,19 +307,86 @@ class Index(Frame, Serializable):
             else:
                 return result._values.all()
 
-    def join(self, other, method, how="left", return_indexers=False):
-        column_join_res = self._values.join(
-            other._values,
-            how=how,
-            return_indexers=return_indexers,
-            method=method,
-        )
-        if return_indexers:
-            joined_col, indexers = column_join_res
-            joined_index = as_index(joined_col)
-            return joined_index, indexers
+    def join(self, other, how="left", level=None, return_indexers=False, sort=False):
+        
+        if isinstance(self, cudf.MultiIndex)  and isinstance(other, cudf.MultiIndex):
+            raise TypeError("Join on level between two MultiIndex objects is ambiguous")
+
+        if level is not None and not is_scalar(level):
+            raise ValueError("level should be an int or a label only")
+
+        if how == 'right':
+            how = 'left'
+            lhs = other.copy(deep=False)
+            rhs = self.copy(deep=False)
         else:
-            return column_join_res
+            lhs = self.copy(deep=False)
+            rhs = other.copy(deep=False)
+
+        on = None
+        if level is not None:
+            if isinstance(level, int):
+                if isinstance(lhs, cudf.MultiIndex):
+                    on = lhs._data.get_by_index(level).names[0]
+                elif isinstance(rhs, cudf.MultiIndex):
+                    on = rhs._data.get_by_index(level).names[0]
+            else:
+                on = level
+
+        left_name = lhs.name
+        right_name = rhs.name
+        if isinstance(lhs, cudf.MultiIndex):
+            right_name = on or right_name
+            on = right_name
+            how = 'left' if how == 'outer' else how
+    
+        elif isinstance(rhs, cudf.MultiIndex):
+            left_name = on or left_name
+            on = left_name
+            if how == 'left':
+                how = 'inner'
+            elif how == 'outer':
+                how = 'left'
+                lhs, rhs = rhs, lhs
+                left_name, right_name = right_name, left_name
+        else:
+            # Both are nomal indices
+            if how == "right":
+                left_name = right_name
+                on = left_name
+            else:
+                right_name = left_name
+                on = right_name
+
+        def _set_categories(col, cats):
+            return col.cat()._set_categories(
+                cats, is_unique=True
+            ).fillna(-1)
+        
+        lhs = lhs.to_frame(index=False, name=left_name)
+        rhs = rhs.to_frame(index=False, name=right_name)
+
+        if is_categorical_dtype(lhs._data[on]):
+            if is_categorical_dtype(rhs._data[on]):
+                lcats = lhs._data[on].cat().categories
+                rcats = rhs._data[on].cat().categories
+                if set(lcats).difference(set(rcats)):
+                    if how == "left":
+                        rhs._data[on] = _set_categories(rhs._data[on], lcats)
+                    elif how == "right":
+                        lhs._data[on] = _set_categories(lhs._data[on], rcats)
+                    elif how in ["inner", "outer"]:
+                        cats = column.as_column(lcats).append(rcats)
+                        cats = (
+                            cudf.Series(cats).drop_duplicates(ignore_index=True)._column
+                        )
+
+                        lhs._data[on] = _set_categories(lhs._data[on], cats)
+                        rhs._data[on] = _set_categories(rhs._data[on], cats)
+
+        output = lhs.merge(rhs, how=how, on=on, sort=sort)
+
+        return output.set_index(list(output._data.names)).index
 
     def rename(self, name, inplace=False):
         """
