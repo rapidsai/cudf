@@ -22,8 +22,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <gmock/gmock.h>
-
 class ColumnFactoryTest : public cudf::test::BaseFixture {
   cudf::size_type _size{1000};
   cudaStream_t _stream{0};

@@ -30,7 +30,6 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
-#include <gmock/gmock.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <vector>
 

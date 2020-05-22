@@ -18,12 +18,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gmock.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/merge.hpp>
-#include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -201,9 +199,6 @@ TYPED_TEST(MergeTest_, MismatchedKeyColumnsAndOrderTypes)
   std::vector<cudf::size_type> key_cols{0, 1};
   std::vector<cudf::order> column_order{cudf::order::ASCENDING};
   std::vector<cudf::null_order> null_precedence{};
-
-  std::vector<cudf::size_type> sortByCols = {0, 1};
-  std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
 
   EXPECT_THROW(
     cudf::experimental::merge({left_view, right_view}, key_cols, column_order, null_precedence),

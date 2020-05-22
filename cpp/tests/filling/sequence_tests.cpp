@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
-
 #include <cudf/scalar/scalar.hpp>
 
 #include <tests/utilities/base_fixture.hpp>

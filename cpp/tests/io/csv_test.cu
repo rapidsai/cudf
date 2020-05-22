@@ -28,7 +28,6 @@
 #include <cudf/table/table_view.hpp>
 
 #include <arrow/io/api.h>
-#include <gmock/gmock.h>
 
 #include <algorithm>
 #include <fstream>

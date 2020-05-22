@@ -23,8 +23,6 @@
 
 #include <thrust/device_vector.h>
 
-#include <gmock/gmock.h>
-
 struct DispatcherTest : public cudf::test::BaseFixture {
 };
 

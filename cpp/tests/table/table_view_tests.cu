@@ -23,7 +23,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <gmock/gmock.h>
 #include <vector>
 
 // Compares two tables row by row, if table1 row is less than table2, then corresponding row value

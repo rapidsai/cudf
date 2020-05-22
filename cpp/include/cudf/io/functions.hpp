@@ -66,7 +66,6 @@ struct read_avro_args {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.avro";
  *  cudf::read_avro_args args{cudf::source_info(filepath)};
@@ -140,7 +139,6 @@ struct read_json_args {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.json";
  *  cudf::read_json_args args{cudf::source_info(filepath)};
@@ -389,7 +387,6 @@ struct read_orc_args {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.orc";
  *  cudf::read_orc_args args{cudf::source_info(filepath)};
@@ -444,7 +441,6 @@ struct read_parquet_args {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.parquet";
  *  cudf::read_parquet_args args{cudf::source_info(filepath)};
@@ -501,7 +497,6 @@ struct write_orc_args {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.orc";
  *  cudf::write_orc_args args{cudf::sink_info(filepath), table->view()};
@@ -559,7 +554,6 @@ struct orc_chunked_state;
  * The following code snippet demonstrates how to write a single ORC file containing
  * one logical table by writing a series of individual cudf::tables.
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.orc";
  *  cudf::experimental::io::write_orc_chunked_args args{cudf::sink_info(filepath), table->view()};
@@ -651,7 +645,6 @@ struct write_parquet_args {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.parquet";
  *  cudf::experimental::io::write_parquet_args args{cudf::sink_info(filepath), table->view()};
@@ -728,7 +721,6 @@ struct pq_chunked_state;
  * The following code snippet demonstrates how to write a single parquet file containing
  * one logical table by writing a series of individual cudf::tables.
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.parquet";
  *  cudf::experimental::io::write_parquet_chunked_args args{cudf::sink_info(filepath),
