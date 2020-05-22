@@ -37,7 +37,7 @@ using CVector     = std::vector<std::unique_ptr<cudf::column>>;
 using column      = cudf::column;
 using column_view = cudf::column_view;
 using TView       = cudf::table_view;
-using Table       = cudf::experimental::table;
+using Table       = cudf::table;
 
 struct TableTest : public cudf::test::BaseFixture {
 };

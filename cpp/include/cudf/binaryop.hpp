@@ -22,7 +22,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 
 /**
  * @addtogroup transformation_binaryops
@@ -178,5 +177,4 @@ std::unique_ptr<column> binary_operation(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

@@ -18,7 +18,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <algorithm>

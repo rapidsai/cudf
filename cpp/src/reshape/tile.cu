@@ -27,7 +27,6 @@
 #include <cudf/detail/gather.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace {
 struct tile_functor {
   size_type count;
@@ -53,7 +52,5 @@ std::unique_ptr<table> tile(const table_view &in,
 
   return detail::gather(in, tiled_it, tiled_it + out_num_rows, false, mr);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

@@ -12,7 +12,7 @@
 #include <memory>
 #include <tests/utilities/column_wrapper.hpp>
 
-template <typename T, typename ScalarType = cudf::experimental::scalar_type_t<T>>
+template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   cudaStream_t stream = 0, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
@@ -20,7 +20,7 @@ std::unique_ptr<cudf::scalar> make_scalar(
   return std::unique_ptr<cudf::scalar>(s);
 }
 
-template <typename T, typename ScalarType = cudf::experimental::scalar_type_t<T>>
+template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   T value,
   cudaStream_t stream                 = 0,
@@ -68,7 +68,7 @@ static void BM_shift(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    auto output = cudf::experimental::shift(input, offset, *fill);
+    auto output = cudf::shift(input, offset, *fill);
   }
 }
 

@@ -22,7 +22,7 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
+
 /**
  * @addtogroup table_classes
  * @{
@@ -144,5 +144,5 @@ class table {
   size_type _num_rows{};
 };
 /** @} */  // end of group
-}  // namespace experimental
+
 }  // namespace cudf

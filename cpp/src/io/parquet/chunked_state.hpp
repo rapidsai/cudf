@@ -24,7 +24,6 @@
 #include "parquet.h"
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace parquet {
@@ -66,5 +65,4 @@ struct pq_chunked_state {
 }  // namespace parquet
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

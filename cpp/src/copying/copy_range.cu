@@ -45,21 +45,20 @@ void in_place_copy_range(cudf::column_view const& source,
 {
   auto p_source_device_view = cudf::column_device_view::create(source, stream);
   if (source.has_nulls()) {
-    cudf::experimental::detail::copy_range(
-      cudf::experimental::detail::make_null_replacement_iterator<T>(*p_source_device_view, T()) +
-        source_begin,
-      cudf::experimental::detail::make_validity_iterator(*p_source_device_view) + source_begin,
+    cudf::detail::copy_range(
+      cudf::detail::make_null_replacement_iterator<T>(*p_source_device_view, T()) + source_begin,
+      cudf::detail::make_validity_iterator(*p_source_device_view) + source_begin,
       target,
       target_begin,
       target_begin + (source_end - source_begin),
       stream);
   } else {
-    cudf::experimental::detail::copy_range(p_source_device_view->begin<T>() + source_begin,
-                                           thrust::make_constant_iterator(true),  // dummy
-                                           target,
-                                           target_begin,
-                                           target_begin + (source_end - source_begin),
-                                           stream);
+    cudf::detail::copy_range(p_source_device_view->begin<T>() + source_begin,
+                             thrust::make_constant_iterator(true),  // dummy
+                             target,
+                             target_begin,
+                             target_begin + (source_end - source_begin),
+                             stream);
   }
 }
 
@@ -125,10 +124,10 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   auto p_source_device_view = cudf::column_device_view::create(source, stream);
   if (source.has_nulls()) {
     return cudf::strings::detail::copy_range(
-      cudf::experimental::detail::make_null_replacement_iterator<cudf::string_view>(
-        *p_source_device_view, cudf::string_view()) +
+      cudf::detail::make_null_replacement_iterator<cudf::string_view>(*p_source_device_view,
+                                                                      cudf::string_view()) +
         source_begin,
-      cudf::experimental::detail::make_validity_iterator(*p_source_device_view) + source_begin,
+      cudf::detail::make_validity_iterator(*p_source_device_view) + source_begin,
       cudf::strings_column_view(target),
       target_begin,
       target_end,
@@ -171,7 +170,6 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
@@ -191,12 +189,12 @@ void copy_range_in_place(column_view const& source,
                "target should be nullable if source has null values.");
 
   if (source_end != source_begin) {  // otherwise no-op
-    cudf::experimental::type_dispatcher(target.type(),
-                                        in_place_copy_range_dispatch{source, target},
-                                        source_begin,
-                                        source_end,
-                                        target_begin,
-                                        stream);
+    cudf::type_dispatcher(target.type(),
+                          in_place_copy_range_dispatch{source, target},
+                          source_begin,
+                          source_end,
+                          target_begin,
+                          stream);
   }
 }
 
@@ -214,13 +212,13 @@ std::unique_ptr<column> copy_range(column_view const& source,
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
 
-  return cudf::experimental::type_dispatcher(target.type(),
-                                             out_of_place_copy_range_dispatch{source, target},
-                                             source_begin,
-                                             source_end,
-                                             target_begin,
-                                             mr,
-                                             stream);
+  return cudf::type_dispatcher(target.type(),
+                               out_of_place_copy_range_dispatch{source, target},
+                               source_begin,
+                               source_end,
+                               target_begin,
+                               mr,
+                               stream);
 }
 
 }  // namespace detail
@@ -246,5 +244,4 @@ std::unique_ptr<column> copy_range(column_view const& source,
   return detail::copy_range(source, target, source_begin, source_end, target_begin, mr, 0);
 }
 
-}  // namespace experimental
 }  // namespace cudf

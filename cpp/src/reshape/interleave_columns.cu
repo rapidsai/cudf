@@ -22,7 +22,6 @@
 #include <strings/utilities.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 struct interleave_columns_functor {
@@ -193,7 +192,5 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   return type_dispatcher(
     dtype, detail::interleave_columns_functor{}, input, output_needs_mask, mr, nullptr);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

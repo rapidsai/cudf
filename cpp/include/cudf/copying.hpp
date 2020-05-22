@@ -25,7 +25,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 
 /**
  * @addtogroup column_copy
@@ -719,5 +718,4 @@ std::unique_ptr<scalar> get_element(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */
-}  // namespace experimental
 }  // namespace cudf

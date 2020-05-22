@@ -29,7 +29,6 @@
  * and concrete C++ types.
  **/
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup utility_dispatcher
  * @{
@@ -356,5 +355,4 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
 }
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

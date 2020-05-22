@@ -23,7 +23,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include "./utilities.h"
 
-#include <gmock/gmock.h>
 #include <vector>
 
 struct StringsReplaceTest : public cudf::test::BaseFixture {
