@@ -23,8 +23,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 
-#include <gmock/gmock.h>
-
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
 

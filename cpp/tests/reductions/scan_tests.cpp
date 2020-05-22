@@ -24,10 +24,8 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gmock.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <cudf/cudf.h>
 #include <cudf/reduction.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>

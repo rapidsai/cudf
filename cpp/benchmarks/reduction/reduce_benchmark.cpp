@@ -15,9 +15,9 @@
  */
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/types.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/reduction.hpp>
+#include <cudf/types.hpp>
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -38,7 +38,6 @@ T random_int(T min, T max)
 
   return uniform(engine);
 }
-
 
 template <typename type>
 void BM_reduction(benchmark::State& state,

@@ -37,7 +37,7 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace json {
-using namespace cudf::io::json;
+using namespace cudf::experimental::io::json;
 using namespace cudf::io;
 
 /**
@@ -69,7 +69,6 @@ class reader::impl {
 
   table_metadata metadata;
   std::vector<data_type> dtypes_;
-  // std::vector<gdf_dtype_extra_info> dtypes_extra_info_;
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;

@@ -15,16 +15,19 @@
  */
 
 #include <benchmark/benchmark.h>
-#include <cudf/cudf.h>
+
 #include <thrust/iterator/counting_iterator.h>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+
 #include <vector>
 
 #include "generate_input_tables.cuh"

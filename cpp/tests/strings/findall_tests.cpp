@@ -22,7 +22,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 
-#include <gmock/gmock.h>
 #include <vector>
 
 struct StringsFindallTests : public cudf::test::BaseFixture {

@@ -26,7 +26,6 @@
 #include <tests/utilities/table_utilities.hpp>
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 #include <algorithm>
 #include <random>

@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
 #include <cudf/aggregation.hpp>
 #include <cudf/scalar/scalar.hpp>
 
