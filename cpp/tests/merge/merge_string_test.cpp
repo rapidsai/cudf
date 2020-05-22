@@ -22,7 +22,6 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/merge.hpp>
-#include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>

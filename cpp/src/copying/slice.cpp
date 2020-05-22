@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>

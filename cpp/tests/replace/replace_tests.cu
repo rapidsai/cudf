@@ -1,4 +1,6 @@
 /*
+ * Copyright 2019-20, NVIDIA CORPORATION.
+ *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
  *
@@ -22,9 +24,6 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <cudf/cudf.h>
-#include <bitmask/legacy/bit_mask.cuh>
-
 #include <thrust/device_vector.h>
 
 #include <gtest/gtest.h>
@@ -38,41 +37,38 @@ struct ReplaceErrorTest : public cudf::test::BaseFixture {
 // Error: old-values and new-values size mismatch
 TEST_F(ReplaceErrorTest, SizeMismatch)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_input_column{{7, 5, 6, 3, 1, 2, 8, 4}};
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_values_to_replace_column{{10, 11, 12, 13}};
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_replacement_values_column{{15, 16, 17}};
+  cudf::test::fixed_width_column_wrapper<int32_t> input_column{{7, 5, 6, 3, 1, 2, 8, 4}};
+  cudf::test::fixed_width_column_wrapper<int32_t> values_to_replace_column{{10, 11, 12, 13}};
+  cudf::test::fixed_width_column_wrapper<int32_t> replacement_values_column{{15, 16, 17}};
 
-  EXPECT_THROW(
-    cudf::experimental::find_and_replace_all(
-      gdf_input_column, gdf_values_to_replace_column, gdf_replacement_values_column, mr()),
-    cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::find_and_replace_all(
+                 input_column, values_to_replace_column, replacement_values_column, mr()),
+               cudf::logic_error);
 }
 
 // Error: column type mismatch
 TEST_F(ReplaceErrorTest, TypeMismatch)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_input_column{{7, 5, 6, 3, 1, 2, 8, 4}};
-  cudf::test::fixed_width_column_wrapper<float> gdf_values_to_replace_column{{10, 11, 12}};
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_replacement_values_column{{15, 16, 17}};
+  cudf::test::fixed_width_column_wrapper<int32_t> input_column{{7, 5, 6, 3, 1, 2, 8, 4}};
+  cudf::test::fixed_width_column_wrapper<float> values_to_replace_column{{10, 11, 12}};
+  cudf::test::fixed_width_column_wrapper<int32_t> replacement_values_column{{15, 16, 17}};
 
-  EXPECT_THROW(
-    cudf::experimental::find_and_replace_all(
-      gdf_input_column, gdf_values_to_replace_column, gdf_replacement_values_column, mr()),
-    cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::find_and_replace_all(
+                 input_column, values_to_replace_column, replacement_values_column, mr()),
+               cudf::logic_error);
 }
 
 // Error: nulls in old-values
 TEST_F(ReplaceErrorTest, NullInOldValues)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_input_column{{7, 5, 6, 3, 1, 2, 8, 4}};
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_values_to_replace_column{{10, 11, 12, 13},
-                                                                               {1, 0, 0, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_replacement_values_column{{15, 16, 17, 18}};
+  cudf::test::fixed_width_column_wrapper<int32_t> input_column{{7, 5, 6, 3, 1, 2, 8, 4}};
+  cudf::test::fixed_width_column_wrapper<int32_t> values_to_replace_column{{10, 11, 12, 13},
+                                                                           {0, 1, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> replacement_values_column{{15, 16, 17, 18}};
 
-  EXPECT_THROW(
-    cudf::experimental::find_and_replace_all(
-      gdf_input_column, gdf_values_to_replace_column, gdf_replacement_values_column, mr()),
-    cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::find_and_replace_all(
+                 input_column, values_to_replace_column, replacement_values_column, mr()),
+               cudf::logic_error);
 }
 
 struct ReplaceStringsTest : public cudf::test::BaseFixture {
@@ -299,7 +295,7 @@ struct ReplaceTest : cudf::test::BaseFixture {
   ~ReplaceTest() {}
 };
 
-/* --------------------------------------------------------------------------*
+/**
  * @brief Main method for testing.
  * Initializes the input columns with the given values. Then compute the actual
  * resultant column by invoking `cudf::find_and_replace_all()` and then
@@ -311,7 +307,7 @@ struct ReplaceTest : cudf::test::BaseFixture {
  * @param input_column_valid The mask for replace column
  * @param replacement_values_valid The mask for new values
  * @param print Optionally print the set of columns for debug
- * -------------------------------------------------------------------------*/
+ */
 template <typename T>
 void test_replace(
   std::vector<T> const& input_column,
@@ -321,19 +317,18 @@ void test_replace(
   std::vector<cudf::valid_type> const& replacement_values_valid = std::vector<cudf::valid_type>{},
   bool print                                                    = false)
 {
-  cudf::test::fixed_width_column_wrapper<T> gdf_input_column(input_column.begin(),
-                                                             input_column.end());
+  cudf::test::fixed_width_column_wrapper<T> _input_column(input_column.begin(), input_column.end());
   if (input_column_valid.size() > 0) {
-    gdf_input_column = cudf::test::fixed_width_column_wrapper<T>(
+    _input_column = cudf::test::fixed_width_column_wrapper<T>(
       input_column.begin(), input_column.end(), input_column_valid.begin());
   }
 
-  cudf::test::fixed_width_column_wrapper<T> gdf_values_to_replace_column(
+  cudf::test::fixed_width_column_wrapper<T> _values_to_replace_column(
     values_to_replace_column.begin(), values_to_replace_column.end());
-  cudf::test::fixed_width_column_wrapper<T> gdf_replacement_values_column(
+  cudf::test::fixed_width_column_wrapper<T> _replacement_values_column(
     replacement_values_column.begin(), replacement_values_column.end());
   if (replacement_values_valid.size() > 0) {
-    gdf_replacement_values_column =
+    _replacement_values_column =
       cudf::test::fixed_width_column_wrapper<T>(replacement_values_column.begin(),
                                                 replacement_values_column.end(),
                                                 replacement_values_valid.begin());
@@ -342,7 +337,7 @@ void test_replace(
   /* getting the actual result*/
   std::unique_ptr<cudf::column> actual_result;
   ASSERT_NO_THROW(actual_result = cudf::experimental::find_and_replace_all(
-                    gdf_input_column, gdf_values_to_replace_column, gdf_replacement_values_column));
+                    _input_column, _values_to_replace_column, _replacement_values_column));
 
   /* computing the expected result */
   std::vector<T> reference_result(input_column);
@@ -392,7 +387,7 @@ using Types = cudf::test::NumericTypes;
 
 TYPED_TEST_CASE(ReplaceTest, Types);
 
-// Simple test, replacing all even gdf_replacement_values_column
+// Simple test, replacing all even replacement_values_column
 TYPED_TEST(ReplaceTest, ReplaceEvenPosition)
 {
   using T                     = TypeParam;
@@ -516,16 +511,16 @@ TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
       }
     }
   }
-  cudf::test::fixed_width_column_wrapper<TypeParam> gdf_input_column(input_column.begin(),
-                                                                     input_column.end());
-  cudf::test::fixed_width_column_wrapper<TypeParam> gdf_values_to_replace_column(
+  cudf::test::fixed_width_column_wrapper<TypeParam> _input_column(input_column.begin(),
+                                                                  input_column.end());
+  cudf::test::fixed_width_column_wrapper<TypeParam> _values_to_replace_column(
     values_to_replace_column.begin(), values_to_replace_column.end());
-  cudf::test::fixed_width_column_wrapper<TypeParam> gdf_replacement_values_column(
+  cudf::test::fixed_width_column_wrapper<TypeParam> _replacement_values_column(
     replacement_values_column.begin(), replacement_values_column.end());
 
   std::unique_ptr<cudf::column> actual_result;
   ASSERT_NO_THROW(actual_result = cudf::experimental::find_and_replace_all(
-                    gdf_input_column, gdf_values_to_replace_column, gdf_replacement_values_column));
+                    _input_column, _values_to_replace_column, _replacement_values_column));
 
   std::for_each(input_column.begin(), input_column.end(), [](TypeParam& d) { d += 1; });
   cudf::test::fixed_width_column_wrapper<TypeParam> expected(input_column.begin(),

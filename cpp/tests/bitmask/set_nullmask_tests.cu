@@ -17,7 +17,6 @@
 #include <iostream>
 
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gmock.hpp>
 
 #include <cudf/null_mask.hpp>
 

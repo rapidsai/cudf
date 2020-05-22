@@ -30,7 +30,6 @@
 #include <thrust/equal.h>
 #include <thrust/logical.h>
 
-#include <gmock/gmock.h>
 #include <numeric>
 
 namespace cudf {

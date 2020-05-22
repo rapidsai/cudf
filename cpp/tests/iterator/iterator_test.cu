@@ -24,7 +24,6 @@
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gmock.hpp>
 #include <tests/utilities/type_lists.hpp>
 
 #include <thrust/equal.h>
