@@ -308,7 +308,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   auto d_table = *table;
 
   // Create resulting null mask
-  auto valid_mask = cudf::experimental::detail::valid_if(
+  auto valid_mask = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     [d_table, separator_col_view, separator_rep, col_rep] __device__(size_type ridx) {
