@@ -28,14 +28,13 @@
 #include <cudf/utilities/traits.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
-
 template <typename MapIterator>
 auto scatter_to_gather(MapIterator scatter_map_begin,
                        MapIterator scatter_map_end,
                        size_type gather_rows,
-                       cudaStream_t stream) {
+                       cudaStream_t stream)
+{
   using MapValueType = typename thrust::iterator_traits<MapIterator>::value_type;
 
   static_assert(std::is_signed<MapValueType>::value,
@@ -62,7 +61,8 @@ struct column_scatterer_impl {
                                      MapIterator scatter_map_end,
                                      column_view const& target,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const {
+                                     cudaStream_t stream) const
+  {
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
@@ -85,7 +85,8 @@ struct column_scatterer_impl<string_view, MapIterator> {
                                      MapIterator scatter_map_end,
                                      column_view const& target,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const {
+                                     cudaStream_t stream) const
+  {
     using strings::detail::create_string_vector_from_column;
     auto const source_vector = create_string_vector_from_column(source, stream);
     auto const begin         = source_vector.begin();
@@ -101,7 +102,8 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
                                      MapIterator scatter_map_end,
                                      column_view const& target_in,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const {
+                                     cudaStream_t stream) const
+  {
     if (target_in.size() == 0)  // empty begets empty
       return make_empty_column(data_type{DICTIONARY32});
     if (source_in.size() == 0)  // no input, just make a copy
@@ -116,7 +118,8 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
     // first combine keys so both dictionaries have the same set
     auto target_matched    = dictionary::detail::add_keys(target, source.keys(), mr, stream);
     auto const target_view = dictionary_column_view(target_matched->view());
-    auto source_matched    = dictionary::detail::set_keys(source, target_view.keys(), mr, stream);
+    auto source_matched    = dictionary::detail::set_keys(
+      source, target_view.keys(), rmm::mr::get_default_resource(), stream);
     auto const source_view = dictionary_column_view(source_matched->view());
 
     // now build the new indices by doing a scatter on just the matched indices
@@ -131,10 +134,10 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
     auto indices_column    = std::make_unique<column>(data_type{INT32},
                                                    static_cast<size_type>(output_size),
                                                    std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{},
+                                                   rmm::device_buffer{0, stream, mr},
                                                    0);
 
-    // take the keys from either matched column
+    // take the keys from the matched column allocated using mr
     std::unique_ptr<column> keys_column(std::move(target_matched->release().children.back()));
 
     // create column with keys_column and indices_column
@@ -153,7 +156,8 @@ struct column_scatterer {
                                      MapIterator scatter_map_end,
                                      column_view const& target,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const {
+                                     cudaStream_t stream) const
+  {
     column_scatterer_impl<Element, MapIterator> scatterer{};
     return scatterer(source, scatter_map_begin, scatter_map_end, target, mr, stream);
   }
@@ -180,7 +184,8 @@ struct column_scatterer {
  *
  * @param[in] source The input columns containing values to be scattered into the
  * target columns
- * @param[in] scatter_map_begin Beginning of iterator range of integer indices that has been provided.
+ * @param[in] scatter_map_begin Beginning of iterator range of integer indices that has been
+ *provided.
  * @param[in] scatter_map_end End of iterator range of integer indices that has been provided.
  * source columns to rows in the target columns
  * @param[in] target The set of columns into which values from the source_table
@@ -200,7 +205,8 @@ std::unique_ptr<table> scatter(
   table_view const& target,
   bool check_bounds                   = false,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   CUDF_FUNC_RANGE();
 
   using MapType = typename thrust::iterator_traits<MapIterator>::value_type;
@@ -252,6 +258,5 @@ std::unique_ptr<table> scatter(
 
   return std::make_unique<table>(std::move(result));
 }
-}  //namespace detail
-}  //namespace experimental
+}  // namespace detail
 }  // namespace cudf

@@ -24,15 +24,12 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
-
-namespace experimental {
-
 namespace detail {
-
 template <bool has_nulls>
 auto is_sorted(cudf::table_view const& in,
                std::vector<order> const& column_order,
-               std::vector<null_order> const& null_precedence) {
+               std::vector<null_order> const& null_precedence)
+{
   cudaStream_t stream = 0;
   auto in_d           = table_device_view::create(in);
   rmm::device_vector<order> d_column_order(column_order);
@@ -54,7 +51,8 @@ auto is_sorted(cudf::table_view const& in,
 
 bool is_sorted(cudf::table_view const& in,
                std::vector<order> const& column_order,
-               std::vector<null_order> const& null_precedence) {
+               std::vector<null_order> const& null_precedence)
+{
   CUDF_FUNC_RANGE();
   if (in.num_columns() == 0 || in.num_rows() == 0) { return true; }
 
@@ -75,7 +73,5 @@ bool is_sorted(cudf::table_view const& in,
     return detail::is_sorted<false>(in, column_order, null_precedence);
   }
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

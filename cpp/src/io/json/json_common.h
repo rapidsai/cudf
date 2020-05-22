@@ -16,15 +16,13 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
+#include <cudf/types.hpp>
 
 class SerialTrieNode;
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace json {
-
 struct ColumnInfo {
   cudf::size_type float_count;
   cudf::size_type datetime_count;
@@ -36,5 +34,4 @@ struct ColumnInfo {
 
 }  // namespace json
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

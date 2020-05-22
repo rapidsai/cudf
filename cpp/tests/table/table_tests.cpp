@@ -16,64 +16,65 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/copying.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/table_utilities.hpp>
 
-#include <random>
 #include <memory>
+#include <random>
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
-using s_col_wrapper  = cudf::test::strings_column_wrapper;
+using s_col_wrapper = cudf::test::strings_column_wrapper;
 
 using CVector     = std::vector<std::unique_ptr<cudf::column>>;
 using column      = cudf::column;
 using column_view = cudf::column_view;
 using TView       = cudf::table_view;
-using Table       = cudf::experimental::table;
+using Table       = cudf::table;
 
-struct TableTest : public cudf::test::BaseFixture {};
+struct TableTest : public cudf::test::BaseFixture {
+};
 
 TEST_F(TableTest, EmptyColumnedTable)
 {
-    std::vector<column_view> cols{};
+  std::vector<column_view> cols{};
 
-    TView input(cols);
-    cudf::size_type expected = 0;
+  TView input(cols);
+  cudf::size_type expected = 0;
 
-    EXPECT_EQ(input.num_columns(), expected);
+  EXPECT_EQ(input.num_columns(), expected);
 }
 
 TEST_F(TableTest, ValidateConstructorTableViewToTable)
 {
-    column_wrapper <int8_t>  col1{{1,2,3,4}};
-    column_wrapper <int8_t>  col2{{1,2,3,4}};
+  column_wrapper<int8_t> col1{{1, 2, 3, 4}};
+  column_wrapper<int8_t> col2{{1, 2, 3, 4}};
 
-    CVector cols;
-    cols.push_back(col1.release());
-    cols.push_back(col2.release());
+  CVector cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
 
-    Table input_table(std::move(cols));
+  Table input_table(std::move(cols));
 
-    Table out_table(input_table.view());
+  Table out_table(input_table.view());
 
-    EXPECT_EQ(input_table.num_columns(), out_table.num_columns());
-    EXPECT_EQ(input_table.num_rows(), out_table.num_rows());
+  EXPECT_EQ(input_table.num_columns(), out_table.num_columns());
+  EXPECT_EQ(input_table.num_rows(), out_table.num_rows());
 }
 
 TEST_F(TableTest, GetTableWithSelectedColumns)
 {
-  column_wrapper <int8_t>  col1{{1,2,3,4}};
-  column_wrapper <int16_t> col2{{1,2,3,4}};
-  column_wrapper <int32_t> col3{{4,5,6,7}};
-  column_wrapper <int64_t> col4{{4,5,6,7}};
+  column_wrapper<int8_t> col1{{1, 2, 3, 4}};
+  column_wrapper<int16_t> col2{{1, 2, 3, 4}};
+  column_wrapper<int32_t> col3{{4, 5, 6, 7}};
+  column_wrapper<int64_t> col4{{4, 5, 6, 7}};
 
   CVector cols;
   cols.push_back(col1.release());
@@ -83,15 +84,15 @@ TEST_F(TableTest, GetTableWithSelectedColumns)
 
   Table t(std::move(cols));
 
-  cudf::table_view selected_tview = t.select(std::vector<cudf::size_type>{2,3});
+  cudf::table_view selected_tview = t.select(std::vector<cudf::size_type>{2, 3});
   cudf::test::expect_columns_equal(t.view().column(2), selected_tview.column(0));
   cudf::test::expect_columns_equal(t.view().column(3), selected_tview.column(1));
 }
 
 TEST_F(TableTest, SelectingOutOfBounds)
 {
-  column_wrapper <int8_t > col1{{1,2,3,4}};
-  column_wrapper <int16_t> col2{{1,2,3,4}};
+  column_wrapper<int8_t> col1{{1, 2, 3, 4}};
+  column_wrapper<int16_t> col2{{1, 2, 3, 4}};
 
   CVector cols;
   cols.push_back(col1.release());
@@ -99,13 +100,13 @@ TEST_F(TableTest, SelectingOutOfBounds)
 
   Table t(std::move(cols));
 
-  EXPECT_THROW (t.select(std::vector<cudf::size_type>{0,1,2}), std::out_of_range);
+  EXPECT_THROW(t.select(std::vector<cudf::size_type>{0, 1, 2}), std::out_of_range);
 }
 
 TEST_F(TableTest, SelectingNoColumns)
 {
-  column_wrapper <int8_t > col1{{1,2,3,4}};
-  column_wrapper <int16_t> col2{{1,2,3,4}};
+  column_wrapper<int8_t> col1{{1, 2, 3, 4}};
+  column_wrapper<int16_t> col2{{1, 2, 3, 4}};
 
   CVector cols;
   cols.push_back(col1.release());
@@ -118,8 +119,8 @@ TEST_F(TableTest, SelectingNoColumns)
 
 TEST_F(TableTest, CreateFromViewVector)
 {
-  column_wrapper <int8_t > col1{{1,2,3,4}};
-  column_wrapper <int16_t> col2{{1,2,3,4}};
+  column_wrapper<int8_t> col1{{1, 2, 3, 4}};
+  column_wrapper<int16_t> col2{{1, 2, 3, 4}};
 
   std::vector<TView> views;
   views.emplace_back(std::vector<column_view>{col1});
@@ -131,13 +132,13 @@ TEST_F(TableTest, CreateFromViewVector)
 
 TEST_F(TableTest, CreateFromViewVectorRowsMismatch)
 {
-  column_wrapper <int8_t > col1{{1,2,3,4}};
-  column_wrapper <int16_t> col2{{1,2,3}};
+  column_wrapper<int8_t> col1{{1, 2, 3, 4}};
+  column_wrapper<int16_t> col2{{1, 2, 3}};
 
   std::vector<TView> views;
   views.emplace_back(std::vector<column_view>{col1});
   views.emplace_back(std::vector<column_view>{col2});
-  EXPECT_THROW (TView{views}, cudf::logic_error);
+  EXPECT_THROW(TView{views}, cudf::logic_error);
 }
 
 TEST_F(TableTest, CreateFromViewVectorEmptyTables)

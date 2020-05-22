@@ -15,10 +15,10 @@
  */
 #include <cudf/dlpack.hpp>
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
+#include <tests/utilities/type_lists.hpp>
 
 #include <dlpack/dlpack.h>
 
@@ -50,22 +50,17 @@ template <typename T>
 void validate_dtype(DLDataType const& dtype)
 {
   switch (dtype.code) {
-    case kDLInt:
-      EXPECT_TRUE(std::is_integral<T>::value && std::is_signed<T>::value);
-      break;
-    case kDLUInt:
-      EXPECT_TRUE(std::is_integral<T>::value && std::is_unsigned<T>::value);
-      break;
-    case kDLFloat:
-      EXPECT_TRUE(std::is_floating_point<T>::value);
-      break;
+    case kDLInt: EXPECT_TRUE(std::is_integral<T>::value && std::is_signed<T>::value); break;
+    case kDLUInt: EXPECT_TRUE(std::is_integral<T>::value && std::is_unsigned<T>::value); break;
+    case kDLFloat: EXPECT_TRUE(std::is_floating_point<T>::value); break;
     default: FAIL();
   }
   EXPECT_EQ(1, dtype.lanes);
   EXPECT_EQ(sizeof(T) * 8, dtype.bits);
 }
 
-class DLPackUntypedTests : public BaseFixture {};
+class DLPackUntypedTests : public BaseFixture {
+};
 
 TEST_F(DLPackUntypedTests, EmptyTableToDlpack)
 {
@@ -212,7 +207,8 @@ TEST_F(DLPackUntypedTests, UnsupportedLanesFromDlpack)
 }
 
 template <typename T>
-class DLPackTimestampTests : public BaseFixture {};
+class DLPackTimestampTests : public BaseFixture {
+};
 
 TYPED_TEST_CASE(DLPackTimestampTests, TimestampTypes);
 
@@ -224,7 +220,8 @@ TYPED_TEST(DLPackTimestampTests, TimestampTypesToDlpack)
 }
 
 template <typename T>
-class DLPackNumericTests : public BaseFixture {};
+class DLPackNumericTests : public BaseFixture {
+};
 
 TYPED_TEST_CASE(DLPackNumericTests, NumericTypes);
 
@@ -250,15 +247,14 @@ TYPED_TEST(DLPackNumericTests, ToDlpack1D)
   EXPECT_NE(nullptr, tensor.shape);
 
   // Verify that data matches input column
-  constexpr cudf::data_type type{cudf::experimental::type_to_id<TypeParam>()};
-  cudf::column_view const result_view(type, tensor.shape[0], tensor.data,
-    col_view.null_mask());
+  constexpr cudf::data_type type{cudf::type_to_id<TypeParam>()};
+  cudf::column_view const result_view(type, tensor.shape[0], tensor.data, col_view.null_mask());
   expect_columns_equal(col_view, result_view);
 }
 
 TYPED_TEST(DLPackNumericTests, ToDlpack2D)
 {
-  using T = TypeParam;
+  using T             = TypeParam;
   auto const col1_tmp = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
   auto const col2_tmp = cudf::test::make_type_param_vector<T>({4, 5, 6, 7});
   std::vector<fixed_width_column_wrapper<TypeParam>> cols;
@@ -266,8 +262,9 @@ TYPED_TEST(DLPackNumericTests, ToDlpack2D)
   cols.push_back(fixed_width_column_wrapper<TypeParam>(col2_tmp.cbegin(), col2_tmp.cend()));
 
   std::vector<cudf::column_view> col_views;
-  std::transform(cols.begin(), cols.end(), std::back_inserter(col_views),
-    [](auto const& col) { return static_cast<cudf::column_view>(col); });
+  std::transform(cols.begin(), cols.end(), std::back_inserter(col_views), [](auto const& col) {
+    return static_cast<cudf::column_view>(col);
+  });
 
   cudf::table_view input(col_views);
   unique_managed_tensor result(cudf::to_dlpack(input));
@@ -288,7 +285,7 @@ TYPED_TEST(DLPackNumericTests, ToDlpack2D)
   // Verify that data matches input columns
   cudf::size_type offset{0};
   for (auto const& col : input) {
-    constexpr cudf::data_type type{cudf::experimental::type_to_id<TypeParam>()};
+    constexpr cudf::data_type type{cudf::type_to_id<TypeParam>()};
     cudf::column_view const result_view(type, tensor.shape[0], tensor.data, nullptr, 0, offset);
     expect_columns_equal(col, result_view);
     offset += tensor.strides[1];
@@ -310,7 +307,7 @@ TYPED_TEST(DLPackNumericTests, FromDlpack1D)
 TYPED_TEST(DLPackNumericTests, FromDlpack2D)
 {
   // Use to_dlpack to generate an input tensor
-  using T = TypeParam;
+  using T         = TypeParam;
   auto const col1 = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
   auto const col2 = cudf::test::make_type_param_vector<T>({4, 5, 6, 7});
   std::vector<fixed_width_column_wrapper<TypeParam>> cols;
@@ -318,8 +315,9 @@ TYPED_TEST(DLPackNumericTests, FromDlpack2D)
   cols.push_back(fixed_width_column_wrapper<T>(col2.cbegin(), col2.cend()));
 
   std::vector<cudf::column_view> col_views;
-  std::transform(cols.begin(), cols.end(), std::back_inserter(col_views),
-    [](auto const& col) { return static_cast<cudf::column_view>(col); });
+  std::transform(cols.begin(), cols.end(), std::back_inserter(col_views), [](auto const& col) {
+    return static_cast<cudf::column_view>(col);
+  });
 
   cudf::table_view input(col_views);
   unique_managed_tensor tensor(cudf::to_dlpack(input));
@@ -332,10 +330,10 @@ TYPED_TEST(DLPackNumericTests, FromDlpack2D)
 TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
 {
   // Host buffer with stride > rows and byte_offset > 0
-  using T = TypeParam;
+  using T         = TypeParam;
   auto const data = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 0, 5, 6, 7, 8, 0});
   uint64_t const offset{sizeof(T)};
-  int64_t shape[2] = {4, 2};
+  int64_t shape[2]   = {4, 2};
   int64_t strides[2] = {1, 5};
 
   DLManagedTensor tensor{};
@@ -347,7 +345,7 @@ TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
   tensor.dl_tensor.strides         = strides;
 
   thrust::host_vector<T> host_vector(data.begin(), data.end());
-  tensor.dl_tensor.data            = host_vector.data();
+  tensor.dl_tensor.data = host_vector.data();
 
   fixed_width_column_wrapper<TypeParam> col1({1, 2, 3, 4});
   fixed_width_column_wrapper<TypeParam> col2({5, 6, 7, 8});

@@ -7,7 +7,6 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <utilities/legacy/error_utils.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/count.h>
@@ -15,9 +14,7 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
-
 struct dispatch_map_type {
   template <typename map_type,
             std::enable_if_t<std::is_integral<map_type>::value and
@@ -30,7 +27,8 @@ struct dispatch_map_type {
     bool ignore_out_of_bounds,
     bool allow_negative_indices         = false,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream                 = 0) {
+    cudaStream_t stream                 = 0)
+  {
     std::unique_ptr<table> destination_table;
 
     if (check_bounds) {
@@ -76,7 +74,8 @@ struct dispatch_map_type {
     bool ignore_out_of_bounds,
     bool allow_negative_indices         = false,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream                 = 0) {
+    cudaStream_t stream                 = 0)
+  {
     CUDF_FAIL("Gather map must be an integral type.");
   }
 };
@@ -87,20 +86,20 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               bool ignore_out_of_bounds,
                               bool allow_negative_indices,
                               rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream) {
+                              cudaStream_t stream)
+{
   CUDF_EXPECTS(gather_map.has_nulls() == false, "gather_map contains nulls");
 
-  std::unique_ptr<table> destination_table =
-    cudf::experimental::type_dispatcher(gather_map.type(),
-                                        dispatch_map_type{},
-                                        source_table,
-                                        gather_map,
-                                        gather_map.size(),
-                                        check_bounds,
-                                        ignore_out_of_bounds,
-                                        allow_negative_indices,
-                                        mr,
-                                        stream);
+  std::unique_ptr<table> destination_table = cudf::type_dispatcher(gather_map.type(),
+                                                                   dispatch_map_type{},
+                                                                   source_table,
+                                                                   gather_map,
+                                                                   gather_map.size(),
+                                                                   check_bounds,
+                                                                   ignore_out_of_bounds,
+                                                                   allow_negative_indices,
+                                                                   mr,
+                                                                   stream);
 
   return destination_table;
 }
@@ -110,10 +109,10 @@ std::unique_ptr<table> gather(table_view const& source_table,
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
                               bool check_bounds,
-                              rmm::mr::device_memory_resource* mr) {
+                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::gather(source_table, gather_map, check_bounds, false, true, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

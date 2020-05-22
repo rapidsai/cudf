@@ -16,13 +16,13 @@
 
 #pragma once
 
+#include <cudf/utilities/traits.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/cxxopts.hpp>
-#include <cudf/utilities/traits.hpp>
 
-#include <rmm/mr/device/default_memory_resource.hpp>
 #include <rmm/mr/device/cnmem_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/default_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 
 #include <ftw.h>
@@ -30,7 +30,6 @@
 
 namespace cudf {
 namespace test {
-
 /**
  * @brief Base test fixture class from which all libcudf tests should inherit.
  *
@@ -38,43 +37,67 @@ namespace test {
  * ```
  * class MyTestFixture : public cudf::test::BaseFixture {};
  * ```
- */
+ **/
 class BaseFixture : public ::testing::Test {
-  rmm::mr::device_memory_resource* _mr{rmm::mr::get_default_resource()};
+  rmm::mr::device_memory_resource *_mr{rmm::mr::get_default_resource()};
 
  public:
   /**
    * @brief Returns pointer to `device_memory_resource` that should be used for
-   * all tests inheritng from this fixture
-   */
-  rmm::mr::device_memory_resource* mr() { return _mr; }
+   * all tests inheriting from this fixture
+   **/
+  rmm::mr::device_memory_resource *mr() { return _mr; }
 };
 
 template <typename T, typename Enable = void>
-struct uniform_distribution_impl{};
-template<typename T>
-struct uniform_distribution_impl<T,
-  std::enable_if_t<std::is_integral<T>::value && not cudf::is_boolean<T>()> > {
-   using type = std::uniform_int_distribution<T>;
+struct uniform_distribution_impl {
+};
+template <typename T>
+struct uniform_distribution_impl<
+  T,
+  std::enable_if_t<std::is_integral<T>::value && not cudf::is_boolean<T>()>> {
+  using type = std::uniform_int_distribution<T>;
 };
 
-template<typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<std::is_floating_point<T>::value > > {
-   using type = std::uniform_real_distribution<T>;
+template <typename T>
+struct uniform_distribution_impl<T, std::enable_if_t<std::is_floating_point<T>::value>> {
+  using type = std::uniform_real_distribution<T>;
 };
 
-template<typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_boolean<T>() > > {
-   using type = std::bernoulli_distribution;
+template <typename T>
+struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_boolean<T>()>> {
+  using type = std::bernoulli_distribution;
 };
 
-template<typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_timestamp<T>() > > {
-   using type = std::uniform_int_distribution<typename T::duration::rep>;
+template <typename T>
+struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
+  using type = std::uniform_int_distribution<typename T::duration::rep>;
 };
 
 template <typename T>
 using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
+
+namespace detail {
+
+/**
+ * @brief Returns an incrementing seed value for use with UniformRandomGenerator.
+ *
+ *  The intent behind this is to handle the following case:
+ *
+ * auto lhs = make_random_wrapped_column<TypeLhs>(10000);
+ * auto rhs = make_random_wrapped_column<TypeRhs>(10000);
+ *
+ * Previously, the binops test framework had a persistent UniformRandomGenerator
+ * that would produce unique values across two calls to make_random_wrapped_column()
+ * like this.  However that code has been changed and each call to make_random_wrapped_column()
+ * now uses a local UniformRandomGenerator object.  If we didn't generate an incrementing seed
+ * for each one, every call to make_random_wrapped_column() would return the same values. This
+ * fixes that case and also leaves results across multiple test runs deterministic.
+ *
+ */
+uint64_t random_generator_incrementing_seed();
+
+}  // namespace detail
 
 /**
  * @brief Provides uniform random number generation.
@@ -91,14 +114,13 @@ using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
  * ```
  *
  * @tparam T The type of values that will be generated.
- */
-template <typename T = cudf::size_type,
-          typename Engine = std::default_random_engine>
+ **/
+template <typename T = cudf::size_type, typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
  public:
   using uniform_distribution = uniform_distribution_t<T>;
 
-  UniformRandomGenerator() = default;
+  UniformRandomGenerator() : rng{std::mt19937_64{detail::random_generator_incrementing_seed()}()} {}
 
   /**
    * @brief Construct a new Uniform Random Generator to generate uniformly
@@ -107,16 +129,37 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  UniformRandomGenerator(T lower, T upper) : dist{lower, upper} {}
+  template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()> * = nullptr>
+  UniformRandomGenerator(T lower,
+                         T upper,
+                         uint64_t seed = detail::random_generator_incrementing_seed())
+    : dist{lower, upper}, rng{std::mt19937_64{seed}()}
+  {
+  }
+
+  /**
+   * @brief Construct a new Uniform Random Generator to generate uniformly
+   * random numbers in the range `[upper,lower]`
+   *
+   * @param lower Lower bound of the range
+   * @param upper Upper bound of the desired range
+   */
+  template <typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()> * = nullptr>
+  UniformRandomGenerator(long lower,
+                         long upper,
+                         uint64_t seed = detail::random_generator_incrementing_seed())
+    : dist{lower, upper}, rng{std::mt19937_64{seed}()}
+  {
+  }
 
   /**
    * @brief Returns the next random number.
-   */
+   **/
   T generate() { return T{dist(rng)}; }
 
  private:
-  uniform_distribution dist{};         ///< Distribution
-  Engine rng{std::random_device{}()};  ///< Random generator
+  uniform_distribution dist{};  ///< Distribution
+  Engine rng;                   ///< Random generator
 };
 
 /**
@@ -127,24 +170,30 @@ class UniformRandomGenerator {
  * ::testing::Environment* const temp_env =
  *    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment);
  * ```
- */
+ **/
 class TempDirTestEnvironment : public ::testing::Environment {
  public:
   std::string tmpdir;
 
-  void SetUp() {
-    char tmp_format[] = "/tmp/gtest.XXXXXX";
-    tmpdir = mkdtemp(tmp_format);
+  void SetUp()
+  {
+    std::string tmp("/tmp");
+    if (const char *env_p = std::getenv("WORKSPACE")) tmp = env_p;
+    tmp += "/gtest.XXXXXX";
+    auto tmpdirptr = mkdtemp(const_cast<char *>(tmp.data()));
+    if (tmpdirptr == nullptr) CUDF_FAIL("Temporary directory creation failure: " + tmp);
+    tmpdir = tmpdirptr;
     tmpdir += "/";
   }
 
-  void TearDown() {
+  void TearDown()
+  {
     // TODO: should use std::filesystem instead, once C++17 support added
     nftw(tmpdir.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
   }
 
-  static int rm_files(const char *pathname, const struct stat *sbuf, int type,
-                      struct FTW *ftwb) {
+  static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
+  {
     return remove(pathname);
   }
 
@@ -160,35 +209,31 @@ class TempDirTestEnvironment : public ::testing::Environment {
    *
    * @return std::string The temporary filepath
    */
-  std::string get_temp_filepath(std::string filename) {
-    return tmpdir + filename;
-  }
+  std::string get_temp_filepath(std::string filename) { return tmpdir + filename; }
 };
 
 /**
  * @brief Creates a memory resource for the unit test environment
  * given the name of the allocation mode.
- * 
+ *
  * The returned resource instance must be kept alive for the duration of
  * the tests. Attaching the resource to a TestEnvironment causes
  * issues since the environment objects are not destroyed until
  * after the runtime is shutdown.
- * 
+ *
  * @throw cudf::logic_error if the `allocation_mode` is unsupported.
  *
  * @param allocation_mode String identifies which resource type.
  *        Accepted types are "pool", "cuda", and "managed" only.
  * @return Memory resource instance
  */
-inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& allocation_mode)
+inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(
+  std::string const &allocation_mode)
 {
-    if( allocation_mode == "cuda" )
-        return std::make_unique<rmm::mr::cuda_memory_resource>();
-    if( allocation_mode == "pool" )
-        return std::make_unique<rmm::mr::cnmem_memory_resource>();
-    if( allocation_mode == "managed" )
-        return std::make_unique<rmm::mr::managed_memory_resource>();
-    CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
+  if (allocation_mode == "cuda") return std::make_unique<rmm::mr::cuda_memory_resource>();
+  if (allocation_mode == "pool") return std::make_unique<rmm::mr::cnmem_memory_resource>();
+  if (allocation_mode == "managed") return std::make_unique<rmm::mr::managed_memory_resource>();
+  CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }
 
 }  // namespace test
@@ -199,41 +244,40 @@ inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(s
  *
  * Currently only supports 'rmm_mode' string paramater, which set the rmm
  * allocation mode. The default value of the parameter is 'pool'.
- * 
+ *
  * @return Parsing results in the form of unordered map
  */
-inline auto parse_cudf_test_opts(int argc, char **argv) {
+inline auto parse_cudf_test_opts(int argc, char **argv)
+{
   try {
     cxxopts::Options options(argv[0], " - cuDF tests command line options");
-    options
-      .allow_unrecognised_options()
-      .add_options()
-      ("rmm_mode", "RMM allocation mode",
-        cxxopts::value<std::string>()->default_value("pool"));
+    options.allow_unrecognised_options().add_options()(
+      "rmm_mode", "RMM allocation mode", cxxopts::value<std::string>()->default_value("pool"));
 
     return options.parse(argc, argv);
-  }
-  catch (const cxxopts::OptionException& e) {
+  } catch (const cxxopts::OptionException &e) {
     CUDF_FAIL("Error parsing command line options");
   }
 }
 
 /**
  * @brief Macro that defines main function for gtest programs that use rmm
- * 
+ *
  * Should be included in every test program that uses rmm allocators since
  * it maintains the lifespan of the rmm default memory resource.
  * This `main` function is a wrapper around the google test generated `main`,
  * maintaining the original functionality. In addition, this custom `main`
  * function parses the command line to customize test behavior, like the
  * allocation mode used for creating the default memory resource.
- * 
+ *
  */
-#define CUDF_TEST_PROGRAM_MAIN() int main(int argc, char **argv) {  \
-  ::testing::InitGoogleTest(&argc, argv);                           \
-  auto const cmd_opts = parse_cudf_test_opts(argc, argv);           \
-  auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();     \
-  auto resource = cudf::test::create_memory_resource(rmm_mode);     \
-  rmm::mr::set_default_resource(resource.get());                    \
-  return RUN_ALL_TESTS();                                           \
-}
+#define CUDF_TEST_PROGRAM_MAIN()                                        \
+  int main(int argc, char **argv)                                       \
+  {                                                                     \
+    ::testing::InitGoogleTest(&argc, argv);                             \
+    auto const cmd_opts = parse_cudf_test_opts(argc, argv);             \
+    auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();       \
+    auto resource       = cudf::test::create_memory_resource(rmm_mode); \
+    rmm::mr::set_default_resource(resource.get());                      \
+    return RUN_ALL_TESTS();                                             \
+  }

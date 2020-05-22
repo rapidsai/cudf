@@ -20,6 +20,10 @@
 
 namespace cudf {
 namespace strings {
+/**
+ * @addtogroup strings_convert
+ * @{
+ */
 
 /**
  * @brief Returns a new numeric column by parsing float values from each string
@@ -62,5 +66,6 @@ std::unique_ptr<column> to_floats(
 std::unique_ptr<column> from_floats(
   column_view const& floats, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

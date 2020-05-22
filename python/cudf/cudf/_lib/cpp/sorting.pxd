@@ -20,7 +20,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         MAX "cudf::rank_method::MAX"
         DENSE "cudf::rank_method::DENSE"
 
-cdef extern from "cudf/sorting.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] sorted_order(
         table_view source_table,
         vector[libcudf_types.order] column_order,
@@ -30,7 +30,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf::experimental" nogil:
         column_view input_view,
         rank_method method,
         libcudf_types.order column_order,
-        libcudf_types.include_nulls _include_nulls,
+        libcudf_types.null_policy null_handling,
         libcudf_types.null_order null_precedence,
         bool percentage) except +
 

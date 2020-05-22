@@ -23,19 +23,23 @@
  * @file dictionary.hpp
  * @brief Concrete type definition for dictionary columns.
  */
+
 namespace cudf {
+/**
+ * @addtogroup dictionary_classes
+ * @{
+ */
 
 /**
  * @brief A strongly typed wrapper for indices in a DICTIONARY type column.
  *
  * IndexType will be integer types like int32_t.
- * 
+ *
  * For example, `dictionary32` is a strongly typed wrapper around an `int32_t`
- * value that holds the offset into the dictionary keys for a specific element. 
+ * value that holds the offset into the dictionary keys for a specific element.
  *
  * This wrapper provides common conversion and comparison operations for
  * the IndexType.
- *
  */
 template <typename IndexType>
 struct dictionary_wrapper {
@@ -63,40 +67,47 @@ struct dictionary_wrapper {
 // comparison operators
 template <typename Integer>
 CUDA_HOST_DEVICE_CALLABLE bool operator==(dictionary_wrapper<Integer> const& lhs,
-                                          dictionary_wrapper<Integer> const& rhs) {
+                                          dictionary_wrapper<Integer> const& rhs)
+{
   return lhs.value() == rhs.value();
 }
 
 template <typename Integer>
 CUDA_HOST_DEVICE_CALLABLE bool operator!=(dictionary_wrapper<Integer> const& lhs,
-                                          dictionary_wrapper<Integer> const& rhs) {
+                                          dictionary_wrapper<Integer> const& rhs)
+{
   return lhs.value() != rhs.value();
 }
 
 template <typename Integer>
 CUDA_HOST_DEVICE_CALLABLE bool operator<=(dictionary_wrapper<Integer> const& lhs,
-                                          dictionary_wrapper<Integer> const& rhs) {
+                                          dictionary_wrapper<Integer> const& rhs)
+{
   return lhs.value() <= rhs.value();
 }
 
 template <typename Integer>
 CUDA_HOST_DEVICE_CALLABLE bool operator>=(dictionary_wrapper<Integer> const& lhs,
-                                          dictionary_wrapper<Integer> const& rhs) {
+                                          dictionary_wrapper<Integer> const& rhs)
+{
   return lhs.value() >= rhs.value();
 }
 
 template <typename Integer>
 CUDA_HOST_DEVICE_CALLABLE constexpr bool operator<(dictionary_wrapper<Integer> const& lhs,
-                                                   dictionary_wrapper<Integer> const& rhs) {
+                                                   dictionary_wrapper<Integer> const& rhs)
+{
   return lhs.value() < rhs.value();
 }
 
 template <typename Integer>
 CUDA_HOST_DEVICE_CALLABLE bool operator>(dictionary_wrapper<Integer> const& lhs,
-                                         dictionary_wrapper<Integer> const& rhs) {
+                                         dictionary_wrapper<Integer> const& rhs)
+{
   return lhs.value() > rhs.value();
 }
 
 using dictionary32 = dictionary_wrapper<int32_t>;
 
+/** @} */  // end of group
 }  // namespace cudf

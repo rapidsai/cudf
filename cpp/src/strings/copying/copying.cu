@@ -27,14 +27,14 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 // new strings column from subset of this strings instance
 std::unique_ptr<cudf::column> slice(strings_column_view const& strings,
                                     size_type start,
                                     size_type end,
                                     size_type step,
                                     cudaStream_t stream,
-                                    rmm::mr::device_memory_resource* mr) {
+                                    rmm::mr::device_memory_resource* mr)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
   if (step == 0) step = 1;
@@ -51,10 +51,10 @@ std::unique_ptr<cudf::column> slice(strings_column_view const& strings,
   column_view indices_view(data_type{INT32}, strings_count, indices.data().get(), nullptr, 0);
   // build a new strings column from the indices
   auto sliced_table =
-    experimental::detail::gather(table_view{{strings.parent()}}, indices_view, stream, mr)
-      ->release();
+    cudf::detail::gather(table_view{{strings.parent()}}, indices_view, stream, mr)->release();
   std::unique_ptr<column> output_column(std::move(sliced_table.front()));
-  if (output_column->null_count() == 0) output_column->set_null_mask(rmm::device_buffer{}, 0);
+  if (output_column->null_count() == 0)
+    output_column->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
   return output_column;
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -19,47 +19,53 @@
 
 #pragma once
 
+#include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
 namespace test {
 namespace binop {
 
-struct BinaryOperationTest
-    : public cudf::test::BaseFixture
-    , cudf::test::UniformRandomGenerator<uint8_t>
-{
-    BinaryOperationTest()
-     : cudf::test::UniformRandomGenerator<uint8_t>(1, 10)
-    {}
+struct BinaryOperationTest : public cudf::test::BaseFixture {
+  BinaryOperationTest() {}
 
-    auto make_data_iter() {
-        return cudf::test::make_counting_transform_iterator(0,
-            [this](auto row) { return this->generate(); });
-    }
+  static constexpr int r_min = 1;
+  static constexpr int r_max = 10;
 
-    auto make_validity_iter() {
-        uint8_t mod_base = this->generate();
-        return cudf::test::make_counting_transform_iterator(0,
-            [mod_base](auto row) { return (row % mod_base) > 0; });
-    }
+  template <typename T>
+  auto make_data_iter(cudf::test::UniformRandomGenerator<T>& rand_gen)
+  {
+    return cudf::test::make_counting_transform_iterator(
+      0, [&](auto row) { return rand_gen.generate(); });
+  }
 
-    template <typename T>
-    auto make_random_wrapped_column(size_type size) {
-        auto data_iter = make_data_iter();
-        auto validity_iter = make_validity_iter();
-        return cudf::test::fixed_width_column_wrapper<T>(
-            data_iter, data_iter + size, validity_iter);
-    }
+  auto make_validity_iter()
+  {
+    cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max);
+    uint8_t mod_base = rand_gen.generate();
+    return cudf::test::make_counting_transform_iterator(
+      0, [mod_base](auto row) { return (row % mod_base) > 0; });
+  }
 
-    template <typename T>
-    auto make_random_wrapped_scalar() {
-        return cudf::experimental::scalar_type_t<T>(this->generate());
-    }
+  template <typename T>
+  auto make_random_wrapped_column(size_type size)
+  {
+    cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
+    auto data_iter     = make_data_iter(rand_gen);
+    auto validity_iter = make_validity_iter();
+
+    return cudf::test::fixed_width_column_wrapper<T>(data_iter, data_iter + size, validity_iter);
+  }
+
+  template <typename T>
+  auto make_random_wrapped_scalar()
+  {
+    cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
+    return cudf::scalar_type_t<T>(rand_gen.generate());
+  }
 };
 
-} // namespace binop
-} // namespace test
-} // namespace cudf
+}  // namespace binop
+}  // namespace test
+}  // namespace cudf

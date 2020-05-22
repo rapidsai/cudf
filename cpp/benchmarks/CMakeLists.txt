@@ -5,17 +5,19 @@ project(CUDF_BENCHS LANGUAGES C CXX CUDA)
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
+set(BENCHMARK_LIST CACHE INTERNAL "BENCHMARK_LIST")
+
 function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     add_executable(${CMAKE_BENCH_NAME}
                    ${CMAKE_BENCH_SRC}
-                   "${CMAKE_CURRENT_SOURCE_DIR}/synchronization/synchronization.cpp")
+                   "${CMAKE_CURRENT_SOURCE_DIR}/synchronization/synchronization.cpp"
+                   "${CMAKE_SOURCE_DIR}/tests/utilities/base_fixture.cpp")
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(${CMAKE_BENCH_NAME} benchmark benchmark_main pthread cudf )
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gbenchmarks")
+    set(BENCHMARK_LIST ${BENCHMARK_LIST} ${CMAKE_BENCH_NAME} CACHE INTERNAL "BENCHMARK_LIST")
 endfunction(ConfigureBench)
-
-option(CMAKE_ENABLE_BENCHMARKS "Enable building cuDF benchmarks" OFF)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -63,11 +65,6 @@ set(GATHER_BENCH_SRC
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 
-set(LEGACY_GATHER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/gather_benchmark.cu")
-
-ConfigureBench(LEGACY_GATHER_BENCH "${LEGACY_GATHER_BENCH_SRC}")
-
 ###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
 
@@ -75,11 +72,6 @@ set(SCATTER_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_benchmark.cu")
 
 ConfigureBench(SCATTER_BENCH "${SCATTER_BENCH_SRC}")
-
-set(LEGACY_SCATTER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/scatter_benchmark.cu")
-
-ConfigureBench(LEGACY_SCATTER_BENCH "${LEGACY_SCATTER_BENCH_SRC}")
 
 ###################################################################################################
 # - contiguous_split benchmark  -------------------------------------------------------------------
@@ -109,7 +101,7 @@ ConfigureBench(TRANSPOSE_BENCH "${TRANSPOSE_BENCH_SRC}")
 # - apply_boolean_mask benchmark ------------------------------------------------------------------
 
 set(APPLY_BOOLEAN_MASK_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_benchmark.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_benchmark.cpp")
 
 ConfigureBench(APPLY_BOOLEAN_MASK_BENCH "${APPLY_BOOLEAN_MASK_BENCH_SRC}")
 
@@ -146,19 +138,6 @@ set(TD_BENCH_SRC
 
 ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
 
-set(LEGACY_TD_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/type_dispatcher/legacy/type_dispatcher_benchmark.cu")
-
-ConfigureBench(LEGACY_TYPE_DISPATCHER_BENCH "${LEGACY_TD_BENCH_SRC}")
-
-###################################################################################################
-# - quantiles benchmark ---------------------------------------------------------------------------
-
-set(LEGACY_QUANTILES_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_benchmark.cu")
-
-ConfigureBench(LEGACY_QUANTILES_BENCH "${LEGACY_QUANTILES_BENCH_SRC}")
-
 ###################################################################################################
 # - groupby benchmark -----------------------------------------------------------------------------
 
@@ -167,22 +146,6 @@ set(GROUPBY_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_benchmark.cu")
 
 ConfigureBench(GROUPBY_BENCH "${GROUPBY_BENCH_SRC}")
-
-###################################################################################################
-# - stack benchmark -------------------------------------------------------------------------------
-
-set(LEGACY_STACK_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/reshape/legacy/stack_benchmark.cu")
-
-ConfigureBench(LEGACY_STACK_BENCH "${LEGACY_STACK_BENCH_SRC}")
-
-###################################################################################################
-# - legacy hashing benchmark ----------------------------------------------------------------------
-
-set(LEGACY_HASHING_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hashing_benchmark.cu")
-
-ConfigureBench(LEGACY_HASHING_BENCH "${LEGACY_HASHING_BENCH_SRC}")
 
 ###################################################################################################
 # - hashing benchmark -----------------------------------------------------------------------------

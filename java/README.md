@@ -77,3 +77,34 @@ You will get errors if you don't do it consistently.  We tried to detect these u
 
 If you have a compatible GPU on your build system the tests will use it.  If not you will see a
 lot of skipped tests.
+
+## Per-thread Default Stream
+
+The JNI code can be built with *per-thread default stream* (PTDS), which gives each host thread its
+own default CUDA stream, and can potentially increase the overlap of data copying and compute
+between different threads (see
+[blog post](https://devblogs.nvidia.com/gpu-pro-tip-cuda-7-streams-simplify-concurrency/)).
+
+Since the PTDS option is for each compilation unit, it should be done at the same time across the
+whole codebase. To enable PTDS, first build RMM:
+```shell script
+conda activate cudf_dev
+cd src/rmm/build
+cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DPER_THREAD_DEFAULT_STREAM=ON
+make -j`nproc`
+make install
+```
+
+then build cuDF:
+```shell script
+cd src/cudf/cpp/build
+cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DPER_THREAD_DEFAULT_STREAM=ON
+make -j`nproc`
+make install
+```
+
+and finally build the jar:
+```shell script
+cd src/cudf/java
+mvn clean install -DPER_THREAD_DEFAULT_STREAM=ON
+```

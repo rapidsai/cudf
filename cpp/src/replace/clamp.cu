@@ -29,32 +29,31 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
-
 template <typename Transformer>
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_char_column(
   cudf::column_device_view input,
   size_type null_count,
   Transformer offsets_transformer,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   std::unique_ptr<column> offsets_column{};
   auto strings_count = input.size();
 
   if (input.nullable()) {
     auto input_begin =
-      cudf::experimental::detail::make_null_replacement_iterator<string_view>(input, string_view{});
+      cudf::detail::make_null_replacement_iterator<string_view>(input, string_view{});
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input_begin, offsets_transformer);
-    offsets_column = std::move(cudf::strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream));
+    offsets_column = cudf::strings::detail::make_offsets_child_column(
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
   } else {
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input.begin<string_view>(), offsets_transformer);
-    offsets_column = std::move(cudf::strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream));
+    offsets_column = cudf::strings::detail::make_offsets_child_column(
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
   }
 
   auto d_offsets = offsets_column->view().template data<size_type>();
@@ -73,34 +72,34 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
                                                   ScalarIterator const& hi_itr,
                                                   ScalarIterator const& hi_replace_itr,
                                                   rmm::mr::device_memory_resource* mr,
-                                                  cudaStream_t stream) {
+                                                  cudaStream_t stream)
+{
   auto input_device_column = column_device_view::create(input.parent(), stream);
   auto d_input             = *input_device_column;
   size_type null_count     = input.parent().null_count();
-  const auto d_lo          = (*lo_itr).first;
-  const auto d_hi          = (*hi_itr).first;
-  const auto d_lo_replace  = (*lo_replace_itr).first;
-  const auto d_hi_replace  = (*hi_replace_itr).first;
-  const auto lo_valid      = (*lo_itr).second;
-  const auto hi_valid      = (*hi_itr).second;
 
   // build offset column
-  auto offsets_transformer =
-    [d_lo, lo_valid, d_lo_replace, d_hi, hi_valid, d_hi_replace] __device__(string_view element,
-                                                                            bool is_valid = true) {
-      size_type bytes = 0;
+  auto offsets_transformer = [lo_itr, hi_itr, lo_replace_itr, hi_replace_itr] __device__(
+                               string_view element, bool is_valid = true) {
+    const auto d_lo         = (*lo_itr).first;
+    const auto d_hi         = (*hi_itr).first;
+    const auto d_lo_replace = (*lo_replace_itr).first;
+    const auto d_hi_replace = (*hi_replace_itr).first;
+    const auto lo_valid     = (*lo_itr).second;
+    const auto hi_valid     = (*hi_itr).second;
+    size_type bytes         = 0;
 
-      if (is_valid) {
-        if (lo_valid and element < d_lo) {
-          bytes = d_lo_replace.size_bytes();
-        } else if (hi_valid and d_hi < element) {
-          bytes = d_hi_replace.size_bytes();
-        } else {
-          bytes = element.size_bytes();
-        }
+    if (is_valid) {
+      if (lo_valid and element < d_lo) {
+        bytes = d_lo_replace.size_bytes();
+      } else if (hi_valid and d_hi < element) {
+        bytes = d_hi_replace.size_bytes();
+      } else {
+        bytes = element.size_bytes();
       }
-      return bytes;
-    };
+    }
+    return bytes;
+  };
 
   auto offset_and_char =
     form_offsets_and_char_column(d_input, null_count, offsets_transformer, mr, stream);
@@ -110,26 +109,26 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
   auto d_offsets = offsets_column->view().template data<size_type>();
   auto d_chars   = chars_column->mutable_view().template data<char>();
   // fill in chars
-  auto copy_transformer = [d_input,
-                           d_lo,
-                           lo_valid,
-                           d_lo_replace,
-                           d_hi,
-                           hi_valid,
-                           d_hi_replace,
-                           d_offsets,
-                           d_chars] __device__(size_type idx) {
-    if (d_input.is_null(idx)) { return; }
-    auto input_element = d_input.element<string_view>(idx);
+  auto copy_transformer =
+    [d_input, lo_itr, hi_itr, lo_replace_itr, hi_replace_itr, d_offsets, d_chars] __device__(
+      size_type idx) {
+      if (d_input.is_null(idx)) { return; }
+      auto input_element      = d_input.element<string_view>(idx);
+      const auto d_lo         = (*lo_itr).first;
+      const auto d_hi         = (*hi_itr).first;
+      const auto d_lo_replace = (*lo_replace_itr).first;
+      const auto d_hi_replace = (*hi_replace_itr).first;
+      const auto lo_valid     = (*lo_itr).second;
+      const auto hi_valid     = (*hi_itr).second;
 
-    if (lo_valid and input_element < d_lo) {
-      memcpy(d_chars + d_offsets[idx], d_lo_replace.data(), d_lo_replace.size_bytes());
-    } else if (hi_valid and d_hi < input_element) {
-      memcpy(d_chars + d_offsets[idx], d_hi_replace.data(), d_hi_replace.size_bytes());
-    } else {
-      memcpy(d_chars + d_offsets[idx], input_element.data(), input_element.size_bytes());
-    }
-  };
+      if (lo_valid and input_element < d_lo) {
+        memcpy(d_chars + d_offsets[idx], d_lo_replace.data(), d_lo_replace.size_bytes());
+      } else if (hi_valid and d_hi < input_element) {
+        memcpy(d_chars + d_offsets[idx], d_hi_replace.data(), d_hi_replace.size_bytes());
+      } else {
+        memcpy(d_chars + d_offsets[idx], input_element.data(), input_element.size_bytes());
+      }
+    };
 
   auto exec = rmm::exec_policy(stream);
   thrust::for_each_n(
@@ -152,7 +151,8 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
   ScalarIterator const& hi_itr,
   ScalarIterator const& hi_replace_itr,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   auto output =
     detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, mr, stream);
   // mask will not change
@@ -208,7 +208,8 @@ std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<cudf::colu
   ScalarIterator const& hi_itr,
   ScalarIterator const& hi_replace_itr,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   return clamp_string_column(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, mr, stream);
 }
 
@@ -220,11 +221,25 @@ std::enable_if_t<std::is_same<T, dictionary32>::value, std::unique_ptr<cudf::col
   ScalarIterator const& hi_itr,
   ScalarIterator const& hi_replace_itr,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   CUDF_FAIL("dictionary type not supported");
 }
 
-}  //namespace
+template <typename T, typename ScalarIterator>
+std::enable_if_t<std::is_same<T, list_view>::value, std::unique_ptr<cudf::column>> clamper(
+  column_view const& input,
+  ScalarIterator const& lo_itr,
+  ScalarIterator const& lo_replace_itr,
+  ScalarIterator const& hi_itr,
+  ScalarIterator const& hi_replace_itr,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("list_view type not supported");
+}
+
+}  // namespace
 
 template <typename T, typename ScalarIterator>
 std::unique_ptr<column> clamp(column_view const& input,
@@ -233,7 +248,8 @@ std::unique_ptr<column> clamp(column_view const& input,
                               ScalarIterator const& hi_itr,
                               ScalarIterator const& hi_replace_itr,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0) {
+                              cudaStream_t stream                 = 0)
+{
   return clamper<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, mr, stream);
 }
 
@@ -246,7 +262,8 @@ struct dispatch_clamp {
     scalar const& hi,
     scalar const& hi_replace,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream                 = 0) {
+    cudaStream_t stream                 = 0)
+  {
     auto lo_itr         = make_pair_iterator<T>(lo);
     auto hi_itr         = make_pair_iterator<T>(hi);
     auto lo_replace_itr = make_pair_iterator<T>(lo_replace);
@@ -256,8 +273,21 @@ struct dispatch_clamp {
   }
 };
 
+template <>
+std::unique_ptr<column> dispatch_clamp::operator()<cudf::list_view>(
+  column_view const& input,
+  scalar const& lo,
+  scalar const& lo_replace,
+  scalar const& hi,
+  scalar const& hi_replace,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("clamp for list_view not supported");
+}
+
 /**
- * @copydoc cudf::experimental::clamp(column_view const& input,
+ * @copydoc cudf::clamp(column_view const& input,
                                       scalar const& lo,
                                       scalar const& lo_replace,
                                       scalar const& hi,
@@ -272,7 +302,8 @@ std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& hi,
                               scalar const& hi_replace,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0) {
+                              cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(lo.type() == hi.type(), "mismatching types of limit scalars");
   CUDF_EXPECTS(lo_replace.type() == hi_replace.type(), "mismatching types of replace scalars");
   CUDF_EXPECTS(lo.type() == lo_replace.type(), "mismatching types of limit and replace scalars");
@@ -290,7 +321,7 @@ std::unique_ptr<column> clamp(column_view const& input,
     CUDF_EXPECTS(hi_replace.is_valid(stream), "hi_replace can't be null if hi is not null");
   }
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     input.type(), dispatch_clamp{}, input, lo, lo_replace, hi, hi_replace, mr, stream);
 }
 
@@ -302,7 +333,8 @@ std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& lo_replace,
                               scalar const& hi,
                               scalar const& hi_replace,
-                              rmm::mr::device_memory_resource* mr) {
+                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::clamp(input, lo, lo_replace, hi, hi_replace, mr);
 }
@@ -311,9 +343,9 @@ std::unique_ptr<column> clamp(column_view const& input,
 std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& lo,
                               scalar const& hi,
-                              rmm::mr::device_memory_resource* mr) {
+                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::clamp(input, lo, lo, hi, hi, mr);
 }
-}  // namespace experimental
 }  // namespace cudf

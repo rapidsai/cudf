@@ -25,13 +25,13 @@
 namespace cudf {
 namespace dictionary {
 namespace detail {
-
 /**
  * @brief Decode a column from a dictionary.
  */
 std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::mr::device_memory_resource* mr,
-                               cudaStream_t stream) {
+                               cudaStream_t stream)
+{
   if (source.size() == 0) return make_empty_column(data_type{EMPTY});
 
   column_view indices{cudf::data_type{cudf::INT32},
@@ -41,9 +41,9 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
                       0,
                       source.offset()};  // no nulls for gather indices
   // use gather to create the output column -- use ignore_out_of_bounds=true
-  auto table_column = experimental::detail::gather(
-                        table_view{{source.keys()}}, indices, false, true, false, mr, stream)
-                        ->release();
+  auto table_column =
+    cudf::detail::gather(table_view{{source.keys()}}, indices, false, true, false, mr, stream)
+      ->release();
   auto output_column = std::unique_ptr<column>(std::move(table_column.front()));
 
   // apply any nulls to the output column
@@ -55,7 +55,8 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
 }  // namespace detail
 
 std::unique_ptr<column> decode(dictionary_column_view const& source,
-                               rmm::mr::device_memory_resource* mr) {
+                               rmm::mr::device_memory_resource* mr)
+{
   return detail::decode(source, mr);
 }
 

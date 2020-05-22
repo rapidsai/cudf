@@ -33,11 +33,9 @@
 #include <cudf/io/readers.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace json {
-
 using namespace cudf::io::json;
 using namespace cudf::io;
 
@@ -70,7 +68,6 @@ class reader::impl {
 
   table_metadata metadata;
   std::vector<data_type> dtypes_;
-  //std::vector<gdf_dtype_extra_info> dtypes_extra_info_;
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;
@@ -104,7 +101,7 @@ class reader::impl {
    * @brief Finds all record starts in the file and stores them in rec_starts_
    *
    * Does not upload the entire file to the GPU
-   * 
+   *
    * @param[in] stream Cuda stream to execute gpu operations on
    *
    * @return void
@@ -126,7 +123,7 @@ class reader::impl {
    * @brief Parse the first row to set the column name
    *
    * Sets the column_names_ data member
-   * 
+   *
    * @param[in] stream Cuda stream to execute gpu operations on
    *
    * @return void
@@ -137,7 +134,7 @@ class reader::impl {
    * @brief Set the data type array data member
    *
    * If user does not pass the data types, deduces types from the file content
-   * 
+   *
    * @param[in] stream Cuda stream to execute gpu operations on
    *
    * @return void
@@ -146,7 +143,7 @@ class reader::impl {
 
   /**
    * @brief Parse the input data and store results a table
-   *       
+   *
    * @param[in] stream Cuda stream to execute gpu operations on
    *
    * @return table_with_metadata struct
@@ -177,5 +174,4 @@ class reader::impl {
 }  // namespace json
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

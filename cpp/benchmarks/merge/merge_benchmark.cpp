@@ -33,11 +33,13 @@
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
 // Fixture that enables RMM pool mode
-class Merge : public cudf::benchmark {};
+class Merge : public cudf::benchmark {
+};
 
 using IntColWrap = cudf::test::fixed_width_column_wrapper<int32_t>;
 
-void BM_merge(benchmark::State& state) {
+void BM_merge(benchmark::State& state)
+{
   cudf::size_type const avg_rows = 1 << 19;  // 512K rows
   int const num_tables           = state.range(0);
 
@@ -77,7 +79,7 @@ void BM_merge(benchmark::State& state) {
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    auto result = cudf::experimental::merge(tables, key_cols, column_order, null_precedence);
+    auto result = cudf::merge(tables, key_cols, column_order, null_precedence);
   }
 
   state.SetBytesProcessed(state.iterations() * 2 * sizeof(int32_t) * total_rows);

@@ -27,10 +27,12 @@
 #include <vector>
 
 template <typename T, bool Nullable>
-class Concatenate : public cudf::benchmark {};
+class Concatenate : public cudf::benchmark {
+};
 
 template <typename T, bool Nullable>
-static void BM_concatenate(benchmark::State& state) {
+static void BM_concatenate(benchmark::State& state)
+{
   using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
   auto const num_rows = state.range(0);
@@ -80,7 +82,8 @@ CONCAT_BENCHMARK_DEFINE(concat_columns_int64_non_null, int64_t, false)
 CONCAT_BENCHMARK_DEFINE(concat_columns_int64_nullable, int64_t, true)
 
 template <typename T, bool Nullable>
-static void BM_concatenate_tables(benchmark::State& state) {
+static void BM_concatenate_tables(benchmark::State& state)
+{
   using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
   auto const num_rows   = state.range(0);
@@ -122,7 +125,7 @@ static void BM_concatenate_tables(benchmark::State& state) {
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, 0);
-    auto result = cudf::experimental::concatenate(table_views);
+    auto result = cudf::concatenate(table_views);
   }
 
   state.SetBytesProcessed(state.iterations() * num_cols * num_rows * num_tables * sizeof(T));
@@ -141,10 +144,12 @@ CONCAT_TABLES_BENCHMARK_DEFINE(concat_tables_int64_non_null, int64_t, false)
 CONCAT_TABLES_BENCHMARK_DEFINE(concat_tables_int64_nullable, int64_t, true)
 
 template <bool Nullable>
-class ConcatenateStrings : public cudf::benchmark {};
+class ConcatenateStrings : public cudf::benchmark {
+};
 
 template <bool Nullable>
-static void BM_concatenate_strings(benchmark::State& state) {
+static void BM_concatenate_strings(benchmark::State& state)
+{
   using column_wrapper = cudf::test::strings_column_wrapper;
 
   auto const num_rows  = state.range(0);

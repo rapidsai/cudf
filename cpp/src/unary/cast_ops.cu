@@ -24,34 +24,36 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
-
 template <typename _T, typename _R>
 struct unary_cast {
   template <typename T                                                                   = _T,
             typename R                                                                   = _R,
             typename std::enable_if_t<(cudf::is_numeric<T>() && cudf::is_numeric<R>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE R operator()(T const element) {
+  CUDA_DEVICE_CALLABLE R operator()(T const element)
+  {
     return static_cast<R>(element);
   }
   template <
     typename T                                                                       = _T,
     typename R                                                                       = _R,
     typename std::enable_if_t<(cudf::is_timestamp<T>() && cudf::is_timestamp<R>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE R operator()(T const element) {
+  CUDA_DEVICE_CALLABLE R operator()(T const element)
+  {
     return static_cast<R>(simt::std::chrono::floor<R::duration>(element));
   }
   template <typename T                                                                   = _T,
             typename R                                                                   = _R,
             typename std::enable_if_t<cudf::is_numeric<T>() && cudf::is_timestamp<R>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE R operator()(T const element) {
+  CUDA_DEVICE_CALLABLE R operator()(T const element)
+  {
     return static_cast<R>(static_cast<typename R::rep>(element));
   }
   template <typename T                                                                   = _T,
             typename R                                                                   = _R,
             typename std::enable_if_t<cudf::is_timestamp<T>() && cudf::is_numeric<R>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE R operator()(T const element) {
+  CUDA_DEVICE_CALLABLE R operator()(T const element)
+  {
     return static_cast<R>(element.time_since_epoch().count());
   }
 };
@@ -66,7 +68,8 @@ struct dispatch_unary_cast_to {
             typename std::enable_if_t<cudf::is_numeric<R>() || cudf::is_timestamp<R>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     auto size   = input.size();
     auto output = std::make_unique<column>(type,
                                            size,
@@ -90,7 +93,8 @@ struct dispatch_unary_cast_to {
     typename std::enable_if_t<!cudf::is_numeric<R>() && !cudf::is_timestamp<R>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     CUDF_FAIL("Column type must be numeric or timestamp");
   }
 };
@@ -104,8 +108,9 @@ struct dispatch_unary_cast_from {
             typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_timestamp<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
-    return experimental::type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, mr, stream);
+                                     cudaStream_t stream)
+  {
+    return type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, mr, stream);
   }
 
   template <
@@ -113,7 +118,8 @@ struct dispatch_unary_cast_from {
     typename std::enable_if_t<!cudf::is_timestamp<T>() && !cudf::is_numeric<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     CUDF_FAIL("Column type must be numeric or timestamp");
   }
 };
@@ -121,21 +127,21 @@ struct dispatch_unary_cast_from {
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
                              rmm::mr::device_memory_resource* mr,
-                             cudaStream_t stream) {
+                             cudaStream_t stream)
+{
   CUDF_EXPECTS(is_fixed_width(type), "Unary cast type must be fixed-width.");
 
-  return experimental::type_dispatcher(
-    input.type(), detail::dispatch_unary_cast_from{input}, type, mr, stream);
+  return type_dispatcher(input.type(), detail::dispatch_unary_cast_from{input}, type, mr, stream);
 }
 
 }  // namespace detail
 
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
-                             rmm::mr::device_memory_resource* mr) {
+                             rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::cast(input, type, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

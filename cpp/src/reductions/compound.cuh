@@ -23,10 +23,8 @@
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 namespace compound {
-
 /** --------------------------------------------------------------------------*
  * @brief Multi-step reduction for operations such as mean and variance, and
  * standard deviation.
@@ -41,14 +39,16 @@ namespace compound {
  *
  * @tparam ElementType  the input column cudf dtype
  * @tparam ResultType   the output cudf dtype
- * @tparam Op           the compound operator derived from `cudf::experimental::reduction::op::compound_op`
+ * @tparam Op           the compound operator derived from
+ * `cudf::reduction::op::compound_op`
  * ----------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,
                                            data_type const output_dtype,
                                            cudf::size_type ddof,
                                            rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream) {
+                                           cudaStream_t stream)
+{
   cudf::size_type valid_count = col.size() - col.null_count();
 
   // reduction by iterator
@@ -58,7 +58,7 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
 
   if (col.has_nulls()) {
     auto it =
-      thrust::make_transform_iterator(experimental::detail::make_null_replacement_iterator(
+      thrust::make_transform_iterator(cudf::detail::make_null_replacement_iterator(
                                         *dcol, compound_op.template get_identity<ElementType>()),
                                       compound_op.template get_element_transformer<ResultType>());
     result = detail::reduce<Op, decltype(it), ResultType>(
@@ -82,7 +82,8 @@ template <typename ElementType, typename Op>
 struct result_type_dispatcher {
  private:
   template <typename ResultType>
-  static constexpr bool is_supported_v() {
+  static constexpr bool is_supported_v()
+  {
     // the operator `mean`, `var`, `std` only accepts
     // floating points as output dtype
     return std::is_floating_point<ResultType>::value;
@@ -94,7 +95,8 @@ struct result_type_dispatcher {
                                      cudf::data_type const output_dtype,
                                      cudf::size_type ddof,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     return compound_reduction<ElementType, ResultType, Op>(col, output_dtype, ddof, mr, stream);
   }
 
@@ -103,7 +105,8 @@ struct result_type_dispatcher {
                                      cudf::data_type const output_dtype,
                                      cudf::size_type ddof,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     CUDF_FAIL("Unsupported output data type");
   }
 };
@@ -114,7 +117,8 @@ struct element_type_dispatcher {
  private:
   // return true if ElementType is arithmetic type
   template <typename ElementType>
-  static constexpr bool is_supported_v() {
+  static constexpr bool is_supported_v()
+  {
     return std::is_arithmetic<ElementType>::value;
   }
 
@@ -124,8 +128,9 @@ struct element_type_dispatcher {
                                      cudf::data_type const output_dtype,
                                      cudf::size_type ddof,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
-    return cudf::experimental::type_dispatcher(
+                                     cudaStream_t stream)
+  {
+    return cudf::type_dispatcher(
       output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, mr, stream);
   }
 
@@ -134,7 +139,8 @@ struct element_type_dispatcher {
                                      cudf::data_type const output_dtype,
                                      cudf::size_type ddof,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     CUDF_FAIL(
       "Reduction operators other than `min` and `max`"
       " are not supported for non-arithmetic types");
@@ -143,5 +149,4 @@ struct element_type_dispatcher {
 
 }  // namespace compound
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

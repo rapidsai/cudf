@@ -19,10 +19,11 @@
 #include <cudf/column/column_view.hpp>
 
 namespace cudf {
-
 /**
  * @brief Construct a dictionary column by copying the provided `keys`
  * and `indices`.
+ *
+ * @ingroup column_factories
  *
  * It is expected that `keys_column.has_nulls() == false`.
  * It is assumed the elements in `keys_column` are unique and
@@ -31,7 +32,8 @@ namespace cudf {
  *
  * The indices values must be in the range [0,keys_column.size()).
  *
- * If element `i` in `indices_column` is null, then element `i` in the returned dictionary column 
+ * The null_mask and null count for the output column are copied from the indices column.
+ * If element `i` in `indices_column` is null, then element `i` in the returned dictionary column
  * will also be null.
  *
  * ```
@@ -62,6 +64,8 @@ std::unique_ptr<column> make_dictionary_column(
 /**
  * @brief Construct a dictionary column by taking ownership of the provided keys
  * and indices columns.
+ *
+ * @ingroup column_factories
  *
  * The keys_column and indices columns must contain no nulls.
  * It is assumed the elements in `keys_column` are unique and

@@ -174,6 +174,11 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if dtype is not None:
         val = val.astype(dtype)
 
+    if val.dtype.type is np.datetime64:
+        time_unit, _ = np.datetime_data(val.dtype)
+        if time_unit in ("D", "W", "M", "Y"):
+            val = val.astype("datetime64[s]")
+
     return val
 
 
@@ -253,7 +258,12 @@ def check_cast_unsupported_dtype(dtype):
 
     if is_categorical_dtype(dtype):
         return dtype
-    dtype = np.dtype(dtype)
+
+    if isinstance(dtype, pd.core.arrays.numpy_.PandasDtype):
+        dtype = dtype.numpy_dtype
+    else:
+        dtype = np.dtype(dtype)
+
     if dtype in np_to_cudf_types:
         return dtype
 

@@ -23,13 +23,14 @@ namespace cudf {
 namespace test {
 
 struct PackUnpackTest : public BaseFixture {
-  void run_test(std::vector<column_view> const& t) {
-    auto packed  = experimental::pack(t);
-    auto packed2 = std::make_unique<experimental::packed_columns>(
-      std::make_unique<std::vector<uint8_t>>(*packed.metadata),
-      std::make_unique<rmm::device_buffer>(*packed.data));
+  void run_test(std::vector<column_view> const& t)
+  {
+    auto packed = pack(t);
+    auto packed2 =
+      std::make_unique<packed_columns>(std::make_unique<std::vector<uint8_t>>(*packed.metadata),
+                                       std::make_unique<rmm::device_buffer>(*packed.data));
 
-    experimental::unpack_result unpacked = experimental::unpack(std::move(packed2));
+    unpack_result unpacked = unpack(std::move(packed2));
 
     for (size_t i = 0; i < t.size(); i++) { expect_columns_equal(t[i], unpacked.columns[i]); }
   }

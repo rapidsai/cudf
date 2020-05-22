@@ -27,11 +27,7 @@
 #include <numeric>
 
 namespace cudf {
-
-namespace experimental {
-
 namespace detail {
-
 constexpr size_type MAX_JOIN_SIZE{std::numeric_limits<size_type>::max()};
 
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
@@ -50,9 +46,9 @@ using multimap_type =
                                 equal_to<hash_value_type>,
                                 default_allocator<thrust::pair<hash_value_type, size_type>>>;
 
-using row_hash = cudf::experimental::row_hasher<default_hash>;
+using row_hash = cudf::row_hasher<default_hash>;
 
-using row_equality = cudf::experimental::row_equality_comparator<true>;
+using row_equality = cudf::row_equality_comparator<true>;
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
 
@@ -60,7 +56,8 @@ inline bool is_trivial_join(table_view const& left,
                             table_view const& right,
                             std::vector<size_type> const& left_on,
                             std::vector<size_type> const& right_on,
-                            join_kind join_type) {
+                            join_kind join_type)
+{
   // If there is nothing to join, then send empty table with all columns
   if (left_on.empty() || right_on.empty()) { return true; }
 
@@ -79,8 +76,6 @@ inline bool is_trivial_join(table_view const& left,
   return false;
 }
 
-}  //namespace detail
+}  // namespace detail
 
-}  //namespace experimental
-
-}  //namespace cudf
+}  // namespace cudf

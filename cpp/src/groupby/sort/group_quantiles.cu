@@ -28,12 +28,9 @@
 #include <thrust/for_each.h>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
-
 namespace {
-
 struct quantiles_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
@@ -44,8 +41,9 @@ struct quantiles_functor {
     rmm::device_vector<double> const& quantile,
     interpolation interpolation,
     rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0) {
-    using ResultType = experimental::detail::target_type_t<T, aggregation::QUANTILE>;
+    cudaStream_t stream = 0)
+  {
+    using ResultType = cudf::detail::target_type_t<T, aggregation::QUANTILE>;
 
     auto result = make_numeric_column(data_type(type_to_id<ResultType>()),
                                       group_sizes.size() * quantile.size(),
@@ -78,15 +76,14 @@ struct quantiles_functor {
                            return d_values.element<T>(d_group_offset[i] + j);
                          };
 
-                         thrust::transform(
-                           thrust::seq,
-                           d_quantiles,
-                           d_quantiles + num_quantiles,
-                           d_result.data<ResultType>() + i * num_quantiles,
-                           [selector, segment_size, interpolation](auto q) {
-                             return experimental::detail::select_quantile<ResultType>(
-                               selector, segment_size, q, interpolation);
-                           });
+                         thrust::transform(thrust::seq,
+                                           d_quantiles,
+                                           d_quantiles + num_quantiles,
+                                           d_result.data<ResultType>() + i * num_quantiles,
+                                           [selector, segment_size, interpolation](auto q) {
+                                             return cudf::detail::select_quantile<ResultType>(
+                                               selector, segment_size, q, interpolation);
+                                           });
 
                          for (size_t j = 0; j < num_quantiles; j++) {
                            size_type group_size = d_group_size.element<size_type>(i);
@@ -113,7 +110,8 @@ struct quantiles_functor {
 
   template <typename T, typename... Args>
   std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
-    Args&&... args) {
+    Args&&... args)
+  {
     CUDF_FAIL("Only arithmetic types are supported in quantiles");
   }
 };
@@ -128,7 +126,8 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                                         std::vector<double> const& quantiles,
                                         interpolation interp,
                                         rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream) {
+                                        cudaStream_t stream)
+{
   rmm::device_vector<double> dv_quantiles(quantiles);
 
   return type_dispatcher(values.type(),
@@ -145,5 +144,4 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
 
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

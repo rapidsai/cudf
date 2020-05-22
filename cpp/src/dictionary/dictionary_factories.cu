@@ -19,11 +19,11 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 
 namespace cudf {
-
 std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
                                                column_view const& indices_column,
                                                rmm::mr::device_memory_resource* mr,
-                                               cudaStream_t stream) {
+                                               cudaStream_t stream)
+{
   CUDF_EXPECTS(!keys_column.has_nulls(), "keys column must not have nulls");
   if (keys_column.size() == 0) return make_empty_column(data_type{DICTIONARY32});
   CUDF_EXPECTS(indices_column.type().id() == cudf::type_id::INT32, "indices column must be INT32");
@@ -45,8 +45,8 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
   children.emplace_back(std::move(keys_copy));
   return std::make_unique<column>(data_type{DICTIONARY32},
                                   indices_column.size(),
-                                  rmm::device_buffer{},
-                                  null_mask,
+                                  rmm::device_buffer{0, stream, mr},
+                                  std::move(null_mask),
                                   null_count,
                                   std::move(children));
 }
@@ -54,7 +54,8 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
 std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_column,
                                                std::unique_ptr<column> indices_column,
                                                rmm::device_buffer&& null_mask,
-                                               size_type null_count) {
+                                               size_type null_count)
+{
   CUDF_EXPECTS(!keys_column->has_nulls(), "keys column must not have nulls");
   CUDF_EXPECTS(!indices_column->has_nulls(), "indices column must not have nulls");
   CUDF_EXPECTS(indices_column->type().id() == cudf::type_id::INT32, "indices must be type INT32");

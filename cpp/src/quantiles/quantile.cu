@@ -27,10 +27,7 @@
 #include <quantiles/quantiles_util.hpp>
 
 namespace cudf {
-namespace experimental {
-
 namespace detail {
-
 template <bool exact, typename SortMapIterator>
 struct quantile_functor {
   SortMapIterator ordered_indices;
@@ -43,13 +40,15 @@ struct quantile_functor {
 
   template <typename T>
   std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
-    column_view const& input) {
+    column_view const& input)
+  {
     CUDF_FAIL("quantile does not support non-numeric types");
   }
 
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
-    column_view const& input) {
+    column_view const& input)
+  {
     using Result = std::conditional_t<exact, double, T>;
 
     auto type   = data_type{type_to_id<Result>()};
@@ -109,7 +108,8 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  interpolation interp,
                                  bool retain_types,
                                  rmm::mr::device_memory_resource* mr,
-                                 cudaStream_t stream) {
+                                 cudaStream_t stream)
+{
   auto functor = quantile_functor<exact, SortMapIterator>{
     ordered_indices, size, q, interp, retain_types, mr, stream};
 
@@ -123,7 +123,8 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  interpolation interp,
                                  column_view const& ordered_indices,
                                  bool exact,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
 
   if (ordered_indices.is_empty()) {
@@ -149,5 +150,4 @@ std::unique_ptr<column> quantile(column_view const& input,
   }
 }
 
-}  // namespace experimental
 }  // namespace cudf

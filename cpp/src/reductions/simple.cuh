@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,9 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 namespace simple {
-
-/** --------------------------------------------------------------------------*    
+/** --------------------------------------------------------------------------*
  * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
  * which directly compute the reduction by a single step reduction call
  *
@@ -38,13 +36,14 @@ namespace simple {
  *
  * @tparam ElementType  the input column cudf dtype
  * @tparam ResultType   the output cudf dtype
- * @tparam Op           the operator of cudf::experimental::reduction::op::
+ * @tparam Op           the operator of cudf::reduction::op::
  * ----------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> simple_reduction(column_view const& col,
                                          data_type const output_dtype,
                                          rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream) {
+                                         cudaStream_t stream)
+{
   // reduction by iterator
   auto dcol = cudf::column_device_view::create(col, stream);
   std::unique_ptr<scalar> result;
@@ -52,7 +51,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
 
   if (col.has_nulls()) {
     auto it =
-      thrust::make_transform_iterator(experimental::detail::make_null_replacement_iterator(
+      thrust::make_transform_iterator(cudf::detail::make_null_replacement_iterator(
                                         *dcol, simple_op.template get_identity<ElementType>()),
                                       simple_op.template get_element_transformer<ResultType>());
     result = detail::reduce(it, col.size(), Op{}, mr, stream);
@@ -71,7 +70,8 @@ template <typename ElementType, typename Op>
 struct result_type_dispatcher {
  private:
   template <typename ResultType>
-  static constexpr bool is_supported_v() {
+  static constexpr bool is_supported_v()
+  {
     // for single step reductions,
     // the available combination of input and output dtypes are
     //  - same dtypes (including cudf::wrappers)
@@ -79,8 +79,9 @@ struct result_type_dispatcher {
     //  - bool to/from any arithmetic dtype
     return std::is_convertible<ElementType, ResultType>::value &&
            (std::is_arithmetic<ResultType>::value ||
-            std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
-            std::is_same<Op, cudf::experimental::reduction::op::max>::value);
+            std::is_same<Op, cudf::reduction::op::min>::value ||
+            std::is_same<Op, cudf::reduction::op::max>::value) &&
+           !std::is_same<ResultType, cudf::list_view>::value;
   }
 
  public:
@@ -88,7 +89,8 @@ struct result_type_dispatcher {
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_dtype,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     return simple_reduction<ElementType, ResultType, Op>(col, output_dtype, mr, stream);
   }
 
@@ -96,7 +98,8 @@ struct result_type_dispatcher {
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_dtype,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     CUDF_FAIL("input data type is not convertible to output data type");
   }
 };
@@ -108,11 +111,14 @@ struct element_type_dispatcher {
   // return true if ElementType is arithmetic type or bool, or
   // Op is DeviceMin or DeviceMax for wrapper (non-arithmetic) types
   template <typename ElementType>
-  static constexpr bool is_supported_v() {
+  static constexpr bool is_supported_v()
+  {
     // disable only for string ElementType except for operators min, max
-    return !(std::is_same<ElementType, cudf::string_view>::value &&
-             !(std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
-               std::is_same<Op, cudf::experimental::reduction::op::max>::value));
+    return !((std::is_same<ElementType, cudf::string_view>::value &&
+              !(std::is_same<Op, cudf::reduction::op::min>::value ||
+                std::is_same<Op, cudf::reduction::op::max>::value))
+             // disable for list views
+             || std::is_same<ElementType, cudf::list_view>::value);
   }
 
  public:
@@ -120,8 +126,9 @@ struct element_type_dispatcher {
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_dtype,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
-    return cudf::experimental::type_dispatcher(
+                                     cudaStream_t stream)
+  {
+    return cudf::type_dispatcher(
       output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, mr, stream);
   }
 
@@ -129,7 +136,8 @@ struct element_type_dispatcher {
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_dtype,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     CUDF_FAIL(
       "Reduction operators other than `min` and `max`"
       " are not supported for non-arithmetic types");
@@ -138,5 +146,4 @@ struct element_type_dispatcher {
 
 }  // namespace simple
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

@@ -20,7 +20,6 @@
 namespace cudf {
 namespace io {
 namespace parquet {
-
 /**
  * @brief Basic data types in Parquet, determines how data is physically stored
  **/
@@ -46,16 +45,16 @@ enum ConvertedType {
   MAP_KEY_VALUE = 2,  // a key/value pair is converted into a group of two fields
   LIST =
     3,  // a list is converted into an optional field containing a repeated field for its values
-  ENUM = 4,  // an enum is converted into a binary field
-  DECIMAL =
-    5,  // A decimal value. 10^(-scale) encoded as 2's complement big endian (precision=number of digits, scale=location of decimal point)
-  DATE = 6,  // A Date, stored as days since Unix epoch, encoded as the INT32 physical type.
-  TIME_MILLIS =
-    7,  // A time. The total number of milliseconds since midnight.The value is stored as an INT32 physical type.
-  TIME_MICROS =
-    8,  // A time. The total number of microseconds since midnight.  The value is stored as an INT64 physical type.
-  TIMESTAMP_MILLIS =
-    9,  // A date/time combination, recorded as milliseconds since the Unix epoch using physical type of INT64.
+  ENUM    = 4,      // an enum is converted into a binary field
+  DECIMAL = 5,      // A decimal value. 10^(-scale) encoded as 2's complement big endian
+                    // (precision=number of digits, scale=location of decimal point)
+  DATE        = 6,  // A Date, stored as days since Unix epoch, encoded as the INT32 physical type.
+  TIME_MILLIS = 7,  // A time. The total number of milliseconds since midnight.The value is stored
+                    // as an INT32 physical type.
+  TIME_MICROS = 8,  // A time. The total number of microseconds since midnight.  The value is stored
+                    // as an INT64 physical type.
+  TIMESTAMP_MILLIS = 9,   // A date/time combination, recorded as milliseconds since the Unix epoch
+                          // using physical type of INT64.
   TIMESTAMP_MICROS = 10,  // A date/time combination, microseconds since the Unix epoch as INT64
   UINT_8           = 11,  // An unsigned integer 8-bit value as INT32
   UINT_16          = 12,  // An unsigned integer 16-bit value as INT32
@@ -67,8 +66,8 @@ enum ConvertedType {
   INT_64           = 18,  // A signed integer 8-bit value as INT64
   JSON             = 19,  // A JSON document embedded within a single UTF8 column.
   BSON             = 20,  // A BSON document embedded within a single BINARY column.
-  INTERVAL =
-    21,  // This type annotates a time interval stored as a FIXED_LEN_BYTE_ARRAY of length 12 for 3 integers {months,days,milliseconds}
+  INTERVAL = 21,  // This type annotates a time interval stored as a FIXED_LEN_BYTE_ARRAY of length
+                  // 12 for 3 integers {months,days,milliseconds}
 };
 
 /**

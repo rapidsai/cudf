@@ -21,14 +21,13 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
-
 struct interleave_columns_functor {
   template <typename T, typename... Args>
   std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> operator()(
-    Args&&... args) {
+    Args&&... args)
+  {
     CUDF_FAIL("Only fixed-width types are supported in interleave_columns.");
   }
 
@@ -37,7 +36,8 @@ struct interleave_columns_functor {
     table_view const& input,
     bool create_mask,
     rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0) {
+    cudaStream_t stream = 0)
+  {
     auto arch_column = input.column(0);
     auto output_size = input.num_columns() * input.num_rows();
     auto output =
@@ -89,7 +89,8 @@ struct interleave_columns_functor {
 }  // namespace detail
 
 std::unique_ptr<column> interleave_columns(table_view const& input,
-                                           rmm::mr::device_memory_resource* mr) {
+                                           rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input.num_columns() > 0, "input must have at least one column to determine dtype.");
 
@@ -103,7 +104,5 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
 
   return type_dispatcher(dtype, detail::interleave_columns_functor{}, input, output_needs_mask, mr);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

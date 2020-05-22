@@ -14,56 +14,59 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/strings/strings_column_view.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include "./utilities.h"
 
-#include <gmock/gmock.h>
-#include <vector>
-#include <thrust/transform.h>
 #include <thrust/execution_policy.h>
+#include <thrust/transform.h>
+#include <vector>
 
+struct StringsHashTest : public cudf::test::BaseFixture {
+};
 
-struct StringsHashTest : public cudf::test::BaseFixture {};
-
-struct hash_string_fn
-{
-    cudf::column_device_view d_strings;
-    uint32_t __device__ operator()(uint32_t idx)
-    {
-        if( d_strings.is_null(idx) )
-            return 0;
-        auto item = d_strings.element<cudf::string_view>(idx);
-        return MurmurHash3_32<cudf::string_view>{}(item);
-    }
+struct hash_string_fn {
+  cudf::column_device_view d_strings;
+  uint32_t __device__ operator()(uint32_t idx)
+  {
+    if (d_strings.is_null(idx)) return 0;
+    auto item = d_strings.element<cudf::string_view>(idx);
+    return MurmurHash3_32<cudf::string_view>{}(item);
+  }
 };
 
 TEST_F(StringsHashTest, HashTest)
 {
-    std::vector<const char*> h_strings{ "abcdefghijklmnopqrstuvwxyz",
-                                        "abcdefghijklmnopqrstuvwxyz",
-                                        "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-                                        "0123456789", "4", "", nullptr,
-                                        "last one" };
-    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
-        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+  std::vector<const char*> h_strings{"abcdefghijklmnopqrstuvwxyz",
+                                     "abcdefghijklmnopqrstuvwxyz",
+                                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                                     "0123456789",
+                                     "4",
+                                     "",
+                                     nullptr,
+                                     "last one"};
+  cudf::test::strings_column_wrapper strings(
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
-    auto strings_view = cudf::strings_column_view(strings);
-    auto strings_column = cudf::column_device_view::create(strings_view.parent());
-    auto d_view = *strings_column;
+  auto strings_view   = cudf::strings_column_view(strings);
+  auto strings_column = cudf::column_device_view::create(strings_view.parent());
+  auto d_view         = *strings_column;
 
-    thrust::device_vector<uint32_t> d_values(strings_view.size());
-    thrust::transform( thrust::device,
-        thrust::make_counting_iterator<uint32_t>(0),
-        thrust::make_counting_iterator<uint32_t>(strings_view.size()),
-        d_values.begin(), hash_string_fn{d_view});
+  thrust::device_vector<uint32_t> d_values(strings_view.size());
+  thrust::transform(thrust::device,
+                    thrust::make_counting_iterator<uint32_t>(0),
+                    thrust::make_counting_iterator<uint32_t>(strings_view.size()),
+                    d_values.begin(),
+                    hash_string_fn{d_view});
 
-    uint32_t h_expected[] = {2739798893, 2739798893, 3506676360, 1891213601, 3778137224, 0, 0, 1551088011};
-    thrust::host_vector<uint32_t> h_values(d_values);
-    for( uint32_t idx=0; idx < h_values.size(); ++idx )
-        EXPECT_EQ(h_values[idx], h_expected[idx]);
+  uint32_t h_expected[] = {
+    2739798893, 2739798893, 3506676360, 1891213601, 3778137224, 0, 0, 1551088011};
+  thrust::host_vector<uint32_t> h_values(d_values);
+  for (uint32_t idx = 0; idx < h_values.size(); ++idx) EXPECT_EQ(h_values[idx], h_expected[idx]);
 }

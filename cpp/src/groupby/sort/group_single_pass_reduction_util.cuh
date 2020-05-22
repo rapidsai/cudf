@@ -30,14 +30,13 @@
 #include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
-
 template <aggregation::Kind K>
 struct reduce_functor {
   template <typename T>
-  static constexpr bool is_supported() {
+  static constexpr bool is_supported()
+  {
     if (K == aggregation::SUM)
       return cudf::is_numeric<T>();
     else if (K == aggregation::MIN or K == aggregation::MAX)
@@ -54,9 +53,10 @@ struct reduce_functor {
     size_type num_groups,
     rmm::device_vector<cudf::size_type> const& group_labels,
     rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream) {
-    using OpType     = cudf::experimental::detail::corresponding_operator_t<K>;
-    using ResultType = cudf::experimental::detail::target_type_t<T, K>;
+    cudaStream_t stream)
+  {
+    using OpType     = cudf::detail::corresponding_operator_t<K>;
+    using ResultType = cudf::detail::target_type_t<T, K>;
 
     std::unique_ptr<column> result =
       make_fixed_width_column(data_type(type_to_id<ResultType>()),
@@ -68,7 +68,7 @@ struct reduce_functor {
     if (values.size() == 0) { return result; }
 
     auto result_table = mutable_table_view({*result});
-    experimental::detail::initialize_with_identity(result_table, {K}, stream);
+    cudf::detail::initialize_with_identity(result_table, {K}, stream);
 
     auto resultview = mutable_column_device_view::create(result->mutable_view());
     auto valuesview = column_device_view::create(values);
@@ -79,7 +79,7 @@ struct reduce_functor {
                        [d_values     = *valuesview,
                         d_result     = *resultview,
                         dest_indices = group_labels.data().get()] __device__(auto i) {
-                         experimental::detail::update_target_element<T, K, true, true>{}(
+                         cudf::detail::update_target_element<T, K, true, true>{}(
                            d_result, dest_indices[i], d_values, i);
                        });
 
@@ -87,12 +87,12 @@ struct reduce_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<not is_supported<T>(), std::unique_ptr<column>> operator()(Args&&... args) {
+  std::enable_if_t<not is_supported<T>(), std::unique_ptr<column>> operator()(Args&&... args)
+  {
     CUDF_FAIL("Unsupported type-agg combination");
   }
 };
 
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

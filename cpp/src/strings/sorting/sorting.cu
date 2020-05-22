@@ -27,14 +27,14 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 // return sorted version of the given strings column
 std::unique_ptr<cudf::column> sort(strings_column_view strings,
                                    sort_type stype,
                                    cudf::order order,
                                    cudf::null_order null_order,
                                    cudaStream_t stream,
-                                   rmm::mr::device_memory_resource* mr) {
+                                   rmm::mr::device_memory_resource* mr)
+{
   auto execpol        = rmm::exec_policy(stream);
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
@@ -63,8 +63,7 @@ std::unique_ptr<cudf::column> sort(strings_column_view strings,
   column_view indices_view(data_type{INT32}, num_strings, indices.data().get(), nullptr, 0);
   // now build a new strings column from the indices
   auto table_sorted =
-    experimental::detail::gather(table_view{{strings.parent()}}, indices_view, stream, mr)
-      ->release();
+    cudf::detail::gather(table_view{{strings.parent()}}, indices_view, stream, mr)->release();
   return std::move(table_sorted.front());
 }
 

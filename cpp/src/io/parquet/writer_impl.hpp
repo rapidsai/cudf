@@ -39,11 +39,9 @@
 #include "chunked_state.hpp"
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace parquet {
-
 // Forward internal classes
 class parquet_column_view;
 
@@ -92,22 +90,25 @@ class writer::impl {
   /**
    * @brief Begins the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.   
+   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * boundaries.
    */
-  void write_chunked_begin(struct pq_chunked_state& state);
+  void write_chunked_begin(pq_chunked_state& state);
 
   /**
    * @brief Writes a single subtable as part of a larger parquet file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.      
+   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * boundaries.
    */
   void write_chunked(table_view const& table, pq_chunked_state& state);
 
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.   
+   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * boundaries.
    * @param return_filemetadata If true, return the raw parquet file metadata
    * @param metadata_out_file_path Column chunks file path to be set in the raw output metadata
    * @return unique_ptr to FileMetadata thrift message if requested
@@ -238,5 +239,4 @@ class writer::impl {
 }  // namespace parquet
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

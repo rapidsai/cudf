@@ -20,6 +20,10 @@
 
 namespace cudf {
 namespace strings {
+/**
+ * @addtogroup strings_convert
+ * @{
+ */
 
 /**
  * @brief Converts IPv4 addresses into integers.
@@ -37,7 +41,7 @@ namespace strings {
  * integer is undefined.
  *
  * The resulting 32-bit integer is placed in an int64_t to avoid setting the sign-bit
- * in a int32_t type. This could be changed if cudf supported a UINT32 type in the future.
+ * in an int32_t type. This could be changed if cudf supported a UINT32 type in the future.
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
@@ -72,5 +76,6 @@ std::unique_ptr<column> integers_to_ipv4(
   column_view const& integers,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

@@ -22,12 +22,13 @@
 
 namespace cudf {
 namespace nvtx {
-
-void range_push(const char* name, color color) {
+void range_push(const char* name, color color)
+{
   range_push_hex(name, static_cast<uint32_t>(color));
 }
 
-void range_push_hex(const char* name, uint32_t color) {
+void range_push_hex(const char* name, uint32_t color)
+{
 #ifdef USE_NVTX
   CUDF_EXPECTS(name != nullptr, "Null name string.");
 
@@ -42,7 +43,8 @@ void range_push_hex(const char* name, uint32_t color) {
 #endif
 }
 
-void range_pop() {
+void range_pop()
+{
 #ifdef USE_NVTX
   nvtxRangePop();
 #endif

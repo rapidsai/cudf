@@ -21,6 +21,10 @@
 
 namespace cudf {
 namespace strings {
+/**
+ * @addtogroup strings_split
+ * @{
+ */
 
 /**
  * @brief Returns a set of 3 columns by splitting each string using the
@@ -34,21 +38,22 @@ namespace strings {
  *
  * Any null string entries return corresponding null output columns.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["ab_cd","def_g_h"]
- * r = rpartition(s,"_")
+ * r = partition(s,"_")
  * r[0] is ["ab","def"]
  * r[1] is ["_","_"]
  * r[2] is ["cd","g_h"]
- * ```
+ * @endcode
  *
  * @param strings Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indentifying where to split each string.
+ * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
  * @param mr Resource for allocating device memory.
  * @return New table of strings columns.
  */
-std::unique_ptr<experimental::table> partition(
+std::unique_ptr<table> partition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -65,24 +70,26 @@ std::unique_ptr<experimental::table> partition(
  *
  * Any null string entries return corresponding null output columns.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["ab_cd","def_g_h"]
  * r = rpartition(s,"_")
  * r[0] is ["ab","def_g"]
  * r[1] is ["_","_"]
  * r[2] is ["cd","h"]
- * ```
+ * @endcode
  *
  * @param strings Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indentifying where to split each string.
+ * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
  * @param mr Resource for allocating device memory.
  * @return New strings columns.
  */
-std::unique_ptr<experimental::table> rpartition(
+std::unique_ptr<table> rpartition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,17 +15,15 @@
  */
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/string_view.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
-
 namespace {
-
 /**
  * @brief Specialization of copy_if_else_functor for string_views.
  */
@@ -38,29 +36,26 @@ struct copy_if_else_functor_impl {
                                      bool right_nullable,
                                      Filter filter,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     if (left_nullable) {
       if (right_nullable) {
-        auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T, true>(lhs);
-        auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T, true>(rhs);
-        return detail::copy_if_else<T>(
-          lhs.type(), true, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
+        auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
+        auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
+        return detail::copy_if_else(true, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
       }
-      auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T, true>(lhs);
-      auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T, false>(rhs);
-      return detail::copy_if_else<T>(
-        lhs.type(), true, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
+      auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
+      auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
+      return detail::copy_if_else(true, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
     }
     if (right_nullable) {
-      auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T, false>(lhs);
-      auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T, true>(rhs);
-      return detail::copy_if_else<T>(
-        lhs.type(), true, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
+      auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
+      auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
+      return detail::copy_if_else(true, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
     }
-    auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T, false>(lhs);
-    auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T, false>(rhs);
-    return detail::copy_if_else<T>(
-      lhs.type(), false, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
+    auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
+    auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
+    return detail::copy_if_else(false, lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
   }
 };
 
@@ -76,34 +71,53 @@ struct copy_if_else_functor_impl<string_view, Left, Right, Filter> {
                                      bool right_nullable,
                                      Filter filter,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     using T = string_view;
 
     if (left_nullable) {
       if (right_nullable) {
-        auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T, true>(lhs);
-        auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T, true>(rhs);
+        auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
+        auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
         return strings::detail::copy_if_else(
           lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
       }
-      auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T, true>(lhs);
-      auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T, false>(rhs);
+      auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
+      auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
       return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
     }
     if (right_nullable) {
-      auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T, false>(lhs);
-      auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T, true>(rhs);
+      auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
+      auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
       return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
     }
-    auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T, false>(lhs);
-    auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T, false>(rhs);
+    auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
+    auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
     return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, mr, stream);
   }
 };
 
 /**
+ * @brief Specialization of copy_if_else_functor for list_views.
+ */
+template <typename Left, typename Right, typename Filter>
+struct copy_if_else_functor_impl<list_view, Left, Right, Filter> {
+  std::unique_ptr<column> operator()(Left const& lhs,
+                                     Right const& rhs,
+                                     size_type size,
+                                     bool left_nullable,
+                                     bool right_nullable,
+                                     Filter filter,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    CUDF_FAIL("copy_if_else not supported for list_view yet");
+  }
+};
+
+/**
  * @brief Functor called by the `type_dispatcher` to invoke copy_if_else on combinations
- *        of column_view and scalar 
+ *        of column_view and scalar
  */
 struct copy_if_else_functor {
   template <typename T, typename Left, typename Right, typename Filter>
@@ -114,7 +128,8 @@ struct copy_if_else_functor {
                                      bool right_nullable,
                                      Filter filter,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     copy_if_else_functor_impl<T, Left, Right, Filter> copier{};
     return copier(lhs, rhs, size, left_nullable, right_nullable, filter, mr, stream);
   }
@@ -128,7 +143,8 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
                                      bool right_nullable,
                                      column_view const& boolean_mask,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+{
   CUDF_EXPECTS(lhs.type() == rhs.type(), "Both inputs must be of the same type");
   CUDF_EXPECTS(boolean_mask.type() == data_type(BOOL8),
                "Boolean mask column must be of type BOOL8");
@@ -142,30 +158,30 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
     auto filter = [bool_mask_device] __device__(cudf::size_type i) {
       return bool_mask_device.is_valid_nocheck(i) and bool_mask_device.element<bool>(i);
     };
-    return cudf::experimental::type_dispatcher(lhs.type(),
-                                               copy_if_else_functor{},
-                                               lhs,
-                                               rhs,
-                                               boolean_mask.size(),
-                                               left_nullable,
-                                               right_nullable,
-                                               filter,
-                                               mr,
-                                               stream);
+    return cudf::type_dispatcher(lhs.type(),
+                                 copy_if_else_functor{},
+                                 lhs,
+                                 rhs,
+                                 boolean_mask.size(),
+                                 left_nullable,
+                                 right_nullable,
+                                 filter,
+                                 mr,
+                                 stream);
   } else {
     auto filter = [bool_mask_device] __device__(cudf::size_type i) {
       return bool_mask_device.element<bool>(i);
     };
-    return cudf::experimental::type_dispatcher(lhs.type(),
-                                               copy_if_else_functor{},
-                                               lhs,
-                                               rhs,
-                                               boolean_mask.size(),
-                                               left_nullable,
-                                               right_nullable,
-                                               filter,
-                                               mr,
-                                               stream);
+    return cudf::type_dispatcher(lhs.type(),
+                                 copy_if_else_functor{},
+                                 lhs,
+                                 rhs,
+                                 boolean_mask.size(),
+                                 left_nullable,
+                                 right_nullable,
+                                 filter,
+                                 mr,
+                                 stream);
   }
 }
 
@@ -175,7 +191,8 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+{
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
                "Boolean mask column must be the same size as lhs and rhs columns");
   CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be of the size");
@@ -192,7 +209,8 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+{
   CUDF_EXPECTS(boolean_mask.size() == rhs.size(),
                "Boolean mask column must be the same size as rhs column");
   return copy_if_else(lhs,
@@ -208,7 +226,8 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+{
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
                "Boolean mask column must be the same size as lhs column");
   return copy_if_else(*column_device_view::create(lhs),
@@ -224,7 +243,8 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+{
   return copy_if_else(lhs, rhs, !lhs.is_valid(), !rhs.is_valid(), boolean_mask, mr, stream);
 }
 
@@ -233,35 +253,37 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
-                                     rmm::mr::device_memory_resource* mr) {
+                                     rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
-                                     rmm::mr::device_memory_resource* mr) {
+                                     rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
 
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
-                                     rmm::mr::device_memory_resource* mr) {
+                                     rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
-                                     rmm::mr::device_memory_resource* mr) {
+                                     rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

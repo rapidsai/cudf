@@ -20,12 +20,11 @@
 #include <cudf/unary.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
-
 /**
- * @brief Creates a column of `BOOL8` elements by applying a predicate to every element between [`begin, `end`)
- * `true` indicates the value is satisfies the predicate and `false` indicates it doesn't.
+ * @brief Creates a column of `BOOL8` elements by applying a predicate to every element between
+ * [`begin, `end`) `true` indicates the value is satisfies the predicate and `false` indicates it
+ * doesn't.
  *
  * @tparam InputIterator Iterator type for `begin` and `end`
  * @tparam Predicate A predicator type which will be evaludated
@@ -35,7 +34,8 @@ namespace detail {
  * @param mr Optional, The resource to use for all allocations
  * @param stream Optional CUDA stream on which to execute kernels
  *
- * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing predicate is satisfied.
+ * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing
+ * predicate is satisfied.
  */
 
 template <typename InputIterator, typename Predicate>
@@ -45,7 +45,8 @@ std::unique_ptr<column> true_if(
   size_type size,
   Predicate p,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto output = make_numeric_column(data_type(BOOL8), size, mask_state::UNALLOCATED, stream, mr);
   auto output_mutable_view = output->mutable_view();
   auto output_data         = output_mutable_view.data<bool>();
@@ -56,38 +57,45 @@ std::unique_ptr<column> true_if(
 }
 
 /**
- * @brief Performs unary op on all values in column
+ * @copydoc cudf::unary_operation
  *
- * @param input A `column_view` as input
- * @param op operation to perform
- * @param mr Optional, The resource to use for all allocations
  * @param stream Optional CUDA stream on which to execute kernels
- *
- * @returns std::unique_ptr<cudf::column> Result of the operation
  */
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
-  cudf::experimental::unary_op op,
+  cudf::unary_op op,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
 /**
- * @brief  Casts data from dtype specified in input to dtype specified in output.
- * Supports only fixed-width types.
+ * @copydoc cudf::cast
  *
- * @param column_view Input column
- * @param out_type Desired datatype of output column
- * @param mr Optional, The resource to use for all allocations
  * @param stream Optional CUDA stream on which to execute kernels
- *
- * @returns unique_ptr<column> Result of the cast operation
- * @throw cudf::logic_error if `out_type` is not a fixed-width type
  */
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                              cudaStream_t stream                 = 0);
 
+/**
+ * @copydoc cudf::is_nan
+ *
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ */
+std::unique_ptr<column> is_nan(
+  cudf::column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @copydoc cudf::is_not_nan
+ *
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ */
+std::unique_ptr<column> is_not_nan(
+  cudf::column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

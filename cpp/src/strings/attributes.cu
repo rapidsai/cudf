@@ -31,7 +31,6 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
-
 /**
  * @brief Returns a numeric column containing lengths of each string in
  * based on the provided unary function.
@@ -49,20 +48,19 @@ template <typename UnaryFunction>
 std::unique_ptr<column> counts_fn(strings_column_view const& strings,
                                   UnaryFunction& ufn,
                                   rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream = 0) {
+                                  cudaStream_t stream = 0)
+{
   auto strings_count  = strings.size();
   auto execpol        = rmm::exec_policy(stream);
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
-  // copy the null mask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
   // create output column
-  auto results =
-    std::make_unique<cudf::column>(cudf::data_type{INT32},
-                                   strings_count,
-                                   rmm::device_buffer(strings_count * sizeof(int32_t), stream, mr),
-                                   null_mask,
-                                   strings.null_count());
+  auto results = std::make_unique<cudf::column>(
+    cudf::data_type{INT32},
+    strings_count,
+    rmm::device_buffer(strings_count * sizeof(int32_t), stream, mr),
+    copy_bitmask(strings.parent(), stream, mr),  // copy the null mask
+    strings.null_count());
   auto results_view = results->mutable_view();
   auto d_lengths    = results_view.data<int32_t>();
   // fill in the lengths
@@ -85,7 +83,8 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
 std::unique_ptr<column> count_characters(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto ufn = [] __device__(const string_view& d_str) { return d_str.length(); };
   return counts_fn(strings, ufn, mr, stream);
 }
@@ -93,7 +92,8 @@ std::unique_ptr<column> count_characters(
 std::unique_ptr<column> count_bytes(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto ufn = [] __device__(const string_view& d_str) { return d_str.size_bytes(); };
   return counts_fn(strings, ufn, mr, stream);
 }
@@ -101,7 +101,6 @@ std::unique_ptr<column> count_bytes(
 }  // namespace detail
 
 namespace {
-
 /**
  * @brief Sets the code-point values for each character in the output
  * integer memory for each string in the strings column.
@@ -116,7 +115,8 @@ struct code_points_fn {
   size_type* d_offsets;  // offset within d_results to fill with each string's code-point values
   int32_t* d_results;    // base integer array output
 
-  __device__ void operator()(size_type idx) {
+  __device__ void operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return;
     auto d_str  = d_strings.element<string_view>(idx);
     auto result = d_results + d_offsets[idx];
@@ -131,7 +131,8 @@ namespace detail {
 std::unique_ptr<column> code_points(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
 
@@ -174,19 +175,22 @@ std::unique_ptr<column> code_points(
 // external APIS
 
 std::unique_ptr<column> count_characters(strings_column_view const& strings,
-                                         rmm::mr::device_memory_resource* mr) {
+                                         rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::count_characters(strings, mr);
 }
 
 std::unique_ptr<column> count_bytes(strings_column_view const& strings,
-                                    rmm::mr::device_memory_resource* mr) {
+                                    rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::count_bytes(strings, mr);
 }
 
 std::unique_ptr<column> code_points(strings_column_view const& strings,
-                                    rmm::mr::device_memory_resource* mr) {
+                                    rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::code_points(strings, mr);
 }

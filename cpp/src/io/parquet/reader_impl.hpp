@@ -36,11 +36,9 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace parquet {
-
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
@@ -167,5 +165,4 @@ class reader::impl {
 }  // namespace parquet
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

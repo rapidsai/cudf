@@ -20,6 +20,10 @@
 
 namespace cudf {
 namespace strings {
+/**
+ * @addtogroup strings_case
+ * @{
+ */
 
 /**
  * @brief Converts a column of strings to lower case.
@@ -73,5 +77,6 @@ std::unique_ptr<column> swapcase(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

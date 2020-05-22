@@ -9,6 +9,7 @@ import pytest
 
 from cudf.core import DataFrame, GenericIndex, Series
 from cudf.core.buffer import Buffer
+from cudf.tests.utils import assert_eq
 
 
 def check_serialization(df):
@@ -22,6 +23,16 @@ def check_serialization(df):
     sortvaldf = df.sort_values("vals")
     assert isinstance(sortvaldf.index, GenericIndex)
     assert_frame_picklable(sortvaldf)
+    # out-of-band
+    if pickle.HIGHEST_PROTOCOL >= 5:
+        buffers = []
+        serialbytes = pickle.dumps(
+            df, protocol=5, buffer_callback=buffers.append
+        )
+        for b in buffers:
+            assert isinstance(b, pickle.PickleBuffer)
+        loaded = pickle.loads(serialbytes, buffers=buffers)
+        pd.util.testing.assert_frame_equal(loaded.to_pandas(), df.to_pandas())
 
 
 def assert_frame_picklable(df):
@@ -95,3 +106,45 @@ def test_pickle_series(named):
     pickled = pickle.dumps(ser)
     out = pickle.loads(pickled)
     assert (ser == out).all()
+
+
+@pytest.mark.parametrize(
+    "slices",
+    [
+        slice(None, None, None),
+        slice(1, 3, 1),
+        slice(0, 3, 1),
+        slice(3, 5, 1),
+        slice(10, 12, 1),
+    ],
+)
+def test_pickle_categorical_column(slices):
+    sr = Series(["a", "b", None, "a", "c", "b"]).astype("category")
+    sliced_sr = sr.iloc[slices]
+    input_col = sliced_sr._column
+
+    pickled = pickle.dumps(input_col)
+    out = pickle.loads(pickled)
+
+    assert_eq(Series(out), Series(input_col))
+
+
+@pytest.mark.parametrize(
+    "slices",
+    [
+        slice(None, None, None),
+        slice(1, 3, 1),
+        slice(0, 3, 1),
+        slice(3, 5, 1),
+        slice(10, 12, 1),
+    ],
+)
+def test_pickle_string_column(slices):
+    sr = Series(["a", "b", None, "a", "c", "b"])
+    sliced_sr = sr.iloc[slices]
+    input_col = sliced_sr._column
+
+    pickled = pickle.dumps(input_col)
+    out = pickle.loads(pickled)
+
+    assert_eq(Series(out), Series(input_col))

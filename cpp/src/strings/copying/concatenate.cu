@@ -31,7 +31,6 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 // Benchmark data, shared at https://github.com/rapidsai/cudf/pull/4703, shows
 // that the single kernel optimization generally performs better, but when the
 // number of chars/col is beyond a certain threshold memcpy performs better.
@@ -39,7 +38,8 @@ namespace detail {
 // comparing the mean chars/col with values from the above table.
 constexpr bool use_fused_kernel_heuristic(bool const has_nulls,
                                           size_t const total_bytes,
-                                          size_t const num_columns) {
+                                          size_t const num_columns)
+{
   return has_nulls ? total_bytes < num_columns * 1572864  // midpoint of 1048576 and 2097152
                    : total_bytes < num_columns * 393216;  // midpoint of 262144 and 524288
 }
@@ -48,7 +48,8 @@ constexpr bool use_fused_kernel_heuristic(bool const has_nulls,
 // error: The enclosing parent function ("create_strings_device_views") for an
 // extended __device__ lambda must not have deduced return type
 struct chars_size_transform {
-  __device__ size_t operator()(column_device_view const& col) const {
+  __device__ size_t operator()(column_device_view const& col) const
+  {
     if (col.size() > 0) {
       constexpr auto offsets_index = strings_column_view::offsets_column_index;
       auto d_offsets               = col.child(offsets_index).data<int32_t>();
@@ -59,7 +60,8 @@ struct chars_size_transform {
   }
 };
 
-auto create_strings_device_views(std::vector<column_view> const& views, cudaStream_t stream) {
+auto create_strings_device_views(std::vector<column_view> const& views, cudaStream_t stream)
+{
   // Create device views for each input view
   using CDViewPtr =
     decltype(column_device_view::create(std::declval<column_view>(), std::declval<cudaStream_t>()));
@@ -125,7 +127,8 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
                                                        size_type const output_size,
                                                        size_type* output_data,
                                                        bitmask_type* output_mask,
-                                                       size_type* out_valid_count) {
+                                                       size_type* out_valid_count)
+{
   size_type output_index     = threadIdx.x + blockIdx.x * blockDim.x;
   size_type warp_valid_count = 0;
 
@@ -153,7 +156,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
       bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
 
       // First thread writes bitmask word
-      if (threadIdx.x % experimental::detail::warp_size == 0) {
+      if (threadIdx.x % cudf::detail::warp_size == 0) {
         output_mask[word_index(output_index)] = new_word;
       }
 
@@ -170,7 +173,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
   }
 
   if (Nullable) {
-    using experimental::detail::single_lane_block_sum_reduce;
+    using cudf::detail::single_lane_block_sum_reduce;
     auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
     if (threadIdx.x == 0) { atomicAdd(out_valid_count, block_valid_count); }
   }
@@ -180,7 +183,8 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
                                                       size_t const* partition_offsets,
                                                       size_type const num_input_views,
                                                       size_type const output_size,
-                                                      char* output_data) {
+                                                      char* output_data)
+{
   size_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (output_index < output_size) {
@@ -209,7 +213,8 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
 
 std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
                                     rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream) {
+                                    cudaStream_t stream)
+{
   // Compute output sizes
   auto const device_views         = create_strings_device_views(columns, stream);
   auto const& d_views             = std::get<1>(device_views);
@@ -251,7 +256,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     rmm::device_scalar<size_type> d_valid_count(0);
 
     constexpr size_type block_size{256};
-    cudf::experimental::detail::grid_1d config(offsets_count, block_size);
+    cudf::detail::grid_1d config(offsets_count, block_size);
     auto const kernel = has_nulls ? fused_concatenate_string_offset_kernel<block_size, true>
                                   : fused_concatenate_string_offset_kernel<block_size, false>;
     kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
@@ -272,7 +277,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     if (use_fused_kernel_heuristic(has_nulls, total_bytes, columns.size())) {
       // Use single kernel launch to copy chars columns
       constexpr size_type block_size{256};
-      cudf::experimental::detail::grid_1d config(total_bytes, block_size);
+      cudf::detail::grid_1d config(total_bytes, block_size);
       auto const kernel = fused_concatenate_string_chars_kernel;
       kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
         d_views.data().get(),

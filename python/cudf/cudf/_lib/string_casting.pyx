@@ -4,6 +4,7 @@ import numpy as np
 
 from cudf._lib.column cimport Column
 from cudf._lib.move cimport move
+from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.types import np_to_cudf_types
 
@@ -302,7 +303,7 @@ def _to_booleans(Column input_col, object string_true="True"):
     A Column with string values cast to boolean
     """
 
-    cdef Scalar str_true = Scalar(string_true)
+    cdef Scalar str_true = as_scalar(string_true)
     cdef column_view input_column_view = input_col.view()
     cdef string_scalar* string_scalar_true = <string_scalar*>(
         str_true.c_value.get())
@@ -339,8 +340,8 @@ def _from_booleans(
     A Column with boolean values cast to string
     """
 
-    cdef Scalar str_true = Scalar(string_true)
-    cdef Scalar str_false = Scalar(string_false)
+    cdef Scalar str_true = as_scalar(string_true)
+    cdef Scalar str_false = as_scalar(string_false)
     cdef column_view input_column_view = input_col.view()
     cdef string_scalar* string_scalar_true = <string_scalar*>(
         str_true.c_value.get())
@@ -483,11 +484,11 @@ def htoi(Column input_col, **kwargs):
 
     Returns
     -------
-    A Column with strings representd as integer
+    A Column of integers parsed from hexadecimal string values.
     """
 
     cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = np_to_cudf_types[kwargs.get('dtype', np.int64)]
+    cdef type_id tid = np_to_cudf_types[kwargs.get('dtype', np.dtype("int64"))]
     cdef data_type c_out_type = data_type(tid)
 
     cdef unique_ptr[column] c_result

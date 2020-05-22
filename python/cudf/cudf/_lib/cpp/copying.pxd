@@ -18,7 +18,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 
-cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     cdef unique_ptr[table] gather (
         const table_view& source_table,
         const column_view& gather_map,
@@ -46,9 +46,9 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
     ) except +
 
     ctypedef enum mask_allocation_policy:
-        NEVER 'cudf::experimental::mask_allocation_policy::NEVER',
-        RETAIN 'cudf::experimental::mask_allocation_policy::RETAIN',
-        ALWAYS 'cudf::experimental::mask_allocation_policy::ALWAYS'
+        NEVER 'cudf::mask_allocation_policy::NEVER',
+        RETAIN 'cudf::mask_allocation_policy::RETAIN',
+        ALWAYS 'cudf::mask_allocation_policy::ALWAYS'
 
     cdef unique_ptr[column] empty_like (
         column_view input_column
@@ -160,4 +160,9 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
         vector[reference_wrapper[scalar]] input,
         table_view target,
         column_view boolean_mask
+    ) except +
+
+    cdef unique_ptr[scalar] get_element (
+        column_view input,
+        size_type index
     ) except +

@@ -29,24 +29,28 @@ namespace cudf {
 namespace {
 struct size_of_helper {
   template <typename T>
-  constexpr std::enable_if_t<not is_fixed_width<T>(), int> operator()() const {
+  constexpr std::enable_if_t<not is_fixed_width<T>(), int> operator()() const
+  {
     CUDF_FAIL("Invalid, non fixed-width element type.");
   }
 
   template <typename T>
-  constexpr std::enable_if_t<is_fixed_width<T>(), int> operator()() const noexcept {
+  constexpr std::enable_if_t<is_fixed_width<T>(), int> operator()() const noexcept
+  {
     return sizeof(T);
   }
 };
 }  // namespace
 
-std::size_t size_of(data_type element_type) {
+std::size_t size_of(data_type element_type)
+{
   CUDF_EXPECTS(is_fixed_width(element_type), "Invalid element type.");
-  return cudf::experimental::type_dispatcher(element_type, size_of_helper{});
+  return cudf::type_dispatcher(element_type, size_of_helper{});
 }
 
 // Empty column of specified type
-std::unique_ptr<column> make_empty_column(data_type type) {
+std::unique_ptr<column> make_empty_column(data_type type)
+{
   return std::make_unique<column>(type, 0, rmm::device_buffer{});
 }
 
@@ -55,7 +59,8 @@ std::unique_ptr<column> make_numeric_column(data_type type,
                                             size_type size,
                                             mask_state state,
                                             cudaStream_t stream,
-                                            rmm::mr::device_memory_resource* mr) {
+                                            rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
 
@@ -72,7 +77,8 @@ std::unique_ptr<column> make_timestamp_column(data_type type,
                                               size_type size,
                                               mask_state state,
                                               cudaStream_t stream,
-                                              rmm::mr::device_memory_resource* mr) {
+                                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
 
@@ -89,7 +95,8 @@ std::unique_ptr<column> make_fixed_width_column(data_type type,
                                                 size_type size,
                                                 mask_state state,
                                                 cudaStream_t stream,
-                                                rmm::mr::device_memory_resource* mr) {
+                                                rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
 
@@ -99,60 +106,75 @@ std::unique_ptr<column> make_fixed_width_column(data_type type,
 
 struct column_from_scalar_dispatch {
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> operator()(
-    scalar const& value,
-    size_type size,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream) const {
+  std::unique_ptr<cudf::column> operator()(scalar const& value,
+                                           size_type size,
+                                           rmm::mr::device_memory_resource* mr,
+                                           cudaStream_t stream) const
+  {
     if (!value.is_valid())
-      return make_fixed_width_column(value.type(), size, mask_state::ALL_NULL, stream);
+      return make_fixed_width_column(value.type(), size, mask_state::ALL_NULL, stream, mr);
     auto output_column =
       make_fixed_width_column(value.type(), size, mask_state::UNALLOCATED, stream, mr);
     auto view = output_column->mutable_view();
-    experimental::detail::fill_in_place(view, 0, size, value, stream);
+    detail::fill_in_place(view, 0, size, value, stream);
     return output_column;
   }
-
-  template <typename T>
-  std::enable_if_t<std::is_same<cudf::string_view, T>::value, std::unique_ptr<cudf::column>>
-  operator()(scalar const& value,
-             size_type size,
-             rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream) const {
-    auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr);
-    if (!value.is_valid())
-      return std::make_unique<column>(
-        value.type(), size, rmm::device_buffer{}, std::move(null_mask), size);
-
-    // Create a strings column_view with all nulls and no children.
-    // Since we are setting every row to the scalar, the fill() never needs to access
-    // any of the children in the strings column which would otherwise cause an exception.
-    column_view sc{
-      data_type{STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
-    auto sv = static_cast<experimental::scalar_type_t<T> const&>(value);
-    // fill the column with the scalar
-    auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, mr, stream);
-    output->set_null_mask(rmm::device_buffer{}, 0);  // should be no nulls
-    return output;
-  }
-
-  template <typename T>
-  std::enable_if_t<std::is_same<cudf::dictionary32, T>::value, std::unique_ptr<cudf::column>>
-  operator()(scalar const& value,
-             size_type size,
-             rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream) const {
-    CUDF_FAIL("dictionary not supported when creating from scalar");
-  }
 };
+
+template <>
+std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::string_view>(
+  scalar const& value,
+  size_type size,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream) const
+{
+  if (!value.is_valid())
+    return std::make_unique<column>(value.type(),
+                                    size,
+                                    rmm::device_buffer{0, stream, mr},
+                                    create_null_mask(size, mask_state::ALL_NULL, stream, mr),
+                                    size);
+
+  // Create a strings column_view with all nulls and no children.
+  // Since we are setting every row to the scalar, the fill() never needs to access
+  // any of the children in the strings column which would otherwise cause an exception.
+  auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream);
+  column_view sc{
+    data_type{STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
+  auto sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
+  // fill the column with the scalar
+  auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, mr, stream);
+  output->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // should be no nulls
+  return output;
+}
+
+template <>
+std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::dictionary32>(
+  scalar const& value,
+  size_type size,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream) const
+{
+  CUDF_FAIL("dictionary not supported when creating from scalar");
+}
+
+template <>
+std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::list_view>(
+  scalar const& value,
+  size_type size,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream) const
+{
+  CUDF_FAIL("TODO");
+}
 
 std::unique_ptr<column> make_column_from_scalar(scalar const& s,
                                                 size_type size,
                                                 rmm::mr::device_memory_resource* mr,
-                                                cudaStream_t stream) {
+                                                cudaStream_t stream)
+{
   if (size == 0) return make_empty_column(s.type());
-  return experimental::type_dispatcher(
-    s.type(), column_from_scalar_dispatch{}, s, size, mr, stream);
+  return type_dispatcher(s.type(), column_from_scalar_dispatch{}, s, size, mr, stream);
 }
 
 }  // namespace cudf

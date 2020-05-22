@@ -21,10 +21,11 @@
 namespace cudf {
 namespace strings {
 namespace string {
-
 /**
  * @brief Returns `true` if all characters in the string
  * are valid for conversion to an integer.
+ *
+ * @ingroup strings_classes
  *
  * Valid characters are in [-+0-9]. The sign character (+/-)
  * is optional but if present must be the first character.
@@ -35,17 +36,22 @@ namespace string {
  * @param d_str String to check.
  * @return true if string has valid integer characters
  */
-__device__ bool is_integer(string_view const& d_str) {
+__device__ bool is_integer(string_view const& d_str)
+{
   if (d_str.empty()) return false;
   auto begin = d_str.begin();
+  auto end   = d_str.end();
   if (*begin == '+' || *begin == '-') ++begin;
-  return thrust::all_of(
-    thrust::seq, begin, d_str.end(), [] __device__(auto chr) { return chr >= '0' && chr <= '9'; });
+  return (thrust::distance(begin, end) > 0) &&
+         thrust::all_of(
+           thrust::seq, begin, end, [] __device__(auto chr) { return chr >= '0' && chr <= '9'; });
 }
 
 /**
  * @brief Returns `true` if all characters in the string
  * are valid for conversion to a float type.
+ *
+ * @ingroup strings_classes
  *
  * Valid characters are in [-+0-9eE.]. The sign character (+/-)
  * is optional but if present must be the first character.
@@ -62,7 +68,8 @@ __device__ bool is_integer(string_view const& d_str) {
  * @param d_str String to check.
  * @return true if string has valid float characters
  */
-__device__ bool is_float(string_view const& d_str) {
+__device__ bool is_float(string_view const& d_str)
+{
   if (d_str.empty()) return false;
   // strings allowed by the converter
   if (d_str.compare("NaN", 3) == 0) return true;
@@ -74,6 +81,7 @@ __device__ bool is_float(string_view const& d_str) {
   const char* data    = d_str.data();
   // sign character allowed at the beginning of the string
   size_type chidx = (*data == '-' || *data == '+') ? 1 : 0;
+  bool result     = chidx < bytes;
   // check for float chars [0-9] and a single decimal '.'
   // and scientific notation [eE][+-][0-9]
   for (; chidx < bytes; ++chidx) {
@@ -92,7 +100,7 @@ __device__ bool is_float(string_view const& d_str) {
     }
     return false;
   }
-  return true;
+  return result;
 }
 
 }  // namespace string

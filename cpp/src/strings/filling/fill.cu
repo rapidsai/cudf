@@ -29,13 +29,13 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 std::unique_ptr<column> fill(strings_column_view const& strings,
                              size_type begin,
                              size_type end,
                              string_scalar const& value,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                             cudaStream_t stream                 = 0) {
+                             cudaStream_t stream                 = 0)
+{
   auto strings_count = strings.size();
   if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
   CUDF_EXPECTS((begin >= 0) && (end <= strings_count),
@@ -51,7 +51,7 @@ std::unique_ptr<column> fill(strings_column_view const& strings,
   auto d_strings      = *strings_column;
 
   // create resulting null mask
-  auto valid_mask = cudf::experimental::detail::valid_if(
+  auto valid_mask = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     [d_strings, begin, end, d_value] __device__(size_type idx) {

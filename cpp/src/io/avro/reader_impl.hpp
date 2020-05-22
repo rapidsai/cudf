@@ -36,11 +36,9 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace avro {
-
 using namespace cudf::io::avro;
 using namespace cudf::io;
 
@@ -116,5 +114,4 @@ class reader::impl {
 }  // namespace avro
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

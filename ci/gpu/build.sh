@@ -57,8 +57,15 @@ nvidia-smi
 
 logger "Activate conda env..."
 source activate gdf
+
+# Install contextvars on Python 3.6
+py_ver=$(python -c "import sys; print('.'.join(map(str, sys.version_info[:2])))")
+if [ "$py_ver" == "3.6" ];then
+    conda install contextvars
+fi
+
 conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
-              "dask>=2.1.0" "distributed>=2.1.0" "numpy>=1.16" "double-conversion" \
+              "dask>=2.15.0" "distributed>=2.15.0" "numpy>=1.16" "double-conversion" \
               "rapidjson" "flatbuffers" "boost-cpp" "fsspec>=0.6.0" "dlpack" \
               "feather-format" "cupy>=6.6.0,<8.0.0a0,!=7.1.0" "arrow-cpp=0.15.0" "pyarrow=0.15.0" \
               "fastavro>=0.22.0" "pandas>=0.25,<0.26" "hypothesis" "s3fs" "gcsfs" \

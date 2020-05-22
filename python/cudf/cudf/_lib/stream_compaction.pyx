@@ -10,7 +10,9 @@ from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 from cudf._lib.move cimport move
 
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.types cimport (
+    size_type, null_policy, nan_policy, null_equality
+)
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -89,7 +91,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
 
     Parameters
     ----------
-    source_table : source table whose rows are droppped as per boolean_mask
+    source_table : source table whose rows are dropped as per boolean_mask
     boolean_mask : a boolean column of same size as source_table
 
     Returns
@@ -120,8 +122,11 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
     )
 
 
-def drop_duplicates(Table source_table, keys=None,
-                    keep='first', nulls_are_equal=True):
+def drop_duplicates(Table source_table,
+                    object keys=None,
+                    object keep='first',
+                    bool nulls_are_equal=True,
+                    bool ignore_index=False):
     """
     Drops rows in source_table as per duplicate rows in keys.
 
@@ -149,7 +154,7 @@ def drop_duplicates(Table source_table, keys=None,
         raise ValueError('keep must be either "first", "last" or False')
 
     num_index_columns =(
-        0 if source_table._index is None
+        0 if (source_table._index is None or ignore_index)
         else source_table._index._num_columns)
     # shifting the index number by number of index columns
     cdef vector[size_type] cpp_keys = (
@@ -163,9 +168,17 @@ def drop_duplicates(Table source_table, keys=None,
         )
     )
 
-    cdef bool cpp_nulls_are_equal = nulls_are_equal
+    cdef null_equality cpp_nulls_equal = (
+        null_equality.EQUAL
+        if nulls_are_equal
+        else null_equality.UNEQUAL
+    )
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = source_table.view()
+    cdef table_view source_table_view
+    if ignore_index:
+        source_table_view = source_table.data_view()
+    else:
+        source_table_view = source_table.view()
 
     with nogil:
         c_result = move(
@@ -173,7 +186,7 @@ def drop_duplicates(Table source_table, keys=None,
                 source_table_view,
                 cpp_keys,
                 cpp_keep_option,
-                cpp_nulls_are_equal
+                cpp_nulls_equal
             )
         )
 
@@ -181,8 +194,8 @@ def drop_duplicates(Table source_table, keys=None,
         move(c_result),
         column_names=source_table._column_names,
         index_names=(
-            None if source_table._index
-            is None else source_table._index_names)
+            None if (source_table._index is None or ignore_index)
+            else source_table._index_names)
     )
 
 
@@ -203,15 +216,23 @@ def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
     Count of number of unique rows in `source_column`
     """
 
-    cdef bool cpp_ignore_nulls = ignore_nulls
-    cdef bool cpp_nan_as_null = nan_as_null
+    cdef null_policy cpp_null_handling = (
+        null_policy.EXCLUDE
+        if ignore_nulls
+        else null_policy.INCLUDE
+    )
+    cdef nan_policy cpp_nan_handling = (
+        nan_policy.NAN_IS_NULL
+        if nan_as_null
+        else nan_policy.NAN_IS_VALID
+    )
 
     cdef column_view source_column_view = source_column.view()
     with nogil:
         count = cpp_unique_count(
             source_column_view,
-            cpp_ignore_nulls,
-            cpp_nan_as_null
+            cpp_null_handling,
+            cpp_nan_handling
         )
 
     return count
