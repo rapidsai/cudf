@@ -1193,15 +1193,15 @@ def test_strings_rpartition(data):
     ],
 )
 def test_strings_partition(data):
-    gs = Series(data)
-    ps = pd.Series(data)
+    gs = Series(data, name="str_name")
+    ps = pd.Series(data, name="str_name")
 
     assert_eq(ps.str.partition(), gs.str.partition())
     assert_eq(ps.str.partition(","), gs.str.partition(","))
     assert_eq(ps.str.partition("-"), gs.str.partition("-"))
 
-    gi = as_index(data)
-    pi = pd.Index(data)
+    gi = as_index(data, name="new name")
+    pi = pd.Index(data, name="new name")
     assert_eq(pi.str.partition(), gi.str.partition())
     assert_eq(pi.str.partition(","), gi.str.partition(","))
     assert_eq(pi.str.partition("-"), gi.str.partition("-"))

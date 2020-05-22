@@ -268,7 +268,7 @@ class StringMethods(object):
                         idx = self._parent._constructor_expanddim._from_table(
                             table=table
                         )
-                        idx.names = self._parent.name
+                        idx.names = None
                         return idx
                     else:
                         return self._parent._constructor_expanddim(
