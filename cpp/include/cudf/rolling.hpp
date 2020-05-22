@@ -21,7 +21,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup aggregation_rolling
  * @{
@@ -277,5 +276,4 @@ std::unique_ptr<column> rolling_window(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

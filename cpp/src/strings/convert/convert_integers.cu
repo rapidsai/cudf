@@ -135,8 +135,7 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
                                      mr);
   auto results_view = results->mutable_view();
   // fill output column with integers
-  experimental::type_dispatcher(
-    output_type, dispatch_to_integers_fn{}, d_strings, results_view, stream);
+  type_dispatcher(output_type, dispatch_to_integers_fn{}, d_strings, results_view, stream);
   results->set_null_count(strings.null_count());
   return results;
 }
@@ -333,8 +332,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
   size_type strings_count = integers.size();
   if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
 
-  return experimental::type_dispatcher(
-    integers.type(), dispatch_from_integers_fn{}, integers, mr, stream);
+  return type_dispatcher(integers.type(), dispatch_from_integers_fn{}, integers, mr, stream);
 }
 
 }  // namespace detail

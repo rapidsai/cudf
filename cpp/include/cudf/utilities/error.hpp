@@ -5,21 +5,10 @@
 #include <stdexcept>
 #include <string>
 
-#include <rmm/rmm.h>
-
 /**
  * @addtogroup utility_error
  * @{
  */
-
-#define RMM_TRY(call)                                                                         \
-  do {                                                                                        \
-    rmmError_t const status = (call);                                                         \
-    if (RMM_SUCCESS != status) { cudf::detail::throw_rmm_error(status, __FILE__, __LINE__); } \
-  } while (0);
-
-#define RMM_TRY_CUDAERROR(x) \
-  if ((x) != RMM_SUCCESS) CUDA_TRY(cudaPeekAtLastError());
 
 namespace cudf {
 /**
@@ -90,13 +79,6 @@ struct cuda_error : public std::runtime_error {
 
 namespace cudf {
 namespace detail {
-inline void throw_rmm_error(rmmError_t error, const char* file, unsigned int line)
-{
-  // todo: throw cuda_error if the error is from cuda
-  throw cudf::logic_error(std::string{"RMM error encountered at: " + std::string{file} + ":" +
-                                      std::to_string(line) + ": " + std::to_string(error) + " " +
-                                      rmmGetErrorString(error)});
-}
 
 inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int line)
 {
@@ -113,9 +95,6 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
  * Invokes a CUDA runtime API function call, if the call does not return
  * cudaSuccess, invokes cudaGetLastError() to clear the error and throws an
  * exception detailing the CUDA error that occurred
- *
- * This macro supersedes GDF_REQUIRE and should be preferred in all instances.
- * GDF_REQUIRE should be considered deprecated.
  *
  **/
 #define CUDA_TRY(call)                                            \

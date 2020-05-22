@@ -417,16 +417,16 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
  * @return table of columns for the output of the split
  */
 template <typename Tokenizer>
-std::unique_ptr<experimental::table> split_fn(strings_column_view const& strings_column,
-                                              Tokenizer tokenizer,
-                                              rmm::mr::device_memory_resource* mr,
-                                              cudaStream_t stream)
+std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
+                                Tokenizer tokenizer,
+                                rmm::mr::device_memory_resource* mr,
+                                cudaStream_t stream)
 {
   std::vector<std::unique_ptr<column>> results;
   auto strings_count = strings_column.size();
   if (strings_count == 0) {
     results.push_back(make_empty_strings_column(mr, stream));
-    return std::make_unique<experimental::table>(std::move(results));
+    return std::make_unique<table>(std::move(results));
   }
 
   auto execpol   = rmm::exec_policy(stream);
@@ -540,7 +540,7 @@ std::unique_ptr<experimental::table> split_fn(strings_column_view const& strings
     results.emplace_back(
       make_strings_column(column_tokens, column_tokens + strings_count, mr, stream));
   }
-  return std::make_unique<experimental::table>(std::move(results));
+  return std::make_unique<table>(std::move(results));
 }
 
 /**
@@ -830,10 +830,10 @@ struct whitespace_rsplit_tokenizer_fn : base_whitespace_split_tokenizer {
  * @return table of columns for the output of the split
  */
 template <typename Tokenizer>
-std::unique_ptr<experimental::table> whitespace_split_fn(size_type strings_count,
-                                                         Tokenizer tokenizer,
-                                                         rmm::mr::device_memory_resource* mr,
-                                                         cudaStream_t stream)
+std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
+                                           Tokenizer tokenizer,
+                                           rmm::mr::device_memory_resource* mr,
+                                           cudaStream_t stream)
 {
   auto execpol = rmm::exec_policy(stream);
 
@@ -887,17 +887,16 @@ std::unique_ptr<experimental::table> whitespace_split_fn(size_type strings_count
     results.emplace_back(
       make_strings_column(column_tokens, column_tokens + strings_count, mr, stream));
   }
-  return std::make_unique<experimental::table>(std::move(results));
+  return std::make_unique<table>(std::move(results));
 }
 
 }  // namespace
 
-std::unique_ptr<experimental::table> split(
-  strings_column_view const& strings_column,
-  string_scalar const& delimiter      = string_scalar(""),
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0)
+std::unique_ptr<table> split(strings_column_view const& strings_column,
+                             string_scalar const& delimiter      = string_scalar(""),
+                             size_type maxsplit                  = -1,
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                             cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
 
@@ -917,12 +916,11 @@ std::unique_ptr<experimental::table> split(
     strings_column, split_tokenizer_fn{*strings_device_view, d_delimiter, max_tokens}, mr, stream);
 }
 
-std::unique_ptr<experimental::table> rsplit(
-  strings_column_view const& strings_column,
-  string_scalar const& delimiter      = string_scalar(""),
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0)
+std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
+                              string_scalar const& delimiter      = string_scalar(""),
+                              size_type maxsplit                  = -1,
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                              cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
 
@@ -946,19 +944,19 @@ std::unique_ptr<experimental::table> rsplit(
 
 // external APIs
 
-std::unique_ptr<experimental::table> split(strings_column_view const& strings_column,
-                                           string_scalar const& delimiter,
-                                           size_type maxsplit,
-                                           rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> split(strings_column_view const& strings_column,
+                             string_scalar const& delimiter,
+                             size_type maxsplit,
+                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::split(strings_column, delimiter, maxsplit, mr);
 }
 
-std::unique_ptr<experimental::table> rsplit(strings_column_view const& strings_column,
-                                            string_scalar const& delimiter,
-                                            size_type maxsplit,
-                                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
+                              string_scalar const& delimiter,
+                              size_type maxsplit,
+                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::rsplit(strings_column, delimiter, maxsplit, mr);

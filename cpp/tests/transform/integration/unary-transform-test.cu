@@ -17,7 +17,6 @@
  * limitations under the License.
  */
 
-#include <cudf/types.h>
 #include <cudf/transform.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
@@ -41,7 +40,7 @@ void test_udf(const char udf[], Op op, Data data_init, cudf::size_type size, boo
   auto in = cudf::test::fixed_width_column_wrapper<dtype>(data_iter, data_iter + size, all_valid);
 
   std::unique_ptr<cudf::column> out =
-    cudf::experimental::transform(in, udf, data_type(experimental::type_to_id<dtype>()), is_ptx);
+    cudf::transform(in, udf, data_type(type_to_id<dtype>()), is_ptx);
 
   ASSERT_UNARY<dtype, dtype>(out->view(), in, op);
 }

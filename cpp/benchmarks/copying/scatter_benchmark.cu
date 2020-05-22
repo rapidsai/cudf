@@ -26,7 +26,6 @@
 #include <tests/utilities/table_utilities.hpp>
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 #include <algorithm>
 #include <random>
@@ -86,7 +85,7 @@ void BM_scatter(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::experimental::scatter(source_table, scatter_map, target_table);
+    cudf::scatter(source_table, scatter_map, target_table);
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0) * n_cols * 2 *

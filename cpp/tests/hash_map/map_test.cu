@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
+#include <cudf/types.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 #include <tests/utilities/base_fixture.hpp>
 
