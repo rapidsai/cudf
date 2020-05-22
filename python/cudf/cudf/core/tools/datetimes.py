@@ -5,9 +5,9 @@ import numpy as np
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
+from cudf._lib.scalar import as_scalar
 from cudf.core import column
 from cudf.core.index import as_index
-from cudf.utils import utils
 from cudf.utils.dtypes import is_scalar
 
 
@@ -147,10 +147,8 @@ def to_datetime(
                     if current_col.dtype.kind not in ("i", "f"):
                         current_col = current_col.astype(dtype="int64")
 
-                    factor = utils.scalar_broadcast_to(
-                        scalar=column.datetime._numpy_to_pandas_conversion[u],
-                        size=len(current_col),
-                        dtype=current_col.dtype,
+                    factor = as_scalar(
+                        column.datetime._numpy_to_pandas_conversion[u]
                     )
 
                     if times_column is None:
@@ -227,10 +225,8 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
     dtype = "datetime64[ns]"
     if col.dtype.kind in ("i", "f"):
         if unit not in (None, "ns"):
-            factor = utils.scalar_broadcast_to(
-                scalar=column.datetime._numpy_to_pandas_conversion[unit],
-                size=len(col),
-                dtype=col.dtype,
+            factor = as_scalar(
+                column.datetime._numpy_to_pandas_conversion[unit]
             )
             col = col.binary_operator(binop="mul", rhs=factor)
 
@@ -238,10 +234,8 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
     elif col.dtype.kind in ("O"):
         if unit not in (None, "ns"):
             col = col.astype("int64")
-            factor = utils.scalar_broadcast_to(
-                scalar=column.datetime._numpy_to_pandas_conversion[unit],
-                size=len(col),
-                dtype=col.dtype,
+            factor = as_scalar(
+                column.datetime._numpy_to_pandas_conversion[unit]
             )
             col = col.binary_operator(binop="mul", rhs=factor)
             col = col.astype(dtype=dtype)
