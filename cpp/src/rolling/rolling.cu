@@ -431,7 +431,7 @@ struct rolling_window_launcher {
     auto output_table = detail::gather(table_view{{input}},
                                        output->view(),
                                        detail::out_of_bounds_policy::IGNORE,
-                                       detail::negative_indices_policy::NOT_ALLOWED,
+                                       detail::negative_indices_policy::NOT_ALLOW,
                                        mr,
                                        stream);
     return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));

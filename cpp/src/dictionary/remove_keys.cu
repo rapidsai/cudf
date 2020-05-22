@@ -89,7 +89,7 @@ std::unique_ptr<column> remove_keys_fn(
   auto table_indices = cudf::detail::gather(table_view{{map_indices_view}},
                                             indices_view,
                                             cudf::detail::out_of_bounds_policy::NULLIFY,
-                                            cudf::detail::negative_indices_policy::NOT_ALLOWED,
+                                            cudf::detail::negative_indices_policy::NOT_ALLOW,
                                             mr,
                                             stream)
                          ->release();

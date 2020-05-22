@@ -207,7 +207,7 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
   return detail::gather(input,
                         unique_indices_view,
                         detail::out_of_bounds_policy::NULLIFY,
-                        detail::negative_indices_policy::NOT_ALLOWED,
+                        detail::negative_indices_policy::NOT_ALLOW,
                         mr,
                         stream);
 }

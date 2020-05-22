@@ -53,7 +53,7 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                          null_removed_indices,
                          indices->nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
                                              : cudf::detail::out_of_bounds_policy::NULLIFY,
-                         cudf::detail::negative_indices_policy::NOT_ALLOWED,
+                         cudf::detail::negative_indices_policy::NOT_ALLOW,
                          mr,
                          stream);
 

@@ -12,7 +12,7 @@ namespace detail {
 
 enum class out_of_bounds_policy : int8_t { FAIL, NULLIFY, IGNORE };
 
-enum class negative_indices_policy : bool { ALLOW, NOT_ALLOWED };
+enum class negative_indices_policy : bool { ALLOW, NOT_ALLOW };
 
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.
@@ -35,7 +35,8 @@ enum class negative_indices_policy : bool { ALLOW, NOT_ALLOWED };
  * @param[in] out_of_bounds_policy How to treat out of bounds indices. FAIL: check `gather_map`
  * values and throw an exception if any are out of bounds. `NULLIFY` means to nullify output values
  * corresponding to out-of-bounds gather_map values. `IGNORE` means to ignore values in
- * `gather_map` that are out of bounds. `IGNORE` is incompatible with `negative_indices_policy == ALLOW`.
+ * `gather_map` that are out of bounds. `IGNORE` is incompatible with `negative_indices_policy ==
+ * ALLOW`.
  * @param[in] negative_indices_policy Interpret each negative index `i` in the
  * gathermap as the positive index `i+num_source_rows`.
  * @param[in] mr The resource to use for all allocations
