@@ -20,7 +20,7 @@
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
-namespace experimental {
+
 // Copy the columns from another table
 table::table(table const& other) : _num_rows{other.num_rows()}
 {
@@ -87,5 +87,4 @@ table_view table::select(std::vector<cudf::size_type> const& column_indices) con
   return table_view(columns);
 }
 
-}  // namespace experimental
 }  // namespace cudf

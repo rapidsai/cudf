@@ -22,7 +22,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <cudf/cudf.h>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {

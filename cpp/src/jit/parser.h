@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef GDF_JIT_PARSER_H
-#define GDF_JIT_PARSER_H
+#pragma once
 
 #include <map>
 #include <set>
@@ -242,5 +241,3 @@ std::string parse_single_function_cuda(const std::string& src, const std::string
 
 }  // namespace jit
 }  // namespace cudf
-
-#endif

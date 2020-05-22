@@ -156,7 +156,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
       bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
 
       // First thread writes bitmask word
-      if (threadIdx.x % experimental::detail::warp_size == 0) {
+      if (threadIdx.x % cudf::detail::warp_size == 0) {
         output_mask[word_index(output_index)] = new_word;
       }
 
@@ -173,7 +173,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
   }
 
   if (Nullable) {
-    using experimental::detail::single_lane_block_sum_reduce;
+    using cudf::detail::single_lane_block_sum_reduce;
     auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
     if (threadIdx.x == 0) { atomicAdd(out_valid_count, block_valid_count); }
   }
@@ -256,7 +256,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     rmm::device_scalar<size_type> d_valid_count(0);
 
     constexpr size_type block_size{256};
-    cudf::experimental::detail::grid_1d config(offsets_count, block_size);
+    cudf::detail::grid_1d config(offsets_count, block_size);
     auto const kernel = has_nulls ? fused_concatenate_string_offset_kernel<block_size, true>
                                   : fused_concatenate_string_offset_kernel<block_size, false>;
     kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
@@ -277,7 +277,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     if (use_fused_kernel_heuristic(has_nulls, total_bytes, columns.size())) {
       // Use single kernel launch to copy chars columns
       constexpr size_type block_size{256};
-      cudf::experimental::detail::grid_1d config(total_bytes, block_size);
+      cudf::detail::grid_1d config(total_bytes, block_size);
       auto const kernel = fused_concatenate_string_chars_kernel;
       kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
         d_views.data().get(),

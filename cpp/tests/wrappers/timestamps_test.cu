@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/legacy/binaryop.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
@@ -27,13 +27,11 @@
 #include "tests/utilities/column_utilities.hpp"
 #include "tests/utilities/column_wrapper.hpp"
 
-#include <gmock/gmock.h>
-
 template <typename T>
 struct TimestampColumnTest : public cudf::test::BaseFixture {
   cudaStream_t stream() { return cudaStream_t(0); }
   cudf::size_type size() { return cudf::size_type(100); }
-  cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 template <typename Timestamp>
@@ -70,7 +68,7 @@ TYPED_TEST(TimestampColumnTest, TimestampDurationsMatchPrimitiveRepresentation)
   auto timestamp_col =
     generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop_));
 
-  // rount-trip through the host to copy `timestamp_col` values
+  // round-trip through the host to copy `timestamp_col` values
   // to a new fixed_width_column_wrapper `primitive_col`
   // When C++17, use structured bindings
   thrust::host_vector<Rep> timestamp_col_data;
@@ -91,11 +89,11 @@ TYPED_TEST(TimestampColumnTest, TimestampDurationsMatchPrimitiveRepresentation)
 
 template <typename Timestamp>
 struct compare_timestamp_elements {
-  gdf_binary_operator comp;
+  cudf::binary_operator comp;
   cudf::column_device_view lhs;
   cudf::column_device_view rhs;
 
-  compare_timestamp_elements(gdf_binary_operator _comp,
+  compare_timestamp_elements(cudf::binary_operator _comp,
                              cudf::column_device_view& _lhs,
                              cudf::column_device_view& _rhs)
     : comp(_comp), lhs(_lhs), rhs(_rhs)
@@ -107,10 +105,10 @@ struct compare_timestamp_elements {
     auto lhs_elt = lhs.element<Timestamp>(element_index);
     auto rhs_elt = rhs.element<Timestamp>(element_index);
     switch (comp) {
-      case GDF_LESS: return lhs_elt < rhs_elt;
-      case GDF_GREATER: return lhs_elt > rhs_elt;
-      case GDF_LESS_EQUAL: return lhs_elt <= rhs_elt;
-      case GDF_GREATER_EQUAL: return lhs_elt >= rhs_elt;
+      case cudf::binary_operator::LESS: return lhs_elt < rhs_elt;
+      case cudf::binary_operator::GREATER: return lhs_elt > rhs_elt;
+      case cudf::binary_operator::LESS_EQUAL: return lhs_elt <= rhs_elt;
+      case cudf::binary_operator::GREATER_EQUAL: return lhs_elt >= rhs_elt;
       default: return false;
     }
   }
@@ -139,28 +137,28 @@ TYPED_TEST(TimestampColumnTest, TimestampsCanBeComparedInDeviceCode)
   EXPECT_TRUE(thrust::all_of(
     indices.begin(),
     indices.end(),
-    compare_timestamp_elements<TypeParam>{GDF_LESS,
+    compare_timestamp_elements<TypeParam>{cudf::binary_operator::LESS,
                                           *cudf::column_device_view::create(timestamp_lhs_col),
                                           *cudf::column_device_view::create(timestamp_rhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
     indices.begin(),
     indices.end(),
-    compare_timestamp_elements<TypeParam>{GDF_GREATER,
+    compare_timestamp_elements<TypeParam>{cudf::binary_operator::GREATER,
                                           *cudf::column_device_view::create(timestamp_rhs_col),
                                           *cudf::column_device_view::create(timestamp_lhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
     indices.begin(),
     indices.end(),
-    compare_timestamp_elements<TypeParam>{GDF_LESS_EQUAL,
+    compare_timestamp_elements<TypeParam>{cudf::binary_operator::LESS_EQUAL,
                                           *cudf::column_device_view::create(timestamp_lhs_col),
                                           *cudf::column_device_view::create(timestamp_lhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
     indices.begin(),
     indices.end(),
-    compare_timestamp_elements<TypeParam>{GDF_GREATER_EQUAL,
+    compare_timestamp_elements<TypeParam>{cudf::binary_operator::GREATER_EQUAL,
                                           *cudf::column_device_view::create(timestamp_rhs_col),
                                           *cudf::column_device_view::create(timestamp_rhs_col)}));
 }
@@ -168,14 +166,13 @@ TYPED_TEST(TimestampColumnTest, TimestampsCanBeComparedInDeviceCode)
 TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsParm)
 {
   rmm::device_buffer null_mask{create_null_mask(this->size(), cudf::mask_state::ALL_NULL)};
-  auto column =
-    cudf::make_timestamp_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
-                                this->size(),
-                                null_mask,
-                                this->size(),
-                                this->stream(),
-                                this->mr());
-  EXPECT_EQ(column->type(), cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+  auto column = cudf::make_timestamp_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
+                                            this->size(),
+                                            null_mask,
+                                            this->size(),
+                                            this->stream(),
+                                            this->mr());
+  EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(this->size(), column->null_count());
   EXPECT_TRUE(column->nullable());
@@ -186,14 +183,13 @@ TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsParm)
 TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsEmptyParm)
 {
   rmm::device_buffer null_mask{};
-  auto column =
-    cudf::make_timestamp_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
-                                this->size(),
-                                null_mask,
-                                0,
-                                this->stream(),
-                                this->mr());
-  EXPECT_EQ(column->type(), cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+  auto column = cudf::make_timestamp_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
+                                            this->size(),
+                                            null_mask,
+                                            0,
+                                            this->stream(),
+                                            this->mr());
+  EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(0, column->null_count());
   EXPECT_FALSE(column->nullable());

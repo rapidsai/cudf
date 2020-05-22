@@ -426,20 +426,20 @@ struct copy_block_partitions_dispatcher {
                                          stream);
 
     // Use gather instead for non-fixed width types
-    return experimental::type_dispatcher(input.type(),
-                                         experimental::detail::column_gatherer{},
-                                         input,
-                                         gather_map.begin(),
-                                         gather_map.end(),
-                                         false,
-                                         mr,
-                                         stream);
+    return type_dispatcher(input.type(),
+                           detail::column_gatherer{},
+                           input,
+                           gather_map.begin(),
+                           gather_map.end(),
+                           false,
+                           mr,
+                           stream);
   }
 };
 
 // NOTE hash_has_nulls must be true if table_to_hash has nulls
 template <bool hash_has_nulls>
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition_table(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   table_view const& input,
   table_view const& table_to_hash,
   size_type num_partitions,
@@ -476,7 +476,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
   auto row_partition_offset = rmm::device_vector<size_type>(num_rows);
 
   auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher       = experimental::row_hasher<MurmurHash3_32, hash_has_nulls>(*device_input);
+  auto const hasher       = row_hasher<MurmurHash3_32, hash_has_nulls>(*device_input);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
@@ -557,17 +557,17 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
 
     // Copy input to output by partition per column
     std::transform(input.begin(), input.end(), output_cols.begin(), [=](auto const& col) {
-      return cudf::experimental::type_dispatcher(col.type(),
-                                                 copy_block_partitions_dispatcher{},
-                                                 col,
-                                                 num_partitions,
-                                                 row_partition_numbers_ptr,
-                                                 row_partition_offset_ptr,
-                                                 block_partition_sizes_ptr,
-                                                 scanned_block_partition_sizes_ptr,
-                                                 grid_size,
-                                                 mr,
-                                                 stream);
+      return cudf::type_dispatcher(col.type(),
+                                   copy_block_partitions_dispatcher{},
+                                   col,
+                                   num_partitions,
+                                   row_partition_numbers_ptr,
+                                   row_partition_offset_ptr,
+                                   block_partition_sizes_ptr,
+                                   scanned_block_partition_sizes_ptr,
+                                   grid_size,
+                                   mr,
+                                   stream);
     });
 
     if (has_nulls(input)) {
@@ -582,15 +582,11 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
                                            stream);
 
       // Handle bitmask using gather to take advantage of ballot_sync
-      experimental::detail::gather_bitmask(input,
-                                           gather_map.begin(),
-                                           output_cols,
-                                           experimental::detail::gather_bitmask_op::DONT_CHECK,
-                                           mr,
-                                           stream);
+      detail::gather_bitmask(
+        input, gather_map.begin(), output_cols, detail::gather_bitmask_op::DONT_CHECK, mr, stream);
     }
 
-    auto output{std::make_unique<experimental::table>(std::move(output_cols))};
+    auto output{std::make_unique<table>(std::move(output_cols))};
     return std::make_pair(std::move(output), std::move(partition_offsets));
   } else {
     // Compute a scatter map from input to output such that the output rows are
@@ -604,7 +600,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
       row_output_locations, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
 
     // Use the resulting scatter map to materialize the output
-    auto output = experimental::detail::scatter(
+    auto output = detail::scatter(
       input, row_partition_numbers.begin(), row_partition_numbers.end(), input, false, mr, stream);
 
     return std::make_pair(std::move(output), std::move(partition_offsets));
@@ -614,7 +610,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
 }  // namespace
 
 namespace detail {
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
@@ -627,7 +623,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
 
   // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
-    return std::make_pair(experimental::empty_like(input), std::vector<size_type>{});
+    return std::make_pair(empty_like(input), std::vector<size_type>{});
   }
 
   if (has_nulls(table_to_hash)) {
@@ -663,13 +659,13 @@ std::unique_ptr<column> hash(table_view const& input,
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
-                       experimental::row_hasher_initial_values<MurmurHash3_32, true>(
+                       row_hasher_initial_values<MurmurHash3_32, true>(
                          *device_input, device_initial_hash.data().get()));
     } else {
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
-                       experimental::row_hasher_initial_values<MurmurHash3_32, false>(
+                       row_hasher_initial_values<MurmurHash3_32, false>(
                          *device_input, device_initial_hash.data().get()));
     }
   } else {
@@ -677,12 +673,12 @@ std::unique_ptr<column> hash(table_view const& input,
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
-                       experimental::row_hasher<MurmurHash3_32, true>(*device_input));
+                       row_hasher<MurmurHash3_32, true>(*device_input));
     } else {
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
-                       experimental::row_hasher<MurmurHash3_32, false>(*device_input));
+                       row_hasher<MurmurHash3_32, false>(*device_input));
     }
   }
 

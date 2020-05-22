@@ -22,7 +22,6 @@
 #include <algorithm>
 
 namespace cudf {
-namespace experimental {
 namespace {
 template <typename T>
 std::vector<T> split(T const& input, size_type column_size, std::vector<size_type> const& splits)
@@ -39,7 +38,7 @@ std::vector<T> split(T const& input, size_type column_size, std::vector<size_typ
 
   indices.push_back(column_size);  // This to include rest of the elements
 
-  return cudf::experimental::slice(input, indices);
+  return cudf::slice(input, indices);
 }
 };  // anonymous namespace
 
@@ -58,7 +57,5 @@ std::vector<cudf::table_view> split(cudf::table_view const& input,
   if (input.num_columns() == 0) { return result; }
   return split(input, input.column(0).size(), splits);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

@@ -22,7 +22,6 @@
 #include <cudf/table/table_view.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 std::unique_ptr<column> stable_sorted_order(table_view input,
                                             std::vector<order> const& column_order,
@@ -43,5 +42,4 @@ std::unique_ptr<column> stable_sorted_order(table_view input,
   return detail::stable_sorted_order(input, column_order, null_precedence, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf
