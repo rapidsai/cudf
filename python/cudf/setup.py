@@ -37,8 +37,8 @@ try:
 except Exception:
     nthreads = 0
 
-ARROW_HOME = os.environ.get("ARROW_HOME")
-DLPACK_INCLUDE = os.environ.get("DLPACK_INCLUDE")
+ARROW_HOME = os.environ.get("ARROW_HOME", "")
+DLPACK_INCLUDE = os.environ.get("DLPACK_INCLUDE", "")
 
 extensions = [
     Extension(
@@ -62,7 +62,7 @@ extensions = [
             os.path.join(ARROW_HOME, "lib"),
             cuda_lib_dir,
         ],
-        libraries=["cudf", "cudart", "cuda", "nvrtc", "arrow"],
+        libraries=["cudf", "cudart", "cuda", "nvrtc"],
         language="c++",
         extra_compile_args=["-std=c++14"],
     )
