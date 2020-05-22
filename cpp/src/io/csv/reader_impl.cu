@@ -39,7 +39,6 @@ using std::string;
 using std::vector;
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace csv {
@@ -79,7 +78,7 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
  *
  * @param[in] dtype String containing the basic or extended dtype
  *
- * @return std::pair<gdf_dtype, column_parse::flags> Tuple of dtype and flags
+ * @return Tuple of data_type and flags
  */
 std::tuple<data_type, column_parse::flags> get_dtype_info(const std::string &dtype)
 {
@@ -220,11 +219,10 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_uncomp_data = reinterpret_cast<const char *>(buffer->data());
       h_uncomp_size = buffer->size();
     } else {
-      CUDF_EXPECTS(getUncompressedHostData(reinterpret_cast<const char *>(buffer->data()),
-                                           buffer->size(),
-                                           compression_type_,
-                                           h_uncomp_data_owner) == GDF_SUCCESS,
-                   "Cannot decompress data");
+      getUncompressedHostData(reinterpret_cast<const char *>(buffer->data()),
+                              buffer->size(),
+                              compression_type_,
+                              h_uncomp_data_owner);
       h_uncomp_data = h_uncomp_data_owner.data();
       h_uncomp_size = h_uncomp_data_owner.size();
     }
@@ -232,28 +230,34 @@ table_with_metadata reader::impl::read(size_t range_offset,
     const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
                                  skip_end_rows <= 0 && num_rows == -1;
 
-    // Preload the intput data to device
-    if (load_whole_file) data_ = rmm::device_buffer(h_uncomp_data, h_uncomp_size);
+    // With byte range, find the start of the first data row
+    size_t const data_start_offset =
+      (range_offset != 0) ? find_first_row_start(h_uncomp_data, h_uncomp_size) : 0;
 
-    // Pass nullptr for the device data is the data is not preloaded (will cause additional copies)
-    gather_row_offsets(
-      h_uncomp_data, h_uncomp_size, range_offset, stream, (load_whole_file ? &data_ : nullptr));
+    // TODO: Allow parsing the header outside the mapped range
+    CUDF_EXPECTS((range_offset == 0 || args_.header < 0),
+                 "byte_range offset with header not supported");
 
-    auto row_range = select_rows(
-      h_uncomp_data, h_uncomp_size, range_size, skip_rows, skip_end_rows, num_rows, stream);
+    // Gather row offsets
+    gather_row_offsets(h_uncomp_data,
+                       h_uncomp_size,
+                       data_start_offset,
+                       (range_size) ? range_size : h_uncomp_size,
+                       (skip_rows > 0) ? skip_rows : 0,
+                       num_rows,
+                       load_whole_file,
+                       stream);
 
-    data_size = row_range.second - row_range.first;
-    CUDF_EXPECTS(data_size <= h_uncomp_size, "Row range exceeds data size");
-
-    num_bits = (data_size + 63) / 64;
-    if (load_whole_file) {
-      // Loaded the whole file, add the start offset (e.g. empty rows) to the pointer
-      data_ptr = static_cast<char *>(data_.data()) + row_range.first;
-    } else {
-      // The start offset is applied to the device data buffer
-      data_    = rmm::device_buffer(h_uncomp_data + row_range.first, data_size);
-      data_ptr = static_cast<char *>(data_.data());
+    // Exclude the rows that are to be skipped from the end
+    if (skip_end_rows > 0 && static_cast<size_t>(skip_end_rows) < row_offsets.size()) {
+      row_offsets.resize(row_offsets.size() - skip_end_rows);
     }
+
+    // Exclude the end-of-data row from number of rows with actual data
+    num_records = row_offsets.size();
+    num_records -= (num_records > 0);
+  } else {
+    num_records = 0;
   }
 
   // Check if the user gave us a list of column names
@@ -338,6 +342,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
 
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<column_buffer> out_buffers;
+  out_buffers.reserve(column_types.size());
   for (int col = 0, active_col = 0; col < num_actual_cols; ++col) {
     if (h_column_flags[col] & column_parse::enabled) {
       // Replace EMPTY dtype with STRING
@@ -350,6 +355,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
     }
   }
 
+  out_columns.reserve(column_types.size());
   if (num_records != 0) {
     decode_data(column_types, out_buffers, stream);
 
@@ -379,162 +385,162 @@ table_with_metadata reader::impl::read(size_t range_offset,
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
 }
 
-void reader::impl::gather_row_offsets(const char *h_data,
-                                      size_t h_size,
-                                      size_t range_offset,
-                                      cudaStream_t stream,
-                                      const rmm::device_buffer *d_data)
+size_t reader::impl::find_first_row_start(const char *h_data, size_t h_size)
 {
-  // Account for the start and end of row region offsets
-  const bool require_first_line_start = (range_offset == 0);
-  const bool require_last_line_end    = (h_data[h_size - 1] != opts.terminator);
-
-  auto symbols = (opts.quotechar != '\0') ? std::vector<char>{opts.terminator, opts.quotechar}
-                                          : std::vector<char>{opts.terminator};
-
-  cudf::size_type num_rows = (require_first_line_start ? 1 : 0);
-  if (d_data) {
-    // preloaded to device memory
-    num_rows += count_all_from_set(*d_data, symbols);
-  } else {
-    num_rows += count_all_from_set(h_data, h_size, symbols);
-  }
-  const auto num_offsets = num_rows + (require_last_line_end ? 1 : 0);
-  row_offsets.resize(num_offsets);
-
-  auto ptr_first = row_offsets.data().get();
-  auto ptr_last  = ptr_first + num_rows;
-  if (require_first_line_start) {
-    ptr_first++;
-    const uint64_t first_entry = 0;
-    row_offsets.front()        = first_entry;
-  }
-  if (require_last_line_end) {
-    const uint64_t last_entry = h_size;
-    row_offsets.back()        = last_entry;
-  }
-
-  // Passing offset = 1 to return positions AFTER the found character
-  if (d_data) {
-    find_all_from_set(*d_data, symbols, 1, ptr_first);
-  } else {
-    find_all_from_set(h_data, h_size, symbols, 1, ptr_first);
-  }
-
-  // Sort the row info according to ascending start offset
-  // Subsequent processing (filtering, etc.) may require row order
-  thrust::sort(rmm::exec_policy(stream)->on(stream), ptr_first, ptr_last);
+  // For now, look for the first terminator (assume the first terminator isn't within a quote)
+  // TODO: Attempt to infer this from the data
+  size_t pos = 0;
+  while (pos < h_size && h_data[pos] != opts.terminator) { ++pos; }
+  return std::min(pos + 1, h_size);
 }
 
-std::pair<uint64_t, uint64_t> reader::impl::select_rows(const char *h_data,
-                                                        size_t h_size,
-                                                        size_t range_size,
-                                                        cudf::size_type skip_rows,
-                                                        cudf::size_type skip_end_rows,
-                                                        cudf::size_type num_rows,
-                                                        cudaStream_t stream)
+void reader::impl::gather_row_offsets(const char *h_data,
+                                      size_t h_size,
+                                      size_t range_begin,
+                                      size_t range_end,
+                                      size_t skip_rows,
+                                      int64_t num_rows,
+                                      bool load_whole_file,
+                                      cudaStream_t stream)
 {
-  thrust::host_vector<uint64_t> h_row_offsets = row_offsets;
-  auto it_begin                               = h_row_offsets.begin();
-  auto it_end                                 = h_row_offsets.end();
-  assert(std::distance(it_begin, it_end) >= 1);
+  constexpr size_t max_chunk_bytes = 64 * 1024 * 1024;  // 64MB
+  size_t buffer_size               = std::min(max_chunk_bytes, h_size);
+  size_t max_blocks =
+    std::max<size_t>((buffer_size / cudf::io::csv::gpu::rowofs_block_bytes) + 1, 2);
+  hostdevice_vector<uint64_t> row_ctx(max_blocks);
+  size_t buffer_pos  = std::min(range_begin - std::min(range_begin, sizeof(char)), h_size);
+  size_t pos         = std::min(range_begin, h_size);
+  size_t header_rows = (args_.header >= 0) ? args_.header + 1 : 0;
+  uint64_t ctx       = 0;
 
-  // Currently, ignoring lineterminations within quotes is handled by recording
-  // the records of both, and then filtering out the records that is a quotechar
-  // or a linetermination within a quotechar pair.
-  if (opts.quotechar != '\0') {
-    auto count = std::distance(it_begin, it_end) - 1;
-    // First element is zero if reading from start of file, skip it in that case
-    // Check the first element otherwise, it could be a quotation
-    const int start = (h_row_offsets[0] == 0) ? 1 : 0;
-    // Starting in the incomplete first row (before first line terminator in the byte range)?
-    bool is_partial_row = (h_row_offsets[0] != 0);
-    auto filtered_count = count;
-    bool quotation      = false;
-    for (int i = start; i < count; ++i) {
-      auto &offset = h_row_offsets[i];
-      if (offset > 0 && h_data[offset - 1] == opts.quotechar) {
-        // Don't update the quotation state before hitting the first line terminator
-        if (!is_partial_row) { quotation = !quotation; }
-        offset = static_cast<uint64_t>(-1);
-        filtered_count--;
-      } else if (offset > 0 && h_data[offset - 1] == opts.terminator) {
-        if (quotation) {
-          offset = static_cast<uint64_t>(-1);
-          filtered_count--;
-        } else if (is_partial_row) {
-          // Hit the the first line terminator, reset the is_partial_row flag
-          is_partial_row = false;
+  // For compatibility with the previous parser, a row is considered in-range if the
+  // previous row terminator is within the given range
+  range_end += (range_end < h_size);
+  data_.resize(0);
+  row_offsets.resize(0);
+  data_.reserve((load_whole_file) ? h_size : std::min(buffer_size * 2, h_size));
+  do {
+    size_t target_pos = std::min(pos + max_chunk_bytes, h_size);
+    size_t chunk_size = target_pos - pos;
+
+    data_.insert(data_.end(), h_data + buffer_pos + data_.size(), h_data + target_pos);
+
+    // Pass 1: Count the potential number of rows in each character block for each
+    // possible parser state at the beginning of the block.
+    uint32_t num_blocks = cudf::io::csv::gpu::gather_row_offsets(row_ctx.device_ptr(),
+                                                                 nullptr,
+                                                                 data_.data().get(),
+                                                                 chunk_size,
+                                                                 pos,
+                                                                 buffer_pos,
+                                                                 h_size,
+                                                                 range_begin,
+                                                                 range_end,
+                                                                 skip_rows,
+                                                                 0,
+                                                                 opts,
+                                                                 stream);
+    CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
+                             row_ctx.device_ptr(),
+                             num_blocks * sizeof(uint64_t),
+                             cudaMemcpyDeviceToHost,
+                             stream));
+    CUDA_TRY(cudaStreamSynchronize(stream));
+    // Sum up the rows in each character block, selecting the row count that
+    // corresponds to the current input context. Also stores the now known input
+    // context per character block that will be needed by the second pass.
+    for (uint32_t i = 0; i < num_blocks; i++) {
+      uint64_t ctx_next = cudf::io::csv::gpu::select_row_context(ctx, row_ctx[i]);
+      row_ctx[i]        = ctx;
+      ctx               = ctx_next;
+    }
+    size_t total_rows = ctx >> 2;
+    if (total_rows > skip_rows) {
+      // At least one row in range in this batch
+      size_t num_row_offsets = total_rows - skip_rows;
+      row_offsets.resize(num_row_offsets);
+      CUDA_TRY(cudaMemcpyAsync(row_ctx.device_ptr(),
+                               row_ctx.host_ptr(),
+                               num_blocks * sizeof(uint64_t),
+                               cudaMemcpyHostToDevice,
+                               stream));
+      // Pass 2: Output row offsets
+      cudf::io::csv::gpu::gather_row_offsets(row_ctx.device_ptr(),
+                                             row_offsets.data().get(),
+                                             data_.data().get(),
+                                             chunk_size,
+                                             pos,
+                                             buffer_pos,
+                                             h_size,
+                                             range_begin,
+                                             range_end,
+                                             skip_rows,
+                                             num_row_offsets,
+                                             opts,
+                                             stream);
+      // With byte range, we want to keep only one row out of the specified range
+      if (range_end < h_size) {
+        CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
+                                 row_ctx.device_ptr(),
+                                 num_blocks * sizeof(uint64_t),
+                                 cudaMemcpyDeviceToHost,
+                                 stream));
+        CUDA_TRY(cudaStreamSynchronize(stream));
+        size_t rows_out_of_range = 0;
+        for (uint32_t i = 0; i < num_blocks; i++) { rows_out_of_range += row_ctx[i]; }
+        if (rows_out_of_range != 0) {
+          // Keep one row out of range (used to infer length of previous row)
+          num_row_offsets -= std::min(rows_out_of_range - 1, num_row_offsets);
+          row_offsets.resize(num_row_offsets);
+          // Implies we reached the end of the range
+          break;
         }
       }
-    }
-    if (filtered_count != count) {
-      it_end = std::remove_if(
-        it_begin, it_end, [](uint64_t pos) { return (pos == static_cast<uint64_t>(-1)); });
-    }
-  }
-
-  // Exclude the rows that are to be skipped from the start
-  if (skip_rows > 0 && skip_rows < std::distance(it_begin, it_end)) { it_begin += skip_rows; }
-
-  // Exclude the rows outside of requested range
-  if (range_size != 0) {
-    auto it = it_end - 1;
-    while (it >= it_begin && *it > static_cast<uint64_t>(range_size)) { --it; }
-    if ((it + 2) < it_end) { it_end = it + 2; }
-  }
-
-  // Exclude the rows without data
-  if (opts.skipblanklines || opts.comment != '\0') {
-    const auto newline  = opts.skipblanklines ? opts.terminator : opts.comment;
-    const auto comment  = opts.comment != '\0' ? opts.comment : newline;
-    const auto carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
-
-    it_end = std::remove_if(it_begin, it_end, [=, &h_data](uint64_t pos) {
-      return ((pos != h_size) &&
-              (h_data[pos] == newline || h_data[pos] == comment || h_data[pos] == carriage));
-    });
-  }
-
-  // Exclude the rows before the header row (inclusive)
-  if (std::distance(it_begin, it_end) > 1) {
-    if (args_.header == -1) {
-      header.assign(h_data + *(it_begin), h_data + *(it_begin + 1));
+      // num_rows does not include blank rows
+      if (num_rows >= 0) {
+        if (num_row_offsets > header_rows + static_cast<size_t>(num_rows)) {
+          size_t num_blanks =
+            cudf::io::csv::gpu::count_blank_rows(row_offsets, data_, opts, stream);
+          if (num_row_offsets - num_blanks > header_rows + static_cast<size_t>(num_rows)) {
+            // Got the desired number of rows
+            break;
+          }
+        }
+      }
     } else {
-      header.assign(h_data + *(it_begin + args_.header), h_data + *(it_begin + args_.header + 1));
-      it_begin += args_.header + 1;
+      // Discard data (all rows below skip_rows), keeping one character for history
+      size_t discard_bytes = std::max(data_.size(), sizeof(char)) - sizeof(char);
+      if (discard_bytes != 0) {
+        data_.erase(data_.begin(), data_.begin() + discard_bytes);
+        buffer_pos += discard_bytes;
+      }
     }
+    pos = target_pos;
+  } while (pos < h_size);
+
+  // Eliminate blank rows
+  if (row_offsets.size() != 0) {
+    cudf::io::csv::gpu::remove_blank_rows(row_offsets, data_, opts, stream);
   }
-
-  // Exclude the rows that exceed past the requested number
-  if (num_rows >= 0 && num_rows < std::distance(it_begin, it_end)) {
-    it_end = it_begin + num_rows + 1;
-  }
-
-  // Exclude the rows that are to be skipped from the end
-  if (skip_end_rows > 0 && skip_end_rows < std::distance(it_begin, it_end)) {
-    it_end -= skip_end_rows;
-  }
-
-  const uint64_t offset_start = *it_begin;
-  const uint64_t offset_end   = *(it_end - 1);
-
-  // Copy out the row starts to use for row-column data parsing
-  if (offset_start != offset_end) {
-    if (offset_start != 0) {
-      for (auto it = it_begin; it != it_end; ++it) { *it -= offset_start; }
-    }
-    CUDA_TRY(cudaMemcpyAsync(row_offsets.data().get(),
-                             &(*it_begin),
-                             std::distance(it_begin, it_end) * sizeof(uint64_t),
-                             cudaMemcpyHostToDevice,
+  // Remove header rows and extract header
+  const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
+  if (header_row_index + 1 < row_offsets.size()) {
+    CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
+                             row_offsets.data().get() + header_row_index,
+                             2 * sizeof(uint64_t),
+                             cudaMemcpyDeviceToHost,
                              stream));
-
-    // Exclude the end-of-data row from number of rows with actual data
-    num_records = std::distance(it_begin, it_end) - 1;
+    CUDA_TRY(cudaStreamSynchronize(stream));
+    const auto header_start = buffer_pos + row_ctx[0];
+    const auto header_end   = buffer_pos + row_ctx[1];
+    CUDF_EXPECTS(header_start <= header_end && header_end <= h_size, "Invalid csv header location");
+    header.assign(h_data + header_start, h_data + header_end);
+    if (header_rows > 0) {
+      row_offsets.erase(row_offsets.begin(), row_offsets.begin() + header_rows);
+    }
   }
-
-  return std::make_pair(offset_start, offset_end);
+  // Apply num_rows limit
+  if (num_rows >= 0) { row_offsets.resize(std::min<size_t>(row_offsets.size(), num_rows + 1)); }
 }
 
 std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
@@ -549,7 +555,7 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
 
       hostdevice_vector<column_parse::stats> column_stats(num_active_cols);
       CUDA_TRY(cudaMemsetAsync(column_stats.device_ptr(), 0, column_stats.memory_size(), stream));
-      CUDA_TRY(cudf::io::csv::gpu::DetectColumnTypes(data_ptr,
+      CUDA_TRY(cudf::io::csv::gpu::DetectColumnTypes(data_.data().get(),
                                                      row_offsets.data().get(),
                                                      num_records,
                                                      num_actual_cols,
@@ -672,7 +678,7 @@ void reader::impl::decode_data(const std::vector<data_type> &column_types,
   rmm::device_vector<bitmask_type *> d_valid = h_valid;
   d_column_flags                             = h_column_flags;
 
-  CUDA_TRY(cudf::io::csv::gpu::DecodeRowColumnData(data_ptr,
+  CUDA_TRY(cudf::io::csv::gpu::DecodeRowColumnData(data_.data().get(),
                                                    row_offsets.data().get(),
                                                    num_records,
                                                    num_actual_cols,
@@ -803,5 +809,4 @@ table_with_metadata reader::read_rows(size_type num_skip_header,
 }  // namespace csv
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

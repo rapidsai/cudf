@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,11 +30,11 @@
 #include <thrust/equal.h>
 #include <thrust/logical.h>
 
-#include <gmock/gmock.h>
 #include <numeric>
 
 namespace cudf {
 namespace test {
+
 // Property comparison
 template <bool check_exact_equality>
 void column_property_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs)
@@ -58,59 +58,14 @@ void expect_column_properties_equivalent(column_view const& lhs, column_view con
 }
 
 class corresponding_rows_unequal {
-  table_device_view d_lhs;
-  table_device_view d_rhs;
-
  public:
-  corresponding_rows_unequal(table_device_view d_lhs, table_device_view d_rhs)
-    : d_lhs(d_lhs), d_rhs(d_rhs), comp(d_lhs, d_rhs)
+  corresponding_rows_unequal(table_device_view d_lhs, table_device_view d_rhs) : comp(d_lhs, d_rhs)
   {
-    CUDF_EXPECTS(d_lhs.num_columns() == 1 and d_rhs.num_columns() == 1,
-                 "Unsupported number of columns");
   }
 
-  struct typed_element_unequal {
-    template <typename T>
-    __device__ std::enable_if_t<std::is_floating_point<T>::value, bool> operator()(
-      column_device_view const& lhs, column_device_view const& rhs, size_type index)
-    {
-      if (lhs.is_valid(index) and rhs.is_valid(index)) {
-        int ulp = 4;  // value taken from google test
-        T x     = lhs.element<T>(index);
-        T y     = rhs.element<T>(index);
-        return std::abs(x - y) > std::numeric_limits<T>::epsilon() * std::abs(x + y) * ulp &&
-               std::abs(x - y) >= std::numeric_limits<T>::min();
-      } else {
-        // if either is null, then the inequality was checked already
-        return true;
-      }
-    }
+  cudf::row_equality_comparator<true> comp;
 
-    template <typename T, typename... Args>
-    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(Args... args)
-    {
-      // Non-floating point inequality is checked already
-      return true;
-    }
-  };
-
-  cudf::experimental::row_equality_comparator<true> comp;
-
-  __device__ bool operator()(size_type index)
-  {
-    if (not comp(index, index)) {
-      return thrust::any_of(thrust::seq,
-                            thrust::make_counting_iterator(0),
-                            thrust::make_counting_iterator(d_lhs.num_columns()),
-                            [this, index](auto i) {
-                              auto lhs_col = this->d_lhs.column(i);
-                              auto rhs_col = this->d_rhs.column(i);
-                              return experimental::type_dispatcher(
-                                lhs_col.type(), typed_element_unequal{}, lhs_col, rhs_col, index);
-                            });
-    }
-    return false;
-  }
+  __device__ bool operator()(size_type index) { return !comp(index, index); }
 };
 
 class corresponding_rows_not_equivalent {
@@ -150,14 +105,14 @@ class corresponding_rows_not_equivalent {
     }
   };
 
-  cudf::experimental::row_equality_comparator<true> comp;
+  cudf::row_equality_comparator<true> comp;
 
   __device__ bool operator()(size_type index)
   {
     if (not comp(index, index)) {
       auto lhs_col = this->d_lhs.column(0);
       auto rhs_col = this->d_rhs.column(0);
-      return experimental::type_dispatcher(
+      return type_dispatcher(
         lhs_col.type(), typed_element_not_equivalent{}, lhs_col, rhs_col, index);
     }
     return false;
@@ -165,6 +120,7 @@ class corresponding_rows_not_equivalent {
 };
 
 namespace {
+
 template <bool check_exact_equality>
 void column_comparison(cudf::column_view const& lhs,
                        cudf::column_view const& rhs,
@@ -179,7 +135,6 @@ void column_comparison(cudf::column_view const& lhs,
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
   auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
 
-  // TODO (dm): handle floating point equality
   thrust::device_vector<int> differences(lhs.size());
 
   auto diff_iter = thrust::copy_if(thrust::device,
@@ -202,8 +157,7 @@ void column_comparison(cudf::column_view const& lhs,
 
       fixed_width_column_wrapper<int32_t> diff_column(differences.begin(), differences.end());
 
-      std::unique_ptr<cudf::experimental::table> diff_table =
-        cudf::experimental::gather(source_table, diff_column);
+      std::unique_ptr<cudf::table> diff_table = cudf::gather(source_table, diff_column);
 
       //
       //  Need to pull back the differences
@@ -223,8 +177,8 @@ void column_comparison(cudf::column_view const& lhs,
       //
       int index = differences[0];
 
-      auto diff_lhs = cudf::experimental::detail::slice(lhs, index, index + 1);
-      auto diff_rhs = cudf::experimental::detail::slice(rhs, index, index + 1);
+      auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
+      auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
 
       std::vector<std::string> h_left_strings  = to_strings(diff_lhs);
       std::vector<std::string> h_right_strings = to_strings(diff_rhs);
@@ -290,6 +244,20 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
   }
 }
 
+template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+static auto numeric_to_string_precise(T value)
+{
+  return std::to_string(value);
+}
+
+template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+static auto numeric_to_string_precise(T value)
+{
+  std::ostringstream o;
+  o << std::setprecision(std::numeric_limits<T>::max_digits10) << value;
+  return o.str();
+}
+
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out)
@@ -304,13 +272,13 @@ struct column_view_printer {
                      out.begin(),
                      [&h_data](auto idx) {
                        return bit_is_set(h_data.second.data(), idx)
-                                ? std::to_string(h_data.first[idx])
+                                ? numeric_to_string_precise(h_data.first[idx])
                                 : std::string("NULL");
                      });
 
     } else {
       std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
-        return std::to_string(el);
+        return numeric_to_string_precise(el);
       });
     }
   }
@@ -367,12 +335,19 @@ struct column_view_printer {
       out.insert(out.end(), indices.begin() + 1, indices.end());
     }
   }
+
+  template <typename Element,
+            typename std::enable_if_t<std::is_same<Element, cudf::list_view>::value>* = nullptr>
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out)
+  {
+    CUDF_FAIL("list_view printing not supported yet");
+  }
 };
 
 std::vector<std::string> to_strings(cudf::column_view const& col)
 {
   std::vector<std::string> reply;
-  cudf::experimental::type_dispatcher(col.type(), column_view_printer{}, col, reply);
+  cudf::type_dispatcher(col.type(), column_view_printer{}, col, reply);
   return reply;
 }
 

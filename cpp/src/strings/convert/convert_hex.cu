@@ -60,10 +60,10 @@ struct hex_to_integer_fn {
       if (ch >= '0' && ch <= '9') {
         result += static_cast<int64_t>(ch - 48) * base;
         base *= 16;
-      } else if (ch >= 'A' && ch <= 'Z') {
+      } else if (ch >= 'A' && ch <= 'F') {
         result += static_cast<int64_t>(ch - 55) * base;
         base *= 16;
-      } else if (ch >= 'a' && ch <= 'z') {
+      } else if (ch >= 'a' && ch <= 'f') {
         result += static_cast<int64_t>(ch - 87) * base;
         base *= 16;
       }
@@ -136,8 +136,7 @@ std::unique_ptr<column> hex_to_integers(
                                      mr);
   auto results_view = results->mutable_view();
   // fill output column with integers
-  experimental::type_dispatcher(
-    output_type, dispatch_hex_to_integers_fn{}, d_strings, results_view, stream);
+  type_dispatcher(output_type, dispatch_hex_to_integers_fn{}, d_strings, results_view, stream);
   results->set_null_count(strings.null_count());
   return results;
 }

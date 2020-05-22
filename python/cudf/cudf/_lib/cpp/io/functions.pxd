@@ -12,7 +12,7 @@ cimport cudf._lib.cpp.table.table_view as cudf_table_view
 
 
 cdef extern from "cudf/io/functions.hpp" \
-        namespace "cudf::experimental::io" nogil:
+        namespace "cudf::io" nogil:
 
     cdef cppclass read_avro_args:
         cudf_io_types.source_info source
@@ -131,6 +131,25 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef cudf_io_types.table_with_metadata read_parquet(
         read_parquet_args args) except +
 
+    cdef cppclass write_csv_args:
+        cudf_io_types.sink_info snk
+        cudf_table_view.table_view table
+        const cudf_io_types.table_metadata *metadata
+
+        write_csv_args() except +
+        write_csv_args(cudf_io_types.sink_info snk_,
+                       cudf_table_view.table_view table_,
+                       string na_,
+                       bool include_header_,
+                       int rows_per_chunk_,
+                       string line_term_,
+                       char delim_,
+                       string true_v_,
+                       string false_v_,
+                       cudf_io_types.table_metadata *metadata_) except +
+
+    cdef void write_csv(write_csv_args args) except +
+
     cdef cppclass write_orc_args:
         cudf_io_types.sink_info sink
         cudf_io_types.compression_type compression
@@ -194,7 +213,7 @@ cdef extern from "cudf/io/functions.hpp" \
 
 
 cdef extern from "cudf/io/functions.hpp" \
-        namespace "cudf::experimental::io::detail::parquet" nogil:
+        namespace "cudf::io::detail::parquet" nogil:
 
     cdef cppclass pq_chunked_state:
         pass

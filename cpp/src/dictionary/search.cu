@@ -31,12 +31,13 @@ namespace detail {
  *
  * The index is the position within the keys column where the given key (scalar) is found.
  * The keys column is sorted and unique so only one value is expected.
- * The result is an integer scalar identifing the index value.
+ * The result is an integer scalar identifying the index value.
  * If the key is not found, the resulting scalar has `is_valid()=false`.
  */
 struct find_index_fn {
   template <typename Element,
-            std::enable_if_t<not std::is_same<Element, dictionary32>::value>* = nullptr>
+            std::enable_if_t<not std::is_same<Element, dictionary32>::value and
+                             not std::is_same<Element, list_view>::value>* = nullptr>
   std::unique_ptr<numeric_scalar<int32_t>> operator()(dictionary_column_view const& input,
                                                       scalar const& key,
                                                       rmm::mr::device_memory_resource* mr,
@@ -47,7 +48,7 @@ struct find_index_fn {
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
     auto keys_view = column_device_view::create(input.keys(), stream);
-    auto find_key  = static_cast<experimental::scalar_type_t<Element> const&>(key).value(stream);
+    auto find_key  = static_cast<scalar_type_t<Element> const&>(key).value(stream);
     auto iter =
       thrust::equal_range(thrust::device,  // segfaults: rmm::exec_policy(stream)->on(stream) and
                                            // thrust::cuda::par.on(stream)
@@ -67,6 +68,15 @@ struct find_index_fn {
   {
     CUDF_FAIL("dictionary column cannot be the keys column of another dictionary");
   }
+
+  template <typename Element, std::enable_if_t<std::is_same<Element, list_view>::value>* = nullptr>
+  std::unique_ptr<numeric_scalar<int32_t>> operator()(dictionary_column_view const& input,
+                                                      scalar const& key,
+                                                      rmm::mr::device_memory_resource* mr,
+                                                      cudaStream_t stream) const
+  {
+    CUDF_FAIL("list_view column cannot be the keys column of a dictionary");
+  }
 };
 
 std::unique_ptr<numeric_scalar<int32_t>> get_index(dictionary_column_view const& dictionary,
@@ -74,8 +84,7 @@ std::unique_ptr<numeric_scalar<int32_t>> get_index(dictionary_column_view const&
                                                    rmm::mr::device_memory_resource* mr,
                                                    cudaStream_t stream)
 {
-  return experimental::type_dispatcher(
-    dictionary.keys().type(), find_index_fn(), dictionary, key, mr, stream);
+  return type_dispatcher(dictionary.keys().type(), find_index_fn(), dictionary, key, mr, stream);
 }
 
 }  // namespace detail

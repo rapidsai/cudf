@@ -27,6 +27,12 @@
 #include <vector>
 
 namespace cudf {
+
+/**
+ * @ingroup column_classes Column
+ * @{
+ */
+
 class column {
  public:
   column()        = default;
@@ -311,4 +317,5 @@ class column {
                                                       ///< columns may contain additional data
 };
 
+/** @} */  // end of group
 }  // namespace cudf

@@ -24,13 +24,13 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
 
 #include <io/csv/datetime.cuh>
 #include <io/utilities/parsing_utils.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace json {
 namespace gpu {
@@ -66,7 +66,7 @@ __device__ void limit_range_to_brackets(const char *data, long &start, long &sto
  * @brief CUDA kernel that finds the end position of the next field name,
  * including the colon that separates the name from the field value.
  *
- * Returns the position after the colon that preceeds the value token.
+ * Returns the position after the colon that precedes the value token.
  *
  * @param[in] data Pointer to the device buffer containing the data to process
  * @param[in] opts Parsing options (e.g. delimiter and quotation character)
@@ -107,7 +107,7 @@ template <typename T, int base>
 __inline__ __device__ T
 decode_value(const char *data, long start, long end, ParseOptions const &opts)
 {
-  return cudf::experimental::io::gpu::parse_numeric<T, base>(data, start, end, opts);
+  return cudf::io::gpu::parse_numeric<T, base>(data, start, end, opts);
 }
 
 /**
@@ -124,7 +124,7 @@ template <typename T>
 __inline__ __device__ T
 decode_value(const char *data, long start, long end, ParseOptions const &opts)
 {
-  return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts);
+  return cudf::io::gpu::parse_numeric<T>(data, start, end, opts);
 }
 
 /**
@@ -243,6 +243,14 @@ __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
 {
   return cudf::dictionary32{};
 }
+template <>
+__inline__ __device__ cudf::list_view decode_value(const char *data,
+                                                   long start,
+                                                   long end,
+                                                   ParseOptions const &opts)
+{
+  return cudf::list_view{};
+}
 
 /**
  * @brief Functor for converting plain text data to cuDF data type value.
@@ -349,7 +357,7 @@ __inline__ __device__ void trim_field_start_end(const char *data,
  * @brief Returns true is the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  *
- * @param c Chracter to check
+ * @param c Character to check
  * @param is_hex Whether to check as a hexadecimal
  *
  * @return `true` if it is digit-like, `false` otherwise
@@ -434,7 +442,7 @@ __global__ void convert_json_to_columns_kernel(const char *data,
   for (int col = 0; col < num_columns && start < stop; col++) {
     if (is_object) { start = seek_field_name_end(data, opts, start, stop); }
     // field_end is at the next delimiter/newline
-    const long field_end = cudf::experimental::io::gpu::seek_field_end(data, opts, start, stop);
+    const long field_end = cudf::io::gpu::seek_field_end(data, opts, start, stop);
     long field_data_last = field_end - 1;
     // Modify start & end to ignore whitespace and quotechars
     trim_field_start_end(data, &start, &field_data_last, opts.quotechar);
@@ -451,14 +459,14 @@ __global__ void convert_json_to_columns_kernel(const char *data,
         set_bit(valid_fields[col], rec_id);
         atomicAdd(&num_valid_fields[col], 1);
       } else {
-        if (cudf::experimental::type_dispatcher(dtypes[col],
-                                                ConvertFunctor{},
-                                                data,
-                                                output_columns[col],
-                                                rec_id,
-                                                start,
-                                                field_data_last,
-                                                opts)) {
+        if (cudf::type_dispatcher(dtypes[col],
+                                  ConvertFunctor{},
+                                  data,
+                                  output_columns[col],
+                                  rec_id,
+                                  start,
+                                  field_data_last,
+                                  opts)) {
           // set the valid bitmap - all bits were set to 0 to start
           set_bit(valid_fields[col], rec_id);
           atomicAdd(&num_valid_fields[col], 1);
@@ -510,9 +518,8 @@ __global__ void detect_json_data_types(const char *data,
 
   for (int col = 0; col < num_columns; col++) {
     if (is_object) { start = seek_field_name_end(data, opts, start, stop); }
-    auto field_start = start;
-    const long field_end =
-      cudf::experimental::io::gpu::seek_field_end(data, opts, field_start, stop);
+    auto field_start     = start;
+    const long field_end = cudf::io::gpu::seek_field_end(data, opts, field_start, stop);
     long field_data_last = field_end - 1;
     trim_field_start_end(data, &field_start, &field_data_last);
     const int field_len = field_data_last - field_start + 1;
@@ -667,5 +674,4 @@ void detect_data_types(ColumnInfo *column_infos,
 }  // namespace gpu
 }  // namespace json
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

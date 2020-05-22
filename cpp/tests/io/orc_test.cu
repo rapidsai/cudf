@@ -29,14 +29,14 @@
 
 #include <type_traits>
 
-namespace cudf_io = cudf::experimental::io;
+namespace cudf_io = cudf::io;
 
 template <typename T>
 using column_wrapper = typename std::conditional<std::is_same<T, cudf::string_view>::value,
                                                  cudf::test::strings_column_wrapper,
                                                  cudf::test::fixed_width_column_wrapper<T>>::type;
 using column         = cudf::column;
-using table          = cudf::experimental::table;
+using table          = cudf::table;
 using table_view     = cudf::table_view;
 
 // Global environment for temporary files
@@ -44,9 +44,9 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
 template <typename T>
-std::unique_ptr<cudf::experimental::table> create_random_fixed_table(cudf::size_type num_columns,
-                                                                     cudf::size_type num_rows,
-                                                                     bool include_validity)
+std::unique_ptr<cudf::table> create_random_fixed_table(cudf::size_type num_columns,
+                                                       cudf::size_type num_rows,
+                                                       bool include_validity)
 {
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
@@ -71,7 +71,7 @@ std::unique_ptr<cudf::experimental::table> create_random_fixed_table(cudf::size_
                    ret->has_nulls();
                    return ret;
                  });
-  return std::make_unique<cudf::experimental::table>(std::move(columns));
+  return std::make_unique<cudf::table>(std::move(columns));
 }
 
 // Base test fixture for tests
@@ -81,13 +81,13 @@ struct OrcWriterTest : public cudf::test::BaseFixture {
 // Typed test fixture for numeric type tests
 template <typename T>
 struct OrcWriterNumericTypeTest : public OrcWriterTest {
-  auto type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 // Typed test fixture for timestamp type tests
 template <typename T>
 struct OrcWriterTimestampTypeTest : public OrcWriterTest {
-  auto type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 // Declare typed test cases
@@ -104,7 +104,7 @@ struct OrcChunkedWriterTest : public cudf::test::BaseFixture {
 // Typed test fixture for numeric type tests
 template <typename T>
 struct OrcChunkedWriterNumericTypeTest : public OrcChunkedWriterTest {
-  auto type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 // Declare typed test cases
@@ -448,7 +448,7 @@ TEST_F(OrcChunkedWriterTest, SimpleTable)
   auto table1 = create_random_fixed_table<int>(5, 5, true);
   auto table2 = create_random_fixed_table<int>(5, 5, true);
 
-  auto full_table = cudf::experimental::concatenate({*table1, *table2});
+  auto full_table = cudf::concatenate({*table1, *table2});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedSimple.orc");
   cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
@@ -469,7 +469,7 @@ TEST_F(OrcChunkedWriterTest, LargeTables)
   auto table1 = create_random_fixed_table<int>(512, 4096, true);
   auto table2 = create_random_fixed_table<int>(512, 8192, true);
 
-  auto full_table = cudf::experimental::concatenate({*table1, *table2});
+  auto full_table = cudf::concatenate({*table1, *table2});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedLarge.orc");
   cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
@@ -496,7 +496,7 @@ TEST_F(OrcChunkedWriterTest, ManyTables)
     tables.push_back(std::move(tbl));
   }
 
-  auto expected = cudf::experimental::concatenate(table_views);
+  auto expected = cudf::concatenate(table_views);
 
   auto filepath = temp_env->get_temp_filepath("ChunkedManyTables.orc");
   cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
@@ -520,15 +520,15 @@ TEST_F(OrcChunkedWriterTest, Strings)
   std::vector<const char*> h_strings1{"four", "score", "and", "seven", "years", "ago", "abcdefgh"};
   cudf::test::strings_column_wrapper strings1(h_strings1.begin(), h_strings1.end(), mask1);
   cols.push_back(strings1.release());
-  cudf::experimental::table tbl1(std::move(cols));
+  cudf::table tbl1(std::move(cols));
 
   bool mask2[] = {0, 1, 1, 1, 1, 1, 1};
   std::vector<const char*> h_strings2{"ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz"};
   cudf::test::strings_column_wrapper strings2(h_strings2.begin(), h_strings2.end(), mask2);
   cols.push_back(strings2.release());
-  cudf::experimental::table tbl2(std::move(cols));
+  cudf::table tbl2(std::move(cols));
 
-  auto expected = cudf::experimental::concatenate({tbl1, tbl2});
+  auto expected = cudf::concatenate({tbl1, tbl2});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedStrings.orc");
   cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
@@ -577,7 +577,7 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
   auto table1 = create_random_fixed_table<int>(5, 5, true);
   auto table2 = create_random_fixed_table<int>(5, 5, true);
 
-  auto full_table = cudf::experimental::concatenate({*table2, *table1, *table2});
+  auto full_table = cudf::concatenate({*table2, *table1, *table2});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedStripes.orc");
   cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
@@ -632,7 +632,7 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
   column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
   cols.push_back(c1a_w.release());
   cols.push_back(c1b_w.release());
-  cudf::experimental::table tbl1(std::move(cols));
+  cudf::table tbl1(std::move(cols));
 
   T c2a[] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
              8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8};
@@ -642,9 +642,9 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
   column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
   cols.push_back(c2a_w.release());
   cols.push_back(c2b_w.release());
-  cudf::experimental::table tbl2(std::move(cols));
+  cudf::table tbl2(std::move(cols));
 
-  auto expected = cudf::experimental::concatenate({tbl1, tbl2});
+  auto expected = cudf::concatenate({tbl1, tbl2});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize.orc");
   cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
@@ -680,7 +680,7 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
   column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
   cols.push_back(c1a_w.release());
   cols.push_back(c1b_w.release());
-  cudf::experimental::table tbl1(std::move(cols));
+  cudf::table tbl1(std::move(cols));
 
   T c2a[] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
              8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8};
@@ -690,9 +690,9 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
   column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
   cols.push_back(c2a_w.release());
   cols.push_back(c2b_w.release());
-  cudf::experimental::table tbl2(std::move(cols));
+  cudf::table tbl2(std::move(cols));
 
-  auto expected = cudf::experimental::concatenate({tbl1, tbl2});
+  auto expected = cudf::concatenate({tbl1, tbl2});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize2.orc");
   cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};

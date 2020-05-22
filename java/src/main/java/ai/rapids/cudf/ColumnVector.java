@@ -349,9 +349,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *
    * @return ColumnVector holding length of string at index 'i' in the original vector
    */
-  public ColumnVector getLengths() {
-    assert DType.STRING == type : "length only available for String type";
-    return new ColumnVector(lengths(getNativeView()));
+  public ColumnVector getCharLengths() {
+    assert DType.STRING == type : "char length only available for String type";
+    return new ColumnVector(charLengths(getNativeView()));
   }
 
   /**
@@ -382,6 +382,39 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector isNull() {
     return new ColumnVector(isNullNative(getNativeView()));
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
+   * for null entries
+   *
+   * NOTE: Integer doesn't mean a 32-bit integer. It means a number that is not a fraction.
+   * i.e. If this method returns true for a value it could still result in an overflow or underflow
+   * if you convert it to a Java integral type
+   *
+   * @return - Boolean vector
+   */
+  public ColumnVector isInteger() {
+    assert type == DType.STRING;
+    return new ColumnVector(isInteger(getNativeView()));
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is a float, and FALSE if its not a float. A null will be returned
+   * for null entries
+   *
+   * NOTE: Float doesn't mean a 32-bit float. It means a number that is a fraction or can be written
+   * as a fraction. i.e. This method will return true for integers as well as floats. Also note if
+   * this method returns true for a value it could still result in an overflow or underflow if you
+   * convert it to a Java float or double
+   *
+   * @return - Boolean vector
+   */
+  public ColumnVector isFloat() {
+    assert type == DType.STRING;
+    return new ColumnVector(isFloat(getNativeView()));
   }
 
   /**
@@ -2058,6 +2091,24 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     return new ColumnVector(containsRe(getNativeView(), pattern));
   }
 
+  /**
+   * For each captured group specified in the given regular expression
+   * return a column in the table. Null entries are added if the string
+   * does not match. Any null inputs also result in null output entries.
+   *
+   * For supported regex patterns refer to:
+   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
+   * @param pattern the pattern to use
+   * @return the table of extracted matches
+   * @throws CudfException if any error happens including if the RE does
+   * not contain any capture groups.
+   */
+  public Table extractRe(String pattern) throws CudfException {
+    assert type == DType.STRING : "column type must be a String";
+    assert pattern != null : "pattern may not be null";
+    return new Table(extractRe(this.getNativeView(), pattern));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2261,6 +2312,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
 
   /**
+   * Native method for extracting results from an regular expressions.  Returns a table handle.
+   */
+  private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
+
+  /**
    * Native method to concatenate columns of strings together, combining a row from
    * each colunm into a single string.
    * @param columnViews array of longs holding the native handles of the column_views to combine.
@@ -2312,7 +2368,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 
-  private static native long lengths(long viewHandle) throws CudfException;
+  private static native long charLengths(long viewHandle) throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
 
@@ -2335,6 +2391,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long isNullNative(long viewHandle);
 
   private static native long isNanNative(long viewHandle);
+
+  private static native long isFloat(long viewHandle);
+
+  private static native long isInteger(long viewHandle);
 
   private static native long isNotNanNative(long viewHandle);
 
@@ -2889,4 +2949,5 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   public static ColumnVector timestampNanoSecondsFromBoxedLongs(Long... values) {
     return build(DType.TIMESTAMP_NANOSECONDS, values.length, (b) -> b.appendBoxed(values));
   }
+
 }

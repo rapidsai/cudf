@@ -20,7 +20,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Source table identifier to copy data from.
@@ -35,7 +34,7 @@ using index_type = thrust::tuple<side, cudf::size_type>;
 
 /**
  * @brief tagged_element_relational_comparator uses element_relational_comparator to provide
- * "tagged-index" comparation logic.
+ * "tagged-index" comparison logic.
  *
  * Special treatment is necessary in several thrust algorithms (e.g., merge()) where
  * the index affinity to the side is not guaranteed; i.e., the algorithms rely on
@@ -90,7 +89,7 @@ struct tagged_element_relational_comparator {
     auto erl_comparator =
       element_relational_comparator<has_nulls>(*ptr_left_dview, *ptr_right_dview, null_precedence);
 
-    return cudf::experimental::type_dispatcher(lhs.type(), erl_comparator, l_indx, r_indx);
+    return cudf::type_dispatcher(lhs.type(), erl_comparator, l_indx, r_indx);
   }
 
  private:
@@ -143,5 +142,4 @@ struct row_lexicographic_tagged_comparator {
 };
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

@@ -20,13 +20,16 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
+/**
+ * @addtogroup transformation_replace
+ * @{
+ */
+
 /**
  * @brief Replaces all null values in a column with corresponding values of another column
  *
  * If `input[i]` is NULL, then `output[i]` will contain `replacement[i]`.
  * `input` and `replacement` must be of the same type and size.
- * must be of the same type and same size as the first.
  *
  * @param[in] input A column whose null values will be replaced
  * @param[in] replacement A cudf::column whose values will replace null values in input
@@ -45,8 +48,6 @@ std::unique_ptr<column> replace_nulls(
  *
  * If `input[i]` is NULL, then `output[i]` will contain `replacement`.
  * `input` and `replacement` must have the same type.
- * a cudf::scalar of the same data type as the column.
- *
  *
  * @param[in] input A column whose null values will be replaced
  * @param[in] replacement Scalar used to replace null values in `input`.
@@ -60,15 +61,66 @@ std::unique_ptr<column> replace_nulls(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Replace elements from `input_col` according to the mapping `old_values` to
- *  @brief Return a copy of `input_col` replacing all `old_values[i]` present with `new_values[i]`.
+ * @brief Replaces all NaN values in a column with corresponding values from another column
+ *
+ * If `input[i]` is NaN, then `output[i]` will contain `replacement[i]`.
+ * @code{.pseudo}
+ * input        = {1.0, NaN, 4.0}
+ * replacement  = {3.0, 9.0, 7.0}
+ * output       = {1.0, 9.0, 4.0}
+ * @endcode
+ *
+ * @note Nulls are not considered as NaN
+ *
+ * @throws cudf::logic_error If `input` and `replacement` are of different type or size.
+ * @throws cudf::logic_error If `input` or `replacement` are not of floating-point dtype.
+ *
+ * @param input A column whose NaN values will be replaced
+ * @param replacement A cudf::column whose values will replace NaN values in input
+ * @param mr Optional device_memory_resource to use for allocations
+ * @return A copy of `input` with the NaN values replaced with corresponding values from
+ * `replacement`.
+ */
+std::unique_ptr<column> replace_nans(
+  column_view const& input,
+  column_view const& replacement,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Replaces all NaN values in a column with a scalar
+ *
+ * If `input[i]` is NaN, then `output[i]` will contain `replacement`.
+ * @code{.pseudo}
+ * input        = {1.0, NaN, 4.0}
+ * replacement  = 7.0
+ * output       = {1.0, 7.0, 4.0}
+ * @endcode
+ *
+ * @note Nulls are not considered as NaN
+ *
+ * @throws cudf::logic_error If `input` and `replacement` are of different type.
+ * @throws cudf::logic_error If `input` or `replacement` are not of floating-point dtype.
+ *
+ * @param input A column whose NaN values will be replaced
+ * @param replacement A cudf::scalar whose value will replace NaN values in input
+ * @param mr Optional device_memory_resource to use for allocations
+ * @return A copy of `input` with the NaN values replaced by `replacement`.
+ */
+std::unique_ptr<column> replace_nans(
+  column_view const& input,
+  scalar const& replacement,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Return a copy of `input_col` replacing any `values_to_replace[i]`
+ * found with `replacement_values[i]`.
  *
  * @param input_col The column to find and replace values in.
  * @param values_to_replace The values to replace
  * @param replacement_values The values to replace with
  * @param mr Optional device_memory_resource to use for allocations.
  *
- * @returns Copy of `input` with specified values replaced.
+ * @returns Copy of `input_col` with specified values replaced.
  */
 std::unique_ptr<column> find_and_replace_all(
   column_view const& input_col,
@@ -175,7 +227,11 @@ std::unique_ptr<column> clamp(
   scalar const& hi,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-}  // namespace experimental
+/** @} */  // end of group
+/**
+ * @addtogroup transformation_replace
+ * @{
+ */
 
 /**
  * @brief Copies from a column of floating-point elements and replaces `-NaN` and `-0.0` with `+NaN`
@@ -206,4 +262,6 @@ std::unique_ptr<column> normalize_nans_and_zeros(
  * @param[in, out] Column of floating-point elements to normalize
  */
 void normalize_nans_and_zeros(mutable_column_view& in_out);
+
+/** @} */  // end of group
 }  // namespace cudf

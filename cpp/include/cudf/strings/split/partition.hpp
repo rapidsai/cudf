@@ -22,9 +22,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_apis
- * @addtogroup strings_split Split
- * APIs to split strings into multiple columns of strings.
+ * @addtogroup strings_split
  * @{
  */
 
@@ -50,12 +48,12 @@ namespace strings {
  * @endcode
  *
  * @param strings Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indentifying where to split each string.
+ * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
  * @param mr Resource for allocating device memory.
  * @return New table of strings columns.
  */
-std::unique_ptr<experimental::table> partition(
+std::unique_ptr<table> partition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -82,12 +80,12 @@ std::unique_ptr<experimental::table> partition(
  * @endcode
  *
  * @param strings Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indentifying where to split each string.
+ * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
  * @param mr Resource for allocating device memory.
  * @return New strings columns.
  */
-std::unique_ptr<experimental::table> rpartition(
+std::unique_ptr<table> rpartition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());

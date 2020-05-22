@@ -484,11 +484,11 @@ def htoi(Column input_col, **kwargs):
 
     Returns
     -------
-    A Column with strings representd as integer
+    A Column of integers parsed from hexadecimal string values.
     """
 
     cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = np_to_cudf_types[kwargs.get('dtype', np.int64)]
+    cdef type_id tid = np_to_cudf_types[kwargs.get('dtype', np.dtype("int64"))]
     cdef data_type c_out_type = data_type(tid)
 
     cdef unique_ptr[column] c_result

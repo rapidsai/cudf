@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -27,9 +26,9 @@
 #include <algorithm>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
+
 inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc, bool mask_exists)
 {
   if ((mask_alloc == mask_allocation_policy::ALWAYS) ||
@@ -52,6 +51,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       rmm::mr::device_memory_resource* mr,
                                       cudaStream_t stream)
 {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
   mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
 
@@ -76,6 +76,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
  */
 std::unique_ptr<column> empty_like(column_view const& input)
 {
+  CUDF_FUNC_RANGE();
   return make_empty_column(input.type());
 }
 
@@ -84,6 +85,7 @@ std::unique_ptr<column> empty_like(column_view const& input)
  */
 std::unique_ptr<table> empty_like(table_view const& input_table)
 {
+  CUDF_FUNC_RANGE();
   std::vector<std::unique_ptr<column>> columns(input_table.num_columns());
   std::transform(input_table.begin(), input_table.end(), columns.begin(), [&](column_view in_col) {
     return empty_like(in_col);
@@ -108,5 +110,4 @@ std::unique_ptr<column> allocate_like(column_view const& input,
   return detail::allocate_like(input, size, mask_alloc, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

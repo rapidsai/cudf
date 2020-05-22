@@ -39,7 +39,6 @@
 #include "chunked_state.hpp"
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace parquet {
@@ -94,7 +93,7 @@ class writer::impl {
    * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
    * boundaries.
    */
-  void write_chunked_begin(struct pq_chunked_state& state);
+  void write_chunked_begin(pq_chunked_state& state);
 
   /**
    * @brief Writes a single subtable as part of a larger parquet file/table write.
@@ -240,5 +239,4 @@ class writer::impl {
 }  // namespace parquet
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

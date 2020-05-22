@@ -24,7 +24,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 //! `groupby` APIs
 namespace groupby {
 namespace detail {
@@ -33,6 +32,11 @@ class sort_groupby_helper;
 
 }  // namespace sort
 }  // namespace detail
+
+/**
+ * @addtogroup aggregation_groupby
+ * @{
+ */
 
 /**
  * @brief Request for groupby aggregation(s) to perform on a column.
@@ -225,6 +229,6 @@ class groupby {
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr);
 };
+/** @} */
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

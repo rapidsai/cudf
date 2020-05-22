@@ -21,7 +21,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation()
 {
@@ -112,6 +111,11 @@ std::unique_ptr<aggregation> make_nth_element_aggregation(size_type n, null_poli
   return std::make_unique<detail::nth_element_aggregation>(
     aggregation::NTH_ELEMENT, n, null_handling);
 }
+/// Factory to create a ROW_NUMBER aggregation
+std::unique_ptr<aggregation> make_row_number_aggregation()
+{
+  return std::make_unique<aggregation>(aggregation::ROW_NUMBER);
+}
 /// Factory to create a UDF aggregation
 std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
                                                   std::string const& user_defined_aggregator,
@@ -155,5 +159,4 @@ bool is_valid_aggregation(data_type source, aggregation::Kind k)
   return dispatch_type_and_aggregation(source, k, is_valid_aggregation_impl{});
 }
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

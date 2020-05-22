@@ -24,7 +24,6 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 namespace sort {
@@ -233,5 +232,4 @@ struct sort_groupby_helper {
 }  // namespace sort
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

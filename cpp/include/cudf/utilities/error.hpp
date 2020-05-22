@@ -5,25 +5,21 @@
 #include <stdexcept>
 #include <string>
 
-#include <rmm/rmm.h>
-
-#define RMM_TRY(call)                                                                         \
-  do {                                                                                        \
-    rmmError_t const status = (call);                                                         \
-    if (RMM_SUCCESS != status) { cudf::detail::throw_rmm_error(status, __FILE__, __LINE__); } \
-  } while (0);
-
-#define RMM_TRY_CUDAERROR(x) \
-  if ((x) != RMM_SUCCESS) CUDA_TRY(cudaPeekAtLastError());
+/**
+ * @addtogroup utility_error
+ * @{
+ */
 
 namespace cudf {
 /**
  * @brief Exception thrown when logical precondition is violated.
  *
+ * @ingroup utility_error
+ *
  * This exception should not be thrown directly and is instead thrown by the
  * CUDF_EXPECTS macro.
  *
- **/
+ */
 struct logic_error : public std::logic_error {
   logic_error(char const* const message) : std::logic_error(message) {}
 
@@ -35,7 +31,8 @@ struct logic_error : public std::logic_error {
 /**
  * @brief Exception thrown when a CUDA error is encountered.
  *
- **/
+ * @ingroup utility_error
+ */
 struct cuda_error : public std::runtime_error {
   cuda_error(std::string const& message) : std::runtime_error(message) {}
 };
@@ -82,13 +79,6 @@ struct cuda_error : public std::runtime_error {
 
 namespace cudf {
 namespace detail {
-inline void throw_rmm_error(rmmError_t error, const char* file, unsigned int line)
-{
-  // todo: throw cuda_error if the error is from cuda
-  throw cudf::logic_error(std::string{"RMM error encountered at: " + std::string{file} + ":" +
-                                      std::to_string(line) + ": " + std::to_string(error) + " " +
-                                      rmmGetErrorString(error)});
-}
 
 inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int line)
 {
@@ -105,9 +95,6 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
  * Invokes a CUDA runtime API function call, if the call does not return
  * cudaSuccess, invokes cudaGetLastError() to clear the error and throws an
  * exception detailing the CUDA error that occurred
- *
- * This macro supersedes GDF_REQUIRE and should be preferred in all instances.
- * GDF_REQUIRE should be considered deprecated.
  *
  **/
 #define CUDA_TRY(call)                                            \
@@ -138,3 +125,5 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
 #else
 #define CHECK_CUDA(stream) CUDA_TRY(cudaPeekAtLastError());
 #endif
+
+/** @} */

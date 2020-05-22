@@ -109,9 +109,8 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
     thrust::device, d_integers.begin(), d_integers.end(), -(TypeParam)(d_integers.size() / 2));
   d_integers.push_back(std::numeric_limits<TypeParam>::min());
   d_integers.push_back(std::numeric_limits<TypeParam>::max());
-  auto integers =
-    cudf::make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
-                              (cudf::size_type)d_integers.size());
+  auto integers      = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
+                                            (cudf::size_type)d_integers.size());
   auto integers_view = integers->mutable_view();
   CUDA_TRY(cudaMemcpy(integers_view.data<TypeParam>(),
                       d_integers.data().get(),
@@ -131,9 +130,9 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   cudf::test::expect_columns_equal(*results_strings, expected);
 
   // convert back to integers
-  auto strings_view     = cudf::strings_column_view(results_strings->view());
-  auto results_integers = cudf::strings::to_integers(
-    strings_view, cudf::data_type(cudf::experimental::type_to_id<TypeParam>()));
+  auto strings_view = cudf::strings_column_view(results_strings->view());
+  auto results_integers =
+    cudf::strings::to_integers(strings_view, cudf::data_type(cudf::type_to_id<TypeParam>()));
   cudf::test::expect_columns_equal(*results_integers, integers->view());
 }
 
@@ -147,7 +146,7 @@ TYPED_TEST_CASE(StringsFloatConvertTest, FloatTypes);
 
 TYPED_TEST(StringsFloatConvertTest, FromToIntegerError)
 {
-  auto dtype  = cudf::data_type{cudf::experimental::type_to_id<TypeParam>()};
+  auto dtype  = cudf::data_type{cudf::type_to_id<TypeParam>()};
   auto column = cudf::make_numeric_column(dtype, 100);
   EXPECT_THROW(cudf::strings::from_integers(column->view()), cudf::logic_error);
 
@@ -164,20 +163,38 @@ TEST_F(StringsConvertTest, HexToInteger)
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
-  std::vector<int32_t> h_expected;
-  for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr) {
-    if (*itr == nullptr)
-      h_expected.push_back(0);
-    else
-      h_expected.push_back((int)std::stol(std::string(*itr), 0, 16));
+  {
+    std::vector<int32_t> h_expected;
+    for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr) {
+      if (*itr == nullptr)
+        h_expected.push_back(0);
+      else
+        h_expected.push_back(static_cast<int>(std::stol(std::string(*itr), 0, 16)));
+    }
+
+    auto results = cudf::strings::hex_to_integers(cudf::strings_column_view(strings),
+                                                  cudf::data_type{cudf::INT32});
+    cudf::test::fixed_width_column_wrapper<int32_t> expected(
+      h_expected.begin(),
+      h_expected.end(),
+      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cudf::test::expect_columns_equal(*results, expected);
   }
+  {
+    std::vector<int64_t> h_expected;
+    for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr) {
+      if (*itr == nullptr)
+        h_expected.push_back(0);
+      else
+        h_expected.push_back(std::stol(std::string(*itr), 0, 16));
+    }
 
-  auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::hex_to_integers(strings_view, cudf::data_type{cudf::INT32});
-
-  cudf::test::fixed_width_column_wrapper<int32_t> expected(
-    h_expected.begin(),
-    h_expected.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+    auto results = cudf::strings::hex_to_integers(cudf::strings_column_view(strings),
+                                                  cudf::data_type{cudf::INT64});
+    cudf::test::fixed_width_column_wrapper<int64_t> expected(
+      h_expected.begin(),
+      h_expected.end(),
+      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cudf::test::expect_columns_equal(*results, expected);
+  }
 }

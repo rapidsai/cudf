@@ -21,6 +21,7 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
+#include <type_traits>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -32,15 +33,20 @@ struct ColumnUtilitiesTest : public cudf::test::BaseFixture {
 
   auto size() { return random.generate(); }
 
-  auto data_type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto data_type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 template <typename T>
-struct ColumnUtilitiesTestNumeric : public cudf::test::BaseFixture {
+struct ColumnUtilitiesTestIntegral : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+struct ColumnUtilitiesTestFloatingPoint : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
-TYPED_TEST_CASE(ColumnUtilitiesTestNumeric, cudf::test::NumericTypes);
+TYPED_TEST_CASE(ColumnUtilitiesTestIntegral, cudf::test::IntegralTypes);
+TYPED_TEST_CASE(ColumnUtilitiesTestFloatingPoint, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost)
 {
@@ -70,7 +76,7 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset)
   cudf::test::fixed_width_column_wrapper<TypeParam> col(data.begin(), data.end());
 
   std::vector<cudf::size_type> splits{split};
-  std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
+  std::vector<cudf::column_view> result = cudf::split(col, splits);
 
   auto host_data = cudf::test::to_host<TypeParam>(result.back());
 
@@ -91,7 +97,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
   cudf::test::fixed_width_column_wrapper<TypeParam> col(data.begin(), data.end(), valid);
 
   std::vector<cudf::size_type> splits{split};
-  std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
+  std::vector<cudf::column_view> result = cudf::split(col, splits);
 
   auto host_data = cudf::test::to_host<TypeParam>(result.back());
 
@@ -173,7 +179,7 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
   EXPECT_TRUE(std::all_of(results.begin(), results.end(), [](auto s) { return s.empty(); }));
 }
 
-TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric)
+TYPED_TEST(ColumnUtilitiesTestIntegral, PrintColumnNumeric)
 {
   const char* delimiter = ",";
 
@@ -193,7 +199,7 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric)
   EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
 }
 
-TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids)
+TYPED_TEST(ColumnUtilitiesTestIntegral, PrintColumnWithInvalids)
 {
   const char* delimiter = ",";
 
@@ -206,6 +212,34 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids)
       << std::to_string(std_col[4]);
 
   EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
+}
+
+TYPED_TEST(ColumnUtilitiesTestFloatingPoint, PrintColumnNumeric)
+{
+  const char* delimiter = ",";
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col(
+    {10001523.25, 2.0, 3.75, 0.000000034, 5.3});
+
+  auto expected = std::is_same<TypeParam, double>::value
+                    ? "10001523.25,2,3.75,3.4e-08,5.2999999999999998"
+                    : "10001523,2,3.75,3.39999993e-08,5.30000019";
+
+  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), expected);
+}
+
+TYPED_TEST(ColumnUtilitiesTestFloatingPoint, PrintColumnWithInvalids)
+{
+  const char* delimiter = ",";
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col(
+    {10001523.25, 2.0, 3.75, 0.000000034, 5.3}, {1, 0, 1, 0, 1});
+
+  auto expected = std::is_same<TypeParam, double>::value
+                    ? "10001523.25,NULL,3.75,NULL,5.2999999999999998"
+                    : "10001523,NULL,3.75,NULL,5.30000019";
+
+  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), expected);
 }
 
 TEST_F(ColumnUtilitiesStringsTest, StringsToString)
