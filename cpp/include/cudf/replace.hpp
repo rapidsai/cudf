@@ -20,7 +20,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup transformation_replace
  * @{
@@ -229,7 +228,6 @@ std::unique_ptr<column> clamp(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 /**
  * @addtogroup transformation_replace
  * @{

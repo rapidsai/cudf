@@ -730,3 +730,54 @@ def test_to_datetime_format(data, format, infer_datetime_format):
     )
 
     assert_eq(actual, expected)
+
+
+# Cudf autocasts unsupported time_units
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[D]", "datetime64[W]", "datetime64[M]", "datetime64[Y]"],
+)
+def test_datetime_array_timeunit_cast(dtype):
+    testdata = np.array(
+        [
+            np.datetime64("2016-11-20"),
+            np.datetime64("2020-11-20"),
+            np.datetime64("2019-11-20"),
+            np.datetime64("1918-11-20"),
+            np.datetime64("2118-11-20"),
+        ],
+        dtype=dtype,
+    )
+
+    gs = Series(testdata)
+    ps = pd.Series(testdata)
+
+    assert_eq(ps, gs)
+
+    gdf = DataFrame()
+    gdf["a"] = np.arange(5)
+    gdf["b"] = testdata
+
+    pdf = pd.DataFrame()
+    pdf["a"] = np.arange(5)
+    pdf["b"] = testdata
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("timeunit", ["D", "W", "M", "Y"])
+def test_datetime_scalar_timeunit_cast(timeunit):
+    testscalar = np.datetime64("2016-11-20", timeunit)
+
+    gs = Series(testscalar)
+    ps = pd.Series(testscalar)
+    assert_eq(ps, gs)
+
+    gdf = DataFrame()
+    gdf["a"] = np.arange(5)
+    gdf["b"] = testscalar
+
+    pdf = pd.DataFrame()
+    pdf["a"] = np.arange(5)
+    pdf["b"] = testscalar
+
+    assert_eq(pdf, gdf)

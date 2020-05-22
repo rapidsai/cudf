@@ -22,7 +22,6 @@
 #include <unordered_map>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 struct aggregation_equality {
   bool operator()(aggregation const& lhs, aggregation const& rhs) const
@@ -61,5 +60,4 @@ class result_cache {
 };
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

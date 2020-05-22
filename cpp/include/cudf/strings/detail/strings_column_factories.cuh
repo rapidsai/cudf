@@ -68,7 +68,7 @@ std::unique_ptr<column> make_strings_column(
   auto d_offsets = offsets_column->view().template data<int32_t>();
 
   // create null mask
-  auto new_nulls = experimental::detail::valid_if( begin, end,
+  auto new_nulls = cudf::detail::valid_if( begin, end,
     [] __device__(string_index_pair const item) { return item.first != nullptr; },
     stream,
     mr);

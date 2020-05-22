@@ -33,7 +33,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace orc {
@@ -64,5 +63,4 @@ struct orc_chunked_state {
 }  // namespace orc
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

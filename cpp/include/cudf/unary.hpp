@@ -20,7 +20,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup transformation_unaryops
  * @{
@@ -62,7 +61,7 @@ enum class unary_op : int32_t {
  */
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
-  cudf::experimental::unary_op op,
+  cudf::unary_op op,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -141,5 +140,4 @@ std::unique_ptr<column> is_not_nan(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

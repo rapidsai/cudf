@@ -33,7 +33,7 @@ struct ColumnUtilitiesTest : public cudf::test::BaseFixture {
 
   auto size() { return random.generate(); }
 
-  auto data_type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto data_type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 template <typename T>
@@ -76,7 +76,7 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset)
   cudf::test::fixed_width_column_wrapper<TypeParam> col(data.begin(), data.end());
 
   std::vector<cudf::size_type> splits{split};
-  std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
+  std::vector<cudf::column_view> result = cudf::split(col, splits);
 
   auto host_data = cudf::test::to_host<TypeParam>(result.back());
 
@@ -97,7 +97,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
   cudf::test::fixed_width_column_wrapper<TypeParam> col(data.begin(), data.end(), valid);
 
   std::vector<cudf::size_type> splits{split};
-  std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
+  std::vector<cudf::column_view> result = cudf::split(col, splits);
 
   auto host_data = cudf::test::to_host<TypeParam>(result.back());
 

@@ -37,6 +37,7 @@
 
 ## Improvements
 
+- PR #5235 Make DataFrame.clean_renderable_dataframe() and DataFrame.get_renderable_dataframe non-public methods
 - PR #4995 Add CMake option for per-thread default stream
 - PR #5033 Fix Numba deprecations warnings with Numba 0.49+
 - PR #4950 Fix import errors with Numba 0.49+
@@ -58,6 +59,7 @@
 - PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 - PR #4703 Optimize strings concatenate for many columns
+- PR #4769 Remove legacy code from libcudf
 - PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
 - PR #4520 Fix several single char -> single char case mapping values. Add support for single -> multi char mappings.
@@ -115,6 +117,7 @@
 - PR #4869 Expose contiguous table when deserializing from Java
 - PR #4878 Remove obsolete string_from_host utility
 - PR #4873 Prevent mutable_view() from invoking null count
+- PR #4806 Modify doc and correct cupy array conversions in `10min-cudf-cupy.ipynb`
 - PR #4877 Fix `DataFrame.mask` and align `mask` & `where` behavior with pandas
 - PR #4884 Add more NVTX annotations in cuDF Python
 - PR #4902 Use ContextDecorator instead of contextmanager for nvtx.annotate
@@ -183,12 +186,15 @@
 - PR #5184 Fix style checks
 - PR #5198 Add detail headers for strings converter functions
 - PR #5199 Add index support in `DataFrame.query`
+- PR #5218 Reduce memory usage when categorifying column with null values.
 - PR #5209 Add `nan_as_null` support to `cudf.from_pandas`
 - PR #5207 Break up backref_re.cu into multiple source files to improve compile time
-- PR #5214 Move docs build script into repository
 - PR #5155 Fix cudf documentation misspellings
+- PR #5208 Port search and join benchmark to libcudf++
 - PR #5214 Move docs build script into repository
 - PR #5219 Add per context cache for JIT kernels
+- PR #5233 Remove experimental namespace used during libcudf++ refactor
+- PR #5251 Fix more mispellings in cpp comments and strings
 
 ## Bug Fixes
 
@@ -270,6 +276,7 @@
 - PR #4949 Fix scatter, gather benchmark constructor call
 - PR #4958 Fix strings::replace perf for long strings
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`
+- PR #4983 Fix from_cudf in dask_cudf
 - PR #4996 Parquet writer: fix potentially zero-sized string dictionary
 - PR #5009 Fix pickling for string and categorical columns
 - PR #4984 Fix groupby nth aggregation negative n and exclude nulls
@@ -312,6 +319,7 @@
 - PR #5191 Fix the use of the device memory resource
 - PR #5212 Fix memory leak in `dlpack.pyx:from_dlpack()`
 - PR #5224 Add new headers from 5198 to libcudf/meta.yaml
+- PR #5228 Fix datetime64 scalar dtype handling for unsupported time units
 
 
 # cuDF 0.13.0 (31 Mar 2020)

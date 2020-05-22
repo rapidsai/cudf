@@ -23,7 +23,6 @@
 #include <cudf/table/table_view.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
@@ -79,5 +78,4 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
   return detail::sort_by_key(values, keys, column_order, null_precedence, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

@@ -30,7 +30,7 @@
 using cudf::test::fixed_width_column_wrapper;
 using TestTypes = cudf::test::Types<int32_t>;
 
-template <typename T, typename ScalarType = cudf::experimental::scalar_type_t<T>>
+template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   cudaStream_t stream = 0, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
@@ -38,7 +38,7 @@ std::unique_ptr<cudf::scalar> make_scalar(
   return std::unique_ptr<cudf::scalar>(s);
 }
 
-template <typename T, typename ScalarType = cudf::experimental::scalar_type_t<T>>
+template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   T value,
   cudaStream_t stream                 = 0,
@@ -71,7 +71,7 @@ TYPED_TEST(ShiftTest, OneColumnEmpty)
   auto expected = fixed_width_column_wrapper<T>(vals.begin(), vals.end(), mask.begin());
 
   auto fill   = make_scalar<T>();
-  auto actual = cudf::experimental::shift(input, 5, *fill);
+  auto actual = cudf::shift(input, 5, *fill);
 
   cudf::test::expect_columns_equal(expected, *actual);
 }
@@ -87,7 +87,7 @@ TYPED_TEST(ShiftTest, TwoColumnsEmpty)
   auto expected = fixed_width_column_wrapper<T>(vals.begin(), vals.end(), mask.begin());
 
   auto fill   = make_scalar<T>();
-  auto actual = cudf::experimental::shift(input, 5, *fill);
+  auto actual = cudf::shift(input, 5, *fill);
 
   cudf::test::expect_columns_equal(expected, *actual);
 }
@@ -100,7 +100,7 @@ TYPED_TEST(ShiftTest, OneColumn)
   auto expected = fixed_width_column_wrapper<T>{T(7), T(7), lowest<T>, T(1), T(2), T(3), T(4)};
 
   auto fill   = make_scalar<T>(7);
-  auto actual = cudf::experimental::shift(input, 2, *fill);
+  auto actual = cudf::shift(input, 2, *fill);
 
   cudf::test::expect_columns_equal(expected, *actual);
 }
@@ -113,7 +113,7 @@ TYPED_TEST(ShiftTest, OneColumnNegativeShift)
   auto expected = fixed_width_column_wrapper<T>{T(4), T(5), highest<T>, T(7), T(7), T(7), T(7)};
 
   auto fill   = make_scalar<T>(7);
-  auto actual = cudf::experimental::shift(input, -4, *fill);
+  auto actual = cudf::shift(input, -4, *fill);
 
   cudf::test::expect_columns_equal(expected, *actual);
 }
@@ -128,7 +128,7 @@ TYPED_TEST(ShiftTest, OneColumnNullFill)
 
   auto fill = make_scalar<T>();
 
-  auto actual = cudf::experimental::shift(input, 2, *fill);
+  auto actual = cudf::shift(input, 2, *fill);
 
   cudf::test::expect_columns_equal(expected, *actual);
 }
@@ -141,7 +141,7 @@ TYPED_TEST(ShiftTest, TwoColumnsNullableInput)
   auto expected = fixed_width_column_wrapper<T>({7, 7, 1, 2, 3}, {1, 1, 0, 1, 1});
 
   auto fill   = make_scalar<T>(7);
-  auto actual = cudf::experimental::shift(input, 2, *fill);
+  auto actual = cudf::shift(input, 2, *fill);
 
   cudf::test::expect_columns_equal(expected, *actual);
 }
@@ -158,5 +158,5 @@ TYPED_TEST(ShiftTest, MismatchFillValueDtypes)
 
   std::unique_ptr<cudf::column> output;
 
-  EXPECT_THROW(output = cudf::experimental::shift(input, 5, *fill), cudf::logic_error);
+  EXPECT_THROW(output = cudf::shift(input, 5, *fill), cudf::logic_error);
 }

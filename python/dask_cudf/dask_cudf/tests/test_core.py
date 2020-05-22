@@ -5,6 +5,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
+from dask.dataframe.core import make_meta, meta_nonempty
 
 import cudf
 
@@ -30,6 +31,15 @@ def test_from_cudf():
     # Test conversion to dask.dataframe
     ddf = ingested.to_dask_dataframe()
     dd.assert_eq(ddf, df)
+
+
+def test_from_cudf_multiindex_raises():
+
+    df = cudf.DataFrame({"x": list("abc"), "y": [1, 2, 3], "z": [1, 2, 3]})
+
+    with pytest.raises(NotImplementedError):
+        # dask_cudf does not support MultiIndex yet
+        dgd.from_cudf(df.set_index(["x", "y"]))
 
 
 def test_from_cudf_with_generic_idx():
@@ -605,13 +615,25 @@ def test_make_meta_backends(index):
     df["time_ms"] = df["time_s"].astype("datetime64[ms]")
     df["time_ns"] = df["time_s"].astype("datetime64[ns]")
     df = df.set_index(index)
-    ddf = dgd.from_cudf(df, npartitions=1)
 
     # Check "empty" metadata types
-    dd.assert_eq(ddf._meta.dtypes, df.dtypes)
+    chk_meta = make_meta(df)
+    dd.assert_eq(chk_meta.dtypes, df.dtypes)
 
     # Check "non-empty" metadata types
-    dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
+    chk_meta_nonempty = meta_nonempty(df)
+    dd.assert_eq(chk_meta.dtypes, chk_meta_nonempty.dtypes)
+
+    # Check dask code path if not MultiIndex
+    if not isinstance(df.index, cudf.MultiIndex):
+
+        ddf = dgd.from_cudf(df, npartitions=1)
+
+        # Check "empty" metadata types
+        dd.assert_eq(ddf._meta.dtypes, df.dtypes)
+
+        # Check "non-empty" metadata types
+        dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
 
 
 @pytest.mark.parametrize(

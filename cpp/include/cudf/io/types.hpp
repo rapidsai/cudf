@@ -44,8 +44,6 @@ class data_sink;
 
 //! cuDF interfaces
 namespace cudf {
-//! In-development features
-namespace experimental {
 //! IO interfaces
 namespace io {
 /**
@@ -187,5 +185,4 @@ struct sink_info {
 };
 
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

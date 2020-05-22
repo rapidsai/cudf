@@ -24,7 +24,6 @@
 #include <thrust/sequence.h>
 #include <cassert>
 
-#include <cudf/cudf.h>
 #include <rmm/rmm.h>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/error.hpp>

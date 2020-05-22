@@ -45,12 +45,12 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
 
   nvtx::range_push("CUDF_TRANSPOSE", nvtx::color::GREEN);
 
-  auto output_column = cudf::experimental::interleave_columns(input, mr);
+  auto output_column = cudf::interleave_columns(input, mr);
   auto one_iter      = thrust::make_counting_iterator<size_type>(1);
   auto splits_iter   = thrust::make_transform_iterator(
     one_iter, [width = input.num_columns()](size_type idx) { return idx * width; });
   auto splits = std::vector<size_type>(splits_iter, splits_iter + input.num_rows() - 1);
-  auto output_column_views = cudf::experimental::split(output_column->view(), splits);
+  auto output_column_views = cudf::split(output_column->view(), splits);
 
   return std::make_pair(std::move(output_column), table_view(output_column_views));
 }
