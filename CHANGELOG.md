@@ -192,6 +192,7 @@
 - PR #5208 Port search and join benchmark to libcudf++
 - PR #5214 Move docs build script into repository
 - PR #5219 Add per context cache for JIT kernels
+- PR #5251 Fix more mispellings in cpp comments and strings
 
 ## Bug Fixes
 
