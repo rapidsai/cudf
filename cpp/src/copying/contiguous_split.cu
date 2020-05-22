@@ -170,6 +170,19 @@ __launch_bounds__(block_size) __global__
 static constexpr size_t split_align = 64;
 
 /**
+ * @brief Information about the split for a given column. Bundled together
+ *        into a struct because tuples were getting pretty unreadable.
+ */
+struct column_split_info {
+  size_t data_buf_size;      // size of the data (including padding)
+  size_t validity_buf_size;  // validity vector size (including padding)
+
+  size_t offsets_buf_size;  // (strings only) size of offset column (including padding)
+  size_type num_chars;      // (strings only) number of chars in the column
+  size_type chars_offset;   // (strings only) offset from head of chars data
+};
+
+/**
  * @brief Functor called by the `type_dispatcher` to incrementally compute total
  * memory buffer size needed to allocate a contiguous copy of all columns within
  * a source table.

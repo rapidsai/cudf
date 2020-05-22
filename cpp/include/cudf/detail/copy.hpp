@@ -73,19 +73,6 @@ std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices,
                                cudaStream_t stream = 0);
 
-/**
- * @brief Information about the split for a given column. Bundled together
- *        into a struct because tuples were getting pretty unreadable.
- */
-struct column_split_info {
-  size_t data_buf_size;      // size of the data (including padding)
-  size_t validity_buf_size;  // validity vector size (including padding)
-
-  size_t offsets_buf_size;  // (strings only) size of offset column (including padding)
-  size_type num_chars;      // (strings only) number of chars in the column
-  size_type chars_offset;   // (strings only) offset from head of chars data
-};
-
 unpack_result alloc_and_copy(std::vector<column_view> const& t,
                              rmm::mr::device_memory_resource* mr,
                              cudaStream_t stream);
