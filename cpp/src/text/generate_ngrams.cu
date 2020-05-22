@@ -94,7 +94,7 @@ std::unique_ptr<cudf::column> generate_ngrams(
   std::unique_ptr<cudf::column> non_empty_offsets_column = [&] {
     cudf::column_view offsets_view(
       cudf::data_type{cudf::INT32}, strings_count + 1, strings.offsets().data<int32_t>());
-    auto table_offsets = cudf::experimental::detail::copy_if(
+    auto table_offsets = cudf::detail::copy_if(
                            cudf::table_view({offsets_view}),
                            [d_strings, strings_count] __device__(cudf::size_type idx) {
                              if (idx == strings_count) return true;

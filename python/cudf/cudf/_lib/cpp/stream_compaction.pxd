@@ -14,12 +14,12 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 
 
-cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" \
+cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" \
         nogil:
     ctypedef enum duplicate_keep_option:
-        KEEP_FIRST 'cudf::experimental::duplicate_keep_option::KEEP_FIRST'
-        KEEP_LAST 'cudf::experimental::duplicate_keep_option::KEEP_LAST'
-        KEEP_NONE 'cudf::experimental::duplicate_keep_option::KEEP_NONE'
+        KEEP_FIRST 'cudf::duplicate_keep_option::KEEP_FIRST'
+        KEEP_LAST 'cudf::duplicate_keep_option::KEEP_LAST'
+        KEEP_NONE 'cudf::duplicate_keep_option::KEEP_NONE'
 
     cdef unique_ptr[table] drop_nulls(table_view source_table,
                                       vector[size_type] keys,

@@ -27,7 +27,6 @@
 #include <quantiles/quantiles_util.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 template <bool exact, typename SortMapIterator>
 struct quantile_functor {
@@ -151,5 +150,4 @@ std::unique_ptr<column> quantile(column_view const& input,
   }
 }
 
-}  // namespace experimental
 }  // namespace cudf

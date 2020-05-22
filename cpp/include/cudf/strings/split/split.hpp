@@ -48,11 +48,10 @@ namespace strings {
  * @param mr Resource for allocating device memory.
  * @return New table of strings columns.
  */
-std::unique_ptr<experimental::table> split(
-  strings_column_view const& strings_column,
-  string_scalar const& delimiter      = string_scalar(""),
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<table> split(strings_column_view const& strings_column,
+                             string_scalar const& delimiter      = string_scalar(""),
+                             size_type maxsplit                  = -1,
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a list of columns by splitting each string using the
@@ -76,7 +75,7 @@ std::unique_ptr<experimental::table> split(
  * @param mr Resource for allocating device memory.
  * @return New strings columns.
  */
-std::unique_ptr<experimental::table> rsplit(
+std::unique_ptr<table> rsplit(
   strings_column_view const& strings_column,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,

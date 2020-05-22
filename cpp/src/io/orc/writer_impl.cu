@@ -32,7 +32,6 @@
 #include <rmm/device_buffer.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace orc {
@@ -1383,5 +1382,4 @@ void writer::write_chunked_end(orc_chunked_state &state) { _impl->write_chunked_
 }  // namespace orc
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

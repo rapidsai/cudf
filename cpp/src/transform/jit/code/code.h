@@ -17,7 +17,6 @@
 #pragma once
 
 namespace cudf {
-namespace experimental {
 namespace transformation {
 namespace jit {
 namespace code {
@@ -29,5 +28,4 @@ extern const char* operation;
 }  // namespace code
 }  // namespace jit
 }  // namespace transformation
-}  // namespace experimental
 }  // namespace cudf

@@ -20,7 +20,6 @@
 #include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup aggregation_reduction
  * @{
@@ -88,5 +87,4 @@ std::unique_ptr<column> scan(const column_view &input,
                              rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

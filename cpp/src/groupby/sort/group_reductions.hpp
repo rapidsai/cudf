@@ -24,7 +24,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 /**
@@ -222,5 +221,4 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                           cudaStream_t stream = 0);
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

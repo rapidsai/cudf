@@ -55,7 +55,7 @@ TEST_F(StringsSplitTest, Split)
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
-  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+  auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
   auto results = cudf::strings::split(strings_view, cudf::string_scalar(" "));
   EXPECT_TRUE(results->num_columns() == 2);
@@ -74,7 +74,7 @@ TEST_F(StringsSplitTest, SplitWithMax)
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
-  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+  auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
   auto results = cudf::strings::split(strings_view, cudf::string_scalar("::"), 1);
   EXPECT_TRUE(results->num_columns() == 2);
@@ -104,7 +104,7 @@ TEST_F(StringsSplitTest, SplitWhitespace)
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
-  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+  auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
   auto results = cudf::strings::split(strings_view);
   EXPECT_TRUE(results->num_columns() == 2);
@@ -122,7 +122,7 @@ TEST_F(StringsSplitTest, SplitWhitespaceWithMax)
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
-  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+  auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
   auto results = cudf::strings::split(strings_view, cudf::string_scalar(""), 1);
   EXPECT_TRUE(results->num_columns() == 2);
@@ -161,7 +161,7 @@ TEST_F(StringsSplitTest, RSplit)
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
   expected_columns.push_back(expected3.release());
-  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+  auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
   auto results = cudf::strings::rsplit(strings_view, cudf::string_scalar("_"));
   EXPECT_TRUE(results->num_columns() == 3);
@@ -180,7 +180,7 @@ TEST_F(StringsSplitTest, RSplitWithMax)
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
-  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+  auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
   auto results = cudf::strings::rsplit(strings_view, cudf::string_scalar("::"), 1);
   EXPECT_TRUE(results->num_columns() == 2);
@@ -215,7 +215,7 @@ TEST_F(StringsSplitTest, RSplitWhitespace)
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
   expected_columns.push_back(expected3.release());
-  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+  auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
   auto results = cudf::strings::rsplit(strings_view);
   EXPECT_TRUE(results->num_columns() == 3);
@@ -233,7 +233,7 @@ TEST_F(StringsSplitTest, RSplitWhitespaceWithMax)
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
-  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+  auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
   auto results = cudf::strings::rsplit(strings_view, cudf::string_scalar(""), 1);
   EXPECT_TRUE(results->num_columns() == 2);
@@ -640,7 +640,7 @@ TEST_F(StringsSplitTest, Partition)
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
   expected_columns.push_back(expected3.release());
-  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+  auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
   cudf::test::expect_tables_equal(*results, *expected);
 }
@@ -680,7 +680,7 @@ TEST_F(StringsSplitTest, PartitionWhitespace)
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
   expected_columns.push_back(expected3.release());
-  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+  auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
   cudf::test::expect_tables_equal(*results, *expected);
 }
@@ -720,7 +720,7 @@ TEST_F(StringsSplitTest, RPartition)
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
   expected_columns.push_back(expected3.release());
-  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+  auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
   cudf::test::expect_tables_equal(*results, *expected);
 }
@@ -760,7 +760,7 @@ TEST_F(StringsSplitTest, RPartitionWhitespace)
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
   expected_columns.push_back(expected3.release());
-  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+  auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
   cudf::test::expect_tables_equal(*results, *expected);
 }
