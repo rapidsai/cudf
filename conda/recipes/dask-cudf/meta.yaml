@@ -15,7 +15,7 @@ source:
 
 build:
   number: {{ git_revision_count }}
-  string: py{{ py_version }}_{{ git_revision_count }}_{{ git_commit_hash }}
+  string: +g{{ git_commit_short }}_py{{ py_version }}_{{ git_revision_count }}
   script_env:
     - VERSION_SUFFIX
 
