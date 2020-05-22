@@ -42,15 +42,18 @@ cdef source_info make_source_info(src) except*:
 
 
 # Converts the Python sink input to libcudf++ IO sink_info.
-cdef sink_info make_sink_info(src, unique_ptr[data_sink] * data) except*:
+cdef sink_info make_sink_info(src, unique_ptr[data_sink] * sink) except*:
     if isinstance(src, io.TextIOBase):
+        # Files opened in text mode expect writes to be str rather than bytes,
+        # which requires conversion from utf-8. If the underlying buffer is
+        # utf-8, we can bypass this conversion by writing directly to it.
         if codecs.lookup(src.encoding).name != "utf-8":
             raise NotImplementedError(f"Unsupported encoding f{src.encoding}")
-        data.reset(new iobase_data_sink(src.buffer))
-        return sink_info(data.get())
+        sink.reset(new iobase_data_sink(src.buffer))
+        return sink_info(sink.get())
     elif isinstance(src, io.IOBase):
-        data.reset(new iobase_data_sink(src))
-        return sink_info(data.get())
+        sink.reset(new iobase_data_sink(src))
+        return sink_info(sink.get())
     elif isinstance(src, (basestring, os.PathLike)):
         return sink_info(<string> os.path.expanduser(src).encode())
     else:
