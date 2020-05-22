@@ -1,6 +1,6 @@
 import weakref
 
-import warn
+import warnings
 
 warnings.warn("NVCategory will be removed in the future. Please use cuDF.",
               DeprecationWarning, stacklevel=2)

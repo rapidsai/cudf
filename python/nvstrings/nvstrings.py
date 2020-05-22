@@ -1,5 +1,5 @@
 import weakref
-import warn
+import warnings
 
 warnings.warn("NVStrings will be removed in the future. "
               "Please use cuDF for strings.",
