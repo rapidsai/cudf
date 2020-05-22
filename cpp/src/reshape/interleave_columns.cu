@@ -56,7 +56,7 @@ struct interleave_columns_functor {
     std::pair<rmm::device_buffer, size_type> valid_mask{{}, 0};
     if (create_mask) {
       // Create resulting null mask
-      valid_mask = cudf::experimental::detail::valid_if(
+      valid_mask = cudf::detail::valid_if(
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(num_strings),
         [num_columns, d_table] __device__(size_type idx) {

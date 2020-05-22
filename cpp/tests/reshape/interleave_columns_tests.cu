@@ -184,7 +184,7 @@ TEST_F(InterleaveStringsColumnsTest, ZeroSizedColumns)
 {
   cudf::column_view col0(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
 
-  auto results = cudf::experimental::interleave_columns(cudf::table_view{{col0}});
+  auto results = cudf::interleave_columns(cudf::table_view{{col0}});
   cudf::test::expect_strings_empty(results->view());
 }
 
@@ -192,7 +192,7 @@ TEST_F(InterleaveStringsColumnsTest, SingleColumn)
 {
   auto col0 = cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, true, false});
 
-  auto results = cudf::experimental::interleave_columns(cudf::table_view{{col0}});
+  auto results = cudf::interleave_columns(cudf::table_view{{col0}});
   cudf::test::expect_columns_equal(*results, col0, true);
 }
 
@@ -204,7 +204,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnNullAndEmpty)
   auto exp_results = cudf::test::strings_column_wrapper(
     {"", "", "", "", "", "", "", ""}, {false, true, true, false, true, true, false, false});
 
-  auto results = cudf::experimental::interleave_columns(cudf::table_view{{col0, col1}});
+  auto results = cudf::interleave_columns(cudf::table_view{{col0, col1}});
   cudf::test::expect_columns_equal(*results, exp_results, true);
 }
 
@@ -215,7 +215,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnNullAndEmptyNonNullable)
 
   auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", "", "", "", ""});
 
-  auto results = cudf::experimental::interleave_columns(cudf::table_view{{col0, col1}});
+  auto results = cudf::interleave_columns(cudf::table_view{{col0, col1}});
   cudf::test::expect_columns_equal(*results, exp_results, true);
 }
 
@@ -265,7 +265,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMix)
                                                          true,
                                                          false});
 
-  auto results = cudf::experimental::interleave_columns(cudf::table_view{{col0, col1, col2}});
+  auto results = cudf::interleave_columns(cudf::table_view{{col0, col1, col2}});
   cudf::test::expect_columns_equal(*results, exp_results, true);
 }
 
@@ -294,7 +294,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMixNonNullable)
                                                          "",
                                                          "c25"});
 
-  auto results = cudf::experimental::interleave_columns(cudf::table_view{{col0, col1, col2}});
+  auto results = cudf::interleave_columns(cudf::table_view{{col0, col1, col2}});
   cudf::test::expect_columns_equal(*results, exp_results, true);
 }
 
@@ -342,7 +342,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMixNullableMix)
                                                          true,
                                                          true});
 
-  auto results = cudf::experimental::interleave_columns(cudf::table_view{{col0, col1, col2}});
+  auto results = cudf::interleave_columns(cudf::table_view{{col0, col1, col2}});
   cudf::test::expect_columns_equal(*results, exp_results, true);
 }
 
