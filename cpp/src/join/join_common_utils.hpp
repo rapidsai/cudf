@@ -27,7 +27,6 @@
 #include <numeric>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 constexpr size_type MAX_JOIN_SIZE{std::numeric_limits<size_type>::max()};
 
@@ -47,9 +46,9 @@ using multimap_type =
                                 equal_to<hash_value_type>,
                                 default_allocator<thrust::pair<hash_value_type, size_type>>>;
 
-using row_hash = cudf::experimental::row_hasher<default_hash>;
+using row_hash = cudf::row_hasher<default_hash>;
 
-using row_equality = cudf::experimental::row_equality_comparator<true>;
+using row_equality = cudf::row_equality_comparator<true>;
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
 
@@ -78,7 +77,5 @@ inline bool is_trivial_join(table_view const& left,
 }
 
 }  // namespace detail
-
-}  // namespace experimental
 
 }  // namespace cudf

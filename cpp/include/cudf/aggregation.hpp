@@ -32,7 +32,6 @@
  */
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup aggregation_factories
  * @{
@@ -207,5 +206,4 @@ std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
                                                   data_type output_type);
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

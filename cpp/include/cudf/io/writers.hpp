@@ -33,8 +33,6 @@
 
 //! cuDF interfaces
 namespace cudf {
-//! In-development features
-namespace experimental {
 //! IO interfaces
 namespace io {
 namespace detail {
@@ -355,5 +353,4 @@ class writer {
 
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

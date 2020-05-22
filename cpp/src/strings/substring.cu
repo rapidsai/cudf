@@ -303,13 +303,13 @@ std::unique_ptr<column> slice_strings(
   CUDF_EXPECTS(stops_column.null_count() == 0, "Parameter stops must not contain nulls.");
 
   // perhaps another candidate for index-normalizer
-  return cudf::experimental::type_dispatcher(starts_column.type(),
-                                             dispatch_substring_from_fn{},
-                                             strings,
-                                             starts_column,
-                                             stops_column,
-                                             mr,
-                                             stream);
+  return cudf::type_dispatcher(starts_column.type(),
+                               dispatch_substring_from_fn{},
+                               strings,
+                               starts_column,
+                               stops_column,
+                               mr,
+                               stream);
 }
 
 }  // namespace detail

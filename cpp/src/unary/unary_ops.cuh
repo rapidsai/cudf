@@ -24,17 +24,16 @@
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace unary {
 template <typename T, typename Tout, typename F>
 struct launcher {
   static std::unique_ptr<cudf::column> launch(cudf::column_view const& input,
-                                              cudf::experimental::unary_op op,
+                                              cudf::unary_op op,
                                               rmm::mr::device_memory_resource* mr,
                                               cudaStream_t stream = 0)
   {
     std::unique_ptr<cudf::column> output = [&] {
-      if (op == cudf::experimental::unary_op::NOT) {
+      if (op == cudf::unary_op::NOT) {
         auto type = cudf::data_type{cudf::BOOL8};
         auto size = input.size();
 
@@ -45,7 +44,7 @@ struct launcher {
                                         input.null_count());
 
       } else {
-        return cudf::experimental::detail::allocate_like(
+        return cudf::detail::allocate_like(
           input, input.size(), mask_allocation_policy::NEVER, mr, stream);
       }
     }();
@@ -76,7 +75,6 @@ struct launcher {
 };
 
 }  // namespace unary
-}  // namespace experimental
 }  // namespace cudf
 
 #endif  // UNARY_OPS_H

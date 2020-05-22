@@ -26,7 +26,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
@@ -62,5 +61,4 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   return detail::bools_to_mask(input, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf
