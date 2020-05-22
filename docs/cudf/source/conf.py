@@ -202,5 +202,7 @@ numpydoc_class_members_toctree = False
 
 
 def setup(app):
+    # TODO : add static file for this.
+    app.add_js_file("https://docs.python.org/3/_static/copybutton.js")
     app.add_stylesheet("params.css")
     app.add_stylesheet("https://docs.rapids.ai/assets/css/custom.css")
