@@ -283,7 +283,7 @@ class Index(Frame, Serializable):
     @property
     def gpu_values(self):
         """
-        View the data as a device array object
+        View the data as a numba device array object
         """
         return self._values.data_array_view
 
