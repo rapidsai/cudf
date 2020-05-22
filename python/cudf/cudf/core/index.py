@@ -99,7 +99,7 @@ class Index(Frame, Serializable):
 
         See Also
         --------
-        cudf.MultiIndex.get_level_values : Get values for a level
+        cudf.core.multiindex.get_level_values : Get values for a level
             of a MultiIndex.
 
         Notes
@@ -299,8 +299,9 @@ class Index(Frame, Serializable):
         See Also
         --------
         Index.max : Return the maximum value in an Index.
-        cudf.Series.min : Return the minimum value in a Series.
-        cudf.DataFrame.min : Return the minimum values in a DataFrame.
+        cudf.core.series.Series.min : Return the minimum value in a Series.
+        cudf.core.dataframe.DataFrame.min : Return the minimum values in
+            a DataFrame.
 
         Examples
         --------
@@ -323,8 +324,9 @@ class Index(Frame, Serializable):
         See Also
         --------
         Index.min : Return the minimum value in an Index.
-        cudf.Series.max : Return the maximum value in a Series.
-        cudf.DataFrame.max : Return the maximum values in a DataFrame.
+        cudf.core.series.Series.max : Return the maximum value in a Series.
+        cudf.core.dataframe.Dataframe.max : Return the maximum values in
+            a DataFrame.
 
         Examples
         --------

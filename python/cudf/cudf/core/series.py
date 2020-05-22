@@ -1800,7 +1800,7 @@ class Series(Frame, Serializable):
 
         See also
         --------
-        cudf.DataFrame.loc
+        cudf.core.dataframe.Dataframe.loc
         """
         return _SeriesLocIndexer(self)
 
@@ -1811,7 +1811,7 @@ class Series(Frame, Serializable):
 
         See also
         --------
-        cudf.DataFrame.iloc
+        cudf.core.dataframe.Dataframe.iloc
         """
         return _SeriesIlocIndexer(self)
 
