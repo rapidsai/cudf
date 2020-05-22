@@ -41,12 +41,6 @@ from cudf.utils.dtypes import (
 
 
 class Series(Frame, Serializable):
-    """
-    Data and null-masks.
-
-    ``Series`` objects are used as columns of ``DataFrame``.
-    """
-
     @property
     def _constructor(self):
         return Series
@@ -99,8 +93,48 @@ class Series(Frame, Serializable):
         return cls(data=col)
 
     def __init__(
-        self, data=None, index=None, name=None, nan_as_null=True, dtype=None
+        self, data=None, index=None, dtype=None, name=None, nan_as_null=True,
     ):
+        """
+        One-dimensional GPU array (including time series).
+
+        Labels need not be unique but must be a hashable type. The object
+        supports both integer- and label-based indexing and provides a
+        host of methods for performing operations involving the index.
+        Statistical methods from ndarray have been overridden to
+        automatically exclude missing data (currently represented
+        as null/NaN).
+
+        Operations between Series (+, -, /, , *) align values based on their
+        associated index values– they need not be the same length. The
+        result index will be the sorted union of the two indexes.
+
+        ``Series`` objects are used as columns of ``DataFrame``.
+
+        Parameters
+        ----------
+        data : array-like, Iterable, dict, or scalar value
+            Contains data stored in Series.
+
+        index : array-like or Index (1d)
+            Values must be hashable and have the same length
+            as data. Non-unique index values are allowed. Will
+            default to RangeIndex (0, 1, 2, …, n) if not provided.
+            If both a dict and index sequence are used, the index will
+            override the keys found in the dict.
+
+        dtype : str, numpy.dtype, or ExtensionDtype, optional
+            Data type for the output Series. If not specified,
+            this will be inferred from data.
+
+        name : str, optional
+            The name to give to the Series.
+
+        nan_as_null : bool, Default True
+            If ``None``/``True``, converts ``np.nan`` values to
+            ``null`` values.
+            If ``False``, leaves ``np.nan`` values as is.
+        """
         if isinstance(data, pd.Series):
             if name is None:
                 name = data.name
@@ -1459,12 +1493,12 @@ class Series(Frame, Serializable):
         """
         return self.__mul__(-1)
 
-    @copy_docstring(CategoricalAccessor)
+    @copy_docstring(CategoricalAccessor.__init__)
     @property
     def cat(self):
         return self._column.cat(parent=self)
 
-    @copy_docstring(StringMethods)
+    @copy_docstring(StringMethods.__init__)
     @property
     def str(self):
         return self._column.str(parent=self)
@@ -3596,7 +3630,7 @@ class Series(Frame, Serializable):
             )
         return Series(output_col, name=self.name, index=self.index)
 
-    @copy_docstring(SeriesGroupBy)
+    @copy_docstring(SeriesGroupBy.__init__)
     def groupby(
         self,
         by=None,

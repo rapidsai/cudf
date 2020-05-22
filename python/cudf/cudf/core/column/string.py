@@ -150,16 +150,15 @@ _numeric_to_str_typecast_functions = {
 
 
 class StringMethods(object):
-    """
-    Vectorized string functions for Series and Index.
-
-    This mimics pandas ``df.str`` interface. nulls stay null
-    unless handled otherwise by a particular method.
-    Patterned after Python’s string methods, with some
-    inspiration from R’s stringr package.
-    """
-
     def __init__(self, column, parent=None):
+        """
+        Vectorized string functions for Series and Index.
+
+        This mimics pandas ``df.str`` interface. nulls stay null
+        unless handled otherwise by a particular method.
+        Patterned after Python’s string methods, with some
+        inspiration from R’s stringr package.
+        """
         self._column = column
         self._parent = parent
 

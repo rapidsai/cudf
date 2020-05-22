@@ -89,82 +89,98 @@ def _reverse_op(fn):
 
 
 class DataFrame(Frame, Serializable):
-    """
-    A GPU Dataframe object.
-
-    Parameters
-    ----------
-    data : data-type to coerce. Infers date format if to date.
-
-    Examples
-    --------
-
-    Build dataframe with ``__setitem__``:
-
-    >>> import cudf
-    >>> df = cudf.DataFrame()
-    >>> df['key'] = [0, 1, 2, 3, 4]
-    >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-    >>> print(df)
-       key   val
-    0    0  10.0
-    1    1  11.0
-    2    2  12.0
-    3    3  13.0
-    4    4  14.0
-
-    Build DataFrame via dict of columns:
-
-    >>> import cudf
-    >>> import numpy as np
-    >>> from datetime import datetime, timedelta
-
-    >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
-    >>> n = 5
-    >>> df = cudf.DataFrame({
-    >>>   'id': np.arange(n),
-    >>>   'datetimes': np.array([(t0+ timedelta(seconds=x)) for x in range(n)])
-    >>> })
-    >>> df
-        id                datetimes
-    0    0  2018-10-07T12:00:00.000
-    1    1  2018-10-07T12:00:01.000
-    2    2  2018-10-07T12:00:02.000
-    3    3  2018-10-07T12:00:03.000
-    4    4  2018-10-07T12:00:04.000
-
-    Build DataFrame via list of rows as tuples:
-
-    >>> import cudf
-    >>> df = cudf.DataFrame([
-        (5, "cats", "jump", np.nan),
-        (2, "dogs", "dig", 7.5),
-        (3, "cows", "moo", -2.1, "occasionally"),
-    ])
-    >>> df
-    0     1     2     3             4
-    0  5  cats  jump  null          None
-    1  2  dogs   dig   7.5          None
-    2  3  cows   moo  -2.1  occasionally
-
-    Convert from a Pandas DataFrame:
-
-    >>> import pandas as pd
-    >>> import cudf
-    >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
-    >>> df = cudf.from_pandas(pdf)
-    >>> df
-      a b
-    0 0 0.1
-    1 1 0.2
-    2 2 nan
-    3 3 0.3
-    """
 
     _internal_names = {"_data", "_index"}
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
+        """
+        A GPU Dataframe object.
+
+        Parameters
+        ----------
+        data : array-like, Iterable, dict, or DataFrame.
+            Dict can contain Series, arrays, constants, or list-like objects.
+
+        index : Index or array-like
+            Index to use for resulting frame. Will default to
+            RangeIndex if no indexing information part of input data and
+            no index provided.
+
+        columns : Index or array-like
+            Column labels to use for resulting frame.
+            Will default to RangeIndex (0, 1, 2, …, n) if no column
+            labels are provided.
+
+        dtype : dtype, default None
+            Data type to force. Only a single dtype is allowed.
+            If None, infer.
+
+        Examples
+        --------
+
+        Build dataframe with ``__setitem__``:
+
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+        >>> print(df)
+        key   val
+        0    0  10.0
+        1    1  11.0
+        2    2  12.0
+        3    3  13.0
+        4    4  14.0
+
+        Build DataFrame via dict of columns:
+
+        >>> import cudf
+        >>> import numpy as np
+        >>> from datetime import datetime, timedelta
+
+        >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
+        >>> n = 5
+        >>> df = cudf.DataFrame({
+        >>> 'id': np.arange(n),
+        >>> 'datetimes': np.array(
+        >>> [(t0+ timedelta(seconds=x)) for x in range(n)])
+        >>> })
+        >>> df
+            id                datetimes
+        0    0  2018-10-07T12:00:00.000
+        1    1  2018-10-07T12:00:01.000
+        2    2  2018-10-07T12:00:02.000
+        3    3  2018-10-07T12:00:03.000
+        4    4  2018-10-07T12:00:04.000
+
+        Build DataFrame via list of rows as tuples:
+
+        >>> import cudf
+        >>> df = cudf.DataFrame([
+            (5, "cats", "jump", np.nan),
+            (2, "dogs", "dig", 7.5),
+            (3, "cows", "moo", -2.1, "occasionally"),
+        ])
+        >>> df
+        0     1     2     3             4
+        0  5  cats  jump  null          None
+        1  2  dogs   dig   7.5          None
+        2  3  cows   moo  -2.1  occasionally
+
+        Convert from a Pandas DataFrame:
+
+        >>> import pandas as pd
+        >>> import cudf
+        >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
+        >>> df = cudf.from_pandas(pdf)
+        >>> df
+        a b
+        0 0 0.1
+        1 1 0.2
+        2 2 nan
+        3 3 0.3
+        """
         super().__init__()
 
         if isinstance(data, ColumnAccessor):
@@ -3444,7 +3460,7 @@ class DataFrame(Frame, Serializable):
                 df.index._data[new_key] = df.index._data.pop(old_key)
         return df
 
-    @copy_docstring(DataFrameGroupBy)
+    @copy_docstring(DataFrameGroupBy.__init__)
     def groupby(
         self,
         by=None,

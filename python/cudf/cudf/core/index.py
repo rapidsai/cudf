@@ -797,25 +797,16 @@ class Index(Frame, Serializable):
 
 
 class RangeIndex(Index):
-    """An iterable integer index defined by a starting value and ending value.
-    Can be sliced and indexed arbitrarily without allocating memory for the
-    complete structure.
-
-    Properties
-    ----------
-    start: The first value
-    stop: The last value
-    name: Name of the index
-
-    """
-
     def __init__(self, start, stop=None, name=None):
-        """RangeIndex(size), RangeIndex(start, stop)
+        """An iterable integer index defined by a starting value and ending value.
+        Can be sliced and indexed arbitrarily without allocating memory for the
+        complete structure.
 
         Parameters
         ----------
-        start, stop: int
-        name: string
+        start: The first value
+        stop: The last value
+        name: Name of the index
         """
         if isinstance(start, range):
             therange = start
@@ -1451,7 +1442,7 @@ class StringIndex(GenericIndex):
             + ")"
         )
 
-    @copy_docstring(StringMethods)
+    @copy_docstring(StringMethods.__init__)
     @property
     def str(self):
         return self._values.str(parent=self)
