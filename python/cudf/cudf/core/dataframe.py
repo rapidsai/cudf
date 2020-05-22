@@ -1521,7 +1521,6 @@ class DataFrame(Frame, Serializable):
         cols = columns
         original_cols = df._data
         dtypes = OrderedDict(df.dtypes)
-
         idx = labels if index is None and axis in (0, "index") else index
         cols = labels if cols is None and axis in (1, "columns") else cols
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
