@@ -229,6 +229,12 @@ class Index(Frame, Serializable):
 
         return cupy.asarray(self._values.data_array_view)
 
+    def any(self):
+        """
+        Return whether any elements is True in Index.
+        """
+        return self._values.any()
+
     def to_pandas(self):
         """
         Convert to a Pandas Index.

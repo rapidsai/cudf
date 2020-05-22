@@ -3769,7 +3769,6 @@ class Series(Frame, Serializable):
         return result
 
     def merge(self, other):
-        # TODO: ADD docs.
         # An inner join should return a series containing matching elements
         # a Left join should return just self
         # an outer join should return a two column
