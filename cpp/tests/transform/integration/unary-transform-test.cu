@@ -17,7 +17,6 @@
  * limitations under the License.
  */
 
-#include <cudf/types.h>
 #include <cudf/transform.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>

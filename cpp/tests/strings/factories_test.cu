@@ -25,8 +25,6 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
-#include <gmock/gmock.h>
-
 #include <cstring>
 #include <vector>
 
