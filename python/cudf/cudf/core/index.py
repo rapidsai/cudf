@@ -590,7 +590,7 @@ class Index(Frame, Serializable):
 
         return Series(
             self._values,
-            index=self.copy() if index is None else index,
+            index=self.copy(deep=False) if index is None else index,
             name=self.name if name is None else name,
         )
 
