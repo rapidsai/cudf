@@ -75,8 +75,6 @@ def rolling(Column source_column, Column pre_column_window,
                     agg)
             )
     else:
-        if op == "count":
-            min_periods = 0
         c_min_periods = min_periods
         if center:
             c_window = (window // 2) + 1
