@@ -68,7 +68,7 @@ TYPED_TEST(TimestampColumnTest, TimestampDurationsMatchPrimitiveRepresentation)
   auto timestamp_col =
     generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop_));
 
-  // rount-trip through the host to copy `timestamp_col` values
+  // round-trip through the host to copy `timestamp_col` values
   // to a new fixed_width_column_wrapper `primitive_col`
   // When C++17, use structured bindings
   thrust::host_vector<Rep> timestamp_col_data;

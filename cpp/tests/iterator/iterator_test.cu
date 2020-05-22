@@ -210,7 +210,7 @@ TYPED_TEST(IteratorTest, non_null_iterator)
 
 // Tests for null input iterator (column with null bitmap)
 // Actually, we can use cub for reduction with nulls without creating custom
-// kernel or multiple steps. We may accelarate the reduction for a column using
+// kernel or multiple steps. We may accelerate the reduction for a column using
 // cub
 TYPED_TEST(IteratorTest, null_iterator)
 {

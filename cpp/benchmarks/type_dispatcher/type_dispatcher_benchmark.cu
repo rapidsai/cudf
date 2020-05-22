@@ -103,7 +103,7 @@ struct ColumnHandle {
 
 // The following is for DEVICE_DISPATCHING:
 // The dispatching is done on device. The loop loops over
-// each row (across different coluns). Type is dispatched each time
+// each row (across different columns). Type is dispatched each time
 // a column is visited so the total number of dispatching is
 // n_rows * n_cols.
 template <FunctorType functor_type>

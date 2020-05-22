@@ -153,7 +153,7 @@ void check_timestamp_column(cudf::column_view const& col_lhs,
   EXPECT_TRUE(found == end_count);  // not found...
 }
 
-// helper to replacein `str`  _all_ occurences of `from` with `to`
+// helper to replace in `str`  _all_ occurrences of `from` with `to`
 std::string replace_all_helper(std::string str, const std::string& from, const std::string& to)
 {
   size_t start_pos = 0;
