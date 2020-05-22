@@ -226,7 +226,7 @@ struct column_to_strings_fn {
   {
   }
 
-  // Note: `null` replacement with `na_rep` defered to `concatenate()`
+  // Note: `null` replacement with `na_rep` deferred to `concatenate()`
   // instead of column-wise; might be faster
   //
   // Note: Cannot pass `stream` to detail::<fname> version of <fname> calls below, because they are
