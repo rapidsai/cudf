@@ -1200,6 +1200,12 @@ def test_strings_partition(data):
     assert_eq(ps.str.partition(","), gs.str.partition(","))
     assert_eq(ps.str.partition("-"), gs.str.partition("-"))
 
+    gi = as_index(data)
+    pi = pd.Index(data)
+    assert_eq(pi.str.partition(), gi.str.partition())
+    assert_eq(pi.str.partition(","), gi.str.partition(","))
+    assert_eq(pi.str.partition("-"), gi.str.partition("-"))
+
 
 @pytest.mark.parametrize(
     "data",

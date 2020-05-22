@@ -266,9 +266,11 @@ class StringMethods(object):
 
                 if isinstance(table, Table):
                     if isinstance(self._parent, Index):
-                        return self._parent._constructor_expanddim._from_table(
+                        idx = self._parent._constructor_expanddim._from_table(
                             table=table
                         )
+                        idx.names = self._parent.name
+                        return idx
                     else:
                         return self._parent._constructor_expanddim(
                             data=table._data, index=self._parent.index
