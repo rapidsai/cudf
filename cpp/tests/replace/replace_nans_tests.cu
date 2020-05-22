@@ -34,8 +34,7 @@ TEST_F(ReplaceNaNsErrorTest, SizeMismatch)
   cudf::test::fixed_width_column_wrapper<float> input_column{7, 5, 6, 3, 1, 8, 4};
   cudf::test::fixed_width_column_wrapper<float> replacement_column{{10, 11, 12, 13}};
 
-  EXPECT_THROW(cudf::experimental::replace_nans(input_column, replacement_column),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nans(input_column, replacement_column), cudf::logic_error);
 }
 
 // Error : column type mismatch
@@ -44,8 +43,7 @@ TEST_F(ReplaceNaNsErrorTest, TypeMismatch)
   cudf::test::fixed_width_column_wrapper<float> input_column{7, 5, 6, 3, 1, 2, 8, 4};
   cudf::test::fixed_width_column_wrapper<double> replacement_column{10, 11, 12, 13, 14, 15, 16, 17};
 
-  EXPECT_THROW(cudf::experimental::replace_nans(input_column, replacement_column),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nans(input_column, replacement_column), cudf::logic_error);
 }
 
 // Error: column type mismatch
@@ -54,7 +52,7 @@ TEST_F(ReplaceNaNsErrorTest, TypeMismatchScalar)
   cudf::test::fixed_width_column_wrapper<double> input_column{7, 5, 6, 3, 1, 2, 8, 4};
   cudf::numeric_scalar<float> replacement(1);
 
-  EXPECT_THROW(cudf::experimental::replace_nans(input_column, replacement), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nans(input_column, replacement), cudf::logic_error);
 }
 
 // Error: column type mismatch
@@ -63,7 +61,7 @@ TEST_F(ReplaceNaNsErrorTest, NonFloatType)
   cudf::test::fixed_width_column_wrapper<int32_t> input_column{7, 5, 6, 3, 1, 2, 8, 4};
   cudf::numeric_scalar<float> replacement(1);
 
-  EXPECT_THROW(cudf::experimental::replace_nans(input_column, replacement), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nans(input_column, replacement), cudf::logic_error);
 }
 
 namespace cudf {
@@ -83,7 +81,7 @@ void ReplaceNaNsColumn(fixed_width_column_wrapper<T> input,
                        fixed_width_column_wrapper<T> expected)
 {
   std::unique_ptr<column> result;
-  ASSERT_NO_THROW(result = experimental::replace_nans(input, replacement_values));
+  ASSERT_NO_THROW(result = replace_nans(input, replacement_values));
   expect_columns_equal(expected, *result);
 }
 
@@ -93,7 +91,7 @@ void ReplaceNaNsScalar(fixed_width_column_wrapper<T> input,
                        fixed_width_column_wrapper<T> expected)
 {
   std::unique_ptr<column> result;
-  ASSERT_NO_THROW(result = experimental::replace_nans(input, replacement_value));
+  ASSERT_NO_THROW(result = replace_nans(input, replacement_value));
   expect_columns_equal(expected, *result);
 }
 

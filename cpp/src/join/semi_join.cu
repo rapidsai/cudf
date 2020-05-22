@@ -14,7 +14,6 @@
 #include <join/hash_join.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief  Performs a left semi or anti join on the specified columns of two
@@ -53,7 +52,7 @@ namespace detail {
  *                             will contain `return_columns` from `left` that match in right.
  */
 template <join_kind JoinKind>
-std::unique_ptr<cudf::experimental::table> left_semi_anti_join(
+std::unique_ptr<cudf::table> left_semi_anti_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
   std::vector<cudf::size_type> const& left_on,
@@ -66,15 +65,15 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(
   CUDF_EXPECTS(0 != right.num_columns(), "Right table is empty");
   CUDF_EXPECTS(left_on.size() == right_on.size(), "Mismatch in number of columns to be joined on");
 
-  if (0 == return_columns.size()) { return experimental::empty_like(left.select(return_columns)); }
+  if (0 == return_columns.size()) { return empty_like(left.select(return_columns)); }
 
   if (is_trivial_join(left, right, left_on, right_on, JoinKind)) {
-    return experimental::empty_like(left.select(return_columns));
+    return empty_like(left.select(return_columns));
   }
 
   if ((join_kind::LEFT_ANTI_JOIN == JoinKind) && (0 == right.num_rows())) {
     // Everything matches, just copy the proper columns from the left table
-    return std::make_unique<experimental::table>(left.select(return_columns), stream, mr);
+    return std::make_unique<table>(left.select(return_columns), stream, mr);
   }
 
   // Only care about existence, so we'll use an unordered map (other joins need a multimap)
@@ -126,37 +125,33 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(
       return (pos != hash_table.end()) == join_type_boolean;
     });
 
-  return cudf::experimental::detail::gather(
+  return cudf::detail::gather(
     left.select(return_columns), gather_map.begin(), gather_map_end, false, mr);
 }
 }  // namespace detail
 
-std::unique_ptr<cudf::experimental::table> left_semi_join(
-  cudf::table_view const& left,
-  cudf::table_view const& right,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
-  std::vector<cudf::size_type> const& return_columns,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::table> left_semi_join(cudf::table_view const& left,
+                                            cudf::table_view const& right,
+                                            std::vector<cudf::size_type> const& left_on,
+                                            std::vector<cudf::size_type> const& right_on,
+                                            std::vector<cudf::size_type> const& return_columns,
+                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_SEMI_JOIN>(
     left, right, left_on, right_on, return_columns, mr, 0);
 }
 
-std::unique_ptr<cudf::experimental::table> left_anti_join(
-  cudf::table_view const& left,
-  cudf::table_view const& right,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
-  std::vector<cudf::size_type> const& return_columns,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::table> left_anti_join(cudf::table_view const& left,
+                                            cudf::table_view const& right,
+                                            std::vector<cudf::size_type> const& left_on,
+                                            std::vector<cudf::size_type> const& right_on,
+                                            std::vector<cudf::size_type> const& return_columns,
+                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_ANTI_JOIN>(
     left, right, left_on, right_on, return_columns, mr, 0);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

@@ -26,12 +26,12 @@ namespace jni {
 
 constexpr jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
 
-constexpr char const* CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
-constexpr char const* CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
-constexpr char const* INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
-constexpr char const* ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
-constexpr char const* NPE_CLASS = "java/lang/NullPointerException";
-constexpr char const* OOM_CLASS = "java/lang/OutOfMemoryError";
+constexpr char const *CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
+constexpr char const *CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
+constexpr char const *INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
+constexpr char const *ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
+constexpr char const *NPE_CLASS = "java/lang/NullPointerException";
+constexpr char const *OOM_CLASS = "java/lang/OutOfMemoryError";
 
 /**
  * @brief indicates that a JNI error of some kind was thrown and the main
@@ -74,7 +74,8 @@ public:
 
   jdoubleArray newArray(JNIEnv *const env, int len) const { return env->NewDoubleArray(len); }
 
-  void setArrayRegion(JNIEnv *const env, jdoubleArray jarr, int start, int len, jdouble const* arr) const {
+  void setArrayRegion(JNIEnv *const env, jdoubleArray jarr, int start, int len,
+                      jdouble const *arr) const {
     env->SetDoubleArrayRegion(jarr, start, len, arr);
   }
 
@@ -91,7 +92,8 @@ public:
 
   jlongArray newArray(JNIEnv *const env, int len) const { return env->NewLongArray(len); }
 
-  void setArrayRegion(JNIEnv *const env, jlongArray jarr, int start, int len, jlong const* arr) const {
+  void setArrayRegion(JNIEnv *const env, jlongArray jarr, int start, int len,
+                      jlong const *arr) const {
     env->SetLongArrayRegion(jarr, start, len, arr);
   }
 
@@ -108,7 +110,8 @@ public:
 
   jintArray newArray(JNIEnv *const env, int len) const { return env->NewIntArray(len); }
 
-  void setArrayRegion(JNIEnv *const env, jintArray jarr, int start, int len, jint const* arr) const {
+  void setArrayRegion(JNIEnv *const env, jintArray jarr, int start, int len,
+                      jint const *arr) const {
     env->SetIntArrayRegion(jarr, start, len, arr);
   }
 
@@ -125,7 +128,8 @@ public:
 
   jbyteArray newArray(JNIEnv *const env, int len) const { return env->NewByteArray(len); }
 
-  void setArrayRegion(JNIEnv *const env, jbyteArray jarr, int start, int len, jbyte const* arr) const {
+  void setArrayRegion(JNIEnv *const env, jbyteArray jarr, int start, int len,
+                      jbyte const *arr) const {
     env->SetByteArrayRegion(jarr, start, len, arr);
   }
 
@@ -143,7 +147,7 @@ public:
   jbooleanArray newArray(JNIEnv *const env, int len) const { return env->NewBooleanArray(len); }
 
   void setArrayRegion(JNIEnv *const env, jbooleanArray jarr, int start, int len,
-                      jboolean const* arr) const {
+                      jboolean const *arr) const {
     env->SetBooleanArrayRegion(jarr, start, len, arr);
   }
 
@@ -190,7 +194,7 @@ public:
     check_java_exception(env);
   }
 
-  native_jArray(JNIEnv *const env, N_TYPE const* arr, int len)
+  native_jArray(JNIEnv *const env, N_TYPE const *arr, int len)
       : env(env), orig(access.newArray(env, len)), len(len), data_ptr(NULL) {
     check_java_exception(env);
     access.setArrayRegion(env, orig, 0, len, arr);
@@ -510,9 +514,7 @@ public:
     check_java_exception(env);
   }
 
-  jobjectArray wrapped() {
-    return orig;
-  }
+  jobjectArray wrapped() { return orig; }
 };
 
 /**
@@ -655,32 +657,32 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 }
 
-jobject contiguous_table_from(JNIEnv* env, cudf::experimental::contiguous_split_result & split);
+jobject contiguous_table_from(JNIEnv *env, cudf::contiguous_split_result &split);
 
-native_jobjectArray<jobject> contiguous_table_array(JNIEnv* env, jsize length);
+native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length);
 
-std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
+std::unique_ptr<cudf::aggregation> map_jni_aggregation(jint op);
 
-jlongArray convert_table_for_return(JNIEnv * env, std::unique_ptr<cudf::experimental::table> &table_result);
+jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result);
 
 /**
  * Allocate a HostMemoryBuffer
  */
-jobject allocate_host_buffer(JNIEnv* env, jlong amount, jboolean prefer_pinned);
+jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned);
 
 /**
  * Get the address of a HostMemoryBuffer
  */
-jlong get_host_buffer_address(JNIEnv* env, jobject buffer);
+jlong get_host_buffer_address(JNIEnv *env, jobject buffer);
 
 /**
  * Get the length of a HostMemoryBuffer
  */
-jlong get_host_buffer_length(JNIEnv* env, jobject buffer);
+jlong get_host_buffer_length(JNIEnv *env, jobject buffer);
 
 // Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
 // needs to be attached, the thread will automatically detach when the thread terminates.
-JNIEnv* get_jni_env(JavaVM* jvm);
+JNIEnv *get_jni_env(JavaVM *jvm);
 
 /** Set the device to use for cudf */
 void set_cudf_device(int device);
@@ -690,7 +692,7 @@ void set_cudf_device(int device);
  * set the device, throw an exception, or do nothing depending on how the application has
  * configured it via Cuda.setAutoSetDeviceMode.
  */
-void auto_set_device(JNIEnv* env);
+void auto_set_device(JNIEnv *env);
 
 } // namespace jni
 } // namespace cudf
@@ -753,7 +755,7 @@ void auto_set_device(JNIEnv* env);
   catch (const std::bad_alloc &e) {                                                                \
     /* In some cases a cuda exception can be the cause so peek and clear if needed*/               \
     if (cudaErrorMemoryAllocation == cudaPeekAtLastError()) {                                      \
-         cudaGetLastError();                                                                       \
+      cudaGetLastError();                                                                          \
     }                                                                                              \
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, "Could not allocate native memory", ret_val);   \
   }                                                                                                \

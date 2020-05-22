@@ -183,8 +183,7 @@ std::unique_ptr<column> to_floats(strings_column_view const& strings,
                                      mr);
   auto results_view = results->mutable_view();
   // fill output column with floats
-  experimental::type_dispatcher(
-    output_type, dispatch_to_floats_fn{}, d_strings, results_view, stream);
+  type_dispatcher(output_type, dispatch_to_floats_fn{}, d_strings, results_view, stream);
   results->set_null_count(strings.null_count());
   return results;
 }
@@ -517,8 +516,7 @@ std::unique_ptr<column> from_floats(column_view const& floats,
   size_type strings_count = floats.size();
   if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
 
-  return experimental::type_dispatcher(
-    floats.type(), dispatch_from_floats_fn{}, floats, mr, stream);
+  return type_dispatcher(floats.type(), dispatch_from_floats_fn{}, floats, mr, stream);
 }
 
 }  // namespace detail

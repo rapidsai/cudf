@@ -21,7 +21,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation()
 {
@@ -160,5 +159,4 @@ bool is_valid_aggregation(data_type source, aggregation::Kind k)
   return dispatch_type_and_aggregation(source, k, is_valid_aggregation_impl{});
 }
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

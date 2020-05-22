@@ -26,7 +26,6 @@
 #include <algorithm>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 
@@ -111,5 +110,4 @@ std::unique_ptr<column> allocate_like(column_view const& input,
   return detail::allocate_like(input, size, mask_alloc, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf
