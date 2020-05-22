@@ -280,7 +280,7 @@ def test_string_numeric_astype(dtype):
     # on the data, so making it consistent unless we choose to match the
     # behavior
     if dtype.startswith("datetime64"):
-        expect = ps.dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        expect = ps.dt.strftime("%Y-%m-%d %H:%M:%S.%f")
     else:
         expect = ps.astype("str")
     got = gs.astype("str")
