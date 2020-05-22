@@ -68,7 +68,7 @@ std::unique_ptr<column> make_strings_column(
   auto d_offsets    = offsets_view.data<int32_t>();
 
   // create null mask
-  auto new_nulls = experimental::detail::valid_if(
+  auto new_nulls = detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     [d_strings] __device__(size_type idx) { return d_strings[idx].first != nullptr; },

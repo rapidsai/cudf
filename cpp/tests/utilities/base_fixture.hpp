@@ -44,7 +44,7 @@ class BaseFixture : public ::testing::Test {
  public:
   /**
    * @brief Returns pointer to `device_memory_resource` that should be used for
-   * all tests inheritng from this fixture
+   * all tests inheriting from this fixture
    **/
   rmm::mr::device_memory_resource *mr() { return _mr; }
 };

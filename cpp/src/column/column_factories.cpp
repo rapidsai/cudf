@@ -45,7 +45,7 @@ struct size_of_helper {
 std::size_t size_of(data_type element_type)
 {
   CUDF_EXPECTS(is_fixed_width(element_type), "Invalid element type.");
-  return cudf::experimental::type_dispatcher(element_type, size_of_helper{});
+  return cudf::type_dispatcher(element_type, size_of_helper{});
 }
 
 // Empty column of specified type
@@ -116,7 +116,7 @@ struct column_from_scalar_dispatch {
     auto output_column =
       make_fixed_width_column(value.type(), size, mask_state::UNALLOCATED, stream, mr);
     auto view = output_column->mutable_view();
-    experimental::detail::fill_in_place(view, 0, size, value, stream);
+    detail::fill_in_place(view, 0, size, value, stream);
     return output_column;
   }
 };
@@ -141,7 +141,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream);
   column_view sc{
     data_type{STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
-  auto sv = static_cast<experimental::scalar_type_t<cudf::string_view> const&>(value);
+  auto sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
   // fill the column with the scalar
   auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, mr, stream);
   output->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // should be no nulls
@@ -174,8 +174,7 @@ std::unique_ptr<column> make_column_from_scalar(scalar const& s,
                                                 cudaStream_t stream)
 {
   if (size == 0) return make_empty_column(s.type());
-  return experimental::type_dispatcher(
-    s.type(), column_from_scalar_dispatch{}, s, size, mr, stream);
+  return type_dispatcher(s.type(), column_from_scalar_dispatch{}, s, size, mr, stream);
 }
 
 }  // namespace cudf

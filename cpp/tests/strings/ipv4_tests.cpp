@@ -21,7 +21,6 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
-#include <gmock/gmock.h>
 #include <vector>
 
 struct StringsConvertTest : public cudf::test::BaseFixture {

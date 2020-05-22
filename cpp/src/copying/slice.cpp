@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
@@ -25,7 +24,6 @@
 #include <algorithm>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices,
@@ -86,7 +84,7 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
   std::transform(input.begin(),
                  input.end(),
                  std::back_inserter(sliced_table),
-                 [&indices](cudf::column_view const& c) { return slice(c, indices); });
+                 [&indices](cudf::column_view const& c) { return cudf::slice(c, indices); });
 
   // distribute columns into outgoing table_views
   size_t num_output_tables = indices.size() / 2;
@@ -101,5 +99,4 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
   return result;
 };
 
-}  // namespace experimental
 }  // namespace cudf

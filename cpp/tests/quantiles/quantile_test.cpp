@@ -332,7 +332,7 @@ std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> unsorted()
 template <typename T>
 void test(testdata::test_case<T> test_case)
 {
-  using namespace cudf::experimental;
+  using namespace cudf;
 
   for (auto& expected : test_case.expectations) {
     auto q = std::vector<double>{expected.quantile};
@@ -405,7 +405,7 @@ TYPED_TEST(QuantileTest, TestEmpty)
 {
   auto input    = fixed_width_column_wrapper<TypeParam>({});
   auto expected = cudf::test::fixed_width_column_wrapper<double>({0, 0}, {0, 0});
-  auto actual   = cudf::experimental::quantile(input, {0.5, 0.25});
+  auto actual   = cudf::quantile(input, {0.5, 0.25});
 }
 
 template <typename T>
@@ -419,21 +419,21 @@ TYPED_TEST(QuantileUnsupportedTypesTest, TestZeroElements)
 {
   fixed_width_column_wrapper<TypeParam> input({});
 
-  EXPECT_THROW(cudf::experimental::quantile(input, {0}), cudf::logic_error);
+  EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }
 
 TYPED_TEST(QuantileUnsupportedTypesTest, TestOneElements)
 {
   fixed_width_column_wrapper<TypeParam> input({0});
 
-  EXPECT_THROW(cudf::experimental::quantile(input, {0}), cudf::logic_error);
+  EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }
 
 TYPED_TEST(QuantileUnsupportedTypesTest, TestMultipleElements)
 {
   fixed_width_column_wrapper<TypeParam> input({0, 1, 2});
 
-  EXPECT_THROW(cudf::experimental::quantile(input, {0}), cudf::logic_error);
+  EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }
 
 }  // anonymous namespace

@@ -73,7 +73,7 @@ Generally, the value would need to be accessed from a function that is aware of 
 ```c++
 //unique_ptr<scalar> s = make_numeric_scalar(...);
 
-using ScalarType = cudf::experimental::scalar_type_t<T>;
+using ScalarType = cudf::scalar_type_t<T>;
 // ScalarType is now numeric_scalar<T>
 auto s1 = static_cast<ScalarType *>(s.get());
 ```
@@ -828,8 +828,8 @@ cdef extern from "cudf/legacy/copying.hpp" namespace "cudf" nogil:
 |        `is_nullable()`       |               `*view::nullable()`               |                                                                              |
 |         `has_nulls()`        |               `*view::has_nulls()`              |                                                                              |
 |        `cudf::copy()`        | `column::column(const&)` `table::table(const&)` |                               Copy constructors                              |
-|    `cudf::allocate_like()`   |      `cudf::experimental::allocate_like()`      |                      This applies to both columns/tables                     |
-|     `cudf::empty_like()`     |        `cudf::experimental::empty_like()`       |                      This applies to both columns/tables                     |
+|    `cudf::allocate_like()`   |      `cudf::allocate_like()`      |                      This applies to both columns/tables                     |
+|     `cudf::empty_like()`     |        `cudf::empty_like()`       |                      This applies to both columns/tables                     |
 
 ## Strings Support<a name="string_support"></a>
 

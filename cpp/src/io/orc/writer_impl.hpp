@@ -39,7 +39,6 @@
 #include "chunked_state.hpp"
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace orc {
@@ -344,5 +343,4 @@ class writer::impl {
 }  // namespace orc
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

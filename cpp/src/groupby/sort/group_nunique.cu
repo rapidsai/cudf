@@ -24,7 +24,6 @@
 #include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 namespace {
@@ -130,5 +129,4 @@ std::unique_ptr<column> group_nunique(column_view const& values,
 
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

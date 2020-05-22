@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
@@ -24,7 +23,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <tuple>
@@ -44,8 +42,8 @@ void run_rank_test(table_view input,
   int i = 0;
   for (auto &&input_column : input) {
     // Rank
-    auto got_rank_column = cudf::experimental::rank(
-      input_column, method, column_order, null_handling, null_precedence, percentage);
+    auto got_rank_column =
+      cudf::rank(input_column, method, column_order, null_handling, null_precedence, percentage);
     if (debug) {
       cudf::test::print(got_rank_column->view());
       std::cout << "\n";

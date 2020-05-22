@@ -27,7 +27,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 template <typename SortMapIterator>
 std::unique_ptr<table> quantiles(table_view const& input,
@@ -75,5 +74,4 @@ std::unique_ptr<table> quantiles(table_view const& input,
   }
 }
 
-}  // namespace experimental
 }  // namespace cudf
