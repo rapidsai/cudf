@@ -187,7 +187,7 @@ class Index(Frame, Serializable):
 
         Parameters
         ----------
-            indices: An array-like that maps to values contained in this Index.
+        indices: An array-like that maps to values contained in this Index.
         """
         return self[indices]
 
