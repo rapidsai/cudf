@@ -22,7 +22,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include "./utilities.h"
 
-#include <gmock/gmock.h>
 #include <thrust/execution_policy.h>
 #include <thrust/transform.h>
 #include <vector>

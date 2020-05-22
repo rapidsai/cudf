@@ -33,7 +33,6 @@
 #include <cudf/io/readers.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace json {
@@ -69,7 +68,6 @@ class reader::impl {
 
   table_metadata metadata;
   std::vector<data_type> dtypes_;
-  // std::vector<gdf_dtype_extra_info> dtypes_extra_info_;
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;
@@ -176,5 +174,4 @@ class reader::impl {
 }  // namespace json
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

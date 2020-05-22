@@ -36,7 +36,6 @@
 #include <cmath>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /*
  * unique_copy copies elements from the range [first, last) to a range beginning
@@ -126,7 +125,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                   comp,
                                   keep);
 
-    return cudf::experimental::detail::slice(
+    return cudf::detail::slice(
       column_view(unique_indices),
       0,
       thrust::distance(unique_indices.begin<cudf::size_type>(), result_end));
@@ -140,7 +139,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                   comp,
                                   keep);
 
-    return cudf::experimental::detail::slice(
+    return cudf::detail::slice(
       column_view(unique_indices),
       0,
       thrust::distance(unique_indices.begin<cudf::size_type>(), result_end));
@@ -182,15 +181,15 @@ cudf::size_type unique_count(table_view const& keys,
   }
 }
 
-std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
-                                                     std::vector<size_type> const& keys,
-                                                     duplicate_keep_option keep,
-                                                     null_equality nulls_equal,
-                                                     rmm::mr::device_memory_resource* mr,
-                                                     cudaStream_t stream)
+std::unique_ptr<table> drop_duplicates(table_view const& input,
+                                       std::vector<size_type> const& keys,
+                                       duplicate_keep_option keep,
+                                       null_equality nulls_equal,
+                                       rmm::mr::device_memory_resource* mr,
+                                       cudaStream_t stream)
 {
   if (0 == input.num_rows() || 0 == input.num_columns() || 0 == keys.size()) {
-    return experimental::empty_like(input);
+    return empty_like(input);
   }
 
   auto keys_view = input.select(keys);
@@ -207,8 +206,8 @@ std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
   // run gather operation to establish new order
   return detail::gather(input,
                         unique_indices_view,
-                        experimental::detail::out_of_bounds_policy::NULLIFY,
-                        experimental::detail::negative_indices_policy::NOT_ALLOWED,
+                        detail::out_of_bounds_policy::NULLIFY,
+                        detail::negative_indices_policy::NOT_ALLOWED,
                         mr,
                         stream);
 }
@@ -305,7 +304,7 @@ cudf::size_type unique_count(column_view const& input,
   // be an extra if nan_handling was NAN_IS_NULL and input also had null, which
   // will increase the count by 1.
   if (input.has_nulls() and nan_handling == nan_policy::NAN_IS_NULL) {
-    has_nan = cudf::experimental::type_dispatcher(input.type(), has_nans{}, input, stream);
+    has_nan = cudf::type_dispatcher(input.type(), has_nans{}, input, stream);
   }
 
   auto count = detail::unique_count(table_view{{input}}, null_equality::EQUAL, stream);
@@ -321,11 +320,11 @@ cudf::size_type unique_count(column_view const& input,
 
 }  // namespace detail
 
-std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
-                                                     std::vector<size_type> const& keys,
-                                                     duplicate_keep_option const keep,
-                                                     null_equality nulls_equal,
-                                                     rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> drop_duplicates(table_view const& input,
+                                       std::vector<size_type> const& keys,
+                                       duplicate_keep_option const keep,
+                                       null_equality nulls_equal,
+                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::drop_duplicates(input, keys, keep, nulls_equal, mr);
@@ -339,5 +338,4 @@ cudf::size_type unique_count(column_view const& input,
   return detail::unique_count(input, null_handling, nan_handling);
 }
 
-}  // namespace experimental
 }  // namespace cudf

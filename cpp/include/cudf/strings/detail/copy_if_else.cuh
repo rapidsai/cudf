@@ -62,7 +62,7 @@ std::unique_ptr<cudf::column> copy_if_else(
 
   auto execpol = rmm::exec_policy(stream);
   // create null mask
-  auto valid_mask = cudf::experimental::detail::valid_if(
+  auto valid_mask = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {

@@ -7,7 +7,6 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <utilities/legacy/error_utils.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/count.h>
@@ -15,7 +14,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
 struct dispatch_map_type {
@@ -79,16 +77,15 @@ std::unique_ptr<table> gather(table_view const& source_table,
 {
   CUDF_EXPECTS(gather_map.has_nulls() == false, "gather_map contains nulls");
 
-  std::unique_ptr<table> destination_table =
-    cudf::experimental::type_dispatcher(gather_map.type(),
-                                        dispatch_map_type{},
-                                        source_table,
-                                        gather_map,
-                                        gather_map.size(),
-                                        bounds,
-                                        neg_indices,
-                                        mr,
-                                        stream);
+  std::unique_ptr<table> destination_table = cudf::type_dispatcher(gather_map.type(),
+                                                                   dispatch_map_type{},
+                                                                   source_table,
+                                                                   gather_map,
+                                                                   gather_map.size(),
+                                                                   bounds,
+                                                                   neg_indices,
+                                                                   mr,
+                                                                   stream);
 
   return destination_table;
 }
@@ -109,5 +106,4 @@ std::unique_ptr<table> gather(table_view const& source_table,
     mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

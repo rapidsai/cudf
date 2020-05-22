@@ -23,7 +23,7 @@
 namespace cudf {
 namespace {
 struct scalar_construction_helper {
-  template <typename T, typename ScalarType = experimental::scalar_type_t<T>>
+  template <typename T, typename ScalarType = scalar_type_t<T>>
   std::enable_if_t<is_fixed_width<T>(), std::unique_ptr<scalar>> operator()(
     cudaStream_t stream, rmm::mr::device_memory_resource* mr) const
   {
@@ -46,7 +46,7 @@ std::unique_ptr<scalar> make_numeric_scalar(data_type type,
 {
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
 
-  return experimental::type_dispatcher(type, scalar_construction_helper{}, stream, mr);
+  return type_dispatcher(type, scalar_construction_helper{}, stream, mr);
 }
 
 // Allocate storage for a single timestamp element
@@ -56,7 +56,7 @@ std::unique_ptr<scalar> make_timestamp_scalar(data_type type,
 {
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
 
-  return experimental::type_dispatcher(type, scalar_construction_helper{}, stream, mr);
+  return type_dispatcher(type, scalar_construction_helper{}, stream, mr);
 }
 
 // Allocate storage for a single fixed width element
@@ -66,7 +66,7 @@ std::unique_ptr<scalar> make_fixed_width_scalar(data_type type,
 {
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
 
-  return experimental::type_dispatcher(type, scalar_construction_helper{}, stream, mr);
+  return type_dispatcher(type, scalar_construction_helper{}, stream, mr);
 }
 
 namespace {
@@ -74,7 +74,7 @@ struct default_scalar_functor {
   template <typename T>
   std::unique_ptr<cudf::scalar> operator()()
   {
-    using ScalarType = experimental::scalar_type_t<T>;
+    using ScalarType = scalar_type_t<T>;
     return std::unique_ptr<scalar>(new ScalarType);
   }
 };
@@ -97,7 +97,7 @@ std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<list_view>()
 
 std::unique_ptr<scalar> make_default_constructed_scalar(data_type type)
 {
-  return experimental::type_dispatcher(type, default_scalar_functor{});
+  return type_dispatcher(type, default_scalar_functor{});
 }
 
 }  // namespace cudf

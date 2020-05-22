@@ -31,7 +31,6 @@
 #include <rmm/device_buffer.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace avro {
@@ -504,5 +503,4 @@ table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, c
 }  // namespace avro
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

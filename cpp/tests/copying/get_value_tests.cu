@@ -38,9 +38,9 @@ TYPED_TEST_CASE(FixedWidthGetValueTest, FixedWidthTypes);
 TYPED_TEST(FixedWidthGetValueTest, BasicGet)
 {
   fixed_width_column_wrapper<TypeParam> col{9, 8, 7, 6};
-  auto s = experimental::get_element(col, 0);
+  auto s = get_element(col, 0);
 
-  using ScalarType = experimental::scalar_type_t<TypeParam>;
+  using ScalarType = scalar_type_t<TypeParam>;
   auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
@@ -50,9 +50,9 @@ TYPED_TEST(FixedWidthGetValueTest, BasicGet)
 TYPED_TEST(FixedWidthGetValueTest, GetFromNullable)
 {
   fixed_width_column_wrapper<TypeParam> col({9, 8, 7, 6}, {0, 1, 0, 1});
-  auto s = experimental::get_element(col, 1);
+  auto s = get_element(col, 1);
 
-  using ScalarType = experimental::scalar_type_t<TypeParam>;
+  using ScalarType = scalar_type_t<TypeParam>;
   auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
@@ -62,7 +62,7 @@ TYPED_TEST(FixedWidthGetValueTest, GetFromNullable)
 TYPED_TEST(FixedWidthGetValueTest, GetNull)
 {
   fixed_width_column_wrapper<TypeParam> col({9, 8, 7, 6}, {0, 1, 0, 1});
-  auto s = experimental::get_element(col, 2);
+  auto s = get_element(col, 2);
 
   EXPECT_FALSE(s->is_valid());
 }
@@ -71,8 +71,8 @@ TYPED_TEST(FixedWidthGetValueTest, IndexOutOfBounds)
 {
   fixed_width_column_wrapper<TypeParam> col({9, 8, 7, 6}, {0, 1, 0, 1});
 
-  CUDF_EXPECT_THROW_MESSAGE(experimental::get_element(col, -1);, "Index out of bounds");
-  CUDF_EXPECT_THROW_MESSAGE(experimental::get_element(col, 4);, "Index out of bounds");
+  CUDF_EXPECT_THROW_MESSAGE(get_element(col, -1);, "Index out of bounds");
+  CUDF_EXPECT_THROW_MESSAGE(get_element(col, 4);, "Index out of bounds");
 }
 
 struct StringGetValueTest : public BaseFixture {
@@ -81,7 +81,7 @@ struct StringGetValueTest : public BaseFixture {
 TEST_F(StringGetValueTest, BasicGet)
 {
   strings_column_wrapper col{"this", "is", "a", "test"};
-  auto s = experimental::get_element(col, 3);
+  auto s = get_element(col, 3);
 
   auto typed_s = static_cast<string_scalar const*>(s.get());
 
@@ -92,7 +92,7 @@ TEST_F(StringGetValueTest, BasicGet)
 TEST_F(StringGetValueTest, GetEmpty)
 {
   strings_column_wrapper col{"this", "is", "", "test"};
-  auto s = experimental::get_element(col, 2);
+  auto s = get_element(col, 2);
 
   auto typed_s = static_cast<string_scalar const*>(s.get());
 
@@ -103,7 +103,7 @@ TEST_F(StringGetValueTest, GetEmpty)
 TEST_F(StringGetValueTest, GetFromNullable)
 {
   strings_column_wrapper col({"this", "is", "a", "test"}, {0, 1, 0, 1});
-  auto s = experimental::get_element(col, 1);
+  auto s = get_element(col, 1);
 
   auto typed_s = static_cast<string_scalar const*>(s.get());
 
@@ -114,7 +114,7 @@ TEST_F(StringGetValueTest, GetFromNullable)
 TEST_F(StringGetValueTest, GetNull)
 {
   strings_column_wrapper col({"this", "is", "a", "test"}, {0, 1, 0, 1});
-  auto s = experimental::get_element(col, 2);
+  auto s = get_element(col, 2);
 
   EXPECT_FALSE(s->is_valid());
 }
@@ -131,9 +131,9 @@ TYPED_TEST(DictionaryGetValueTest, BasicGet)
   fixed_width_column_wrapper<int32_t> indices{0, 0, 1, 2, 1, 3, 3, 2};
   auto col = make_dictionary_column(keys, indices);
 
-  auto s = experimental::get_element(*col, 2);
+  auto s = get_element(*col, 2);
 
-  using ScalarType = experimental::scalar_type_t<TypeParam>;
+  using ScalarType = scalar_type_t<TypeParam>;
   auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
@@ -146,9 +146,9 @@ TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
   fixed_width_column_wrapper<int32_t> indices({0, 0, 1, 2, 1, 3, 3, 2}, {0, 1, 0, 1, 1, 1, 0, 0});
   auto col = make_dictionary_column(keys, indices);
 
-  auto s = experimental::get_element(*col, 3);
+  auto s = get_element(*col, 3);
 
-  using ScalarType = experimental::scalar_type_t<TypeParam>;
+  using ScalarType = scalar_type_t<TypeParam>;
   auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
@@ -161,7 +161,7 @@ TYPED_TEST(DictionaryGetValueTest, GetNull)
   fixed_width_column_wrapper<int32_t> indices({0, 0, 1, 2, 1, 3, 3, 2}, {0, 1, 0, 1, 1, 1, 0, 0});
   auto col = make_dictionary_column(keys, indices);
 
-  auto s = experimental::get_element(*col, 2);
+  auto s = get_element(*col, 2);
 
   EXPECT_FALSE(s->is_valid());
 }

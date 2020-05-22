@@ -15,31 +15,31 @@ from cudf._lib.cpp.types cimport (
 ctypedef int32_t underlying_type_t_unary_op
 
 
-cdef extern from "cudf/unary.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
 
     ctypedef enum unary_op:
-        SIN "cudf::experimental::unary_op::SIN"
-        COS "cudf::experimental::unary_op::COS"
-        TAN "cudf::experimental::unary_op::TAN"
-        ARCSIN "cudf::experimental::unary_op::ARCSIN"
-        ARCCOS "cudf::experimental::unary_op::ARCCOS"
-        ARCTAN "cudf::experimental::unary_op::ARCTAN"
-        SINH "cudf::experimental::unary_op::SINH"
-        COSH "cudf::experimental::unary_op::COSH"
-        TANH "cudf::experimental::unary_op::TANH"
-        ARCSINH "cudf::experimental::unary_op::ARCSINH"
-        ARCCOSH "cudf::experimental::unary_op::ARCCOSH"
-        ARCTANH "cudf::experimental::unary_op::ARCTANH"
-        EXP "cudf::experimental::unary_op::EXP"
-        LOG "cudf::experimental::unary_op::LOG"
-        SQRT "cudf::experimental::unary_op::SQRT"
-        CBRT "cudf::experimental::unary_op::CBRT"
-        CEIL "cudf::experimental::unary_op::CEIL"
-        FLOOR "cudf::experimental::unary_op::FLOOR"
-        ABS "cudf::experimental::unary_op::ABS"
-        RINT "cudf::experimental::unary_op::RINT"
-        BIT_INVERT "cudf::experimental::unary_op::BIT_INVERT"
-        NOT "cudf::experimental::unary_op::NOT"
+        SIN "cudf::unary_op::SIN"
+        COS "cudf::unary_op::COS"
+        TAN "cudf::unary_op::TAN"
+        ARCSIN "cudf::unary_op::ARCSIN"
+        ARCCOS "cudf::unary_op::ARCCOS"
+        ARCTAN "cudf::unary_op::ARCTAN"
+        SINH "cudf::unary_op::SINH"
+        COSH "cudf::unary_op::COSH"
+        TANH "cudf::unary_op::TANH"
+        ARCSINH "cudf::unary_op::ARCSINH"
+        ARCCOSH "cudf::unary_op::ARCCOSH"
+        ARCTANH "cudf::unary_op::ARCTANH"
+        EXP "cudf::unary_op::EXP"
+        LOG "cudf::unary_op::LOG"
+        SQRT "cudf::unary_op::SQRT"
+        CBRT "cudf::unary_op::CBRT"
+        CEIL "cudf::unary_op::CEIL"
+        FLOOR "cudf::unary_op::FLOOR"
+        ABS "cudf::unary_op::ABS"
+        RINT "cudf::unary_op::RINT"
+        BIT_INVERT "cudf::unary_op::BIT_INVERT"
+        NOT "cudf::unary_op::NOT"
 
     cdef extern unique_ptr[column] unary_operation(
         column_view input,

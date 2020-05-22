@@ -8,7 +8,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
 enum class out_of_bounds_policy : int8_t { FAIL, NULLIFY, IGNORE };
@@ -51,5 +50,4 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream                 = 0);
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

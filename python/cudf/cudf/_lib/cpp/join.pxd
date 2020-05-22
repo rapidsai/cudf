@@ -9,7 +9,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 
 
-cdef extern from "cudf/join.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
     cdef unique_ptr[table] inner_join(
         const table_view left,
         const table_view right,
