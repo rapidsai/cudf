@@ -46,10 +46,10 @@ void BM_non_null_column(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto col = cudf::experimental::upper_bound(cudf::table_view({column}),
-                                               cudf::table_view({values}),
-                                               {cudf::order::ASCENDING},
-                                               {cudf::null_order::BEFORE});
+    auto col = cudf::upper_bound(cudf::table_view({column}),
+                                 cudf::table_view({values}),
+                                 {cudf::order::ASCENDING},
+                                 {cudf::null_order::BEFORE});
   }
 }
 
@@ -86,14 +86,14 @@ void BM_nullable_column(benchmark::State& state)
   cudf::test::fixed_width_column_wrapper<float> values(
     val_data_it, val_data_it + values_size, make_validity_iter());
 
-  auto sorted = cudf::experimental::sort(cudf::table_view({column}));
+  auto sorted = cudf::sort(cudf::table_view({column}));
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto col = cudf::experimental::upper_bound(sorted->view(),
-                                               cudf::table_view({values}),
-                                               {cudf::order::ASCENDING},
-                                               {cudf::null_order::BEFORE});
+    auto col = cudf::upper_bound(sorted->view(),
+                                 cudf::table_view({values}),
+                                 {cudf::order::ASCENDING},
+                                 {cudf::null_order::BEFORE});
   }
 }
 
@@ -125,7 +125,7 @@ void BM_table(benchmark::State& state)
       cols.emplace_back(temp.release());
     }
 
-    return cudf::experimental::table(std::move(cols));
+    return cudf::table(std::move(cols));
   };
 
   auto data_table   = make_table(column_size);
@@ -133,11 +133,11 @@ void BM_table(benchmark::State& state)
 
   std::vector<cudf::order> orders(num_columns, cudf::order::ASCENDING);
   std::vector<cudf::null_order> null_orders(num_columns, cudf::null_order::BEFORE);
-  auto sorted = cudf::experimental::sort(data_table);
+  auto sorted = cudf::sort(data_table);
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto col = cudf::experimental::lower_bound(sorted->view(), values_table, orders, null_orders);
+    auto col = cudf::lower_bound(sorted->view(), values_table, orders, null_orders);
   }
 }
 

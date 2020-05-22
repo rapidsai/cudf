@@ -19,7 +19,6 @@
  */
 
 namespace cudf {
-namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
@@ -120,5 +119,4 @@ const char* kernel =
 }  // namespace code
 }  // namespace jit
 }  // namespace binops
-}  // namespace experimental
 }  // namespace cudf

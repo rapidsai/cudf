@@ -33,7 +33,7 @@ TEST_F(ColumnDeviceViewTest, Sample)
   using T             = int32_t;
   cudaStream_t stream = 0;
   cudf::test::fixed_width_column_wrapper<T> input({1, 2, 3, 4, 5, 6});
-  auto output            = cudf::experimental::allocate_like(input);
+  auto output            = cudf::allocate_like(input);
   auto input_device_view = cudf::column_device_view::create(input, stream);
   auto output_device_view =
     cudf::mutable_column_device_view::create(output->mutable_view(), stream);
@@ -51,7 +51,7 @@ TEST_F(ColumnDeviceViewTest, MismatchingType)
   using T             = int32_t;
   cudaStream_t stream = 0;
   cudf::test::fixed_width_column_wrapper<T> input({1, 2, 3, 4, 5, 6});
-  auto output            = cudf::experimental::allocate_like(input);
+  auto output            = cudf::allocate_like(input);
   auto input_device_view = cudf::column_device_view::create(input, stream);
   auto output_device_view =
     cudf::mutable_column_device_view::create(output->mutable_view(), stream);

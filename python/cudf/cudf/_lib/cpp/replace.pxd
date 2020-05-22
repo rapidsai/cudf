@@ -11,7 +11,7 @@ from cudf._lib.cpp.column.column_view cimport (
     mutable_column_view
 )
 
-cdef extern from "cudf/replace.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/replace.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] replace_nulls(
         column_view source_column,
         column_view replacement_column) except +

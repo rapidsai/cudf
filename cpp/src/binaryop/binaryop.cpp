@@ -42,7 +42,6 @@
 #include <types.hpp.jit>
 
 namespace cudf {
-namespace experimental {
 
 namespace binops {
 namespace detail {
@@ -68,7 +67,7 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 
 namespace jit {
 
-const std::string hash = "prog_binop.experimental";
+const std::string hash = "prog_binop";
 
 const std::vector<std::string> header_names{
   "operation.h", "traits.h", cudf_types_hpp, cudf_utilities_bit_hpp, cudf_wrappers_timestamps_hpp};
@@ -415,5 +414,4 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   return detail::binary_operation(lhs, rhs, ptx, output_type, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf
