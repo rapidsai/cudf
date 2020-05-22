@@ -51,7 +51,7 @@ cdef sink_info make_sink_info(src, unique_ptr[data_sink] * data) except*:
     elif isinstance(src, io.IOBase):
         data.reset(new iobase_data_sink(src))
         return sink_info(data.get())
-    elif isinstance(src, (int, float, complex, basestring, os.PathLike)):
+    elif isinstance(src, (basestring, os.PathLike)):
         src = os.path.expanduser(str(src))
         return sink_info(<string> str(src).encode())
     else:
