@@ -15,7 +15,6 @@
  */
 
 namespace cudf {
-namespace experimental {
 namespace rolling {
 namespace jit {
 namespace code {
@@ -109,5 +108,4 @@ void gpu_rolling_new(cudf::size_type nrows,
 }  // namespace code
 }  // namespace jit
 }  // namespace rolling
-}  // namespace experimental
 }  // namespace cudf

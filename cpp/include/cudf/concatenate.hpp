@@ -87,7 +87,7 @@ std::unique_ptr<column> concatenate(
  * @return Unique pointer to a single table having all the rows from the
  * elements of `tables_to_concat` respectively in the same order.
  */
-std::unique_ptr<experimental::table> concatenate(
+std::unique_ptr<table> concatenate(
   std::vector<table_view> const& tables_to_concat,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 

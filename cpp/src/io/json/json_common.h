@@ -21,7 +21,6 @@
 class SerialTrieNode;
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace json {
 struct ColumnInfo {
@@ -35,5 +34,4 @@ struct ColumnInfo {
 
 }  // namespace json
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

@@ -52,7 +52,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
   cudf::size_type inputRows1 = static_cast<cudf::column_view const&>(leftColWrap1).size();
 
   auto sequence0 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
       return 0;
     else
       return row;
@@ -71,9 +71,9 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
   std::vector<cudf::order> column_order{cudf::order::ASCENDING};
   std::vector<cudf::null_order> null_precedence{};
 
-  std::unique_ptr<cudf::experimental::table> p_outputTable;
-  EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(
-                    {left_view, right_view}, key_cols, column_order, null_precedence));
+  std::unique_ptr<cudf::table> p_outputTable;
+  EXPECT_NO_THROW(p_outputTable =
+                    cudf::merge({left_view, right_view}, key_cols, column_order, null_precedence));
 
   cudf::column_view const& a_left_tbl_cview{static_cast<cudf::column_view const&>(leftColWrap1)};
   cudf::column_view const& a_right_tbl_cview{static_cast<cudf::column_view const&>(rightColWrap1)};
@@ -97,7 +97,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
                                             "hj"});
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
-    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
       return 0;
     else
       return row / 2;
@@ -127,7 +127,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
   EXPECT_EQ(inputRows, static_cast<cudf::column_view const&>(leftColWrap3).size());
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
       return 1;
     else
       return 2 * row;
@@ -142,7 +142,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
   EXPECT_EQ(inputRows, static_cast<cudf::column_view const&>(rightColWrap1).size());
 
   auto sequence_r = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
       return 0;
     else
       return 2 * row + 1;
@@ -159,9 +159,9 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
   std::vector<cudf::order> column_order{cudf::order::ASCENDING, cudf::order::DESCENDING};
   std::vector<cudf::null_order> null_precedence{};
 
-  std::unique_ptr<cudf::experimental::table> p_outputTable;
-  EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(
-                    {left_view, right_view}, key_cols, column_order, null_precedence));
+  std::unique_ptr<cudf::table> p_outputTable;
+  EXPECT_NO_THROW(p_outputTable =
+                    cudf::merge({left_view, right_view}, key_cols, column_order, null_precedence));
 
   cudf::column_view const& a_left_tbl_cview{static_cast<cudf::column_view const&>(leftColWrap1)};
   cudf::column_view const& a_right_tbl_cview{static_cast<cudf::column_view const&>(rightColWrap1)};
@@ -184,7 +184,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
                                             "hj"});
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
-    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
+    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8) {
       bool ret = (row % 2 == 0);
       return static_cast<TypeParam>(ret);
     } else
@@ -231,7 +231,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(leftColWrap1).size();
 
   auto sequence0 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
       return 0;
     else
       return row;
@@ -251,9 +251,9 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
   std::vector<cudf::order> column_order{cudf::order::ASCENDING};
   std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER};
 
-  std::unique_ptr<cudf::experimental::table> p_outputTable;
-  EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(
-                    {left_view, right_view}, key_cols, column_order, null_precedence));
+  std::unique_ptr<cudf::table> p_outputTable;
+  EXPECT_NO_THROW(p_outputTable =
+                    cudf::merge({left_view, right_view}, key_cols, column_order, null_precedence));
 
   cudf::column_view const& a_left_tbl_cview{static_cast<cudf::column_view const&>(leftColWrap1)};
   cudf::column_view const& a_right_tbl_cview{static_cast<cudf::column_view const&>(rightColWrap1)};
@@ -280,7 +280,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
                                             "hj"},
                                            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0});
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
-    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
       return 0;
     else
       return row / 2;
@@ -309,7 +309,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
   EXPECT_EQ(inputRows, static_cast<cudf::column_view const&>(leftColWrap3).size());
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
       return 1;
     else
       return 2 * row;
@@ -325,7 +325,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
   EXPECT_EQ(inputRows, static_cast<cudf::column_view const&>(rightColWrap1).size());
 
   auto sequence_r = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
       return 0;
     else
       return 2 * row + 1;
@@ -343,9 +343,9 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
   std::vector<cudf::order> column_order{cudf::order::ASCENDING, cudf::order::DESCENDING};
   std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER, cudf::null_order::BEFORE};
 
-  std::unique_ptr<cudf::experimental::table> p_outputTable;
-  EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(
-                    {left_view, right_view}, key_cols, column_order, null_precedence));
+  std::unique_ptr<cudf::table> p_outputTable;
+  EXPECT_NO_THROW(p_outputTable =
+                    cudf::merge({left_view, right_view}, key_cols, column_order, null_precedence));
 
   cudf::column_view const& a_left_tbl_cview{static_cast<cudf::column_view const&>(leftColWrap1)};
   cudf::column_view const& a_right_tbl_cview{static_cast<cudf::column_view const&>(rightColWrap1)};
@@ -369,7 +369,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
                                            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0});
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
-    if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
+    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8) {
       bool ret = (row % 2 == 0);
       return static_cast<TypeParam>(ret);
     } else

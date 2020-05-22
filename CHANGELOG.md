@@ -193,6 +193,8 @@
 - PR #5214 Move docs build script into repository
 - PR #5219 Add per context cache for JIT kernels
 - PR #5250 Improve `to_csv()` support for writing to buffers
+- PR #5233 Remove experimental namespace used during libcudf++ refactor
+- PR #5251 Fix more mispellings in cpp comments and strings
 
 ## Bug Fixes
 
@@ -318,6 +320,7 @@
 - PR #5212 Fix memory leak in `dlpack.pyx:from_dlpack()`
 - PR #5224 Add new headers from 5198 to libcudf/meta.yaml
 - PR #5228 Fix datetime64 scalar dtype handling for unsupported time units
+- PR #5256 ORC reader: fix loading individual timestamp columns
 
 
 # cuDF 0.13.0 (31 Mar 2020)

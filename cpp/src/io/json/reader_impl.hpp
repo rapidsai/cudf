@@ -33,11 +33,10 @@
 #include <cudf/io/readers.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace json {
-using namespace cudf::experimental::io::json;
+using namespace cudf::io::json;
 using namespace cudf::io;
 
 /**
@@ -175,5 +174,4 @@ class reader::impl {
 }  // namespace json
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

@@ -20,7 +20,6 @@
 #include <cudf/null_mask.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace binops {
 namespace detail {
 /**
@@ -124,5 +123,4 @@ std::unique_ptr<column> binary_operation(
 
 }  // namespace compiled
 }  // namespace binops
-}  // namespace experimental
 }  // namespace cudf

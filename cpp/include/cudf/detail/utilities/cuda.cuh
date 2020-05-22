@@ -27,7 +27,6 @@
 #include <type_traits>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Size of a warp in a CUDA kernel.
@@ -175,5 +174,4 @@ void device_single_thread(Functor functor, cudaStream_t stream = 0)
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

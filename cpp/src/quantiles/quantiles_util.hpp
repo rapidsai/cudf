@@ -20,7 +20,6 @@
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 template <typename Result, typename T>
 CUDA_HOST_DEVICE_CALLABLE Result get_array_value(T const* devarr, size_type location)
@@ -209,5 +208,4 @@ CUDA_HOST_DEVICE_CALLABLE bool select_quantile_validity(Iterator begin,
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf
