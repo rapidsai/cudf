@@ -2,6 +2,8 @@
 
 ## New Features
 
+ - PR #5262 Example for using Python cudf dataframes with CUDA kernels
+
 ## Improvements
 
 ## Bug Fixes
