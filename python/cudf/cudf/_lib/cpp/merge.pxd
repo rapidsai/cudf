@@ -8,7 +8,7 @@ from cudf._lib.cpp.table.table_view cimport table_view
 cimport cudf._lib.cpp.types as libcudf_types
 
 
-cdef extern from "cudf/merge.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/merge.hpp" namespace "cudf" nogil:
     cdef unique_ptr[table] merge (
         vector[table_view] tables_to_merge,
         vector[libcudf_types.size_type] key_cols,

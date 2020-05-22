@@ -17,7 +17,6 @@
 #pragma once
 
 namespace cudf {
-namespace experimental {
 namespace io {
 /**
  * @brief Convert a string to a cuDF data_type
@@ -29,5 +28,4 @@ namespace io {
 data_type convert_string_to_dtype(const std::string &dtype);
 
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

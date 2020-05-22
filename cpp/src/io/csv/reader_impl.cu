@@ -39,7 +39,6 @@ using std::string;
 using std::vector;
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace csv {
@@ -810,5 +809,4 @@ table_with_metadata reader::read_rows(size_type num_skip_header,
 }  // namespace csv
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

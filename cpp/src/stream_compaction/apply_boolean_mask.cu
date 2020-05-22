@@ -53,19 +53,18 @@ struct boolean_mask_filter {
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /*
  * Filters a table_view using a column_view of boolean values as a mask.
  *
  * calls copy_if() with the `boolean_mask_filter` functor.
  */
-std::unique_ptr<experimental::table> apply_boolean_mask(table_view const& input,
-                                                        column_view const& boolean_mask,
-                                                        rmm::mr::device_memory_resource* mr,
-                                                        cudaStream_t stream)
+std::unique_ptr<table> apply_boolean_mask(table_view const& input,
+                                          column_view const& boolean_mask,
+                                          rmm::mr::device_memory_resource* mr,
+                                          cudaStream_t stream)
 {
-  if (boolean_mask.size() == 0) { return experimental::empty_like(input); }
+  if (boolean_mask.size() == 0) { return empty_like(input); }
 
   CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be Boolean type");
   // zero-size inputs are OK, but otherwise input size must match mask size
@@ -86,12 +85,11 @@ std::unique_ptr<experimental::table> apply_boolean_mask(table_view const& input,
 /*
  * Filters a table_view using a column_view of boolean values as a mask.
  */
-std::unique_ptr<experimental::table> apply_boolean_mask(table_view const& input,
-                                                        column_view const& boolean_mask,
-                                                        rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> apply_boolean_mask(table_view const& input,
+                                          column_view const& boolean_mask,
+                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::apply_boolean_mask(input, boolean_mask, mr);
 }
-}  // namespace experimental
 }  // namespace cudf

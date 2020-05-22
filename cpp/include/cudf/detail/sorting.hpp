@@ -22,11 +22,10 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
 /**
- * @copydoc cudf::experimental::sorted_order
+ * @copydoc cudf::sorted_order
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
@@ -38,7 +37,7 @@ std::unique_ptr<column> sorted_order(
   cudaStream_t stream                            = 0);
 
 /**
- * @copydoc cudf::experimental::stable_sorted_order
+ * @copydoc cudf::stable_sorted_order
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
@@ -50,7 +49,7 @@ std::unique_ptr<column> stable_sorted_order(
   cudaStream_t stream                            = 0);
 
 /**
- * @copydoc cudf::experimental::sort_by_key
+ * @copydoc cudf::sort_by_key
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
@@ -63,5 +62,4 @@ std::unique_ptr<table> sort_by_key(
   cudaStream_t stream                            = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

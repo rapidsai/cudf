@@ -24,7 +24,6 @@
 #include <cudf/table/table_device_view.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Maps an `aggregation::Kind` value to it's corresponding binary
@@ -428,5 +427,4 @@ void initialize_with_identity(mutable_table_view& table,
                               cudaStream_t stream = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

@@ -41,14 +41,14 @@
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 
-namespace cudf_io = cudf::experimental::io;
+namespace cudf_io = cudf::io;
 
 template <typename T>
 using column_wrapper = typename std::conditional<std::is_same<T, cudf::string_view>::value,
                                                  cudf::test::strings_column_wrapper,
                                                  cudf::test::fixed_width_column_wrapper<T>>::type;
 using column         = cudf::column;
-using table          = cudf::experimental::table;
+using table          = cudf::table;
 using table_view     = cudf::table_view;
 
 // Global environment for temporary files
@@ -62,7 +62,7 @@ struct CsvReaderTest : public cudf::test::BaseFixture {
 // Typed test fixture for timestamp type tests
 template <typename T>
 struct CsvReaderNumericTypeTest : public CsvReaderTest {
-  auto type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 // Declare typed test cases

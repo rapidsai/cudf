@@ -15,7 +15,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 
 
-cdef extern from "cudf/transform.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     cdef pair[unique_ptr[device_buffer], size_type] bools_to_mask (
         column_view input
     ) except +

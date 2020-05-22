@@ -79,7 +79,7 @@ void iterator_bench_cub(cudf::column_view &col, rmm::device_vector<T> &result)
   auto d_col    = cudf::column_device_view::create(col);
   int num_items = col.size();
   if (has_null) {
-    auto begin = cudf::experimental::detail::make_null_replacement_iterator(*d_col, init);
+    auto begin = cudf::detail::make_null_replacement_iterator(*d_col, init);
     reduce_by_cub(result.begin(), begin, num_items, init);
   } else {
     auto begin = d_col->begin<T>();
@@ -107,7 +107,7 @@ void iterator_bench_thrust(cudf::column_view &col, rmm::device_vector<T> &result
   T init{0};
   auto d_col = cudf::column_device_view::create(col);
   if (has_null) {
-    auto d_in  = cudf::experimental::detail::make_null_replacement_iterator(*d_col, init);
+    auto d_in  = cudf::detail::make_null_replacement_iterator(*d_col, init);
     auto d_end = d_in + col.size();
     thrust::reduce(thrust::device, d_in, d_end, init, cudf::DeviceSum{});
   } else {
