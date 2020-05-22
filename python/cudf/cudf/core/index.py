@@ -207,7 +207,7 @@ class Index(Frame, Serializable):
             would sort the index if used as an indexer.
         """
         indices = self._values.argsort(ascending=ascending)
-        return cupy.asarray(indices.data_array_view)
+        return cupy.asarray(indices)
 
     @property
     def values(self):
