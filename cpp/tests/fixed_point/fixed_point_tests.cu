@@ -461,7 +461,7 @@ TEST_F(FixedPointTest, Decimal32ColumnLikeAssignment)
   using Rep = int32_t;
   using FP = ColumnLike<Rep>::FP;
 
-  ColumnLike<Rep> input{std::vector<Rep>{100, 200, 300}, scale_type{-2}};
+  ColumnLike<Rep> input{std::vector<Rep>{100, 125, 150}, scale_type{-2}};
   ColumnLike<Rep> output{std::vector<Rep>{0, 0, 0}, scale_type{-4}};
 
   std::transform(input.cbegin(), input.cend(), output.begin(),
@@ -469,7 +469,7 @@ TEST_F(FixedPointTest, Decimal32ColumnLikeAssignment)
       return fp;
     });
 
-  std::vector<double> expected{1., 2., 3.};
+  std::vector<double> expected{1., 1.25, 1.5};
   auto result_it = thrust::make_transform_iterator(output.cbegin(),
     [](FP fp) {
       return double{fp};
@@ -482,7 +482,7 @@ TEST_F(FixedPointTest, Decimal32ColumnLikeAddition)
   using Rep = int32_t;
   using FP = ColumnLike<Rep>::FP;
 
-  ColumnLike<Rep> input1{std::vector<Rep>{100, 200, 300}, scale_type{-2}};
+  ColumnLike<Rep> input1{std::vector<Rep>{100, 125, 150}, scale_type{-2}};
   ColumnLike<Rep> input2{std::vector<Rep>{4, 5, 6}, scale_type{0}};
   ColumnLike<Rep> output{std::vector<Rep>{0, 0, 0}, scale_type{-4}};
 
@@ -492,7 +492,7 @@ TEST_F(FixedPointTest, Decimal32ColumnLikeAddition)
       return fp1 + fp2;
     });
 
-  std::vector<double> expected{5., 7., 9.};
+  std::vector<double> expected{5., 6., 8.}; // fractional part rounded off from addition
   auto result_it = thrust::make_transform_iterator(output.cbegin(),
     [](FP fp) {
       return double{fp};
