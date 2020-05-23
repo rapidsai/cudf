@@ -44,7 +44,7 @@ using int64_wrapper        = wrapper<int64_t>;
 using timestamp_ms_wrapper = wrapper<cudf::timestamp_ms>;
 using bool_wrapper         = wrapper<bool>;
 
-namespace cudf_io = cudf::experimental::io;
+namespace cudf_io = cudf::io;
 
 cudf::test::TempDirTestEnvironment* const temp_env =
   static_cast<cudf::test::TempDirTestEnvironment*>(

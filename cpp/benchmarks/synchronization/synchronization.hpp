@@ -50,7 +50,7 @@
     }
 
     // Register the function as a benchmark. You will need to set the `UseManualTime()`
-    // flag in order to use the timer embeded in this class.
+    // flag in order to use the timer embedded in this class.
     BENCHMARK(sample_cuda_benchmark)->UseManualTime();
 
 
@@ -61,8 +61,9 @@
 
 // Google Benchmark library
 #include <benchmark/benchmark.h>
+#include <cudf/types.hpp>
 
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <driver_types.h>
 
 class cuda_event_timer {
  public:
@@ -82,7 +83,7 @@ class cuda_event_timer {
   // the timer so we disable the default c'tor.
   cuda_event_timer() = delete;
 
-  // The d'tor stops the timer and performs a synchroniazation.
+  // The d'tor stops the timer and performs a synchronization.
   // Time of the benchmark::State object provided to the c'tor
   // will be set to the value given by `cudaEventElapsedTime`.
   ~cuda_event_timer();

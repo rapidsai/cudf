@@ -26,11 +26,9 @@
 #include <tests/utilities/timestamp_utilities.cuh>
 #include <tests/utilities/type_lists.hpp>
 
-#include <gmock/gmock.h>
-
 template <typename T>
 struct NonTimestampTest : public cudf::test::BaseFixture {
-  cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 using NonTimestampTypes = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::StringTypes>;
@@ -44,7 +42,7 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
   using namespace cudf::datetime;
   using namespace simt::std::chrono;
 
-  cudf::data_type dtype{cudf::experimental::type_to_id<T>()};
+  cudf::data_type dtype{cudf::type_to_id<T>()};
   cudf::column col{dtype, 0, rmm::device_buffer{0}};
 
   EXPECT_THROW(extract_year(col), cudf::logic_error);
@@ -130,7 +128,7 @@ template <typename T>
 struct TypedDatetimeOpsTest : public cudf::test::BaseFixture {
   cudaStream_t stream() { return cudaStream_t(0); }
   cudf::size_type size() { return cudf::size_type(10); }
-  cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 TYPED_TEST_CASE(TypedDatetimeOpsTest, cudf::test::TimestampTypes);
@@ -142,8 +140,8 @@ TYPED_TEST(TypedDatetimeOpsTest, TestEmptyColumns)
   using namespace cudf::datetime;
   using namespace simt::std::chrono;
 
-  auto int16s_dtype     = cudf::data_type{cudf::experimental::type_to_id<int16_t>()};
-  auto timestamps_dtype = cudf::data_type{cudf::experimental::type_to_id<T>()};
+  auto int16s_dtype     = cudf::data_type{cudf::type_to_id<int16_t>()};
+  auto timestamps_dtype = cudf::data_type{cudf::type_to_id<T>()};
 
   cudf::column int16s{int16s_dtype, 0, rmm::device_buffer{0}};
   cudf::column timestamps{timestamps_dtype, 0, rmm::device_buffer{0}};

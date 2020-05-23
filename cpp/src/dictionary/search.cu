@@ -48,7 +48,7 @@ struct find_index_fn {
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
     auto keys_view = column_device_view::create(input.keys(), stream);
-    auto find_key  = static_cast<experimental::scalar_type_t<Element> const&>(key).value(stream);
+    auto find_key  = static_cast<scalar_type_t<Element> const&>(key).value(stream);
     auto iter =
       thrust::equal_range(thrust::device,  // segfaults: rmm::exec_policy(stream)->on(stream) and
                                            // thrust::cuda::par.on(stream)
@@ -84,8 +84,7 @@ std::unique_ptr<numeric_scalar<int32_t>> get_index(dictionary_column_view const&
                                                    rmm::mr::device_memory_resource* mr,
                                                    cudaStream_t stream)
 {
-  return experimental::type_dispatcher(
-    dictionary.keys().type(), find_index_fn(), dictionary, key, mr, stream);
+  return type_dispatcher(dictionary.keys().type(), find_index_fn(), dictionary, key, mr, stream);
 }
 
 }  // namespace detail

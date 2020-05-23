@@ -23,8 +23,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 
-#include <gmock/gmock.h>
-
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
 
@@ -466,7 +464,7 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous)
                                        760,
                                        760,
                                        num_elements};
-  std::vector<cudf::column_view> views    = cudf::experimental::slice(original, indices);
+  std::vector<cudf::column_view> views    = cudf::slice(original, indices);
   rmm::device_buffer concatenated_bitmask = cudf::concatenate_masks(views);
   cleanEndWord(concatenated_bitmask, 0, num_elements);
   cudf::test::expect_equal_buffers(

@@ -28,7 +28,6 @@
 #include <cudf/utilities/traits.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 template <typename MapIterator>
 auto scatter_to_gather(MapIterator scatter_map_begin,
@@ -260,5 +259,4 @@ std::unique_ptr<table> scatter(
   return std::make_unique<table>(std::move(result));
 }
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf
