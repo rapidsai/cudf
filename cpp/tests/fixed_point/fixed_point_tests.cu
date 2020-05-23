@@ -27,6 +27,7 @@
 
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/transform.h>
 
 using namespace numeric;
 
@@ -416,7 +417,8 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 template <typename Rep>
 class ColumnLike {
  public:
-  using fp = fixed_point<Rep, Radix::BASE_10>;
+  static constexpr auto Rad = Radix::BASE_10;
+  using FP = fixed_point<Rep, Rad>;
 
   ColumnLike(std::vector<Rep>&& data, scale_type scale):
     _data{std::move(data)}, _scale{scale} {}
@@ -424,7 +426,7 @@ class ColumnLike {
   auto cbegin() const {
     return thrust::make_transform_iterator(_data.cbegin(),
       [scale=_scale](Rep rep_to_fp) {
-        return fp{scaled_integer<Rep>{rep_to_fp, scale}};
+        return FP{scaled_integer<Rep>{rep_to_fp, scale}};
       });
   }
 
@@ -436,11 +438,11 @@ class ColumnLike {
     // TODO this probably needs to be a composite of transform_iterator and
     // transform_output_iterator to allow both read and write
     return thrust::make_transform_output_iterator(_data.begin(),
-      [scale=_scale](fp fp_to_rep) {
+      [scale=_scale](FP fp_to_rep) {
         // TODO maybe fixed_point can expose this conversion somehow?
         // Also, this is the shift factor that Mark wants us to pre-compute
         auto impl = scaled_integer<Rep>{fp_to_rep};
-        auto rescaled = detail::shift<Rep, Radix::BASE_10, Rep>(impl.value, scale_type{scale - impl.scale});
+        auto rescaled = detail::shift<Rep, Rad, Rep>(impl.value, scale_type{scale - impl.scale});
         return Rep{rescaled};
       });
   }
@@ -454,27 +456,49 @@ class ColumnLike {
   std::vector<Rep> _data;
 };
 
-TEST_F(FixedPointTest, Decimal32ColumnLike)
+TEST_F(FixedPointTest, Decimal32ColumnLikeAssignment)
 {
   using Rep = int32_t;
+  using FP = ColumnLike<Rep>::FP;
 
   ColumnLike<Rep> input{std::vector<Rep>{100, 200, 300}, scale_type{-2}};
   ColumnLike<Rep> output{std::vector<Rep>{0, 0, 0}, scale_type{-4}};
 
   std::transform(input.cbegin(), input.cend(), output.begin(),
-    [](fixed_point<Rep, Radix::BASE_10> fp) {
+    [](FP fp) {
       return fp;
     });
 
   std::cout << "Input:\n";
   std::for_each(input.cbegin(), input.cend(),
-    [](fixed_point<Rep, Radix::BASE_10> fp) {
+    [](FP fp) {
       std::cout << fp << "\n";
     });
 
   std::cout << "\nOutput:\n";
   std::for_each(output.cbegin(), output.cend(),
-    [](fixed_point<Rep, Radix::BASE_10> fp) {
+    [](FP fp) {
+      std::cout << fp << "\n";
+    });
+}
+
+TEST_F(FixedPointTest, Decimal32ColumnLikeAddition)
+{
+  using Rep = int32_t;
+  using FP = ColumnLike<Rep>::FP;
+
+  ColumnLike<Rep> input1{std::vector<Rep>{100, 200, 300}, scale_type{-2}};
+  ColumnLike<Rep> input2{std::vector<Rep>{4, 5, 6}, scale_type{0}};
+  ColumnLike<Rep> output{std::vector<Rep>{0, 0, 0}, scale_type{-4}};
+
+  thrust::transform(input1.cbegin(), input1.cend(), input2.cbegin(), output.begin(),
+    [](FP fp1, FP fp2) {
+      return fp1 + fp2;
+    });
+
+  std::cout << "\nOutput:\n";
+  std::for_each(output.cbegin(), output.cend(),
+    [](FP fp) {
       std::cout << fp << "\n";
     });
 }
