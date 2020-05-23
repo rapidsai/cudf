@@ -38,7 +38,7 @@ struct interleave_columns_functor {
   operator()(table_view const& strings_columns,
              bool create_mask,
              rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream)
+             cudaStream_t stream = 0)
   {
     auto num_columns = strings_columns.num_columns();
     if (num_columns == 1)  // Single strings column returns a copy
@@ -105,8 +105,7 @@ struct interleave_columns_functor {
 
         size_type offset = d_results_offsets[idx];
         char* d_buffer   = d_results_chars + offset;
-        d_buffer =
-          strings::detail::copy_string(d_buffer, d_table.column(cidx).element<string_view>(ridx));
+        strings::detail::copy_string(d_buffer, d_table.column(cidx).element<string_view>(ridx));
       });
 
     return make_strings_column(num_strings,
@@ -123,7 +122,7 @@ struct interleave_columns_functor {
     table_view const& input,
     bool create_mask,
     rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream)
+    cudaStream_t stream = 0)
   {
     auto arch_column = input.column(0);
     auto output_size = input.num_columns() * input.num_rows();
@@ -189,8 +188,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
     output_needs_mask |= col.nullable();
   }
 
-  return type_dispatcher(
-    dtype, detail::interleave_columns_functor{}, input, output_needs_mask, mr, nullptr);
+  return type_dispatcher(dtype, detail::interleave_columns_functor{}, input, output_needs_mask, mr);
 }
 
 }  // namespace cudf
