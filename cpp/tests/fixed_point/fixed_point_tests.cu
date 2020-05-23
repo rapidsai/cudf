@@ -25,6 +25,9 @@
 #include <type_traits>
 #include <vector>
 
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
+
 using namespace numeric;
 
 struct FixedPointTest : public cudf::test::BaseFixture {
@@ -408,6 +411,72 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   thrust::host_vector<int32_t> vec3_host = vec3;
 
   EXPECT_EQ(vec2, vec3);
+}
+
+template <typename Rep>
+class ColumnLike {
+ public:
+  using fp = fixed_point<Rep, Radix::BASE_10>;
+
+  ColumnLike(std::vector<Rep>&& data, scale_type scale):
+    _data{std::move(data)}, _scale{scale} {}
+
+  auto cbegin() const {
+    return thrust::make_transform_iterator(_data.cbegin(),
+      [scale=_scale](Rep rep_to_fp) {
+        return fp{scaled_integer<Rep>{rep_to_fp, scale}};
+      });
+  }
+
+  auto cend() const {
+    return cbegin() + _data.size();
+  }
+
+  auto begin() {
+    // TODO this probably needs to be a composite of transform_iterator and
+    // transform_output_iterator to allow both read and write
+    return thrust::make_transform_output_iterator(_data.begin(),
+      [scale=_scale](fp fp_to_rep) {
+        // TODO maybe fixed_point can expose this conversion somehow?
+        // Also, this is the shift factor that Mark wants us to pre-compute
+        auto impl = scaled_integer<Rep>{fp_to_rep};
+        auto rescaled = detail::shift<Rep, Radix::BASE_10, Rep>(impl.value, scale_type{scale - impl.scale});
+        return Rep{rescaled};
+      });
+  }
+
+  auto end() {
+    return begin() + _data.size();
+  }
+
+ private:
+  scale_type _scale;
+  std::vector<Rep> _data;
+};
+
+TEST_F(FixedPointTest, Decimal32ColumnLike)
+{
+  using Rep = int32_t;
+
+  ColumnLike<Rep> input{std::vector<Rep>{100, 200, 300}, scale_type{-2}};
+  ColumnLike<Rep> output{std::vector<Rep>{0, 0, 0}, scale_type{-4}};
+
+  std::transform(input.cbegin(), input.cend(), output.begin(),
+    [](fixed_point<Rep, Radix::BASE_10> fp) {
+      return fp;
+    });
+
+  std::cout << "Input:\n";
+  std::for_each(input.cbegin(), input.cend(),
+    [](fixed_point<Rep, Radix::BASE_10> fp) {
+      std::cout << fp << "\n";
+    });
+
+  std::cout << "\nOutput:\n";
+  std::for_each(output.cbegin(), output.cend(),
+    [](fixed_point<Rep, Radix::BASE_10> fp) {
+      std::cout << fp << "\n";
+    });
 }
 
 CUDF_TEST_PROGRAM_MAIN()

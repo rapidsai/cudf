@@ -275,6 +275,11 @@ class fixed_point {
     return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
   }
 
+  operator scaled_integer<Rep>() const
+  {
+    return scaled_integer<Rep>{_value, _scale};
+  }
+
   /**
    * @brief operator +=
    *
