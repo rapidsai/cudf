@@ -469,17 +469,12 @@ TEST_F(FixedPointTest, Decimal32ColumnLikeAssignment)
       return fp;
     });
 
-  std::cout << "Input:\n";
-  std::for_each(input.cbegin(), input.cend(),
+  std::vector<double> expected{1., 2., 3.};
+  auto result_it = thrust::make_transform_iterator(output.cbegin(),
     [](FP fp) {
-      std::cout << fp << "\n";
+      return double{fp};
     });
-
-  std::cout << "\nOutput:\n";
-  std::for_each(output.cbegin(), output.cend(),
-    [](FP fp) {
-      std::cout << fp << "\n";
-    });
+  EXPECT_TRUE(std::equal(expected.cbegin(), expected.cend(), result_it));
 }
 
 TEST_F(FixedPointTest, Decimal32ColumnLikeAddition)
@@ -491,16 +486,18 @@ TEST_F(FixedPointTest, Decimal32ColumnLikeAddition)
   ColumnLike<Rep> input2{std::vector<Rep>{4, 5, 6}, scale_type{0}};
   ColumnLike<Rep> output{std::vector<Rep>{0, 0, 0}, scale_type{-4}};
 
+  // std::transform doesn't get two inputs until C++17 :(
   thrust::transform(input1.cbegin(), input1.cend(), input2.cbegin(), output.begin(),
     [](FP fp1, FP fp2) {
       return fp1 + fp2;
     });
 
-  std::cout << "\nOutput:\n";
-  std::for_each(output.cbegin(), output.cend(),
+  std::vector<double> expected{5., 7., 9.};
+  auto result_it = thrust::make_transform_iterator(output.cbegin(),
     [](FP fp) {
-      std::cout << fp << "\n";
+      return double{fp};
     });
+  EXPECT_TRUE(std::equal(expected.cbegin(), expected.cend(), result_it));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
