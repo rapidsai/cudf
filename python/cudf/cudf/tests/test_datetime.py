@@ -1,5 +1,6 @@
 import datetime as dt
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -582,6 +583,12 @@ def test_datetime_dataframe():
         pd.Series([1, 2, 3]).astype("datetime64[ms]"),
         pd.Series([1, 2, 3]).astype("datetime64[s]"),
         pd.Series([1, 2, 3]).astype("datetime64[D]"),
+        1,
+        100,
+        17,
+        53.638435454,
+        np.array([1, 10, 15, 478925, 2327623467]),
+        np.array([0.3474673, -10, 15, 478925.34345, 2327623467]),
     ],
 )
 @pytest.mark.parametrize("dayfirst", [True, False])
@@ -591,7 +598,10 @@ def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
     if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
         gd_data = cudf.from_pandas(pd_data)
     else:
-        gd_data = pd_data
+        if type(pd_data).__module__ == np.__name__:
+            gd_data = cp.array(pd_data)
+        else:
+            gd_data = pd_data
 
     expected = pd.to_datetime(
         pd_data, dayfirst=dayfirst, infer_datetime_format=infer_datetime_format
