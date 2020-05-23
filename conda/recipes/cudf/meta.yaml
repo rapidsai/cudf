@@ -33,6 +33,7 @@ requirements:
     - pandas >=0.25,<0.26
     - cupy >=6.6.0,<8.0.0a0,!=7.1.0
     - numba >=0.49.0
+    - numpy
     - pyarrow 0.15.0.*
     - fastavro >=0.22.0
     - rmm {{ minor_version }}.*
