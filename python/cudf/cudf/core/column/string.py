@@ -2053,34 +2053,40 @@ class StringColumn(column.ColumnBase):
 
     def as_numerical_column(self, dtype, **kwargs):
 
-        mem_dtype = np.dtype(dtype)
-        str_dtype = mem_dtype
-        out_dtype = mem_dtype
+        out_dtype = np.dtype(dtype)
+        kwargs.update(dtype=out_dtype)
 
-        if mem_dtype.type is np.datetime64:
+        if out_dtype.type is np.datetime64:
             if "format" not in kwargs:
                 if len(self) > 0:
                     # infer on host from the first not na element
                     fmt = datetime.infer_format(self[self.notna()][0])
                     kwargs.update(format=fmt)
-        kwargs.update(dtype=out_dtype)
 
-        if str_dtype.kind in ("i"):
+            # Check for None strings
+            if len(self) > 0 and self.binary_operator("eq", "None").any():
+                raise ValueError("Could not convert `None` value to datetime")
 
+            boolean_match = self.binary_operator("eq", "NaT")
+        elif out_dtype.kind in ("i"):
             if not cpp_is_integer(self).all():
                 raise ValueError(
                     "Could not convert strings to integer \
                         type due to presence of non-integer values."
                 )
-        elif str_dtype.kind in ("f"):
-
+        elif out_dtype.kind in ("f"):
             if not cpp_is_float(self).all():
                 raise ValueError(
                     "Could not convert strings to float \
                         type due to presence of non-floating values."
                 )
 
-        return _str_to_numeric_typecast_functions[str_dtype](self, **kwargs)
+        result_col = _str_to_numeric_typecast_functions[out_dtype](
+            self, **kwargs
+        )
+        if (out_dtype.type is np.datetime64) and boolean_match.any():
+            result_col[boolean_match] = None
+        return result_col
 
     def as_datetime_column(self, dtype, **kwargs):
         return self.as_numerical_column(dtype, **kwargs)
