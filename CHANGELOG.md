@@ -194,6 +194,7 @@
 - PR #5219 Add per context cache for JIT kernels
 - PR #5233 Remove experimental namespace used during libcudf++ refactor
 - PR #5251 Fix more mispellings in cpp comments and strings
+- PR #5270 Add support to check for "NaT" and "None" strings while typecasting to `datetime64`
 
 ## Bug Fixes
 
