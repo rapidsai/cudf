@@ -214,8 +214,8 @@ def test_groupby_MI(nrows, ncols):
         {"a": np.arange(10), "b": np.arange(10), "c": np.arange(10)}
     )
     pdf = gdf.to_pandas()
-    gdg = gdf.groupby(["a", "b"]).count()
-    pdg = pdf.groupby(["a", "b"]).count()
+    gdg = gdf.groupby(["a", "b"]).count().sort_index()
+    pdg = pdf.groupby(["a", "b"]).count().sort_index()
     pd.options.display.max_rows = nrows
     pd.options.display.max_columns = ncols
     assert gdg.__repr__() == pdg.__repr__()

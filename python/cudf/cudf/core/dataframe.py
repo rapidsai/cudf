@@ -2593,7 +2593,7 @@ class DataFrame(Frame, Serializable):
     def groupby(
         self,
         by=None,
-        sort=True,
+        sort=False,
         as_index=True,
         level=None,
         dropna=True,
@@ -2614,6 +2614,12 @@ class DataFrame(Frame, Serializable):
                 "The 'method' argument is deprecated and will be unused",
                 DeprecationWarning,
             )
+
+        if sort is True:
+            warnings.warn(
+                "sort=True does not guarantee ordering within groups."
+            )
+
         return DataFrameGroupBy(
             self,
             by=by,

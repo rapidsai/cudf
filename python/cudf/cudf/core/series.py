@@ -3187,7 +3187,7 @@ class Series(Frame, Serializable):
         by=None,
         group_series=None,
         level=None,
-        sort=True,
+        sort=False,
         group_keys=True,
         as_index=None,
         dropna=True,
@@ -3203,6 +3203,12 @@ class Series(Frame, Serializable):
                     "The 'method' argument is deprecated and will be unused",
                     DeprecationWarning,
                 )
+
+            if sort is True:
+                warnings.warn(
+                    "sort=True does not guarantee ordering within groups."
+                )
+
             return SeriesGroupBy(
                 self, by=by, level=level, dropna=dropna, sort=sort
             )

@@ -429,11 +429,11 @@ def test_multiindex_multiple_groupby():
         }
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
-    pdg = pdf.groupby(["a", "b"]).sum()
-    gdg = gdf.groupby(["a", "b"]).sum()
+    pdg = pdf.groupby(["a", "b"]).sum().sort_index()
+    gdg = gdf.groupby(["a", "b"]).sum().sort_index()
     assert_eq(pdg, gdg)
-    pdg = pdf.groupby(["a", "b"]).x.sum()
-    gdg = gdf.groupby(["a", "b"]).x.sum()
+    pdg = pdf.groupby(["a", "b"]).x.sum().sort_index()
+    gdg = gdf.groupby(["a", "b"]).x.sum().sort_index()
     assert_eq(pdg, gdg)
 
 
@@ -454,8 +454,8 @@ def test_multi_column(func):
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
 
-    a = func(pdf)
-    b = func(gdf)
+    a = func(pdf).sort_index()
+    b = func(gdf).sort_index()
 
     assert_eq(a, b)
 
@@ -467,7 +467,7 @@ def test_multiindex_equality():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
-    mi1 = gdf.groupby(["x", "y"]).mean().index
+    mi1 = gdf.groupby(["x", "y"]).mean().sort_index().index
     mi2 = cudf.MultiIndex(
         levels=[[1, 3, 4, 5], [1, 2, 5]],
         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
@@ -476,7 +476,7 @@ def test_multiindex_equality():
     assert_eq(mi1, mi2)
 
     # mi made from two groupbys, are they equal?
-    mi2 = gdf.groupby(["x", "y"]).max().index
+    mi2 = gdf.groupby(["x", "y"]).max().sort_index().index
     assert_eq(mi1, mi2)
 
     # mi made manually twice are they equal?
@@ -518,7 +518,7 @@ def test_multiindex_equals():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
-    mi1 = gdf.groupby(["x", "y"]).mean().index
+    mi1 = gdf.groupby(["x", "y"]).mean().sort_index().index
     mi2 = cudf.MultiIndex(
         levels=[[1, 3, 4, 5], [1, 2, 5]],
         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
@@ -527,7 +527,7 @@ def test_multiindex_equals():
     assert_eq(mi1.equals(mi2), True)
 
     # mi made from two groupbys, are they equal?
-    mi2 = gdf.groupby(["x", "y"]).max().index
+    mi2 = gdf.groupby(["x", "y"]).max().sort_index().index
     assert_eq(mi1.equals(mi2), True)
 
     # mi made manually twice are they equal?
@@ -544,8 +544,8 @@ def test_multiindex_equals():
     assert_eq(mi1.equals(mi2), True)
 
     # mi made from different groupbys are they not equal?
-    mi1 = gdf.groupby(["x", "y"]).mean().index
-    mi2 = gdf.groupby(["x", "z"]).mean().index
+    mi1 = gdf.groupby(["x", "y"]).mean().sort_index().index
+    mi2 = gdf.groupby(["x", "z"]).mean().sort_index().index
     assert_eq(mi1.equals(mi2), False)
 
     # mi made from different manuals are they not equal?
@@ -708,8 +708,8 @@ def test_multiindex_groupby_to_frame():
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
     pdf = gdf.to_pandas()
-    gdg = gdf.groupby(["x", "y"]).count()
-    pdg = pdf.groupby(["x", "y"]).count()
+    gdg = gdf.groupby(["x", "y"]).count().sort_index()
+    pdg = pdf.groupby(["x", "y"]).count().sort_index()
     assert_eq(pdg.index.to_frame(), gdg.index.to_frame())
 
 
@@ -725,22 +725,22 @@ def test_multiindex_groupby_reset_index():
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
     pdf = gdf.to_pandas()
-    gdg = gdf.groupby(["x", "y"]).sum()
-    pdg = pdf.groupby(["x", "y"]).sum()
+    gdg = gdf.groupby(["x", "y"]).sum().sort_index()
+    pdg = pdf.groupby(["x", "y"]).sum().sort_index()
     assert_eq(pdg.reset_index(), gdg.reset_index())
 
 
 def test_multicolumn_reset_index():
     gdf = cudf.DataFrame({"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5]})
     pdf = gdf.to_pandas()
-    gdg = gdf.groupby(["x"]).agg({"y": ["count", "mean"]})
-    pdg = pdf.groupby(["x"]).agg({"y": ["count", "mean"]})
+    gdg = gdf.groupby(["x"]).agg({"y": ["count", "mean"]}).sort_index()
+    pdg = pdf.groupby(["x"]).agg({"y": ["count", "mean"]}).sort_index()
     assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
-    gdg = gdf.groupby(["x"]).agg({"y": ["count"]})
-    pdg = pdf.groupby(["x"]).agg({"y": ["count"]})
+    gdg = gdf.groupby(["x"]).agg({"y": ["count"]}).sort_index()
+    pdg = pdf.groupby(["x"]).agg({"y": ["count"]}).sort_index()
     assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
-    gdg = gdf.groupby(["x"]).agg({"y": "count"})
-    pdg = pdf.groupby(["x"]).agg({"y": "count"})
+    gdg = gdf.groupby(["x"]).agg({"y": "count"}).sort_index()
+    pdg = pdf.groupby(["x"]).agg({"y": "count"}).sort_index()
     assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
 
 
