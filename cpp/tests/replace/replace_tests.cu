@@ -286,7 +286,7 @@ template <class T>
 struct ReplaceTest : cudf::test::BaseFixture {
   ReplaceTest()
   {
-    // Use constant seed so the psuedo-random order is the same each time
+    // Use constant seed so the pseudo-random order is the same each time
     // Each time the class is constructed a new constant seed is used
     static size_t number_of_instantiations{0};
     std::srand(number_of_instantiations++);

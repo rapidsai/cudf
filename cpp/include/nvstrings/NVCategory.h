@@ -37,7 +37,7 @@ class NVCategoryImpl;
  * @par
  * The methods are meant to match more or less directly with its python
  * counterpart, @p nvcategory.py. And the operations strive to mimic the
- * behavoir of the equivalent Pandas strings methods.
+ * behavior of the equivalent Pandas strings methods.
  * @par
  * An instance of this class is immutable and operations that modify
  * or modify keys or values will return a new instance.
