@@ -44,7 +44,7 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
   auto table_column = cudf::detail::gather(table_view{{source.keys()}},
                                            indices,
                                            cudf::detail::out_of_bounds_policy::IGNORE,
-                                           cudf::detail::negative_indices_policy::NOT_ALLOW,
+                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
                                            mr,
                                            stream)
                         ->release();

@@ -12,7 +12,7 @@ namespace detail {
 
 enum class out_of_bounds_policy : int8_t { FAIL, NULLIFY, IGNORE };
 
-enum class negative_indices_policy : bool { ALLOW, NOT_ALLOW };
+enum class negative_index_policy : bool { ALLOWED, NOT_ALLOWED };
 
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.
@@ -35,9 +35,9 @@ enum class negative_indices_policy : bool { ALLOW, NOT_ALLOW };
  * @param[in] out_of_bounds_policy How to treat out of bounds indices. FAIL: check `gather_map`
  * values and throw an exception if any are out of bounds. `NULLIFY` means to nullify output values
  * corresponding to out-of-bounds gather_map values. `IGNORE` means to ignore values in
- * `gather_map` that are out of bounds. `IGNORE` is incompatible with `negative_indices_policy ==
+ * `gather_map` that are out of bounds. `IGNORE` is incompatible with `negative_index_policy ==
  * ALLOW`.
- * @param[in] negative_indices_policy Interpret each negative index `i` in the
+ * @param[in] negative_index_policy Interpret each negative index `i` in the
  * gathermap as the positive index `i+num_source_rows`.
  * @param[in] mr The resource to use for all allocations
  * @param[in] stream The CUDA stream on which to execute kernels
@@ -46,7 +46,7 @@ enum class negative_indices_policy : bool { ALLOW, NOT_ALLOW };
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
                               out_of_bounds_policy bounds,
-                              negative_indices_policy neg_indices,
+                              negative_index_policy neg_indices,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream                 = 0);
 }  // namespace detail

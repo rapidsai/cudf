@@ -273,7 +273,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
   auto sorted_values_table = cudf::detail::gather(table_view({values}),
                                                   gather_map,
                                                   cudf::detail::out_of_bounds_policy::NULLIFY,
-                                                  cudf::detail::negative_indices_policy::NOT_ALLOW,
+                                                  cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                   mr,
                                                   stream);
 
@@ -288,7 +288,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
   auto grouped_values_table = cudf::detail::gather(table_view({values}),
                                                    gather_map,
                                                    cudf::detail::out_of_bounds_policy::NULLIFY,
-                                                   cudf::detail::negative_indices_policy::NOT_ALLOW,
+                                                   cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                    mr,
                                                    stream);
 
@@ -313,7 +313,7 @@ std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::mr::device_memory_r
   return cudf::detail::gather(_keys,
                               key_sort_order(),
                               cudf::detail::out_of_bounds_policy::NULLIFY,
-                              cudf::detail::negative_indices_policy::NOT_ALLOW,
+                              cudf::detail::negative_index_policy::NOT_ALLOWED,
                               mr,
                               stream);
 }

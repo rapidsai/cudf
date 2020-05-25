@@ -203,7 +203,7 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
                              null_removed_map,
                              argmin_result.nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
                                                       : cudf::detail::out_of_bounds_policy::NULLIFY,
-                             cudf::detail::negative_indices_policy::NOT_ALLOW,
+                             cudf::detail::negative_index_policy::NOT_ALLOWED,
                              mr,
                              stream);
       return std::move(transformed_result->release()[0]);
@@ -240,7 +240,7 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
                              null_removed_map,
                              argmax_result.nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
                                                       : cudf::detail::out_of_bounds_policy::NULLIFY,
-                             cudf::detail::negative_indices_policy::NOT_ALLOW,
+                             cudf::detail::negative_index_policy::NOT_ALLOWED,
                              mr,
                              stream);
       return std::move(transformed_result->release()[0]);
