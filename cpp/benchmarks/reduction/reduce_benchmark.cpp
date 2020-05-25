@@ -20,6 +20,7 @@
 #include <cudf/types.hpp>
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
+#include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
 #include <memory>
@@ -28,17 +29,6 @@
 class Reduction : public cudf::benchmark {
 };
 
-// TODO: put it in a struct so `uniform` can be remade with different min, max
-template <typename T>
-T random_int(T min, T max)
-{
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
-  static std::uniform_int_distribution<T> uniform{min, max};
-
-  return uniform(engine);
-}
-
 template <typename type>
 void BM_reduction(benchmark::State& state,
                   std::unique_ptr<cudf::experimental::aggregation> const& agg)
@@ -46,11 +36,12 @@ void BM_reduction(benchmark::State& state,
   using wrapper = cudf::test::fixed_width_column_wrapper<type>;
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
+  cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
   auto data_it = cudf::test::make_counting_transform_iterator(
-    0, [=](cudf::size_type row) { return random_int(0, 100); });
-  wrapper vals(data_it, data_it + column_size);
+    0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
+  wrapper values(data_it, data_it + column_size);
 
-  auto input_column            = cudf::column_view(vals);
+  auto input_column            = cudf::column_view(values);
   cudf::data_type output_dtype = (agg->kind == cudf::experimental::aggregation::MEAN ||
                                   agg->kind == cudf::experimental::aggregation::VARIANCE ||
                                   agg->kind == cudf::experimental::aggregation::STD)
