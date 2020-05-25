@@ -56,9 +56,21 @@ class CategoricalAccessor(object):
 
     def add_categories(self, new_categories, **kwargs):
         new_categories = column.as_column(new_categories)
-        new_categories = self._column.categories.append(new_categories)
+        old_categories = self._column.categories
+
+        common_dtype = np.find_common_type(
+            [old_categories.dtype, new_categories.dtype], []
+        )
+
+        if new_categories.dtype != common_dtype:
+            new_categories = new_categories.astype(common_dtype)
+        elif old_categories.dtype != common_dtype:
+            old_categories = old_categories.astype(common_dtype)
+
+        new_categories = old_categories.append(new_categories)
         out_col = self._column
         if not self._categories_equal(new_categories, **kwargs):
+            kwargs["current_cats"] = old_categories
             out_col = self._set_categories(new_categories, **kwargs)
 
         return self._return_or_inplace(out_col, **kwargs)
@@ -167,7 +179,7 @@ class CategoricalAccessor(object):
 
         from cudf import DataFrame, Series
 
-        cur_cats = self._column.categories
+        cur_cats = kwargs.get("current_cats", self._column.categories)
         new_cats = column.as_column(new_categories)
 
         # Join the old and new categories to build a map from

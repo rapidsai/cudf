@@ -614,3 +614,30 @@ def test_categorical_dtype(categories, ordered):
 def test_astype_dtype(data, expected):
     got = data.astype("category").cat.codes.dtype
     np.testing.assert_equal(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # [1, 2, 3],
+        [0.0, 6.7, 10.0],
+        # ['a', 'bd', 'ef']
+    ],
+)
+@pytest.mark.parametrize(
+    "add",
+    [
+        # [10, 11, 12],
+        # [0.01, 9.7, 15.0],
+        ["asdfsdf", "bddf", "eff"]
+    ],
+)
+def test_add_categories(data, add):
+    pds = pd.Series(data, dtype="category")
+    gds = gd.Series(data, dtype="category")
+
+    assert_eq(
+        pds.cat.add_categories(add),
+        gds.cat.add_categories(add),
+        check_dtype=False,
+    )
