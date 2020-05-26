@@ -45,7 +45,12 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
 
   auto sorted_order = detail::sorted_order(keys, column_order, null_precedence, mr, stream);
 
-  return detail::gather(values, sorted_order->view(), false, false, false, mr, stream);
+  return detail::gather(values,
+                        sorted_order->view(),
+                        detail::out_of_bounds_policy::NULLIFY,
+                        detail::negative_index_policy::NOT_ALLOWED,
+                        mr,
+                        stream);
 }
 
 }  // namespace detail
