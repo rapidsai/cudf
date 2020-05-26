@@ -36,7 +36,6 @@ enum class rank_method {
   DENSE     ///< rank always increases by 1 between groups
 };
 
-namespace experimental {
 /**
  * @addtogroup column_sort
  * @{
@@ -68,7 +67,7 @@ std::unique_ptr<column> sorted_order(
  *
  * The order of equivalent elements is guaranteed to be preserved.
  *
- * @copydoc cudf::experimental::sorted_order
+ * @copydoc cudf::sorted_order
  */
 std::unique_ptr<column> stable_sorted_order(
   table_view input,
@@ -182,5 +181,4 @@ std::unique_ptr<column> rank(column_view const& input,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

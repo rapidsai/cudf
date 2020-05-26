@@ -139,7 +139,7 @@ struct is_numeric_impl {
  **/
 constexpr inline bool is_numeric(data_type type)
 {
-  return cudf::experimental::type_dispatcher(type, is_numeric_impl{});
+  return cudf::type_dispatcher(type, is_numeric_impl{});
 }
 
 /**
@@ -172,7 +172,7 @@ struct is_boolean_impl {
  **/
 constexpr inline bool is_boolean(data_type type)
 {
-  return cudf::experimental::type_dispatcher(type, is_boolean_impl{});
+  return cudf::type_dispatcher(type, is_boolean_impl{});
 }
 
 /**
@@ -207,7 +207,7 @@ struct is_timestamp_impl {
  **/
 constexpr inline bool is_timestamp(data_type type)
 {
-  return cudf::experimental::type_dispatcher(type, is_timestamp_impl{});
+  return cudf::type_dispatcher(type, is_timestamp_impl{});
 }
 
 /**
@@ -246,7 +246,7 @@ struct is_fixed_width_impl {
  **/
 constexpr inline bool is_fixed_width(data_type type)
 {
-  return cudf::experimental::type_dispatcher(type, is_fixed_width_impl{});
+  return cudf::type_dispatcher(type, is_fixed_width_impl{});
 }
 
 /**
@@ -290,7 +290,7 @@ struct is_compound_impl {
  **/
 constexpr inline bool is_compound(data_type type)
 {
-  return cudf::experimental::type_dispatcher(type, is_compound_impl{});
+  return cudf::type_dispatcher(type, is_compound_impl{});
 }
 
 /**
@@ -367,7 +367,7 @@ struct is_nested_impl {
  **/
 constexpr inline bool is_nested(data_type type)
 {
-  return cudf::experimental::type_dispatcher(type, is_nested_impl{});
+  return cudf::type_dispatcher(type, is_nested_impl{});
 }
 
 /** @} */

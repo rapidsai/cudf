@@ -173,7 +173,7 @@ struct rpartition_fn : public partition_fn {
 
 }  // namespace
 
-std::unique_ptr<experimental::table> partition(
+std::unique_ptr<table> partition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -181,8 +181,7 @@ std::unique_ptr<experimental::table> partition(
 {
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
   auto strings_count = strings.size();
-  if (strings_count == 0)
-    return std::make_unique<experimental::table>(std::vector<std::unique_ptr<column>>());
+  if (strings_count == 0) return std::make_unique<table>(std::vector<std::unique_ptr<column>>());
   auto strings_column = column_device_view::create(strings.parent(), stream);
   string_view d_delimiter(delimiter.data(), delimiter.size());
   rmm::device_vector<string_index_pair> left_indices(strings_count), delim_indices(strings_count),
@@ -198,10 +197,10 @@ std::unique_ptr<experimental::table> partition(
   results.emplace_back(make_strings_column(left_indices, stream, mr));
   results.emplace_back(make_strings_column(delim_indices, stream, mr));
   results.emplace_back(make_strings_column(right_indices, stream, mr));
-  return std::make_unique<experimental::table>(std::move(results));
+  return std::make_unique<table>(std::move(results));
 }
 
-std::unique_ptr<experimental::table> rpartition(
+std::unique_ptr<table> rpartition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -209,8 +208,7 @@ std::unique_ptr<experimental::table> rpartition(
 {
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
   auto strings_count = strings.size();
-  if (strings_count == 0)
-    return std::make_unique<experimental::table>(std::vector<std::unique_ptr<column>>());
+  if (strings_count == 0) return std::make_unique<table>(std::vector<std::unique_ptr<column>>());
   auto strings_column = column_device_view::create(strings.parent(), stream);
   string_view d_delimiter(delimiter.data(), delimiter.size());
   rmm::device_vector<string_index_pair> left_indices(strings_count), delim_indices(strings_count),
@@ -226,24 +224,24 @@ std::unique_ptr<experimental::table> rpartition(
   results.emplace_back(make_strings_column(left_indices, stream, mr));
   results.emplace_back(make_strings_column(delim_indices, stream, mr));
   results.emplace_back(make_strings_column(right_indices, stream, mr));
-  return std::make_unique<experimental::table>(std::move(results));
+  return std::make_unique<table>(std::move(results));
 }
 
 }  // namespace detail
 
 // external APIs
 
-std::unique_ptr<experimental::table> partition(strings_column_view const& strings,
-                                               string_scalar const& delimiter,
-                                               rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> partition(strings_column_view const& strings,
+                                 string_scalar const& delimiter,
+                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::partition(strings, delimiter, mr);
 }
 
-std::unique_ptr<experimental::table> rpartition(strings_column_view const& strings,
-                                                string_scalar const& delimiter,
-                                                rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> rpartition(strings_column_view const& strings,
+                                  string_scalar const& delimiter,
+                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::rpartition(strings, delimiter, mr);

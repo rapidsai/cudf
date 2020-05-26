@@ -35,7 +35,6 @@
 #include <array>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace orc {
@@ -261,8 +260,8 @@ class metadata {
           if (index >= get_num_columns()) { index = 0; }
           if (ff.GetColumnName(index) == use_name) {
             selection.emplace_back(index);
+            if (ff.types[index].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
             index++;
-            if (ff.types[i].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
             break;
           }
         }
@@ -892,5 +891,4 @@ table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, c
 }  // namespace orc
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

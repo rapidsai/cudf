@@ -34,7 +34,6 @@
 #include <cudf/table/table.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace json {
@@ -390,17 +389,17 @@ void reader::impl::set_data_types(cudaStream_t stream)
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
     const auto num_columns = metadata.column_names.size();
 
-    rmm::device_vector<cudf::experimental::io::json::ColumnInfo> d_column_infos(
-      num_columns, cudf::experimental::io::json::ColumnInfo{});
-    cudf::experimental::io::json::gpu::detect_data_types(d_column_infos.data().get(),
-                                                         static_cast<const char *>(data_.data()),
-                                                         data_.size(),
-                                                         opts_,
-                                                         num_columns,
-                                                         rec_starts_.data().get(),
-                                                         rec_starts_.size(),
-                                                         stream);
-    thrust::host_vector<cudf::experimental::io::json::ColumnInfo> h_column_infos = d_column_infos;
+    rmm::device_vector<cudf::io::json::ColumnInfo> d_column_infos(num_columns,
+                                                                  cudf::io::json::ColumnInfo{});
+    cudf::io::json::gpu::detect_data_types(d_column_infos.data().get(),
+                                           static_cast<const char *>(data_.data()),
+                                           data_.size(),
+                                           opts_,
+                                           num_columns,
+                                           rec_starts_.data().get(),
+                                           rec_starts_.size(),
+                                           stream);
+    thrust::host_vector<cudf::io::json::ColumnInfo> h_column_infos = d_column_infos;
 
     for (const auto &cinfo : h_column_infos) {
       if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
@@ -456,16 +455,16 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
   rmm::device_vector<cudf::bitmask_type *> d_valid = h_valid;
   rmm::device_vector<cudf::size_type> d_valid_counts(num_columns, 0);
 
-  cudf::experimental::io::json::gpu::convert_json_to_columns(data_,
-                                                             d_dtypes.data().get(),
-                                                             d_data.data().get(),
-                                                             num_records,
-                                                             num_columns,
-                                                             rec_starts_.data().get(),
-                                                             d_valid.data().get(),
-                                                             d_valid_counts.data().get(),
-                                                             opts_,
-                                                             stream);
+  cudf::io::json::gpu::convert_json_to_columns(data_,
+                                               d_dtypes.data().get(),
+                                               d_data.data().get(),
+                                               num_records,
+                                               num_columns,
+                                               rec_starts_.data().get(),
+                                               d_valid.data().get(),
+                                               d_valid_counts.data().get(),
+                                               opts_,
+                                               stream);
   CUDA_TRY(cudaStreamSynchronize(stream));
   CUDA_TRY(cudaGetLastError());
 
@@ -581,5 +580,4 @@ table_with_metadata reader::read_byte_range(size_t offset, size_t size, cudaStre
 }  // namespace json
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

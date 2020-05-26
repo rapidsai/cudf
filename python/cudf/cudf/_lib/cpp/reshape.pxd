@@ -7,7 +7,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 
-cdef extern from "cudf/reshape.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/reshape.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] interleave_columns(
         table_view source_table
     ) except +

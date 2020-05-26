@@ -43,16 +43,16 @@ void in_place_fill(cudf::mutable_column_view& destination,
                    cudf::scalar const& value,
                    cudaStream_t stream = 0)
 {
-  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  using ScalarType = cudf::scalar_type_t<T>;
   auto p_scalar    = static_cast<ScalarType const*>(&value);
   T fill_value     = p_scalar->value(stream);
   bool is_valid    = p_scalar->is_valid();
-  cudf::experimental::detail::copy_range(thrust::make_constant_iterator(fill_value),
-                                         thrust::make_constant_iterator(is_valid),
-                                         destination,
-                                         begin,
-                                         end,
-                                         stream);
+  cudf::detail::copy_range(thrust::make_constant_iterator(fill_value),
+                           thrust::make_constant_iterator(is_valid),
+                           destination,
+                           begin,
+                           end,
+                           stream);
 }
 
 struct in_place_fill_range_dispatch {
@@ -122,7 +122,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   cudaStream_t stream)
 {
   CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
-  using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
+  using ScalarType = cudf::scalar_type_t<cudf::string_view>;
   auto p_scalar    = static_cast<ScalarType const*>(&value);
   return cudf::strings::detail::fill(
     cudf::strings_column_view(input), begin, end, *p_scalar, mr, stream);
@@ -185,7 +185,6 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
@@ -202,7 +201,7 @@ void fill_in_place(mutable_column_view& destination,
   CUDF_EXPECTS(destination.type() == value.type(), "Data type mismatch.");
 
   if (end != begin) {  // otherwise no-op
-    cudf::experimental::type_dispatcher(
+    cudf::type_dispatcher(
       destination.type(), in_place_fill_range_dispatch{value, destination}, begin, end, stream);
   }
 
@@ -218,7 +217,7 @@ std::unique_ptr<column> fill(column_view const& input,
 {
   CUDF_EXPECTS((begin >= 0) && (end <= input.size()) && (begin <= end), "Range is out of bounds.");
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     input.type(), out_of_place_fill_range_dispatch{value, input}, begin, end, mr, stream);
 }
 
@@ -243,5 +242,4 @@ std::unique_ptr<column> fill(column_view const& input,
   return detail::fill(input, begin, end, value, mr, 0);
 }
 
-}  // namespace experimental
 }  // namespace cudf

@@ -47,10 +47,10 @@ static void BM_join(benchmark::State &state)
 
   // Generate build and probe tables
 
-  auto build_key_column = cudf::make_numeric_column(
-    cudf::data_type(cudf::experimental::type_to_id<key_type>()), build_table_size);
-  auto probe_key_column = cudf::make_numeric_column(
-    cudf::data_type(cudf::experimental::type_to_id<key_type>()), probe_table_size);
+  auto build_key_column =
+    cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()), build_table_size);
+  auto probe_key_column =
+    cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()), probe_table_size);
 
   generate_input_tables<key_type, cudf::size_type>(
     build_key_column->mutable_view().data<key_type>(),
@@ -82,8 +82,8 @@ static void BM_join(benchmark::State &state)
   for (auto _ : state) {
     cuda_event_timer raii(state, true, 0);
 
-    auto result = cudf::experimental::inner_join(
-      probe_table, build_table, columns_to_join, columns_to_join, {{0, 0}});
+    auto result =
+      cudf::inner_join(probe_table, build_table, columns_to_join, columns_to_join, {{0, 0}});
   }
 }
 
