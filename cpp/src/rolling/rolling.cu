@@ -428,8 +428,12 @@ struct rolling_window_launcher {
 
     // The rows that represent null elements will be having negative values in gather map,
     // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
-    auto output_table =
-      detail::gather(table_view{{input}}, output->view(), false, true, false, mr, stream);
+    auto output_table = detail::gather(table_view{{input}},
+                                       output->view(),
+                                       detail::out_of_bounds_policy::IGNORE,
+                                       detail::negative_index_policy::NOT_ALLOWED,
+                                       mr,
+                                       stream);
     return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
   }
 
