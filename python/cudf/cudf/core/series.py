@@ -3324,46 +3324,45 @@ class Series(Frame, Serializable):
         result.index.names = index.names
         return result
 
-    def merge(self, other):
-        # An inner join should return a series containing matching elements
-        # a Left join should return just self
-        # an outer join should return a two column
-        # dataframe containing all elements from both
-        dummy = "name"
+    def merge(
+        self,
+        other,
+        on=None,
+        left_on=None,
+        right_on=None,
+        left_index=False,
+        right_index=False,
+        how="inner",
+        sort=False,
+        lsuffix=None,
+        rsuffix=None,
+        method="hash",
+        suffixes=("_x", "_y"),
+    ):
 
-        l_name = self.name
-        r_name = other.name
+        if left_on not in (self.name, None):
+            raise ValueError(
+                "Series to other merge uses series name as key implicitly"
+            )
+
         lhs = self.copy(deep=False)
         rhs = other.copy(deep=False)
 
-        if l_name is None and r_name is not None:
-            lhs.name = r_name
-            left_on = right_on = r_name
-        elif r_name is None and l_name is not None:
-            rhs.name = l_name
-            left_on = right_on = l_name
-        elif l_name is None and r_name is None:
-            lhs.name = dummy
-            rhs.name = dummy
-            left_on = right_on = dummy
-        elif l_name is not None and r_name is not None:
-            left_on = l_name
-            right_on = r_name
-
         result = super(Series, lhs)._merge(
             rhs,
-            left_on=left_on,
-            right_on=right_on,
-            how="inner",
-            left_index=False,
-            right_index=False,
-            on=None,
-            lsuffix=None,
-            rsuffix=None,
-            method="hash",
+            on,
+            left_on,
+            right_on,
+            left_index,
+            right_index,
+            how,
+            sort,
+            lsuffix,
+            rsuffix,
+            method,
+            None,
+            suffixes,
         )
-
-        result.name = other.name
 
         return result
 
