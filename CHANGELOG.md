@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #5287 Add `index.join` support
+
 ## Improvements
 
 ## Bug Fixes
