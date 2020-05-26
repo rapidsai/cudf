@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #5231 Type `Buffer` as `uint8`
+
 ## Bug Fixes
 
 # cuDF 0.14.0 (Date TBD)
@@ -201,7 +203,6 @@
 - PR #5155 Fix cudf documentation misspellings
 - PR #5208 Port search and join benchmark to libcudf++
 - PR #5214 Move docs build script into repository
-- PR #5231 Type `Buffer` as `uint8`
 - PR #5219 Add per context cache for JIT kernels
 - PR #5233 Remove experimental namespace used during libcudf++ refactor
 - PR #5251 Fix more mispellings in cpp comments and strings
