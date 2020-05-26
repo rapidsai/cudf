@@ -1,10 +1,5 @@
 import weakref
 
-import warnings
-
-warnings.warn("NVCategory will be removed in the future. Please use cuDF.",
-              DeprecationWarning, stacklevel=2)
-
 import rmm  # noqa: F401
 
 import nvstrings as nvs

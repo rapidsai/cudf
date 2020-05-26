@@ -3,6 +3,7 @@
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
 from unittest.mock import patch
+import warnings
 
 import cupy
 import numpy as np
@@ -65,6 +66,12 @@ def test_from_nvstrings_nbytes(mock_byte_count, nbytes):
     expectation = raise_builder(
         [nbytes > libcudf.MAX_STRING_COLUMN_BYTES], MemoryError
     )
+    warnings.warn(
+        "nvstrings will be removed in 0.15. Please remove this test case.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     with expectation:
         Series(nvstrings.to_device([""]))
 

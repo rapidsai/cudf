@@ -1,9 +1,4 @@
 import weakref
-import warnings
-
-warnings.warn("NVStrings will be removed in the future. "
-              "Please use cuDF for strings.",
-              DeprecationWarning, stacklevel=2)
 
 import rmm  # noqa: F401
 

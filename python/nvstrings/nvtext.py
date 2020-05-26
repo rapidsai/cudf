@@ -1,10 +1,5 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-import warnings
-
-warnings.warn("NVText will be removed in the future. Please use cuDF.",
-              DeprecationWarning, stacklevel=2)
-
 import nvstrings as nvs
 import pyniNVText
 
