@@ -23,8 +23,6 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <memory>
 
-//#include <../tests/utilities/column_utilities.hpp>
-
 namespace cudf {
 namespace lists {
 namespace detail {
@@ -37,24 +35,27 @@ namespace {
  * Since offsets are all relative to the start of their respective column,
  * all offsets are shifted to account for the new starting position
  *
- * @param columns               Vector of lists columns to concatenate
- * @param total_list_count      Total number of lists contains in the columns
- * @param print_all_differences If true display all differences
- **/
+ * @param[in] columns               Vector of lists columns to concatenate
+ * @param[in] total_list_count      Total number of lists contained in the columns
+ * @param[in] stream                Stream on which to issue all memory allocation
+ * and device kernels
+ * @param[in] mr                    Optional resource to use for device memory
+ */
 std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& columns,
                                       size_type total_list_count,
-                                      rmm::mr::device_memory_resource* mr,
-                                      cudaStream_t stream)
+                                      cudaStream_t stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   // outgoing offsets
-  auto merged_offsets = cudf::make_fixed_width_column(data_type{INT32}, total_list_count + 1);
+  auto merged_offsets = cudf::make_fixed_width_column(
+    data_type{INT32}, total_list_count + 1, mask_state::UNALLOCATED, stream, mr);
   mutable_column_device_view d_merged_offsets(*merged_offsets, 0, 0);
 
   // merge offsets
   // TODO : this could probably be done as a single gpu operation if done as a kernel.
   size_type shift = 0;
   size_type count = 0;
-  thrust::for_each(columns.begin(), columns.end(), [&](lists_column_view const& c) {
+  std::for_each(columns.begin(), columns.end(), [&](lists_column_view const& c) {
     column_device_view offsets(c.offsets(), 0, 0);
     thrust::transform(rmm::exec_policy(stream)->on(stream),
                       offsets.begin<size_type>(),
@@ -76,8 +77,8 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
  */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0)
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   std::vector<lists_column_view> lists_columns;
   std::transform(
@@ -98,10 +99,10 @@ std::unique_ptr<column> concatenate(
                    // lists
                    return l.child();
                  });
-  auto data = cudf::concatenate(children);
+  auto data = cudf::detail::concatenate(children, mr, stream);
 
   // merge offsets
-  auto offsets = merge_offsets(lists_columns, total_list_count, mr, stream);
+  auto offsets = merge_offsets(lists_columns, total_list_count, stream, mr);
 
   // if any of the input columns have nulls, construct the output mask
   bool const has_nulls =

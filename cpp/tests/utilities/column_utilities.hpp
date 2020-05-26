@@ -85,6 +85,8 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
 /**
  * @brief Formats a column view as a string
  *
+ * This can be useful when displaying nested type information
+ *
  * @param col The column view
  * @param delimiter The delimiter to put between strings
  * @param indent Indentation for all output
@@ -98,7 +100,8 @@ std::string to_string(cudf::column_view const& col,
  *
  * @param null_mask The null mask buffer
  * @param null_mask_size Size of the null mask (in rows)
- * @param indent Indentation for all output
+ * @param indent Indentation for all output.  See comment in `to_strings` for
+ * a detailed description.
  */
 std::string to_string(std::vector<bitmask_type> const& null_mask,
                       size_type null_mask_size,
@@ -106,6 +109,27 @@ std::string to_string(std::vector<bitmask_type> const& null_mask,
 
 /**
  * @brief Convert column values to a host vector of strings
+ *
+ * Supports indentation of all output.  For example, if the displayed output of your column
+ * would be
+ *
+ * "1,2,3,4,5"
+ * and the `indent` parameter was "   ", that indentation would be prepended to
+ * result in the output
+ * "   1,2,3,4,5"
+ *
+ * The can be useful for displaying complex types. An example use case would be for
+ * displaying the nesting of a LIST type column (via recursion).
+ *
+ *  List<List<int>>:
+ *  Length : 3
+ *  Offsets : 0, 2, 5, 6
+ *  Children :
+ *     List<int>:
+ *     Length : 6
+ *     Offsets : 0, 2, 4, 7, 8, 9, 11
+ *     Children :
+ *        1, 2, 3, 4, 5, 6, 7, 0, 8, 9, 10
  *
  * @param col The column view
  * @param indent Indentation for all output

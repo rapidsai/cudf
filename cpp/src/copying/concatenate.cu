@@ -320,7 +320,7 @@ std::unique_ptr<column> concatenate_dispatch::operator()<cudf::string_view>()
 template <>
 std::unique_ptr<column> concatenate_dispatch::operator()<cudf::list_view>()
 {
-  return cudf::lists::detail::concatenate(views, mr, stream);
+  return cudf::lists::detail::concatenate(views, stream, mr);
 }
 
 // Concatenates the elements from a vector of column_views
