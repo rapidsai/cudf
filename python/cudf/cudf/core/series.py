@@ -1417,7 +1417,7 @@ class Series(Frame):
         """
         return self._column.as_mask()
 
-    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+    def astype(self, dtype, copy=False, errors="raise"):
         """
         Cast the Series to the given dtype
 
@@ -1439,7 +1439,6 @@ class Series(Frame):
             object.
             - ``warn`` : prints last exceptions as warnings and
             return original object.
-        **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
@@ -1461,7 +1460,7 @@ class Series(Frame):
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
         try:
-            data = self._column.astype(dtype, **kwargs)
+            data = self._column.astype(dtype)
 
             return self._copy_construct(
                 data=data.copy(deep=True) if copy else data, index=self.index
