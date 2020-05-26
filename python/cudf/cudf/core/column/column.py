@@ -1187,7 +1187,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     # TODO: Remove nvstrings here when nvstrings is fully removed
     elif isinstance(arbitrary, nvstrings.nvstrings):
         warnings.warn(
-            "nvstrings will be removed in 0.15. Please use equivalent from libcudf",
+            "nvstrings will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )

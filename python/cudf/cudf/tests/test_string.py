@@ -1,9 +1,9 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
+import warnings
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
 from unittest.mock import patch
-import warnings
 
 import cupy
 import numpy as np

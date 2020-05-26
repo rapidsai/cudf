@@ -167,7 +167,8 @@ class StringMethods(object):
 
         # TODO: Remove when all needed string compute APIs are ported
         warnings.warn(
-            "nvstrings will be removed in 0.15. Please use equivalent from libcudf",
+            "nvstrings will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -306,7 +307,8 @@ class StringMethods(object):
         keys = dir(type(self))
         # TODO: Remove along with `__getattr__` above when all is ported
         warnings.warn(
-            "nvstrings will be removed in 0.15. Please use equivalent from libcudf",
+            "nvstrings will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3390,7 +3392,8 @@ class StringMethods(object):
         dtype: object
         """
         warnings.warn(
-            "nvtext will be removed in 0.15. Please use equivalent from libcudf",
+            "nvtext will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3430,7 +3433,8 @@ class StringMethods(object):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         kwargs.setdefault("retain_index", False)
         warnings.warn(
-            "nvtext will be removed in 0.15. Please use equivalent from libcudf",
+            "nvtext will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3466,7 +3470,8 @@ class StringMethods(object):
         """
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         warnings.warn(
-            "nvtext will be removed in 0.15. Please use equivalent from libcudf",
+            "nvtext will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3509,7 +3514,8 @@ class StringMethods(object):
         separator = _massage_string_arg(separator, "separator")
         kwargs.setdefault("retain_index", False)
         warnings.warn(
-            "nvtext will be removed in 0.15. Please use equivalent from libcudf",
+            "nvtext will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3550,7 +3556,8 @@ class StringMethods(object):
         separator = _massage_string_arg(separator, "separator")
         kwargs.setdefault("retain_index", False)
         warnings.warn(
-            "nvtext will be removed in 0.15. Please use equivalent from libcudf",
+            "nvtext will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3642,13 +3649,15 @@ class StringColumn(column.ColumnBase):
 
         # TODO: Remove these once NVStrings is fully deprecated / removed
         warnings.warn(
-            "nvstrings will be removed in 0.15. Please use equivalent from libcudf",
+            "nvstrings will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
         self._nvstrings = None
         warnings.warn(
-            "nvcategory will be removed in 0.15. Please use equivalent from libcudf",
+            "nvcategory will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3680,13 +3689,15 @@ class StringColumn(column.ColumnBase):
         # TODO: Remove these once NVStrings is fully deprecated / removed
         self._indices = None
         warnings.warn(
-            "nvcategory will be removed in 0.15. Please use equivalent from libcudf",
+            "nvcategory will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
         self._nvcategory = None
         warnings.warn(
-            "nvstrings will be removed in 0.15. Please use equivalent from libcudf",
+            "nvstrings will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3699,13 +3710,15 @@ class StringColumn(column.ColumnBase):
         # TODO: Remove these once NVStrings is fully deprecated / removed
         self._indices = None
         warnings.warn(
-            "nvcategory will be removed in 0.15. Please use equivalent from libcudf",
+            "nvcategory will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
         self._nvcategory = None
         warnings.warn(
-            "nvstrings will be removed in 0.15. Please use equivalent from libcudf",
+            "nvstrings will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3789,7 +3802,8 @@ class StringColumn(column.ColumnBase):
     @property
     def nvstrings(self):
         warnings.warn(
-            "nvstrings will be removed in 0.15. Please use equivalent from libcudf",
+            "nvstrings will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3815,12 +3829,14 @@ class StringColumn(column.ColumnBase):
     @property
     def nvcategory(self):
         warnings.warn(
-            "nvcategory will be removed in 0.15. Please use equivalent from libcudf",
+            "nvcategory will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
         warnings.warn(
-            "nvstrings will be removed in 0.15. Please use equivalent from libcudf",
+            "nvstrings will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3834,7 +3850,8 @@ class StringColumn(column.ColumnBase):
     @nvcategory.setter
     def nvcategory(self, nvc):
         warnings.warn(
-            "nvcategory will be removed in 0.15. Please use equivalent from libcudf",
+            "nvcategory will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3843,13 +3860,15 @@ class StringColumn(column.ColumnBase):
     def _set_mask(self, value):
         # TODO: Remove these once NVStrings is fully deprecated / removed
         warnings.warn(
-            "nvstrings will be removed in 0.15. Please use equivalent from libcudf",
+            "nvstrings will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
         self._nvstrings = None
         warnings.warn(
-            "nvcategory will be removed in 0.15. Please use equivalent from libcudf",
+            "nvcategory will be removed in 0.15. \
+            Please use equivalent from libcudf",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3863,7 +3882,8 @@ class StringColumn(column.ColumnBase):
     def indices(self):
         if self._indices is None:
             warnings.warn(
-                "nvcategory will be removed in 0.15. Please use equivalent from libcudf",
+                "nvcategory will be removed in 0.15. \
+                Please use equivalent from libcudf",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -4090,13 +4110,15 @@ class StringColumn(column.ColumnBase):
         if inplace:
             # TODO: Remove these once NVStrings is fully deprecated / removed
             warnings.warn(
-                "nvstrings will be removed in 0.15. Please use equivalent from libcudf",
+                "nvstrings will be removed in 0.15. \
+                Please use equivalent from libcudf",
                 DeprecationWarning,
                 stacklevel=2,
             )
             self._nvstrings = other_col._nvstrings
             warnings.warn(
-                "nvcategory will be removed in 0.15. Please use equivalent from libcudf",
+                "nvcategory will be removed in 0.15. \
+                Please use equivalent from libcudf",
                 DeprecationWarning,
                 stacklevel=2,
             )
