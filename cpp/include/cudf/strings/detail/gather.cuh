@@ -86,7 +86,11 @@ std::unique_ptr<cudf::column> gather(
   auto gather_chars =
     [d_strings, begin, strings_count, d_offsets, d_chars] __device__(size_type idx) {
       auto index = begin[idx];
-      if (NullifyOutOfBounds && ((index < 0) || (index >= strings_count))) return;
+      if (NullifyOutOfBounds) {
+        if (std::is_signed<decltype(index)>::value ? ((index < 0) || (index >= strings_count))
+                                                   : (index >= strings_count))
+          return;
+      }
       if (d_strings.is_null(index)) return;
       string_view d_str = d_strings.element<string_view>(index);
       memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());

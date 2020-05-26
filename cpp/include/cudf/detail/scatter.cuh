@@ -37,9 +37,11 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 {
   using MapValueType = typename thrust::iterator_traits<MapIterator>::value_type;
 
+  // TODO: This is only used to call gather_bitmask below.
+  //       Recommend changing to use a pair-iterator to idenitfy pass-through elements instead.
   // static_assert(std::is_signed<MapValueType>::value,
   //              "Need different invalid index if unsigned index types are added");
-  auto const invalid_index = static_cast<MapValueType>(-1);
+  auto const invalid_index = gather_rows;  // static_cast<MapValueType>(-1);
 
   // Convert scatter map to a gather map
   auto gather_map = rmm::device_vector<MapValueType>(gather_rows, invalid_index);

@@ -166,7 +166,7 @@ struct integer_to_string_size_fn {
     if (d_column.is_null(idx)) return 0;
     IntegerType value = d_column.element<IntegerType>(idx);
     if (value == 0) return 1;
-    bool is_negative = value < 0;
+    bool is_negative = std::is_signed<IntegerType>::value ? (value < 0) : false;
     // abs(std::numeric_limits<IntegerType>::min()) is negative;
     // for all integer types, the max() and min() values have the same number of digits
     value = (value == std::numeric_limits<IntegerType>::min())
@@ -244,7 +244,8 @@ struct integer_to_string_fn {
       *d_buffer = '0';
       return;
     }
-    bool is_negative           = value < 0;
+    bool is_negative = std::is_signed<IntegerType>::value ? (value < 0) : false;
+    //
     constexpr IntegerType base = 10;
     constexpr int MAX_DIGITS   = 20;  // largest 64-bit integer is 20 digits
     char digits[MAX_DIGITS];          // place-holder for digit chars
