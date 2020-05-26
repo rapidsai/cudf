@@ -102,7 +102,17 @@ using FloatingPointTypes = cudf::test::Types<float, double>;
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypes);
  * ```
  **/
-using NumericTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double, bool>;
+using NumericTypes = cudf::test::Types<int8_t,
+                                       int16_t,
+                                       int32_t,
+                                       int64_t,
+                                       float,
+                                       double,
+                                       bool,
+                                       uint8_t,
+                                       uint16_t,
+                                       uint32_t,
+                                       uint64_t>;
 
 /**
  * @brief Provides a list of all timestamp types supported in libcudf for use
