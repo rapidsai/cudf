@@ -31,7 +31,7 @@ class Reduction : public cudf::benchmark {
 
 template <typename type>
 void BM_reduction(benchmark::State& state,
-                  std::unique_ptr<cudf::experimental::aggregation> const& agg)
+                  std::unique_ptr<cudf::aggregation> const& agg)
 {
   using wrapper = cudf::test::fixed_width_column_wrapper<type>;
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
@@ -42,20 +42,20 @@ void BM_reduction(benchmark::State& state,
   wrapper values(data_it, data_it + column_size);
 
   auto input_column            = cudf::column_view(values);
-  cudf::data_type output_dtype = (agg->kind == cudf::experimental::aggregation::MEAN ||
-                                  agg->kind == cudf::experimental::aggregation::VARIANCE ||
-                                  agg->kind == cudf::experimental::aggregation::STD)
+  cudf::data_type output_dtype = (agg->kind == cudf::aggregation::MEAN ||
+                                  agg->kind == cudf::aggregation::VARIANCE ||
+                                  agg->kind == cudf::aggregation::STD)
                                    ? cudf::data_type{cudf::FLOAT64}
                                    : input_column.type();
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::experimental::reduce(input_column, agg, output_dtype);
+    auto result = cudf::reduce(input_column, agg, output_dtype);
   }
 }
 
 #define concat(a, b, c) a##b##c
-#define get_agg(op) concat(cudf::experimental::make_, op, _aggregation())
+#define get_agg(op) concat(cudf::make_, op, _aggregation())
 
 // TYPE, OP
 #define RBM_BENCHMARK_DEFINE(name, type, aggregation)             \
