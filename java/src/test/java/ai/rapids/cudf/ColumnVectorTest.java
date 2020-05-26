@@ -2081,9 +2081,18 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testStringReplaceWithBackrefs() {
+
+    try (ColumnVector v = ColumnVector.fromStrings("<h1>title</h1>", "<h1>another title</h1>",
+        null);
+         ColumnVector expected = ColumnVector.fromStrings("<h2>title</h2>",
+             "<h2>another title</h2>", null);
+         ColumnVector actual = v.stringReplaceWithBackrefs("<h1>(.*)</h1>", "<h2>\\1</h2>")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
     try (ColumnVector v = ColumnVector.fromStrings("2020-1-01", "2020-2-02", null);
          ColumnVector expected = ColumnVector.fromStrings("2020-01-01", "2020-02-02", null);
-         ColumnVector actual = v.stringReplaceWithBackRefs("-([0-9])-", "-0\\1-")) {
+         ColumnVector actual = v.stringReplaceWithBackrefs("-([0-9])-", "-0\\1-")) {
       assertColumnsAreEqual(expected, actual);
     }
 
@@ -2091,7 +2100,7 @@ public class ColumnVectorTest extends CudfTestBase {
         "2020-03-3invalid", null);
          ColumnVector expected = ColumnVector.fromStrings("2020-01-01", "2020-02-02",
              "2020-03-3invalid", null);
-         ColumnVector actual = v.stringReplaceWithBackRefs(
+         ColumnVector actual = v.stringReplaceWithBackrefs(
              "-([0-9])$", "-0\\1")) {
       assertColumnsAreEqual(expected, actual);
     }
@@ -2100,7 +2109,7 @@ public class ColumnVectorTest extends CudfTestBase {
         "2020-03-3invalid", null);
          ColumnVector expected = ColumnVector.fromStrings("2020-01-01 random_text",
              "2020-02-02T12:34:56", "2020-03-3invalid", null);
-         ColumnVector actual = v.stringReplaceWithBackRefs(
+         ColumnVector actual = v.stringReplaceWithBackrefs(
              "-([0-9])([ T])", "-0\\1\\2")) {
       assertColumnsAreEqual(expected, actual);
     }
