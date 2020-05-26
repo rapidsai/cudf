@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #5288 Drop `auto_pickle` decorator #5288
+
 ## Bug Fixes
 
 # cuDF 0.14.0 (Date TBD)
