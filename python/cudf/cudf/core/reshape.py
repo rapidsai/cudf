@@ -85,7 +85,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
-        # if indexes do not match, check for duplicate axis check if 
+        # if indexes do not match, check for duplicate axis check if
         # multiindex and compare to see if they match. GenericIndex
         # returns ndarray tuple of bools requiring additional filter.
         i_objs = iter(objs)
