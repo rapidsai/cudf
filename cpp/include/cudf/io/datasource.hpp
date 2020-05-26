@@ -128,7 +128,7 @@ class datasource {
    *
    * @return bool Whether this source supports device_read() calls
    */
-  virtual bool supports_device_write() const { return false; }
+  virtual bool supports_device_read() const { return false; }
 
   /**
    * @brief Returns a device buffer with a subset of data from the source.
