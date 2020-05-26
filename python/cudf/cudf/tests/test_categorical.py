@@ -617,27 +617,46 @@ def test_astype_dtype(data, expected):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        # [1, 2, 3],
-        [0.0, 6.7, 10.0],
-        # ['a', 'bd', 'ef']
-    ],
+    "data", [[1, 2, 3], [0.0, 6.7, 10.0], ["a", "bd", "ef"]],
 )
 @pytest.mark.parametrize(
-    "add",
-    [
-        # [10, 11, 12],
-        # [0.01, 9.7, 15.0],
-        ["asdfsdf", "bddf", "eff"]
-    ],
+    "add", [[100, 11, 12], [0.01, 9.7, 15.0], ["asdfsdf", "bddf", "eff"], []],
 )
 def test_add_categories(data, add):
     pds = pd.Series(data, dtype="category")
     gds = gd.Series(data, dtype="category")
 
+    expected = pds.cat.add_categories(add)
+    actual = gds.cat.add_categories(add)
+    assert_eq(expected.cat.codes, actual.cat.codes)
+
+    # Need to type-cast pandas object to str due to mixed-type
+    # support in "object"
     assert_eq(
-        pds.cat.add_categories(add),
-        gds.cat.add_categories(add),
-        check_dtype=False,
+        expected.cat.categories.astype("str")
+        if (expected.cat.categories.dtype == "object")
+        else expected.cat.categories,
+        actual.cat.categories,
     )
+
+
+@pytest.mark.parametrize(
+    "data,add",
+    [
+        ([1, 2, 3], [1, 3, 11]),
+        ([0.0, 6.7, 10.0], [1, 2, 0.0]),
+        (["a", "bd", "ef"], ["a", "bd", "a"]),
+    ],
+)
+def test_add_categories_error(data, add):
+    pds = pd.Series(data, dtype="category")
+    gds = gd.Series(data, dtype="category")
+
+    error_type = None
+    try:
+        pds.cat.add_categories(add)
+    except Exception as e:
+        error_type = type(e)
+
+    with pytest.raises(error_type):
+        gds.cat.add_categories(add)

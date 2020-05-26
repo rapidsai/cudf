@@ -67,6 +67,13 @@ class CategoricalAccessor(object):
         elif old_categories.dtype != common_dtype:
             old_categories = old_categories.astype(common_dtype)
 
+        already_included = set(new_categories) & set(old_categories)
+        if len(already_included) != 0:
+            raise ValueError(
+                f"new categories must not\
+                     include old categories: {already_included}"
+            )
+
         new_categories = old_categories.append(new_categories)
         out_col = self._column
         if not self._categories_equal(new_categories, **kwargs):
