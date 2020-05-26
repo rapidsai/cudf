@@ -31,8 +31,8 @@ class GroupBy(Serializable):
         For objects with a MultiIndex, `level` can be used to specify
         grouping by one or more levels of the MultiIndex.
     sort : False, optional
-        If True, sort results by group's. Note that
-        unlike Pandas, this doesnot guarantee sorting values within each group.
+        If True, sort results by groups. Note that
+        unlike Pandas, this does not guarantee sorting values within each group.
     as_index : bool, optional
         If as_index=True (default), the group names appear
         as the keys of the resulting DataFrame.
