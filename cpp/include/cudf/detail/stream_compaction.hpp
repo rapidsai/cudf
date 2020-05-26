@@ -21,15 +21,14 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
- * @copydoc cudf::experimental::drop_nulls(table_view const&, std::vector<size_type> const&,
+ * @copydoc cudf::drop_nulls(table_view const&, std::vector<size_type> const&,
  *                                         cudf::size_type, rmm::mr::device_memory_resource*)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<experimental::table> drop_nulls(
+std::unique_ptr<table> drop_nulls(
   table_view const& input,
   std::vector<size_type> const& keys,
   cudf::size_type keep_threshold,
@@ -37,22 +36,22 @@ std::unique_ptr<experimental::table> drop_nulls(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::apply_boolean_mask
+ * @copydoc cudf::apply_boolean_mask
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<experimental::table> apply_boolean_mask(
+std::unique_ptr<table> apply_boolean_mask(
   table_view const& input,
   column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::drop_duplicates
+ * @copydoc cudf::drop_duplicates
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<experimental::table> drop_duplicates(
+std::unique_ptr<table> drop_duplicates(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
@@ -61,7 +60,7 @@ std::unique_ptr<experimental::table> drop_duplicates(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::unique_count
+ * @copydoc cudf::unique_count
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -71,5 +70,4 @@ cudf::size_type unique_count(column_view const& input,
                              cudaStream_t stream = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

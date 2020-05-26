@@ -30,7 +30,6 @@
 #include <thrust/equal.h>
 #include <thrust/logical.h>
 
-#include <gmock/gmock.h>
 #include <numeric>
 
 namespace cudf {
@@ -64,7 +63,7 @@ class corresponding_rows_unequal {
   {
   }
 
-  cudf::experimental::row_equality_comparator<true> comp;
+  cudf::row_equality_comparator<true> comp;
 
   __device__ bool operator()(size_type index) { return !comp(index, index); }
 };
@@ -106,14 +105,14 @@ class corresponding_rows_not_equivalent {
     }
   };
 
-  cudf::experimental::row_equality_comparator<true> comp;
+  cudf::row_equality_comparator<true> comp;
 
   __device__ bool operator()(size_type index)
   {
     if (not comp(index, index)) {
       auto lhs_col = this->d_lhs.column(0);
       auto rhs_col = this->d_rhs.column(0);
-      return experimental::type_dispatcher(
+      return type_dispatcher(
         lhs_col.type(), typed_element_not_equivalent{}, lhs_col, rhs_col, index);
     }
     return false;
@@ -158,8 +157,7 @@ void column_comparison(cudf::column_view const& lhs,
 
       fixed_width_column_wrapper<int32_t> diff_column(differences.begin(), differences.end());
 
-      std::unique_ptr<cudf::experimental::table> diff_table =
-        cudf::experimental::gather(source_table, diff_column);
+      std::unique_ptr<cudf::table> diff_table = cudf::gather(source_table, diff_column);
 
       //
       //  Need to pull back the differences
@@ -179,8 +177,8 @@ void column_comparison(cudf::column_view const& lhs,
       //
       int index = differences[0];
 
-      auto diff_lhs = cudf::experimental::detail::slice(lhs, index, index + 1);
-      auto diff_rhs = cudf::experimental::detail::slice(rhs, index, index + 1);
+      auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
+      auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
 
       std::vector<std::string> h_left_strings  = to_strings(diff_lhs);
       std::vector<std::string> h_right_strings = to_strings(diff_rhs);
@@ -349,7 +347,7 @@ struct column_view_printer {
 std::vector<std::string> to_strings(cudf::column_view const& col)
 {
   std::vector<std::string> reply;
-  cudf::experimental::type_dispatcher(col.type(), column_view_printer{}, col, reply);
+  cudf::type_dispatcher(col.type(), column_view_printer{}, col, reply);
   return reply;
 }
 

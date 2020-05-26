@@ -15,7 +15,6 @@
  */
 #pragma once
 
-//#include <bitmask/legacy/valid_if.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 

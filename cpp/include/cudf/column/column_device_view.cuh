@@ -743,7 +743,7 @@ struct value_accessor {
    */
   value_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
   }
 
   __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }
@@ -777,7 +777,7 @@ struct pair_accessor {
    */
   pair_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
@@ -798,7 +798,7 @@ struct mutable_value_accessor {
    */
   mutable_value_accessor(mutable_column_device_view& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
   }
 
   __device__ T& operator()(cudf::size_type i) { return col.element<T>(i); }

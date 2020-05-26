@@ -24,7 +24,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup column_search
  * @{
@@ -169,5 +168,4 @@ std::unique_ptr<column> contains(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

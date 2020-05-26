@@ -30,7 +30,6 @@
 #include <thrust/sequence.h>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 // Functor to identify unique elements in a sorted order table/column
@@ -336,5 +335,4 @@ std::unique_ptr<column> rank(column_view const &input,
 {
   return detail::rank(input, method, column_order, null_handling, null_precedence, percentage, mr);
 }
-}  // namespace experimental
 }  // namespace cudf

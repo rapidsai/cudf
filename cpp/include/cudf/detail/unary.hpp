@@ -20,7 +20,6 @@
 #include <cudf/unary.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Creates a column of `BOOL8` elements by applying a predicate to every element between
@@ -57,18 +56,18 @@ std::unique_ptr<column> true_if(
 }
 
 /**
- * @copydoc cudf::experimental::unary_operation
+ * @copydoc cudf::unary_operation
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
-  cudf::experimental::unary_op op,
+  cudf::unary_op op,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::cast
+ * @copydoc cudf::cast
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -78,7 +77,7 @@ std::unique_ptr<column> cast(column_view const& input,
                              cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::is_nan
+ * @copydoc cudf::is_nan
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -88,7 +87,7 @@ std::unique_ptr<column> is_nan(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::is_not_nan
+ * @copydoc cudf::is_not_nan
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -98,5 +97,4 @@ std::unique_ptr<column> is_not_nan(
   cudaStream_t stream                 = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

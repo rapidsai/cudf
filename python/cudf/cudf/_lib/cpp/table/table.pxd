@@ -10,7 +10,7 @@ from cudf._lib.cpp.table.table_view cimport (
     mutable_table_view
 )
 
-cdef extern from "cudf/table/table.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/table/table.hpp" namespace "cudf" nogil:
     cdef cppclass table:
         table(const table&) except +
         table(vector[unique_ptr[column]]&& columns) except +

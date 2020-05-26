@@ -35,7 +35,6 @@
 #include <utility>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 // Constructor
 groupby::groupby(table_view const& keys,
@@ -85,13 +84,13 @@ auto empty_results(std::vector<aggregation_request> const& requests)
     requests.begin(), requests.end(), std::back_inserter(empty_results), [](auto const& request) {
       std::vector<std::unique_ptr<column>> results;
 
-      std::transform(request.aggregations.begin(),
-                     request.aggregations.end(),
-                     std::back_inserter(results),
-                     [&request](auto const& agg) {
-                       return make_empty_column(
-                         experimental::detail::target_type(request.values.type(), agg->kind));
-                     });
+      std::transform(
+        request.aggregations.begin(),
+        request.aggregations.end(),
+        std::back_inserter(results),
+        [&request](auto const& agg) {
+          return make_empty_column(cudf::detail::target_type(request.values.type(), agg->kind));
+        });
 
       return aggregation_result{std::move(results)};
     });
@@ -108,7 +107,7 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests)
                              return std::all_of(request.aggregations.begin(),
                                                 request.aggregations.end(),
                                                 [&request](auto const& agg) {
-                                                  return experimental::detail::is_valid_aggregation(
+                                                  return cudf::detail::is_valid_aggregation(
                                                     request.values.type(), agg->kind);
                                                 });
                            }),
@@ -146,8 +145,11 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
 
   std::unique_ptr<table> grouped_values{nullptr};
   if (values.num_columns()) {
-    grouped_values = cudf::experimental::detail::gather(
-      values, helper().key_sort_order(), false, false, false, mr);
+    grouped_values = cudf::detail::gather(values,
+                                          helper().key_sort_order(),
+                                          cudf::detail::out_of_bounds_policy::NULLIFY,
+                                          cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                          mr);
     return groupby::groups{
       std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};
   } else {
@@ -165,5 +167,4 @@ detail::sort::sort_groupby_helper& groupby::helper()
 };
 
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

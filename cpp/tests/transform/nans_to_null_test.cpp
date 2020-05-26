@@ -27,7 +27,7 @@ template <typename T>
 struct NaNsToNullTest : public cudf::test::BaseFixture {
   void run_test(cudf::column_view const& input, cudf::column_view const& expected)
   {
-    auto got_mask = cudf::experimental::nans_to_nulls(input);
+    auto got_mask = cudf::nans_to_nulls(input);
     cudf::column got(input);
     got.set_null_mask(std::move(*(got_mask.first)));
 
@@ -128,7 +128,7 @@ TEST_F(NaNsToNullFailTest, StringType)
     "", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"};
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end());
 
-  EXPECT_THROW(cudf::experimental::nans_to_nulls(input), cudf::logic_error);
+  EXPECT_THROW(cudf::nans_to_nulls(input), cudf::logic_error);
 }
 
 TEST_F(NaNsToNullFailTest, IntegerType)
@@ -136,5 +136,5 @@ TEST_F(NaNsToNullFailTest, IntegerType)
   std::vector<int32_t> input = {1, 2, 3, 4, 5, 6};
   auto input_column = cudf::test::fixed_width_column_wrapper<int32_t>(input.begin(), input.end());
 
-  EXPECT_THROW(cudf::experimental::nans_to_nulls(input_column), cudf::logic_error);
+  EXPECT_THROW(cudf::nans_to_nulls(input_column), cudf::logic_error);
 }

@@ -24,7 +24,7 @@
 namespace cudf {
 namespace detail {
 /**
- * @copydoc cudf::experimental::replace_nulls(column_view const&, column_view const&,
+ * @copydoc cudf::replace_nulls(column_view const&, column_view const&,
  * rmm::mr::device_memory_resource*)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
@@ -36,7 +36,7 @@ std::unique_ptr<column> replace_nulls(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::replace_nulls(column_view const&, scalar const&,
+ * @copydoc cudf::replace_nulls(column_view const&, scalar const&,
  * rmm::mr::device_memory_resource*)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
@@ -48,7 +48,7 @@ std::unique_ptr<column> replace_nulls(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::replace_nans(column_view const&, column_view const&,
+ * @copydoc cudf::replace_nans(column_view const&, column_view const&,
  * rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -60,7 +60,7 @@ std::unique_ptr<column> replace_nans(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @copydoc cudf::experimental::replace_nans(column_view const&, scalar const&,
+ * @copydoc cudf::replace_nans(column_view const&, scalar const&,
  * rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -72,7 +72,7 @@ std::unique_ptr<column> replace_nans(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @copydoc cudf::experimental::find_and_replace_all
+ * @copydoc cudf::find_and_replace_all
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

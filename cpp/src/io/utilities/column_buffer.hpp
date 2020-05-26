@@ -30,7 +30,6 @@
 #include <rmm/device_buffer.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 /**
@@ -131,5 +130,4 @@ std::unique_ptr<column> make_column(
 
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

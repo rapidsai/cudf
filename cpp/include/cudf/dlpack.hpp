@@ -43,7 +43,7 @@ namespace cudf {
  *
  * @return Table with a copy of the tensor data
  */
-std::unique_ptr<experimental::table> from_dlpack(
+std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 

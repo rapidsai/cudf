@@ -25,8 +25,6 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
-#include <gmock/gmock.h>
-
 #include <cstring>
 #include <vector>
 
@@ -185,7 +183,7 @@ TEST_F(StringsFactoriesTest, CreateOffsets)
   cudf::test::strings_column_wrapper sw = {strings.begin(), strings.end()};
   cudf::column_view col(sw);
   std::vector<cudf::size_type> indices{0, 2, 3, 6};
-  auto result = cudf::experimental::slice(col, indices);
+  auto result = cudf::slice(col, indices);
 
   std::vector<std::vector<std::string>> expecteds{
     std::vector<std::string>{"this", "is"},              // [0,2)

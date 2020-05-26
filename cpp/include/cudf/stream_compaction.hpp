@@ -22,7 +22,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup reorder_compact
  * @{
@@ -97,7 +96,7 @@ std::unique_ptr<table> drop_nulls(
  * @return Table containing all rows of the `input` without nulls in the columns
  * of @p keys.
  */
-std::unique_ptr<experimental::table> drop_nulls(
+std::unique_ptr<table> drop_nulls(
   table_view const& input,
   std::vector<size_type> const& keys,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -123,7 +122,7 @@ std::unique_ptr<experimental::table> drop_nulls(
  * @return Table containing copy of all rows of @p input passing
  * the filter defined by @p boolean_mask.
  */
-std::unique_ptr<experimental::table> apply_boolean_mask(
+std::unique_ptr<table> apply_boolean_mask(
   table_view const& input,
   column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -158,7 +157,7 @@ enum class duplicate_keep_option {
  *
  * @return Table with unique rows as per specified `keep`.
  */
-std::unique_ptr<experimental::table> drop_duplicates(
+std::unique_ptr<table> drop_duplicates(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
@@ -186,5 +185,4 @@ cudf::size_type unique_count(column_view const& input,
                              nan_policy nan_handling);
 
 /** @} */
-}  // namespace experimental
 }  // namespace cudf

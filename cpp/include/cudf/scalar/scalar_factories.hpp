@@ -113,7 +113,7 @@ std::unique_ptr<scalar> make_fixed_width_scalar(
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
-  return std::make_unique<experimental::scalar_type_t<T>>(value, true, stream, mr);
+  return std::make_unique<scalar_type_t<T>>(value, true, stream, mr);
 }
 
 /** @} */  // end of group

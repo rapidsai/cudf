@@ -21,7 +21,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup transformation_fill
  * @{
@@ -202,5 +201,4 @@ std::unique_ptr<column> sequence(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

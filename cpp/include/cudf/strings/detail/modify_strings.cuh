@@ -31,7 +31,7 @@ namespace detail {
  * @brief Generic string modification in two passes: 1st pass probes for memory load requirements;
  * 2nd pass executes string modification.
  *
- * @tparam device_probe_functor Functor for probing memory requitements;
+ * @tparam device_probe_functor Functor for probing memory requirements;
  * must implement `__device__ int32_t operator()(size_type idx) const`
  * @tparam device_execute_functor Functor for executing string modification; must
  * implement `__device__ int32_t operator()(size_type idx)`

@@ -24,7 +24,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 //! `groupby` APIs
 namespace groupby {
 namespace detail {
@@ -233,5 +232,4 @@ class groupby {
 };
 /** @} */
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

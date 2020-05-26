@@ -16,7 +16,6 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/legacy/copying.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/search.hpp>
 #include <cudf/table/row_operators.cuh>
@@ -34,7 +33,6 @@
 #include <thrust/logical.h>
 
 namespace cudf {
-namespace experimental {
 namespace {
 template <typename DataIterator,
           typename ValuesIterator,
@@ -77,12 +75,8 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                                        cudaStream_t stream = 0)
 {
   // Allocate result column
-  std::unique_ptr<column> result =
-    make_numeric_column(data_type{experimental::type_to_id<size_type>()},
-                        values.num_rows(),
-                        mask_state::UNALLOCATED,
-                        stream,
-                        mr);
+  std::unique_ptr<column> result = make_numeric_column(
+    data_type{type_to_id<size_type>()}, values.num_rows(), mask_state::UNALLOCATED, stream, mr);
 
   mutable_column_view result_view = result.get()->mutable_view();
 
@@ -153,7 +147,7 @@ struct contains_scalar_dispatch {
                   cudaStream_t stream,
                   rmm::mr::device_memory_resource* mr)
   {
-    using ScalarType = cudf::experimental::scalar_type_t<Element>;
+    using ScalarType = cudf::scalar_type_t<Element>;
     auto d_col       = column_device_view::create(col, stream);
     auto s           = static_cast<const ScalarType*>(&value);
 
@@ -207,8 +201,7 @@ bool contains(column_view const& col,
 
   if (not value.is_valid()) { return col.has_nulls(); }
 
-  return cudf::experimental::type_dispatcher(
-    col.type(), contains_scalar_dispatch{}, col, value, stream, mr);
+  return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream, mr);
 }
 
 struct multi_contains_dispatch {
@@ -218,13 +211,12 @@ struct multi_contains_dispatch {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    std::unique_ptr<column> result =
-      make_numeric_column(data_type{experimental::type_to_id<bool>()},
-                          haystack.size(),
-                          copy_bitmask(haystack),
-                          haystack.null_count(),
-                          stream,
-                          mr);
+    std::unique_ptr<column> result = make_numeric_column(data_type{type_to_id<bool>()},
+                                                         haystack.size(),
+                                                         copy_bitmask(haystack),
+                                                         haystack.null_count(),
+                                                         stream,
+                                                         mr);
 
     if (haystack.size() == 0) { return result; }
 
@@ -294,7 +286,7 @@ std::unique_ptr<column> contains(column_view const& haystack,
 {
   CUDF_EXPECTS(haystack.type() == needles.type(), "DTYPE mismatch");
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     haystack.type(), multi_contains_dispatch{}, haystack, needles, mr, stream);
 }
 
@@ -356,5 +348,4 @@ std::unique_ptr<column> contains(column_view const& haystack,
   return detail::contains(haystack, needles, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

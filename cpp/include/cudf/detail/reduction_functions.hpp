@@ -20,7 +20,6 @@
 #include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 /**
  * @brief Computes sum of elements in input column
@@ -212,5 +211,4 @@ std::unique_ptr<scalar> standard_deviation(
   cudaStream_t stream                 = 0);
 
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

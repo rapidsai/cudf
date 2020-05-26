@@ -20,7 +20,6 @@
 #include <io/utilities/parsing_utils.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace json {
 namespace gpu {
@@ -77,5 +76,4 @@ void detect_data_types(ColumnInfo *column_infos,
 }  // namespace gpu
 }  // namespace json
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

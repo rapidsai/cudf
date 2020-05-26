@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -27,7 +26,6 @@
 #include <numeric>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 /**
@@ -42,8 +40,8 @@ __launch_bounds__(block_size) __global__
   void copy_in_place_kernel(column_device_view const in, mutable_column_device_view out)
 {
   const size_type tid            = threadIdx.x + blockIdx.x * block_size;
-  const int warp_id              = tid / cudf::experimental::detail::warp_size;
-  const size_type warps_per_grid = gridDim.x * block_size / cudf::experimental::detail::warp_size;
+  const int warp_id              = tid / cudf::detail::warp_size;
+  const size_type warps_per_grid = gridDim.x * block_size / cudf::detail::warp_size;
 
   // begin/end indices for the column data
   size_type begin = 0;
@@ -55,7 +53,7 @@ __launch_bounds__(block_size) __global__
   size_type warp_end   = cudf::word_index(end - 1);
 
   // lane id within the current warp
-  const int lane_id = threadIdx.x % cudf::experimental::detail::warp_size;
+  const int lane_id = threadIdx.x % cudf::detail::warp_size;
 
   // current warp.
   size_type warp_cur = warp_begin + warp_id;
@@ -119,8 +117,8 @@ __launch_bounds__(block_size) __global__
                                     char* __restrict__ chars_out)
 {
   const size_type tid            = threadIdx.x + blockIdx.x * block_size;
-  const int warp_id              = tid / cudf::experimental::detail::warp_size;
-  const size_type warps_per_grid = gridDim.x * block_size / cudf::experimental::detail::warp_size;
+  const int warp_id              = tid / cudf::detail::warp_size;
+  const size_type warps_per_grid = gridDim.x * block_size / cudf::detail::warp_size;
 
   // how many warps we'll be processing. with strings, the chars and offsets
   // lengths may be different.  so we'll just march the worst case.
@@ -137,7 +135,7 @@ __launch_bounds__(block_size) __global__
   size_type validity_warp_end = cudf::word_index(num_strings - 1);
 
   // lane id within the current warp
-  const int lane_id = threadIdx.x % cudf::experimental::detail::warp_size;
+  const int lane_id = threadIdx.x % cudf::detail::warp_size;
 
   size_type warp_cur = warp_begin + warp_id;
   size_type index    = tid;
@@ -235,10 +233,9 @@ struct column_copy_functor {
     }
 
     // custom copy kernel (which could probably just be an in-place copy() function in cudf).
-    cudf::size_type num_els =
-      cudf::util::round_up_safe(in.size(), cudf::experimental::detail::warp_size);
+    cudf::size_type num_els  = cudf::util::round_up_safe(in.size(), cudf::detail::warp_size);
     constexpr int block_size = 256;
-    cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
+    cudf::detail::grid_1d grid{num_els, block_size, 1};
 
     // output copied column
     mutable_column_view mcv{in.type(), in.size(), data, validity, in.null_count()};
@@ -275,9 +272,9 @@ void column_copy_functor::operator()<string_view>(column_view const& in,
   column_view in_offsets = strings_c.offsets();
   // note, incoming columns are sliced, so their size is fundamentally different from their child
   // offset columns, which are unsliced.
-  size_type num_offsets       = in.size() + 1;
-  cudf::size_type num_threads = cudf::util::round_up_safe(
-    std::max(split_info.num_chars, num_offsets), cudf::experimental::detail::warp_size);
+  size_type num_offsets = in.size() + 1;
+  cudf::size_type num_threads =
+    cudf::util::round_up_safe(std::max(split_info.num_chars, num_offsets), cudf::detail::warp_size);
   column_view in_chars = strings_c.chars();
 
   // a column with no strings will still have a single offset.
@@ -286,7 +283,7 @@ void column_copy_functor::operator()<string_view>(column_view const& in,
   // 1 combined kernel call that copies chars, offsets and validity in one pass. see notes on why
   // this exists in the kernel brief.
   constexpr int block_size = 256;
-  cudf::experimental::detail::grid_1d grid{num_threads, block_size, 1};
+  cudf::detail::grid_1d grid{num_threads, block_size, 1};
   if (in.has_nulls()) {
     copy_in_place_strings_kernel<block_size, true><<<grid.num_blocks, block_size, 0, 0>>>(
       in.size(),                                        // num_rows
@@ -425,8 +422,8 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t,
   size_type column_index = 0;
   std::for_each(
     t.begin(), t.end(), [&total_size, &column_index, &split_info](cudf::column_view const& c) {
-      total_size += cudf::experimental::type_dispatcher(
-        c.type(), column_buffer_size_functor{}, c, split_info[column_index]);
+      total_size +=
+        cudf::type_dispatcher(c.type(), column_buffer_size_functor{}, c, split_info[column_index]);
       column_index++;
     });
 
@@ -442,7 +439,7 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t,
   column_index = 0;
   std::for_each(
     t.begin(), t.end(), [&out_cols, &buf, &column_index, &split_info](cudf::column_view const& c) {
-      cudf::experimental::type_dispatcher(
+      cudf::type_dispatcher(
         c.type(), column_copy_functor{}, c, split_info[column_index], buf, out_cols);
       column_index++;
     });
@@ -457,7 +454,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                                                       rmm::mr::device_memory_resource* mr,
                                                       cudaStream_t stream)
 {
-  auto subtables = cudf::experimental::split(input, splits);
+  auto subtables = cudf::split(input, splits);
 
   // optimization : for large numbers of splits this allocation can dominate total time
   //                spent if done inside alloc_and_copy().  so we'll allocate it once
@@ -486,9 +483,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::experimental::detail::contiguous_split(input, splits, mr, (cudaStream_t)0);
+  return cudf::detail::contiguous_split(input, splits, mr, (cudaStream_t)0);
 }
-
-};  // namespace experimental
 
 };  // namespace cudf

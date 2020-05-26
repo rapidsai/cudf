@@ -20,11 +20,11 @@
 namespace cudf {
 namespace detail {
 /**
- * @copydoc cudf::experimental::hash_partition
+ * @copydoc cudf::hash_partition
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,

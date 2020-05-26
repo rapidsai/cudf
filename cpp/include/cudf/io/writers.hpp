@@ -33,8 +33,6 @@
 
 //! cuDF interfaces
 namespace cudf {
-//! In-development features
-namespace experimental {
 //! IO interfaces
 namespace io {
 namespace detail {
@@ -246,8 +244,8 @@ struct writer_options {
    * @param rows_per_chunk maximum number of rows to process for each file write
    * @param line_terminator character to use for separating lines (default "\n")
    * @param delim character to use between each column entry (default ',')
-   * @param true_v string to use for values !=0 in GDF_INT8 types (default 'true')
-   * @param false_v string to use for values ==0 in GDF_INT8 types (default 'false')
+   * @param true_v string to use for values !=0 in INT8 types (default 'true')
+   * @param false_v string to use for values ==0 in INT8 types (default 'false')
    */
   writer_options(std::string const& na,
                  bool include_header,
@@ -300,11 +298,11 @@ struct writer_options {
   //
   char inter_column_delimiter_;
 
-  // string to use for values !=0 in GDF_INT8 types (default 'true'):
+  // string to use for values !=0 in INT8 types (default 'true'):
   //
   std::string const true_value_;
 
-  // string to use for values ==0 in GDF_INT8 types (default 'false'):
+  // string to use for values ==0 in INT8 types (default 'false'):
   //
   std::string const false_value_;
 };
@@ -355,5 +353,4 @@ class writer {
 
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf
