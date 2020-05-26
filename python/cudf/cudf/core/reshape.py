@@ -86,8 +86,8 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
         # Check if multiindex then check if indexes match. GenericIndex
-        # returns ndarray tuple of bools requiring additional filter. 
-        # Then check for duplicate index value. 
+        # returns ndarray tuple of bools requiring additional filter.
+        # Then check for duplicate index value.
         i_objs = iter(objs)
         first = next(i_objs)
         if all(isinstance(o.index, cudf.MultiIndex) for o in objs):
