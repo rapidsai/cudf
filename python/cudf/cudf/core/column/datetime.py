@@ -229,6 +229,33 @@ class DatetimeColumn(column.ColumnBase):
     def is_unique(self):
         return self.as_numerical.is_unique
 
+    def can_cast_safely(self, to_dtype):
+        if np.issubdtype(to_dtype, np.datetime64):
+
+            to_res, _ = np.datetime_data(to_dtype)
+            self_res, _ = np.datetime_data(self.dtype)
+
+            max_int = np.iinfo(np.dtype("int64")).max
+
+            max_dist = self.max().astype(np.timedelta64, copy=False)
+            min_dist = self.min().astype(np.timedelta64, copy=False)
+
+            self_delta_dtype = np.timedelta64(0, self_res).dtype
+
+            if max_dist <= np.timedelta64(max_int, to_res).astype(
+                self_delta_dtype
+            ) and min_dist <= np.timedelta64(max_int, to_res).astype(
+                self_delta_dtype
+            ):
+                return True
+            else:
+                return False
+        elif to_dtype == np.dtype("int64") or to_dtype == np.dtype("O"):
+            # can safely cast to representation, or string
+            return True
+        else:
+            return False
+
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(lhs, rhs, op, out_dtype):
