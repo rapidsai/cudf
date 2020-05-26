@@ -2087,8 +2087,10 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, actual);
     }
 
-    try (ColumnVector v = ColumnVector.fromStrings("2020-01-1", "2020-02-2", null);
-         ColumnVector expected = ColumnVector.fromStrings("2020-01-01", "2020-02-02", null);
+    try (ColumnVector v = ColumnVector.fromStrings("2020-01-1", "2020-02-2",
+        "2020-03-3invalid", null);
+         ColumnVector expected = ColumnVector.fromStrings("2020-01-01", "2020-02-02",
+             "2020-03-3invalid", null);
          ColumnVector actual = v.stringReplaceWithBackRefs(
              "-([0-9])$", "-0\\1")) {
       assertColumnsAreEqual(expected, actual);
