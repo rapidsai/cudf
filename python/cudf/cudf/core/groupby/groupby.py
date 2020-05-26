@@ -30,9 +30,9 @@ class GroupBy(Serializable):
     level : int, level_name or list, optional
         For objects with a MultiIndex, `level` can be used to specify
         grouping by one or more levels of the MultiIndex.
-    sort : True, optional
-        If True (default), sort results by group9s). Note that
-        unlike Pandas, this also sorts values within each group.
+    sort : False, optional
+        If True, sort results by group's. Note that
+        unlike Pandas, this doesnot guarantee sorting values within each group.
     as_index : bool, optional
         If as_index=True (default), the group names appear
         as the keys of the resulting DataFrame.
@@ -43,7 +43,7 @@ class GroupBy(Serializable):
     """
 
     def __init__(
-        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
+        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
         self.obj = obj
         self._as_index = as_index
