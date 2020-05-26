@@ -5,6 +5,7 @@
 ## Improvements
 
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
+- PR #5231 Type `Buffer` as `uint8`
 
 ## Bug Fixes
 
