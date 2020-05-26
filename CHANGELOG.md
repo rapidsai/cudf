@@ -4,6 +4,7 @@
 
 ## Improvements
 
+- PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
 
 ## Bug Fixes
