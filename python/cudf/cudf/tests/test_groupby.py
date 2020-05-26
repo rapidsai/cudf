@@ -1083,8 +1083,6 @@ def test_groupby_nunique(agg, by):
 )
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
 def test_groupby_nth(n, by):
-    pytest.skip()
-    # TODO: CHECK
     pdf = pd.DataFrame(
         {
             "a": [1, 1, 1, 2, 3],
@@ -1095,8 +1093,8 @@ def test_groupby_nth(n, by):
     )
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.groupby(by, sort=True).nth(n)
-    got = gdf.groupby(by, sort=True).nth(n)
+    expect = pdf.groupby(by, sort=False).nth(n)
+    got = gdf.groupby(by, sort=False).nth(n)
     assert_eq(expect, got, check_dtype=False)
 
 

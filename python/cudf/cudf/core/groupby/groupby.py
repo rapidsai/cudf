@@ -82,6 +82,7 @@ class GroupBy(Serializable):
             )
             .groupby(self.grouping)
             .agg("size")
+            .sort_index()
         )
 
     @annotate("GROUPBY_AGG", domain="cudf_python")
