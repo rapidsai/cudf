@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #5268 Rely on NumPy arrays for out-of-band pickling
+
 ## Bug Fixes
 
 # cuDF 0.14.0 (Date TBD)

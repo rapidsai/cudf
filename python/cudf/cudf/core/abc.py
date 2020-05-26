@@ -55,8 +55,5 @@ class Serializable(abc.ABC):
 
     def __reduce_ex__(self, protocol):
         header, frames = self.host_serialize()
-        if protocol >= 5:
-            frames = [pickle.PickleBuffer(f) for f in frames]
-        else:
-            frames = [numpy.asarray(f) for f in frames]
+        frames = [numpy.asarray(f) for f in frames]
         return self.host_deserialize, (header, frames)
