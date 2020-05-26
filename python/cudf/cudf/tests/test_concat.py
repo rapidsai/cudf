@@ -268,12 +268,12 @@ def test_pandas_concat_compatibility_axis1():
     assert_eq(got, expect)
 
 
-@pytest.mark.parametrize("index2", [[0, 1, 2], [2, 1, 0]])
+@pytest.mark.parametrize("index", [[0, 1, 2], [2, 1, 0], [5, 9, 10]])
 @pytest.mark.parametrize("names", [False, (0, 1)])
-def test_pandas_concat_compatibility_axis1_overlap(index2, names):
-    data = [1, 2, 3]
-    s1 = gd.Series(data, index=[0, 1, 2])
-    s2 = gd.Series(data, index=index2)
+@pytest.mark.parametrize("data", [(["a", "b", "c"], ["XX", "YY", "ZZ"])])
+def test_pandas_concat_compatibility_axis1_overlap(index, names, data):
+    s1 = gd.Series(data[0], index=[0, 1, 2])
+    s2 = gd.Series(data[1], index=index)
     if names:
         s1.name = names[0]
         s2.name = names[1]
@@ -285,7 +285,6 @@ def test_pandas_concat_compatibility_axis1_overlap(index2, names):
     assert_eq(got, expect)
 
 
-@pytest.mark.xfail(raises=ValueError)
 def test_pandas_concat_compatibility_axis1_equal_duplicate():
     data = [1, 2, 3]
     index = [1, 1, 0]

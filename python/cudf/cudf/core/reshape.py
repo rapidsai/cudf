@@ -85,9 +85,20 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
-        """ Check if *objs* index contains any duplicates """
-        for o in objs:
-            if not o.index.is_unique:
+        # if indexes do not match, check for duplicate axis check if
+        # multiindex and compare to see if they match. GenericIndex
+        # returns ndarray tuple of bools requiring additional filter.
+        i_objs = iter(objs)
+        first = next(i_objs)
+        if all(isinstance(o.index, cudf.MultiIndex) for o in objs):
+            match_index = all(first.index == rest.index for rest in i_objs)
+        else:
+            match_index = all(
+                all(first.index == rest.index) for rest in i_objs
+            )
+
+        if not match_index:
+            if not all(o.index.is_unique for o in objs):
                 raise ValueError("cannot reindex from a duplicate axis")
 
         assert typs.issubset(allowed_typs)
@@ -102,7 +113,8 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
                     sr_name += 1
                 objs[idx] = o.to_frame(name=name)
 
-        objs = align_objs(objs)
+        if not match_index:
+            objs = align_objs(objs)
 
         for idx, o in enumerate(objs):
             if not ignore_index and idx == 0:
@@ -126,8 +138,10 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         if ignore_index:
             df.index = None
             return df
-        else:
+        elif not match_index:
             return df.sort_index()
+        else:
+            return df
 
     typ = list(typs)[0]
 
