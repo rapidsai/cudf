@@ -35,7 +35,6 @@
 //! cuDF interfaces
 namespace cudf {
 //! In-development features
-namespace experimental {
 namespace io {
 
 /**
@@ -66,7 +65,6 @@ struct read_avro_args {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.avro";
  *  cudf::read_avro_args args{cudf::source_info(filepath)};
@@ -140,7 +138,6 @@ struct read_json_args {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.json";
  *  cudf::read_json_args args{cudf::source_info(filepath)};
@@ -259,7 +256,7 @@ struct read_csv_args {
  *  #include <cudf/io/functions.hpp>
  *  ...
  *  std::string filepath = "dataset.csv";
- *  cudf::experimental::io::read_csv_args args{cudf::source_info(filepath)};
+ *  cudf::io::read_csv_args args{cudf::source_info(filepath)};
  *  ...
  *  auto result = cudf::read_csv(args);
  * @endcode
@@ -327,12 +324,12 @@ struct write_csv_args : detail::csv::writer_options {
  *  #include <cudf/io/functions.hpp>
  *  ...
  *  std::string filepath = "dataset.csv";
- *  cudf::experimental::io::sink_info sink_info(filepath);
+ *  cudf::io::sink_info sink_info(filepath);
  *
- *  cudf::experimental::io::write_csv_args args{sink_info, table->view(), na, include_header,
+ *  cudf::io::write_csv_args args{sink_info, table->view(), na, include_header,
  * rows_per_chunk};
  *  ...
- *  cudf::experimental::io::write_csv(args);
+ *  cudf::io::write_csv(args);
  * @endcode
  *
  * @param args Settings for controlling writing behavior
@@ -389,7 +386,6 @@ struct read_orc_args {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.orc";
  *  cudf::read_orc_args args{cudf::source_info(filepath)};
@@ -444,7 +440,6 @@ struct read_parquet_args {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.parquet";
  *  cudf::read_parquet_args args{cudf::source_info(filepath)};
@@ -501,7 +496,6 @@ struct write_orc_args {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.orc";
  *  cudf::write_orc_args args{cudf::sink_info(filepath), table->view()};
@@ -559,10 +553,9 @@ struct orc_chunked_state;
  * The following code snippet demonstrates how to write a single ORC file containing
  * one logical table by writing a series of individual cudf::tables.
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.orc";
- *  cudf::experimental::io::write_orc_chunked_args args{cudf::sink_info(filepath), table->view()};
+ *  cudf::io::write_orc_chunked_args args{cudf::sink_info(filepath), table->view()};
  *  ...
  *  auto state = cudf::write_orc_chunked_begin(args);
  *    cudf::write_orc_chunked(table0, state);
@@ -651,10 +644,9 @@ struct write_parquet_args {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.parquet";
- *  cudf::experimental::io::write_parquet_args args{cudf::sink_info(filepath), table->view()};
+ *  cudf::io::write_parquet_args args{cudf::sink_info(filepath), table->view()};
  *  ...
  *  cudf::write_parquet(args);
  * @endcode
@@ -728,10 +720,9 @@ struct pq_chunked_state;
  * The following code snippet demonstrates how to write a single parquet file containing
  * one logical table by writing a series of individual cudf::tables.
  * @code
- *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.parquet";
- *  cudf::experimental::io::write_parquet_chunked_args args{cudf::sink_info(filepath),
+ *  cudf::io::write_parquet_chunked_args args{cudf::sink_info(filepath),
  *                                                          table->view()};
  *  ...
  *  auto state = cudf::write_parquet_chunked_begin(args);
@@ -777,5 +768,4 @@ void write_parquet_chunked(table_view const& table,
 void write_parquet_chunked_end(std::shared_ptr<detail::parquet::pq_chunked_state>& state);
 
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

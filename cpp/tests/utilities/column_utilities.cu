@@ -33,7 +33,6 @@
 #include <thrust/equal.h>
 #include <thrust/logical.h>
 
-#include <gmock/gmock.h>
 #include <numeric>
 
 namespace cudf {
@@ -60,10 +59,10 @@ struct column_property_comparator {
     //   seems to be ok.
     if (cudf::is_nested<T>()) {
       for (size_type idx = 0; idx < lhs.num_children(); idx++) {
-        cudf::experimental::type_dispatcher(lhs.child(idx).type(),
-                                            column_property_comparator<check_exact_equality>{},
-                                            lhs.child(idx),
-                                            rhs.child(idx));
+        cudf::type_dispatcher(lhs.child(idx).type(),
+                              column_property_comparator<check_exact_equality>{},
+                              lhs.child(idx),
+                              rhs.child(idx));
       }
     }
   }
@@ -75,7 +74,7 @@ class corresponding_rows_unequal {
   {
   }
 
-  cudf::experimental::row_equality_comparator<true> comp;
+  cudf::row_equality_comparator<true> comp;
 
   __device__ bool operator()(size_type index) { return !comp(index, index); }
 };
@@ -117,14 +116,14 @@ class corresponding_rows_not_equivalent {
     }
   };
 
-  cudf::experimental::row_equality_comparator<true> comp;
+  cudf::row_equality_comparator<true> comp;
 
   __device__ bool operator()(size_type index)
   {
     if (not comp(index, index)) {
       auto lhs_col = this->d_lhs.column(0);
       auto rhs_col = this->d_rhs.column(0);
-      return experimental::type_dispatcher(
+      return type_dispatcher(
         lhs_col.type(), typed_element_not_equivalent{}, lhs_col, rhs_col, index);
     }
     return false;
@@ -152,8 +151,7 @@ void print_differences(thrust::device_vector<int> const& differences,
 
     fixed_width_column_wrapper<int32_t> diff_column(differences.begin(), differences.end());
 
-    std::unique_ptr<cudf::experimental::table> diff_table =
-      cudf::experimental::gather(source_table, diff_column);
+    std::unique_ptr<cudf::table> diff_table = cudf::gather(source_table, diff_column);
 
     //
     //  Need to pull back the differences
@@ -173,8 +171,8 @@ void print_differences(thrust::device_vector<int> const& differences,
     //
     int index = differences[0];
 
-    auto diff_lhs = cudf::experimental::detail::slice(lhs, index, index + 1);
-    auto diff_rhs = cudf::experimental::detail::slice(rhs, index, index + 1);
+    auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
+    auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
 
     std::vector<std::string> h_left_strings  = to_strings(diff_lhs);
     std::vector<std::string> h_right_strings = to_strings(diff_rhs);
@@ -241,18 +239,18 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     //
     // Instead, we can simply walk the hierarchy once, checking each pair of offset columns for
     // equivalency and then finally checking the leaves, which are not nested types.
-    cudf::experimental::type_dispatcher(lhs_l.offsets().type(),
-                                        column_comparator<check_exact_equality>{},
-                                        lhs_l.offsets(),
-                                        rhs_l.offsets(),
-                                        print_all_differences,
-                                        depth);
-    cudf::experimental::type_dispatcher(lhs_l.child().type(),
-                                        column_comparator<check_exact_equality>{},
-                                        lhs_l.child(),
-                                        rhs_l.child(),
-                                        print_all_differences,
-                                        depth + 1);
+    cudf::type_dispatcher(lhs_l.offsets().type(),
+                          column_comparator<check_exact_equality>{},
+                          lhs_l.offsets(),
+                          rhs_l.offsets(),
+                          print_all_differences,
+                          depth);
+    cudf::type_dispatcher(lhs_l.child().type(),
+                          column_comparator<check_exact_equality>{},
+                          lhs_l.child(),
+                          rhs_l.child(),
+                          print_all_differences,
+                          depth + 1);
 
     // TODO:  to display differences between list columns what we really want to do is
     //        - if there are differences in the leaf values, display those.
@@ -273,8 +271,7 @@ struct column_comparator {
                   int depth = 0)
   {
     // compare properties
-    cudf::experimental::type_dispatcher(
-      lhs.type(), column_property_comparator<check_exact_equality>{}, lhs, rhs);
+    cudf::type_dispatcher(lhs.type(), column_property_comparator<check_exact_equality>{}, lhs, rhs);
 
     // compare values
     column_comparator_impl<T, check_exact_equality> comparator{};
@@ -290,7 +287,7 @@ struct column_comparator {
  */
 void expect_column_properties_equal(column_view const& lhs, column_view const& rhs)
 {
-  cudf::experimental::type_dispatcher(lhs.type(), column_property_comparator<true>{}, lhs, rhs);
+  cudf::type_dispatcher(lhs.type(), column_property_comparator<true>{}, lhs, rhs);
 }
 
 /**
@@ -299,7 +296,7 @@ void expect_column_properties_equal(column_view const& lhs, column_view const& r
  */
 void expect_column_properties_equivalent(column_view const& lhs, column_view const& rhs)
 {
-  cudf::experimental::type_dispatcher(lhs.type(), column_property_comparator<false>{}, lhs, rhs);
+  cudf::type_dispatcher(lhs.type(), column_property_comparator<false>{}, lhs, rhs);
 }
 
 /**
@@ -310,8 +307,7 @@ void expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
                           bool print_all_differences)
 {
-  cudf::experimental::type_dispatcher(
-    lhs.type(), column_comparator<true>{}, lhs, rhs, print_all_differences);
+  cudf::type_dispatcher(lhs.type(), column_comparator<true>{}, lhs, rhs, print_all_differences);
 }
 
 /**
@@ -322,8 +318,7 @@ void expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
                                bool print_all_differences)
 {
-  cudf::experimental::type_dispatcher(
-    lhs.type(), column_comparator<false>{}, lhs, rhs, print_all_differences);
+  cudf::type_dispatcher(lhs.type(), column_comparator<false>{}, lhs, rhs, print_all_differences);
 }
 
 /**
@@ -509,7 +504,7 @@ struct column_view_printer {
 std::vector<std::string> to_strings(cudf::column_view const& col, std::string const& indent)
 {
   std::vector<std::string> reply;
-  cudf::experimental::type_dispatcher(col.type(), column_view_printer{}, col, reply, indent);
+  cudf::type_dispatcher(col.type(), column_view_printer{}, col, reply, indent);
   return reply;
 }
 

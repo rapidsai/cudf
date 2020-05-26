@@ -27,7 +27,7 @@ struct FixedWidthColumnWrapperTest : public cudf::test::BaseFixture,
 
   auto size() { return this->generate(); }
 
-  auto data_type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto data_type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 TYPED_TEST_CASE(FixedWidthColumnWrapperTest, cudf::test::FixedWidthTypes);

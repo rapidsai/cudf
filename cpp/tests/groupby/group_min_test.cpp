@@ -35,7 +35,7 @@ TYPED_TEST(groupby_min_test, basic)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, experimental::aggregation::MIN>;
+    using R = cudf::detail::target_type_t<V, aggregation::MIN>;
 
     fixed_width_column_wrapper<K> keys { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
     fixed_width_column_wrapper<V> vals { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -43,10 +43,10 @@ TYPED_TEST(groupby_min_test, basic)
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
     fixed_width_column_wrapper<R> expect_vals { 0, 1, 2 };
 
-    auto agg = cudf::experimental::make_min_aggregation();
+    auto agg = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_min_aggregation();
+    auto agg2 = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -54,7 +54,7 @@ TYPED_TEST(groupby_min_test, empty_cols)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, experimental::aggregation::MIN>;
+    using R = cudf::detail::target_type_t<V, aggregation::MIN>;
 
     fixed_width_column_wrapper<K> keys        { };
     fixed_width_column_wrapper<V> vals        { };
@@ -62,10 +62,10 @@ TYPED_TEST(groupby_min_test, empty_cols)
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
 
-    auto agg = cudf::experimental::make_min_aggregation();
+    auto agg = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_min_aggregation();
+    auto agg2 = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -73,7 +73,7 @@ TYPED_TEST(groupby_min_test, zero_valid_keys)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, experimental::aggregation::MIN>;
+    using R = cudf::detail::target_type_t<V, aggregation::MIN>;
 
     fixed_width_column_wrapper<K> keys( { 1, 2, 3}, all_null() );
     fixed_width_column_wrapper<V> vals  { 3, 4, 5};
@@ -81,10 +81,10 @@ TYPED_TEST(groupby_min_test, zero_valid_keys)
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
 
-    auto agg = cudf::experimental::make_min_aggregation();
+    auto agg = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_min_aggregation();
+    auto agg2 = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -92,7 +92,7 @@ TYPED_TEST(groupby_min_test, zero_valid_values)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, experimental::aggregation::MIN>;
+    using R = cudf::detail::target_type_t<V, aggregation::MIN>;
 
     fixed_width_column_wrapper<K> keys   { 1, 1, 1};
     fixed_width_column_wrapper<V> vals ( { 3, 4, 5}, all_null() );
@@ -100,10 +100,10 @@ TYPED_TEST(groupby_min_test, zero_valid_values)
     fixed_width_column_wrapper<K> expect_keys { 1 };
     fixed_width_column_wrapper<R> expect_vals({ 0 }, all_null());
 
-    auto agg = cudf::experimental::make_min_aggregation();
+    auto agg = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_min_aggregation();
+    auto agg2 = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -111,7 +111,7 @@ TYPED_TEST(groupby_min_test, null_keys_and_values)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, experimental::aggregation::MIN>;
+    using R = cudf::detail::target_type_t<V, aggregation::MIN>;
 
     fixed_width_column_wrapper<K> keys({ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
                                        { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
@@ -124,10 +124,10 @@ TYPED_TEST(groupby_min_test, null_keys_and_values)
     fixed_width_column_wrapper<R> expect_vals({ 3,        1,         2,       0},
                                               { 1,        1,         1,       0});
 
-    auto agg = cudf::experimental::make_min_aggregation();
+    auto agg = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_min_aggregation();
+    auto agg2 = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -144,10 +144,10 @@ TEST_F(groupby_min_string_test, basic)
     fixed_width_column_wrapper<K> expect_keys {     1,     2,    3 };
     strings_column_wrapper        expect_vals({ "aaa", "bat", "$1" });
 
-    auto agg = cudf::experimental::make_min_aggregation();
+    auto agg = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_min_aggregation();
+    auto agg2 = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
@@ -161,10 +161,10 @@ TEST_F(groupby_min_string_test, zero_valid_values)
     fixed_width_column_wrapper<K> expect_keys { 1 };
     strings_column_wrapper        expect_vals({ "" }, all_null());
 
-    auto agg = cudf::experimental::make_min_aggregation();
+    auto agg = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    auto agg2 = cudf::experimental::make_min_aggregation();
+    auto agg2 = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 // clang-format on

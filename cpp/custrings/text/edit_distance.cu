@@ -21,7 +21,7 @@
 #include <thrust/for_each.h>
 #include <thrust/scan.h>
 
-#include <cudf/cudf.h>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include "nvstrings/NVStrings.h"

@@ -25,7 +25,6 @@
 #include <tests/utilities/table_utilities.hpp>
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 #include <algorithm>
 #include <random>
@@ -73,7 +72,7 @@ void BM_gather(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::experimental::gather(source_table, gather_map);
+    cudf::gather(source_table, gather_map);
   }
 
   state.SetBytesProcessed(state.iterations() * state.range(0) * n_cols * 2 * sizeof(TypeParam));

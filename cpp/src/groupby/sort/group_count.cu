@@ -23,7 +23,6 @@
 #include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_count_valid(column_view const& values,
@@ -47,7 +46,7 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
     // make_validity_iterator returns a boolean iterator that sums to 1 (1+1=1)
     // so we need to transform it to cast it to an integer type
     auto bitmask_iterator =
-      thrust::make_transform_iterator(experimental::detail::make_validity_iterator(*values_view),
+      thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
                                       [] __device__(auto b) { return static_cast<size_type>(b); });
 
     thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
@@ -89,5 +88,4 @@ std::unique_ptr<column> group_count_all(rmm::device_vector<size_type> const& gro
 
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

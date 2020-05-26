@@ -28,7 +28,7 @@ template <typename T>
 struct ListColumnWrapperTestTyped : public cudf::test::BaseFixture {
   ListColumnWrapperTestTyped() {}
 
-  auto data_type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  auto data_type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 using FixedWidthTypesNoBool = cudf::test::

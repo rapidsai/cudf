@@ -24,8 +24,6 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <gmock/gmock.h>
-
 #include <thrust/sequence.h>
 
 template <typename T>
@@ -37,13 +35,13 @@ using CVector     = std::vector<std::unique_ptr<cudf::column>>;
 using column      = cudf::column;
 using column_view = cudf::column_view;
 using TView       = cudf::table_view;
-using Table       = cudf::experimental::table;
+using Table       = cudf::table;
 
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
   static std::size_t data_size() { return 1000; }
   static std::size_t mask_size() { return 100; }
-  cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest()
     : data{_num_elements * cudf::size_of(type())},
@@ -98,7 +96,7 @@ TYPED_TEST(TypedColumnTest, ConcatenateColumnView)
                                        this->num_elements() / 2,
                                        this->num_elements() / 2,
                                        this->num_elements()};
-  std::vector<cudf::column_view> views = cudf::experimental::slice(original, indices);
+  std::vector<cudf::column_view> views = cudf::slice(original, indices);
 
   auto concatenated_col = cudf::concatenate(views);
 
@@ -197,19 +195,16 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
   cudf::table_view table_view_in2{{col1_2, col2_2}};
 
   std::vector<cudf::size_type> split_indexes1{3};
-  std::vector<cudf::table_view> partitioned1 =
-    cudf::experimental::split(table_view_in1, split_indexes1);
+  std::vector<cudf::table_view> partitioned1 = cudf::split(table_view_in1, split_indexes1);
 
   std::vector<cudf::size_type> split_indexes2{3};
-  std::vector<cudf::table_view> partitioned2 =
-    cudf::experimental::split(table_view_in2, split_indexes2);
+  std::vector<cudf::table_view> partitioned2 = cudf::split(table_view_in2, split_indexes2);
 
   {
     std::vector<cudf::table_view> table_views_to_concat;
     table_views_to_concat.push_back(partitioned1[1]);
     table_views_to_concat.push_back(partitioned2[1]);
-    std::unique_ptr<cudf::experimental::table> concatenated_tables =
-      cudf::concatenate(table_views_to_concat);
+    std::unique_ptr<cudf::table> concatenated_tables = cudf::concatenate(table_views_to_concat);
 
     column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 6, 15, 14, 13}};
     cudf::test::strings_column_wrapper exp2_1(
@@ -221,8 +216,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
     std::vector<cudf::table_view> table_views_to_concat;
     table_views_to_concat.push_back(partitioned1[0]);
     table_views_to_concat.push_back(partitioned2[1]);
-    std::unique_ptr<cudf::experimental::table> concatenated_tables =
-      cudf::concatenate(table_views_to_concat);
+    std::unique_ptr<cudf::table> concatenated_tables = cudf::concatenate(table_views_to_concat);
 
     column_wrapper<int32_t> exp1_1{{5, 4, 3, 6, 15, 14, 13}};
     cudf::test::strings_column_wrapper exp2_1(
@@ -234,8 +228,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
     std::vector<cudf::table_view> table_views_to_concat;
     table_views_to_concat.push_back(partitioned1[1]);
     table_views_to_concat.push_back(partitioned2[0]);
-    std::unique_ptr<cudf::experimental::table> concatenated_tables =
-      cudf::concatenate(table_views_to_concat);
+    std::unique_ptr<cudf::table> concatenated_tables = cudf::concatenate(table_views_to_concat);
 
     column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 5, 8, 5}};
     cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "dada", "kite", "dog"});
@@ -259,19 +252,16 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
   cudf::table_view table_view_in2{{col1_2, col2_2}};
 
   std::vector<cudf::size_type> split_indexes1{3};
-  std::vector<cudf::table_view> partitioned1 =
-    cudf::experimental::split(table_view_in1, split_indexes1);
+  std::vector<cudf::table_view> partitioned1 = cudf::split(table_view_in1, split_indexes1);
 
   std::vector<cudf::size_type> split_indexes2{3};
-  std::vector<cudf::table_view> partitioned2 =
-    cudf::experimental::split(table_view_in2, split_indexes2);
+  std::vector<cudf::table_view> partitioned2 = cudf::split(table_view_in2, split_indexes2);
 
   {
     std::vector<cudf::table_view> table_views_to_concat;
     table_views_to_concat.push_back(partitioned1[1]);
     table_views_to_concat.push_back(partitioned2[1]);
-    std::unique_ptr<cudf::experimental::table> concatenated_tables =
-      cudf::concatenate(table_views_to_concat);
+    std::unique_ptr<cudf::table> concatenated_tables = cudf::concatenate(table_views_to_concat);
 
     cudf::test::fixed_width_column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 6, 15, 14, 13},
                                                            {1, 1, 1, 1, 1, 1, 1, 0}};
@@ -284,8 +274,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
     std::vector<cudf::table_view> table_views_to_concat;
     table_views_to_concat.push_back(partitioned1[1]);
     table_views_to_concat.push_back(partitioned2[0]);
-    std::unique_ptr<cudf::experimental::table> concatenated_tables =
-      cudf::concatenate(table_views_to_concat);
+    std::unique_ptr<cudf::table> concatenated_tables = cudf::concatenate(table_views_to_concat);
 
     cudf::test::fixed_width_column_wrapper<int32_t> exp1_1{5, 8, 5, 6, 5, 8, 5};
     cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "dada", "kite", "dog"},

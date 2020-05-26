@@ -29,7 +29,6 @@
 #include <thrust/transform_reduce.h>
 
 namespace cudf {
-namespace experimental {
 
 /**
  * @brief Result type of the `element_relational_comparator` function object.
@@ -214,11 +213,10 @@ class row_equality_comparator {
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
-      return cudf::experimental::type_dispatcher(
-        l.type(),
-        element_equality_comparator<has_nulls>{l, r, nulls_are_equal},
-        lhs_row_index,
-        rhs_row_index);
+      return cudf::type_dispatcher(l.type(),
+                                   element_equality_comparator<has_nulls>{l, r, nulls_are_equal},
+                                   lhs_row_index,
+                                   rhs_row_index);
     };
 
     return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);
@@ -369,8 +367,7 @@ class row_lexicographic_comparator {
       auto comparator =
         element_relational_comparator<has_nulls>{_lhs.column(i), _rhs.column(i), null_precedence};
 
-      state = cudf::experimental::type_dispatcher(
-        _lhs.column(i).type(), comparator, lhs_index, rhs_index);
+      state = cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
 
@@ -424,10 +421,10 @@ class row_hasher {
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
-      return cudf::experimental::type_dispatcher(_table.column(column_index).type(),
-                                                 element_hasher<hash_function, has_nulls>{},
-                                                 _table.column(column_index),
-                                                 row_index);
+      return cudf::type_dispatcher(_table.column(column_index).type(),
+                                   element_hasher<hash_function, has_nulls>{},
+                                   _table.column(column_index),
+                                   row_index);
     };
 
     // Hash each element and combine all the hash values together
@@ -467,11 +464,10 @@ class row_hasher_initial_values {
 
     // Hashes an element in a column and combines with an initial value
     auto hasher = [=](size_type column_index) {
-      auto hash_value =
-        cudf::experimental::type_dispatcher(_table.column(column_index).type(),
-                                            element_hasher<hash_function, has_nulls>{},
-                                            _table.column(column_index),
-                                            row_index);
+      auto hash_value = cudf::type_dispatcher(_table.column(column_index).type(),
+                                              element_hasher<hash_function, has_nulls>{},
+                                              _table.column(column_index),
+                                              row_index);
 
       return hash_combiner(_initial_hash[column_index], hash_value);
     };
@@ -490,5 +486,4 @@ class row_hasher_initial_values {
   hash_value_type* _initial_hash;
 };
 
-}  // namespace experimental
 }  // namespace cudf

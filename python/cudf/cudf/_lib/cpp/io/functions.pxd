@@ -12,7 +12,7 @@ cimport cudf._lib.cpp.table.table_view as cudf_table_view
 
 
 cdef extern from "cudf/io/functions.hpp" \
-        namespace "cudf::experimental::io" nogil:
+        namespace "cudf::io" nogil:
 
     cdef cppclass read_avro_args:
         cudf_io_types.source_info source
@@ -213,7 +213,7 @@ cdef extern from "cudf/io/functions.hpp" \
 
 
 cdef extern from "cudf/io/functions.hpp" \
-        namespace "cudf::experimental::io::detail::parquet" nogil:
+        namespace "cudf::io::detail::parquet" nogil:
 
     cdef cppclass pq_chunked_state:
         pass
