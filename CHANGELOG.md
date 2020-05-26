@@ -6,6 +6,9 @@
 
 ## Bug Fixes
 
+- PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
+
+
 # cuDF 0.14.0 (Date TBD)
 
 ## New Features
