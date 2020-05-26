@@ -32,7 +32,8 @@ class GroupBy(Serializable):
         grouping by one or more levels of the MultiIndex.
     sort : False, optional
         If True, sort results by groups. Note that
-        unlike Pandas, this does not guarantee sorting values within each group.
+        unlike Pandas, this does not guarantee sorting values
+        within each group.
     as_index : bool, optional
         If as_index=True (default), the group names appear
         as the keys of the resulting DataFrame.
@@ -82,7 +83,6 @@ class GroupBy(Serializable):
             )
             .groupby(self.grouping)
             .agg("size")
-            .sort_index()
         )
 
     @annotate("GROUPBY_AGG", domain="cudf_python")
@@ -186,7 +186,7 @@ class GroupBy(Serializable):
         Return the nth row from each group.
         """
         result = self.agg(lambda x: x.nth(n))
-        sizes = self.size()
+        sizes = self.size().sort_index()
         return result[n < sizes]
 
     def nunique(self):

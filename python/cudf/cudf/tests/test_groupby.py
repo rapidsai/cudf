@@ -1093,8 +1093,8 @@ def test_groupby_nth(n, by):
     )
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.groupby(by, sort=False).nth(n)
-    got = gdf.groupby(by, sort=False).nth(n)
+    expect = pdf.groupby(by, sort=True).nth(n)
+    got = gdf.groupby(by, sort=True).nth(n)
     assert_eq(expect, got, check_dtype=False)
 
 
