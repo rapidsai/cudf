@@ -208,7 +208,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnNullAndEmpty)
   cudf::test::expect_columns_equal(*results, exp_results, true);
 }
 
-TEST_F(InterleaveStringsColumnsTest, MultiColumnNullAndEmptyNonNullable)
+TEST_F(InterleaveStringsColumnsTest, MultiColumnEmptyNonNullable)
 {
   auto col0 = cudf::test::strings_column_wrapper({"", "", "", ""});
   auto col1 = cudf::test::strings_column_wrapper({"", "", "", ""});
