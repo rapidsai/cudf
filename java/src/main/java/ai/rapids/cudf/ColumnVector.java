@@ -1846,6 +1846,21 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * For each string, replaces any character sequence matching the given pattern
+   * using the repl template for back-references.
+   *
+   * Any null string entries return corresponding null output column entries.
+   *
+   * @param pattern The regular expression patterns to search within each string.
+   * @param replace The replacement template for creating the output string.
+   * @return A new java column vector containing the string results.
+   */
+  public ColumnVector stringReplaceWithBackRefs(String pattern, String replace) {
+    return new ColumnVector(stringReplaceWithBackrefs(getNativeView(), pattern,
+        replace));
+  }
+
+  /**
    * Checks if each string in a column starts with a specified comparison string, resulting in a
    * parallel column of the boolean results.
    * @param pattern scalar containing the string being searched for at the beginning of the column's strings.
@@ -2261,6 +2276,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param repl handle of scalar containing the string to replace.
    */
   private static native long stringReplace(long columnView, long target, long repl) throws CudfException;
+
+  /**
+   * Native method for replacing any character sequence matching the given pattern
+   * using the repl template for back-references.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param pattern The regular expression patterns to search within each string.
+   * @param repl The replacement template for creating the output string.
+   * @return native handle of the resulting cudf column containing the string results.
+   */
+  private static native long stringReplaceWithBackrefs(long columnView, String pattern,
+      String repl) throws CudfException;
 
   /**
    * Native method for checking if strings in a column starts with a specified comparison string.

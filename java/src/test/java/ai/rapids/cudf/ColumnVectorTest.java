@@ -2080,6 +2080,15 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testStringReplaceWithBackrefs() {
+    try (ColumnVector v = ColumnVector.fromStrings("2020-1-01", "2020-2-02", null);
+         ColumnVector e_allParameters = ColumnVector.fromStrings("2020-01-01", "2020-02-02", null);
+         ColumnVector replace_allParameters = v.stringReplaceWithBackRefs("-([0-9])-", "-0\\1-")) {
+      assertColumnsAreEqual(e_allParameters, replace_allParameters);
+    }
+  }
+
+  @Test
   void testStringTitlize() {
     try (ColumnVector cv = ColumnVector.fromStrings("sPark", "sqL", "lowercase", null, "", "UPPERCASE");
          ColumnVector result = cv.toTitle();
