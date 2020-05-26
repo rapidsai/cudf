@@ -17,7 +17,6 @@
 #include <groupby/sort/group_single_pass_reduction_util.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_min(column_view const& values,
@@ -37,5 +36,4 @@ std::unique_ptr<column> group_min(column_view const& values,
 
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

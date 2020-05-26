@@ -36,7 +36,6 @@
 #include <numeric>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 struct dispatch_map_type {
@@ -395,9 +394,9 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
         return boolean_mask_scatter(input_column, target_column, boolean_mask, mr, stream);
       });
 
-    return std::make_unique<experimental::table>(std::move(out_columns));
+    return std::make_unique<table>(std::move(out_columns));
   } else {
-    return experimental::empty_like(target);
+    return empty_like(target);
   }
 }
 
@@ -434,9 +433,9 @@ std::unique_ptr<table> boolean_mask_scatter(
                        scalar.get(), target_column, boolean_mask, mr, stream);
                    });
 
-    return std::make_unique<experimental::table>(std::move(out_columns));
+    return std::make_unique<table>(std::move(out_columns));
   } else {
-    return experimental::empty_like(target);
+    return empty_like(target);
   }
 }
 
@@ -481,5 +480,4 @@ std::unique_ptr<table> boolean_mask_scatter(
   return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

@@ -10,7 +10,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.aggregation cimport aggregation
 
 
-cdef extern from "cudf/rolling.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] rolling_window(
         column_view source,
         column_view preceding_window,

@@ -27,7 +27,6 @@
 #include <cudf/scalar/scalar_factories.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 struct reduce_dispatch_functor {
   column_view const col;
@@ -125,5 +124,4 @@ std::unique_ptr<scalar> reduce(column_view const &col,
   return detail::reduce(col, agg, output_dtype, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

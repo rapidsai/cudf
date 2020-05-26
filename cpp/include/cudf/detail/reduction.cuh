@@ -27,7 +27,6 @@
 #include "reduction_operators.cuh"
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 namespace detail {
 /** --------------------------------------------------------------------------*
@@ -80,7 +79,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             identity,
                             stream);
 
-  using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
+  using ScalarType = cudf::scalar_type_t<OutputType>;
   auto s           = new ScalarType(
     std::move(dev_result), true, stream, mr);  // only for string_view, data is copied
   return std::unique_ptr<scalar>(s);
@@ -124,7 +123,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             identity,
                             stream);
 
-  using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
+  using ScalarType = cudf::scalar_type_t<OutputType>;
   auto s = new ScalarType(dev_result, true, stream, mr);  // only for string_view, data is copied
   return std::unique_ptr<scalar>(s);
 }
@@ -202,7 +201,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             stream);
 
   // compute the result value from intermediate value in device
-  using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
+  using ScalarType = cudf::scalar_type_t<OutputType>;
   auto result      = new ScalarType(OutputType{0}, true, stream, mr);
   thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                      intermediate_result.data(),
@@ -215,5 +214,4 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 
 }  // namespace detail
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

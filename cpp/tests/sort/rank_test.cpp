@@ -42,8 +42,8 @@ void run_rank_test(table_view input,
   int i = 0;
   for (auto &&input_column : input) {
     // Rank
-    auto got_rank_column = cudf::experimental::rank(
-      input_column, method, column_order, null_handling, null_precedence, percentage);
+    auto got_rank_column =
+      cudf::rank(input_column, method, column_order, null_handling, null_precedence, percentage);
     if (debug) {
       cudf::test::print(got_rank_column->view());
       std::cout << "\n";

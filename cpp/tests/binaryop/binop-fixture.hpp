@@ -62,7 +62,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
   auto make_random_wrapped_scalar()
   {
     cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
-    return cudf::experimental::scalar_type_t<T>(rand_gen.generate());
+    return cudf::scalar_type_t<T>(rand_gen.generate());
   }
 };
 

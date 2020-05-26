@@ -24,7 +24,6 @@
 #include "binary_ops.hpp"
 
 namespace cudf {
-namespace experimental {
 namespace binops {
 namespace compiled {
 
@@ -74,9 +73,8 @@ struct apply_binop {
 
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
-  cudf::experimental::scalar_device_type_t<Rhs> scalar;
-  apply_binop_scalar_lhs_rhs(binary_operator op,
-                             cudf::experimental::scalar_device_type_t<Rhs> scalar)
+  cudf::scalar_device_type_t<Rhs> scalar;
+  apply_binop_scalar_lhs_rhs(binary_operator op, cudf::scalar_device_type_t<Rhs> scalar)
     : apply_binop<Lhs, Rhs, Out>(op), scalar(scalar)
   {
   }
@@ -88,9 +86,8 @@ struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
 
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop_scalar_rhs_lhs : apply_binop<Rhs, Lhs, Out> {
-  cudf::experimental::scalar_device_type_t<Rhs> scalar;
-  apply_binop_scalar_rhs_lhs(binary_operator op,
-                             cudf::experimental::scalar_device_type_t<Rhs> scalar)
+  cudf::scalar_device_type_t<Rhs> scalar;
+  apply_binop_scalar_rhs_lhs(binary_operator op, cudf::scalar_device_type_t<Rhs> scalar)
     : apply_binop<Rhs, Lhs, Out>(op), scalar(scalar)
   {
   }
@@ -122,11 +119,10 @@ struct binary_op {
       auto out_view        = out->mutable_view();
       auto out_itr         = out_view.begin<Out>();
       auto lhs_device_view = column_device_view::create(lhs, stream);
-      auto rhs_scalar      = static_cast<cudf::experimental::scalar_type_t<Rhs> const&>(rhs);
+      auto rhs_scalar      = static_cast<cudf::scalar_type_t<Rhs> const&>(rhs);
       auto rhs_scalar_view = get_scalar_device_view(rhs_scalar);
       if (lhs.has_nulls()) {
-        auto lhs_itr =
-          cudf::experimental::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
+        auto lhs_itr = cudf::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
         reversed
           ? thrust::transform(rmm::exec_policy(stream)->on(stream),
                               lhs_itr,
@@ -178,10 +174,8 @@ struct binary_op {
       auto lhs_device_view = column_device_view::create(lhs, stream);
       auto rhs_device_view = column_device_view::create(rhs, stream);
       if (lhs.has_nulls() && rhs.has_nulls()) {
-        auto lhs_itr =
-          cudf::experimental::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
-        auto rhs_itr =
-          cudf::experimental::detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
+        auto lhs_itr = cudf::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
+        auto rhs_itr = cudf::detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
         thrust::transform(rmm::exec_policy(stream)->on(stream),
                           lhs_itr,
                           lhs_itr + lhs.size(),
@@ -189,8 +183,7 @@ struct binary_op {
                           out_itr,
                           apply_binop<Lhs, Rhs, Out>{op});
       } else if (lhs.has_nulls()) {
-        auto lhs_itr =
-          cudf::experimental::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
+        auto lhs_itr = cudf::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
         auto rhs_itr = thrust::make_transform_iterator(
           thrust::make_counting_iterator(size_type{0}),
           [col = *rhs_device_view] __device__(size_type i) { return col.element<Rhs>(i); });
@@ -204,8 +197,7 @@ struct binary_op {
         auto lhs_itr = thrust::make_transform_iterator(
           thrust::make_counting_iterator(size_type{0}),
           [col = *lhs_device_view] __device__(size_type i) { return col.element<Lhs>(i); });
-        auto rhs_itr =
-          cudf::experimental::detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
+        auto rhs_itr = cudf::detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
         thrust::transform(rmm::exec_policy(stream)->on(stream),
                           lhs_itr,
                           lhs_itr + lhs.size(),
@@ -302,8 +294,7 @@ struct null_considering_binop {
   auto get_device_view(cudf::scalar const& scalar_item) const
   {
     return get_scalar_device_view(
-      static_cast<cudf::experimental::scalar_type_t<cudf::string_view>&>(
-        const_cast<scalar&>(scalar_item)));
+      static_cast<cudf::scalar_type_t<cudf::string_view>&>(const_cast<scalar&>(scalar_item)));
   }
 
   auto get_device_view(column_device_view const& col_item) const { return col_item; }
@@ -491,5 +482,4 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
 }  // namespace compiled
 }  // namespace binops
-}  // namespace experimental
 }  // namespace cudf

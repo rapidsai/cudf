@@ -30,7 +30,7 @@
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-namespace cudf_io = cudf::experimental::io;
+namespace cudf_io = cudf::io;
 
 class ParquetWrite : public cudf::benchmark {
 };
@@ -38,9 +38,9 @@ class ParquetWriteChunked : public cudf::benchmark {
 };
 
 template <typename T>
-std::unique_ptr<cudf::experimental::table> create_random_fixed_table(cudf::size_type num_columns,
-                                                                     cudf::size_type num_rows,
-                                                                     bool include_validity)
+std::unique_ptr<cudf::table> create_random_fixed_table(cudf::size_type num_columns,
+                                                       cudf::size_type num_rows,
+                                                       bool include_validity)
 {
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
@@ -65,7 +65,7 @@ std::unique_ptr<cudf::experimental::table> create_random_fixed_table(cudf::size_
                    ret->has_nulls();
                    return ret;
                  });
-  return std::make_unique<cudf::experimental::table>(std::move(columns));
+  return std::make_unique<cudf::table>(std::move(columns));
 }
 
 void PQ_write(benchmark::State& state)
@@ -99,7 +99,7 @@ void PQ_write_chunked(benchmark::State& state)
   int64_t num_rows        = (total_desired_bytes / (num_cols * el_size)) / num_tables;
 
   srand(31337);
-  std::vector<std::unique_ptr<cudf::experimental::table>> tables;
+  std::vector<std::unique_ptr<cudf::table>> tables;
   for (cudf::size_type idx = 0; idx < num_tables; idx++) {
     tables.push_back(create_random_fixed_table<int>(num_cols, num_rows, true));
   }
@@ -109,11 +109,9 @@ void PQ_write_chunked(benchmark::State& state)
     cudf_io::write_parquet_chunked_args args{cudf_io::sink_info()};
 
     auto state = cudf_io::write_parquet_chunked_begin(args);
-    std::for_each(tables.begin(),
-                  tables.end(),
-                  [&state](std::unique_ptr<cudf::experimental::table> const& tbl) {
-                    cudf_io::write_parquet_chunked(*tbl, state);
-                  });
+    std::for_each(tables.begin(), tables.end(), [&state](std::unique_ptr<cudf::table> const& tbl) {
+      cudf_io::write_parquet_chunked(*tbl, state);
+    });
     cudf_io::write_parquet_chunked_end(state);
   }
 

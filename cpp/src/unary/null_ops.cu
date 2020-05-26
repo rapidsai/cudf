@@ -22,7 +22,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace experimental {
 std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -50,5 +49,4 @@ std::unique_ptr<column> is_valid(cudf::column_view const& input,
                          mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

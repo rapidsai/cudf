@@ -32,7 +32,7 @@
 
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
-  cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest()
     : data{_num_elements * cudf::size_of(type())},
