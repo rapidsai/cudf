@@ -185,7 +185,7 @@
 - PR #5184 Fix style checks
 - PR #5198 Add detail headers for strings converter functions
 - PR #5199 Add index support in `DataFrame.query`
-- PR #5227 Refactor `detail::gather` API to use scoped enumerators
+- PR #5227 Refactor `detail::gather` API to make use of scoped enumerators
 - PR #5218 Reduce memory usage when categorifying column with null values.
 - PR #5209 Add `nan_as_null` support to `cudf.from_pandas`
 - PR #5207 Break up backref_re.cu into multiple source files to improve compile time
