@@ -323,24 +323,19 @@ class Index(Frame, Serializable):
             lhs = self.copy(deep=False)
             rhs = other.copy(deep=False)
 
-        on = None
-        if level is not None:
-            if isinstance(level, int):
-                if isinstance(lhs, cudf.MultiIndex):
-                    on = lhs._data.get_by_index(level).names[0]
-                elif isinstance(rhs, cudf.MultiIndex):
-                    on = rhs._data.get_by_index(level).names[0]
-            else:
-                on = level
-
+        on = level
         left_name = lhs.name
         right_name = rhs.name
         if isinstance(lhs, cudf.MultiIndex):
+            if level is not None and isinstance(level, int):
+                on = lhs._data.get_by_index(level).names[0]
             right_name = on or right_name
             on = right_name
             how = 'left' if how == 'outer' else how
     
         elif isinstance(rhs, cudf.MultiIndex):
+            if level is not None and isinstance(level, int):
+                on = rhs._data.get_by_index(level).names[0]
             left_name = on or left_name
             on = left_name
             if how == 'left':
