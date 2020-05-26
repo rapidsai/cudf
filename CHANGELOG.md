@@ -195,6 +195,7 @@
 - PR #5214 Move docs build script into repository
 - PR #5219 Add per context cache for JIT kernels
 - PR #5233 Remove experimental namespace used during libcudf++ refactor
+- PR #5213 Documentation enhancements to `cudf` python APIs
 - PR #5251 Fix more mispellings in cpp comments and strings
 
 ## Bug Fixes
