@@ -15,6 +15,7 @@
 
 namespace cudf {
 namespace detail {
+
 struct dispatch_map_type {
   template <typename map_type,
             std::enable_if_t<std::is_integral<map_type>::value and
@@ -23,16 +24,14 @@ struct dispatch_map_type {
     table_view const& source_table,
     column_view const& gather_map,
     size_type num_destination_rows,
-    bool check_bounds,
-    bool ignore_out_of_bounds,
-    bool allow_negative_indices         = false,
+    out_of_bounds_policy bounds,
+    negative_index_policy neg_indices,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream                 = 0)
   {
-    std::unique_ptr<table> destination_table;
-
-    if (check_bounds) {
-      cudf::size_type begin = (allow_negative_indices) ? -source_table.num_rows() : 0;
+    if (bounds == out_of_bounds_policy::FAIL) {
+      cudf::size_type begin =
+        neg_indices == negative_index_policy::ALLOWED ? -source_table.num_rows() : 0;
       CUDF_EXPECTS(num_destination_rows ==
                      thrust::count_if(rmm::exec_policy()->on(0),
                                       gather_map.begin<map_type>(),
@@ -41,50 +40,38 @@ struct dispatch_map_type {
                    "Index out of bounds.");
     }
 
-    if (allow_negative_indices) {
-      destination_table =
-        gather(source_table,
-               thrust::make_transform_iterator(gather_map.begin<map_type>(),
-                                               index_converter<map_type>{source_table.num_rows()}),
-               thrust::make_transform_iterator(gather_map.end<map_type>(),
-                                               index_converter<map_type>{source_table.num_rows()}),
-               ignore_out_of_bounds,
-               mr,
-               stream);
+    if (neg_indices == negative_index_policy::ALLOWED) {
+      auto idx_converter = index_converter<map_type>{source_table.num_rows()};
+      return gather(source_table,
+                    thrust::make_transform_iterator(gather_map.begin<map_type>(), idx_converter),
+                    thrust::make_transform_iterator(gather_map.end<map_type>(), idx_converter),
+                    bounds == out_of_bounds_policy::IGNORE,
+                    mr,
+                    stream);
     } else {
-      destination_table = gather(source_table,
-                                 gather_map.begin<map_type>(),
-                                 gather_map.end<map_type>(),
-                                 ignore_out_of_bounds,
-                                 mr,
-                                 stream);
+      return gather(source_table,
+                    gather_map.begin<map_type>(),
+                    gather_map.end<map_type>(),
+                    bounds == out_of_bounds_policy::IGNORE,
+                    mr,
+                    stream);
     }
-
-    return destination_table;
   }
 
   template <typename map_type,
+            typename... Args,
             std::enable_if_t<not std::is_integral<map_type>::value or
                              std::is_same<map_type, bool>::value>* = nullptr>
-  std::unique_ptr<table> operator()(
-    table_view const& source_table,
-    column_view const& gather_map,
-    size_type num_destination_rows,
-    bool check_bounds,
-    bool ignore_out_of_bounds,
-    bool allow_negative_indices         = false,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream                 = 0)
+  std::unique_ptr<table> operator()(Args&&... args)
   {
     CUDF_FAIL("Gather map must be an integral type.");
   }
-};
+};  // namespace detail
 
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
-                              bool check_bounds,
-                              bool ignore_out_of_bounds,
-                              bool allow_negative_indices,
+                              out_of_bounds_policy bounds,
+                              negative_index_policy neg_indices,
                               rmm::mr::device_memory_resource* mr,
                               cudaStream_t stream)
 {
@@ -95,9 +82,8 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                                    source_table,
                                                                    gather_map,
                                                                    gather_map.size(),
-                                                                   check_bounds,
-                                                                   ignore_out_of_bounds,
-                                                                   allow_negative_indices,
+                                                                   bounds,
+                                                                   neg_indices,
                                                                    mr,
                                                                    stream);
 
@@ -112,7 +98,12 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::gather(source_table, gather_map, check_bounds, false, true, mr);
+  return detail::gather(
+    source_table,
+    gather_map,
+    check_bounds ? detail::out_of_bounds_policy::FAIL : detail::out_of_bounds_policy::NULLIFY,
+    detail::negative_index_policy::ALLOWED,
+    mr);
 }
 
 }  // namespace cudf
