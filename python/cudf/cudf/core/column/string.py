@@ -2119,7 +2119,6 @@ class StringColumn(column.ColumnBase):
             pd_series.index = index
         return pd_series
 
-
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
 

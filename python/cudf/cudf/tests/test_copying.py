@@ -15,9 +15,6 @@ from cudf.tests.utils import assert_eq
 )
 def test_repeat(dtype):
     arr = np.random.rand(10) * 10
-    if dtype == 'str':
-        arr = arr.astype(dtype)
-        dtype = pd.StringDtype()
     repeats = np.random.randint(10, size=10)
     psr = pd.Series(arr).astype(dtype)
     gsr = cudf.from_pandas(psr)
