@@ -12,6 +12,16 @@ from cudf.core import column
 from cudf.core.index import as_index
 from cudf.utils.dtypes import is_scalar
 
+_unit_dtype_map = {
+    "ns": "datetime64[ns]",
+    "us": "datetime64[us]",
+    "ms": "datetime64[ms]",
+    "m": "datetime64[s]",
+    "h": "datetime64[s]",
+    "s": "datetime64[s]",
+    "D": "datetime64[s]",
+}
+
 
 def to_datetime(
     arg,
@@ -192,11 +202,7 @@ def to_datetime(
                 col = (
                     col.astype(dtype="int64")
                     .binary_operator(binop="add", rhs=times_column)
-                    .astype(
-                        dtype="datetime64[s]"
-                        if np.datetime_data(col.dtype)[0] == "s"
-                        else "datetime64[ns]"
-                    )
+                    .astype(dtype=col.dtype)
                 )
             return cudf.Series(col, index=arg.index)
         elif isinstance(arg, cudf.Index):
@@ -260,15 +266,14 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
             col = col.binary_operator(binop="mul", rhs=factor)
         col = col.as_datetime_column(dtype="datetime64[ns]")
     if col.dtype.kind in ("i"):
-        if unit in ("D"):
+        if unit in ("D", "h", "m"):
             factor = as_scalar(
                 column.datetime._numpy_to_pandas_conversion[unit]
                 / column.datetime._numpy_to_pandas_conversion["s"]
             )
             col = col.binary_operator(binop="mul", rhs=factor)
-            col = col.as_datetime_column(dtype="datetime64[s]")
-        else:
-            col = col.as_datetime_column(dtype="datetime64[" + unit + "]")
+
+        col = col.as_datetime_column(dtype=_unit_dtype_map[unit])
     elif col.dtype.kind in ("O"):
         if unit not in (None, "ns"):
             try:
@@ -290,10 +295,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
             elif format is None:
                 format = column.datetime.infer_format(element=col[0])
             col = col.as_datetime_column(
-                dtype="datetime64[" + unit + "]"
-                if unit not in ("D")
-                else "datetime64[ns]",
-                format=format,
+                dtype=_unit_dtype_map[unit], format=format,
             )
     return col
 
