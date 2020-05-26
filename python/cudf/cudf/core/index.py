@@ -307,16 +307,55 @@ class Index(Frame, Serializable):
             else:
                 return result._values.all()
 
-    def join(self, other, how="left", level=None, return_indexers=False, sort=False):
-        
-        if isinstance(self, cudf.MultiIndex)  and isinstance(other, cudf.MultiIndex):
-            raise TypeError("Join on level between two MultiIndex objects is ambiguous")
+    def join(
+        self, other, how="left", level=None, return_indexers=False, sort=False
+    ):
+        """
+        Compute join_index and indexers to conform data structures
+        to the new index.
+
+        Parameters
+        ----------
+        other : Index.
+        how : {'left', 'right', 'inner', 'outer'}
+        return_indexers : bool, default False
+        sort : bool, default False
+            Sort the join keys lexicographically in the result Index. If False,
+            the order of the join keys depends on the join type (how keyword).
+
+        Returns: index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> lhs = cudf.DataFrame(
+        ...     {"a":[2, 3, 1], "b":[3, 4, 2]}).set_index(['a', 'b']
+        ... ).index
+        >>> rhs = cudf.DataFrame({"a":[1, 4, 3]}).set_index('a').index
+        >>> lhs.join(rhs, how='inner')
+        MultiIndex(levels=[0    1
+        1    3
+        dtype: int64, 0    2
+        1    4
+        dtype: int64],
+        codes=   a  b
+        0  1  1
+        1  0  0)
+        """
+
+        if isinstance(self, cudf.MultiIndex) and isinstance(
+            other, cudf.MultiIndex
+        ):
+            raise TypeError(
+                "Join on level between two MultiIndex objects is ambiguous"
+            )
 
         if level is not None and not is_scalar(level):
             raise ValueError("level should be an int or a label only")
 
-        if how == 'right':
-            how = 'left'
+        # `_merge` doesn't support `right`
+        if how == "right":
+            how = "left"
             lhs = other.copy(deep=False)
             rhs = self.copy(deep=False)
         else:
@@ -326,41 +365,39 @@ class Index(Frame, Serializable):
         on = level
         left_name = lhs.name
         right_name = rhs.name
+        # There should be no None values in Joined indices,
+        # so essentially it would be `left` or 'inner'
         if isinstance(lhs, cudf.MultiIndex):
             if level is not None and isinstance(level, int):
                 on = lhs._data.get_by_index(level).names[0]
             right_name = on or right_name
             on = right_name
-            how = 'left' if how == 'outer' else how
-    
+            how = "left" if how == "outer" else how
+
         elif isinstance(rhs, cudf.MultiIndex):
             if level is not None and isinstance(level, int):
                 on = rhs._data.get_by_index(level).names[0]
             left_name = on or left_name
             on = left_name
-            if how == 'left':
-                how = 'inner'
-            elif how == 'outer':
-                how = 'left'
-                lhs, rhs = rhs, lhs
-                left_name, right_name = right_name, left_name
+            if how == "left":
+                how = "inner"
+            elif how == "outer":
+                how = "left"
+
+            lhs, rhs = rhs, lhs
+            left_name, right_name = right_name, left_name
         else:
             # Both are nomal indices
-            if how == "right":
-                left_name = right_name
-                on = left_name
-            else:
-                right_name = left_name
-                on = right_name
+            right_name = left_name
+            on = right_name
 
         def _set_categories(col, cats):
-            return col.cat()._set_categories(
-                cats, is_unique=True
-            ).fillna(-1)
-        
+            return col.cat()._set_categories(cats, is_unique=True).fillna(-1)
+
         lhs = lhs.to_frame(index=False, name=left_name)
         rhs = rhs.to_frame(index=False, name=right_name)
 
+        # Handle categorical columns
         if is_categorical_dtype(lhs._data[on]):
             if is_categorical_dtype(rhs._data[on]):
                 lcats = lhs._data[on].cat().categories
@@ -368,12 +405,12 @@ class Index(Frame, Serializable):
                 if set(lcats).difference(set(rcats)):
                     if how == "left":
                         rhs._data[on] = _set_categories(rhs._data[on], lcats)
-                    elif how == "right":
-                        lhs._data[on] = _set_categories(lhs._data[on], rcats)
                     elif how in ["inner", "outer"]:
                         cats = column.as_column(lcats).append(rcats)
                         cats = (
-                            cudf.Series(cats).drop_duplicates(ignore_index=True)._column
+                            cudf.Series(cats)
+                            .drop_duplicates(ignore_index=True)
+                            ._column
                         )
 
                         lhs._data[on] = _set_categories(lhs._data[on], cats)

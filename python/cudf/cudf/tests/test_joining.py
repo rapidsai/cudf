@@ -1172,7 +1172,7 @@ def test_typecast_on_join_categorical(dtype_l, dtype_r):
     ],
 )
 @pytest.mark.parametrize("how", ["left", "right", "outer", "inner"])
-@pytest.mark.parametrize("level", ['a', 'b', 0, 1])
+@pytest.mark.parametrize("level", ["a", "b", 0, 1])
 def test_index_join(lhs, rhs, how, level):
     l_pdf = pd.DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})
     r_pdf = pd.DataFrame({"a": [1, 5, 4, 0], "b": [3, 9, 8, 4]})
@@ -1183,7 +1183,7 @@ def test_index_join(lhs, rhs, how, level):
     g_lhs = l_df.set_index(lhs).index
     g_rhs = r_df.set_index(rhs).index
 
-    expect = (
+    expected = (
         p_lhs.join(p_rhs, level=level, how=how)
         .to_frame(index=False)
         .sort_values(by=lhs)
@@ -1195,28 +1195,29 @@ def test_index_join(lhs, rhs, how, level):
         .sort_values(by=lhs)
         .reset_index(drop=True)
     )
-    got = got[got.columns.sort_values()]
 
-    assert_eq(expect, got)
+    assert_eq(expected, got)
 
 
 def test_index_join_corner_cases():
     l_pdf = pd.DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})
-    r_pdf = pd.DataFrame({"a": [1, 5, 4, 0], "b": [3, 9, 8, 4], "c": [2, 3, 6, 0]})
+    r_pdf = pd.DataFrame(
+        {"a": [1, 5, 4, 0], "b": [3, 9, 8, 4], "c": [2, 3, 6, 0]}
+    )
     l_df = DataFrame.from_pandas(l_pdf)
     r_df = DataFrame.from_pandas(r_pdf)
 
     # Join when column name doesn't match with level
-    lhs = ['a', 'b']
+    lhs = ["a", "b"]
     # level and rhs don't match
-    rhs = ['c']
-    level = 'b'
-    how = 'outer'
+    rhs = ["c"]
+    level = "b"
+    how = "outer"
     p_lhs = l_pdf.set_index(lhs).index
     p_rhs = r_pdf.set_index(rhs).index
     g_lhs = l_df.set_index(lhs).index
     g_rhs = r_df.set_index(rhs).index
-    expect = (
+    expected = (
         p_lhs.join(p_rhs, level=level, how=how)
         .to_frame(index=False)
         .sort_values(by=lhs)
@@ -1228,53 +1229,81 @@ def test_index_join_corner_cases():
         .sort_values(by=lhs)
         .reset_index(drop=True)
     )
-    got = got[got.columns.sort_values()]
 
-    assert_eq(expect, got)
+    assert_eq(expected, got)
 
     # sort is supported only in case of two non-MultiIndex join
     # Join when column name doesn't match with level
-    lhs = ['a']
+    lhs = ["a"]
     # level and rhs don't match
-    rhs = ['a']
-    level = 'b'
-    how = 'left'
+    rhs = ["a"]
+    level = "b"
+    how = "left"
     p_lhs = l_pdf.set_index(lhs).index
     p_rhs = r_pdf.set_index(rhs).index
     g_lhs = l_df.set_index(lhs).index
     g_rhs = r_df.set_index(rhs).index
-    expect = p_lhs.join(p_rhs, how=how, sort=True)
+    expected = p_lhs.join(p_rhs, how=how, sort=True)
     got = g_lhs.join(g_rhs, how=how, sort=True)
 
-    assert_eq(expect, got)
+    assert_eq(expected, got)
+
+    # In pandas categorical returns normal column,
+    # but in case of cudf, returns categorical
+    lhs = ["a"]
+    rhs = ["a", "b"]
+    how = "left"
+    l_pdf["a"] = l_pdf["a"].astype("category")
+    r_pdf["a"] = r_pdf["a"].astype("category")
+    l_df["a"] = l_df["a"].astype("category")
+    r_df["a"] = r_df["a"].astype("category")
+
+    p_lhs = l_pdf.set_index(lhs).index
+    p_rhs = r_pdf.set_index(rhs).index
+    g_lhs = l_df.set_index(lhs).index
+    g_rhs = r_df.set_index(rhs).index
+    expected = p_lhs.join(p_rhs, how=how, sort=True)
+    got = g_lhs.join(g_rhs, how=how, sort=True)
+
+    expected = (
+        p_lhs.join(p_rhs, how=how)
+        .to_frame(index=False)
+        .sort_values(by=lhs)
+        .reset_index(drop=True)
+    )
+    got = (
+        g_lhs.join(g_rhs, how=how)
+        .to_frame(index=False)
+        .sort_values(by=lhs)
+        .reset_index(drop=True)
+    )
+    got["a"] = got["a"].astype(got["a"].cat.categories.dtype)
+    # Category column after join return as an object column
+    # in pandas
+    expected["a"] = expected["a"].astype(got["a"].dtype)
+
+    assert_eq(expected, got)
+
 
 def test_index_join_exception_cases():
     l_df = DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})
     r_df = DataFrame({"a": [1, 5, 4, 0], "b": [3, 9, 8, 4], "c": [2, 3, 6, 0]})
 
     # Join between two MultiIndex
-    lhs = ['a', 'b']
-    rhs = ['a', 'c']
-    level = 'a'
-    how = 'outer'
+    lhs = ["a", "b"]
+    rhs = ["a", "c"]
+    level = "a"
+    how = "outer"
     g_lhs = l_df.set_index(lhs).index
     g_rhs = r_df.set_index(rhs).index
 
     with pytest.raises(TypeError):
         g_lhs.join(g_rhs, level=level, how=how)
 
-    #Improper level value, level should be an int or scalar value
-    level=['a']
-    rhs= ['a']
+    # Improper level value, level should be an int or scalar value
+    level = ["a"]
+    rhs = ["a"]
     g_lhs = l_df.set_index(lhs).index
     g_rhs = r_df.set_index(rhs).index
     with pytest.raises(ValueError):
         g_lhs.join(g_rhs, level=level, how=how)
-
-
-
-
-
-
-
- 
