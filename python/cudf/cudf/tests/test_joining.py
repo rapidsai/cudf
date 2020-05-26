@@ -1282,42 +1282,6 @@ def test_index_join_corner_cases():
 
     assert_eq(expected, got)
 
-    # In pandas categorical returns normal column,
-    # but in case of cudf, returns categorical
-    lhs = ["a"]
-    rhs = ["a", "b"]
-    how = "left"
-    l_pdf["a"] = l_pdf["a"].astype("category")
-    r_pdf["a"] = r_pdf["a"].astype("category")
-    l_df["a"] = l_df["a"].astype("category")
-    r_df["a"] = r_df["a"].astype("category")
-
-    p_lhs = l_pdf.set_index(lhs).index
-    p_rhs = r_pdf.set_index(rhs).index
-    g_lhs = l_df.set_index(lhs).index
-    g_rhs = r_df.set_index(rhs).index
-    expected = p_lhs.join(p_rhs, how=how, sort=True)
-    got = g_lhs.join(g_rhs, how=how, sort=True)
-
-    expected = (
-        p_lhs.join(p_rhs, how=how)
-        .to_frame(index=False)
-        .sort_values(by=lhs)
-        .reset_index(drop=True)
-    )
-    got = (
-        g_lhs.join(g_rhs, how=how)
-        .to_frame(index=False)
-        .sort_values(by=lhs)
-        .reset_index(drop=True)
-    )
-    got["a"] = got["a"].astype(got["a"].cat.categories.dtype)
-    # Category column after join return as an object column
-    # in pandas
-    expected["a"] = expected["a"].astype(got["a"].dtype)
-
-    assert_eq(expected, got)
-
 
 def test_index_join_exception_cases():
     l_df = DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})

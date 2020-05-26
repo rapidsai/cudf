@@ -397,25 +397,6 @@ class Index(Frame, Serializable):
         lhs = lhs.to_frame(index=False, name=left_name)
         rhs = rhs.to_frame(index=False, name=right_name)
 
-        # Handle categorical columns
-        if is_categorical_dtype(lhs._data[on]):
-            if is_categorical_dtype(rhs._data[on]):
-                lcats = lhs._data[on].cat().categories
-                rcats = rhs._data[on].cat().categories
-                if set(lcats).difference(set(rcats)):
-                    if how == "left":
-                        rhs._data[on] = _set_categories(rhs._data[on], lcats)
-                    elif how in ["inner", "outer"]:
-                        cats = column.as_column(lcats).append(rcats)
-                        cats = (
-                            cudf.Series(cats)
-                            .drop_duplicates(ignore_index=True)
-                            ._column
-                        )
-
-                        lhs._data[on] = _set_categories(lhs._data[on], cats)
-                        rhs._data[on] = _set_categories(rhs._data[on], cats)
-
         output = lhs.merge(rhs, how=how, on=on, sort=sort)
 
         return output.set_index(list(output._data.names)).index
