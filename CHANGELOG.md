@@ -162,6 +162,7 @@
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
 - PR #5039 Make `annotate` picklable
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
+- PR #5023 Object oriented join and column agnostic typcasting
 - PR #5049 Add grouping of libcudf apis into doxygen modules
 - PR #5069 Remove duplicate documentation from detail headers
 - PR #5075 Add simple row-group aggregation mechanism in dask_cudf read_parquet
@@ -186,6 +187,7 @@
 - PR #5184 Fix style checks
 - PR #5198 Add detail headers for strings converter functions
 - PR #5199 Add index support in `DataFrame.query`
+- PR #5227 Refactor `detail::gather` API to make use of scoped enumerators
 - PR #5218 Reduce memory usage when categorifying column with null values.
 - PR #5209 Add `nan_as_null` support to `cudf.from_pandas`
 - PR #5207 Break up backref_re.cu into multiple source files to improve compile time
@@ -320,6 +322,7 @@
 - PR #5212 Fix memory leak in `dlpack.pyx:from_dlpack()`
 - PR #5224 Add new headers from 5198 to libcudf/meta.yaml
 - PR #5228 Fix datetime64 scalar dtype handling for unsupported time units
+- PR #5256 ORC reader: fix loading individual timestamp columns
 
 
 # cuDF 0.13.0 (31 Mar 2020)
