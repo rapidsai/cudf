@@ -27,7 +27,6 @@
 #include <cudf/table/table_device_view.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace {
 // Launch configuration for optimized hash partition
 constexpr size_type OPTIMIZED_BLOCK_SIZE                     = 512;
@@ -436,20 +435,20 @@ struct copy_block_partitions_dispatcher {
                                          stream);
 
     // Use gather instead for non-fixed width types
-    return experimental::type_dispatcher(input.type(),
-                                         experimental::detail::column_gatherer{},
-                                         input,
-                                         gather_map.begin(),
-                                         gather_map.end(),
-                                         false,
-                                         mr,
-                                         stream);
+    return type_dispatcher(input.type(),
+                           detail::column_gatherer{},
+                           input,
+                           gather_map.begin(),
+                           gather_map.end(),
+                           false,
+                           mr,
+                           stream);
   }
 };
 
 // NOTE hash_has_nulls must be true if table_to_hash has nulls
 template <bool hash_has_nulls>
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition_table(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   table_view const& input,
   table_view const& table_to_hash,
   size_type num_partitions,
@@ -486,7 +485,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
   auto row_partition_offset = rmm::device_vector<size_type>(num_rows);
 
   auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher       = experimental::row_hasher<MurmurHash3_32, hash_has_nulls>(*device_input);
+  auto const hasher       = row_hasher<MurmurHash3_32, hash_has_nulls>(*device_input);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
@@ -572,17 +571,17 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
 
     // Copy input to output by partition per column
     std::transform(input.begin(), input.end(), output_cols.begin(), [=](auto const& col) {
-      return cudf::experimental::type_dispatcher(col.type(),
-                                                 copy_block_partitions_dispatcher{},
-                                                 col,
-                                                 num_partitions,
-                                                 row_partition_numbers_ptr,
-                                                 row_partition_offset_ptr,
-                                                 block_partition_sizes_ptr,
-                                                 scanned_block_partition_sizes_ptr,
-                                                 grid_size,
-                                                 mr,
-                                                 stream);
+      return cudf::type_dispatcher(col.type(),
+                                   copy_block_partitions_dispatcher{},
+                                   col,
+                                   num_partitions,
+                                   row_partition_numbers_ptr,
+                                   row_partition_offset_ptr,
+                                   block_partition_sizes_ptr,
+                                   scanned_block_partition_sizes_ptr,
+                                   grid_size,
+                                   mr,
+                                   stream);
     });
 
     if (has_nulls(input)) {
@@ -597,15 +596,11 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
                                            stream);
 
       // Handle bitmask using gather to take advantage of ballot_sync
-      experimental::detail::gather_bitmask(input,
-                                           gather_map.begin(),
-                                           output_cols,
-                                           experimental::detail::gather_bitmask_op::DONT_CHECK,
-                                           mr,
-                                           stream);
+      detail::gather_bitmask(
+        input, gather_map.begin(), output_cols, detail::gather_bitmask_op::DONT_CHECK, mr, stream);
     }
 
-    auto output{std::make_unique<experimental::table>(std::move(output_cols))};
+    auto output{std::make_unique<table>(std::move(output_cols))};
     return std::make_pair(std::move(output), std::move(partition_offsets));
   } else {
     // Compute a scatter map from input to output such that the output rows are
@@ -619,7 +614,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
       row_output_locations, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
 
     // Use the resulting scatter map to materialize the output
-    auto output = experimental::detail::scatter(
+    auto output = detail::scatter(
       input, row_partition_numbers.begin(), row_partition_numbers.end(), input, false, mr, stream);
 
     return std::make_pair(std::move(output), std::move(partition_offsets));
@@ -648,7 +643,7 @@ struct dispatch_map_type {
    */
   template <typename MapType>
   std::enable_if_t<std::is_integral<MapType>::value and not is_boolean<MapType>(),
-                   std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>>
+                   std::pair<std::unique_ptr<table>, std::vector<size_type>>>
   operator()(table_view const& t,
              column_view const& partition_map,
              size_type num_partitions,
@@ -707,15 +702,15 @@ struct dispatch_map_type {
                       });
 
     // Scatter the rows into their partitions
-    auto scattered = cudf::experimental::detail::scatter(
-      t, scatter_map.begin(), scatter_map.end(), t, false, mr, stream);
+    auto scattered =
+      cudf::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t, false, mr, stream);
 
     return std::make_pair(std::move(scattered), std::move(partition_offsets));
   }
 
   template <typename MapType>
   std::enable_if_t<not std::is_integral<MapType>::value or is_boolean<MapType>(),
-                   std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>>
+                   std::pair<std::unique_ptr<table>, std::vector<size_type>>>
   operator()(table_view const& t,
              column_view const& partition_map,
              size_type num_partitions,
@@ -728,7 +723,8 @@ struct dispatch_map_type {
 }  // namespace
 
 namespace detail {
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition(
+namespace local {
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
@@ -739,7 +735,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
 
   // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
-    return std::make_pair(experimental::empty_like(input), std::vector<size_type>{});
+    return std::make_pair(empty_like(input), std::vector<size_type>{});
   }
 
   if (has_nulls(table_to_hash)) {
@@ -748,8 +744,9 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
     return hash_partition_table<false>(input, table_to_hash, num_partitions, mr, stream);
   }
 }
+}  // namespace local
 
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> partition(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
   column_view const& partition_map,
   size_type num_partitions,
@@ -764,24 +761,24 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> partitio
     return std::make_pair(empty_like(t), std::vector<size_type>{});
   }
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     partition_map.type(), dispatch_map_type{}, t, partition_map, num_partitions, mr, stream);
 }
 }  // namespace detail
 
 // Partition based on hash values
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash_partition(input, columns_to_hash, num_partitions, mr);
+  return detail::local::hash_partition(input, columns_to_hash, num_partitions, mr);
 }
 
 // Partition based on an explicit partition map
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> partition(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
   column_view const& partition_map,
   size_type num_partitions,
@@ -791,5 +788,4 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> partitio
   return detail::partition(t, partition_map, num_partitions, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

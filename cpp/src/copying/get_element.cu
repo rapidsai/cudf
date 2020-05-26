@@ -23,7 +23,6 @@
 #include <cudf/detail/utilities/cuda.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
 namespace {
@@ -38,7 +37,7 @@ struct get_element_functor {
   {
     auto s = make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
 
-    using ScalarType = cudf::experimental::scalar_type_t<T>;
+    using ScalarType = cudf::scalar_type_t<T>;
     auto typed_s     = static_cast<ScalarType *>(s.get());
 
     auto device_s   = get_scalar_device_view(*typed_s);
@@ -137,5 +136,4 @@ std::unique_ptr<scalar> get_element(column_view const &input,
   return detail::get_element(input, index, 0, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

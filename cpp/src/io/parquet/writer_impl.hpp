@@ -39,7 +39,6 @@
 #include "chunked_state.hpp"
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace parquet {
@@ -240,5 +239,4 @@ class writer::impl {
 }  // namespace parquet
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

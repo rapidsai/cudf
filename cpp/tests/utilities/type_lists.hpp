@@ -39,7 +39,7 @@ template <typename TYPES, std::size_t... Indices>
 constexpr std::array<cudf::type_id, sizeof...(Indices)> types_to_ids_impl(
   std::index_sequence<Indices...>)
 {
-  return {{cudf::experimental::type_to_id<GetType<TYPES, Indices>>()...}};
+  return {{cudf::type_to_id<GetType<TYPES, Indices>>()...}};
 }
 
 /**

@@ -93,7 +93,7 @@ struct ColumnHandle {
                   int work_per_thread,
                   cudaStream_t stream = 0)
   {
-    cudf::experimental::detail::grid_1d grid_config{source_column.size(), block_size};
+    cudf::detail::grid_1d grid_config{source_column.size(), block_size};
     int grid_size = grid_config.num_blocks;
     // Launch the kernel.
     host_dispatching_kernel<functor_type, ColumnType>
@@ -103,7 +103,7 @@ struct ColumnHandle {
 
 // The following is for DEVICE_DISPATCHING:
 // The dispatching is done on device. The loop loops over
-// each row (across different coluns). Type is dispatched each time
+// each row (across different columns). Type is dispatched each time
 // a column is visited so the total number of dispatching is
 // n_rows * n_cols.
 template <FunctorType functor_type>
@@ -125,7 +125,7 @@ __global__ void device_dispatching_kernel(mutable_table_device_view source)
 
   while (index < n_rows) {
     for (cudf::size_type i = 0; i < source.num_columns(); i++) {
-      cudf::experimental::type_dispatcher(
+      cudf::type_dispatcher(
         source.column(i).type(), RowHandle<functor_type>{}, source.column(i), index);
     }
     index += blockDim.x * gridDim.x;
@@ -138,14 +138,14 @@ void launch_kernel(mutable_table_view input, T** d_ptr, int work_per_thread)
   const cudf::size_type n_rows = input.num_rows();
   const cudf::size_type n_cols = input.num_columns();
 
-  cudf::experimental::detail::grid_1d grid_config{n_rows, block_size};
+  cudf::detail::grid_1d grid_config{n_rows, block_size};
   int grid_size = grid_config.num_blocks;
 
   if (dispatching_type == HOST_DISPATCHING) {
     // std::vector<cudf::util::cuda::scoped_stream> v_stream(n_cols);
     for (int c = 0; c < n_cols; c++) {
       auto d_column = mutable_column_device_view::create(input.column(c));
-      cudf::experimental::type_dispatcher(
+      cudf::type_dispatcher(
         d_column->type(), ColumnHandle<functor_type>{}, *d_column, work_per_thread);
     }
   } else if (dispatching_type == DEVICE_DISPATCHING) {

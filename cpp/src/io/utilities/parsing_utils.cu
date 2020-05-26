@@ -1,4 +1,3 @@
-#include <cudf/cudf.h>
 #include <cudf/utilities/error.hpp>
 
 #include <thrust/device_vector.h>
@@ -12,7 +11,6 @@
 #include <algorithm>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace {
 // When processing the input in chunks, this is the maximum size of each chunk.
@@ -234,5 +232,4 @@ std::string infer_compression_type(
 }
 
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

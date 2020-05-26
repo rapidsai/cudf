@@ -25,7 +25,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 struct dispatch_nan_to_null {
   template <typename T>
@@ -80,8 +79,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
 {
   if (input.size() == 0) { return std::make_pair(std::make_unique<rmm::device_buffer>(), 0); }
 
-  return cudf::experimental::type_dispatcher(
-    input.type(), dispatch_nan_to_null{}, input, mr, stream);
+  return cudf::type_dispatcher(input.type(), dispatch_nan_to_null{}, input, mr, stream);
 }
 
 }  // namespace detail
@@ -93,5 +91,4 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
   return detail::nans_to_nulls(input, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

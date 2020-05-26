@@ -43,7 +43,7 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
                                   cudf::size_type target_end,
                                   cudf::size_type* __restrict__ const null_count)
 {
-  using cudf::experimental::detail::warp_size;
+  using cudf::detail::warp_size;
 
   static_assert(block_size <= 1024, "copy_range_kernel assumes block_size is not larger than 1024");
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
@@ -97,8 +97,7 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
 
   if (has_validity) {
     auto block_null_change =
-      cudf::experimental::detail::single_lane_block_sum_reduce<block_size, leader_lane>(
-        warp_null_change);
+      cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_null_change);
     if (threadIdx.x == 0) {  // if the first thread in a block
       atomicAdd(null_count, block_null_change);
     }
@@ -108,7 +107,6 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Internal API to copy a range of values from source iterators to a
@@ -152,7 +150,7 @@ void copy_range(SourceValueIterator source_value_begin,
 
   constexpr size_type block_size{256};
 
-  auto grid = cudf::experimental::detail::grid_1d{num_items, block_size, 1};
+  auto grid = cudf::detail::grid_1d{num_items, block_size, 1};
 
   if (target.nullable()) {
     // TODO: if null_count is UNKNOWN_NULL_COUNT, no need to update null
@@ -189,7 +187,7 @@ void copy_range(SourceValueIterator source_value_begin,
 }
 
 /**
- * @copydoc cudf::experimental::copy_range_in_place
+ * @copydoc cudf::copy_range_in_place
  * @param stream Optional CUDA stream to run this function
  */
 void copy_range_in_place(column_view const& source,
@@ -200,7 +198,7 @@ void copy_range_in_place(column_view const& source,
                          cudaStream_t stream = 0);
 
 /**
- * @copydoc cudf::experimental::copy_range
+ * @copydoc cudf::copy_range
  * @param stream CUDA stream to run this function
  * @return std::unique_ptr<column> The result target column
  */
@@ -214,5 +212,4 @@ std::unique_ptr<column> copy_range(
   cudaStream_t stream                 = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

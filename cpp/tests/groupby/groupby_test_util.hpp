@@ -37,8 +37,8 @@ inline void test_groups(column_view const& keys,
                         column_view const& values                = {},
                         column_view const& expect_grouped_values = {})
 {
-  experimental::groupby::groupby gb(table_view({keys}));
-  experimental::groupby::groupby::groups gb_groups;
+  groupby::groupby gb(table_view({keys}));
+  groupby::groupby::groups gb_groups;
 
   if (values.size()) {
     gb_groups = gb.get_groups(table_view({values}));
@@ -62,25 +62,25 @@ inline void test_single_agg(column_view const& keys,
                             column_view const& values,
                             column_view const& expect_keys,
                             column_view const& expect_vals,
-                            std::unique_ptr<experimental::aggregation>&& agg,
+                            std::unique_ptr<aggregation>&& agg,
                             force_use_sort_impl use_sort           = force_use_sort_impl::NO,
                             null_policy include_null_keys          = null_policy::EXCLUDE,
                             sorted keys_are_sorted                 = sorted::NO,
                             std::vector<order> const& column_order = {},
                             std::vector<null_order> const& null_precedence = {})
 {
-  std::vector<experimental::groupby::aggregation_request> requests;
-  requests.emplace_back(experimental::groupby::aggregation_request());
+  std::vector<groupby::aggregation_request> requests;
+  requests.emplace_back(groupby::aggregation_request());
   requests[0].values = values;
 
   requests[0].aggregations.push_back(std::move(agg));
 
   if (use_sort == force_use_sort_impl::YES) {
     // WAR to force groupby to use sort implementation
-    requests[0].aggregations.push_back(experimental::make_nth_element_aggregation(0));
+    requests[0].aggregations.push_back(make_nth_element_aggregation(0));
   }
 
-  experimental::groupby::groupby gb_obj(
+  groupby::groupby gb_obj(
     table_view({keys}), include_null_keys, keys_are_sorted, column_order, null_precedence);
 
   auto result = gb_obj.aggregate(requests);
@@ -89,11 +89,9 @@ inline void test_single_agg(column_view const& keys,
     expect_tables_equal(table_view({expect_keys}), result.first->view());
     expect_columns_equivalent(expect_vals, *result.second[0].results[0], true);
   } else {
-    auto const sort_order =
-      experimental::sorted_order(result.first->view(), {}, {null_order::AFTER});
-    auto const sorted_keys = experimental::gather(result.first->view(), *sort_order);
-    auto const sorted_vals =
-      experimental::gather(table_view({result.second[0].results[0]->view()}), *sort_order);
+    auto const sort_order  = sorted_order(result.first->view(), {}, {null_order::AFTER});
+    auto const sorted_keys = gather(result.first->view(), *sort_order);
+    auto const sorted_vals = gather(table_view({result.second[0].results[0]->view()}), *sort_order);
 
     expect_tables_equal(table_view({expect_keys}), *sorted_keys);
     expect_columns_equivalent(expect_vals, sorted_vals->get_column(0), true);

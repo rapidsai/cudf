@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/column_wrapper.hpp>
 
-#include <cudf/legacy/copying.hpp>
-#include <cudf/legacy/search.hpp>
+#include <cudf/search.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/types.hpp>
 
 #include <benchmark/benchmark.h>
 
 #include <random>
 
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
+#include <tests/utilities/base_fixture.hpp>
 
 class Search : public cudf::benchmark {
 };
@@ -34,15 +36,20 @@ void BM_non_null_column(benchmark::State& state)
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   const cudf::size_type values_size = column_size;
 
-  cudf::test::column_wrapper<float> column(
-    column_size, [=](cudf::size_type row) { return static_cast<float>(row); });
-  cudf::test::column_wrapper<float> values(
-    values_size, [=](cudf::size_type row) { return static_cast<float>(values_size - row); });
+  auto col_data_it = cudf::test::make_counting_transform_iterator(
+    0, [=](cudf::size_type row) { return static_cast<float>(row); });
+  auto val_data_it = cudf::test::make_counting_transform_iterator(
+    0, [=](cudf::size_type row) { return static_cast<float>(values_size - row); });
+
+  cudf::test::fixed_width_column_wrapper<float> column(col_data_it, col_data_it + column_size);
+  cudf::test::fixed_width_column_wrapper<float> values(val_data_it, val_data_it + values_size);
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto col = cudf::upper_bound({column.get()}, {values.get()}, {false});
-    gdf_column_free(&col);
+    auto col = cudf::upper_bound(cudf::table_view({column}),
+                                 cudf::table_view({values}),
+                                 {cudf::order::ASCENDING},
+                                 {cudf::null_order::BEFORE});
   }
 }
 
@@ -53,24 +60,40 @@ BENCHMARK_REGISTER_F(Search, AllValidColumn)
   ->Unit(benchmark::kMillisecond)
   ->Arg(100000000);
 
+auto make_validity_iter()
+{
+  static constexpr int r_min = 1;
+  static constexpr int r_max = 10;
+
+  cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max);
+  uint8_t mod_base = rand_gen.generate();
+  return cudf::test::make_counting_transform_iterator(
+    0, [mod_base](auto row) { return (row % mod_base) > 0; });
+}
+
 void BM_nullable_column(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   const cudf::size_type values_size = column_size;
 
-  cudf::test::column_wrapper<float> column(
-    column_size,
-    [=](cudf::size_type row) { return static_cast<float>(row); },
-    [=](cudf::size_type row) { return row < (9 * column_size / 10); });
-  cudf::test::column_wrapper<float> values(
-    values_size,
-    [=](cudf::size_type row) { return static_cast<float>(values_size - row); },
-    [=](cudf::size_type row) { return row < (9 * column_size / 10); });
+  auto col_data_it = cudf::test::make_counting_transform_iterator(
+    0, [=](cudf::size_type row) { return static_cast<float>(row); });
+  auto val_data_it = cudf::test::make_counting_transform_iterator(
+    0, [=](cudf::size_type row) { return static_cast<float>(values_size - row); });
+
+  cudf::test::fixed_width_column_wrapper<float> column(
+    col_data_it, col_data_it + column_size, make_validity_iter());
+  cudf::test::fixed_width_column_wrapper<float> values(
+    val_data_it, val_data_it + values_size, make_validity_iter());
+
+  auto sorted = cudf::sort(cudf::table_view({column}));
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto col = cudf::upper_bound({column.get()}, {values.get()}, {false});
-    gdf_column_free(&col);
+    auto col = cudf::upper_bound(sorted->view(),
+                                 cudf::table_view({values}),
+                                 {cudf::order::ASCENDING},
+                                 {cudf::null_order::BEFORE});
   }
 }
 
@@ -81,65 +104,40 @@ BENCHMARK_REGISTER_F(Search, NullableColumn)
   ->Unit(benchmark::kMillisecond)
   ->Arg(100000000);
 
-template <typename T>
-T random_int(T min, T max)
-{
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
-  static std::uniform_int_distribution<T> uniform{min, max};
-
-  return uniform(engine);
-}
-
-void sort_table(cudf::table& t, std::vector<bool>& desc_flags)
-{
-  rmm::device_vector<int8_t> dv_desc_flags(desc_flags);
-  auto d_desc_flags = dv_desc_flags.data().get();
-
-  auto out_indices = cudf::test::column_wrapper<int32_t>(t.num_rows());
-
-  gdf_context ctxt{};
-  gdf_order_by(t.begin(), d_desc_flags, t.num_columns(), out_indices.get(), &ctxt);
-
-  auto indices = static_cast<cudf::size_type*>(out_indices.get()->data);
-  cudf::gather(&t, indices, &t);
-}
-
 void BM_table(benchmark::State& state)
 {
-  using wrapper = cudf::test::column_wrapper<float>;
+  using wrapper = cudf::test::fixed_width_column_wrapper<float>;
 
   const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
   const cudf::size_type column_size{(cudf::size_type)state.range(1)};
   const cudf::size_type values_size = column_size;
 
-  std::vector<wrapper> columns;
-  std::vector<wrapper> values;
+  auto make_table = [&](cudf::size_type col_size) {
+    cudf::test::UniformRandomGenerator<int> random_gen(0, 100);
+    auto data_it = cudf::test::make_counting_transform_iterator(
+      0, [&](cudf::size_type row) { return random_gen.generate(); });
+    auto valid_it = cudf::test::make_counting_transform_iterator(
+      0, [&](cudf::size_type row) { return random_gen.generate() < 90; });
 
-  auto make_table = [&](std::vector<wrapper>& cols, cudf::size_type col_size) -> cudf::table {
+    std::vector<std::unique_ptr<cudf::column>> cols;
     for (cudf::size_type i = 0; i < num_columns; i++) {
-      cols.emplace_back(
-        col_size,
-        [=](cudf::size_type row) { return random_int(0, 100); },
-        [=](cudf::size_type row) { return random_int(0, 100) < 90; });
+      wrapper temp(data_it, data_it + col_size, valid_it);
+      cols.emplace_back(temp.release());
     }
 
-    std::vector<gdf_column*> raw_cols(num_columns, nullptr);
-    std::transform(cols.begin(), cols.end(), raw_cols.begin(), [](wrapper& c) { return c.get(); });
-
-    return cudf::table{raw_cols.data(), num_columns};
+    return cudf::table(std::move(cols));
   };
 
-  auto data_table   = make_table(columns, column_size);
-  auto values_table = make_table(values, values_size);
+  auto data_table   = make_table(column_size);
+  auto values_table = make_table(values_size);
 
-  std::vector<bool> desc_flags(num_columns, false);
-  sort_table(data_table, desc_flags);
+  std::vector<cudf::order> orders(num_columns, cudf::order::ASCENDING);
+  std::vector<cudf::null_order> null_orders(num_columns, cudf::null_order::BEFORE);
+  auto sorted = cudf::sort(data_table);
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto col = cudf::lower_bound(data_table, values_table, desc_flags);
-    gdf_column_free(&col);
+    auto col = cudf::lower_bound(sorted->view(), values_table, orders, null_orders);
   }
 }
 
