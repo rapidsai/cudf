@@ -6,6 +6,9 @@
 
 ## Bug Fixes
 
+- PR #5283 Fix strings::ipv4_to_integers overflow to negative
+
+
 # cuDF 0.14.0 (Date TBD)
 
 ## New Features
