@@ -23,9 +23,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <strings/utilities.cuh>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform.h>
-#include <cmath>
 
 namespace cudf {
 namespace strings {
