@@ -60,9 +60,9 @@ struct interleave_columns_functor {
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(num_strings),
         [num_columns, d_table] __device__(size_type idx) {
-          auto dest_col_idx = idx % num_columns;
-          auto dest_row_idx = idx / num_columns;
-          return !d_table.column(dest_col_idx).is_null(dest_row_idx);
+          auto source_row_idx = idx % num_columns;
+          auto source_col_idx = idx / num_columns;
+          return !d_table.column(source_row_idx).is_null(source_col_idx);
         },
         stream,
         mr);
@@ -73,11 +73,11 @@ struct interleave_columns_functor {
     // Build offsets column by computing sizes of each string in the output
     auto offsets_transformer = [num_columns, d_table] __device__(size_type idx) {
       // First compute the column and the row this item belongs to
-      auto dest_col_idx = idx % num_columns;
-      auto dest_row_idx = idx / num_columns;
+      auto source_row_idx = idx % num_columns;
+      auto source_col_idx = idx / num_columns;
       size_type bytes{0};
-      if (!d_table.column(dest_col_idx).is_null(dest_row_idx))
-        bytes = d_table.column(dest_col_idx).element<string_view>(dest_row_idx).size_bytes();
+      if (!d_table.column(source_row_idx).is_null(source_col_idx))
+        bytes = d_table.column(source_row_idx).element<string_view>(source_col_idx).size_bytes();
       return bytes;
     };
     auto offsets_transformer_itr = thrust::make_transform_iterator(
@@ -97,16 +97,16 @@ struct interleave_columns_functor {
       thrust::make_counting_iterator<size_type>(0),
       num_strings,
       [num_columns, d_table, d_results_offsets, d_results_chars] __device__(size_type idx) {
-        auto dest_col_idx = idx % num_columns;
-        auto dest_row_idx = idx / num_columns;
+        auto source_row_idx = idx % num_columns;
+        auto source_col_idx = idx / num_columns;
 
         // Do not write to buffer if the column value for this row is null
-        if (d_table.column(dest_col_idx).is_null(dest_row_idx)) return;
+        if (d_table.column(source_row_idx).is_null(source_col_idx)) return;
 
         size_type offset = d_results_offsets[idx];
         char* d_buffer   = d_results_chars + offset;
         strings::detail::copy_string(
-          d_buffer, d_table.column(dest_col_idx).element<string_view>(dest_row_idx));
+          d_buffer, d_table.column(source_row_idx).element<string_view>(source_col_idx));
       });
 
     return make_strings_column(num_strings,
