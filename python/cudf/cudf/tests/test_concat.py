@@ -285,19 +285,6 @@ def test_pandas_concat_compatibility_axis1_overlap(index, names, data):
     assert_eq(got, expect)
 
 
-def test_pandas_concat_compatibility_axis1_equal_duplicate():
-    data = [1, 2, 3]
-    index = [1, 1, 0]
-    s1 = gd.Series(data, index=index)
-    s2 = gd.Series(data, index=index)
-    ps1 = s1.to_pandas()
-    ps2 = s2.to_pandas()
-    got = gd.concat([s1, s2], axis=1)
-    expect = pd.concat([ps1, ps2], axis=1)
-
-    assert_eq(got, expect)
-
-
 def test_concat_duplicate_columns():
     cdf = gd.DataFrame(
         {
