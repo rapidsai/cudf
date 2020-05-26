@@ -47,8 +47,8 @@ cdef sink_info make_sink_info(src, unique_ptr[data_sink] * sink) except*:
         # Files opened in text mode expect writes to be str rather than bytes,
         # which requires conversion from utf-8. If the underlying buffer is
         # utf-8, we can bypass this conversion by writing directly to it.
-        if codecs.lookup(src.encoding).name != "utf-8":
-            raise NotImplementedError(f"Unsupported encoding f{src.encoding}")
+        if codecs.lookup(src.encoding).name not in {"utf-8", "ascii"}:
+            raise NotImplementedError(f"Unsupported encoding {src.encoding}")
         sink.reset(new iobase_data_sink(src.buffer))
         return sink_info(sink.get())
     elif isinstance(src, io.IOBase):
