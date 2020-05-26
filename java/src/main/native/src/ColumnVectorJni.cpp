@@ -930,8 +930,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplaceWithBackre
     jstring replaceObj) {
 
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
-//  JNI_NULL_CHECK(env, target, "target string scalar is null", 0);
-//  JNI_NULL_CHECK(env, replace, "replace string scalar is null", 0);
+  JNI_NULL_CHECK(env, patternObj, "pattern string is null", 0);
+  JNI_NULL_CHECK(env, replaceObj, "replace string is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
