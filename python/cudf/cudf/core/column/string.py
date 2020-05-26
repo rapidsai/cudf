@@ -2183,7 +2183,6 @@ class StringColumn(column.ColumnBase):
         return col
 
     def can_cast_safely(self, to_dtype):
-        # import pdb;pdb.set_trace()
         to_dtype = np.dtype(to_dtype)
 
         if self.dtype == to_dtype:
