@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #5231 Type `Buffer` as `uint8`
+
 ## Bug Fixes
 
 # cuDF 0.14.0 (Date TBD)
