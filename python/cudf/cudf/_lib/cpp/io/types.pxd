@@ -36,7 +36,7 @@ cdef extern from "cudf/io/types.hpp" \
         ARROW_RANDOM_ACCESS_FILE \
             "cudf::io::io_type::ARROW_RANDOM_ACCESS_FILE"
         VOID "cudf::io::io_type::VOID"
-        USER_IMPLEMENTED "cudf::experimental::io::io_type::USER_IMPLEMENTED"
+        USER_IMPLEMENTED "cudf::io::io_type::USER_IMPLEMENTED"
 
     ctypedef enum statistics_freq:
         STATISTICS_NONE = 0,
