@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,11 @@
  * and concrete C++ types.
  **/
 namespace cudf {
-namespace experimental {
+/**
+ * @addtogroup utility_dispatcher
+ * @{
+ */
+
 /**
  * @brief Maps a C++ type to it's corresponding `cudf::type_id`
  *
@@ -117,6 +121,7 @@ CUDF_TYPE_MAPPING(cudf::timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
 CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
+CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
 
 template <typename T>
 struct type_to_scalar_type_impl {
@@ -158,6 +163,13 @@ struct type_to_scalar_type_impl<cudf::dictionary32> {
   using ScalarDeviceType = cudf::numeric_scalar_device_view<int32_t>;
 };
 
+template <>  // TODO: this is to get compilation working. list scalars will be implemented at a
+             // later time.
+struct type_to_scalar_type_impl<cudf::list_view> {
+  using ScalarType = cudf::list_scalar;
+  // using ScalarDeviceType = cudf::list_scalar_device_view;
+};
+
 #ifndef MAP_TIMESTAMP_SCALAR
 #define MAP_TIMESTAMP_SCALAR(Type)                                     \
   template <>                                                          \
@@ -190,7 +202,7 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
  *
  * Example usage with a functor that returns the size of the dispatched type:
  *
- * ```
+ * @code
  * struct size_of_functor{
  *  template <typename T>
  *  int operator()(){
@@ -199,19 +211,19 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
  * };
  * cudf::data_type t{INT32};
  * cudf::type_dispatcher(t, size_of_functor{});  // returns 4
- * ```
+ * @endcode
  *
  * The `type_dispatcher` uses `cudf::type_to_id<t>` to provide a default mapping
  * of `cudf::type_id`s to dispatched C++ types. However, this mapping may be
  * customized by explicitly specifying a user-defined trait struct for the
  * `IdTypeMap`. For example, to always dispatch `int32_t`
  *
- * ```
+ * @code
  * template<cudf::type_id t> struct always_int{ using type = int32_t; }
  *
- * // This will always invoke `operator()<int32_t>`
+ * // This will always invoke operator()<int32_t>
  * cudf::type_dispatcher<always_int>(data_type, f);
- * ```
+ * @endcode
  *
  * It is sometimes necessary to customize the dispatched functor's
  * `operator()` for different types.  This can be done in several ways.
@@ -221,7 +233,7 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
  * prints `int32_t` or `double` when invoked with either of those types, else it
  * prints `unhandled type`:
  *
- * ```
+ * @code
  * struct type_printer {
  *   template <typename ColumnType>
  *   void operator()() { std::cout << "unhandled type\n"; }
@@ -234,30 +246,30 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
  *
  * template <>
  * void type_printer::operator()<double>() { std::cout << "double\n"; }
- * ```
+ * @endcode
  *
  * A second method is to use SFINAE with `std::enable_if_t`. This is useful for
  * specializing for a set of types that share some property. For example, a
  * functor that prints `integral` or `floating point` for integral or floating
  * point types:
  *
- * ```
+ * @code
  * struct integral_or_floating_point {
  *   template <typename ColumnType,
  *             std::enable_if_t<not std::is_integral<ColumnType>::value and
- *                              not std::is_floating_point<ColumnType>::value>*
- *= nullptr> void operator()() { std::cout << "neither integral nor floating
- *point\n"; }
+ *                              not std::is_floating_point<ColumnType>::value>* = nullptr>
+ *   void operator()() {
+ *     std::cout << "neither integral nor floating point\n "; }
  *
  *   template <typename ColumnType,
  *             std::enable_if_t<std::is_integral<ColumnType>::value>* = nullptr>
  *   void operator()() { std::cout << "integral\n"; }
  *
- *   template < typename ColumnType,
- *              std::enable_if_t<std::is_floating_point<ColumnType>::value>* =
- *nullptr> void operator()() { std::cout << "floating point\n"; }
+ *   template <typename ColumnType,
+ *             std::enable_if_t<std::is_floating_point<ColumnType>::value>* = nullptr>
+ *   void operator()() { std::cout << "floating point\n"; }
  * };
- * ```
+ * @endcode
  *
  * For more info on SFINAE and `std::enable_if`, see
  * https://eli.thegreenplace.net/2014/sfinae-and-enable_if/
@@ -321,11 +333,13 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
     case DICTIONARY32:
       return f.template operator()<typename IdTypeMap<DICTIONARY32>::type>(
         std::forward<Ts>(args)...);
+    case LIST:
+      return f.template operator()<typename IdTypeMap<LIST>::type>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported type_id.");
 #else
-      release_assert(false && "Unsuported type_id.");
+      release_assert(false && "Unsupported type_id.");
 
       // The following code will never be reached, but the compiler generates a
       // warning if there isn't a return value.
@@ -340,5 +354,5 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
   }
 }
 
-}  // namespace experimental
+/** @} */  // end of group
 }  // namespace cudf

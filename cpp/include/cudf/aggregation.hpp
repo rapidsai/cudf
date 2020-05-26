@@ -29,11 +29,14 @@
  *
  * @note Not all aggregation APIs support all aggregation operations. See
  * individual function documentation to see what aggregations are supported.
- *
  */
 
 namespace cudf {
-namespace experimental {
+/**
+ * @addtogroup aggregation_factories
+ * @{
+ */
+
 /**
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
@@ -190,7 +193,7 @@ std::unique_ptr<aggregation> make_nth_element_aggregation(
 std::unique_ptr<aggregation> make_row_number_aggregation();
 
 /**
- * @brief Factory to create a aggregation base on UDF for PTX or CUDA
+ * @brief Factory to create an aggregation base on UDF for PTX or CUDA
  *
  * @param[in] type: either udf_type::PTX or udf_type::CUDA
  * @param[in] user_defined_aggregator A string containing the aggregator code
@@ -202,5 +205,5 @@ std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
                                                   std::string const& user_defined_aggregator,
                                                   data_type output_type);
 
-}  // namespace experimental
+/** @} */  // end of group
 }  // namespace cudf

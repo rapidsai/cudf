@@ -21,7 +21,11 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-namespace experimental {
+/**
+ * @addtogroup column_quantiles
+ * @{
+ */
+
 /**
  * @brief Computes quantiles with interpolation.
 
@@ -89,5 +93,5 @@ std::unique_ptr<table> quantiles(
   std::vector<null_order> const& null_precedence = {},
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
 
-}  // namespace experimental
+/** @} */  // end of group
 }  // namespace cudf

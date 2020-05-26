@@ -36,7 +36,7 @@ TEST_F(DictionaryScatterTest, Scatter)
 
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{0, 2, 3, 7};
   auto table_result =
-    cudf::experimental::scatter(
+    cudf::scatter(
       cudf::table_view{{source->view()}}, scatter_map, cudf::table_view{{target->view()}})
       ->release();
   auto decoded =
@@ -48,8 +48,7 @@ TEST_F(DictionaryScatterTest, Scatter)
   // empty map test
   cudf::test::fixed_width_column_wrapper<int32_t> empty_map{};
   table_result =
-    cudf::experimental::scatter(
-      cudf::table_view{{source->view()}}, empty_map, cudf::table_view{{target->view()}})
+    cudf::scatter(cudf::table_view{{source->view()}}, empty_map, cudf::table_view{{target->view()}})
       ->release();
   decoded = cudf::dictionary::decode(cudf::dictionary_column_view(table_result.front()->view()));
   cudf::test::expect_columns_equal(strings_target, decoded->view());
@@ -57,9 +56,9 @@ TEST_F(DictionaryScatterTest, Scatter)
   // empty target test
   cudf::test::strings_column_wrapper empty_target{};
   auto empty_dictionary = cudf::dictionary::encode(empty_target);
-  table_result          = cudf::experimental::scatter(cudf::table_view{{empty_dictionary->view()}},
-                                             empty_map,
-                                             cudf::table_view{{empty_dictionary->view()}})
+  table_result          = cudf::scatter(cudf::table_view{{empty_dictionary->view()}},
+                               empty_map,
+                               cudf::table_view{{empty_dictionary->view()}})
                    ->release();
   decoded = cudf::dictionary::decode(cudf::dictionary_column_view(table_result.front()->view()));
   EXPECT_EQ(0, decoded->size());
@@ -75,7 +74,7 @@ TEST_F(DictionaryScatterTest, WithNulls)
 
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{7, 2, 3, 1};
   auto table_result =
-    cudf::experimental::scatter(
+    cudf::scatter(
       cudf::table_view{{source->view()}}, scatter_map, cudf::table_view{{target->view()}})
       ->release();
   auto decoded =
@@ -94,7 +93,7 @@ TEST_F(DictionaryScatterTest, Error)
   auto target = cudf::dictionary::encode(integers_target);
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map({0});
   EXPECT_THROW(
-    cudf::experimental::scatter(
+    cudf::scatter(
       cudf::table_view{{source->view()}}, scatter_map, cudf::table_view{{target->view()}}),
     cudf::logic_error);
 }

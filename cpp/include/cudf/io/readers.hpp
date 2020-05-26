@@ -40,13 +40,9 @@ class RandomAccessFile;
 
 //! cuDF interfaces
 namespace cudf {
-//! In-development features
-namespace experimental {
 //! IO interfaces
 namespace io {
-//! Inner interfaces and implementations
 namespace detail {
-//! Avro format
 namespace avro {
 /**
  * @brief Options for the Avro reader.
@@ -138,7 +134,6 @@ class reader {
 
 }  // namespace avro
 
-//! JSON format
 namespace json {
 /**
  * @brief Options for the JSON reader.
@@ -222,7 +217,7 @@ class reader {
   /*
    * @brief Reads and returns the entire data set.
    *
-   * @return cudf::table object that contains the array of gdf_columns.
+   * @return cudf::table object that contains the array of cudf::column.
    */
   table_with_metadata read_all(cudaStream_t stream = 0);
 
@@ -236,14 +231,13 @@ class reader {
    * @param[in] offset Byte offset from the start
    * @param[in] size Number of bytes from the offset; set to 0 for all remaining
    *
-   * @return cudf::table object that contains the array of gdf_columns
+   * @return cudf::table object that contains the array of cudf::column
    */
   table_with_metadata read_byte_range(size_t offset, size_t size, cudaStream_t stream = 0);
 };
 
 }  // namespace json
 
-//! CSV format
 namespace csv {
 /**
  * @brief Options for the CSV reader.
@@ -423,7 +417,6 @@ class reader {
 
 }  // namespace csv
 
-//! ORC format
 namespace orc {
 /**
  * @brief Options for the ORC reader.
@@ -563,7 +556,6 @@ class reader {
 
 }  // namespace orc
 
-//! Parquet format
 namespace parquet {
 /**
  * @brief Options for the Parquet reader.
@@ -699,5 +691,4 @@ class reader {
 
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

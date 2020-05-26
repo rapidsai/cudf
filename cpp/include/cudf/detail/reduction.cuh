@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
@@ -28,7 +27,6 @@
 #include "reduction_operators.cuh"
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 namespace detail {
 /** --------------------------------------------------------------------------*
@@ -69,7 +67,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             binary_op,
                             identity,
                             stream);
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
+  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
@@ -81,7 +79,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             identity,
                             stream);
 
-  using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
+  using ScalarType = cudf::scalar_type_t<OutputType>;
   auto s           = new ScalarType(
     std::move(dev_result), true, stream, mr);  // only for string_view, data is copied
   return std::unique_ptr<scalar>(s);
@@ -100,7 +98,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto binary_op      = sop.get_binary_op();
   OutputType identity = sop.template get_identity<OutputType>();
-  rmm::device_scalar<OutputType> dev_result{identity, stream, mr};
+  rmm::device_scalar<OutputType> dev_result{identity, stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -113,7 +111,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             binary_op,
                             identity,
                             stream);
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
+  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
@@ -125,7 +123,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             identity,
                             stream);
 
-  using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
+  using ScalarType = cudf::scalar_type_t<OutputType>;
   auto s = new ScalarType(dev_result, true, stream, mr);  // only for string_view, data is copied
   return std::unique_ptr<scalar>(s);
 }
@@ -177,7 +175,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto binary_op            = cop.get_binary_op();
   IntermediateType identity = cop.template get_identity<IntermediateType>();
-  rmm::device_scalar<IntermediateType> intermediate_result{identity, stream, mr};
+  rmm::device_scalar<IntermediateType> intermediate_result{identity, stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -190,7 +188,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             binary_op,
                             identity,
                             stream);
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
+  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
@@ -203,7 +201,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             stream);
 
   // compute the result value from intermediate value in device
-  using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
+  using ScalarType = cudf::scalar_type_t<OutputType>;
   auto result      = new ScalarType(OutputType{0}, true, stream, mr);
   thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                      intermediate_result.data(),
@@ -216,5 +214,4 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 
 }  // namespace detail
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

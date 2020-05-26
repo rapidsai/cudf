@@ -15,6 +15,7 @@
  */
 
 #include "synchronization.hpp"
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/device_buffer.hpp>
 

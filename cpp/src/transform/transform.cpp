@@ -32,8 +32,8 @@
 #include <types.hpp.jit>
 
 namespace cudf {
-namespace experimental {
 namespace transformation {
+//! Jit functions
 namespace jit {
 
 const std::vector<std::string> header_names{cudf_types_hpp, cudf_wrappers_timestamps_hpp};
@@ -54,7 +54,7 @@ void unary_operation(mutable_column_view output,
                      bool is_ptx,
                      cudaStream_t stream)
 {
-  std::string hash = "prog_transform.experimental" + std::to_string(std::hash<std::string>{}(udf));
+  std::string hash = "prog_transform" + std::to_string(std::hash<std::string>{}(udf));
 
   std::string cuda_source = code::kernel_header;
   if (is_ptx) {
@@ -116,5 +116,4 @@ std::unique_ptr<column> transform(column_view const& input,
   return detail::transform(input, unary_udf, output_type, is_ptx, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

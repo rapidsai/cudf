@@ -31,11 +31,14 @@ using char_utf8 = uint32_t;  //<< UTF-8 characters are 1-4 bytes
 
 /**
  * @brief A non-owning, immutable view of device data that is a variable length
- * char array representing a UTF-8 string. The caller must maintain the
- * device memory for the lifetime of this instance.
+ * char array representing a UTF-8 string.
+ *
+ * @ingroup strings_classes
+ *
+ * The caller must maintain the device memory for the lifetime of this instance.
  *
  * It provides a simple wrapper and string operations for an individual string
- * with a column of strings.
+ * within a column of strings.
  */
 class string_view {
  public:

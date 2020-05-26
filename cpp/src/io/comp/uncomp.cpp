@@ -21,6 +21,8 @@
 #include "io_uncomp.h"
 #include "unbz2.h"  // bz2 uncompress
 
+#include <cudf/utilities/error.hpp>
+
 namespace cudf {
 namespace io {
 #define GZ_FLG_FTEXT 0x01     // ASCII text hint
@@ -286,14 +288,12 @@ int cpu_inflate_vector(std::vector<char> &dst, const uint8_t *comp_data, size_t 
  * @param src_size[in] The size of the compressed data, in bytes
  * @param strm_type[in] Type of compression of the input data
  * @param dst[out] Vector containing the uncompressed output
- *
- * @returns gdf_error with error code on failure, otherwise GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error io_uncompress_single_h2d(const void *src,
-                                   size_t src_size,
-                                   int strm_type,
-                                   std::vector<char> &dst)
+void io_uncompress_single_h2d(const void *src,
+                              size_t src_size,
+                              int strm_type,
+                              std::vector<char> &dst)
 {
   const uint8_t *raw       = (const uint8_t *)src;
   const uint8_t *comp_data = nullptr;
@@ -301,7 +301,9 @@ gdf_error io_uncompress_single_h2d(const void *src,
   size_t uncomp_len        = 0;
   cudaStream_t strm        = (cudaStream_t)0;
 
-  if (!(src && src_size)) { return GDF_INVALID_API_CALL; }
+  CUDF_EXPECTS(src != nullptr, "Decompression: Source cannot be nullptr");
+  CUDF_EXPECTS(src_size != 0, "Decompression: Source size cannot be 0");
+
   switch (strm_type) {
     case IO_UNCOMP_STREAM_TYPE_INFER:
     case IO_UNCOMP_STREAM_TYPE_GZIP: {
@@ -367,7 +369,9 @@ gdf_error io_uncompress_single_h2d(const void *src,
       // Unsupported format
       break;
   }
-  if (!comp_data || comp_len <= 0) return GDF_UNSUPPORTED_DTYPE;
+  CUDF_EXPECTS(comp_data != nullptr, "Unsupported compressed stream type");
+  CUDF_EXPECTS(comp_len > 0, "Unsupported compressed stream type");
+
   if (uncomp_len <= 0) {
     uncomp_len = comp_len * 4 + 4096;  // In case uncompressed size isn't known in advance, assume
                                        // ~4:1 compression for initial size
@@ -379,7 +383,7 @@ gdf_error io_uncompress_single_h2d(const void *src,
     int zerr = cpu_inflate_vector(dst, comp_data, comp_len);
     if (zerr != 0) {
       dst.resize(0);
-      return GDF_FILE_ERROR;
+      CUDF_EXPECTS(0, "Decompression: error in stream");
     }
   } else if (strm_type == IO_UNCOMP_STREAM_TYPE_BZIP2) {
     size_t src_ofs = 0;
@@ -404,13 +408,11 @@ gdf_error io_uncompress_single_h2d(const void *src,
     } while (bz_err == BZ_OUTBUFF_FULL);
     if (bz_err != 0) {
       dst.resize(0);
-      return GDF_FILE_ERROR;
+      CUDF_EXPECTS(0, "Decompression: error in stream");
     }
   } else {
-    return GDF_UNSUPPORTED_DTYPE;
+    CUDF_EXPECTS(0, "Unsupported compressed stream type");
   }
-
-  return GDF_SUCCESS;
 }
 
 /**
@@ -421,13 +423,11 @@ gdf_error io_uncompress_single_h2d(const void *src,
  * @param[in] num_bytes Size of the input data, in bytes
  * @param[in] compression String describing the compression type
  * @param[out] h_uncomp_data Vector containing the output uncompressed data
- *
- * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
  **/
-gdf_error getUncompressedHostData(const char *h_data,
-                                  size_t num_bytes,
-                                  const std::string &compression,
-                                  std::vector<char> &h_uncomp_data)
+void getUncompressedHostData(const char *h_data,
+                             size_t num_bytes,
+                             const std::string &compression,
+                             std::vector<char> &h_uncomp_data)
 {
   int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
   if (compression == "gzip")
@@ -439,7 +439,7 @@ gdf_error getUncompressedHostData(const char *h_data,
   else if (compression == "xz")
     comp_type = IO_UNCOMP_STREAM_TYPE_XZ;
 
-  return io_uncompress_single_h2d(h_data, num_bytes, comp_type, h_uncomp_data);
+  io_uncompress_single_h2d(h_data, num_bytes, comp_type, h_uncomp_data);
 }
 
 /* --------------------------------------------------------------------------*/

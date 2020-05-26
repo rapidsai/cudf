@@ -21,10 +21,10 @@ class SerialTrieNode;
 namespace cudf {
 namespace io {
 namespace csv {
+namespace column_parse {
 /**
  * @brief Per-column parsing flags used for dtype detection and data conversion
  */
-namespace column_parse {
 enum : uint8_t {
   disabled       = 0,   ///< data is not read
   enabled        = 1,   ///< data is read and parsed as usual
@@ -36,7 +36,7 @@ enum : uint8_t {
 using flags = uint8_t;
 
 /**
- * @brief Per-column histogram struct holding detected ocurrences of each dtype
+ * @brief Per-column histogram struct containing detected occurrences of each dtype
  */
 struct stats {
   uint32_t countFloat;

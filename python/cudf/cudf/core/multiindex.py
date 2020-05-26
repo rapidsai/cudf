@@ -51,7 +51,10 @@ class MultiIndex(Index):
             source_data.reset_index(drop=True, inplace=True)
 
             if isinstance(source_data, pd.DataFrame):
-                source_data = DataFrame.from_pandas(source_data)
+                nan_as_null = kwargs.get("nan_as_null", None)
+                source_data = DataFrame.from_pandas(
+                    source_data, nan_as_null=nan_as_null
+                )
             names = names if names is not None else source_data._data.names
             # if names are unique
             # try using those as the source_data column names:
@@ -742,7 +745,7 @@ class MultiIndex(Index):
         return pandas_mi
 
     @classmethod
-    def from_pandas(cls, multiindex):
+    def from_pandas(cls, multiindex, nan_as_null=None):
         """
         Convert from a Pandas MultiIndex
 
@@ -762,14 +765,12 @@ class MultiIndex(Index):
         if not isinstance(multiindex, pd.MultiIndex):
             raise TypeError("not a pandas.MultiIndex")
 
-        if hasattr(multiindex, "codes"):
-            mi = cls(
-                names=multiindex.names, source_data=multiindex.to_frame(),
-            )
-        else:
-            mi = cls(
-                names=multiindex.names, source_data=multiindex.to_frame(),
-            )
+        mi = cls(
+            names=multiindex.names,
+            source_data=multiindex.to_frame(),
+            nan_as_null=nan_as_null,
+        )
+
         return mi
 
     @property

@@ -6,10 +6,12 @@ from numbers import Number
 import cupy
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_dict_like
 
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
+from cudf.core.abc import Serializable
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
@@ -34,7 +36,7 @@ from cudf.utils.dtypes import (
 )
 
 
-class Series(Frame):
+class Series(Frame, Serializable):
     """
     Data and null-masks.
 
@@ -158,7 +160,7 @@ class Series(Frame):
         return item in self._index
 
     @classmethod
-    def from_pandas(cls, s, nan_as_null=True):
+    def from_pandas(cls, s, nan_as_null=None):
         return cls(s, nan_as_null=nan_as_null)
 
     @property
@@ -1093,7 +1095,7 @@ class Series(Frame):
             )
 
     def __neg__(self):
-        """Negatated value (-) for each element
+        """Negated value (-) for each element
 
         Returns a new Series.
         """
@@ -1179,14 +1181,15 @@ class Series(Frame):
         return self._fill([fill_value], begin, end, inplace)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
-        """Fill null values with ``value``.
+        """Fill null values with ``value`` without changing the series' type.
 
         Parameters
         ----------
         value : scalar or Series-like
-            Value to use to fill nulls. If Series-like, null values
-            are filled with the values in corresponding indices of the
-            given Series.
+            Value to use to fill nulls. If `value`'s dtype differs from the
+            series, the fill value will be cast to the column's dtype before
+            applying the fill. If Series-like, null values are filled with the
+            values in corresponding indices of the given Series.
 
         Returns
         -------
@@ -1415,31 +1418,56 @@ class Series(Frame):
         """
         return self._column.as_mask()
 
-    def astype(self, dtype, errors="raise", **kwargs):
+    def astype(self, dtype, copy=False, errors="raise", **kwargs):
         """
         Cast the Series to the given dtype
 
         Parameters
         ----------
 
-        dtype : data type
+        dtype : data type, or dict of column name -> data type
+            Use a numpy.dtype or Python type to cast Series object to
+            the same type. Alternatively, use {col: dtype, ...}, where col is a
+            series name and dtype is a numpy.dtype or Python type to cast to.
+        copy : bool, default False
+            Return a deep-copy when ``copy=True``. Note by default
+            ``copy=False`` setting is used and hence changes to
+            values then may propagate to other cudf objects.
+        errors : {'raise', 'ignore', 'warn'}, default 'raise'
+            Control raising of exceptions on invalid data for provided dtype.
+            - ``raise`` : allow exceptions to be raised
+            - ``ignore`` : suppress exceptions. On error return original
+            object.
+            - ``warn`` : prints last exceptions as warnings and
+            return original object.
         **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
         out : Series
-            Copy of ``self`` cast to the given dtype. Returns
-            ``self`` if ``dtype`` is the same as ``self.dtype``.
+            Returns ``self.copy(deep=copy)`` if ``dtype`` is the same
+            as ``self.dtype``.
         """
         if errors not in ("ignore", "raise", "warn"):
             raise ValueError("invalid error value specified")
 
+        if is_dict_like(dtype):
+            if len(dtype) > 1 or self.name not in dtype:
+                raise KeyError(
+                    "Only the Series name can be used for "
+                    "the key in Series dtype mappings."
+                )
+            dtype = dtype[self.name]
+
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
-            return self
+            return self.copy(deep=copy)
         try:
+            data = self._column.astype(dtype, **kwargs)
+
             return self._copy_construct(
-                data=self._column.astype(dtype, **kwargs)
+                data=data.copy(deep=True) if copy else data, index=self.index
             )
+
         except Exception as e:
             if errors == "raise":
                 raise e
@@ -1657,7 +1685,7 @@ class Series(Frame):
             # Where there is a type-cast from string to numeric types,
             # there is a possibility for ValueError when strings
             # are having non-numeric values, in such cases we have
-            # to catch the exception and return a encoded labels
+            # to catch the exception and return encoded labels
             # with na_sentinel values as there would be no corresponding
             # encoded values of cats in self.
             cats = cats.astype(self.dtype)
@@ -1709,7 +1737,7 @@ class Series(Frame):
     # UDF related
 
     def applymap(self, udf, out_dtype=None):
-        """Apply a elemenwise function to transform the values in the Column.
+        """Apply an elementwise function to transform the values in the Column.
 
         The user function is expected to take one argument and return the
         result, which will be stored to the output Series.  The function
@@ -3296,46 +3324,45 @@ class Series(Frame):
         result.index.names = index.names
         return result
 
-    def merge(self, other):
-        # An inner join shuold return a series containing matching elements
-        # a Left join should return just self
-        # an outer join should return a two column
-        # dataframe containing all elements from both
-        dummy = "name"
+    def merge(
+        self,
+        other,
+        on=None,
+        left_on=None,
+        right_on=None,
+        left_index=False,
+        right_index=False,
+        how="inner",
+        sort=False,
+        lsuffix=None,
+        rsuffix=None,
+        method="hash",
+        suffixes=("_x", "_y"),
+    ):
 
-        l_name = self.name
-        r_name = other.name
+        if left_on not in (self.name, None):
+            raise ValueError(
+                "Series to other merge uses series name as key implicitly"
+            )
+
         lhs = self.copy(deep=False)
         rhs = other.copy(deep=False)
 
-        if l_name is None and r_name is not None:
-            lhs.name = r_name
-            left_on = right_on = r_name
-        elif r_name is None and l_name is not None:
-            rhs.name = l_name
-            left_on = right_on = l_name
-        elif l_name is None and r_name is None:
-            lhs.name = dummy
-            rhs.name = dummy
-            left_on = right_on = dummy
-        elif l_name is not None and r_name is not None:
-            left_on = l_name
-            right_on = r_name
-
         result = super(Series, lhs)._merge(
             rhs,
-            left_on=left_on,
-            right_on=right_on,
-            how="inner",
-            left_index=False,
-            right_index=False,
-            on=None,
-            lsuffix=None,
-            rsuffix=None,
-            method="hash",
+            on,
+            left_on,
+            right_on,
+            left_index,
+            right_index,
+            how,
+            sort,
+            lsuffix,
+            rsuffix,
+            method,
+            None,
+            suffixes,
         )
-
-        result.name = other.name
 
         return result
 

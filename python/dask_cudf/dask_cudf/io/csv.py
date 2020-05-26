@@ -9,7 +9,6 @@ from dask.dataframe.io.csv import make_reader
 from dask.utils import parse_bytes
 
 import cudf
-from cudf._lib.legacy.GDFError import GDFError
 
 
 def read_csv(path, chunksize="256 MiB", **kwargs):
@@ -85,15 +84,7 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
 
 
 def _read_csv(fn, dtypes=None, **kwargs):
-    try:
-        cdf = cudf.read_csv(fn, **kwargs)
-    except GDFError:
-        # end of file check https://github.com/rapidsai/dask-cudf/issues/103
-        # this should be removed when CUDF has better dtype/parse_date support
-        dtypes = dict(zip(kwargs["names"], dtypes))
-        df = dd.core.make_meta(dtypes)
-        cdf = cudf.from_pandas(df)
-    return cdf
+    return cudf.read_csv(fn, **kwargs)
 
 
 def read_csv_without_chunksize(path, **kwargs):

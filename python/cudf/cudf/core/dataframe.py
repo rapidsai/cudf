@@ -7,7 +7,6 @@ import itertools
 import logging
 import numbers
 import pickle
-import uuid
 import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
@@ -25,6 +24,7 @@ import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
 from cudf.core import column
+from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -87,7 +87,7 @@ def _reverse_op(fn):
     }[fn]
 
 
-class DataFrame(Frame):
+class DataFrame(Frame, Serializable):
     """
     A GPU Dataframe object.
 
@@ -795,10 +795,65 @@ class DataFrame(Frame):
     def __str__(self):
         return self.to_string()
 
-    def astype(self, dtype, errors="raise", **kwargs):
-        return self._apply_support_method(
-            "astype", dtype=dtype, errors=errors, **kwargs
-        )
+    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+        """
+        Cast the DataFrame to the given dtype
+
+        Parameters
+        ----------
+
+        dtype : data type, or dict of column name -> data type
+            Use a numpy.dtype or Python type to cast entire DataFrame object to
+            the same type. Alternatively, use {col: dtype, ...}, where col is a
+            column label and dtype is a numpy.dtype or Python type to cast one
+            or more of the DataFrame's columns to column-specific types.
+        copy : bool, default False
+            Return a deep-copy when ``copy=True``. Note by default
+            ``copy=False`` setting is used and hence changes to
+            values then may propagate to other cudf objects.
+        errors : {'raise', 'ignore', 'warn'}, default 'raise'
+            Control raising of exceptions on invalid data for provided dtype.
+            - ``raise`` : allow exceptions to be raised
+            - ``ignore`` : suppress exceptions. On error return original
+            object.
+            - ``warn`` : prints last exceptions as warnings and
+            return original object.
+        **kwargs : extra arguments to pass on to the constructor
+
+        Returns
+        -------
+        casted : DataFrame
+        """
+        result = DataFrame(index=self.index)
+
+        if is_dict_like(dtype):
+            current_cols = self._data.names
+            if len(set(dtype.keys()) - set(current_cols)) > 0:
+                raise KeyError(
+                    "Only a column name can be used for the "
+                    "key in a dtype mappings argument."
+                )
+            for col_name in current_cols:
+                if col_name in dtype:
+                    result._data[col_name] = self._data[col_name].astype(
+                        dtype=dtype[col_name],
+                        errors=errors,
+                        copy=copy,
+                        **kwargs,
+                    )
+                else:
+                    result._data[col_name] = (
+                        self._data[col_name].copy(deep=True)
+                        if copy
+                        else self._data[col_name]
+                    )
+        else:
+            for col in self._data:
+                result._data[col] = self._data[col].astype(
+                    dtype=dtype, errors=errors, copy=copy, **kwargs
+                )
+
+        return result
 
     def _repr_pandas025_formatting(self, ncols, nrows, dtype=None):
         """
@@ -845,7 +900,7 @@ class DataFrame(Frame):
         ncols = 19 if ncols in [20, 21] else ncols
         return ncols, nrows
 
-    def clean_renderable_dataframe(self, output):
+    def _clean_renderable_dataframe(self, output):
         """
         the below is permissible: null in a datetime to_pandas() becomes
         NaT, which is then replaced with null in this processing step.
@@ -864,7 +919,7 @@ class DataFrame(Frame):
             )
         return "\n".join(lines)
 
-    def get_renderable_dataframe(self):
+    def _get_renderable_dataframe(self):
         """
         takes rows and columns from pandas settings or estimation from size.
         pulls quadrents based off of some known parameters then style for
@@ -899,10 +954,10 @@ class DataFrame(Frame):
                 right_cols = -(int(ncols) - left_cols + 1)
             else:
                 # If right_cols is 0 or negative, it means
-                # self has lesser number of columns thans ncols.
+                # self has lesser number of columns than ncols.
                 # Hence assign len(self._data.names) which
                 # will result in empty `*_right` quadrants.
-                # This is because `*_left` quadransts will
+                # This is because `*_left` quadrants will
                 # contain all columns.
                 right_cols = len(self._data.names)
 
@@ -928,12 +983,12 @@ class DataFrame(Frame):
         return output
 
     def __repr__(self):
-        output = self.get_renderable_dataframe()
-        return self.clean_renderable_dataframe(output)
+        output = self._get_renderable_dataframe()
+        return self._clean_renderable_dataframe(output)
 
     def _repr_html_(self):
         lines = (
-            self.get_renderable_dataframe()
+            self._get_renderable_dataframe()
             .to_pandas()
             ._repr_html_()
             .split("\n")
@@ -948,7 +1003,7 @@ class DataFrame(Frame):
         return "\n".join(lines)
 
     def _repr_latex_(self):
-        return self.get_renderable_dataframe().to_pandas()._repr_latex_()
+        return self._get_renderable_dataframe().to_pandas()._repr_latex_()
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
@@ -1391,9 +1446,8 @@ class DataFrame(Frame):
         if isinstance(value, cudf.core.multiindex.MultiIndex):
             if len(self._data) > 0 and len(value) != len(self):
                 msg = (
-                    f"Length mismatch: Expected axis has "
-                    "%d elements, new values "
-                    "have %d elements" % (len(self), len(value))
+                    f"Length mismatch: Expected axis has {len(self)} "
+                    f"elements, new values have {len(value)} elements"
                 )
                 raise ValueError(msg)
             self._index = value
@@ -1404,9 +1458,8 @@ class DataFrame(Frame):
 
         if len(self._data) > 0 and new_length != old_length:
             msg = (
-                f"Length mismatch: Expected axis has "
-                "%d elements, new values "
-                "have %d elements" % (old_length, new_length)
+                f"Length mismatch: Expected axis has {old_length} elements, "
+                f"new values have {new_length} elements"
             )
             raise ValueError(msg)
 
@@ -1630,9 +1683,6 @@ class DataFrame(Frame):
         if memo is None:
             memo = {}
         return self.copy(deep=True)
-
-    def __reduce__(self):
-        return (DataFrame, (self._data, self.index))
 
     @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):
@@ -1900,19 +1950,16 @@ class DataFrame(Frame):
 
         if columns:
             postfix = 1
-            if isinstance(columns, Mapping):
-                # It is possible for DataFrames with a MultiIndex columns
-                # object to have columns with the same name. The followig
-                # use of _cols.items and ("_1", "_2"... allows the use of
-                # rename in this case
-                for key, col in self._data.items():
-                    if key in columns:
-                        if columns[key] in out._data:
-                            out_column = columns[key] + "_" + str(postfix)
-                            postfix += 1
-                        else:
-                            out_column = columns[key]
-                        out[out_column] = col
+            # It is possible for DataFrames with a MultiIndex columns object
+            # to have columns with the same name. The following use of
+            # _cols.items and ("_1", "_2"... allows the use of
+            # rename in this case
+            for key, col in self._data.items():
+                if key in mapper:
+                    if mapper[key] in out.columns:
+                        out_column = mapper[key] + "_" + str(postfix)
+                        postfix += 1
+
                     else:
                         out[key] = col
             elif callable(columns):
@@ -1958,9 +2005,12 @@ class DataFrame(Frame):
         ncol = len(cols)
         nrow = len(self)
         if ncol < 1:
-            raise ValueError("require at least 1 column")
-        if nrow < 1:
-            raise ValueError("require at least 1 row")
+            # This is the case for empty dataframe - construct empty cupy array
+            matrix = cupy.empty(
+                shape=(0, 0), dtype=np.dtype("float64"), order=order
+            )
+            return cuda.as_cuda_array(matrix)
+
         if any(
             (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))
             for c in cols
@@ -2202,7 +2252,7 @@ class DataFrame(Frame):
         Notes
         -----
         Difference from pandas:
-        Not supporting *copy* because default and only behaviour is copy=True
+        Not supporting *copy* because default and only behavior is copy=True
         """
         # Never transpose a MultiIndex - remove the existing columns and
         # replace with a RangeIndex. Afterward, reassign.
@@ -2269,11 +2319,11 @@ class DataFrame(Frame):
         self,
         right,
         on=None,
-        how="inner",
         left_on=None,
         right_on=None,
         left_index=False,
         right_index=False,
+        how="inner",
         sort=False,
         lsuffix=None,
         rsuffix=None,
@@ -2383,11 +2433,13 @@ class DataFrame(Frame):
             right_on,
             left_index,
             right_index,
+            how,
+            sort,
             lsuffix,
             rsuffix,
-            how,
             method,
-            sort=sort,
+            indicator,
+            suffixes,
         )
         return gdf_result
 
@@ -2449,124 +2501,21 @@ class DataFrame(Frame):
                 method="hash",
             )
 
-        same_names = set(self._data.names) & set(other._data.names)
-        if same_names and not (lsuffix or rsuffix):
-            raise ValueError(
-                "there are overlapping columns but "
-                "lsuffix and rsuffix are not defined"
-            )
-
-        lhs = DataFrame()
-        rhs = DataFrame()
-
-        idx_col_names = []
-        if isinstance(self.index, cudf.core.multiindex.MultiIndex):
-            if not isinstance(other.index, cudf.core.multiindex.MultiIndex):
-                raise TypeError(
-                    "Left index is MultiIndex, but right index is "
-                    + type(other.index)
-                )
-
-            index_frame_l = self.index.copy().to_frame(index=False)
-            index_frame_r = other.index.copy().to_frame(index=False)
-
-            if (index_frame_l.columns != index_frame_r.columns).any():
-                raise ValueError(
-                    "Left and Right indice-column names must match."
-                )
-
-            for name in index_frame_l.columns:
-                idx_col_name = str(uuid.uuid4())
-                idx_col_names.append(idx_col_name)
-
-                lhs[idx_col_name] = index_frame_l._data[name]
-                rhs[idx_col_name] = index_frame_r._data[name]
-
-        else:
-            idx_col_names.append(str(uuid.uuid4()))
-            lhs[idx_col_names[0]] = self.index._values
-            rhs[idx_col_names[0]] = other.index._values
-
-        for name, col in self._data.items():
-            lhs[name] = col
-
-        for name, col in other._data.items():
-            rhs[name] = col
-
-        lhs.reset_index(drop=True, inplace=True)
-        rhs.reset_index(drop=True, inplace=True)
-
-        cat_join = []
-        for name in idx_col_names:
-            if is_categorical_dtype(lhs[name]):
-
-                lcats = lhs[name].cat.categories
-                rcats = rhs[name].cat.categories
-
-                def _set_categories(col, cats):
-                    return col.cat._set_categories(
-                        cats, is_unique=True
-                    ).fillna(-1)
-
-                if how == "left":
-                    cats = lcats
-                    rhs[name] = _set_categories(rhs[name], cats)
-                elif how == "right":
-                    cats = rcats
-                    lhs[name] = _set_categories(lhs[name], cats)
-                elif how in ["inner", "outer"]:
-                    cats = column.as_column(lcats).append(rcats)
-                    cats = (
-                        Series(cats).drop_duplicates(ignore_index=True)._column
-                    )
-
-                    lhs[name] = _set_categories(lhs[name], cats)
-                    lhs[name] = lhs[name]._column.as_numerical
-
-                    rhs[name] = _set_categories(rhs[name], cats)
-                    rhs[name] = rhs[name]._column.as_numerical
-
-                cat_join.append((name, cats))
-
-        if lsuffix == "":
-            lsuffix = "l"
-        if rsuffix == "":
-            rsuffix = "r"
+        lhs = self
+        rhs = other
 
         df = lhs.merge(
             rhs,
-            on=idx_col_names,
+            left_index=True,
+            right_index=True,
             how=how,
             suffixes=(lsuffix, rsuffix),
             method=method,
+            sort=sort,
         )
-
-        for name, cats in cat_join:
-
-            if is_categorical_dtype(df[name]):
-                codes = df[name]._column.codes
-            else:
-                codes = df[name]._column
-            df[name] = column.build_categorical_column(
-                categories=cats,
-                codes=as_column(codes.base_data, dtype=codes.dtype),
-                mask=codes.base_mask,
-                size=codes.size,
-                ordered=False,
-                offset=codes.offset,
-            )
-
-        if sort and len(df):
-            df = df.sort_values(idx_col_names)
-
-        df = df.set_index(idx_col_names)
-        # change index to None to better reflect pandas behavior
-        df.index.name = None
-
-        if len(idx_col_names) > 1:
-            df.index.names = index_frame_l.columns
-            for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
-                df.index._data[new_key] = df.index._data.pop(old_key)
+        df.index.name = (
+            None if lhs.index.name != rhs.index.name else lhs.index.name
+        )
         return df
 
     @copy_docstring(DataFrameGroupBy)
@@ -2627,6 +2576,8 @@ class DataFrame(Frame):
 
         expr : str
             A boolean expression. Names in expression refer to columns.
+            `index` can be used instead of index name, but this is not
+            supported for MultiIndex.
 
             Names starting with `@` refer to Python variables.
 
@@ -2808,7 +2759,7 @@ class DataFrame(Frame):
 
         By looping over the range
         ``range(cuda.threadIdx.x, in1.size, cuda.blockDim.x)``, the *kernel*
-        function can be used with any *tpb* in a efficient manner.
+        function can be used with any *tpb* in an efficient manner.
 
         >>> from numba import cuda
         >>> @cuda.jit
@@ -2915,7 +2866,7 @@ class DataFrame(Frame):
                   replaced with replacement*.
         value : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with. If a dict is provided, then
-            its keys must match the keys in *to_replace*, and correponding
+            its keys must match the keys in *to_replace*, and corresponding
             values must be compatible (e.g., if they are lists, then they must
             match in length).
         inplace : bool, default False
@@ -3175,7 +3126,7 @@ class DataFrame(Frame):
         return out_df
 
     @classmethod
-    def from_pandas(cls, dataframe, nan_as_null=True):
+    def from_pandas(cls, dataframe, nan_as_null=None):
         """
         Convert from a Pandas DataFrame.
 
@@ -3189,7 +3140,7 @@ class DataFrame(Frame):
         >>> import pandas as pd
         >>> data = [[0,1], [1,2], [3,4]]
         >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
-        >>> cudf.from_pandas(pdf)
+        >>> cudf.DataFrame.from_pandas(pdf)
         <cudf.DataFrame ncols=2 nrows=3 >
         """
         if not isinstance(dataframe, pd.DataFrame):
@@ -3224,7 +3175,7 @@ class DataFrame(Frame):
 
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):
-            index = cudf.from_pandas(dataframe.index)
+            index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         else:
             index = dataframe.index
         result = df.set_index(index)
@@ -4838,7 +4789,7 @@ class DataFrame(Frame):
         return df
 
 
-def from_pandas(obj):
+def from_pandas(obj, nan_as_null=None):
     """
     Convert certain Pandas objects into the cudf equivalent.
 
@@ -4858,11 +4809,11 @@ def from_pandas(obj):
     <cudf.DataFrame ncols=2 nrows=3 >
     """
     if isinstance(obj, pd.DataFrame):
-        return DataFrame.from_pandas(obj)
+        return DataFrame.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.Series):
-        return Series.from_pandas(obj)
+        return Series.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.MultiIndex):
-        return cudf.MultiIndex.from_pandas(obj)
+        return cudf.MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.RangeIndex):
         if obj._step and obj._step != 1:
             raise ValueError("cudf RangeIndex requires step == 1")
@@ -4870,7 +4821,7 @@ def from_pandas(obj):
             obj._start, stop=obj._stop, name=obj.name
         )
     elif isinstance(obj, pd.Index):
-        return cudf.Index.from_pandas(obj)
+        return cudf.Index.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(obj)
     else:
@@ -4885,7 +4836,7 @@ def merge(left, right, *args, **kwargs):
     return left.merge(right, *args, **kwargs)
 
 
-# a bit of fanciness to inject doctstring with left parameter
+# a bit of fanciness to inject docstring with left parameter
 merge_doc = DataFrame.merge.__doc__
 idx = merge_doc.find("right")
 merge.__doc__ = "".join(
@@ -4959,3 +4910,21 @@ def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
             else:
                 # handle append case
                 input_df.insert(len(input_df._data), col_1, replace_df[col_2])
+
+
+def extract_col(df, col):
+    """
+    Extract column from dataframe `df` with their name `col`.
+    If `col` is index and there are no columns with name `index`,
+    then this will return index column.
+    """
+    try:
+        return df._data[col]
+    except KeyError:
+        if (
+            col == "index"
+            and col not in df.index._data
+            and not isinstance(df.index, cudf.MultiIndex)
+        ):
+            return df.index._data.columns[0]
+        return df.index._data[col]

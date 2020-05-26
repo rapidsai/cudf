@@ -53,7 +53,7 @@ template <typename TypeOut,
           typename TypeRhs,
           typename TypeOp,
           typename ValueComparator = std::equal_to<TypeOut>,
-          typename ScalarType      = cudf::experimental::scalar_type_t<TypeLhs>>
+          typename ScalarType      = cudf::scalar_type_t<TypeLhs>>
 void ASSERT_BINOP(column_view const& out,
                   scalar const& lhs,
                   column_view const& rhs,
@@ -100,7 +100,7 @@ template <typename TypeOut,
           typename TypeRhs,
           typename TypeOp,
           typename ValueComparator = std::equal_to<TypeOut>,
-          typename ScalarType      = cudf::experimental::scalar_type_t<TypeRhs>>
+          typename ScalarType      = cudf::scalar_type_t<TypeRhs>>
 void ASSERT_BINOP(column_view const& out,
                   column_view const& lhs,
                   scalar const& rhs,

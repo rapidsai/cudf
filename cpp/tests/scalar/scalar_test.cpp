@@ -25,8 +25,6 @@
 #include <thrust/sequence.h>
 #include <random>
 
-#include <gmock/gmock.h>
-
 template <typename T>
 struct TypedScalarTest : public cudf::test::BaseFixture {
 };
@@ -36,7 +34,7 @@ TYPED_TEST_CASE(TypedScalarTest, cudf::test::FixedWidthTypes);
 TYPED_TEST(TypedScalarTest, DefaultValidity)
 {
   TypeParam value = 7;
-  cudf::experimental::scalar_type_t<TypeParam> s(value);
+  cudf::scalar_type_t<TypeParam> s(value);
 
   EXPECT_TRUE(s.is_valid());
   EXPECT_EQ(value, s.value());
@@ -45,7 +43,7 @@ TYPED_TEST(TypedScalarTest, DefaultValidity)
 TYPED_TEST(TypedScalarTest, ConstructNull)
 {
   TypeParam value = 5;
-  cudf::experimental::scalar_type_t<TypeParam> s(value, false);
+  cudf::scalar_type_t<TypeParam> s(value, false);
 
   EXPECT_FALSE(s.is_valid());
 }
@@ -53,7 +51,7 @@ TYPED_TEST(TypedScalarTest, ConstructNull)
 TYPED_TEST(TypedScalarTest, SetValue)
 {
   TypeParam value = 9;
-  cudf::experimental::scalar_type_t<TypeParam> s;
+  cudf::scalar_type_t<TypeParam> s;
   s.set_value(value);
 
   EXPECT_TRUE(s.is_valid());
@@ -63,7 +61,7 @@ TYPED_TEST(TypedScalarTest, SetValue)
 TYPED_TEST(TypedScalarTest, SetNull)
 {
   TypeParam value = 6;
-  cudf::experimental::scalar_type_t<TypeParam> s;
+  cudf::scalar_type_t<TypeParam> s;
   s.set_value(value);
   s.set_valid(false);
 
@@ -73,7 +71,7 @@ TYPED_TEST(TypedScalarTest, SetNull)
 TYPED_TEST(TypedScalarTest, CopyConstructor)
 {
   TypeParam value = 8;
-  cudf::experimental::scalar_type_t<TypeParam> s(value);
+  cudf::scalar_type_t<TypeParam> s(value);
   auto s2 = s;
 
   EXPECT_TRUE(s2.is_valid());
@@ -83,7 +81,7 @@ TYPED_TEST(TypedScalarTest, CopyConstructor)
 TYPED_TEST(TypedScalarTest, MoveConstructor)
 {
   TypeParam value = 8;
-  cudf::experimental::scalar_type_t<TypeParam> s(value);
+  cudf::scalar_type_t<TypeParam> s(value);
   auto data_ptr = s.data();
   auto mask_ptr = s.validity_data();
   decltype(s) s2(std::move(s));

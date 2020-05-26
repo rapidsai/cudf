@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 #include <type_traits>
 #include "gtest/gtest.h"
 
-using cudf::experimental::scalar_type_t;
+using cudf::scalar_type_t;
 
 namespace cudf {
 namespace test {
@@ -63,6 +63,13 @@ void compare_scalar_functor::operator()<cudf::dictionary32>(cudf::scalar const& 
   CUDF_FAIL("Unsupported scalar compare type: dictionary");
 }
 
+template <>
+void compare_scalar_functor::operator()<cudf::list_view>(cudf::scalar const& lhs,
+                                                         cudf::scalar const& rhs)
+{
+  CUDF_FAIL("Unsupported scalar compare type: list_view");
+}
+
 }  // anonymous namespace
 
 void expect_scalars_equal(cudf::scalar const& lhs, cudf::scalar const& rhs)
@@ -71,7 +78,7 @@ void expect_scalars_equal(cudf::scalar const& lhs, cudf::scalar const& rhs)
   EXPECT_EQ(lhs.is_valid(), rhs.is_valid());
 
   if (lhs.is_valid() && rhs.is_valid() && lhs.type() == rhs.type()) {
-    experimental::type_dispatcher(lhs.type(), compare_scalar_functor{}, lhs, rhs);
+    type_dispatcher(lhs.type(), compare_scalar_functor{}, lhs, rhs);
   }
 }
 

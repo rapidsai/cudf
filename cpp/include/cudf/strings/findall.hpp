@@ -21,9 +21,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_apis
- * @addtogroup strings_contains Contains
- * APIs to search for substrings/patterns within strings.
+ * @addtogroup strings_contains
  * @{
  */
 
@@ -53,7 +51,7 @@ namespace strings {
  * @param mr Resource for allocating device memory.
  * @return New table of strings columns.
  */
-std::unique_ptr<experimental::table> findall_re(
+std::unique_ptr<table> findall_re(
   strings_column_view const& strings,
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());

@@ -6,8 +6,6 @@ import cupy
 import numpy as np
 from numba import cuda
 
-import rmm
-
 from cudf.utils.utils import (
     check_equals_float,
     check_equals_int,
@@ -127,7 +125,7 @@ def gpu_round(in_col, out_col, decimal):
 
 
 def apply_round(data, decimal):
-    output_dary = rmm.device_array_like(data)
+    output_dary = cuda.device_array_like(data)
     if output_dary.size > 0:
         gpu_round.forall(output_dary.size)(data, output_dary, decimal)
     return output_dary
@@ -179,7 +177,7 @@ def gpu_mark_lt(arr, val, out, not_found):
 def find_first(arr, val, compare="eq"):
     """
     Returns the index of the first occurrence of *val* in *arr*..
-    Or the first occurence of *arr* *compare* *val*, if *compare* is not eq
+    Or the first occurrence of *arr* *compare* *val*, if *compare* is not eq
     Otherwise, returns -1.
 
     Parameters
@@ -188,7 +186,7 @@ def find_first(arr, val, compare="eq"):
     val : scalar
     compare: str ('gt', 'lt', or 'eq' (default))
     """
-    found = rmm.device_array_like(arr)
+    found = cuda.device_array_like(arr)
     if found.size > 0:
         if compare == "gt":
             gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
@@ -216,7 +214,7 @@ def find_first(arr, val, compare="eq"):
 def find_last(arr, val, compare="eq"):
     """
     Returns the index of the last occurrence of *val* in *arr*.
-    Or the last occurence of *arr* *compare* *val*, if *compare* is not eq
+    Or the last occurrence of *arr* *compare* *val*, if *compare* is not eq
     Otherwise, returns -1.
 
     Parameters
@@ -225,7 +223,7 @@ def find_last(arr, val, compare="eq"):
     val : scalar
     compare: str ('gt', 'lt', or 'eq' (default))
     """
-    found = rmm.device_array_like(arr)
+    found = cuda.device_array_like(arr)
     if found.size > 0:
         if compare == "gt":
             gpu_mark_gt.forall(found.size)(arr, val, found, -1)
@@ -256,7 +254,7 @@ def gpu_window_sizes_from_offset(arr, window_sizes, offset):
 
 
 def window_sizes_from_offset(arr, offset):
-    window_sizes = rmm.device_array(shape=(arr.shape), dtype="int32")
+    window_sizes = cuda.device_array(shape=(arr.shape), dtype="int32")
     if arr.size > 0:
         gpu_window_sizes_from_offset.forall(arr.size)(
             arr, window_sizes, offset
@@ -273,7 +271,7 @@ def compile_udf(udf, type_signature):
     together with the generated output type.
 
     The output is expected to be passed to the PTX parser in `libcudf`
-    to generate a CUDA device funtion to be inlined into CUDA kernels,
+    to generate a CUDA device function to be inlined into CUDA kernels,
     compiled at runtime and launched.
 
     Parameters

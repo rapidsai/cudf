@@ -26,7 +26,6 @@
 #include <numeric>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief A wrapper to simplify inheritance of virtual methods from aggregation
@@ -67,12 +66,12 @@ class derived_aggregation : public aggregation {
  * @brief Derived class for specifying a quantile aggregation
  */
 struct quantile_aggregation final : derived_aggregation<quantile_aggregation> {
-  quantile_aggregation(std::vector<double> const& q, experimental::interpolation i)
+  quantile_aggregation(std::vector<double> const& q, interpolation i)
     : derived_aggregation{QUANTILE}, _quantiles{q}, _interpolation{i}
   {
   }
-  std::vector<double> _quantiles;              ///< Desired quantile(s)
-  experimental::interpolation _interpolation;  ///< Desired interpolation
+  std::vector<double> _quantiles;  ///< Desired quantile(s)
+  interpolation _interpolation;    ///< Desired interpolation
 
  protected:
   friend class derived_aggregation<quantile_aggregation>;
@@ -538,5 +537,4 @@ constexpr inline bool is_valid_aggregation()
 bool is_valid_aggregation(data_type source, aggregation::Kind k);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

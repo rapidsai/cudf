@@ -21,9 +21,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_apis
- * @addtogroup strings_modify Modify
- * APIs to modify from strings.
+ * @addtogroup strings_modify
  * @{
  */
 
@@ -57,7 +55,7 @@ namespace strings {
  * ```
  *
  * @param[in] strings String column.
- * @param[in] width Maximum chararacter width of a line within each string.
+ * @param[in] width Maximum character width of a line within each string.
  * @param[in] mr Resource for allocating device memory.
  * @return Column of wrapped strings.
  */

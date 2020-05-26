@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
@@ -27,13 +26,11 @@
 #include <cudf/strings/detail/copy_if_else.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <iterator/legacy/iterator.cuh>
 
 #include <cub/cub.cuh>
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {  // anonymous
 
@@ -159,13 +156,14 @@ __launch_bounds__(block_size) __global__
  *                    by `filter[i]`
  */
 template <typename FilterFn, typename LeftIter, typename RightIter>
-std::unique_ptr<column> copy_if_else(bool nullable,
-                                     LeftIter lhs_begin,
-                                     LeftIter lhs_end,
-                                     RightIter rhs,
-                                     FilterFn filter,
-                                     rmm::mr::device_memory_resource *mr,
-                                     cudaStream_t stream)
+std::unique_ptr<column> copy_if_else(
+  bool nullable,
+  LeftIter lhs_begin,
+  LeftIter lhs_end,
+  RightIter rhs,
+  FilterFn filter,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0)
 {
   using Element =
     typename thrust::tuple_element<0, typename thrust::iterator_traits<LeftIter>::value_type>::type;
@@ -173,7 +171,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
   size_type size           = std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, warp_size);
   constexpr int block_size = 256;
-  cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
+  cudf::detail::grid_1d grid{num_els, block_size, 1};
 
   std::unique_ptr<column> out =
     make_fixed_width_column(data_type(type_to_id<Element>()),
@@ -186,7 +184,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
 
   // if we have validity in the output
   if (nullable) {
-    rmm::device_scalar<size_type> valid_count{0, stream, mr};
+    rmm::device_scalar<size_type> valid_count{0, stream};
 
     // call the kernel
     copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, true>
@@ -204,7 +202,5 @@ std::unique_ptr<column> copy_if_else(bool nullable,
 }
 
 }  // namespace detail
-
-}  // namespace experimental
 
 }  // namespace cudf

@@ -33,7 +33,7 @@ class NVStringsImpl;
  * @par
  * The methods are meant to match more or less directly with its python
  * counterpart, @p nvstrings.py. And the operations strive to mimic the
- * behavoir of the equivalent Pandas strings methods.
+ * behavior of the equivalent Pandas strings methods.
  * @par
  * An instance of this class is immutable and operations that modify
  * or create new strings will return a new instance.
@@ -345,7 +345,7 @@ class NVStrings {
    * @brief Returns new row index positions for strings sorted in this instance.
    *
    * The strings in this instance are neither modified nor moved in position.
-   * @param stype Specify what attribute to srot: length or character code-points.
+   * @param stype Specify what attribute to sort: length or character code-points.
    *              Sorting by both length and characters is allowed. In this case, length is sorted
    * first.
    * @param ascending Set to true to sort logically lowest to highest.
@@ -473,7 +473,7 @@ class NVStrings {
    * @param[in] others The number of strings must match this instance.
    * @param[in] separator Null-terminated CPU string that should appear between each instance.
    * @param[in] narep Null-terminated CPU string that should represent any null strings found.
-   * @return New instance with this instance concatentated with the provided instance.
+   * @return New instance with this instance concatenated with the provided instance.
    */
   NVStrings* cat(NVStrings* others, const char* separator, const char* narep = nullptr);
   /**
@@ -482,7 +482,7 @@ class NVStrings {
    * @param[in] others The number of strings in each item must match this instance.
    * @param[in] separator Null-terminated CPU string that should appear between each instance.
    * @param[in] narep Null-terminated CPU string that should represent any null strings found.
-   * @return New instance with this instance concatentated with the provided instances.
+   * @return New instance with this instance concatenated with the provided instances.
    */
   NVStrings* cat(std::vector<NVStrings*>& others,
                  const char* separator,
@@ -998,7 +998,7 @@ class NVStrings {
   // findall.cu
   /**
    * @brief Return all occurrences of the specified regular expression pattern in each string.
-   * @param[in] pattern The regulare expression pattern to search.
+   * @param[in] pattern The regular expression pattern to search.
    * @param[out] results List of instances.
    * @return Number of strings returned in the results vector.
    */
@@ -1142,7 +1142,7 @@ class NVStrings {
    * Upto 10 significant digits are recorded.
    * Numbers above 10^9 and numbers below 10^5 may be converted to scientific notation.
    * @param[in] values Array of double float values to convert to strings.
-   * @param count The number of doiuble float values in the values parameter.
+   * @param count The number of double float values in the values parameter.
    * @param[in] nullbitmask Indicates which entries should result in a null string.
    *                        If specified, this array should be at least (count+7)/8 bytes.
    *                        The bits are expected to be organized in Arrow format.

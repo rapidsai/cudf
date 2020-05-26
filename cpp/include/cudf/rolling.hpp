@@ -21,7 +21,11 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
+/**
+ * @addtogroup aggregation_rolling
+ * @{
+ */
+
 /**
  * @brief  Applies a fixed-size rolling window function to the values in a column.
  *
@@ -62,17 +66,18 @@ std::unique_ptr<column> rolling_window(
  * Like `rolling_window()`, this function aggregates values in a window around each
  * element of a specified `input` column. It differs from `rolling_window()` in that elements of the
  * `input` column are grouped into distinct groups (e.g. the result of a groupby). The window
- *aggregation cannot cross the group boundaries. For a row `i` of `input`, the group is determined
- *from the corresponding (i.e. i-th) values of the columns under `group_keys`.
+ * aggregation cannot cross the group boundaries. For a row `i` of `input`, the group is determined
+ * from the corresponding (i.e. i-th) values of the columns under `group_keys`.
  *
  * Note: This method requires that the rows are presorted by the `group_key` values.
  *
+ * @code{.pseudo}
  * Example: Consider a user-sales dataset, where the rows look as follows:
- *  { "user_id", sales_amt, day }
+ * { "user_id", sales_amt, day }
  *
  * The `grouped_rolling_window()` method enables windowing queries such as grouping a dataset by
- *`user_id`, and summing up the `sales_amt` column over a window of 3 rows (2 preceding (including
- *current row), 1 row following).
+ * `user_id`, and summing up the `sales_amt` column over a window of 3 rows (2 preceding (including
+ * current row), 1 row following).
  *
  * In this example,
  *    1. `group_keys == [ user_id ]`
@@ -109,6 +114,7 @@ std::unique_ptr<column> rolling_window(
  * Note: The SUMs calculated at the group boundaries (i.e. indices 0, 4, 5, and 8)
  * consider only 2 values each, in spite of the window-size being 3.
  * Each aggregation operation cannot cross group boundaries.
+ * @endcode
  *
  * The returned column for `op == COUNT` always has `INT32` type. All other operators return a
  * column of the same type as the input. Therefore it is suggested to convert integer column types
@@ -140,20 +146,21 @@ std::unique_ptr<column> grouped_rolling_window(
  * Like `rolling_window()`, this function aggregates values in a window around each
  * element of a specified `input` column. It differs from `rolling_window()` in two respects:
  *   1. The elements of the `input` column are grouped into distinct groups (e.g. the result of a
- *groupby), determined by the corresponding values of the columns under `group_keys`. The
- *window-aggregation cannot cross the group boundaries.
+ *      groupby), determined by the corresponding values of the columns under `group_keys`. The
+ *      window-aggregation cannot cross the group boundaries.
  *   2. Within a group, the aggregation window is calculated based on a time interval (e.g. number
- *of days preceding/following the current row). The timestamps for the input data are specified by
- *the `timestamp_column` argument.
+ *      of days preceding/following the current row). The timestamps for the input data are
+ *      specified by the `timestamp_column` argument.
  *
  * Note: This method requires that the rows are presorted by the group keys and timestamp values.
  *
+ * @code{.pseudo}
  * Example: Consider a user-sales dataset, where the rows look as follows:
  *  { "user_id", sales_amt, date }
  *
  * This method enables windowing queries such as grouping a dataset by `user_id`, sorting by
- *increasing `date`, and summing up the `sales_amt` column over a window of 3 days (1 preceding day,
- *the current day, and 1 following day).
+ * increasing `date`, and summing up the `sales_amt` column over a window of 3 days (1 preceding
+ *day, the current day, and 1 following day).
  *
  * In this example,
  *    1. `group_keys == [ user_id ]`
@@ -177,23 +184,25 @@ std::unique_ptr<column> grouped_rolling_window(
  *  ]
  *
  * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt`
- *vector (with 2 groups, one for each distinct `user_id`):
+ * vector (with 2 groups, one for each distinct `user_id`):
  *
  * Date :(202001-)  [ 01,  02,  03,  07,  07,    01,   01,   02,  04 ]
  * Input:           [ 10,  20,  10,  50,  60,    20,   30,   80,  40 ]
  *                    <-------user1-------->|<---------user2--------->
  *
  * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1
- *period. The aggregation window is thus 3 *days* wide, yielding the following output column:
+ * period. The aggregation window is thus 3 *days* wide, yielding the following output column:
  *
  *  Results:        [ 30,  40,  30,  110, 110,  130,  130,  130,  40 ]
  *
+ * @endcode
+ *
  * Note: The number of rows participating in each window might vary, based on the index within the
- *group, datestamp, and `min_periods`. Apropos:
+ * group, datestamp, and `min_periods`. Apropos:
  *  1. results[0] considers 2 values, because it is at the beginning of its group, and has no
- *preceding values.
+ *     preceding values.
  *  2. results[5] considers 3 values, despite being at the beginning of its group. It must include 2
- *following values, based on its datestamp.
+ *     following values, based on its datestamp.
  *
  * Each aggregation operation cannot cross group boundaries.
  *
@@ -212,7 +221,7 @@ std::unique_ptr<column> grouped_rolling_window(
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
  *
  * @returns   A nullable output column containing the rolling window results
- **/
+ */
 std::unique_ptr<column> grouped_time_range_rolling_window(
   table_view const& group_keys,
   column_view const& timestamp_column,
@@ -247,16 +256,17 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *
  * @param[in] input_col The input column
  * @param[in] preceding_window A non-nullable column of INT32 window sizes in the forward direction.
- *                             `preceding_window[i]` specifies preceding window size for element
- *`i`.
+ *                             `preceding_window[i]` specifies preceding window size for
+ *                             element `i`.
  * @param[in] following_window A non-nullable column of INT32 window sizes in the backward
- *direction. `following_window[i]` specifies following window size for element `i`.
+ *                             direction. `following_window[i]` specifies following window size
+ *                             for element `i`.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] agg The rolling window aggregation type (sum, max, min, etc.)
  *
  * @returns   A nullable output column containing the rolling window results
- **/
+ */
 std::unique_ptr<column> rolling_window(
   column_view const& input,
   column_view const& preceding_window,
@@ -265,5 +275,5 @@ std::unique_ptr<column> rolling_window(
   std::unique_ptr<aggregation> const& agg,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-}  // namespace experimental
+/** @} */  // end of group
 }  // namespace cudf

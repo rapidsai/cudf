@@ -3,8 +3,7 @@ import logging
 
 import numpy as np
 import pytest
-
-import rmm
+from numba import cuda
 
 import cudf
 from cudf.comm.gpuarrow import GpuArrowReader
@@ -49,7 +48,7 @@ def test_gpu_parse_arrow_data():
     # memory buffers will be set
     cpu_schema = np.frombuffer(schema_data, dtype=np.uint8)
     cpu_data = np.frombuffer(recbatch_data, dtype=np.uint8)
-    gpu_data = rmm.to_device(cpu_data)
+    gpu_data = cuda.to_device(cpu_data)
     del cpu_data
 
     # test reader
@@ -148,7 +147,7 @@ def test_gpu_parse_arrow_cats():
         dtype=np.byte,
         buffer=bytearray(recordbatches_bytes),
     )
-    rb_gpu_data = rmm.to_device(rb_cpu_data)
+    rb_gpu_data = cuda.to_device(rb_cpu_data)
 
     gar = GpuArrowReader(schema, rb_gpu_data)
     columns = gar.to_dict()
@@ -204,7 +203,7 @@ def test_gpu_parse_arrow_int(dtype):
         buffer=bytearray(recordbatches_bytes),
     )
 
-    rb_gpu_data = rmm.to_device(rb_cpu_data)
+    rb_gpu_data = cuda.to_device(rb_cpu_data)
     gar = GpuArrowReader(schema, rb_gpu_data)
     columns = gar.to_dict()
     assert columns["depdelay"].dtype == dtype
@@ -238,7 +237,7 @@ def test_gpu_parse_arrow_timestamps(dtype):
     # memory buffers will be set
     cpu_schema = np.frombuffer(schema_data, dtype=np.uint8)
     cpu_data = np.frombuffer(recbatch_data, dtype=np.uint8)
-    gpu_data = rmm.to_device(cpu_data)
+    gpu_data = cuda.to_device(cpu_data)
     del cpu_data
 
     # test reader

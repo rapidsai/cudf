@@ -34,8 +34,8 @@ namespace {  // anonym.
 
 using namespace cudf;
 
-using experimental::detail::side;
-using index_type = experimental::detail::index_type;
+using detail::side;
+using index_type = detail::index_type;
 
 /**
  * @brief Merges the bits of two validity bitmasks.
@@ -103,7 +103,7 @@ void materialize_bitmask(column_view const& left_col,
                          cudaStream_t stream)
 {
   constexpr size_type BLOCK_SIZE{256};
-  experimental::detail::grid_1d grid_config{out_col.size(), BLOCK_SIZE};
+  detail::grid_1d grid_config{out_col.size(), BLOCK_SIZE};
 
   auto p_left_dcol  = column_device_view::create(left_col);
   auto p_right_dcol = column_device_view::create(right_col);
@@ -143,7 +143,7 @@ void materialize_bitmask(column_view const& left_col,
  *
  * @tparam index_type Indicates the type to be used to collect index and side information;
  * @param[in] left_table The left table_view to be merged
- * @param[in] right_tbale The right table_view to be merged
+ * @param[in] right_table The right table_view to be merged
  * @param[in] column_order Sort order types of index columns
  * @param[in] null_precedence Array indicating the order of nulls with respect to non-nulls for the
  * index columns
@@ -192,11 +192,11 @@ rmm::device_vector<index_type> generate_merged_indices(
   if (nullable) {
     rmm::device_vector<null_order> d_null_precedence(null_precedence);
 
-    auto ineq_op = experimental::detail::row_lexicographic_tagged_comparator<true>(
-      *lhs_device_view,
-      *rhs_device_view,
-      d_column_order.data().get(),
-      d_null_precedence.data().get());
+    auto ineq_op =
+      detail::row_lexicographic_tagged_comparator<true>(*lhs_device_view,
+                                                        *rhs_device_view,
+                                                        d_column_order.data().get(),
+                                                        d_null_precedence.data().get());
     thrust::merge(exec_pol->on(stream),
                   left_begin_zip_iterator,
                   left_end_zip_iterator,
@@ -205,7 +205,7 @@ rmm::device_vector<index_type> generate_merged_indices(
                   merged_indices.begin(),
                   ineq_op);
   } else {
-    auto ineq_op = experimental::detail::row_lexicographic_tagged_comparator<false>(
+    auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
       *lhs_device_view, *rhs_device_view, d_column_order.data().get());
     thrust::merge(exec_pol->on(stream),
                   left_begin_zip_iterator,
@@ -224,7 +224,6 @@ rmm::device_vector<index_type> generate_merged_indices(
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 // generate merged column
 // given row order of merged tables
@@ -251,9 +250,9 @@ struct column_merger {
 
     std::unique_ptr<cudf::column> p_merged_col{nullptr};
     if (lcol.has_nulls())
-      p_merged_col = cudf::experimental::allocate_like(lcol, merged_size);
+      p_merged_col = cudf::allocate_like(lcol, merged_size);
     else
-      p_merged_col = cudf::experimental::allocate_like(rcol, merged_size);
+      p_merged_col = cudf::allocate_like(rcol, merged_size);
 
     //"gather" data from lcol, rcol according to dv_row_order_ "map"
     //(directly calling gather() won't work because
@@ -264,7 +263,7 @@ struct column_merger {
     // initialize null_mask to all valid:
     //
     // Note: this initialization in conjunction with _conditionally_
-    // calling materialze_bitmask() below covers the case
+    // calling materialize_bitmask() below covers the case
     // materialize_merged_bitmask_kernel<false, false>()
     // which won't be called anymore (because of the _condition_ below)
     //
@@ -341,7 +340,7 @@ std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_vie
   CUDF_FAIL("dictionary not supported yet");
 }
 
-using table_ptr_type = std::unique_ptr<cudf::experimental::table>;
+using table_ptr_type = std::unique_ptr<cudf::table>;
 
 namespace {
 table_ptr_type merge(cudf::table_view const& left_table,
@@ -375,11 +374,10 @@ table_ptr_type merge(cudf::table_view const& left_table,
             right_table.begin(),
             std::back_inserter(merged_cols),
             [&](auto const& left_col, auto const& right_col) {
-              return cudf::experimental::type_dispatcher(
-                left_col.type(), merger, left_col, right_col);
+              return cudf::type_dispatcher(left_col.type(), merger, left_col, right_col);
             });
 
-  return std::make_unique<cudf::experimental::table>(std::move(merged_cols));
+  return std::make_unique<cudf::table>(std::move(merged_cols));
 }
 
 struct merge_queue_item {
@@ -415,7 +413,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
                      rmm::mr::device_memory_resource* mr,
                      cudaStream_t stream = 0)
 {
-  if (tables_to_merge.empty()) { return std::make_unique<cudf::experimental::table>(); }
+  if (tables_to_merge.empty()) { return std::make_unique<cudf::table>(); }
 
   auto const& first_table = tables_to_merge.front();
   auto const n_cols       = first_table.num_columns();
@@ -444,9 +442,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
   });
 
   // If there is only one non-empty table_view, return its copy
-  if (merge_queue.size() == 1) {
-    return std::make_unique<cudf::experimental::table>(merge_queue.top().view);
-  }
+  if (merge_queue.size() == 1) { return std::make_unique<cudf::table>(merge_queue.top().view); }
   // No inputs have rows, return a table with same columns as the first one
   if (merge_queue.empty()) { return empty_like(first_table); }
 
@@ -457,8 +453,17 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
     auto const left_table = top_and_pop(merge_queue);
     // Deallocated at the end of the block
     auto const right_table = top_and_pop(merge_queue);
-    auto merged_table =
-      merge(left_table.view, right_table.view, key_cols, column_order, null_precedence, mr, stream);
+
+    // Only use mr for the output table
+    auto const& new_tbl_rm = merge_queue.empty() ? mr : rmm::mr::get_default_resource();
+    auto merged_table      = merge(left_table.view,
+                              right_table.view,
+                              key_cols,
+                              column_order,
+                              null_precedence,
+                              new_tbl_rm,
+                              stream);
+
     auto const merged_table_view = merged_table->view();
     merge_queue.emplace(merged_table_view, std::move(merged_table));
   }
@@ -468,16 +473,14 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
 
 }  // namespace detail
 
-std::unique_ptr<cudf::experimental::table> merge(
-  std::vector<table_view> const& tables_to_merge,
-  std::vector<cudf::size_type> const& key_cols,
-  std::vector<cudf::order> const& column_order,
-  std::vector<cudf::null_order> const& null_precedence,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merge,
+                                   std::vector<cudf::size_type> const& key_cols,
+                                   std::vector<cudf::order> const& column_order,
+                                   std::vector<cudf::null_order> const& null_precedence,
+                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::merge(tables_to_merge, key_cols, column_order, null_precedence, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include "datetime.cuh"
 
 #include <cudf/detail/utilities/trie.cuh>
+#include <cudf/lists/list_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/bit.hpp>
@@ -29,7 +30,7 @@
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
 
-using namespace ::cudf::experimental::io;
+using namespace ::cudf::io;
 
 namespace cudf {
 namespace io {
@@ -74,7 +75,7 @@ __device__ __inline__ void trim_field_start_end(const char *data,
  * @brief Returns true is the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  *
- * @param c Chracter to check
+ * @param c Character to check
  * @param is_hex Whether to check as a hexadecimal
  *
  * @return `true` if it is digit-like, `false` otherwise
@@ -205,7 +206,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   while (col < num_columns) {
     if (start > stop) { break; }
 
-    pos = cudf::experimental::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
+    pos = cudf::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
 
     // Checking if this is a column that the user wants --- user can filter
     // columns
@@ -291,14 +292,14 @@ template <typename T, int base>
 __inline__ __device__ T
 decode_value(const char *data, long start, long end, ParseOptions const &opts)
 {
-  return cudf::experimental::io::gpu::parse_numeric<T, base>(data, start, end, opts);
+  return cudf::io::gpu::parse_numeric<T, base>(data, start, end, opts);
 }
 
 template <typename T>
 __inline__ __device__ T
 decode_value(const char *data, long start, long end, ParseOptions const &opts)
 {
-  return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts);
+  return cudf::io::gpu::parse_numeric<T>(data, start, end, opts);
 }
 
 template <>
@@ -351,6 +352,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
 }
 
 // The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
 template <>
 __inline__ __device__ cudf::string_view decode_value(const char *data,
                                                      long start,
@@ -359,6 +361,8 @@ __inline__ __device__ cudf::string_view decode_value(const char *data,
 {
   return cudf::string_view{};
 }
+
+// The purpose of this is merely to allow compilation ONLY
 template <>
 __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
                                                       long start,
@@ -366,6 +370,17 @@ __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
                                                       ParseOptions const &opts)
 {
   return cudf::dictionary32{};
+}
+
+// The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
+template <>
+__inline__ __device__ cudf::list_view decode_value(const char *data,
+                                                   long start,
+                                                   long end,
+                                                   ParseOptions const &opts)
+{
+  return cudf::list_view{};
 }
 
 /**
@@ -522,7 +537,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   while (col < num_columns) {
     if (start > stop) break;
 
-    pos = cudf::experimental::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
+    pos = cudf::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
 
     if (flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
@@ -536,7 +551,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
       if (!is_na && start <= (tempPos)) {  // Empty fields are not legal values
 
-        // Type dispatcher does not handle GDF_STRINGS
+        // Type dispatcher does not handle STRING
         if (dtype[actual_col].id() == cudf::type_id::STRING) {
           long end = pos;
           if (opts.keepquotes == false) {
@@ -549,15 +564,15 @@ __global__ void __launch_bounds__(csvparse_block_dim)
           str_list[rec_id].first = raw_csv + start;
           str_list[rec_id].second = end - start;
         } else {
-          if (cudf::experimental::type_dispatcher(dtype[actual_col],
-                                                  decode_op{},
-                                                  raw_csv,
-                                                  data[actual_col],
-                                                  rec_id,
-                                                  start,
-                                                  tempPos,
-                                                  opts,
-                                                  flags[col])) {
+          if (cudf::type_dispatcher(dtype[actual_col],
+                                    decode_op{},
+                                    raw_csv,
+                                    data[actual_col],
+                                    rec_id,
+                                    start,
+                                    tempPos,
+                                    opts,
+                                    flags[col])) {
             // set the valid bitmap - all bits were set to 0 to start
             set_bit(valid[actual_col], rec_id);
           }
@@ -658,7 +673,7 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
 /*
  * @brief 512-wide row context merge transform
  *
- * Repeatingly merge row context blocks, keeping track of each merge operation
+ * Repeatedly merge row context blocks, keeping track of each merge operation
  * in a context tree so that the transform is reversible
  * The tree is organized such that the left and right children of node n
  * are located at indices n*2 and n*2+1, the root node starting at index 1
@@ -811,7 +826,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
     .y = 0,
     .z = 0,
     .w = (ROW_CTX_NONE << 0) | (ROW_CTX_QUOTE << 2) | (ROW_CTX_COMMENT << 4) | (ROW_CTX_EOF << 6)};
-  int c, c_prev = (cur > start) ? cur[-1] : terminator;
+  int c, c_prev = (cur > start && cur <= end) ? cur[-1] : terminator;
   // Loop through all 32 bytes and keep a bitmask of row starts for each possible input context
   for (uint32_t pos = 0; pos < 32; pos++, cur++, c_prev = c) {
     uint32_t ctx;
@@ -842,12 +857,11 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       }
     } else {
       const char *data_end = start + data_size - start_offset;
-      if (cur >= data_end) {
+      if (cur <= end && cur == data_end) {
         // Add a newline at data end (need the extra row offset to infer length of previous row)
-        uint32_t eof_row = (cur == data_end && cur <= end) ? 1 : 0;
-        ctx = make_char_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, eof_row, eof_row, eof_row);
+        ctx = make_char_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, 1, 1, 1);
       } else {
-        // Pass-through context (beyond chunk_size but before data_size)
+        // Pass-through context (beyond chunk_size or data_end)
         ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_COMMENT);
       }
     }
@@ -908,7 +922,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
 
 size_t __host__ count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
                                  rmm::device_vector<char> const &data,
-                                 const cudf::experimental::io::ParseOptions &opts,
+                                 const cudf::io::ParseOptions &opts,
                                  cudaStream_t stream)
 {
   const char *d_data  = data.data().get();
@@ -928,7 +942,7 @@ size_t __host__ count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets
 
 void __host__ remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
                                 rmm::device_vector<char> const &data,
-                                const cudf::experimental::io::ParseOptions &opts,
+                                const cudf::io::ParseOptions &opts,
                                 cudaStream_t stream)
 {
   const char *d_data  = data.data().get();

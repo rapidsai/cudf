@@ -21,9 +21,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_apis
- * @addtogroup strings_convert Converters
- * APIs to convert strings to and from other data-types.
+ * @addtogroup strings_convert
  * @{
  */
 
@@ -43,7 +41,7 @@ namespace strings {
  * integer is undefined.
  *
  * The resulting 32-bit integer is placed in an int64_t to avoid setting the sign-bit
- * in a int32_t type. This could be changed if cudf supported a UINT32 type in the future.
+ * in an int32_t type. This could be changed if cudf supported a UINT32 type in the future.
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
