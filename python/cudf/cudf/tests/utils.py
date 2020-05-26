@@ -20,26 +20,6 @@ supported_numpy_dtypes = [
     "datetime64[us]",
 ]
 
-def _normalize_nullable_types(a, b):
-
-    if isinstance(a, (pd.Series, pd.Index)):
-        if pd.api.types.is_dtype_equal(a.dtype, pd.StringDtype()):
-            a = a.astype('object')
-    if isinstance(b, (pd.Series, pd.Index)):
-        if pd.api.types.is_dtype_equal(b.dtype, pd.StringDtype()):
-            b = b.astype('object')
-    if isinstance(a, pd.DataFrame):
-        for column in a.columns:
-            if pd.api.types.is_dtype_equal(a[column].dtype, pd.StringDtype()):
-                a[column] = a[column].astype('object')
-    if isinstance(b, pd.DataFrame):
-        for column in b.columns:
-            if pd.api.types.is_dtype_equal(b[column].dtype, pd.StringDtype()):
-                b[column] = b[column].astype('object')
-
-    return a, b
-
-
 
 def random_bitmask(size):
     """
@@ -77,7 +57,7 @@ def assert_eq(a, b, **kwargs):
     functions.
     """
     __tracebackhide__ = True
-    
+
     if hasattr(a, "to_pandas"):
         a = a.to_pandas()
     if hasattr(b, "to_pandas"):
@@ -86,14 +66,13 @@ def assert_eq(a, b, **kwargs):
         a = cupy.asnumpy(a)
     if isinstance(b, cupy.ndarray):
         b = cupy.asnumpy(b)
-    if isinstance(a, (pd.DataFrame, pd.Series, pd.Index)):
-        a, b = _normalize_nullable_types(a, b)
-        if isinstance(a, pd.DataFrame):
-            tm.assert_frame_equal(a, b, **kwargs)
-        elif isinstance(a, pd.Series):
-            tm.assert_series_equal(a, b, **kwargs)
-        elif isinstance(a, pd.Index):
-            tm.assert_index_equal(a, b, **kwargs)
+
+    if isinstance(a, pd.DataFrame):
+        tm.assert_frame_equal(a, b, **kwargs)
+    elif isinstance(a, pd.Series):
+        tm.assert_series_equal(a, b, **kwargs)
+    elif isinstance(a, pd.Index):
+        tm.assert_index_equal(a, b, **kwargs)
     elif isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
         if np.issubdtype(a.dtype, np.floating) and np.issubdtype(
             b.dtype, np.floating
