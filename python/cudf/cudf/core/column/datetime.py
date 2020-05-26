@@ -137,7 +137,8 @@ class DatetimeColumn(column.ColumnBase):
 
     def as_string_column(self, dtype, **kwargs):
         from cudf.core.column import string
-
+        if not kwargs.get("format"):
+            kwargs["format"] = "%Y-%m-%d %H:%M:%S.%f"
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
