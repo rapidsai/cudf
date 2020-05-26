@@ -3880,13 +3880,13 @@ class StringColumn(column.ColumnBase):
     # TODO: Remove these once NVStrings is fully deprecated / removed
     @property
     def indices(self):
+        warnings.warn(
+            "nvcategory will be removed in 0.15. \
+            Please use equivalent from libcudf",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if self._indices is None:
-            warnings.warn(
-                "nvcategory will be removed in 0.15. \
-                Please use equivalent from libcudf",
-                DeprecationWarning,
-                stacklevel=2,
-            )
             out_col = column_empty(self.nvcategory.size(), dtype="int32")
             ptr = out_col.data_ptr
             self.nvcategory.values(devptr=ptr)
