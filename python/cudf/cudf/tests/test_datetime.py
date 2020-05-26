@@ -742,6 +742,20 @@ def test_to_datetime_format(data, format, infer_datetime_format):
     assert_eq(actual, expected)
 
 
+def test_datetime_can_cast_safely():
+
+    sr = cudf.Series(
+        ["1679-01-01", "2000-01-31", "2261-01-01"], dtype="datetime64[ms]"
+    )
+    assert sr._column.can_cast_safely(np.dtype("datetime64[ns]"))
+
+    sr = cudf.Series(
+        ["1677-01-01", "2000-01-31", "2263-01-01"], dtype="datetime64[ms]"
+    )
+
+    assert sr._column.can_cast_safely(np.dtype("datetime64[ns]")) is False
+
+
 # Cudf autocasts unsupported time_units
 @pytest.mark.parametrize(
     "dtype",
