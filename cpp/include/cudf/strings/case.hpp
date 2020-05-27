@@ -35,7 +35,7 @@ namespace strings {
  * Any null entries create null entries in the output column.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of strings with characters converted.
  */
 std::unique_ptr<column> to_lower(
@@ -52,7 +52,7 @@ std::unique_ptr<column> to_lower(
  * Any null entries create null entries in the output column.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of strings with characters converted.
  */
 std::unique_ptr<column> to_upper(
@@ -70,7 +70,7 @@ std::unique_ptr<column> to_upper(
  * Any null entries create null entries in the output column.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of strings with characters converted.
  */
 std::unique_ptr<column> swapcase(

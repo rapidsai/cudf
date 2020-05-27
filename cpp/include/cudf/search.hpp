@@ -59,9 +59,9 @@ namespace cudf {
  * @param t               Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
- * @param null_precedence Vector of null_precedence enums
- * values
- * @param mr              Device memory resource to use for device memory allocation
+ * @param null_precedence Vector of null_precedence enums values
+ * @param mr              Device memory resource used to allocate the returned column's device
+ * memory
  * @return A non-nullable column of cudf::size_type elements containing the insertion points.
  */
 std::unique_ptr<column> lower_bound(
@@ -101,9 +101,9 @@ std::unique_ptr<column> lower_bound(
  * @param column          Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
- * @param null_precedence Vector of null_precedence enums
- * values
- * @param mr              Device memory resource to use for device memory allocation
+ * @param null_precedence Vector of null_precedence enums values
+ * @param mr              Device memory resource used to allocate the returned column's device
+ * memory
  * @return A non-nullable column of cudf::size_type elements containing the insertion points.
  */
 std::unique_ptr<column> upper_bound(
@@ -157,7 +157,7 @@ bool contains(column_view const& col,
  *
  * @param haystack  A column object
  * @param needles   A column of values to search for in `col`
- * @param mr         Device memory resource to use for device memory allocation
+ * @param mr        Device memory resource used to allocate the returned column's device memory
  *
  * @return A column of bool elements containing true if the corresponding entry in haystack is
  * contained in needles and false if it is not.

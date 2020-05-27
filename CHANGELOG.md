@@ -200,8 +200,10 @@
 - PR #5233 Remove experimental namespace used during libcudf++ refactor
 - PR #5213 Documentation enhancements to `cudf` python APIs
 - PR #5251 Fix more mispellings in cpp comments and strings
+- PR #5254 Deprecate nvstrings, nvcategory and nvtext
 - PR #5270 Add support to check for "NaT" and "None" strings while typecasting to `datetime64`
 - PR #5298 Remove unused native deps from java library
+- PR #5216 Make documentation uniform for params
 
 ## Bug Fixes
 
@@ -328,6 +330,7 @@
 - PR #5224 Add new headers from 5198 to libcudf/meta.yaml
 - PR #5228 Fix datetime64 scalar dtype handling for unsupported time units
 - PR #5256 ORC reader: fix loading individual timestamp columns
+- PR #5285 Fix DEBUG compilation failure due to `fixed_point.hpp`
 
 
 # cuDF 0.13.0 (31 Mar 2020)
