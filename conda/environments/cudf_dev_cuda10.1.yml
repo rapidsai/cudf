@@ -46,8 +46,9 @@ dependencies:
   - rapidjson
   - flatbuffers
   - hypothesis
+  - sphinx-markdown-tables
+  - sphinx-copybutton
   - pip:
-      - sphinx-markdown-tables
       - git+https://github.com/dask/dask.git
       - git+https://github.com/dask/distributed.git
       - git+https://github.com/python-streamz/streamz.git
