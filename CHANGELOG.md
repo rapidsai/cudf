@@ -11,6 +11,8 @@
 ## Bug Fixes
 
 - PR #5269 Explicitly require NumPy
+- PR #5299 Update package version for Java bindings
+
 
 # cuDF 0.14.0 (Date TBD)
 
@@ -48,6 +50,7 @@
 - PR #5192 Add support for `cudf.to_datetime`
 - PR #5203 Add Java bindings for is_integer and is_float
 - PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
+- PR #5293 Add Java bindings for replace_with_backrefs
 
 ## Improvements
 
@@ -214,6 +217,7 @@
 - PR #5213 Documentation enhancements to `cudf` python APIs
 - PR #5251 Fix more mispellings in cpp comments and strings
 - PR #5261 Add short git commit to conda package name
+- PR #5270 Add support to check for "NaT" and "None" strings while typecasting to `datetime64`
 
 ## Bug Fixes
 
