@@ -175,7 +175,7 @@ class datasource {
    *
    * @return bool True if there is data, False otherwise
    */
-  virtual bool empty() const { return size() == 0; }
+  virtual bool is_empty() const { return size() == 0; }
 };
 
 }  // namespace io
