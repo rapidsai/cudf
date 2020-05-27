@@ -217,6 +217,13 @@ class DataFrame(Frame, Serializable):
                         ),
                     )
                 )
+        elif hasattr(data, "__array_interface__") or hasattr(
+            data, "__cuda_array_interface__"
+        ):
+            new_df = self.from_records(data, index=index, columns=columns)
+            self._data = new_df._data
+            self._index = new_df._index
+            self.columns = new_df.columns
         else:
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
@@ -4221,7 +4228,7 @@ class DataFrame(Frame, Serializable):
 
     @classmethod
     def from_records(self, data, index=None, columns=None, nan_as_null=False):
-        """Convert from a numpy recarray or structured array.
+        """Convert from a numpy array, recarray or a structured array.
 
         Parameters
         ----------
@@ -4243,7 +4250,12 @@ class DataFrame(Frame, Serializable):
                 )
             )
 
-        num_cols = len(data[0])
+        if data.ndim == 1 and data.dtype.names is None:
+            # If data is a 1-d numpy array.
+            num_cols = 1
+        else:
+            num_cols = len(data[0])
+
         if columns is None and data.dtype.names is None:
             names = [i for i in range(num_cols)]
 
@@ -4261,8 +4273,11 @@ class DataFrame(Frame, Serializable):
             for i, k in enumerate(names):
                 df[k] = Series(data[:, i], nan_as_null=nan_as_null)
         elif data.ndim == 1:
-            for k in names:
-                df[k] = Series(data[k], nan_as_null=nan_as_null)
+            if data.dtype.names is None:
+                df[names[0]] = Series(data, nan_as_null=nan_as_null)
+            else:
+                for k in names:
+                    df[k] = Series(data[k], nan_as_null=nan_as_null)
 
         if index is not None:
             indices = data[index]
