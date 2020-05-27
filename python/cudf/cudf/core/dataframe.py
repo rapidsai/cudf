@@ -88,82 +88,98 @@ def _reverse_op(fn):
 
 
 class DataFrame(Frame, Serializable):
-    """
-    A GPU Dataframe object.
-
-    Parameters
-    ----------
-    data : data-type to coerce. Infers date format if to date.
-
-    Examples
-    --------
-
-    Build dataframe with `__setitem__`:
-
-    >>> import cudf
-    >>> df = cudf.DataFrame()
-    >>> df['key'] = [0, 1, 2, 3, 4]
-    >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-    >>> print(df)
-       key   val
-    0    0  10.0
-    1    1  11.0
-    2    2  12.0
-    3    3  13.0
-    4    4  14.0
-
-    Build DataFrame via dict of columns:
-
-    >>> import cudf
-    >>> import numpy as np
-    >>> from datetime import datetime, timedelta
-
-    >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
-    >>> n = 5
-    >>> df = cudf.DataFrame({
-    >>>   'id': np.arange(n),
-    >>>   'datetimes': np.array([(t0+ timedelta(seconds=x)) for x in range(n)])
-    >>> })
-    >>> df
-        id                datetimes
-    0    0  2018-10-07T12:00:00.000
-    1    1  2018-10-07T12:00:01.000
-    2    2  2018-10-07T12:00:02.000
-    3    3  2018-10-07T12:00:03.000
-    4    4  2018-10-07T12:00:04.000
-
-    Build DataFrame via list of rows as tuples:
-
-    >>> import cudf
-    >>> df = cudf.DataFrame([
-        (5, "cats", "jump", np.nan),
-        (2, "dogs", "dig", 7.5),
-        (3, "cows", "moo", -2.1, "occasionally"),
-    ])
-    >>> df
-    0     1     2     3             4
-    0  5  cats  jump  null          None
-    1  2  dogs   dig   7.5          None
-    2  3  cows   moo  -2.1  occasionally
-
-    Convert from a Pandas DataFrame:
-
-    >>> import pandas as pd
-    >>> import cudf
-    >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
-    >>> df = cudf.from_pandas(pdf)
-    >>> df
-      a b
-    0 0 0.1
-    1 1 0.2
-    2 2 nan
-    3 3 0.3
-    """
 
     _internal_names = {"_data", "_index"}
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
+        """
+        A GPU Dataframe object.
+
+        Parameters
+        ----------
+        data : array-like, Iterable, dict, or DataFrame.
+            Dict can contain Series, arrays, constants, or list-like objects.
+
+        index : Index or array-like
+            Index to use for resulting frame. Will default to
+            RangeIndex if no indexing information part of input data and
+            no index provided.
+
+        columns : Index or array-like
+            Column labels to use for resulting frame.
+            Will default to RangeIndex (0, 1, 2, …, n) if no column
+            labels are provided.
+
+        dtype : dtype, default None
+            Data type to force. Only a single dtype is allowed.
+            If None, infer.
+
+        Examples
+        --------
+
+        Build dataframe with ``__setitem__``:
+
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+        >>> print(df)
+        key   val
+        0    0  10.0
+        1    1  11.0
+        2    2  12.0
+        3    3  13.0
+        4    4  14.0
+
+        Build DataFrame via dict of columns:
+
+        >>> import cudf
+        >>> import numpy as np
+        >>> from datetime import datetime, timedelta
+
+        >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
+        >>> n = 5
+        >>> df = cudf.DataFrame({
+        >>> 'id': np.arange(n),
+        >>> 'datetimes': np.array(
+        >>> [(t0+ timedelta(seconds=x)) for x in range(n)])
+        >>> })
+        >>> df
+            id                datetimes
+        0    0  2018-10-07T12:00:00.000
+        1    1  2018-10-07T12:00:01.000
+        2    2  2018-10-07T12:00:02.000
+        3    3  2018-10-07T12:00:03.000
+        4    4  2018-10-07T12:00:04.000
+
+        Build DataFrame via list of rows as tuples:
+
+        >>> import cudf
+        >>> df = cudf.DataFrame([
+            (5, "cats", "jump", np.nan),
+            (2, "dogs", "dig", 7.5),
+            (3, "cows", "moo", -2.1, "occasionally"),
+        ])
+        >>> df
+        0     1     2     3             4
+        0  5  cats  jump  null          None
+        1  2  dogs   dig   7.5          None
+        2  3  cows   moo  -2.1  occasionally
+
+        Convert from a Pandas DataFrame:
+
+        >>> import pandas as pd
+        >>> import cudf
+        >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
+        >>> df = cudf.from_pandas(pdf)
+        >>> df
+        a b
+        0 0 0.1
+        1 1 0.2
+        2 2 nan
+        3 3 0.3
+        """
         super().__init__()
 
         if isinstance(data, ColumnAccessor):
@@ -613,6 +629,52 @@ class DataFrame(Frame, Serializable):
         return columns + index
 
     def memory_usage(self, index=True, deep=False):
+        """
+        Return the memory usage of each column in bytes.
+        The memory usage can optionally include the contribution of
+        the index and elements of `object` dtype.
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the DataFrame's
+            index in returned Series. If ``index=True``, the memory usage of
+            the index is the first item in the output.
+        deep : bool, default False
+            If True, introspect the data deeply by interrogating
+            `object` dtypes for system-level memory consumption, and include
+            it in the returned values.
+
+        Returns
+        -------
+        Series
+            A Series whose index is the original column names and whose values
+            is the memory usage of each column in bytes.
+
+        Examples
+        --------
+        >>> dtypes = ['int64', 'float64', 'object', 'bool']
+        >>> data = dict([(t, np.ones(shape=5000).astype(t))
+        ...              for t in dtypes])
+        >>> df = cudf.DataFrame(data)
+        >>> df.head()
+            int64  float64  object  bool
+        0      1      1.0     1.0  True
+        1      1      1.0     1.0  True
+        2      1      1.0     1.0  True
+        3      1      1.0     1.0  True
+        4      1      1.0     1.0  True
+        >>> df.memory_usage(index=False)
+        int64      40000
+        float64    40000
+        object     40000
+        bool        5000
+        dtype: int64
+        Use a Categorical for efficient storage of an object-dtype column with
+        many repeated values.
+        >>> df['object'].astype('category').memory_usage(deep=True)
+        5048
+        """
         ind = list(self.columns)
         sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
         if index:
@@ -763,7 +825,6 @@ class DataFrame(Frame, Serializable):
            key   val
         3    3  13.0
         4    4  14.0
-
         """
         if n == 0:
             return self.iloc[0:0]
@@ -804,20 +865,22 @@ class DataFrame(Frame, Serializable):
 
         dtype : data type, or dict of column name -> data type
             Use a numpy.dtype or Python type to cast entire DataFrame object to
-            the same type. Alternatively, use {col: dtype, ...}, where col is a
-            column label and dtype is a numpy.dtype or Python type to cast one
-            or more of the DataFrame's columns to column-specific types.
+            the same type. Alternatively, use ``{col: dtype, ...}``, where col
+            is a column label and dtype is a numpy.dtype or Python type
+            to cast one or more of the DataFrame's columns to
+            column-specific types.
         copy : bool, default False
             Return a deep-copy when ``copy=True``. Note by default
             ``copy=False`` setting is used and hence changes to
             values then may propagate to other cudf objects.
         errors : {'raise', 'ignore', 'warn'}, default 'raise'
             Control raising of exceptions on invalid data for provided dtype.
-            - ``raise`` : allow exceptions to be raised
-            - ``ignore`` : suppress exceptions. On error return original
-            object.
-            - ``warn`` : prints last exceptions as warnings and
-            return original object.
+
+            -   ``raise`` : allow exceptions to be raised
+            -   ``ignore`` : suppress exceptions. On error return original
+                object.
+            -   ``warn`` : prints last exceptions as warnings and
+                return original object.
         **kwargs : extra arguments to pass on to the constructor
 
         Returns
@@ -1042,10 +1105,10 @@ class DataFrame(Frame, Serializable):
             for col in lhs._data:
                 if col not in rhs._data:
                     result[col] = fallback(lhs[col], fn)
-            for col in rhs._data:
-                if col in lhs._data:
-                    result[col] = op(lhs[col], rhs[col])
                 else:
+                    result[col] = op(lhs[col], rhs[col])
+            for col in rhs._data:
+                if col not in lhs._data:
                     result[col] = fallback(rhs[col], _reverse_op(fn))
         elif isinstance(other, Series):
             other_cols = other.to_pandas().to_dict()
@@ -1082,114 +1145,794 @@ class DataFrame(Frame, Serializable):
             )
         return result
 
-    def add(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def add(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Addition of dataframe and other, element-wise (binary
+        operator `add`).
+
+        Equivalent to ``dataframe + other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `radd`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df + 1
+                angles  degrees
+        circle          1      361
+        triangle        4      181
+        rectangle       5      361
+        >>> df.add(1)
+                angles  degrees
+        circle          1      361
+        triangle        4      181
+        rectangle       5      361
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("add", other, fill_value)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
 
-    def radd(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def radd(self, other, axis=1, level=None, fill_value=None):
+        """
+        Get Addition of dataframe and other, element-wise (binary
+        operator `radd`).
+
+        Equivalent to ``other + dataframe``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `add`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df + 1
+                angles  degrees
+        circle          1      361
+        triangle        4      181
+        rectangle       5      361
+        >>> df.radd(1)
+                angles  degrees
+        circle          1      361
+        triangle        4      181
+        rectangle       5      361
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("radd", other, fill_value)
 
     def __radd__(self, other):
         return self._apply_op("__radd__", other)
 
-    def sub(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def sub(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Subtraction of dataframe and other, element-wise (binary
+        operator `sub`).
+
+        Equivalent to ``dataframe - other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `rsub`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df.sub(1)
+                angles  degrees
+        circle         -1      359
+        triangle        2      179
+        rectangle       3      359
+        >>> df.sub([1, 2])
+                angles  degrees
+        circle         -1      358
+        triangle        2      178
+        rectangle       3      358
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("sub", other, fill_value)
 
     def __sub__(self, other):
         return self._apply_op("__sub__", other)
 
-    def rsub(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def rsub(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Subtraction of dataframe and other, element-wise (binary
+        operator `rsub`).
+
+        Equivalent to ``other - dataframe``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `sub`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df.rsub(1)
+                angles  degrees
+        circle          1     -359
+        triangle       -2     -179
+        rectangle      -3     -359
+        >>> df.rsub([1, 2])
+                angles  degrees
+        circle          1     -358
+        triangle       -2     -178
+        rectangle      -3     -358
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("rsub", other, fill_value)
 
     def __rsub__(self, other):
         return self._apply_op("__rsub__", other)
 
-    def mul(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def mul(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Multiplication of dataframe and other, element-wise (binary
+        operator `mul`).
+
+        Equivalent to ``dataframe * other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `rmul`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> other = pd.DataFrame({'angles': [0, 3, 4]},
+        ...                      index=['circle', 'triangle', 'rectangle'])
+        >>> df * other
+                angles degrees
+        circle          0    null
+        triangle        9    null
+        rectangle      16    null
+        >>> df.mul(other, fill_value=0)
+                angles  degrees
+        circle          0        0
+        triangle        9        0
+        rectangle      16        0
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("mul", other, fill_value)
 
     def __mul__(self, other):
         return self._apply_op("__mul__", other)
 
-    def rmul(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def rmul(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Multiplication of dataframe and other, element-wise (binary
+        operator `rmul`).
+
+        Equivalent to ``other * dataframe``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `mul`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> other = pd.DataFrame({'angles': [0, 3, 4]},
+        ...                      index=['circle', 'triangle', 'rectangle'])
+        >>> other * df
+                angles degrees
+        circle          0    null
+        triangle        9    null
+        rectangle      16    null
+        >>> df.rmul(other, fill_value=0)
+                angles  degrees
+        circle          0        0
+        triangle        9        0
+        rectangle      16        0
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("rmul", other, fill_value)
 
     def __rmul__(self, other):
         return self._apply_op("__rmul__", other)
 
-    def mod(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def mod(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Modulo division of dataframe and other, element-wise (binary
+        operator `mod`).
+
+        Equivalent to ``dataframe % other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `rmod`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df % 100
+                angles  degrees
+        circle          0       60
+        triangle        3       80
+        rectangle       4       60
+        >>> df.mod(100)
+                angles  degrees
+        circle          0       60
+        triangle        3       80
+        rectangle       4       60
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("mod", other, fill_value)
 
     def __mod__(self, other):
         return self._apply_op("__mod__", other)
 
-    def rmod(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def rmod(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Modulo division of dataframe and other, element-wise (binary
+        operator `rmod`).
+
+        Equivalent to ``other % dataframe``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `mod`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [1, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> 100 % df
+                angles  degrees
+        circle          0      100
+        triangle        1      100
+        rectangle       0      100
+        >>> df.rmod(100)
+                angles  degrees
+        circle          0      100
+        triangle        1      100
+        rectangle       0      100
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("rmod", other, fill_value)
 
     def __rmod__(self, other):
         return self._apply_op("__rmod__", other)
 
-    def pow(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def pow(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Exponential power of dataframe and other, element-wise (binary
+        operator `pow`).
+
+        Equivalent to ``dataframe ** other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `rpow`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [1, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df ** 2
+                angles  degrees
+        circle          0   129600
+        triangle        9    32400
+        rectangle      16   129600
+        >>> df.pow(2)
+                angles  degrees
+        circle          0   129600
+        triangle        9    32400
+        rectangle      16   129600
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("pow", other, fill_value)
 
     def __pow__(self, other):
         return self._apply_op("__pow__", other)
 
-    def rpow(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def rpow(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Exponential power of dataframe and other, element-wise (binary
+        operator `pow`).
+
+        Equivalent to ``other ** dataframe``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `pow`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [1, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> 1 ** df
+                angles  degrees
+        circle          1        1
+        triangle        1        1
+        rectangle       1        1
+        >>> df.rpow(1)
+                angles  degrees
+        circle          1        1
+        triangle        1        1
+        rectangle       1        1
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("rpow", other, fill_value)
 
     def __rpow__(self, other):
         return self._apply_op("__pow__", other)
 
-    def floordiv(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def floordiv(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Integer division of dataframe and other, element-wise (binary
+        operator `floordiv`).
+
+        Equivalent to ``dataframe // other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `rfloordiv`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [1, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df.floordiv(2)
+                angles  degrees
+        circle          0      180
+        triangle        1       90
+        rectangle       2      180
+        >>> df // 2
+                angles  degrees
+        circle          0      180
+        triangle        1       90
+        rectangle       2      180
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("floordiv", other, fill_value)
 
     def __floordiv__(self, other):
         return self._apply_op("__floordiv__", other)
 
-    def rfloordiv(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def rfloordiv(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Integer division of dataframe and other, element-wise (binary
+        operator `rfloordiv`).
+
+        Equivalent to ``other // dataframe``, but with support to substitute
+        a fill_value for missing data in one of the inputs. With reverse
+        version, `floordiv`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        # TODO: Add emaples
+        """
+
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("rfloordiv", other, fill_value)
 
     def __rfloordiv__(self, other):
         return self._apply_op("__rfloordiv__", other)
 
-    def truediv(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def truediv(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Floating division of dataframe and other, element-wise (binary
+        operator `truediv`).
+
+        Equivalent to ``dataframe / other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `rtruediv`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df.truediv(10)
+                    angles  degrees
+        circle        0.0     36.0
+        triangle      0.3     18.0
+        rectangle     0.4     36.0
+        >>> df.div(10)
+                    angles  degrees
+        circle        0.0     36.0
+        triangle      0.3     18.0
+        rectangle     0.4     36.0
+        >>> df / 10
+                    angles  degrees
+        circle        0.0     36.0
+        triangle      0.3     18.0
+        rectangle     0.4     36.0
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("truediv", other, fill_value)
+
+    # Alias for truediv
+    div = truediv
 
     def __truediv__(self, other):
         return self._apply_op("__truediv__", other)
 
-    def rtruediv(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def rtruediv(self, other, axis="columns", level=None, fill_value=None):
+        """
+        Get Floating division of dataframe and other, element-wise (binary
+        operator `rtruediv`).
+
+        Equivalent to ``other / dataframe``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `truediv`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df.rtruediv(10)
+                    angles   degrees
+        circle          inf  0.027778
+        triangle   3.333333  0.055556
+        rectangle  2.500000  0.027778
+        >>> df.rdiv(10)
+                    angles   degrees
+        circle          inf  0.027778
+        triangle   3.333333  0.055556
+        rectangle  2.500000  0.027778
+        >>> 10 / df
+                    angles   degrees
+        circle          inf  0.027778
+        triangle   3.333333  0.055556
+        rectangle  2.500000  0.027778
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
         return self._apply_op("rtruediv", other, fill_value)
+
+    # Alias for rtruediv
+    rdiv = rtruediv
 
     def __rtruediv__(self, other):
         return self._apply_op("__rtruediv__", other)
@@ -1236,6 +1979,44 @@ class DataFrame(Frame, Serializable):
         return iter(self.columns)
 
     def equals(self, other):
+        """
+        Test whether two objects contain the same elements.
+        This function allows two Series or DataFrames to be compared against
+        each other to see if they have the same shape and elements. NaNs in
+        the same location are considered equal. The column headers do not
+        need to have the same type.
+
+        Parameters
+        ----------
+        other : Series or DataFrame
+            The other Series or DataFrame to be compared with the first.
+
+        Returns
+        -------
+        bool
+            True if all elements are the same in both objects, False
+            otherwise.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({1: [10], 2: [20]})
+        >>> df
+            1   2
+        0  10  20
+        >>> exactly_equal = cudf.DataFrame({1: [10], 2: [20]})
+        >>> exactly_equal
+            1   2
+        0  10  20
+        >>> df.equals(exactly_equal)
+        True
+        >>> different_column_type = cudf.DataFrame({1.0: [10], 2.0: [20]})
+        >>> different_column_type
+           1.0  2.0
+        0   10   20
+        >>> df.equals(different_column_type)
+        True
+        """
         for col in self._data.names:
             if col not in other._data.names:
                 return False
@@ -1470,11 +2251,12 @@ class DataFrame(Frame, Serializable):
     def reindex(
         self, labels=None, axis=0, index=None, columns=None, copy=True
     ):
-        """Return a new DataFrame whose axes conform to a new index
+        """
+        Return a new DataFrame whose axes conform to a new index
 
-        ``DataFrame.reindex`` supports two calling conventions
-        * ``(index=index_labels, columns=column_names)``
-        * ``(labels, axis={0 or 'index', 1 or 'columns'})``
+        ``DataFrame.reindex`` supports two calling conventions:
+            - ``(index=index_labels, columns=column_names)``
+            - ``(labels, axis={0 or 'index', 1 or 'columns'})``
 
         Parameters
         ----------
@@ -1532,7 +2314,7 @@ class DataFrame(Frame, Serializable):
             else:
                 df = DataFrame(None, idx).join(df, how="left", sort=True)
                 # double-argsort to map back from sorted to unsorted positions
-                df = df.take(idx.argsort(True).argsort(True))
+                df = df.take(idx.argsort(True).argsort())
 
         idx = idx if idx is not None else df.index
         names = cols if cols is not None else list(df.columns)
@@ -1590,7 +2372,67 @@ class DataFrame(Frame, Serializable):
             df.index = index
             return df
 
-    def reset_index(self, drop=False, inplace=False):
+    def reset_index(
+        self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
+    ):
+        """
+        Reset the index.
+
+        Reset the index of the DataFrame, and use the default one instead.
+
+        Parameters
+        ----------
+        drop : bool, default False
+            Do not try to insert index into dataframe columns. This resets
+            the index to the default integer index.
+        inplace : bool, default False
+            Modify the DataFrame in place (do not create a new object).
+
+        Returns
+        -------
+        DataFrame or None
+            DataFrame with the new index or None if ``inplace=True``.
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame([('bird', 389.0),
+        ...                    ('bird', 24.0),
+        ...                    ('mammal', 80.5),
+        ...                    ('mammal', np.nan)],
+        ...                   index=['falcon', 'parrot', 'lion', 'monkey'],
+        ...                   columns=('class', 'max_speed'))
+        >>> df
+                class max_speed
+        falcon    bird     389.0
+        parrot    bird      24.0
+        lion    mammal      80.5
+        monkey  mammal      null
+        >>> df.reset_index()
+            index   class max_speed
+        0  falcon    bird     389.0
+        1  parrot    bird      24.0
+        2    lion  mammal      80.5
+        3  monkey  mammal      null
+        >>> df.reset_index(drop=True)
+            class max_speed
+        0    bird     389.0
+        1    bird      24.0
+        2  mammal      80.5
+        3  mammal      null
+        """
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        if col_level != 0:
+            raise NotImplementedError(
+                "col_level parameter is not supported yet."
+            )
+
+        if col_fill != "":
+            raise NotImplementedError(
+                "col_fill parameter is not supported yet."
+            )
+
         if inplace:
             result = self
         else:
@@ -1776,7 +2618,8 @@ class DataFrame(Frame, Serializable):
             Name of column(s) to be dropped.
         axis : {0 or 'index', 1 or 'columns'}, default 0
             Only axis=1 is currently supported.
-        columns: array of column names, the same as using labels and axis=1
+        columns
+            array of column names, the same as using labels and axis=1
         errors : {'ignore', 'raise'}, default 'raise'
             This parameter is currently ignored.
         inplace : bool, default False
@@ -2106,6 +2949,7 @@ class DataFrame(Frame, Serializable):
             the dtype for the outputs; see Series.label_encoding
         na_sentinel : number
             Value to indicate missing category.
+
         Returns
         -------
         a new dataframe with a new column append for the coded values.
@@ -2122,6 +2966,29 @@ class DataFrame(Frame, Serializable):
 
     @annotate("ARGSORT", color="yellow", domain="cudf_python")
     def argsort(self, ascending=True, na_position="last"):
+        """
+        Sort by the values.
+
+        Parameters
+        ----------
+        ascending : bool or list of bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {‘first’ or ‘last’}, default ‘last’
+            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+            at the end.
+
+        Returns
+        -------
+        out_column_inds : cuDF Column of indices sorted based on input
+
+        Notes
+        -----
+        Difference from pandas:
+
+        - Support axis='index' only.
+        - Not supporting: inplace, kind
+        - Ascending can be a list of bools to control per column
+        """
         return self._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
@@ -2147,6 +3014,7 @@ class DataFrame(Frame, Serializable):
             by.
         na_position : {‘first’, ‘last’}, default ‘last’
             'first' puts nulls at the beginning, 'last' puts nulls at the end
+
         Returns
         -------
         sorted_obj : cuDF DataFrame
@@ -2180,15 +3048,17 @@ class DataFrame(Frame, Serializable):
         Notes
         -----
         Difference from pandas:
-        * Only a single column is supported in *columns*
+            - Only a single column is supported in *columns*
         """
         return self._n_largest_or_smallest("nlargest", n, columns, keep)
 
     def nsmallest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n smallest value of *columns*
 
+        Notes
+        -----
         Difference from pandas:
-        * Only a single column is supported in *columns*
+            - Only a single column is supported in *columns*
         """
         return self._n_largest_or_smallest("nsmallest", n, columns, keep)
 
@@ -2348,7 +3218,8 @@ class DataFrame(Frame, Serializable):
 
         Returns
         -------
-        merged : DataFrame
+            merged : DataFrame
+
         Examples
         --------
         >>> import cudf
@@ -2487,17 +3358,33 @@ class DataFrame(Frame, Serializable):
         )
         return df
 
-    @copy_docstring(DataFrameGroupBy)
+    @copy_docstring(DataFrameGroupBy.__init__)
     def groupby(
         self,
         by=None,
-        sort=True,
-        as_index=True,
+        axis=0,
         level=None,
+        as_index=True,
+        sort=True,
+        group_keys=True,
+        squeeze=False,
+        observed=False,
         dropna=True,
         method=None,
-        group_keys=True,
     ):
+        if axis not in (0, "index"):
+            raise NotImplementedError("axis parameter is not yet implemented")
+
+        if squeeze is not False:
+            raise NotImplementedError(
+                "squeeze parameter is not yet implemented"
+            )
+
+        if observed is not False:
+            raise NotImplementedError(
+                "observed parameter is not yet implemented"
+            )
+
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
@@ -3065,10 +3952,14 @@ class DataFrame(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> a = ('a', [0, 1, 2])
-        >>> b = ('b', [-3, 2, 0])
-        >>> df = cudf.DataFrame([a, b])
-        >>> type(df.to_pandas())
+        >>> df = cudf.DataFrame({'a': [0, 1, 2], 'b': [-3, 2, 0]})
+        >>> pdf = df.to_pandas()
+        >>> pdf
+           a  b
+        0  0 -3
+        1  1  2
+        2  2  0
+        >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
         """
         out_data = {}
@@ -3099,6 +3990,15 @@ class DataFrame(Frame, Serializable):
         """
         Convert from a Pandas DataFrame.
 
+        Parameters
+        ----------
+        dataframe : Pandas DataFrame object
+            A Pandads DataFrame object which has to be converted
+            to cuDF DataFrame.
+        nan_as_null : bool, Default True
+            If ``True``, converts ``np.nan`` values to ``null`` values.
+            If ``False``, leaves ``np.nan`` values as is.
+
         Raises
         ------
         TypeError for invalid input type.
@@ -3109,8 +4009,11 @@ class DataFrame(Frame, Serializable):
         >>> import pandas as pd
         >>> data = [[0,1], [1,2], [3,4]]
         >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
-        >>> cudf.DataFrame.from_pandas(pdf)
-        <cudf.DataFrame ncols=2 nrows=3 >
+        >>> cudf.from_pandas(pdf)
+           a  b
+        0  0  1
+        1  1  2
+        2  3  4
         """
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError("not a pandas.DataFrame")
@@ -3221,14 +4124,20 @@ class DataFrame(Frame, Serializable):
     def from_arrow(cls, table):
         """Convert from a PyArrow Table.
 
+        Parameters
+        ----------
+        table : PyArrow Table Object
+            PyArrow Table Object which has to be converted to cudf DataFrame.
+
         Raises
         ------
         TypeError for invalid input type.
 
-        **Notes**
+        Notes
+        -----
 
-        Does not support automatically setting index column(s) similar to how
-        ``to_pandas`` works for PyArrow Tables.
+        -   Does not support automatically setting index column(s) similar
+            to how ``to_pandas`` works for PyArrow Tables.
 
         Examples
         --------
@@ -3238,7 +4147,10 @@ class DataFrame(Frame, Serializable):
         >>> batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
         >>> table = pa.Table.from_batches([batch])
         >>> cudf.DataFrame.from_arrow(table)
-        <cudf.DataFrame ncols=2 nrows=3 >
+            f0  f1
+        0   1   4
+        1   2   5
+        2   3   6
         """
 
         if not isinstance(table, pa.Table):
@@ -3456,7 +4368,7 @@ class DataFrame(Frame, Serializable):
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
-            Default 'linear'.
+            Default ``linear``.
         columns : list of str
             List of column names to include.
         exact : boolean
@@ -3466,7 +4378,6 @@ class DataFrame(Frame, Serializable):
         -------
 
         DataFrame
-
         """
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
@@ -3522,7 +4433,6 @@ class DataFrame(Frame, Serializable):
         -------
 
         DataFrame
-
         """
         if isinstance(q, numbers.Number):
             q_is_number = True
@@ -3563,7 +4473,6 @@ class DataFrame(Frame, Serializable):
         DataFrame:
             DataFrame of booleans showing whether each element in
             the DataFrame is contained in values.
-
         """
 
         if isinstance(values, dict):
@@ -3663,9 +4572,9 @@ class DataFrame(Frame, Serializable):
 
     def count(self, axis=0, level=None, numeric_only=False, **kwargs):
         """
-        Count non-NA cells for each column or row.
+        Count ``non-NA`` cells for each column or row.
 
-        The values None, NaN, NaT are considered NA.
+        The values ``None``, ``NaN``, ``NaT`` are considered ``NA``.
 
         Returns
         -------
@@ -4109,9 +5018,10 @@ class DataFrame(Frame, Serializable):
     ):
         """
         Return the mean of the values for the requested axis.
+
         Parameters
         ----------
-        axis : {index (0), columns (1)}
+        axis : {0 or 'index', 1 or 'columns'}
             Axis for the function to be applied on.
         skipna : bool, default True
             Exclude NA/null values when computing the result.
@@ -4124,6 +5034,7 @@ class DataFrame(Frame, Serializable):
             Series.
         **kwargs
             Additional keyword arguments to be passed to the function.
+
         Returns
         -------
         mean : Series or DataFrame (if level specified)
@@ -4529,7 +5440,6 @@ class DataFrame(Frame, Serializable):
             which columns to include based on dtypes
         exclude : str or list
             which columns to exclude based on dtypes
-
         """
 
         # code modified from:
@@ -4732,10 +5642,12 @@ class DataFrame(Frame, Serializable):
 
     def cov(self, **kwargs):
         """Compute the covariance matrix of a DataFrame.
+
         Parameters
         ----------
         **kwargs
             Keyword arguments to be passed to cupy.cov
+
         Returns
         -------
         cov : DataFrame
