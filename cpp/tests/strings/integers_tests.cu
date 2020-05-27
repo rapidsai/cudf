@@ -99,9 +99,7 @@ template <typename T>
 class StringsIntegerConvertTest : public StringsConvertTest {
 };
 
-using IntegerTypes =
-  cudf::test::Types<int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t>;
-TYPED_TEST_CASE(StringsIntegerConvertTest, IntegerTypes);
+TYPED_TEST_CASE(StringsIntegerConvertTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
 {
