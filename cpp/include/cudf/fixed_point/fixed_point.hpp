@@ -415,21 +415,6 @@ class fixed_point {
                                                    fixed_point<Rep1, Rad1> const& rhs);
 
   /**
-   * @brief operator == (for comparing two `fixed_point` numbers)
-   *
-   * If `_scale`s are equal, `_value`s are compared <br>
-   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-   * greater `_scale`, and then `_value`s are compared
-   *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
-   * @return true if `lhs` and `rhs` are equal, false if not
-   */
-  template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE friend bool operator==(fixed_point<Rep1, Rad1> const& lhs,
-                                                   fixed_point<Rep1, Rad1> const& rhs);
-
-  /**
    * @brief operator <= (for comparing two `fixed_point` numbers)
    *
    * If `_scale`s are equal, `_value`s are compared <br>
