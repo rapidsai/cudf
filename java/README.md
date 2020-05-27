@@ -56,11 +56,11 @@ which are included.  If you do this the resulting jar will have a classifier ass
 because that jar can only be used with a single version of the CUDA runtime.  
 
 
-There is experimental work to try and remove that requirement but it is not fully functionaly
+There is experimental work to try and remove that requirement but it is not fully functional
 you can build RMM and cuDF with `-DCUDA_STATIC_RUNTIME=ON` when running cmake, and similarly 
--DCUDA_STATIC_RUNTIME=ON when running maven.  This will statically  link in the CUDA runtime
+`-DCUDA_STATIC_RUNTIME=ON` when running maven.  This will statically link in the CUDA runtime
 and result in a jar with no classifier that should run on any host that has a version of the
-driver new enough to support the runtime that this was built with. Unfortunely libnvrtc is still
+driver new enough to support the runtime that this was built with. Unfortunately `libnvrtc` is still
 required for runtime code generation which also is tied to a specific version of cuda.
 
 To build with maven for dynamic linking you would run.
