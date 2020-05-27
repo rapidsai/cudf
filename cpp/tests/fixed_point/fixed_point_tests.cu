@@ -415,36 +415,6 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   EXPECT_EQ(vec2, vec3);
 }
 
-// Proxy iterator derefernce type with forward and reverse transform functions
-/*template <typename TPub, typename TPriv, typename FPrivToPub, typename FPubToPriv>
-class Proxy {
- public:
-  Proxy(TPriv& priv, FPrivToPub priv_to_pub, FPubToPriv pub_to_priv):
-    _priv{priv}, _priv_to_pub{priv_to_pub}, _pub_to_priv{pub_to_priv} {}
-
-  // Dereference private type and transform to public type
-  operator TPub const() const {
-    return _priv_to_pub(_priv);
-  }
-
-  // Transform public type to private type and store
-  Proxy& operator=(TPub const& pub) {
-    _priv = _pub_to_priv(_priv);
-    return *this;
-  }
-
- private:
-  TPriv& _priv;
-  FPrivToPub _priv_to_pub;
-  FPubToPriv _pub_to_priv;
-};
-
-// Convenience wrapper to infer template parameters from function arguments
-template <typename TPub, typename TPriv, typename FPrivToPub, typename FPubToPriv>
-auto make_proxy(TPriv& priv, FPrivToPub priv_to_pub, FPubToPriv pub_to_priv) {
-  return Proxy<TPub, TPriv, FPrivToPub, FPubToPriv>{priv, priv_to_pub, pub_to_priv};
-}*/
-
 // Mockup demonstrating vector of rep data with a shared scale factor
 template <typename Rep, Radix Rad>
 class ColumnLike {
@@ -456,6 +426,7 @@ class ColumnLike {
 
   auto cbegin() const {
     return thrust::make_transform_iterator(_data.cbegin(),
+      // Transform from Rep to fixed_point
       [scale=_scale](Rep rep_to_fp) {
         return FP{scaled_integer<Rep>{rep_to_fp, scale}};
       });
@@ -466,25 +437,6 @@ class ColumnLike {
   }
 
   auto begin() {
-    // TODO this probably needs to be a composite of transform_iterator and
-    // transform_output_iterator to allow both read and write
-    /*return thrust::make_transform_output_iterator(_data.begin(),
-      [scale=_scale](FP fp_to_rep) {
-        return scaled_integer<Rep>{fp_to_rep.rescale(scale)}.value;
-      });*/
-    // TODO this should work, but thrust needs some extra template magic
-    /*return thrust::make_transform_iterator(_data.begin(),
-      [scale=_scale](Rep& rep) {
-        return make_proxy<FP>(rep,
-          // Transform from Rep to fixed_point
-          [scale](Rep rep_to_fp) {
-            return FP{scaled_integer<Rep>{rep_to_fp, scale}};
-          },
-          // Transform from fixed_point to Rep
-          [scale](FP fp_to_rep) {
-            return scaled_integer<Rep>{fp_to_rep.rescale(scale)}.value;
-          });
-      });*/
     return thrust::make_transform_mutable_iterator(_data.begin(),
       // Transform from Rep to fixed_point
       [scale=_scale](Rep rep_to_fp) {
