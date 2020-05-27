@@ -154,7 +154,9 @@ class CategoricalAccessor(object):
         out_col = self._column
         if not out_col.ordered:
             kwargs["ordered"] = True
-            out_col = self._set_categories(self._column.categories, **kwargs)
+            out_col = self._set_categories(
+                self._column.categories, self._column.categories, **kwargs
+            )
 
         return self._return_or_inplace(out_col, **kwargs)
 
@@ -225,7 +227,9 @@ class CategoricalAccessor(object):
         out_col = self._column
         if out_col.ordered:
             kwargs["ordered"] = False
-            out_col = self._set_categories(self.categories, **kwargs)
+            out_col = self._set_categories(
+                self._column.categories, self.categories, **kwargs
+            )
 
         return self._return_or_inplace(out_col, **kwargs)
 
@@ -307,8 +311,9 @@ class CategoricalAccessor(object):
         new_categories = old_categories.append(new_categories)
         out_col = self._column
         if not self._categories_equal(new_categories, **kwargs):
-            kwargs["current_cats"] = old_categories
-            out_col = self._set_categories(new_categories, **kwargs)
+            out_col = self._set_categories(
+                old_categories, new_categories, **kwargs
+            )
 
         return self._return_or_inplace(out_col, **kwargs)
 
@@ -397,7 +402,9 @@ class CategoricalAccessor(object):
         new_categories = cats[~cats.isin(removals)]._column
         out_col = self._column
         if not self._categories_equal(new_categories, **kwargs):
-            out_col = self._set_categories(new_categories, **kwargs)
+            out_col = self._set_categories(
+                self._column.categories, new_categories, **kwargs
+            )
 
         return self._return_or_inplace(out_col, **kwargs)
 
@@ -521,7 +528,9 @@ class CategoricalAccessor(object):
                     ),
                 )
             elif not self._categories_equal(new_categories, **kwargs):
-                out_col = self._set_categories(new_categories, **kwargs)
+                out_col = self._set_categories(
+                    self._column.categories, new_categories, **kwargs
+                )
 
         return self._return_or_inplace(out_col, **kwargs)
 
@@ -601,7 +610,9 @@ class CategoricalAccessor(object):
                 "items in new_categories are not the same as in "
                 "old categories"
             )
-        out_col = self._set_categories(new_categories, **kwargs)
+        out_col = self._set_categories(
+            self._column.categories, new_categories, **kwargs
+        )
 
         return self._return_or_inplace(out_col, **kwargs)
 
@@ -615,7 +626,7 @@ class CategoricalAccessor(object):
             new_categories = cudf.Series(new_categories).sort_values()
         return cur_categories._column.equals(new_categories._column)
 
-    def _set_categories(self, new_categories, **kwargs):
+    def _set_categories(self, current_categories, new_categories, **kwargs):
         """Returns a new CategoricalColumn with the categories set to the
         specified *new_categories*.
 
@@ -624,7 +635,7 @@ class CategoricalAccessor(object):
         Assumes ``new_categories`` is the same dtype as the current categories
         """
 
-        cur_cats = kwargs.get("current_cats", self._column.categories)
+        cur_cats = column.as_column(current_categories)
         new_cats = column.as_column(new_categories)
 
         # Join the old and new categories to build a map from
@@ -1007,7 +1018,7 @@ class CategoricalColumn(column.ColumnBase):
             fill_value = column.as_column(fill_value, nan_as_null=False)
             # TODO: only required if fill_value has a subset of the categories:
             fill_value = fill_value.cat()._set_categories(
-                self.categories, is_unique=True
+                fill_value.cat().categories, self.categories, is_unique=True
             )
             fill_value = column.as_column(fill_value.codes).astype(
                 self.codes.dtype

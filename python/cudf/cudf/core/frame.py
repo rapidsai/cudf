@@ -127,7 +127,9 @@ class Frame(libcudf.table.Table):
                                 cols[idx]
                                 .cat()
                                 ._set_categories(
-                                    categories[idx], is_unique=True
+                                    cols[idx].cat().categories,
+                                    categories[idx],
+                                    is_unique=True,
                                 )
                                 .codes
                             )
