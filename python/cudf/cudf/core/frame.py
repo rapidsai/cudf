@@ -373,7 +373,7 @@ class Frame(libcudf.table.Table):
             Minimum threshold value. All values below this
             threshold will be set to it. If it is None,
             there will be no clipping based on lower.
-            In case of Series, lower is expected to be
+            In case of Series/Index, lower is expected to be
             a scalar or an array of size 1.
         upper : scalar or array_like, default None
             Maximum threshold value. All values below this
@@ -385,7 +385,7 @@ class Frame(libcudf.table.Table):
 
         Returns
         -------
-        Clipped DataFrame/Series
+        Clipped DataFrame/Series/Index/MultiIndex
 
         Examples
         >>> import cudf
@@ -461,25 +461,23 @@ class Frame(libcudf.table.Table):
         if len(lower) != self._num_columns:
             raise ValueError(
                 """Length of lower/upper should be
-                equal to number of columns in DataFrame/Series"""
+                equal to number of columns in
+                DataFrame/Series/Index/MultiIndex"""
             )
 
-        output = self.__class__()
-        output.index = self.index
-        if isinstance(output, cudf.Series):
-            # In case of series, swap lower and upper if lower > upper
+        output = self.copy(deep=False)
+        if output.ndim == 1:
+            # In case of series and Index,
+            # swap lower and upper if lower > upper
             if (
                 lower[0] is not None
                 and upper[0] is not None
                 and (lower[0] > upper[0])
             ):
                 lower[0], upper[0] = upper[0], lower[0]
-            del output._data[output.name]
 
-        for index, name in enumerate(self._data):
-            output._data[name] = self._data[name].clip(
-                lower[index], upper[index]
-            )
+        for i, name in enumerate(self._data):
+            output._data[name] = self._data[name].clip(lower[i], upper[i])
 
         output._copy_categories(self, include_index=False)
 
