@@ -28,6 +28,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/transform.h>
+#include "transform_mutable_iterator.h"
 
 using namespace numeric;
 
@@ -415,7 +416,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 }
 
 // Proxy iterator derefernce type with forward and reverse transform functions
-template <typename TPub, typename TPriv, typename FPrivToPub, typename FPubToPriv>
+/*template <typename TPub, typename TPriv, typename FPrivToPub, typename FPubToPriv>
 class Proxy {
  public:
   Proxy(TPriv& priv, FPrivToPub priv_to_pub, FPubToPriv pub_to_priv):
@@ -442,7 +443,7 @@ class Proxy {
 template <typename TPub, typename TPriv, typename FPrivToPub, typename FPubToPriv>
 auto make_proxy(TPriv& priv, FPrivToPub priv_to_pub, FPubToPriv pub_to_priv) {
   return Proxy<TPub, TPriv, FPrivToPub, FPubToPriv>{priv, priv_to_pub, pub_to_priv};
-}
+}*/
 
 // Mockup demonstrating vector of rep data with a shared scale factor
 template <typename Rep, Radix Rad>
@@ -467,10 +468,10 @@ class ColumnLike {
   auto begin() {
     // TODO this probably needs to be a composite of transform_iterator and
     // transform_output_iterator to allow both read and write
-    return thrust::make_transform_output_iterator(_data.begin(),
+    /*return thrust::make_transform_output_iterator(_data.begin(),
       [scale=_scale](FP fp_to_rep) {
         return scaled_integer<Rep>{fp_to_rep.rescale(scale)}.value;
-      });
+      });*/
     // TODO this should work, but thrust needs some extra template magic
     /*return thrust::make_transform_iterator(_data.begin(),
       [scale=_scale](Rep& rep) {
@@ -484,6 +485,15 @@ class ColumnLike {
             return scaled_integer<Rep>{fp_to_rep.rescale(scale)}.value;
           });
       });*/
+    return thrust::make_transform_mutable_iterator(_data.begin(),
+      // Transform from Rep to fixed_point
+      [scale=_scale](Rep rep_to_fp) {
+        return FP{scaled_integer<Rep>{rep_to_fp, scale}};
+      },
+      // Transform from fixed_point to Rep
+      [scale=_scale](FP fp_to_rep) {
+        return scaled_integer<Rep>{fp_to_rep.rescale(scale)}.value;
+      });
   }
 
   auto end() {
