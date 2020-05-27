@@ -384,7 +384,7 @@ std::unique_ptr<column> substring_index(strings_column_view const& strings,
   auto colview     = *colview_ptr;
   if (colview.nullable()) {
     return substring_index_functor{}(
-      experimental::detail::make_pair_iterator<string_view, true>(colview),
+      cudf::detail::make_pair_iterator<string_view, true>(colview),
       delimiter_itr,
       count,
       mr,
@@ -392,7 +392,7 @@ std::unique_ptr<column> substring_index(strings_column_view const& strings,
       strings_count);
   } else {
     return substring_index_functor{}(
-      experimental::detail::make_pair_iterator<string_view, false>(colview),
+      cudf::detail::make_pair_iterator<string_view, false>(colview),
       delimiter_itr,
       count,
       mr,
@@ -412,7 +412,7 @@ std::unique_ptr<column> substring_index(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::substring_index(
-    strings, experimental::detail::make_pair_iterator<string_view>(delimiter), count, mr);
+    strings, cudf::detail::make_pair_iterator<string_view>(delimiter), count, mr);
 }
 
 std::unique_ptr<column> substring_index(strings_column_view const& strings,
@@ -429,12 +429,12 @@ std::unique_ptr<column> substring_index(strings_column_view const& strings,
   return (delimiters_dev_view.nullable())
            ? detail::substring_index(
                strings,
-               experimental::detail::make_pair_iterator<string_view, true>(delimiters_dev_view),
+               cudf::detail::make_pair_iterator<string_view, true>(delimiters_dev_view),
                count,
                mr)
            : detail::substring_index(
                strings,
-               experimental::detail::make_pair_iterator<string_view, false>(delimiters_dev_view),
+               cudf::detail::make_pair_iterator<string_view, false>(delimiters_dev_view),
                count,
                mr);
 }
