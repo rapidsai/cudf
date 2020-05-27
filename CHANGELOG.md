@@ -203,6 +203,7 @@
 - PR #5254 Deprecate nvstrings, nvcategory and nvtext
 - PR #5270 Add support to check for "NaT" and "None" strings while typecasting to `datetime64`
 - PR #5216 Make documentation uniform for params
+- PR #5302 Add missing comparison operators to `fixed_point` type
 
 ## Bug Fixes
 
