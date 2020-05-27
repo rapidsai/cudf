@@ -35,7 +35,6 @@
 #include <array>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace orc {
@@ -135,7 +134,7 @@ class metadata {
     const auto max_ps_size = std::min(len, static_cast<size_t>(256));
 
     // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
-    auto buffer            = source->get_buffer(len - max_ps_size, max_ps_size);
+    auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
     const size_t ps_length = buffer->data()[max_ps_size - 1];
     const uint8_t *ps_data = &buffer->data()[max_ps_size - ps_length - 1];
     ProtobufReader pb;
@@ -148,7 +147,7 @@ class metadata {
     decompressor = std::make_unique<OrcDecompressor>(ps.compression, ps.compressionBlockSize);
 
     // Read compressed filefooter section
-    buffer           = source->get_buffer(len - ps_length - 1 - ps.footerLength, ps.footerLength);
+    buffer           = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
     size_t ff_length = 0;
     auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
     pb.init(ff_data, ff_length);
@@ -230,7 +229,7 @@ class metadata {
         CUDF_EXPECTS(sf_comp_offset + sf_comp_length < source->size(),
                      "Invalid stripe information");
 
-        const auto buffer = source->get_buffer(sf_comp_offset, sf_comp_length);
+        const auto buffer = source->host_read(sf_comp_offset, sf_comp_length);
         size_t sf_length  = 0;
         auto sf_data      = decompressor->Decompress(buffer->data(), sf_comp_length, &sf_length);
         pb.init(sf_data, sf_length);
@@ -261,8 +260,8 @@ class metadata {
           if (index >= get_num_columns()) { index = 0; }
           if (ff.GetColumnName(index) == use_name) {
             selection.emplace_back(index);
+            if (ff.types[index].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
             index++;
-            if (ff.types[i].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
             break;
           }
         }
@@ -314,7 +313,7 @@ struct orc_stream_info {
   uint64_t offset;      // offset in file
   size_t dst_pos;       // offset in memory relative to start of compressed stripe data
   uint32_t length;      // length in file
-  uint32_t gdf_idx;     // gdf column index
+  uint32_t gdf_idx;     // column index
   uint32_t stripe_idx;  // stripe index
 };
 
@@ -632,7 +631,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   const auto selected_stripes =
     _metadata->select_stripes(stripe, max_stripe_count, stripe_indices, skip_rows, num_rows);
 
-  // Association between each ORC column and its gdf_column
+  // Association between each ORC column and its cudf::column
   std::vector<int32_t> orc_col_map(_metadata->get_num_columns(), -1);
 
   // Get a list of column data types
@@ -710,7 +709,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           len += stream_info[stream_count].length;
           stream_count++;
         }
-        const auto buffer = _source->get_buffer(offset, len);
+        const auto buffer = _source->host_read(offset, len);
         CUDA_TRY(cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream));
         CUDA_TRY(cudaStreamSynchronize(stream));
       }
@@ -842,19 +841,10 @@ reader::reader(std::string filepath,
 }
 
 // Forward to implementation
-reader::reader(const char *buffer,
-               size_t length,
+reader::reader(std::unique_ptr<cudf::io::datasource> source,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), options, mr))
-{
-}
-
-// Forward to implementation
-reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
-               reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), options, mr))
+  : _impl(std::make_unique<impl>(std::move(source), options, mr))
 {
 }
 
@@ -892,5 +882,4 @@ table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, c
 }  // namespace orc
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

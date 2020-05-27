@@ -17,10 +17,8 @@
  * limitations under the License.
  */
 
-#ifndef GDF_JIT_LAUNCHER_H
-#define GDF_JIT_LAUNCHER_H
+#pragma once
 
-#include <cudf/types.h>
 #include <jit/cache.h>
 #include <chrono>
 #include <fstream>
@@ -40,7 +38,7 @@ class launcher {
   launcher() = delete;
 
   /**
-   * @brief C'tor of the launcher class
+   * @brief Constructor of the launcher class
    *
    * Method to generate vector containing all template types for a JIT kernel.
    *  This vector is used to get the compiled kernel for one set of types and set
@@ -75,7 +73,7 @@ class launcher {
    *
    * @param kernel_name The kernel to be launched
    * @param arguments   The template arguments to be used to instantiate the kernel
-   * @return launcher& ref to this launcehr object
+   * @return launcher& ref to this launcher object
    */
   launcher& set_kernel_inst(const std::string& kernel_name,
                             const std::vector<std::string>& arguments)
@@ -89,7 +87,6 @@ class launcher {
    *  contained in the members of `this`
    *
    * @tparam All parameters to launch the kernel
-   * @return Return GDF_SUCCESS if successful
    */
   template <typename... Args>
   void launch(Args... args)
@@ -108,5 +105,3 @@ class launcher {
 
 }  // namespace jit
 }  // namespace cudf
-
-#endif

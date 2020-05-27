@@ -18,7 +18,6 @@
  */
 
 namespace cudf {
-namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
@@ -480,6 +479,47 @@ const char* operation =
         }
     };
 
+    struct PMod {
+        // Ideally, these two specializations - one for integral types and one for non integral
+        // types shouldn't be required, as std::fmod should promote integral types automatically
+        // to double and call the std::fmod overload for doubles. Sadly, doing this in jitified
+        // code does not work - it is having trouble deciding between float/double overloads
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
+            common_t xconv{x};
+            common_t yconv{y};
+            auto rem = xconv % yconv;
+            if (rem < 0) rem = (rem + yconv) % yconv;
+            return TypeOut{rem};
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<!(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
+            common_t xconv{x};
+            common_t yconv{y};
+            auto rem = std::fmod(xconv, yconv);
+            if (rem < 0) rem = std::fmod(rem + yconv, yconv);
+            return TypeOut{rem};
+        }
+    };
+
+    struct RPMod {
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return PMod::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
+        }
+    };
+
     struct ATan2 {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
@@ -500,5 +540,4 @@ const char* operation =
 }  // namespace code
 }  // namespace jit
 }  // namespace binops
-}  // namespace experimental
 }  // namespace cudf

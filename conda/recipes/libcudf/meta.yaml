@@ -2,7 +2,6 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set cuda_version='.'.join(environ.get('CUDA_VERSION', '10.0').split('.')[:2]) %}
 
 package:
@@ -10,11 +9,11 @@ package:
   version: {{ version }}
 
 source:
-  path: ../../..
+  git_url: ../../..
 
 build:
-  number: {{ git_revision_count }}
-  string: cuda{{ cuda_version }}_{{ git_revision_count }}
+  number: {{ GIT_DESCRIBE_NUMBER }}
+  string: cuda{{ cuda_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - CC
     - CXX
@@ -46,52 +45,121 @@ test:
   commands:
     - test -f $PREFIX/lib/libcudf.so
     - test -f $PREFIX/lib/libcudftestutil.a
-    - test -f $PREFIX/include/cudf/detail/dlpack.hpp
-    - test -f $PREFIX/include/cudf/detail/gather.hpp
-    - test -f $PREFIX/include/cudf/detail/scatter.hpp
-    - test -f $PREFIX/include/cudf/legacy/bitmask.hpp
-    - test -f $PREFIX/include/cudf/legacy/column.hpp
-    - test -f $PREFIX/include/cudf/legacy/reshape.hpp
-    - test -f $PREFIX/include/cudf/reshape.hpp
-    - test -f $PREFIX/include/cudf/legacy/table.hpp
-    - test -f $PREFIX/include/cudf/utilities/legacy/nvcategory_util.hpp
-    - test -f $PREFIX/include/cudf/utilities/legacy/type_dispatcher.hpp
-    - test -f $PREFIX/include/cudf/utilities/legacy/wrapper_types.hpp
-    - test -f $PREFIX/include/cudf/utilities/error.hpp
-    - test -f $PREFIX/include/cudf/legacy/binaryop.hpp
-    - test -f $PREFIX/include/cudf/convert_types.h
+    - test -f $PREFIX/include/cudf/aggregation.hpp
+    - test -f $PREFIX/include/cudf/binaryop.hpp
+    - test -f $PREFIX/include/cudf/column/column_factories.hpp
+    - test -f $PREFIX/include/cudf/column/column.hpp
+    - test -f $PREFIX/include/cudf/column/column_view.hpp
+    - test -f $PREFIX/include/cudf/concatenate.hpp
     - test -f $PREFIX/include/cudf/copying.hpp
-    - test -f $PREFIX/include/cudf/legacy/copying.hpp
-    - test -f $PREFIX/include/cudf/cudf.h
     - test -f $PREFIX/include/cudf/datetime.hpp
+    - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
+    - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
+    - test -f $PREFIX/include/cudf/detail/binaryop.hpp
+    - test -f $PREFIX/include/cudf/detail/copy.hpp
+    - test -f $PREFIX/include/cudf/detail/dlpack.hpp
+    - test -f $PREFIX/include/cudf/detail/fill.hpp
+    - test -f $PREFIX/include/cudf/detail/gather.hpp
+    - test -f $PREFIX/include/cudf/detail/groupby.hpp
+    - test -f $PREFIX/include/cudf/detail/groupby/sort_helper.hpp
+    - test -f $PREFIX/include/cudf/detail/hashing.hpp
+    - test -f $PREFIX/include/cudf/detail/null_mask.hpp
+    - test -f $PREFIX/include/cudf/detail/nvtx/nvtx3.hpp
+    - test -f $PREFIX/include/cudf/detail/nvtx/ranges.hpp
+    - test -f $PREFIX/include/cudf/detail/reduction_functions.hpp
+    - test -f $PREFIX/include/cudf/detail/repeat.hpp
+    - test -f $PREFIX/include/cudf/detail/replace.hpp
+    - test -f $PREFIX/include/cudf/detail/scatter.hpp
+    - test -f $PREFIX/include/cudf/detail/search.hpp
+    - test -f $PREFIX/include/cudf/detail/sequence.hpp
+    - test -f $PREFIX/include/cudf/detail/sorting.hpp
+    - test -f $PREFIX/include/cudf/detail/stream_compaction.hpp
+    - test -f $PREFIX/include/cudf/detail/transform.hpp
+    - test -f $PREFIX/include/cudf/detail/transpose.hpp
+    - test -f $PREFIX/include/cudf/detail/unary.hpp
+    - test -f $PREFIX/include/cudf/detail/utilities/integer_utils.hpp
+    - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
+    - test -f $PREFIX/include/cudf/dictionary/detail/encode.hpp
+    - test -f $PREFIX/include/cudf/dictionary/detail/search.hpp
+    - test -f $PREFIX/include/cudf/dictionary/detail/update_keys.hpp
+    - test -f $PREFIX/include/cudf/dictionary/dictionary_column_view.hpp
+    - test -f $PREFIX/include/cudf/dictionary/dictionary_factories.hpp
+    - test -f $PREFIX/include/cudf/dictionary/encode.hpp
+    - test -f $PREFIX/include/cudf/dictionary/search.hpp
+    - test -f $PREFIX/include/cudf/dictionary/update_keys.hpp
     - test -f $PREFIX/include/cudf/dlpack.hpp
-    - test -f $PREFIX/include/cudf/legacy/filling.hpp
-    - test -f $PREFIX/include/cudf/legacy/functions.h
-    - test -f $PREFIX/include/cudf/legacy/groupby.hpp
-    - test -f $PREFIX/include/cudf/legacy/io_functions.h
-    - test -f $PREFIX/include/cudf/legacy/io_functions.hpp
-    - test -f $PREFIX/include/cudf/legacy/io_readers.hpp
-    - test -f $PREFIX/include/cudf/legacy/io_types.h
-    - test -f $PREFIX/include/cudf/legacy/io_types.hpp
-    - test -f $PREFIX/include/cudf/legacy/io_writers.hpp
+    - test -f $PREFIX/include/cudf/filling.hpp
+    - test -f $PREFIX/include/cudf/fixed_point/fixed_point.hpp
+    - test -f $PREFIX/include/cudf/groupby.hpp
+    - test -f $PREFIX/include/cudf/hashing.hpp
+    - test -f $PREFIX/include/cudf/io/data_sink.hpp
+    - test -f $PREFIX/include/cudf/io/datasource.hpp
+    - test -f $PREFIX/include/cudf/io/functions.hpp
+    - test -f $PREFIX/include/cudf/io/readers.hpp
+    - test -f $PREFIX/include/cudf/io/types.hpp
+    - test -f $PREFIX/include/cudf/io/writers.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
-    - test -f $PREFIX/include/cudf/legacy/merge.hpp
-    - test -f $PREFIX/include/cudf/legacy/join.hpp
-    - test -f $PREFIX/include/cudf/legacy/predicates.hpp
-    - test -f $PREFIX/include/cudf/legacy/quantiles.hpp
-    - test -f $PREFIX/include/cudf/legacy/reduction.hpp
-    - test -f $PREFIX/include/cudf/legacy/replace.hpp
-    - test -f $PREFIX/include/cudf/legacy/rolling.hpp
+    - test -f $PREFIX/include/cudf/join.hpp
+    - test -f $PREFIX/include/cudf/merge.hpp
+    - test -f $PREFIX/include/cudf/null_mask.hpp
+    - test -f $PREFIX/include/cudf/partitioning.hpp
+    - test -f $PREFIX/include/cudf/quantiles.hpp
+    - test -f $PREFIX/include/cudf/reduction.hpp
+    - test -f $PREFIX/include/cudf/replace.hpp
+    - test -f $PREFIX/include/cudf/reshape.hpp
     - test -f $PREFIX/include/cudf/rolling.hpp
-    - test -f $PREFIX/include/cudf/legacy/search.hpp
+    - test -f $PREFIX/include/cudf/scalar/scalar_factories.hpp
+    - test -f $PREFIX/include/cudf/scalar/scalar.hpp
+    - test -f $PREFIX/include/cudf/search.hpp
+    - test -f $PREFIX/include/cudf/sorting.hpp
     - test -f $PREFIX/include/cudf/stream_compaction.hpp
-    - test -f $PREFIX/include/cudf/legacy/stream_compaction.hpp
+    - test -f $PREFIX/include/cudf/strings/attributes.hpp
+    - test -f $PREFIX/include/cudf/strings/capitalize.hpp
+    - test -f $PREFIX/include/cudf/strings/case.hpp
+    - test -f $PREFIX/include/cudf/strings/char_types/char_cases.hpp
+    - test -f $PREFIX/include/cudf/strings/char_types/char_types.hpp
+    - test -f $PREFIX/include/cudf/strings/combine.hpp
+    - test -f $PREFIX/include/cudf/strings/contains.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_booleans.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_datetime.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_floats.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_urls.hpp
+    - test -f $PREFIX/include/cudf/strings/copying.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/combine.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/converters.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/fill.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/utilities.hpp
+    - test -f $PREFIX/include/cudf/strings/extract.hpp
+    - test -f $PREFIX/include/cudf/strings/findall.hpp
+    - test -f $PREFIX/include/cudf/strings/find.hpp
+    - test -f $PREFIX/include/cudf/strings/find_multiple.hpp
+    - test -f $PREFIX/include/cudf/strings/padding.hpp
+    - test -f $PREFIX/include/cudf/strings/replace.hpp
+    - test -f $PREFIX/include/cudf/strings/replace_re.hpp
+    - test -f $PREFIX/include/cudf/strings/sorting.hpp
+    - test -f $PREFIX/include/cudf/strings/split/partition.hpp
+    - test -f $PREFIX/include/cudf/strings/split/split.hpp
+    - test -f $PREFIX/include/cudf/strings/strings_column_view.hpp
+    - test -f $PREFIX/include/cudf/strings/strip.hpp
+    - test -f $PREFIX/include/cudf/strings/substring.hpp
+    - test -f $PREFIX/include/cudf/strings/translate.hpp
+    - test -f $PREFIX/include/cudf/strings/wrap.hpp
+    - test -f $PREFIX/include/cudf/table/table.hpp
+    - test -f $PREFIX/include/cudf/table/table_view.hpp
+    - test -f $PREFIX/include/cudf/transform.hpp
     - test -f $PREFIX/include/cudf/transpose.hpp
-    - test -f $PREFIX/include/cudf/legacy/transform.hpp
-    - test -f $PREFIX/include/cudf/types.h
     - test -f $PREFIX/include/cudf/types.hpp
     - test -f $PREFIX/include/cudf/unary.hpp
-    - test -f $PREFIX/include/cudf/legacy/unary.hpp
+    - test -f $PREFIX/include/cudf/utilities/bit.hpp
+    - test -f $PREFIX/include/cudf/utilities/error.hpp
+    - test -f $PREFIX/include/cudf/utilities/nvtx_utils.hpp
+    - test -f $PREFIX/include/cudf/utilities/traits.hpp
+    - test -f $PREFIX/include/cudf/utilities/type_dispatcher.hpp
+    - test -f $PREFIX/include/cudf/wrappers/dictionary.hpp
+    - test -f $PREFIX/include/cudf/wrappers/timestamps.hpp
 
 about:
   home: http://rapids.ai/

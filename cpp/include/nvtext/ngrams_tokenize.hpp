@@ -21,9 +21,7 @@
 
 namespace nvtext {
 /**
- * @ingroup nvtext_apis
- * @addtogroup nvtext_ngrams NGrams
- * APIs to produce ngrams from strings columns
+ * @addtogroup nvtext_ngrams
  * @{
  */
 

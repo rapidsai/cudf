@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-20, NVIDIA CORPORATION.
 
 import csv
 import gzip
@@ -465,7 +465,7 @@ def test_csv_reader_NaN_values():
     all_cells = empty_cells + default_na_cells + custom_na_cells
     custom_na_values = ["NV_NAN", "NotANumber"]
 
-    # test default NA values. emply cells should also yield NaNs
+    # test default NA values. empty cells should also yield NaNs
     all_nan = read_csv(
         StringIO(default_na_cells + empty_cells), names=names, dtype=dtypes
     )
@@ -1323,6 +1323,33 @@ def test_csv_writer_file_handle(tmpdir):
     assert_eq(gdf, gdf2)
 
 
+def test_csv_writer_file_append(tmpdir):
+
+    gdf1 = cudf.DataFrame({"a": [1, 2, 3], "b": ["xxx", "yyyy", "zzzzz"]})
+    gdf2 = cudf.DataFrame({"a": [4, 5, 6], "b": ["foo", "bar", "baz"]})
+
+    gdf_df_fname = tmpdir.join("gdf_df_append.csv")
+    with open(gdf_df_fname, "w") as f:
+        gdf1.to_csv(f, index=False)
+    with open(gdf_df_fname, "a") as f:
+        gdf2.to_csv(f, header=False, index=False)
+
+    result = cudf.read_csv(gdf_df_fname)
+    expected = cudf.concat([gdf1, gdf2], ignore_index=True)
+    assert_eq(result, expected)
+
+
+def test_csv_writer_buffer(tmpdir):
+
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": ["xxx", "yyyy", "zzzzz"]})
+
+    buffer = BytesIO()
+    gdf.to_csv(buffer, index=False)
+
+    result = cudf.read_csv(buffer)
+    assert_eq(result, gdf)
+
+
 @pytest.mark.parametrize("dtype", dtypes)
 @pytest.mark.parametrize("nelem", nelem)
 def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
@@ -1404,7 +1431,8 @@ def test_csv_writer_mixed_data(
         header=header,
         line_terminator=line_terminator,
         date_format="%Y-%m-%dT%H:%M:%SZ",
-        quoting=csv.QUOTE_NONNUMERIC,
+        quoting=csv.QUOTE_NONE,
+        escapechar="\\",
     )
     gdf.to_csv(
         path=gdf_df_fname,
@@ -1418,7 +1446,7 @@ def test_csv_writer_mixed_data(
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
 
-    expect = pd.read_csv(pdf_df_fname)
+    expect = pd.read_csv(pdf_df_fname, quoting=csv.QUOTE_NONE, escapechar="\\")
     got = pd.read_csv(gdf_df_fname)
     assert_eq(expect, got)
 
@@ -1460,10 +1488,7 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     gdf = cudf.from_pandas(pdf)
 
     pdf.to_csv(
-        pdf_df_fname,
-        date_format="%Y-%m-%dT%H:%M:%SZ",
-        quoting=csv.QUOTE_NONNUMERIC,
-        chunksize=chunksize,
+        pdf_df_fname, date_format="%Y-%m-%dT%H:%M:%SZ", chunksize=chunksize,
     )
     gdf.to_csv(gdf_df_fname, chunksize=chunksize)
 
@@ -1482,3 +1507,18 @@ def test_to_csv_empty_filename():
 
     with exception:
         df.to_csv()
+
+
+def test_csv_writer_empty_dataframe(tmpdir):
+
+    df_fname = tmpdir.join("gdf_df_5.csv")
+    gdf = cudf.DataFrame({"float_point": [], "integer": []})
+    gdf["float_point"] = gdf["float_point"].astype("float")
+    gdf["integer"] = gdf["integer"].astype("int")
+
+    gdf.to_csv(df_fname, index=False)
+
+    df = cudf.read_csv(df_fname)
+
+    assert df.shape == (0, 2)
+    assert all(df.dtypes == ["object", "object"])

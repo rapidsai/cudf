@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/strings/string_view.cuh>
-#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 using hash_value_type = uint32_t;
 
@@ -138,13 +137,6 @@ struct MurmurHash3_32 {
 };
 
 template <>
-hash_value_type CUDA_HOST_DEVICE_CALLABLE
-MurmurHash3_32<cudf::bool8>::operator()(cudf::bool8 const& key) const
-{
-  return this->compute(static_cast<int8_t>(key));
-}
-
-template <>
 hash_value_type CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32<bool>::operator()(bool const& key) const
 {
   return this->compute(static_cast<uint8_t>(key));
@@ -254,37 +246,6 @@ struct IdentityHash {
   CUDA_HOST_DEVICE_CALLABLE result_type operator()(const Key& key) const
   {
     return static_cast<result_type>(key);
-  }
-};
-
-/**
- * @brief Specialization of IdentityHash for wrapper structs that hashes the underlying value.
- */
-template <typename T, gdf_dtype type_id>
-struct IdentityHash<cudf::detail::wrapper<T, type_id>> {
-  using result_type = hash_value_type;
-
-  CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs) const
-  {
-    result_type combined{lhs};
-
-    combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
-
-    return combined;
-  }
-
-  template <gdf_dtype dtype = type_id>
-  typename std::enable_if_t<(dtype == GDF_BOOL8), result_type> CUDA_HOST_DEVICE_CALLABLE
-  operator()(cudf::detail::wrapper<T, dtype> const& key) const
-  {
-    return static_cast<result_type>(key);
-  }
-
-  template <gdf_dtype dtype = type_id>
-  typename std::enable_if_t<(dtype != GDF_BOOL8), result_type> CUDA_HOST_DEVICE_CALLABLE
-  operator()(cudf::detail::wrapper<T, dtype> const& key) const
-  {
-    return static_cast<result_type>(key.value);
   }
 };
 

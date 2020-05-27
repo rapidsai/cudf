@@ -12,31 +12,31 @@ from cudf._lib.cpp.table.table cimport table
 
 
 cdef extern from "cudf/io/types.hpp" \
-        namespace "cudf::experimental::io" nogil:
+        namespace "cudf::io" nogil:
 
     ctypedef enum quote_style:
-        QUOTE_MINIMAL "cudf::experimental::io::quote_style::MINIMAL"
-        QUOTE_ALL "cudf::experimental::io::quote_style::ALL"
-        QUOTE_NONNUMERIC "cudf::experimental::io::quote_style::NONNUMERIC"
-        QUOTE_NONE "cudf::experimental::io::quote_style::NONE"
+        QUOTE_MINIMAL "cudf::io::quote_style::MINIMAL"
+        QUOTE_ALL "cudf::io::quote_style::ALL"
+        QUOTE_NONNUMERIC "cudf::io::quote_style::NONNUMERIC"
+        QUOTE_NONE "cudf::io::quote_style::NONE"
 
     ctypedef enum compression_type:
-        NONE "cudf::experimental::io::compression_type::NONE"
-        AUTO "cudf::experimental::io::compression_type::AUTO"
-        SNAPPY "cudf::experimental::io::compression_type::SNAPPY"
-        GZIP "cudf::experimental::io::compression_type::GZIP"
-        BZIP2 "cudf::experimental::io::compression_type::BZIP2"
-        BROTLI "cudf::experimental::io::compression_type::BROTLI"
-        ZIP "cudf::experimental::io::compression_type::ZIP"
-        XZ "cudf::experimental::io::compression_type::XZ"
+        NONE "cudf::io::compression_type::NONE"
+        AUTO "cudf::io::compression_type::AUTO"
+        SNAPPY "cudf::io::compression_type::SNAPPY"
+        GZIP "cudf::io::compression_type::GZIP"
+        BZIP2 "cudf::io::compression_type::BZIP2"
+        BROTLI "cudf::io::compression_type::BROTLI"
+        ZIP "cudf::io::compression_type::ZIP"
+        XZ "cudf::io::compression_type::XZ"
 
     ctypedef enum io_type:
-        FILEPATH "cudf::experimental::io::io_type::FILEPATH"
-        HOST_BUFFER "cudf::experimental::io::io_type::HOST_BUFFER"
+        FILEPATH "cudf::io::io_type::FILEPATH"
+        HOST_BUFFER "cudf::io::io_type::HOST_BUFFER"
         ARROW_RANDOM_ACCESS_FILE \
-            "cudf::experimental::io::io_type::ARROW_RANDOM_ACCESS_FILE"
-        VOID "cudf::experimental::io::io_type::VOID"
-        USER_SINK "cudf::experimental::io::io_type::USER_SINK"
+            "cudf::io::io_type::ARROW_RANDOM_ACCESS_FILE"
+        VOID "cudf::io::io_type::VOID"
+        USER_IMPLEMENTED "cudf::io::io_type::USER_IMPLEMENTED"
 
     ctypedef enum statistics_freq:
         STATISTICS_NONE = 0,

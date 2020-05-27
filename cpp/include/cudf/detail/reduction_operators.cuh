@@ -25,7 +25,6 @@
 #include <cmath>
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 // intermediate data structure to compute `var`, `std`
 template <typename ResultType>
@@ -111,7 +110,7 @@ struct simple_op {
 };
 
 // `sum`, `product`, `sum_of_squares`, `min`, `max` are used at simple_reduction
-// inferface is defined by CRTP calss simple_op
+// interface is defined by CRTP class simple_op
 
 // operator for `sum`
 struct sum : public simple_op<sum> {
@@ -172,7 +171,7 @@ struct compound_op : public simple_op<Derived> {
    * @param count validity count
    * @param ddof  `ddof` parameter used by variance and standard deviation
    *
-   * @return transformed output result of compount operator
+   * @return transformed output result of compound operator
    */
   template <typename ResultType, typename IntermediateType>
   CUDA_HOST_DEVICE_CALLABLE static ResultType compute_result(const IntermediateType& input,
@@ -190,7 +189,7 @@ struct compound_op : public simple_op<Derived> {
 // structure type of a single reduction call, it is also used as OutputType of
 // cudf::reduction::detail::reduce at compound_reduction. compute_result
 // computes the final ResultType from the IntermediateType.
-// intemediate::compute_result method is enforced by CRTP base class compound_op
+// intermediate::compute_result method is enforced by CRTP base class compound_op
 
 // operator for `mean`
 struct mean : public compound_op<mean> {
@@ -219,7 +218,7 @@ struct variance : public compound_op<variance> {
   using op = cudf::DeviceSum;
 
   template <typename ResultType>
-  using transformer = cudf::experimental::reduction::transformer_var_std<ResultType>;
+  using transformer = cudf::reduction::transformer_var_std<ResultType>;
 
   template <typename ResultType>
   struct intermediate {
@@ -246,7 +245,7 @@ struct standard_deviation : public compound_op<standard_deviation> {
   using op = cudf::DeviceSum;
 
   template <typename ResultType>
-  using transformer = cudf::experimental::reduction::transformer_var_std<ResultType>;
+  using transformer = cudf::reduction::transformer_var_std<ResultType>;
 
   template <typename ResultType>
   struct intermediate {
@@ -268,5 +267,4 @@ struct standard_deviation : public compound_op<standard_deviation> {
 
 }  // namespace op
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

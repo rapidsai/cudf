@@ -35,7 +35,7 @@ using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
  *
  * This path can be overridden at runtime by defining an environment variable
  * named `LIBCUDF_KERNEL_CACHE_PATH`. The value of this variable must be a path
- * under which the process' user has read/write priveleges.
+ * under which the process' user has read/write privileges.
  *
  * This function returns a path to the cache directory, creating it if it
  * doesn't exist.
@@ -67,9 +67,9 @@ class cudfJitCache {
    * Searches an internal in-memory cache and file based cache for the kernel
    * and if not found, JIT compiles and returns the kernel
    *
-   * @param kern_name [in] name of kernel to return
-   * @param program   [in] Jitify preprocessed program to get the kernel from
-   * @param arguments [in] template arguments for kernel in vector of strings
+   * @param kern_name  name of kernel to return
+   * @param program    Jitify preprocessed program to get the kernel from
+   * @param arguments  template arguments for kernel in vector of strings
    * @return  Pair of string kernel identifier and compiled kernel object
    **/
   named_prog<jitify::experimental::KernelInstantiation> getKernelInstantiation(
@@ -83,13 +83,12 @@ class cudfJitCache {
    * Searches an internal in-memory cache and file based cache for the Jitify
    * pre-processed program and if not found, JIT processes and returns it
    *
-   * @param prog_file_name [in] name of program to return
-   * @param cuda_source    [in] string source code of program to compile
-   * @param given_headers  [in] vector of strings representing source or names of
-   *  each header included in cuda_source
-   * @param given_options  [in] vector of strings options to pass to NVRTC
-   * @param file_callback  [in] pointer to callback function to call whenever a
-   *  header needs to be loaded
+   * @param prog_file_name name of program to return
+   * @param cuda_source    string source code of program to compile
+   * @param given_headers  vector of strings representing source or names of each header included in
+   *                       cuda_source
+   * @param given_options  vector of strings options to pass to NVRTC
+   * @param file_callback  pointer to callback function to call whenever a header needs to be loaded
    * @return named_prog<jitify::experimental::Program>
    **/
   named_prog<jitify::experimental::Program> getProgram(
@@ -103,7 +102,8 @@ class cudfJitCache {
   template <typename Tv>
   using umap_str_shptr = std::unordered_map<std::string, std::shared_ptr<Tv>>;
 
-  umap_str_shptr<jitify::experimental::KernelInstantiation> kernel_inst_map;
+  std::unordered_map<CUcontext, umap_str_shptr<jitify::experimental::KernelInstantiation>>
+    kernel_inst_context_map;
   umap_str_shptr<jitify::experimental::Program> program_map;
 
   /*

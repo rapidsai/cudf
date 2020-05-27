@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -24,6 +25,12 @@
 #include <type_traits>
 
 namespace cudf {
+
+/**
+ * @addtogroup utility_types
+ * @{
+ */
+
 template <typename...>
 using void_t = void;
 
@@ -42,6 +49,17 @@ struct is_relationally_comparable_impl<L,
                                        R,
                                        void_t<less_comparable<L, R>, greater_comparable<L, R>>>
   : std::true_type {
+};
+
+template <typename L, typename R, typename = void>
+struct is_equality_comparable_impl : std::false_type {
+};
+
+template <typename L, typename R>
+using equality_comparable = decltype(std::declval<L>() == std::declval<R>());
+
+template <typename L, typename R>
+struct is_equality_comparable_impl<L, R, void_t<equality_comparable<L, R>>> : std::true_type {
 };
 
 template <typename T>
@@ -67,6 +85,24 @@ template <typename L, typename R>
 constexpr inline bool is_relationally_comparable()
 {
   return is_relationally_comparable_impl<L, R>::value;
+}
+
+/**
+ * @brief Indicates whether objects of types `L` and `R` can be compared
+ * for equality.
+ *
+ * Given two objects `L l`, and `R r`, returns true if `l == r` is a
+ * well-formed expression.
+ *
+ * @tparam L Type of the first object
+ * @tparam R Type of the second object
+ * @return true Objects of types `L` and `R` can be compared for equality
+ * @return false Objects of types `L` and `R` cannot be compared
+ */
+template <typename L, typename R>
+constexpr inline bool is_equality_comparable()
+{
+  return is_equality_comparable_impl<L, R>::value;
 }
 
 /**
@@ -103,7 +139,7 @@ struct is_numeric_impl {
  **/
 constexpr inline bool is_numeric(data_type type)
 {
-  return cudf::experimental::type_dispatcher(type, is_numeric_impl{});
+  return cudf::type_dispatcher(type, is_numeric_impl{});
 }
 
 /**
@@ -136,7 +172,7 @@ struct is_boolean_impl {
  **/
 constexpr inline bool is_boolean(data_type type)
 {
-  return cudf::experimental::type_dispatcher(type, is_boolean_impl{});
+  return cudf::type_dispatcher(type, is_boolean_impl{});
 }
 
 /**
@@ -171,7 +207,7 @@ struct is_timestamp_impl {
  **/
 constexpr inline bool is_timestamp(data_type type)
 {
-  return cudf::experimental::type_dispatcher(type, is_timestamp_impl{});
+  return cudf::type_dispatcher(type, is_timestamp_impl{});
 }
 
 /**
@@ -210,7 +246,7 @@ struct is_fixed_width_impl {
  **/
 constexpr inline bool is_fixed_width(data_type type)
 {
-  return cudf::experimental::type_dispatcher(type, is_fixed_width_impl{});
+  return cudf::type_dispatcher(type, is_fixed_width_impl{});
 }
 
 /**
@@ -228,7 +264,8 @@ constexpr inline bool is_fixed_width(data_type type)
 template <typename T>
 constexpr inline bool is_compound()
 {
-  return std::is_same<T, cudf::string_view>::value or std::is_same<T, cudf::dictionary32>::value;
+  return std::is_same<T, cudf::string_view>::value or std::is_same<T, cudf::dictionary32>::value or
+         std::is_same<T, cudf::list_view>::value;
 }
 
 struct is_compound_impl {
@@ -253,7 +290,7 @@ struct is_compound_impl {
  **/
 constexpr inline bool is_compound(data_type type)
 {
-  return cudf::experimental::type_dispatcher(type, is_compound_impl{});
+  return cudf::type_dispatcher(type, is_compound_impl{});
 }
 
 /**
@@ -292,4 +329,46 @@ struct is_simple_impl {
  **/
 constexpr inline bool is_simple(data_type type) { return not is_compound(type); }
 
+/**
+ * @brief Indicates whether `T` is a nested type.
+ *
+ * "Nested" types are distinct from compound types in that they
+ * can have an arbitrarily deep list of descendants of the same
+ * type. Strings are not a nested type, but lists are.
+ *
+ * @param T The type to verify
+ * @return true T is a nested type
+ * @return false T is not a nested type
+ **/
+template <typename T>
+constexpr inline bool is_nested()
+{
+  return std::is_same<T, cudf::list_view>::value;
+}
+
+struct is_nested_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_nested<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a nested type
+ *
+ * "Nested" types are distinct from compound types in that they
+ * can have an arbitrarily deep list of descendants of the same
+ * type. Strings are not a nested type, but lists are.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a nested type
+ * @return false `type` is not a nested type
+ **/
+constexpr inline bool is_nested(data_type type)
+{
+  return cudf::type_dispatcher(type, is_nested_impl{});
+}
+
+/** @} */
 }  // namespace cudf

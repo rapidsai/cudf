@@ -21,11 +21,10 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 inline std::vector<aggregation_result> extract_results(
-  std::vector<aggregation_request> const& requests, experimental::detail::result_cache& cache)
+  std::vector<aggregation_request> const& requests, cudf::detail::result_cache& cache)
 {
   std::vector<aggregation_result> results(requests.size());
 
@@ -39,5 +38,4 @@ inline std::vector<aggregation_result> extract_results(
 
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

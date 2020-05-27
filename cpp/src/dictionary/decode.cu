@@ -41,8 +41,12 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
                       0,
                       source.offset()};  // no nulls for gather indices
   // use gather to create the output column -- use ignore_out_of_bounds=true
-  auto table_column = experimental::detail::gather(
-                        table_view{{source.keys()}}, indices, false, true, false, mr, stream)
+  auto table_column = cudf::detail::gather(table_view{{source.keys()}},
+                                           indices,
+                                           cudf::detail::out_of_bounds_policy::IGNORE,
+                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                           mr,
+                                           stream)
                         ->release();
   auto output_column = std::unique_ptr<column>(std::move(table_column.front()));
 

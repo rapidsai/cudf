@@ -34,7 +34,6 @@
 #include <cudf/table/table.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace json {
@@ -133,9 +132,9 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
     source_ = datasource::create(filepath_, range_offset, map_range_size);
   }
 
-  if (!source_->empty()) {
+  if (!source_->is_empty()) {
     auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
-    buffer_        = source_->get_buffer(range_offset, data_size);
+    buffer_        = source_->host_read(range_offset, data_size);
   }
 
   byte_range_offset_ = range_offset;
@@ -160,11 +159,10 @@ void reader::impl::decompress_input()
     uncomp_data_ = reinterpret_cast<const char *>(buffer_->data());
     uncomp_size_ = buffer_->size();
   } else {
-    CUDF_EXPECTS(getUncompressedHostData(reinterpret_cast<const char *>(buffer_->data()),
-                                         buffer_->size(),
-                                         compression_type,
-                                         uncomp_data_owner_) == GDF_SUCCESS,
-                 "Input data decompression failed.\n");
+    getUncompressedHostData(reinterpret_cast<const char *>(buffer_->data()),
+                            buffer_->size(),
+                            compression_type,
+                            uncomp_data_owner_);
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();
   }
@@ -365,17 +363,12 @@ void reader::impl::set_data_types(cudaStream_t stream)
       });
     if (is_dict) {
       std::map<std::string, data_type> col_type_map;
-      // std::map<std::string, gdf_dtype_extra_info> col_type_info_map;
+
       for (const auto &ts : args_.dtype) {
         const size_t colon_idx = ts.find(":");
         const std::string col_name(ts.begin(), ts.begin() + colon_idx);
         const std::string type_str(ts.begin() + colon_idx + 1, ts.end());
-        /*
-        std::tie(
-          col_type_map[col_name],
-          col_type_info_map[col_name]
-        ) = convertStringToDtype(type_str);
-        */
+
         col_type_map[col_name] = convert_string_to_dtype(type_str);
       }
 
@@ -396,20 +389,17 @@ void reader::impl::set_data_types(cudaStream_t stream)
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
     const auto num_columns = metadata.column_names.size();
 
-    // dtypes_extra_info_ = std::vector<gdf_dtype_extra_info>(num_columns, gdf_dtype_extra_info{
-    // TIME_UNIT_NONE });
-
-    rmm::device_vector<cudf::experimental::io::json::ColumnInfo> d_column_infos(
-      num_columns, cudf::experimental::io::json::ColumnInfo{});
-    cudf::experimental::io::json::gpu::detect_data_types(d_column_infos.data().get(),
-                                                         static_cast<const char *>(data_.data()),
-                                                         data_.size(),
-                                                         opts_,
-                                                         num_columns,
-                                                         rec_starts_.data().get(),
-                                                         rec_starts_.size(),
-                                                         stream);
-    thrust::host_vector<cudf::experimental::io::json::ColumnInfo> h_column_infos = d_column_infos;
+    rmm::device_vector<cudf::io::json::ColumnInfo> d_column_infos(num_columns,
+                                                                  cudf::io::json::ColumnInfo{});
+    cudf::io::json::gpu::detect_data_types(d_column_infos.data().get(),
+                                           static_cast<const char *>(data_.data()),
+                                           data_.size(),
+                                           opts_,
+                                           num_columns,
+                                           rec_starts_.data().get(),
+                                           rec_starts_.size(),
+                                           stream);
+    thrust::host_vector<cudf::io::json::ColumnInfo> h_column_infos = d_column_infos;
 
     for (const auto &cinfo : h_column_infos) {
       if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
@@ -465,16 +455,16 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
   rmm::device_vector<cudf::bitmask_type *> d_valid = h_valid;
   rmm::device_vector<cudf::size_type> d_valid_counts(num_columns, 0);
 
-  cudf::experimental::io::json::gpu::convert_json_to_columns(data_,
-                                                             d_dtypes.data().get(),
-                                                             d_data.data().get(),
-                                                             num_records,
-                                                             num_columns,
-                                                             rec_starts_.data().get(),
-                                                             d_valid.data().get(),
-                                                             d_valid_counts.data().get(),
-                                                             opts_,
-                                                             stream);
+  cudf::io::json::gpu::convert_json_to_columns(data_,
+                                               d_dtypes.data().get(),
+                                               d_data.data().get(),
+                                               num_records,
+                                               num_columns,
+                                               rec_starts_.data().get(),
+                                               d_valid.data().get(),
+                                               d_valid_counts.data().get(),
+                                               opts_,
+                                               stream);
   CUDA_TRY(cudaStreamSynchronize(stream));
   CUDA_TRY(cudaGetLastError());
 
@@ -556,19 +546,10 @@ reader::reader(std::string filepath,
 }
 
 // Forward to implementation
-reader::reader(const char *buffer,
-               size_t length,
+reader::reader(std::unique_ptr<cudf::io::datasource> source,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), "", options, mr))
-{
-}
-
-// Forward to implementation
-reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
-               reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), "", options, mr))
+  : _impl(std::make_unique<impl>(std::move(source), "", options, mr))
 {
 }
 
@@ -590,5 +571,4 @@ table_with_metadata reader::read_byte_range(size_t offset, size_t size, cudaStre
 }  // namespace json
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

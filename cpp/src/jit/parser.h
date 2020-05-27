@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef GDF_JIT_PARSER_H
-#define GDF_JIT_PARSER_H
+#pragma once
 
 #include <map>
 #include <set>
@@ -115,11 +114,11 @@ class ptx_parser {
   std::string parse_statement(const std::string& src);
 
   /**
-   * @brief Convert the input PTX instruction into a inline PTX
+   * @brief Convert the input PTX instruction into an inline PTX
    * statement without changing (exceptions exist).
    *
-   * Non-alphanemric that are not underscore in register identifiers
-   * are all replaced with underscore. An example:
+   * Non-alphanumeric characters in register identifiers, except underscores, are replaced with
+   underscore. Example:
    *
    *  fma.rn.f32 	%f4, %f3, %f1, %f2
    *
@@ -187,7 +186,7 @@ class ptx_parser {
   ptx_parser() = delete;
 
   /**
-   * @brief C'tor of the `ptx_parser` class
+   * @brief Constructor of the `ptx_parser` class
    *
    * @param ptx_ The input PTX code that contains the function whose
    * CUDA is to be generated.
@@ -242,5 +241,3 @@ std::string parse_single_function_cuda(const std::string& src, const std::string
 
 }  // namespace jit
 }  // namespace cudf
-
-#endif

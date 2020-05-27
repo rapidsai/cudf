@@ -42,7 +42,7 @@ TEST_F(DropNullsTest, WholeRowIsNull)
   cudf::test::fixed_width_column_wrapper<double> col3_expected{{10, 40, 5, 2}, {1, 1, 1, 1}};
   cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
 
-  auto got = cudf::experimental::drop_nulls(input, keys);
+  auto got = cudf::drop_nulls(input, keys);
 
   cudf::test::expect_tables_equal(expected, got->view());
 }
@@ -56,7 +56,7 @@ TEST_F(DropNullsTest, NoNull)
   cudf::table_view input{{col1, col2, col3}};
   std::vector<cudf::size_type> keys{0, 1, 2};
 
-  auto got = cudf::experimental::drop_nulls(input, keys);
+  auto got = cudf::drop_nulls(input, keys);
 
   cudf::test::expect_tables_equal(input, got->view());
 }
@@ -75,7 +75,7 @@ TEST_F(DropNullsTest, MixedSetOfRows)
   cudf::test::fixed_width_column_wrapper<double> col3_expected{{10, 40, 5, 2}, {1, 1, 1, 1}};
   cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
 
-  auto got = cudf::experimental::drop_nulls(input, keys);
+  auto got = cudf::drop_nulls(input, keys);
 
   cudf::test::expect_tables_equal(expected, got->view());
 }
@@ -95,7 +95,7 @@ TEST_F(DropNullsTest, MixedSetOfRowsWithThreshold)
   cudf::test::fixed_width_column_wrapper<double> col3_expected{{10, 40, 5, 2, 10}, {1, 1, 1, 1, 1}};
   cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
 
-  auto got = cudf::experimental::drop_nulls(input, keys, keys.size() - 1);
+  auto got = cudf::drop_nulls(input, keys, keys.size() - 1);
 
   cudf::test::expect_tables_equal(expected, got->view());
 }
@@ -106,7 +106,7 @@ TEST_F(DropNullsTest, EmptyTable)
   cudf::table_view expected{std::vector<cudf::column_view>()};
   std::vector<cudf::size_type> keys{};
 
-  auto got = cudf::experimental::drop_nulls(input, keys);
+  auto got = cudf::drop_nulls(input, keys);
 
   cudf::test::expect_tables_equal(expected, got->view());
 }
@@ -123,7 +123,7 @@ TEST_F(DropNullsTest, EmptyColumns)
   cudf::test::fixed_width_column_wrapper<double> col3_expected{};
   cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
 
-  auto got = cudf::experimental::drop_nulls(input, keys);
+  auto got = cudf::drop_nulls(input, keys);
 
   cudf::test::expect_tables_equal(expected, got->view());
 }
@@ -135,7 +135,7 @@ TEST_F(DropNullsTest, EmptyKeys)
   cudf::table_view input{{col1}};
   std::vector<cudf::size_type> keys{};
 
-  auto got = cudf::experimental::drop_nulls(input, keys);
+  auto got = cudf::drop_nulls(input, keys);
   cudf::test::expect_tables_equal(input, got->view());
 }
 
@@ -151,7 +151,7 @@ TEST_F(DropNullsTest, StringColWithNull)
   cudf::test::strings_column_wrapper col2_expected{{"Hi", "Hello", "No", "Naive"}, {1, 1, 1, 1}};
   cudf::table_view expected{{col1_expected, col2_expected}};
 
-  auto got = cudf::experimental::drop_nulls(input, keys);
+  auto got = cudf::drop_nulls(input, keys);
 
   cudf::test::expect_tables_equal(expected, got->view());
 }
@@ -175,7 +175,7 @@ TYPED_TEST(DropNullsTestAll, AllNull)
   cudf::column_view view = expected_col;
   cudf::table_view expected{{expected_col, expected_col}};
 
-  auto got = cudf::experimental::drop_nulls(input, keys);
+  auto got = cudf::drop_nulls(input, keys);
 
   cudf::test::expect_tables_equal(expected, got->view());
 }

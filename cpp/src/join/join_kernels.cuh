@@ -23,7 +23,6 @@
 #include "join_common_utils.hpp"
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /* --------------------------------------------------------------------------*/
 /**
@@ -204,7 +203,7 @@ __device__ void flush_output_cache(const unsigned int activemask,
 
   if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }
 
-  output_offset = cub::ShuffleIndex(output_offset, 0, experimental::detail::warp_size, activemask);
+  output_offset = cub::ShuffleIndex(output_offset, 0, detail::warp_size, activemask);
 
   for (int shared_out_idx = lane_id; shared_out_idx < current_idx_shared[warp_id];
        shared_out_idx += num_threads) {
@@ -256,7 +255,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                  bool flip_results,
                                  const size_type offset = 0)
 {
-  constexpr int num_warps = block_size / experimental::detail::warp_size;
+  constexpr int num_warps = block_size / detail::warp_size;
   __shared__ size_type current_idx_shared[num_warps];
   __shared__ size_type join_shared_l[num_warps][output_cache_size];
   __shared__ size_type join_shared_r[num_warps][output_cache_size];
@@ -267,8 +266,8 @@ __global__ void probe_hash_table(multimap_type multi_map,
     output_r = join_output_l;
   }
 
-  const int warp_id = threadIdx.x / experimental::detail::warp_size;
-  const int lane_id = threadIdx.x % experimental::detail::warp_size;
+  const int warp_id = threadIdx.x / detail::warp_size;
+  const int lane_id = threadIdx.x % detail::warp_size;
 
   if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
 
@@ -350,7 +349,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
 
       __syncwarp(activemask);
       // flush output cache if next iteration does not fit
-      if (current_idx_shared[warp_id] + experimental::detail::warp_size >= output_cache_size) {
+      if (current_idx_shared[warp_id] + detail::warp_size >= output_cache_size) {
         flush_output_cache<num_warps, output_cache_size>(activemask,
                                                          max_size,
                                                          warp_id,
@@ -384,7 +383,5 @@ __global__ void probe_hash_table(multimap_type multi_map,
 }
 
 }  // namespace detail
-
-}  // namespace experimental
 
 }  // namespace cudf

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -23,7 +22,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace experimental {
 std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -51,5 +49,4 @@ std::unique_ptr<column> is_valid(cudf::column_view const& input,
                          mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

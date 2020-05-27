@@ -174,6 +174,11 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if dtype is not None:
         val = val.astype(dtype)
 
+    if val.dtype.type is np.datetime64:
+        time_unit, _ = np.datetime_data(val.dtype)
+        if time_unit in ("D", "W", "M", "Y"):
+            val = val.astype("datetime64[s]")
+
     return val
 
 

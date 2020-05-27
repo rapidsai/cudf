@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,11 +54,11 @@ device_memory_resource* get_default_resource();
 
 namespace cudf {
 // Forward declaration
-struct table;
 class column;
 class column_view;
 class mutable_column_view;
 class string_view;
+class list_view;
 
 class scalar;
 template <typename T>
@@ -73,11 +73,16 @@ class string_scalar_device_view;
 template <typename T>
 class timestamp_scalar_device_view;
 
-namespace experimental {
+class list_scalar;
+
 class table;
-}
 class table_view;
 class mutable_table_view;
+
+/**
+ * @addtogroup utility_types
+ * @{
+ */
 
 using size_type    = int32_t;
 using bitmask_type = uint32_t;
@@ -155,11 +160,11 @@ enum class mask_state : int32_t {
   ALL_NULL        ///< Null mask allocated, initialized to all elements NULL
 };
 
-namespace experimental {
 /**
  * @brief Interpolation method to use when the desired quantile lies between
  * two data points i and j
  *
+ * @ingroup utility_types
  */
 enum class interpolation : int32_t {
   LINEAR,    ///< Linear interpolation between i and j
@@ -168,8 +173,6 @@ enum class interpolation : int32_t {
   MIDPOINT,  ///< (i + j)/2
   NEAREST    ///< i or j, whichever is nearest
 };
-
-}  // namespace experimental
 
 /**
  * @brief Identifies a column's logical element type
@@ -190,6 +193,7 @@ enum type_id {
   TIMESTAMP_NANOSECONDS,   ///< duration of nanoseconds since Unix Epoch in int64
   DICTIONARY32,            ///< Dictionary type using int32 indices
   STRING,                  ///< String elements
+  LIST,                    ///< List elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
 };
@@ -252,4 +256,5 @@ inline bool operator==(data_type const& lhs, data_type const& rhs) { return lhs.
  */
 std::size_t size_of(data_type t);
 
+/** @} */
 }  // namespace cudf

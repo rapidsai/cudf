@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
@@ -24,7 +23,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <vector>
@@ -37,15 +35,14 @@ void run_sort_test(table_view input,
                    std::vector<null_order> null_precedence = {})
 {
   // Sorted table
-  auto got_sorted_table      = experimental::sort(input, column_order, null_precedence);
-  auto expected_sorted_table = experimental::gather(input, expected_sorted_indices);
+  auto got_sorted_table      = sort(input, column_order, null_precedence);
+  auto expected_sorted_table = gather(input, expected_sorted_indices);
 
   expect_tables_equal(expected_sorted_table->view(), got_sorted_table->view());
 
   // Sorted by key
-  auto got_sort_by_key_table =
-    experimental::sort_by_key(input, input, column_order, null_precedence);
-  auto expected_sort_by_key_table = experimental::gather(input, expected_sorted_indices);
+  auto got_sort_by_key_table      = sort_by_key(input, input, column_order, null_precedence);
+  auto expected_sort_by_key_table = gather(input, expected_sorted_indices);
 
   expect_tables_equal(expected_sort_by_key_table->view(), got_sort_by_key_table->view());
 }
@@ -70,12 +67,12 @@ TYPED_TEST(Sort, WithNullMax)
   std::vector<null_order> null_precedence{null_order::AFTER, null_order::AFTER, null_order::AFTER};
 
   // Sorted order
-  auto got = experimental::sorted_order(input, column_order, null_precedence);
+  auto got = sorted_order(input, column_order, null_precedence);
 
   if (!std::is_same<T, bool>::value) {
     expect_columns_equal(expected, got->view());
 
-    // Run test for experimental::sort and sort_by_key
+    // Run test for sort and sort_by_key
     run_sort_test(input, expected, column_order, null_precedence);
   } else {
     // for bools only validate that the null element landed at the back, since
@@ -90,7 +87,7 @@ TYPED_TEST(Sort, WithNullMax)
     thrust::host_vector<int32_t> h_got = to_host(got->view());
     EXPECT_EQ(h_exp[h_exp.size() - 1], h_got[h_got.size() - 1]);
 
-    // Run test for experimental::sort and sort_by_key
+    // Run test for sort and sort_by_key
     fixed_width_column_wrapper<int32_t> expected_for_bool{{0, 3, 5, 1, 4, 2}};
     run_sort_test(input, expected_for_bool, column_order, null_precedence);
   }
@@ -108,12 +105,12 @@ TYPED_TEST(Sort, WithNullMin)
   fixed_width_column_wrapper<int32_t> expected{{2, 1, 0, 3, 4}};
   std::vector<order> column_order{order::ASCENDING, order::ASCENDING, order::DESCENDING};
 
-  auto got = experimental::sorted_order(input, column_order);
+  auto got = sorted_order(input, column_order);
 
   if (!std::is_same<T, bool>::value) {
     cudf::test::expect_columns_equal(expected, got->view());
 
-    // Run test for experimental::sort and sort_by_key
+    // Run test for sort and sort_by_key
     run_sort_test(input, expected, column_order);
   } else {
     // for bools only validate that the null element landed at the front, since
@@ -128,7 +125,7 @@ TYPED_TEST(Sort, WithNullMin)
     thrust::host_vector<int32_t> h_got = to_host(got->view());
     EXPECT_EQ(h_exp.front(), h_got.front());
 
-    // Run test for experimental::sort and sort_by_key
+    // Run test for sort and sort_by_key
     fixed_width_column_wrapper<int32_t> expected_for_bool{{2, 0, 3, 1, 4}};
     run_sort_test(input, expected_for_bool, column_order);
   }
@@ -147,7 +144,7 @@ TYPED_TEST(Sort, WithMixedNullOrder)
   std::vector<order> column_order{order::ASCENDING, order::ASCENDING, order::ASCENDING};
   std::vector<null_order> null_precedence{null_order::AFTER, null_order::BEFORE, null_order::AFTER};
 
-  auto got = experimental::sorted_order(input, column_order, null_precedence);
+  auto got = sorted_order(input, column_order, null_precedence);
 
   if (!std::is_same<T, bool>::value) {
     cudf::test::expect_columns_equal(expected, got->view());
@@ -165,7 +162,7 @@ TYPED_TEST(Sort, WithMixedNullOrder)
     EXPECT_EQ(h_exp.front(), h_got.front());
   }
 
-  // Run test for experimental::sort and sort_by_key
+  // Run test for sort and sort_by_key
   run_sort_test(input, expected, column_order, null_precedence);
 }
 
@@ -181,17 +178,17 @@ TYPED_TEST(Sort, WithAllValid)
   fixed_width_column_wrapper<int32_t> expected{{2, 1, 0, 3, 4}};
   std::vector<order> column_order{order::ASCENDING, order::ASCENDING, order::DESCENDING};
 
-  auto got = experimental::sorted_order(input, column_order);
+  auto got = sorted_order(input, column_order);
 
   // Skip validating bools order. Valid true bools are all
   // equivalent, and yield random order after thrust::sort
   if (!std::is_same<T, bool>::value) {
     cudf::test::expect_columns_equal(expected, got->view());
 
-    // Run test for experimental::sort and sort_by_key
+    // Run test for sort and sort_by_key
     run_sort_test(input, expected, column_order);
   } else {
-    // Run test for experimental::sort and sort_by_key
+    // Run test for sort and sort_by_key
     fixed_width_column_wrapper<int32_t> expected_for_bool{{2, 0, 3, 1, 4}};
     run_sort_test(input, expected_for_bool, column_order);
   }
@@ -207,9 +204,9 @@ TYPED_TEST(Sort, Stable)
 
   fixed_width_column_wrapper<R> expected{{4, 3, 6, 1, 5, 7, 2, 0}};
 
-  auto got = experimental::stable_sorted_order(table_view({col1, col2}),
-                                               {order::ASCENDING, order::ASCENDING},
-                                               {null_order::AFTER, null_order::BEFORE});
+  auto got = stable_sorted_order(table_view({col1, col2}),
+                                 {order::ASCENDING, order::ASCENDING},
+                                 {null_order::AFTER, null_order::BEFORE});
 
   expect_columns_equal(expected, got->view());
 }
@@ -225,10 +222,10 @@ TYPED_TEST(Sort, MisMatchInColumnOrderSize)
 
   std::vector<order> column_order{order::ASCENDING, order::DESCENDING};
 
-  EXPECT_THROW(experimental::sorted_order(input, column_order), logic_error);
-  EXPECT_THROW(experimental::stable_sorted_order(input, column_order), logic_error);
-  EXPECT_THROW(experimental::sort(input, column_order), logic_error);
-  EXPECT_THROW(experimental::sort_by_key(input, input, column_order), logic_error);
+  EXPECT_THROW(sorted_order(input, column_order), logic_error);
+  EXPECT_THROW(stable_sorted_order(input, column_order), logic_error);
+  EXPECT_THROW(sort(input, column_order), logic_error);
+  EXPECT_THROW(sort_by_key(input, input, column_order), logic_error);
 }
 
 TYPED_TEST(Sort, MisMatchInNullPrecedenceSize)
@@ -243,11 +240,10 @@ TYPED_TEST(Sort, MisMatchInNullPrecedenceSize)
   std::vector<order> column_order{order::ASCENDING, order::DESCENDING, order::DESCENDING};
   std::vector<null_order> null_precedence{null_order::AFTER, null_order::BEFORE};
 
-  EXPECT_THROW(experimental::sorted_order(input, column_order, null_precedence), logic_error);
-  EXPECT_THROW(experimental::stable_sorted_order(input, column_order, null_precedence),
-               logic_error);
-  EXPECT_THROW(experimental::sort(input, column_order, null_precedence), logic_error);
-  EXPECT_THROW(experimental::sort_by_key(input, input, column_order, null_precedence), logic_error);
+  EXPECT_THROW(sorted_order(input, column_order, null_precedence), logic_error);
+  EXPECT_THROW(stable_sorted_order(input, column_order, null_precedence), logic_error);
+  EXPECT_THROW(sort(input, column_order, null_precedence), logic_error);
+  EXPECT_THROW(sort_by_key(input, input, column_order, null_precedence), logic_error);
 }
 
 TYPED_TEST(Sort, ZeroSizedColumns)
@@ -260,11 +256,11 @@ TYPED_TEST(Sort, ZeroSizedColumns)
   fixed_width_column_wrapper<int32_t> expected{};
   std::vector<order> column_order{order::ASCENDING};
 
-  auto got = experimental::sorted_order(input, column_order);
+  auto got = sorted_order(input, column_order);
 
   expect_columns_equal(expected, got->view());
 
-  // Run test for experimental::sort and sort_by_key
+  // Run test for sort and sort_by_key
   run_sort_test(input, expected, column_order);
 }
 
@@ -283,7 +279,7 @@ TEST_F(SortByKey, ValueKeysSizeMismatch)
   fixed_width_column_wrapper<T> key_col{{5, 4, 3, 5}};
   table_view keys{{key_col}};
 
-  EXPECT_THROW(experimental::sort_by_key(values, keys), logic_error);
+  EXPECT_THROW(sort_by_key(values, keys), logic_error);
 }
 
 }  // namespace test

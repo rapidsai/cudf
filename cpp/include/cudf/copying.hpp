@@ -25,9 +25,16 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
+
+/**
+ * @addtogroup column_copy
+ * @{
+ */
+
 /**
  * @brief Gathers the specified rows (including null values) of a set of columns.
+ *
+ * @ingroup copy_gather
  *
  * Gathers the rows of the source columns according to `gather_map` such that row "i"
  * in the resulting table's columns will contain row "gather_map[i]" from the source columns.
@@ -40,7 +47,7 @@ namespace experimental {
  * For dictionary columns, the keys column component is copied and not trimmed
  * if the gather results in abandoned key elements.
  *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * @throws cudf::logic_error if `check_bounds == true` and an index exists in
  * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
  * the source table. If `check_bounds == false`, the behavior is undefined.
  *
@@ -62,6 +69,8 @@ std::unique_ptr<table> gather(
  * @brief Scatters the rows of the source table into a copy of the target table
  * according to a scatter map.
  *
+ * @ingroup copy_scatter
+ *
  * Scatters values from the source table into the target table out-of-place,
  * returning a "destination table". The scatter is performed according to a
  * scatter map such that row `scatter_map[i]` of the destination table gets row
@@ -77,7 +86,7 @@ std::unique_ptr<table> gather(
  * A negative value `i` in the `scatter_map` is interpreted as `i+n`, where `n`
  * is the number of rows in the `target` table.
  *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * @throws cudf::logic_error if `check_bounds == true` and an index exists in
  * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
  * the target table. If `check_bounds == false`, the behavior is undefined.
  *
@@ -104,6 +113,8 @@ std::unique_ptr<table> scatter(
  * @brief Scatters a row of scalar values into a copy of the target table
  * according to a scatter map.
  *
+ * @ingroup copy_scatter
+ *
  * Scatters values from the source row into the target table out-of-place,
  * returning a "destination table". The scatter is performed according to a
  * scatter map such that row `scatter_map[i]` of the destination table is
@@ -116,7 +127,7 @@ std::unique_ptr<table> scatter(
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
  *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * @throws cudf::logic_error if `check_bounds == true` and an index exists in
  * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
  * the target table. If `check_bounds == false`, the behavior is undefined.
  *
@@ -178,8 +189,8 @@ std::unique_ptr<column> allocate_like(
  * @param[in] size The desired number of elements that the new column should have capacity for
  * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
  * @param[in] mr Optional, The resource to use for all allocations
- * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the
- * specified number of elements as `input` of the same type as `input.type()`
+ * @return A column with sufficient uninitialized capacity to hold the specified number of elements
+ * as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(
   column_view const& input,
@@ -212,14 +223,15 @@ std::unique_ptr<table> empty_like(table_view const& input_table);
  * If @p source and @p target refer to the same elements and the ranges overlap,
  * the behavior is undefined.
  *
- * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
+ * @throws cudf::logic_error if memory reallocation is required (e.g. for
  * variable width types).
- * @throws `cudf::logic_error` for invalid range (if
+ * @throws cudf::logic_error for invalid range (if
  * @p source_begin > @p source_end, @p source_begin < 0,
- * @p source_end > @p source.size(), @p target_begin < 0,
- * or @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
- * @throws `cudf::logic_error` if @p target and @p source have different types.
- * @throws `cudf::logic_error` if @p source has null values and @p target is not
+ * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
+ * @p target_begin < 0, target_begin >= @p target.size(), or
+ * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
+ * @throws cudf::logic_error if @p target and @p source have different types.
+ * @throws cudf::logic_error if @p source has null values and @p target is not
  * nullable.
  *
  * @param source The column to copy from
@@ -228,7 +240,6 @@ std::unique_ptr<table> empty_like(table_view const& input_table);
  * @param source_end The index of the last element in the source range
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
- * @return void
  */
 void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
@@ -249,11 +260,12 @@ void copy_range_in_place(column_view const& source,
  * If @p source and @p target refer to the same elements and the ranges overlap,
  * the behavior is undefined.
  *
- * @throws `cudf::logic_error` for invalid range (if
+ * @throws cudf::logic_error for invalid range (if
  * @p source_begin > @p source_end, @p source_begin < 0,
- * @p source_end > @p source.size(), @p target_begin < 0,
- * or @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
- * @throws `cudf::logic_error` if @p target and @p source have different types.
+ * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
+ * @p target_begin < 0, target_begin >= @p target.size(), or
+ * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
+ * @throws cudf::logic_error if @p target and @p source have different types.
  *
  * @param source The column to copy from inside the range.
  * @param target The column to copy from outside the range.
@@ -274,6 +286,9 @@ std::unique_ptr<column> copy_range(
 
 /**
  * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.
+ *
+ * @ingroup copy_slice
+ *
  * The returned views of `input` are constructed from an even number indices where
  * the `i`th returned `column_view` views the elements in `input` indicated by the range
  * `[indices[2*i], indices[(2*i)+1])`.
@@ -290,9 +305,9 @@ std::unique_ptr<column> copy_range(
  * output:  {{12, 14}, {20, 22, 24, 26}, {14, 16}, {}}
  * @endcode
  *
- * @throws `cudf::logic_error` if `indices` size is not even.
- * @throws `cudf::logic_error` When the values in the pair are strictly decreasing.
- * @throws `cudf::logic_error` When any of the values in the pair don't belong to
+ * @throws cudf::logic_error if `indices` size is not even.
+ * @throws cudf::logic_error When the values in the pair are strictly decreasing.
+ * @throws cudf::logic_error When any of the values in the pair don't belong to
  * the range [0, input.size()).
  *
  * @param input View of column to slice
@@ -303,6 +318,8 @@ std::vector<column_view> slice(column_view const& input, std::vector<size_type> 
 
 /**
  * @brief Slices a `table_view` into a set of `table_view`s according to a set of indices.
+ *
+ * @ingroup copy_slice
  *
  * The returned views of `input` are constructed from an even number indices where
  * the `i`th returned `table_view` views the elements in `input` indicated by the range
@@ -322,9 +339,9 @@ std::vector<column_view> slice(column_view const& input, std::vector<size_type> 
  *           {{52, 54}, {60, 22, 24, 26}, {14, 16}, {}}]
  * @endcode
  *
- * @throws `cudf::logic_error` if `indices` size is not even.
- * @throws `cudf::logic_error` When the values in the pair are strictly decreasing.
- * @throws `cudf::logic_error` When any of the values in the pair don't belong to
+ * @throws cudf::logic_error if `indices` size is not even.
+ * @throws cudf::logic_error When the values in the pair are strictly decreasing.
+ * @throws cudf::logic_error When any of the values in the pair don't belong to
  * the range [0, input.size()).
  *
  * @param input View of table to slice
@@ -336,6 +353,8 @@ std::vector<table_view> slice(table_view const& input, std::vector<size_type> co
 /**
  * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
  * derived from expected splits.
+ *
+ * @ingroup copy_split
  *
  * The returned view's of `input` are constructed from vector of splits, which indicates
  * where the split should occur. The `i`th returned `column_view` is sliced as
@@ -355,9 +374,9 @@ std::vector<table_view> slice(table_view const& input, std::vector<size_type> co
  * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
  * @endcode
  *
- * @throws `cudf::logic_error` if `splits` has end index > size of `input`.
- * @throws `cudf::logic_error` When the value in `splits` is not in the range [0, input.size()).
- * @throws `cudf::logic_error` When the values in the `splits` are 'strictly decreasing'.
+ * @throws cudf::logic_error if `splits` has end index > size of `input`.
+ * @throws cudf::logic_error When the value in `splits` is not in the range [0, input.size()).
+ * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of column to split
  * @param splits A vector of indices where the view will be split
@@ -368,6 +387,8 @@ std::vector<column_view> split(column_view const& input, std::vector<size_type> 
 /**
  * @brief Splits a `table_view` into a set of `table_view`s according to a set of indices
  * derived from expected splits.
+ *
+ * @ingroup copy_split
  *
  * The returned views of `input` are constructed from vector of splits, which indicates
  * where the split should occur. The `i`th returned `table_view` is sliced as
@@ -389,9 +410,9 @@ std::vector<column_view> split(column_view const& input, std::vector<size_type> 
  *           {{50, 52}, {54, 56, 58}, {60, 62, 64, 66}, {68}}]
  * @endcode
  *
- * @throws `cudf::logic_error` if `splits` has end index > size of `input`.
- * @throws `cudf::logic_error` When the value in `splits` is not in the range [0, input.size()).
- * @throws `cudf::logic_error` When the values in the `splits` are 'strictly decreasing'.
+ * @throws cudf::logic_error if `splits` has end index > size of `input`.
+ * @throws cudf::logic_error When the value in `splits` is not in the range [0, input.size()).
+ * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of a table to split
  * @param splits A vector of indices where the view will be split
@@ -401,6 +422,8 @@ std::vector<table_view> split(table_view const& input, std::vector<size_type> co
 
 /**
  * @brief The result(s) of a `contiguous_split`
+ *
+ * @ingroup copy_split
  *
  * Each table_view resulting from a split operation performed by contiguous_split,
  * will be returned wrapped in a `contiguous_split_result`.  The table_view and internal
@@ -419,6 +442,8 @@ struct contiguous_split_result {
 /**
  * @brief Performs a deep-copy split of a `table_view` into a set of `table_view`s into a single
  * contiguous block of memory.
+ *
+ * @ingroup copy_split
  *
  * The memory for the output views is allocated in a single contiguous `rmm::device_buffer` returned
  * in the `contiguous_split_result`. There is no top-level owning table.
@@ -445,9 +470,9 @@ struct contiguous_split_result {
  * @endcode
  *
  *
- * @throws `cudf::logic_error` if `splits` has end index > size of `input`.
- * @throws `cudf::logic_error` When the value in `splits` is not in the range [0, input.size()).
- * @throws `cudf::logic_error` When the values in the `splits` are 'strictly decreasing'.
+ * @throws cudf::logic_error if `splits` has end index > size of `input`.
+ * @throws cudf::logic_error When the value in `splits` is not in the range [0, input.size()).
+ * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of a table to split
  * @param splits A vector of indices where the view will be split
@@ -472,10 +497,10 @@ std::vector<contiguous_split_result> contiguous_split(
  * @throws cudf::logic_error if lhs and rhs are not of the same length
  * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs
- * @param[in] left-hand column_view
- * @param[in] right-hand column_view
- * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element
- * and null element represents false.
+ * @param[in] lhs left-hand column_view
+ * @param[in] rhs right-hand column_view
+ * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
+ * each element. Null element represents false.
  * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements
@@ -488,6 +513,8 @@ std::unique_ptr<column> copy_if_else(
 
 /**
  * @brief Creates a new column by shifting all values by an offset.
+ *
+ * @ingroup copy_shift
  *
  * Elements will be determined by `output[idx] = input[idx - offset]`.
  * Some elements in the output may be indeterminable from the input. For those
@@ -533,10 +560,10 @@ std::unique_ptr<column> shift(column_view const& input,
  * @throws cudf::logic_error if lhs and rhs are not of the same type
  * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as rhs
- * @param[in] left-hand scalar
- * @param[in] right-hand column_view
- * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element
- * and null element represents false.
+ * @param[in] lhs left-hand scalar
+ * @param[in] rhs right-hand column_view
+ * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
+ * each element. Null element represents false.
  * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements
@@ -557,10 +584,10 @@ std::unique_ptr<column> copy_if_else(
  * @throws cudf::logic_error if lhs and rhs are not of the same type
  * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs
- * @param[in] left-hand column_view
- * @param[in] right-hand scalar
- * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element
- * and null element represents false.
+ * @param[in] lhs left-hand column_view
+ * @param[in] rhs right-hand scalar
+ * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
+ * each element. Null element represents false.
  * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements
@@ -579,10 +606,10 @@ std::unique_ptr<column> copy_if_else(
  * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs : rhs`
  *
  * @throws cudf::logic_error if boolean mask is not of type bool
- * @param[in] left-hand scalar
- * @param[in] right-hand scalar
- * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element
- * and null element represents false.
+ * @param[in] lhs left-hand scalar
+ * @param[in] rhs right-hand scalar
+ * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
+ * each element. null element represents false.
  * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements
@@ -596,6 +623,8 @@ std::unique_ptr<column> copy_if_else(
 /**
  * @brief Scatters rows from the input table to rows of the output corresponding
  * to true values in a boolean mask.
+ *
+ * @ingroup copy_scatter
  *
  * The `i`th row of `input` will be written to the output table at the location
  * of the `i`th true value in `boolean_mask`. All other rows in the output will
@@ -636,6 +665,8 @@ std::unique_ptr<table> boolean_mask_scatter(
 /**
  * @brief Scatters scalar values to rows of the output corresponding
  * to true values in a boolean mask.
+ *
+ * @ingroup copy_scatter
  *
  * The `i`th scalar in `input` will be written to all columns of the output
  * table at the location of the `i`th true value in `boolean_mask`.
@@ -686,5 +717,5 @@ std::unique_ptr<scalar> get_element(
   size_type index,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-}  // namespace experimental
+/** @} */
 }  // namespace cudf

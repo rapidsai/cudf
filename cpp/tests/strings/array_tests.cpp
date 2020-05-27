@@ -151,7 +151,7 @@ TEST_F(StringsColumnTest, Gather)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map{{4, 1}};
-  auto results = cudf::experimental::gather(cudf::table_view{{strings}}, gather_map)->release();
+  auto results = cudf::gather(cudf::table_view{{strings}}, gather_map)->release();
 
   std::vector<const char*> h_expected{"aa", "bb"};
   cudf::test::strings_column_wrapper expected(
@@ -165,8 +165,7 @@ TEST_F(StringsColumnTest, GatherZeroSizeStringsColumn)
 {
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   cudf::column_view map_view(cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
-  auto results =
-    cudf::experimental::gather(cudf::table_view{{zero_size_strings_column}}, map_view)->release();
+  auto results = cudf::gather(cudf::table_view{{zero_size_strings_column}}, map_view)->release();
   cudf::test::expect_strings_empty(results.front()->view());
 }
 
