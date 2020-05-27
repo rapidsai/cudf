@@ -287,8 +287,8 @@ class CategoricalAccessor(object):
             old_categories.dtype == "object"
             and new_categories.dtype != "object"
         ) or (
-            old_categories.dtype != "object"
-            and new_categories.dtype == "object"
+            new_categories.dtype == "object"
+            and old_categories.dtype != "object"
         ):
             raise TypeError(
                 "cudf does not support mixed types, please type-cast \
