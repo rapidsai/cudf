@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #5292 Add unsigned int type columns to libcudf
+
 ## Improvements
 
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
