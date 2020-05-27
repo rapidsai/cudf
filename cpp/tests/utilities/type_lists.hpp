@@ -69,6 +69,7 @@ auto make_type_param_vector(std::initializer_list<T> const& init_list)
 {
   std::vector<TypeParam> vec(init_list.size());
   std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
+    if (std::is_unsigned<TypeParam>::value) return static_cast<T>(std::abs(e));
     return static_cast<T>(e);
   });
   return vec;
