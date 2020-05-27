@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
+import pickle
 import warnings
 from distutils.version import LooseVersion
 
@@ -21,6 +22,7 @@ from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
 import cudf
 import cudf._lib as libcudf
+from cudf.core.abc import Serializable
 
 from dask_cudf import sorting
 
@@ -48,7 +50,7 @@ def finalize(results):
     return results
 
 
-class _Frame(dd.core._Frame, OperatorMethodMixin):
+class _Frame(dd.core._Frame, OperatorMethodMixin, Serializable):
     """ Superclass for DataFrame and Series
 
     Parameters
@@ -90,11 +92,30 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         self._meta = meta
         self.divisions = tuple(divisions)
 
-    def __getstate__(self):
-        return (self.dask, self._name, self._meta, self.divisions)
+    def serialize(self):
+        meta_header, meta_frames = self._meta.serialize()
+        header = {
+            "dask": pickle.dumps(self.dask),
+            "name": self._name,
+            "meta": {
+                "type": pickle.dumps(type(self._meta)),
+                "header": meta_header,
+            },
+            "divisions": self.divisions,
+        }
+        frames = meta_frames
+        return header, frames
 
-    def __setstate__(self, state):
-        self.dask, self._name, self._meta, self.divisions = state
+    @classmethod
+    def deserialize(cls, header, frames):
+        dsk = pickle.loads(header["dask"])
+        name = header["name"]
+        divisions = header["divisions"]
+        meta_type = pickle.loads(header["meta"]["type"])
+        meta_header = header["meta"]["header"]
+        meta_frames = frames
+        meta = meta_type.deserialize(meta_header, meta_frames)
+        return cls(dsk=dsk, name=name, meta=meta, divisions=divisions)
 
     def __repr__(self):
         s = "<dask_cudf.%s | %d tasks | %d npartitions>"
