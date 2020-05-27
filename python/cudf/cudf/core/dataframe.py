@@ -2397,18 +2397,18 @@ class DataFrame(Frame, Serializable):
         # Compute merge
         gdf_result = super(DataFrame, lhs)._merge(
             rhs,
-            on,
-            left_on,
-            right_on,
-            left_index,
-            right_index,
-            how,
-            sort,
-            lsuffix,
-            rsuffix,
-            method,
-            indicator,
-            suffixes,
+            on=on,
+            left_on=left_on,
+            right_on=right_on,
+            left_index=left_index,
+            right_index=right_index,
+            how=how,
+            sort=sort,
+            lsuffix=lsuffix,
+            rsuffix=rsuffix,
+            method=method,
+            indicator=indicator,
+            suffixes=suffixes,
         )
         return gdf_result
 
@@ -2456,19 +2456,6 @@ class DataFrame(Frame, Serializable):
                 DeprecationWarning,
             )
             method = type
-
-        if how == "right":
-            # libgdf doesn't support right join directly, we will swap the
-            # dfs and use left join
-            return other.join(
-                self,
-                other,
-                how="left",
-                lsuffix=rsuffix,
-                rsuffix=lsuffix,
-                sort=sort,
-                method="hash",
-            )
 
         lhs = self
         rhs = other

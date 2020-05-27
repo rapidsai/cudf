@@ -1466,19 +1466,36 @@ class Frame(libcudf.table.Table):
     def _merge(
         self,
         right,
-        on,
-        left_on,
-        right_on,
-        left_index,
-        right_index,
-        how,
-        sort,
-        lsuffix,
-        rsuffix,
-        method,
-        indicator,
-        suffixes,
+        on=None,
+        left_on=None,
+        right_on=None,
+        left_index=False,
+        right_index=False,
+        how="inner",
+        sort=False,
+        lsuffix=None,
+        rsuffix=None,
+        method="hash",
+        indicator=False,
+        suffixes=("_x", "_y"),
     ):
+        # Merge doesn't support right, so just swap
+        if how == "right":
+            return right._merge(
+                self,
+                on=on,
+                left_on=right_on,
+                right_on=left_on,
+                left_index=right_index,
+                right_index=left_index,
+                how="left",
+                sort=sort,
+                lsuffix=rsuffix,
+                rsuffix=lsuffix,
+                method=method,
+                indicator=indicator,
+                suffixes=suffixes,
+            )
 
         lhs = self
         rhs = right

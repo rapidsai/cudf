@@ -353,51 +353,43 @@ class Index(Frame, Serializable):
         if level is not None and not is_scalar(level):
             raise ValueError("level should be an int or a label only")
 
-        # `_merge` doesn't support `right`
-        if how == "right":
-            how = "left"
-            lhs = other.copy(deep=False)
+        if isinstance(other, cudf.MultiIndex):
+            if how == "left":
+                how = "right"
+            elif how == "right":
+                how = "left"
             rhs = self.copy(deep=False)
+            lhs = other.copy(deep=False)
         else:
             lhs = self.copy(deep=False)
             rhs = other.copy(deep=False)
 
         on = level
+        # In case of MultiIndex, it will be None as
+        # we don't need to update name
         left_name = lhs.name
         right_name = rhs.name
-        # There should be no None values in Joined indices,
-        # so essentially it would be `left` or 'inner'
+        # There should be no `None` values in Joined indices,
+        # so essentially it would be `left/right` or 'inner'
+        # in case of MultiIndex
         if isinstance(lhs, cudf.MultiIndex):
             if level is not None and isinstance(level, int):
                 on = lhs._data.get_by_index(level).names[0]
             right_name = on or right_name
             on = right_name
-            how = "left" if how == "outer" else how
-
-        elif isinstance(rhs, cudf.MultiIndex):
-            if level is not None and isinstance(level, int):
-                on = rhs._data.get_by_index(level).names[0]
-            left_name = on or left_name
-            on = left_name
-            if how == "left":
-                how = "inner"
-            elif how == "outer":
+            if how == "outer":
                 how = "left"
-
-            lhs, rhs = rhs, lhs
-            left_name, right_name = right_name, left_name
+            elif how == "right":
+                how = "inner"
         else:
             # Both are nomal indices
             right_name = left_name
             on = right_name
 
-        def _set_categories(col, cats):
-            return col.cat()._set_categories(cats, is_unique=True).fillna(-1)
-
         lhs = lhs.to_frame(index=False, name=left_name)
         rhs = rhs.to_frame(index=False, name=right_name)
 
-        output = lhs.merge(rhs, how=how, on=on, sort=sort)
+        output = lhs._merge(rhs, how=how, on=on, sort=sort)
 
         return output.set_index(list(output._data.names)).index
 
