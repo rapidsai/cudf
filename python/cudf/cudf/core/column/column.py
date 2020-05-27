@@ -1168,8 +1168,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     * pyarrow array
     * pandas.Categorical objects
     """
-    import nvstrings
-
     if isinstance(arbitrary, ColumnBase):
         if dtype is not None:
             return arbitrary.astype(dtype)
@@ -1185,7 +1183,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if dtype is not None:
             data = data.astype(dtype)
     # TODO: Remove nvstrings here when nvstrings is fully removed
-    elif isinstance(arbitrary, nvstrings.nvstrings):
+    elif type(arbitrary).__name__ == "nvstrings":
         byte_count = arbitrary.byte_count()
         if byte_count > libcudf.MAX_STRING_COLUMN_BYTES:
             raise MemoryError(
