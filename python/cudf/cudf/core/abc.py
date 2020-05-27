@@ -4,8 +4,6 @@ import abc
 import pickle
 from abc import abstractmethod
 
-import numpy
-
 import rmm
 
 import cudf
@@ -42,21 +40,16 @@ class Serializable(abc.ABC):
 
     def host_serialize(self):
         header, frames = self.device_serialize()
-        frames = [f.to_host_array().view("u1").data for f in frames]
+        frames = [f.to_host_array().data for f in frames]
         return header, frames
 
     @classmethod
     def host_deserialize(cls, header, frames):
-        frames = [
-            rmm.DeviceBuffer.to_device(memoryview(f).cast("B")) for f in frames
-        ]
+        frames = [rmm.DeviceBuffer.to_device(memoryview(f)) for f in frames]
         obj = cls.device_deserialize(header, frames)
         return obj
 
     def __reduce_ex__(self, protocol):
         header, frames = self.host_serialize()
-        if protocol >= 5:
-            frames = [pickle.PickleBuffer(f) for f in frames]
-        else:
-            frames = [numpy.asarray(f) for f in frames]
+        frames = [f.obj for f in frames]
         return self.host_deserialize, (header, frames)
