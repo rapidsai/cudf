@@ -1,6 +1,6 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-20, NVIDIA CORPORATION.
 
-from io import BytesIO, IOBase, StringIO
+from io import BytesIO, StringIO
 
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
@@ -124,12 +124,9 @@ def to_csv(
 
     rows_per_chunk = chunksize if chunksize else len(df)
 
-    if isinstance(path, IOBase):
-        path = path.name
-
     return libcudf.csv.write_csv(
         df,
-        file_path=path,
+        path_or_buf=path,
         sep=sep,
         na_rep=na_rep,
         header=header,
