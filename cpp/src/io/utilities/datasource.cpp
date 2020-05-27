@@ -205,7 +205,7 @@ class user_datasource_wrapper : public datasource {
   size_t size() const override { return source->size(); }
 
  private:
-  datasource *const source;
+  datasource *const source;  ///< A non-owning pointer to the user-implemented datasource
 };
 
 std::unique_ptr<datasource> datasource::create(const std::string &filepath,
