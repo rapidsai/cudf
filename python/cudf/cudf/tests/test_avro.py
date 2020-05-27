@@ -58,13 +58,12 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
             print(type(excpr).__name__)
 
     expect = pd.DataFrame.from_records(reader)
-    got = cudf.read_avro(path, engine=engine, columns=columns).to_pandas()
+    got = cudf.read_avro(path, engine=engine, columns=columns)
 
     # PANDAS uses NaN to represent invalid data, which forces float dtype
     # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
     # FASTAVRO produces int64 columns from avro int32 dtype, so convert
     # it back to int32 here
-    
     for col in expect.columns:
         expect[col] = expect[col].astype(got[col].dtype)
 
