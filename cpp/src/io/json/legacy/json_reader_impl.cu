@@ -123,7 +123,7 @@ void reader::Impl::ingestRawInput(size_t range_offset, size_t range_size)
     source_ = datasource::create(filepath_, range_offset, map_range_size);
   }
 
-  if (!source_->empty()) {
+  if (!source_->is_empty()) {
     auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
     buffer_        = source_->host_read(range_offset, data_size);
   }

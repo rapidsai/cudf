@@ -204,10 +204,10 @@ table reader::Impl::read(size_t range_offset,
   }
 
   // Return an empty dataframe if no data and no column metadata to process
-  if (source_->empty() && (args_.names.empty() || args_.dtype.empty())) { return cudf::table{}; }
+  if (source_->is_empty() && (args_.names.empty() || args_.dtype.empty())) { return cudf::table{}; }
 
   // Transfer source data to GPU
-  if (!source_->empty()) {
+  if (!source_->is_empty()) {
     const char *h_uncomp_data = nullptr;
     size_t h_uncomp_size      = 0;
 
