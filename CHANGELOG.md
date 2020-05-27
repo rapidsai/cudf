@@ -10,9 +10,11 @@
 
 ## Bug Fixes
 
+- PR #5283 Fix strings::ipv4_to_integers overflow to negative
 - PR #5269 Explicitly require NumPy
 - PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
 - PR #5299 Update package version for Java bindings
+
 
 
 # cuDF 0.14.0 (Date TBD)
