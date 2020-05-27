@@ -222,7 +222,10 @@ class ColumnBase(Column, Serializable):
                 ._column
             )
             objs = [
-                o.cat()._set_categories(cats, is_unique=True) for o in objs
+                o.cat()._set_categories(
+                    o.cat().categories, cats, is_unique=True
+                )
+                for o in objs
             ]
             # Map `objs` into a list of the codes until we port Categorical to
             # use the libcudf++ Category data type.
