@@ -10,6 +10,8 @@
 
 ## Bug Fixes
 
+- PR #5269 Explicitly require NumPy
+
 # cuDF 0.14.0 (Date TBD)
 
 ## New Features
