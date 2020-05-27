@@ -79,26 +79,8 @@ struct gather_bitmask_functor {
     auto col     = input.column(mask_idx);
 
     if (Op != gather_bitmask_op::DONT_CHECK) {
-      // bool out_of_range =
-      //  (row_idx >= col.size()) || (is_signed_itr<MapIterator>() && (row_idx < 0));
-      // bool out_of_range =
-      //  (row_idx >= col.size()) ||
-      //  (std::is_signed<typename std::iterator_traits<MapIterator>::value_type>::value &&
-      //   (row_idx < 0));
-      bool out_of_range =
-        is_signed_itr<MapIterator>()  // std::is_signed<typename
-                                      // std::iterator_traits<MapIterator>::value_type>::value
-          ? (row_idx < 0 || row_idx >= col.size())
-          : row_idx >= col.size();
-
-      // bool out_of_range =
-      //  row_idx >= col.size() || (std::is_signed<decltype(row_idx)>::value && (row_idx < 0));
-      // if (out_of_range != (row_idx < 0 || row_idx >= col.size()))
-      //  printf("row_idx=%d,size=%d,is_signed=%d\n",
-      //         (int)row_idx,
-      //         col.size(),
-      //         (int)std::is_signed<decltype(row_idx)>::value);
-      // if (row_idx < 0 || row_idx >= col.size()) {
+      bool out_of_range = is_signed_itr<MapIterator>() ? (row_idx < 0 || row_idx >= col.size())
+                                                       : row_idx >= col.size();
       if (out_of_range) {
         if (Op == gather_bitmask_op::PASSTHROUGH) {
           return bit_is_set(masks[mask_idx], bit_idx);
