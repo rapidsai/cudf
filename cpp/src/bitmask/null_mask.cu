@@ -129,7 +129,7 @@ void set_null_mask(
   if (bitmask != nullptr) {
     auto number_of_mask_words =
       num_bitmask_words(end_bit) - begin_bit / detail::size_in_bits<bitmask_type>();
-    cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
+    cudf::detail::grid_1d config(number_of_mask_words, 256);
     set_null_mask_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
       static_cast<bitmask_type *>(bitmask), begin_bit, end_bit, valid, number_of_mask_words);
     CHECK_CUDA(stream);
@@ -137,7 +137,8 @@ void set_null_mask(
 }
 
 namespace {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Counts the number of non-zero bits in a bitmask in the range
  * `[first_bit_index, last_bit_index]`.
  *
@@ -147,7 +148,7 @@ namespace {
  * @param[in] first_bit_index The index (inclusive) of the first bit to count
  * @param[in] last_bit_index The index (inclusive) of the last bit to count
  * @param[out] global_count The number of non-zero bits in the specified range
- *---------------------------------------------------------------------------**/
+ **/
 template <size_type block_size>
 __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
                                       size_type first_bit_index,
@@ -283,7 +284,7 @@ __global__ void subtract_set_bits_range_boundaries_kerenel(bitmask_type const *b
   }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Copies the bits starting at the specified offset from a source
  * bitmask into the destination bitmask.
  *
@@ -294,7 +295,7 @@ __global__ void subtract_set_bits_range_boundaries_kerenel(bitmask_type const *b
  * @param source_begin_bit The offset into `source` from which to begin the copy
  * @param source_end_bit   The offset into `source` till which copying is done
  * @param number_of_mask_words The number of `cudf::bitmask_type` words to copy
- *---------------------------------------------------------------------------**/
+ **/
 // TODO: Also make binops test that uses offset in column_view
 __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
                                     bitmask_type const *__restrict__ source,
@@ -364,7 +365,7 @@ rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
   rmm::device_vector<bitmask_type const *> d_masks(masks);
   rmm::device_vector<size_type> d_begin_bits(begin_bits);
 
-  cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
+  cudf::detail::grid_1d config(number_of_mask_words, 256);
   offset_bitmask_and<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
     static_cast<bitmask_type *>(dest_mask.data()),
     d_masks.data().get(),
@@ -424,7 +425,7 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask,
 
   constexpr size_type block_size{256};
 
-  cudf::experimental::detail::grid_1d grid(num_words, block_size);
+  cudf::detail::grid_1d grid(num_words, block_size);
 
   rmm::device_scalar<size_type> non_zero_count(0, stream);
 
@@ -522,12 +523,12 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
 
   CHECK_CUDA(stream);
 
-  // third adjust counts in segement boundaries (if segments are not
+  // third, adjust counts in segment boundaries (if segments are not
   // word-aligned)
 
   constexpr size_type block_size{256};
 
-  cudf::experimental::detail::grid_1d grid(num_ranges, block_size);
+  cudf::detail::grid_1d grid(num_ranges, block_size);
 
   subtract_set_bits_range_boundaries_kerenel<<<grid.num_blocks,
                                                grid.num_threads_per_block,
@@ -619,7 +620,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask,
   } else {
     auto number_of_mask_words = num_bitmask_words(end_bit - begin_bit);
     dest_mask                 = rmm::device_buffer{num_bytes, stream, mr};
-    cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
+    cudf::detail::grid_1d config(number_of_mask_words, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
       static_cast<bitmask_type *>(dest_mask.data()),
       mask,

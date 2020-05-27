@@ -41,7 +41,7 @@ def test_porter_stemmer_measure_with_arguments():
 
 def test_porter_stemmer_measure_value_error():
     strs = ["test"]
-    # Raise Value Error is not a instance of nvstrings class
+    # Raise Value Error is not an instance of nvstrings class
     with pytest.raises(ValueError):
         nvtext.porter_stemmer_measure(strs)
 

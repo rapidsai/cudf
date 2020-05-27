@@ -21,6 +21,11 @@
 namespace cudf {
 namespace strings {
 /**
+ * @addtogroup strings_convert
+ * @{
+ */
+
+/**
  * @brief Returns a new integer numeric column parsing integer values from the
  * provided strings column.
  *
@@ -95,5 +100,6 @@ std::unique_ptr<column> hex_to_integers(
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

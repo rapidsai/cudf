@@ -8,7 +8,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.
@@ -21,7 +20,7 @@ namespace detail {
  * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
  * `n` is the number of rows in the `source_table`.
  *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * @throws cudf::logic_error if `check_bounds == true` and an index exists in
  * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
  * the source table. If `check_bounds == false`, the behavior is undefined.
  *
@@ -47,5 +46,4 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream                 = 0);
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

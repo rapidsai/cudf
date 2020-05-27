@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ struct DeviceCount {
   template <typename T>
   static constexpr T identity()
   {
-    return T{0};
+    return T{};
   }
 };
 
@@ -103,10 +103,14 @@ struct DeviceMin {
   // @brief identity specialized for string_view
   template <typename T,
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  static constexpr T identity()
+  CUDA_HOST_DEVICE_CALLABLE static constexpr T identity()
   {
     const char* psentinel{nullptr};
+#if defined(__CUDA_ARCH__)
+    psentinel = &max_string_sentinel[0];
+#else
     CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel));
+#endif
     return T(psentinel, 4);
   }
 };
@@ -127,10 +131,14 @@ struct DeviceMax {
   }
   template <typename T,
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  static constexpr T identity()
+  CUDA_HOST_DEVICE_CALLABLE static constexpr T identity()
   {
     const char* psentinel{nullptr};
+#if defined(__CUDA_ARCH__)
+    psentinel = &max_string_sentinel[0];
+#else
     CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel));
+#endif
     return T(psentinel, 0);
   }
 };

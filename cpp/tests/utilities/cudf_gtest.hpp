@@ -20,7 +20,7 @@
 #error "Don't include gtest/gtest.h directly, include cudf_gtest.hpp instead"
 #endif
 
-/**---------------------------------------------------------------------------*
+/**
  * @file GTest.hpp
  * @brief Work around for GTests emulation of variadic templates in
  * ::Testing::Types.
@@ -32,7 +32,7 @@
  *
  * Uses macros to rename GTests's emulated variadic template types and then
  * redefines them properly.
- *---------------------------------------------------------------------------**/
+ **/
 
 #define Types Types_NOT_USED
 #define Types0 Types0_NOT_USED
@@ -93,6 +93,9 @@ struct TypeList<Types<TYPES...>> {
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#define ASSERT_CUDA_SUCCEEDED(expr) ASSERT_EQ(cudaSuccess, expr)
+#define EXPECT_CUDA_SUCCEEDED(expr) EXPECT_EQ(cudaSuccess, expr)
+
 // Utility for testing the expectation that an expression x throws the specified
 // exception whose what() message ends with the msg
 #define EXPECT_THROW_MESSAGE(x, exception, startswith, endswith)    \
@@ -116,3 +119,17 @@ struct TypeList<Types<TYPES...>> {
 
 #define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
   EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)
+
+/**
+ * @brief test macro to be expected as no exception.
+ * The testing is same with EXPECT_NO_THROW() in gtest.
+ * It also outputs captured error message, useful for debugging.
+ *
+ * @param statement The statement to be tested
+ */
+#define CUDF_EXPECT_NO_THROW(statement)                                                       \
+  try {                                                                                       \
+    statement;                                                                                \
+  } catch (std::exception & e) {                                                              \
+    FAIL() << "statement:" << #statement << std::endl << "reason: " << e.what() << std::endl; \
+  }

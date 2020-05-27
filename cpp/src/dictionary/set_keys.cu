@@ -39,19 +39,20 @@ namespace {
  */
 struct dispatch_compute_indices {
   template <typename Element>
-  std::unique_ptr<column> operator()(dictionary_column_view const& input,
-                                     column_view const& new_keys,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+  typename std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(),
+                            std::unique_ptr<column>>
+  operator()(dictionary_column_view const& input,
+             column_view const& new_keys,
+             rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream)
   {
     auto dictionary_view = column_device_view::create(input.parent(), stream);
     auto d_dictionary    = *dictionary_view;
     auto dictionary_itr  = thrust::make_transform_iterator(
       thrust::make_counting_iterator<size_type>(0), [d_dictionary] __device__(size_type idx) {
         if (d_dictionary.is_null(idx)) return Element{};
-        column_device_view d_indices = d_dictionary.child(0);
-        column_device_view d_keys    = d_dictionary.child(1);
-        auto index                   = d_indices.element<int32_t>(idx + d_dictionary.offset());
+        column_device_view d_keys = d_dictionary.child(1);
+        size_type index           = static_cast<size_type>(d_dictionary.element<dictionary32>(idx));
         return d_keys.template element<Element>(index);
       });
     auto new_keys_view = column_device_view::create(new_keys, stream);
@@ -74,6 +75,18 @@ struct dispatch_compute_indices {
     result->set_null_count(0);
     return result;
   }
+
+  template <typename Element>
+  typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(),
+                            std::unique_ptr<column>>
+  operator()(dictionary_column_view const& input,
+             column_view const& new_keys,
+             rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream)
+  {
+    CUDF_FAIL("list_view dictionary set_keys not supported yet");
+    return nullptr;
+  }
 };
 
 }  // namespace
@@ -90,22 +103,21 @@ std::unique_ptr<column> set_keys(
   CUDF_EXPECTS(keys.type() == new_keys.type(), "keys types must match");
 
   // copy the keys -- use drop_duplicates to make sure they are sorted and unique
-  auto table_keys =
-    experimental::detail::drop_duplicates(table_view{{new_keys}},
-                                          std::vector<size_type>{0},
-                                          experimental::duplicate_keep_option::KEEP_FIRST,
-                                          true,
-                                          mr,
-                                          stream)
-      ->release();
+  auto table_keys = cudf::detail::drop_duplicates(table_view{{new_keys}},
+                                                  std::vector<size_type>{0},
+                                                  duplicate_keep_option::KEEP_FIRST,
+                                                  null_equality::EQUAL,
+                                                  mr,
+                                                  stream)
+                      ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
   // compute the new nulls
-  auto matches     = experimental::detail::contains(keys, keys_column->view(), mr, stream);
+  auto matches     = cudf::detail::contains(keys, keys_column->view(), mr, stream);
   auto d_matches   = matches->view().data<bool>();
   auto d_indices   = dictionary_column.indices().data<int32_t>();
   auto d_null_mask = dictionary_column.null_mask();
-  auto new_nulls   = experimental::detail::valid_if(
+  auto new_nulls   = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(dictionary_column.offset()),
     thrust::make_counting_iterator<size_type>(dictionary_column.offset() +
                                               dictionary_column.size()),
@@ -117,12 +129,12 @@ std::unique_ptr<column> set_keys(
     mr);
 
   // compute the new indices
-  auto indices_column = experimental::type_dispatcher(keys_column->type(),
-                                                      dispatch_compute_indices{},
-                                                      dictionary_column,
-                                                      keys_column->view(),
-                                                      mr,
-                                                      stream);
+  auto indices_column = type_dispatcher(keys_column->type(),
+                                        dispatch_compute_indices{},
+                                        dictionary_column,
+                                        keys_column->view(),
+                                        mr,
+                                        stream);
 
   // create column with keys_column and indices_column
   return make_dictionary_column(std::move(keys_column),

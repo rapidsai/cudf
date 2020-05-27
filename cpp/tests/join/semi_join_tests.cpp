@@ -77,11 +77,10 @@ TEST_F(JoinTest, LeftSemiJoin)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
-  auto join_table =
-    cudf::experimental::left_semi_join(table_a, table_b, {0, 1}, {0, 1}, {0, 1, 2, 3});
+  auto join_table = cudf::left_semi_join(table_a, table_b, {0, 1}, {0, 1}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table->get_column(0), expect_0);
   expect_columns_equal(join_table->get_column(1), expect_1);
@@ -135,11 +134,10 @@ TEST_F(JoinTest, LeftSemiJoin_with_a_string_key)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
-  auto join_table =
-    cudf::experimental::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
+  auto join_table = cudf::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table->get_column(0), expect_0);
   expect_columns_equal(join_table->get_column(1), expect_1);
@@ -193,11 +191,10 @@ TEST_F(JoinTest, LeftSemiJoin_with_null)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
-  auto join_table =
-    cudf::experimental::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
+  auto join_table = cudf::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table->get_column(0), expect_0);
   expect_columns_equal(join_table->get_column(1), expect_1);
@@ -251,11 +248,10 @@ TEST_F(JoinTest, LeftAntiJoin)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
-  auto join_table =
-    cudf::experimental::left_anti_join(table_a, table_b, {0, 1}, {0, 1}, {0, 1, 2, 3});
+  auto join_table = cudf::left_anti_join(table_a, table_b, {0, 1}, {0, 1}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table->get_column(0), expect_0);
   expect_columns_equal(join_table->get_column(1), expect_1);
@@ -309,11 +305,10 @@ TEST_F(JoinTest, LeftAntiJoin_with_a_string_key)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
-  auto join_table =
-    cudf::experimental::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
+  auto join_table = cudf::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table->get_column(0), expect_0);
   expect_columns_equal(join_table->get_column(1), expect_1);
@@ -367,11 +362,10 @@ TEST_F(JoinTest, LeftAntiJoin_with_null)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
-  auto join_table =
-    cudf::experimental::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
+  auto join_table = cudf::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table->get_column(0), expect_0);
   expect_columns_equal(join_table->get_column(1), expect_1);
@@ -400,38 +394,34 @@ TEST_F(JoinTest, LeftSemiAntiJoin_exceptions)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
   //
   //  table_a has no columns, table_b has columns
   //  Let's check different permutations of passing table
   //  with no columns to verify that exceptions are thrown
   //
-  EXPECT_THROW(cudf::experimental::left_semi_join(table_a, table_b, {}, {}, {}), cudf::logic_error);
+  EXPECT_THROW(cudf::left_semi_join(table_a, table_b, {}, {}, {}), cudf::logic_error);
 
-  EXPECT_THROW(cudf::experimental::left_anti_join(table_a, table_b, {}, {}, {}), cudf::logic_error);
+  EXPECT_THROW(cudf::left_anti_join(table_a, table_b, {}, {}, {}), cudf::logic_error);
 
-  EXPECT_THROW(cudf::experimental::left_semi_join(table_b, table_a, {}, {}, {}), cudf::logic_error);
+  EXPECT_THROW(cudf::left_semi_join(table_b, table_a, {}, {}, {}), cudf::logic_error);
 
-  EXPECT_THROW(cudf::experimental::left_anti_join(table_b, table_a, {}, {}, {}), cudf::logic_error);
+  EXPECT_THROW(cudf::left_anti_join(table_b, table_a, {}, {}, {}), cudf::logic_error);
 
   //
   //  table_b has columns, so we'll pass the column checks, but
   //  these should fail the exception check that the number of
   //  join columns must be the same for each table
   //
-  EXPECT_THROW(cudf::experimental::left_semi_join(table_b, table_b, {0}, {}, {}),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::left_semi_join(table_b, table_b, {0}, {}, {}), cudf::logic_error);
 
-  EXPECT_THROW(cudf::experimental::left_anti_join(table_b, table_b, {0}, {}, {}),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::left_anti_join(table_b, table_b, {0}, {}, {}), cudf::logic_error);
 
-  EXPECT_THROW(cudf::experimental::left_semi_join(table_b, table_b, {}, {0}, {}),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::left_semi_join(table_b, table_b, {}, {0}, {}), cudf::logic_error);
 
-  EXPECT_THROW(cudf::experimental::left_anti_join(table_b, table_b, {}, {0}, {}),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::left_anti_join(table_b, table_b, {}, {0}, {}), cudf::logic_error);
 }
 
 TEST_F(JoinTest, LeftSemiJoin_empty_result)
@@ -480,15 +470,15 @@ TEST_F(JoinTest, LeftSemiJoin_empty_result)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
-  auto join_table = cudf::experimental::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {});
+  auto join_table = cudf::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {});
 
   EXPECT_EQ(join_table->num_columns(), 0);
   EXPECT_EQ(join_table->num_rows(), 0);
 
-  auto join_table2 = cudf::experimental::left_semi_join(table_a, table_b, {}, {}, {0, 1, 3});
+  auto join_table2 = cudf::left_semi_join(table_a, table_b, {}, {}, {0, 1, 3});
 
   EXPECT_EQ(join_table2->num_columns(), 3);
   EXPECT_EQ(join_table2->num_rows(), 0);
@@ -544,15 +534,15 @@ TEST_F(JoinTest, LeftAntiJoin_empty_result)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
-  auto join_table = cudf::experimental::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {});
+  auto join_table = cudf::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {});
 
   EXPECT_EQ(join_table->num_columns(), 0);
   EXPECT_EQ(join_table->num_rows(), 0);
 
-  auto join_table2 = cudf::experimental::left_anti_join(table_a, table_b, {}, {}, {0, 1, 3});
+  auto join_table2 = cudf::left_anti_join(table_a, table_b, {}, {}, {0, 1, 3});
 
   EXPECT_EQ(join_table2->num_columns(), 3);
   EXPECT_EQ(join_table2->num_rows(), 0);
@@ -607,43 +597,38 @@ TEST_F(JoinTest, LeftSemiAntiJoin_empty_table)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
-  auto join_table =
-    cudf::experimental::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
+  auto join_table = cudf::left_semi_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table->get_column(0), expect_0);
   expect_columns_equal(join_table->get_column(1), expect_1);
   expect_columns_equal(join_table->get_column(2), expect_2);
   expect_columns_equal(join_table->get_column(3), expect_3);
 
-  auto join_table2 =
-    cudf::experimental::left_semi_join(table_b, table_a, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
+  auto join_table2 = cudf::left_semi_join(table_b, table_a, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table2->get_column(0), expect_0);
   expect_columns_equal(join_table2->get_column(1), expect_1);
   expect_columns_equal(join_table2->get_column(2), expect_2);
   expect_columns_equal(join_table2->get_column(3), expect_3);
 
-  auto join_table3 =
-    cudf::experimental::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
+  auto join_table3 = cudf::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table3->get_column(0), expect_0);
   expect_columns_equal(join_table3->get_column(1), expect_1);
   expect_columns_equal(join_table3->get_column(2), expect_2);
   expect_columns_equal(join_table3->get_column(3), expect_3);
 
-  auto join_table4 =
-    cudf::experimental::left_anti_join(table_a, table_a, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
+  auto join_table4 = cudf::left_anti_join(table_a, table_a, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table4->get_column(0), expect_0);
   expect_columns_equal(join_table4->get_column(1), expect_1);
   expect_columns_equal(join_table4->get_column(2), expect_2);
   expect_columns_equal(join_table4->get_column(3), expect_3);
 
-  auto join_table5 =
-    cudf::experimental::left_anti_join(table_a, table_a, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
+  auto join_table5 = cudf::left_anti_join(table_a, table_a, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table5->get_column(0), expect_0);
   expect_columns_equal(join_table5->get_column(1), expect_1);
@@ -696,11 +681,10 @@ TEST_F(JoinTest, LeftAntiJoin_empty_right_table)
   column_b.push_back(b_2.release());
   column_b.push_back(b_3.release());
 
-  cudf::experimental::table table_a(std::move(column_a));
-  cudf::experimental::table table_b(std::move(column_b));
+  cudf::table table_a(std::move(column_a));
+  cudf::table table_b(std::move(column_b));
 
-  auto join_table =
-    cudf::experimental::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
+  auto join_table = cudf::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table->get_column(0), expect_0);
   expect_columns_equal(join_table->get_column(1), expect_1);

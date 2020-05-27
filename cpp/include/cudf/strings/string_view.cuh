@@ -26,16 +26,19 @@
  */
 
 namespace cudf {
-// UTF-8 characters are 1-4 bytes
-using char_utf8 = uint32_t;
+
+using char_utf8 = uint32_t;  //<< UTF-8 characters are 1-4 bytes
 
 /**
  * @brief A non-owning, immutable view of device data that is a variable length
- * char array representing a UTF-8 string. The caller must maintain the
- * device memory for the lifetime of this instance.
+ * char array representing a UTF-8 string.
+ *
+ * @ingroup strings_classes
+ *
+ * The caller must maintain the device memory for the lifetime of this instance.
  *
  * It provides a simple wrapper and string operations for an individual string
- * with a column of strings.
+ * within a column of strings.
  */
 class string_view {
  public:
@@ -298,7 +301,8 @@ namespace detail {
 /**
  * @brief Returns the number of bytes in the specified character.
  *
- * @param chr Single character
+ * @param character Single character
+ * @return Number of bytes
  */
 __host__ __device__ size_type bytes_in_char_utf8(char_utf8 character);
 
@@ -306,7 +310,7 @@ __host__ __device__ size_type bytes_in_char_utf8(char_utf8 character);
  * @brief Convert a char array into a char_utf8 value.
  *
  * @param str String containing encoded char bytes.
- * @param[out] chr Single char_utf8 value.
+ * @param[out] character Single char_utf8 value.
  * @return The number of bytes in the character
  */
 __host__ __device__ size_type to_char_utf8(const char* str, char_utf8& character);
@@ -314,7 +318,7 @@ __host__ __device__ size_type to_char_utf8(const char* str, char_utf8& character
 /**
  * @brief Place a char_utf8 value into a char array.
  *
- * @param chr Single character
+ * @param character Single character
  * @param[out] str Allocated char array with enough space to hold the encoded characer.
  * @return The number of bytes in the character
  */

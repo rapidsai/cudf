@@ -36,6 +36,7 @@ class RandomAccessFile;
 
 // <io/utilities/data_sink.hpp>
 namespace cudf {
+//! IO interfaces
 namespace io {
 class data_sink;
 }
@@ -43,8 +44,6 @@ class data_sink;
 
 //! cuDF interfaces
 namespace cudf {
-//! In-development features
-namespace experimental {
 //! IO interfaces
 namespace io {
 /**
@@ -186,5 +185,4 @@ struct sink_info {
 };
 
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

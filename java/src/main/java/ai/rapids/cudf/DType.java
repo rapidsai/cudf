@@ -78,6 +78,15 @@ public enum DType {
     return nativeId;
   }
 
+  /**
+   * This only works for fixed width types. Variable width types like strings the value is
+   * undefined and should be ignored.
+   * @return
+   */
+  public int getSizeInBytes() {
+    return sizeInBytes;
+  }
+
   public static DType fromNative(int nativeId) {
     for (DType type : D_TYPES) {
       if (type.nativeId == nativeId) {

@@ -52,11 +52,13 @@ struct extract_fn {
     if (d_strings.is_null(idx)) return string_index_pair{nullptr, 0};
     string_view d_str = d_strings.element<string_view>(idx);
     string_index_pair result{nullptr, 0};
-    int32_t begin = 0, end = d_str.length();
+    int32_t begin = 0;
+    int32_t end   = -1;  // handles empty strings automatically
     if ((prog.find(idx, d_str, begin, end) > 0) &&
         (prog.extract(idx, d_str, begin, end, column_index) > 0)) {
       auto offset = d_str.byte_offset(begin);
-      result      = string_index_pair{d_str.data() + offset, d_str.byte_offset(end) - offset};
+      // build index-pair
+      result = string_index_pair{d_str.data() + offset, d_str.byte_offset(end) - offset};
     }
     return result;
   }
@@ -65,7 +67,7 @@ struct extract_fn {
 }  // namespace
 
 //
-std::unique_ptr<experimental::table> extract(
+std::unique_ptr<table> extract(
   strings_column_view const& strings,
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -109,19 +111,18 @@ std::unique_ptr<experimental::table> extract(
                         d_indices,
                         extract_fn<RX_STACK_LARGE>{d_prog, d_strings, column_index});
     //
-    auto column = make_strings_column(indices, stream, mr);
-    results.emplace_back(std::move(column));
+    results.emplace_back(make_strings_column(indices, stream, mr));
   }
-  return std::make_unique<experimental::table>(std::move(results));
+  return std::make_unique<table>(std::move(results));
 }
 
 }  // namespace detail
 
 // external API
 
-std::unique_ptr<experimental::table> extract(strings_column_view const& strings,
-                                             std::string const& pattern,
-                                             rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> extract(strings_column_view const& strings,
+                               std::string const& pattern,
+                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::extract(strings, pattern, mr);

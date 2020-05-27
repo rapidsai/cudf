@@ -29,8 +29,11 @@
 #include <vector>
 
 namespace cudf {
+
 /**
  * @brief An owning class to represent a singular value
+ *
+ * @ingroup scalar_classes
  *
  * A scalar is a singular value of any of the supported datatypes in cudf.
  * Classes derived from this class are used to represent a scalar. Objects of
@@ -156,7 +159,7 @@ class fixed_width_scalar : public scalar {
  protected:
   rmm::device_scalar<T> _data{};  ///< device memory containing the value
 
-  fixed_width_scalar() : scalar(data_type(experimental::type_to_id<T>())) {}
+  fixed_width_scalar() : scalar(data_type(type_to_id<T>())) {}
 
   /**
    * @brief Construct a new fixed width scalar object
@@ -170,22 +173,21 @@ class fixed_width_scalar : public scalar {
                      bool is_valid                       = true,
                      cudaStream_t stream                 = 0,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream, mr),
-      _data(value, stream, mr)
+    : scalar(data_type(type_to_id<T>()), is_valid, stream, mr), _data(value, stream, mr)
   {
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a new fixed width scalar object from existing device memory.
    *
    * @param[in] data The scalar's data in device memory
    * @param[in] is_valid Whether the value held by the scalar is valid
-   *---------------------------------------------------------------------------**/
+   */
   fixed_width_scalar(rmm::device_scalar<T>&& data,
                      bool is_valid                       = true,
                      cudaStream_t stream                 = 0,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream, mr),
+    : scalar(data_type(type_to_id<T>()), is_valid, stream, mr),
       _data{std::forward<rmm::device_scalar<T>>(data)}
   {
   }
@@ -195,6 +197,8 @@ class fixed_width_scalar : public scalar {
 
 /**
  * @brief An owning class to represent a numerical value in device memory
+ *
+ * @ingroup scalar_classes
  *
  * @tparam T the data type of the numerical value
  */
@@ -226,12 +230,12 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
   {
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a new numeric scalar object from existing device memory.
    *
    * @param[in] data The scalar's data in device memory
    * @param[in] is_valid Whether the value held by the scalar is valid
-   *---------------------------------------------------------------------------**/
+   */
   numeric_scalar(rmm::device_scalar<T>&& data,
                  bool is_valid                       = true,
                  cudaStream_t stream                 = 0,
@@ -243,6 +247,8 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
 
 /**
  * @brief An owning class to represent a string in device memory
+ *
+ * @ingroup scalar_classes
  */
 class string_scalar : public scalar {
  public:
@@ -301,7 +307,7 @@ class string_scalar : public scalar {
                 bool is_valid                       = true,
                 cudaStream_t stream                 = 0,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : string_scalar(data.value(), is_valid, stream, mr)
+    : string_scalar(data.value(stream), is_valid, stream, mr)
   {
   }
 
@@ -340,6 +346,8 @@ class string_scalar : public scalar {
 
 /**
  * @brief An owning class to represent a timestamp value in device memory
+ *
+ * @ingroup scalar_classes
  *
  * @tparam T the data type of the timestamp value
  * @see cudf/wrappers/timestamps.hpp for a list of allowed types
@@ -388,12 +396,12 @@ class timestamp_scalar : public detail::fixed_width_scalar<T> {
   {
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a new timestamp scalar object from existing device memory.
    *
    * @param[in] data The scalar's data in device memory
    * @param[in] is_valid Whether the value held by the scalar is valid
-   *---------------------------------------------------------------------------**/
+   */
   timestamp_scalar(rmm::device_scalar<T>&& data,
                    bool is_valid                       = true,
                    cudaStream_t stream                 = 0,
@@ -402,9 +410,9 @@ class timestamp_scalar : public detail::fixed_width_scalar<T> {
   {
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Return the duration in number of ticks since the UNIX epoch.
-   *---------------------------------------------------------------------------**/
+   */
   typename T::duration::rep ticks_since_epoch() { return this->value().time_since_epoch().count(); }
 };
 

@@ -30,11 +30,9 @@
 #include <thrust/sequence.h>
 #include <random>
 
-#include <gmock/gmock.h>
-
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
-  cudf::data_type type() { return cudf::data_type{cudf::experimental::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest()
     : data{_num_elements * cudf::size_of(type())},
@@ -60,11 +58,11 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
 
 TYPED_TEST_CASE(TypedColumnTest, cudf::test::Types<int32_t>);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Verifies equality of the properties and data of a `column`'s views.
  *
  * @param col The `column` to verify
- *---------------------------------------------------------------------------**/
+ **/
 void verify_column_views(cudf::column col)
 {
   cudf::column_view view                 = col;

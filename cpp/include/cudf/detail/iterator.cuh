@@ -35,9 +35,9 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_device_view.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /** -------------------------------------------------------------------------*
  * @brief value accessor of column with null bitmask
@@ -48,8 +48,8 @@ namespace detail {
  * the return value for element `i` will return `column[i]`
  * if it is valid, or `null_replacement` if it is null.
  *
- * @throws `cudf::logic_error` if the column is not nullable.
- * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ * @throws cudf::logic_error if the column is not nullable.
+ * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
  * -------------------------------------------------------------------------**/
@@ -66,8 +66,7 @@ struct null_replaced_value_accessor {
   null_replaced_value_accessor(column_device_view const& _col, Element null_val)
     : col{_col}, null_replacement{null_val}
   {
-    CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == col.type(),
-                 "the data type mismatch");
+    CUDF_EXPECTS(data_type(type_to_id<Element>()) == col.type(), "the data type mismatch");
     // verify valid is non-null, otherwise, is_valid_nocheck() will crash
     CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
   }
@@ -85,7 +84,7 @@ struct null_replaced_value_accessor {
  * `operator() (cudf::size_type id)` computes validity flag at `id`
  * This functor is only allowed for nullable columns.
  *
- * @throws `cudf::logic_error` if the column is not nullable.
+ * @throws cudf::logic_error if the column is not nullable.
  * -------------------------------------------------------------------------**/
 struct validity_accessor {
   column_device_view const col;
@@ -112,8 +111,8 @@ struct validity_accessor {
  * if it is valid, or `null_replacement` if it is null.
  * This iterator is only allowed for nullable columns.
  *
- * @throws `cudf::logic_error` if the column is not nullable.
- * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ * @throws cudf::logic_error if the column is not nullable.
+ * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
  * @param column The column to iterate
@@ -142,8 +141,8 @@ auto make_null_replacement_iterator(column_device_view const& column,
  * false`. `pair(column[i], validity)`. `validity` is `true` if `has_nulls=false`. `validity` is
  * validity of the element at `i` if `has_nulls=true` and the column is nullable.
  *
- * @throws `cudf::logic_error` if the column is nullable.
- * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ * @throws cudf::logic_error if the column is nullable.
+ * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
  * @tparam has_nulls boolean indicating to treat the column is nullable
@@ -164,7 +163,7 @@ auto make_pair_iterator(column_device_view const& column)
  * of `column[i]`
  * This iterator is only allowed for nullable columns.
  *
- * @throws `cudf::logic_error` if the column is not nullable.
+ * @throws cudf::logic_error if the column is not nullable.
  *
  * @param column The column to iterate
  * @return auto Iterator that returns validities of column elements.
@@ -176,31 +175,103 @@ auto inline make_validity_iterator(column_device_view const& column)
 }
 
 /**
- * @brief Constructs a constant iterator over a scalar's value.
+ * @brief value accessor for scalar with valid data.
+ * The unary functor returns data of Element type of the scalar.
+ *
+ * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
+ *
+ * @tparam Element The type of return type of functor
+ */
+template <typename Element>
+struct scalar_value_accessor {
+  using ScalarType       = scalar_type_t<Element>;
+  using ScalarDeviceType = scalar_device_type_t<Element>;
+  ScalarDeviceType const dscalar;  ///< scalar device view
+
+  scalar_value_accessor(scalar const& scalar_value)
+    : dscalar(get_scalar_device_view(static_cast<ScalarType&>(const_cast<scalar&>(scalar_value))))
+  {
+    CUDF_EXPECTS(data_type(type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
+  }
+
+  /**
+   * @brief returns the value of the scalar.
+   *
+   * @throw `cudf::logic_error` if this function is called in host.
+   *
+   * @return value of the scalar.
+   */
+  CUDA_DEVICE_CALLABLE
+  const Element operator()(size_type) const
+  {
+#if defined(__CUDA_ARCH__)
+    return dscalar.value();
+#else
+    CUDF_FAIL("unsupported device scalar iterator operation");
+#endif
+  }
+};
+
+/**
+ * @brief Constructs a constant device iterator over a scalar's value.
  *
  * Dereferencing the returned iterator returns a `Element`.
  *
  * For `p = *(iter + i)`, `p` is the value stored in the scalar.
  *
- * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
- * @throws `cudf::logic_error` if scalar is null.
+ * The behavior is undefined if the scalar is destroyed before iterator dereferencing.
  *
- * @tparam Element The type of elements in the scalar
+ * @throws cudf::logic_error if scalar datatype and Element type mismatch.
+ * @throws cudf::logic_error if scalar is null.
+ * @throws cudf::logic_error if the returned iterator is dereferenced in host
+ *
+ * @tparam Element The type of element in the scalar
  * @param scalar_value The scalar to iterate
  * @return auto Iterator that returns scalar value
  */
 template <typename Element>
 auto inline make_scalar_iterator(scalar const& scalar_value)
 {
-  CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == scalar_value.type(),
-               "the data type mismatch");
+  CUDF_EXPECTS(data_type(type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
   CUDF_EXPECTS(scalar_value.is_valid(), "the scalar value must be valid");
-  using ScalarType = experimental::scalar_type_t<Element>;
-  return thrust::make_constant_iterator(static_cast<ScalarType const*>(&scalar_value)->value());
+  return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
+                                         scalar_value_accessor<Element>{scalar_value});
 }
 
 /**
- * @brief Constructs a constant pair iterator over a scalar's value and its validity.
+ * @brief pair accessor for scalar.
+ * The unary functor returns a pair of data of Element type and bool validity of the scalar.
+ *
+ * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
+ *
+ * @tparam Element The type of return type of functor
+ */
+template <typename Element>
+struct scalar_pair_accessor : public scalar_value_accessor<Element> {
+  using super_t    = scalar_value_accessor<Element>;
+  using value_type = thrust::pair<Element, bool>;
+  scalar_pair_accessor(scalar const& scalar_value) : scalar_value_accessor<Element>(scalar_value) {}
+
+  /**
+   * @brief returns a pair with value and validity of the scalar.
+   *
+   * @throw `cudf::logic_error` if this function is called in host.
+   *
+   * @return a pair with value and validity of the scalar.
+   */
+  CUDA_HOST_DEVICE_CALLABLE
+  const value_type operator()(size_type) const
+  {
+#if defined(__CUDA_ARCH__)
+    return {super_t::dscalar.value(), super_t::dscalar.is_valid()};
+#else
+    CUDF_FAIL("unsupported device scalar iterator operation");
+#endif
+  }
+};
+
+/**
+ * @brief Constructs a constant device pair iterator over a scalar's value and its validity.
  *
  * Dereferencing the returned iterator returns a `thrust::pair<Element, bool>`.
  *
@@ -209,7 +280,10 @@ auto inline make_scalar_iterator(scalar const& scalar_value)
  *
  * Else, if the scalar is null, then the value of `p.first` is undefined and `p.second == false`.
  *
- * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
+ * The behavior is undefined if the scalar is destroyed before iterator dereferencing.
+ *
+ * @throws cudf::logic_error if scalar datatype and Element type mismatch.
+ * @throws cudf::logic_error if the returned iterator is dereferenced in host
  *
  * @tparam Element The type of elements in the scalar
  * @tparam bool unused. This template parameter exists to enforce same
@@ -220,13 +294,10 @@ auto inline make_scalar_iterator(scalar const& scalar_value)
 template <typename Element, bool = false>
 auto inline make_pair_iterator(scalar const& scalar_value)
 {
-  CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == scalar_value.type(),
-               "the data type mismatch");
-  using ScalarType = experimental::scalar_type_t<Element>;
-  return thrust::make_constant_iterator(thrust::make_pair(
-    static_cast<ScalarType const*>(&scalar_value)->value(), scalar_value.is_valid()));
+  CUDF_EXPECTS(data_type(type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
+  return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
+                                         scalar_pair_accessor<Element>{scalar_value});
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

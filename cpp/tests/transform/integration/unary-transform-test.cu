@@ -17,7 +17,6 @@
  * limitations under the License.
  */
 
-#include <cudf/types.h>
 #include <cudf/transform.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
@@ -41,7 +40,7 @@ void test_udf(const char udf[], Op op, Data data_init, cudf::size_type size, boo
   auto in = cudf::test::fixed_width_column_wrapper<dtype>(data_iter, data_iter + size, all_valid);
 
   std::unique_ptr<cudf::column> out =
-    cudf::experimental::transform(in, udf, data_type(experimental::type_to_id<dtype>()), is_ptx);
+    cudf::transform(in, udf, data_type(type_to_id<dtype>()), is_ptx);
 
   ASSERT_UNARY<dtype, dtype>(out->view(), in, op);
 }
@@ -195,6 +194,31 @@ __device__ inline void f(
 
   test_udf<dtype>(cuda, op, data_init, 500, false);
   test_udf<dtype>(ptx, op, data_init, 500, true);
+}
+
+TEST_F(UnaryOperationIntegrationTest, Transform_Datetime)
+{
+  // Add one day to timestamp in microseconds
+
+  const char cuda[] =
+    R"***(
+__device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
+{
+  using dur = simt::std::chrono::duration<int32_t, simt::std::ratio<86400>>;
+  *output = static_cast<cudf::timestamp_us>(input + dur{1});
+}
+
+)***";
+
+  using dtype = timestamp_us;
+  auto op     = [](dtype a) {
+    using dur = simt::std::chrono::duration<int32_t, simt::std::ratio<86400>>;
+    return static_cast<timestamp_us>(a + dur{1});
+  };
+  auto random_eng = UniformRandomGenerator<timestamp_us::rep>(0, 100000000);
+  auto data_init  = [&random_eng](cudf::size_type row) { return dtype(random_eng.generate()); };
+
+  test_udf<dtype>(cuda, op, data_init, 500, false);
 }
 
 }  // namespace transformation

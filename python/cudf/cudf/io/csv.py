@@ -2,7 +2,7 @@
 
 from io import BytesIO, IOBase, StringIO
 
-import cudf._lib.legacy as libcudf_legacy
+import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf.utils import ioutils
 
@@ -49,7 +49,7 @@ def read_csv(
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         filepath_or_buffer, compression, (BytesIO, StringIO), **kwargs
     )
-    return libcudf_legacy.csv.read_csv(
+    return libcudf.csv.read_csv(
         filepath_or_buffer,
         lineterminator=lineterminator,
         quotechar=quotechar,
@@ -113,17 +113,25 @@ def to_csv(
                 columns = columns.copy()
                 columns.insert(0, df.index.name)
         df = df.reset_index()
+
+    if columns is not None:
+        try:
+            df = df[columns]
+        except KeyError:
+            raise NameError(
+                "Dataframe doesn't have the labels provided in columns"
+            )
+
     rows_per_chunk = chunksize if chunksize else len(df)
 
     if isinstance(path, IOBase):
         path = path.name
 
-    return libcudf_legacy.csv.write_csv(
-        cols=df._data,
-        path=path,
+    return libcudf.csv.write_csv(
+        df,
+        file_path=path,
         sep=sep,
         na_rep=na_rep,
-        columns=columns,
         header=header,
         line_terminator=line_terminator,
         rows_per_chunk=rows_per_chunk,

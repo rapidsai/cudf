@@ -24,7 +24,11 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
+/**
+ * @addtogroup column_search
+ * @{
+ */
+
 /**
  * @brief Find smallest indices in a sorted table where values should be
  *  inserted to maintain order
@@ -32,6 +36,7 @@ namespace experimental {
  * For each row v in @p values, find the first index in @p t where
  *  inserting the row will maintain the sort order of @p t
  *
+ * @code{.pseudo}
  * Example:
  *
  *  Single column:
@@ -49,6 +54,7 @@ namespace experimental {
  *             { .7 },
  *             { 61 }}
  *   result =  {  3 }
+ * @endcode
  *
  * @param t               Table to search
  * @param values          Find insert locations for these values
@@ -56,8 +62,7 @@ namespace experimental {
  * @param null_precedence Vector of null_precedence enums
  * values
  * @param mr              Device memory resource to use for device memory allocation
- * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
- * containing the insertion points.
+ * @return A non-nullable column of cudf::size_type elements containing the insertion points.
  */
 std::unique_ptr<column> lower_bound(
   table_view const& t,
@@ -73,6 +78,7 @@ std::unique_ptr<column> lower_bound(
  * For each row v in @p values, find the last index in @p t where
  *  inserting the row will maintain the sort order of @p t
  *
+ * @code{.pseudo}
  * Example:
  *
  *  Single Column:
@@ -82,22 +88,23 @@ std::unique_ptr<column> lower_bound(
  *   result = {  3 }
  *
  *  Multi Column:
- *    idx        0    1    2    3    4
+ *      idx        0    1    2    3    4
  *   t      = {{  10,  20,  20,  20,  20 },
  *             { 5.0,  .5,  .5,  .7,  .7 },
  *             {  90,  77,  78,  61,  61 }}
  *   values = {{ 20 },
  *             { .7 },
  *             { 61 }}
- *   result =  {  5  *   *
+ *   result =  {  5 }
+ * @endcode
+ *
  * @param column          Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
  * @param null_precedence Vector of null_precedence enums
  * values
  * @param mr              Device memory resource to use for device memory allocation
- * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
- * containing the insertion points.
+ * @return A non-nullable column of cudf::size_type elements containing the insertion points.
  */
 std::unique_ptr<column> upper_bound(
   table_view const& t,
@@ -112,14 +119,14 @@ std::unique_ptr<column> upper_bound(
  * @throws cudf::logic_error
  * If `col.type() != values.type()`
  *
- * @example:
- *
+ * @code{.pseudo}
  *  Single Column:
  *      idx      0   1   2   3   4
  *      col = { 10, 20, 20, 30, 50 }
  *  Scalar:
  *   value = { 20 }
  *   result = true
+ * @endcode
  *
  * @param col      A column object
  * @param value    A scalar value to search for in `col`
@@ -141,25 +148,24 @@ bool contains(column_view const& col,
  * @throws cudf::logic_error
  * If `haystack.type() != needles.type()`
  *
- * @example:
- *
+ * @code{.pseudo}
  *   haystack = { 10, 20, 30, 40, 50 }
  *   needles  = { 20, 40, 60, 80 }
  *
  *   result = { false, true, false, true, false }
+ * @endcode
  *
  * @param haystack  A column object
  * @param needles   A column of values to search for in `col`
  * @param mr         Device memory resource to use for device memory allocation
  *
- * @return std::unique_ptr<column> A column of bool elements containing
- * true if the corresponding entry in haystack is contained in needles and false
- * if it is not.
+ * @return A column of bool elements containing true if the corresponding entry in haystack is
+ * contained in needles and false if it is not.
  */
 std::unique_ptr<column> contains(
   column_view const& haystack,
   column_view const& needles,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-}  // namespace experimental
+/** @} */  // end of group
 }  // namespace cudf

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -24,7 +23,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 struct nan_dispatcher {
   template <typename T, typename Predicate>
@@ -58,40 +56,26 @@ struct nan_dispatcher {
   }
 };
 
-/**
- * @copydoc cudf::experimental::is_nan
- *
- * @param[in] stream Optional CUDA stream on which to execute kernels
- */
-std::unique_ptr<column> is_nan(
-  cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0)
+std::unique_ptr<column> is_nan(cudf::column_view const& input,
+                               rmm::mr::device_memory_resource* mr,
+                               cudaStream_t stream)
 {
   auto predicate = [] __device__(auto element_validity_pair) {
     return element_validity_pair.second and std::isnan(element_validity_pair.first);
   };
 
-  return cudf::experimental::type_dispatcher(
-    input.type(), nan_dispatcher{}, input, predicate, mr, stream);
+  return cudf::type_dispatcher(input.type(), nan_dispatcher{}, input, predicate, mr, stream);
 }
 
-/**
- * @copydoc cudf::experimental::is_not_nan
- *
- * @param[in] stream Optional CUDA stream on which to execute kernels
- */
-std::unique_ptr<column> is_not_nan(
-  cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0)
+std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
+                                   rmm::mr::device_memory_resource* mr,
+                                   cudaStream_t stream)
 {
   auto predicate = [] __device__(auto element_validity_pair) {
     return !element_validity_pair.second or !std::isnan(element_validity_pair.first);
   };
 
-  return cudf::experimental::type_dispatcher(
-    input.type(), nan_dispatcher{}, input, predicate, mr, stream);
+  return cudf::type_dispatcher(input.type(), nan_dispatcher{}, input, predicate, mr, stream);
 }
 
 }  // namespace detail
@@ -109,5 +93,4 @@ std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
   return detail::is_not_nan(input, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
@@ -24,7 +23,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <tuple>
@@ -36,7 +34,7 @@ void run_rank_test(table_view input,
                    table_view expected,
                    rank_method method,
                    order column_order,
-                   include_nulls _include_nulls,
+                   null_policy null_handling,
                    null_order null_precedence,
                    bool percentage,
                    bool debug = false)
@@ -44,8 +42,8 @@ void run_rank_test(table_view input,
   int i = 0;
   for (auto &&input_column : input) {
     // Rank
-    auto got_rank_column = cudf::experimental::rank(
-      input_column, method, column_order, _include_nulls, null_precedence, percentage);
+    auto got_rank_column =
+      cudf::rank(input_column, method, column_order, null_handling, null_precedence, percentage);
     if (debug) {
       cudf::test::print(got_rank_column->view());
       std::cout << "\n";
@@ -55,14 +53,14 @@ void run_rank_test(table_view input,
   }
 }
 
-using input_arg_t = std::tuple<order, include_nulls, null_order>;
-input_arg_t asce_keep{order::ASCENDING, include_nulls::NO, null_order::AFTER};
-input_arg_t asce_top{order::ASCENDING, include_nulls::YES, null_order::BEFORE};
-input_arg_t asce_bottom{order::ASCENDING, include_nulls::YES, null_order::AFTER};
+using input_arg_t = std::tuple<order, null_policy, null_order>;
+input_arg_t asce_keep{order::ASCENDING, null_policy::EXCLUDE, null_order::AFTER};
+input_arg_t asce_top{order::ASCENDING, null_policy::INCLUDE, null_order::BEFORE};
+input_arg_t asce_bottom{order::ASCENDING, null_policy::INCLUDE, null_order::AFTER};
 
-input_arg_t desc_keep{order::DESCENDING, include_nulls::NO, null_order::BEFORE};
-input_arg_t desc_top{order::DESCENDING, include_nulls::YES, null_order::AFTER};
-input_arg_t desc_bottom{order::DESCENDING, include_nulls::YES, null_order::BEFORE};
+input_arg_t desc_keep{order::DESCENDING, null_policy::EXCLUDE, null_order::BEFORE};
+input_arg_t desc_top{order::DESCENDING, null_policy::INCLUDE, null_order::AFTER};
+input_arg_t desc_bottom{order::DESCENDING, null_policy::INCLUDE, null_order::BEFORE};
 using test_case_t = std::tuple<table_view, table_view>;
 
 template <typename T>

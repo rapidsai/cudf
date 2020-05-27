@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+
 import warnings
 from functools import partial
 
@@ -148,6 +150,7 @@ def read_parquet(
     chunksize=None,
     split_row_groups=True,
     gather_statistics=None,
+    row_groups_per_part=None,
     **kwargs,
 ):
     """ Read parquet files into a Dask DataFrame
@@ -169,6 +172,27 @@ def read_parquet(
     """
     if isinstance(columns, str):
         columns = [columns]
+
+    if row_groups_per_part:
+        from .opt_parquet import parquet_reader
+
+        warnings.warn(
+            "Using optimized read_parquet engine. This option does not "
+            "support partitioned datsets or filtering, and will not "
+            "result in known divisions. Do not use `row_groups_per_part` "
+            "if full support is needed."
+        )
+        if kwargs.get("filters", None):
+            raise ValueError(
+                "Cannot use `filters` with `row_groups_per_part=True`."
+            )
+        return parquet_reader(
+            path,
+            columns=columns,
+            row_groups_per_part=row_groups_per_part,
+            **kwargs,
+        )
+
     if chunksize and gather_statistics is False:
         warnings.warn(
             "Setting chunksize parameter with gather_statistics=False. "

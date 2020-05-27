@@ -20,7 +20,6 @@
 #include <cudf/null_mask.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace binops {
 namespace detail {
 /**
@@ -32,7 +31,18 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
                                              rmm::mr::device_memory_resource* mr);
 }  // namespace detail
 
+/**
+ * @brief Does the binop need to know if an operand is null/invalid to perform special
+ * processing?
+ */
+inline bool null_using_binop(binary_operator op)
+{
+  return op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_MIN ||
+         op == binary_operator::NULL_MAX;
+}
+
 namespace compiled {
+
 /**
  * @brief Performs a binary operation between a string scalar and a string
  * column.
@@ -113,5 +123,4 @@ std::unique_ptr<column> binary_operation(
 
 }  // namespace compiled
 }  // namespace binops
-}  // namespace experimental
 }  // namespace cudf

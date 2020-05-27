@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -28,7 +28,9 @@ struct BinaryOperationNullTest : public BinaryOperationTest {
   template <typename T>
   auto make_random_wrapped_column(size_type size, mask_state state)
   {
-    auto data_iter = make_data_iter();
+    cudf::test::UniformRandomGenerator<T> rand_gen(1, 10);
+    auto data_iter = make_data_iter(rand_gen);
+
     switch (state) {
       case mask_state::ALL_NULL: {
         auto validity_iter =
@@ -48,7 +50,7 @@ struct BinaryOperationNullTest : public BinaryOperationTest {
       default: CUDF_FAIL("Unknown mask state " + std::to_string(static_cast<int64_t>(state)));
     }
   }
-};
+};  // namespace binop
 
 TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_Valid)
 {
@@ -62,10 +64,8 @@ TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_Valid)
   lhs.set_valid(false);
   auto rhs = make_random_wrapped_column<TypeRhs>(100, mask_state::ALL_VALID);
 
-  auto out = cudf::experimental::binary_operation(lhs,
-                                                  rhs,
-                                                  cudf::experimental::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -81,10 +81,8 @@ TEST_F(BinaryOperationNullTest, Scalar_Valid_Vector_NonNullable)
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
   auto rhs = make_random_wrapped_column<TypeRhs>(100, mask_state::UNALLOCATED);
 
-  auto out = cudf::experimental::binary_operation(lhs,
-                                                  rhs,
-                                                  cudf::experimental::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -101,10 +99,8 @@ TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_NonNullable)
   lhs.set_valid(false);
   auto rhs = make_random_wrapped_column<TypeRhs>(100, mask_state::UNALLOCATED);
 
-  auto out = cudf::experimental::binary_operation(lhs,
-                                                  rhs,
-                                                  cudf::experimental::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -120,10 +116,8 @@ TEST_F(BinaryOperationNullTest, Vector_Null_Scalar_Valid)
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
   auto rhs = make_random_wrapped_column<TypeRhs>(100, mask_state::ALL_NULL);
 
-  auto out = cudf::experimental::binary_operation(lhs,
-                                                  rhs,
-                                                  cudf::experimental::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -139,10 +133,8 @@ TEST_F(BinaryOperationNullTest, Vector_Null_Vector_Valid)
   auto lhs = make_random_wrapped_column<TypeLhs>(100, mask_state::ALL_NULL);
   auto rhs = make_random_wrapped_column<TypeRhs>(100, mask_state::ALL_VALID);
 
-  auto out = cudf::experimental::binary_operation(lhs,
-                                                  rhs,
-                                                  cudf::experimental::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -158,10 +150,8 @@ TEST_F(BinaryOperationNullTest, Vector_Null_Vector_NonNullable)
   auto lhs = make_random_wrapped_column<TypeLhs>(100, mask_state::ALL_NULL);
   auto rhs = make_random_wrapped_column<TypeRhs>(100, mask_state::UNALLOCATED);
 
-  auto out = cudf::experimental::binary_operation(lhs,
-                                                  rhs,
-                                                  cudf::experimental::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -177,10 +167,8 @@ TEST_F(BinaryOperationNullTest, Vector_Valid_Vector_NonNullable)
   auto lhs = make_random_wrapped_column<TypeLhs>(100, mask_state::ALL_VALID);
   auto rhs = make_random_wrapped_column<TypeRhs>(100, mask_state::UNALLOCATED);
 
-  auto out = cudf::experimental::binary_operation(lhs,
-                                                  rhs,
-                                                  cudf::experimental::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
@@ -196,10 +184,8 @@ TEST_F(BinaryOperationNullTest, Vector_NonNullable_Vector_NonNullable)
   auto lhs = make_random_wrapped_column<TypeLhs>(100, mask_state::UNALLOCATED);
   auto rhs = make_random_wrapped_column<TypeRhs>(100, mask_state::UNALLOCATED);
 
-  auto out = cudf::experimental::binary_operation(lhs,
-                                                  rhs,
-                                                  cudf::experimental::binary_operator::ADD,
-                                                  data_type(experimental::type_to_id<TypeOut>()));
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }

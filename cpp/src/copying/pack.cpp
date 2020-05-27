@@ -4,7 +4,6 @@
 #include <jit/type.h>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
 namespace {
@@ -17,12 +16,14 @@ struct serialized_column {
   size_type _num_children;
 };
 
-inline void add_column_to_vector(serialized_column const& column, std::vector<uint8_t>* metadata) {
+inline void add_column_to_vector(serialized_column const& column, std::vector<uint8_t>* metadata)
+{
   auto bytes = reinterpret_cast<uint8_t const*>(&column);
   std::copy(bytes, bytes + sizeof(serialized_column), std::back_inserter(*metadata));
 }
 
-serialized_column serialize(column_view const& col, uint8_t const* base_ptr) {
+serialized_column serialize(column_view const& col, uint8_t const* base_ptr)
+{
   // There are columns types that don't have data in parent e.g. strings
   size_t data_offset = col.data<uint8_t>() ? col.data<uint8_t>() - base_ptr : -1;
   size_t null_mask_offset =
@@ -34,7 +35,8 @@ serialized_column serialize(column_view const& col, uint8_t const* base_ptr) {
 
 void serialize_columns(std::vector<column_view> const& cols,
                        uint8_t const* base_ptr,
-                       std::vector<uint8_t>* metadata) {
+                       std::vector<uint8_t>* metadata)
+{
   for (auto&& col : cols) {
     add_column_to_vector(serialize(col, base_ptr), metadata);
     std::vector<column_view> children;
@@ -48,7 +50,8 @@ void serialize_columns(std::vector<column_view> const& cols,
 
 packed_columns pack(std::vector<column_view> const& input,
                     cudaStream_t stream,
-                    rmm::mr::device_memory_resource* mr) {
+                    rmm::mr::device_memory_resource* mr)
+{
   unpack_result contiguous_data = std::move(detail::alloc_and_copy(input, mr, stream));
 
   serialized_column first_element = {
@@ -71,7 +74,8 @@ namespace {
 
 column_view deserialize_column(serialized_column serial_column,
                                std::vector<column_view> const& children,
-                               uint8_t const* base_ptr) {
+                               uint8_t const* base_ptr)
+{
   auto data_ptr = serial_column._data_offset != -1 ? base_ptr + serial_column._data_offset : 0;
 
   // size_t is an unsigned int so -1 is the max value of size_t. If the offset
@@ -99,7 +103,8 @@ column_view deserialize_column(serialized_column serial_column,
 
 }  // namespace
 
-unpack_result unpack(std::unique_ptr<packed_columns> input) {
+unpack_result unpack(std::unique_ptr<packed_columns> input)
+{
   auto serialized_columns = reinterpret_cast<serialized_column const*>(input->metadata->data());
   uint8_t const* base_ptr = static_cast<uint8_t const*>(input->data->data());
   size_t current_index    = 1;
@@ -126,15 +131,16 @@ unpack_result unpack(std::unique_ptr<packed_columns> input) {
 
 }  // namespace detail
 
-packed_columns pack(std::vector<column_view> const& input, rmm::mr::device_memory_resource* mr) {
+packed_columns pack(std::vector<column_view> const& input, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::pack(input, 0, mr);
 }
 
-unpack_result unpack(std::unique_ptr<packed_columns> input) {
+unpack_result unpack(std::unique_ptr<packed_columns> input)
+{
   CUDF_FUNC_RANGE();
   return detail::unpack(std::move(input));
 }
 
-}  // namespace experimental
 }  // namespace cudf

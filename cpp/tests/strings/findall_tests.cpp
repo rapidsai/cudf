@@ -22,7 +22,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 
-#include <gmock/gmock.h>
 #include <vector>
 
 struct StringsFindallTests : public cudf::test::BaseFixture {
@@ -72,7 +71,7 @@ TEST_F(StringsFindallTests, FindallTest)
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.push_back(expected1.release());
   columns.push_back(expected2.release());
-  cudf::experimental::table expected(std::move(columns));
+  cudf::table expected(std::move(columns));
   cudf::test::expect_tables_equal(*results, expected);
 }
 

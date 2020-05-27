@@ -21,6 +21,14 @@
 
 namespace cudf {
 namespace strings {
+/**
+ * @addtogroup strings_modify
+ * @{
+ */
+
+/**
+ * @brief Direction identifier for strip() function.
+ */
 enum class strip_type {
   LEFT,   //<< strip characters from the beginning of the string
   RIGHT,  //<< strip characters from the end of the string
@@ -40,11 +48,12 @@ enum class strip_type {
  *
  * Any null string entries return corresponding null output column entries.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = [" aaa ", "_bbbb ", "__cccc  ", "ddd", " ee _ff gg_"]
  * r = strip(s,both," _")
  * r is now ["aaa", "bbbb", "cccc", "ddd", "ee _ff gg"]
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if `to_strip` is invalid.
  *
@@ -62,5 +71,6 @@ std::unique_ptr<column> strip(
   string_scalar const& to_strip       = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

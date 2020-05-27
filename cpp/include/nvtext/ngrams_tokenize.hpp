@@ -21,11 +21,17 @@
 
 namespace nvtext {
 /**
+ * @addtogroup nvtext_ngrams
+ * @{
+ */
+
+/**
  * @brief Returns a single column of strings by tokenizing the input strings
  * column and then producing ngrams of each string.
  *
  * An ngram is a grouping of 2 or more tokens with a separator. For example,
  * generating bigrams groups all adjacent pairs of tokens for a string.
+ *
  * ```
  * ["a bb ccc"] can be tokenized to ["a", "bb", "ccc"]
  * bigrams would generate ["a_bb", "bb_ccc"] and trigrams would generate ["a_bb_ccc"]
@@ -50,12 +56,12 @@ namespace nvtext {
  * The size of the output column will be the total number of ngrams generated from
  * the input strings column.
  *
+ * @code{.pseudo}
  * Example:
- * ```
  * s = ["a b c", "d e", "f g h i", "j"]
  * t = ngrams_tokenize(s, 2, " ", "_")
  * t is now ["a_b", "b_c", "d_e", "f_g", "g_h", "h_i"]
- * ```
+ * @endcode
  *
  * All null row entries are ignored and the output contains all valid rows.
  *
@@ -76,4 +82,5 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   cudf::string_scalar const& separator = cudf::string_scalar{"_"},
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace nvtext

@@ -10,11 +10,11 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.aggregation cimport aggregation
-from cudf._lib.cpp.types cimport size_type, order, null_order, include_nulls
+from cudf._lib.cpp.types cimport size_type, order, null_order, null_policy
 
 
 cdef extern from "cudf/groupby.hpp" \
-        namespace "cudf::experimental::groupby" nogil:
+        namespace "cudf::groupby" nogil:
 
     cdef cppclass aggregation_request:
         aggregation_request() except +
@@ -25,7 +25,7 @@ cdef extern from "cudf/groupby.hpp" \
         vector[unique_ptr[column]] results
 
     cdef cppclass groups \
-            "cudf::experimental::groupby::groupby::groups" nogil:
+            "cudf::groupby::groupby::groups" nogil:
         unique_ptr[table] keys
         vector[size_type] offsets
         unique_ptr[table] values
@@ -34,25 +34,25 @@ cdef extern from "cudf/groupby.hpp" \
         groupby(const table_view& keys) except +
         groupby(
             const table_view& keys,
-            include_nulls include_null_keys
+            null_policy include_null_keys
         ) except +
 
         groupby(
             const table_view& keys,
-            include_nulls include_null_keys,
+            null_policy include_null_keys,
             bool keys_are_sorted,
         ) except +
 
         groupby(
             const table_view& keys,
-            include_nulls include_null_keys,
+            null_policy include_null_keys,
             bool keys_are_sorted,
             const vector[order]& column_order,
         ) except +
 
         groupby(
             const table_view& keys,
-            include_nulls include_null_keys,
+            null_policy include_null_keys,
             bool keys_are_sorted,
             const vector[order]& column_order,
             const vector[null_order]& null_precedence

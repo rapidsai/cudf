@@ -22,6 +22,11 @@
 namespace cudf {
 namespace strings {
 /**
+ * @addtogroup strings_find
+ * @{
+ */
+
+/**
  * @brief Returns a column of character position values where the target
  * string is first found in each string of the provided column.
  *
@@ -136,5 +141,6 @@ std::unique_ptr<column> ends_with(
   string_scalar const& target,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

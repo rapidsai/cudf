@@ -12,7 +12,7 @@ from pandas.api.types import is_dtype_equal
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
-from cudf._lib.scalar import Scalar
+from cudf._lib.scalar import as_scalar
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
@@ -185,7 +185,7 @@ class Frame(libcudf.table.Table):
         # order. This strips the given index/column names and replaces the
         # names with their integer positions in the `cols` list
         tables = []
-        for i, cols in enumerate(columns):
+        for cols in columns:
             table_cols = cols[first_data_column_position:]
             table_names = indices[first_data_column_position:]
             table = cls(data=dict(zip(table_names, table_cols)))
@@ -394,7 +394,7 @@ class Frame(libcudf.table.Table):
 
             if self is DataFrame, other can be only a
             scalar or array like with size of number of columns
-            in DataFrame or a DataFrame with same dimenstion
+            in DataFrame or a DataFrame with same dimension
 
             if self is Series, other can be only a scalar or
             a series like with same length as self
@@ -424,7 +424,7 @@ class Frame(libcudf.table.Table):
             ):
                 return self._normalize_scalars(other)
 
-            elif (self, cudf.DataFrame):
+            elif isinstance(self, cudf.DataFrame):
                 out = []
                 if is_scalar(other):
                     other = [other for i in range(len(self._data.names))]
@@ -457,7 +457,7 @@ class Frame(libcudf.table.Table):
             supported. Default is None.
 
             DataFrame expects only Scalar or array like with scalars or
-            dataframe with same dimention as self.
+            dataframe with same dimension as self.
 
             Series expects only scalar or series like with same length
         inplace : bool, default False
@@ -635,7 +635,7 @@ class Frame(libcudf.table.Table):
             supported. Default is None.
 
             DataFrame expects only Scalar or array like with scalars or
-            dataframe with same dimention as self.
+            dataframe with same dimension as self.
 
             Series expects only scalar or series like with same length
         inplace : bool, default False
@@ -872,6 +872,11 @@ class Frame(libcudf.table.Table):
         Applies boolean mask to each row of `self`,
         rows corresponding to `False` is dropped
         """
+        boolean_mask = as_column(boolean_mask)
+        if boolean_mask.has_nulls:
+            raise ValueError(
+                "cannot mask with boolean_mask containing null values"
+            )
         result = self.__class__._from_table(
             libcudf.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
@@ -1013,7 +1018,7 @@ class Frame(libcudf.table.Table):
 
     def _repeat(self, count):
         if is_scalar(count):
-            count = Scalar(count)
+            count = as_scalar(count)
         else:
             count = as_column(count)
 
@@ -1127,7 +1132,7 @@ class Frame(libcudf.table.Table):
                         col_to_replace, col_replacement, col_all_nan
                     )
                 except KeyError:
-                    # Donot change the copy_data[name]
+                    # Do not change the copy_data[name]
                     pass
 
         result = self._from_table(Frame(copy_data, self.index))
@@ -1714,8 +1719,10 @@ class Frame(libcudf.table.Table):
                 elif right_index:
                     compare_cols_l = lhs[left_on]._data.columns
                     compare_cols_r = rhs._index._data.columns
-                for l, r in compare_cols_l, compare_cols_r:
-                    if not pd.api.types.is_dtype_equal(l.dtype, r.dtype):
+                for left, right in compare_cols_l, compare_cols_r:
+                    if not pd.api.types.is_dtype_equal(
+                        left.dtype, right.dtype
+                    ):
                         raise NotImplementedError(
                             "Typecasting not yet supported for MultiIndicies"
                         )
