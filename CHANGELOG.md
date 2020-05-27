@@ -329,6 +329,7 @@
 - PR #5224 Add new headers from 5198 to libcudf/meta.yaml
 - PR #5228 Fix datetime64 scalar dtype handling for unsupported time units
 - PR #5256 ORC reader: fix loading individual timestamp columns
+- PR #5285 Fix DEBUG compilation failure due to `fixed_point.hpp`
 
 
 # cuDF 0.13.0 (31 Mar 2020)
