@@ -31,22 +31,54 @@ import java.net.URL;
  */
 public class NativeDepsLoader {
   private static final Logger log = LoggerFactory.getLogger(NativeDepsLoader.class);
-  private static final String[] loadOrder = new String[] {
-      "boost_filesystem",
-      "rmm",
-      "cudf",
-      "cudfjni"
+  private static final Loader[] loadOrder = new Loader[] {
+      new Optional("nvrtc"),
+      new Required("boost_filesystem"),
+      new Required("rmm"),
+      new Required("cudf"),
+      new Required("cudfjni")
   };
   private static ClassLoader loader = NativeDepsLoader.class.getClassLoader();
   private static boolean loaded = false;
+
+  private static abstract class Loader {
+    protected final String baseName;
+    public Loader(String baseName) {
+      this.baseName = baseName;
+    }
+
+    public abstract void load(String os, String arch) throws IOException;
+  }
+
+  private static class Required extends Loader {
+    public Required(String baseName) {
+      super(baseName);
+    }
+
+    @Override
+    public void load(String os, String arch) throws IOException {
+      loadDep(os, arch, this.baseName, true);
+    }
+  }
+
+  private static class Optional extends Loader {
+    public Optional(String baseName) {
+      super(baseName);
+    }
+
+    @Override
+    public void load(String os, String arch) throws IOException {
+      loadDep(os, arch, this.baseName, false);
+    }
+  }
 
   static synchronized void loadNativeDeps() {
     if (!loaded) {
       String os = System.getProperty("os.name");
       String arch = System.getProperty("os.arch");
       try {
-        for (String toLoad : loadOrder) {
-          loadDep(os, arch, toLoad);
+        for (Loader toLoad : loadOrder) {
+          toLoad.load(os, arch);
         }
         loaded = true;
       } catch (Throwable t) {
@@ -55,7 +87,8 @@ public class NativeDepsLoader {
     }
   }
 
-  private static void loadDep(String os, String arch, String baseName) throws IOException {
+  private static void loadDep(String os, String arch, String baseName, boolean required)
+          throws IOException {
     String path = arch + "/" + os + "/" + System.mapLibraryName(baseName);
     File loc;
     URL resource = loader.getResource(path);
@@ -63,7 +96,11 @@ public class NativeDepsLoader {
       // It looks like we are not running from the jar, or there are issues with the jar
       File f = new File("./target/native-deps/" + path);
       if (!f.exists()) {
-        throw new FileNotFoundException("Could not locate native dependency " + path);
+        if (required) {
+          throw new FileNotFoundException("Could not locate native dependency " + path);
+        }
+        // Not required so we will skip it
+        return;
       }
       resource = f.toURL();
     }
