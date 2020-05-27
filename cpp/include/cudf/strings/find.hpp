@@ -141,6 +141,94 @@ std::unique_ptr<column> ends_with(
   string_scalar const& target,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Returns a column of strings that searches for the @p delimiter @p count number of
+ * times in the source @p strings forward if @p count is positive or backwards if @p count is
+ * negative. If @p count is positive, it returns a substring from the start of the source @p
+ * strings up until @p count occurrence of the @delimiter not including the @p delimiter.
+ * If @p count is negative, it returns a substring from the start of the @p count occurrence of
+ * the @delimiter in the source @p strings past the delimiter until the end of the string.
+ *
+ * The search for @delimiter in @p strings is case sensitive.
+ * If the @p count is 0, every row in the output column will be null.
+ * If the row value of @p strings is null, the row value in the output column will be null.
+ * If the @p delimiter is invalid or null, every row in the output column will be null.
+ * If the @p delimiter or the column value for a row is empty, the row value in the output
+ * column will be empty.
+ * If @p count occurrences of @p delimiter isn't found, the row value in the output column will
+ * be the row value from the input @p strings column.
+ *
+ * @code{.pseudo}
+ * Example:
+ * in_s = ['www.nvidia.com', null, 'www.google.com', '', 'foo' ]
+ * r = substring_index(in_s, '.', 1)
+ * r is ['www', null, 'www', '', 'foo']
+ *
+ * in_s = ['www.nvidia.com', null, 'www.google.com', '', 'foo' ]
+ * r = substring_index(in_s, '.', -2)
+ * r is ['nvidia.com', null, 'google.com', '', 'foo']
+ * @endcode
+ *
+ * @param strings Strings instance for this operation.
+ * @param delimiter UTF-8 encoded string to search for in each string.
+ * @param count Number of times to search for delimiter in each string. If the value is positive,
+ *              forward search of delimiter is performed; else, a backward search is performed.
+ * @param mr Resource for allocating device memory.
+ * @return New strings column containing the substrings.
+ */
+std::unique_ptr<column> substring_index(
+  strings_column_view const& strings,
+  string_scalar const& delimiter,
+  size_type count,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Returns a column of strings that searches the delimiter for each row from
+ * @p delimiter_strings @p count number of times in the source @p strings forward if @p count
+ * is positive or backwards if @p count is negative. If @p count is positive, it returns a
+ * substring from the start of the source @p strings up until @p count occurrence of the
+ * delimiter for that row not including that delimiter. If @p count is negative, it returns a
+ * substring from the start of the @p count occurrence of the delimiter for that row in the
+ * source @p strings past the delimiter until the end of the string.
+ *
+ * The search for @p delimiter_strings in @p strings is case sensitive.
+ * If the @p count is 0, every row in the output column will be null.
+ * If the row value of @p strings is null, the row value in the output column will be null.
+ * If the row value from @p delimiter_strings is invalid or null, the row value in the
+ * output column will be null.
+ * If the row value from @p delimiter_strings or the column value for a row is empty, the
+ * row value in the output column will be empty.
+ * If @p count occurrences of delimiter isn't found, the row value in the output column will
+ * be the row value from the input @p strings column.
+ *
+ * @code{.pseudo}
+ * Example:
+ * in_s = ['www.nvidia.com', null, 'www.google.com', '', 'foo..bar....goo' ]
+ * delimiters = ['.', '..', '', null, '..']
+ * r = substring_index(in_s, delimiters, 2)
+ * r is ['www.nvidia', null, '', null, 'foo..bar']
+ *
+ * in_s = ['www.nvidia.com', null, 'www.google.com', '', 'foo..bar....goo', 'apache.org' ]
+ * delimiters = ['.', '..', '', null, '..', '.']
+ * r = substring_index(in_s, delimiters, -2)
+ * r is ['nvidia.com', null, '', null, '..goo', 'apache.org']
+ * @endcode
+ *
+ * @throw cudf::logic_error if the number of rows in @p strings and @delimiter_strings do not match.
+ *
+ * @param strings Strings instance for this operation.
+ * @param delimiter_strings UTF-8 encoded string for each row.
+ * @param count Number of times to search for delimiter in each string. If the value is positive,
+ *              forward search of delimiter is performed; else, a backward search is performed.
+ * @param mr Resource for allocating device memory.
+ * @return New strings column containing the substrings.
+ */
+std::unique_ptr<column> substring_index(
+  strings_column_view const& strings,
+  strings_column_view const& delimiter_strings,
+  size_type count,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf
