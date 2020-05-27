@@ -237,6 +237,7 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust)
 
 TEST_F(FixedPointTest, OverflowDecimal32)
 {
+  // This flag is needed to avoid warnings with ASSERT_DEATH
   ::testing::FLAGS_gtest_death_test_style = "threadsafe";
 
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
