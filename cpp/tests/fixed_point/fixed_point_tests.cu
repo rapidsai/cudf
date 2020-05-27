@@ -164,6 +164,25 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXMath)
   EXPECT_EQ(SIX / TWO, THREE);
 }
 
+TYPED_TEST(FixedPointTestBothReps, ComparisonOperators)
+{
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  decimalXX ONE{1, scale_type{-1}};
+  decimalXX TWO{2, scale_type{-2}};
+  decimalXX THREE{3, scale_type{-3}};
+  decimalXX SIX{6, scale_type{-4}};
+
+  EXPECT_TRUE(ONE + ONE >= TWO);
+
+  EXPECT_TRUE(ONE + ONE <= TWO);
+  EXPECT_TRUE(ONE * TWO < THREE);
+  EXPECT_TRUE(THREE * TWO > THREE);
+  EXPECT_TRUE(THREE - TWO >= ONE);
+  EXPECT_TRUE(TWO / ONE < THREE);
+  EXPECT_TRUE(SIX / TWO >= ONE);
+}
+
 TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
