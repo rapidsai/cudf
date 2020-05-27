@@ -11,6 +11,8 @@
 ## Bug Fixes
 
 - PR #5269 Explicitly require NumPy
+- PR #5299 Update package version for Java bindings
+
 
 # cuDF 0.14.0 (Date TBD)
 
