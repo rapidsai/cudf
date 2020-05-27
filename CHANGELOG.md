@@ -35,6 +35,7 @@
 - PR #5203 Add Java bindings for is_integer and is_float
 - PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
 - PR #5293 Add Java bindings for replace_with_backrefs
+- PR #5303 Add substring_index functionality for strings
 
 ## Improvements
 
