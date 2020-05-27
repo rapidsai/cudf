@@ -538,6 +538,7 @@ struct unpack_result {
  */
 unpack_result unpack(std::unique_ptr<packed_columns> input);
 
+/**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
  *          @p rhs based on the value of the corresponding element in @p boolean_mask
  *
@@ -562,212 +563,211 @@ std::unique_ptr<column> copy_if_else(
   column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
- /**
-  * @brief Creates a new column by shifting all values by an offset.
-  *
-  * @ingroup copy_shift
-  *
-  * Elements will be determined by `output[idx] = input[idx - offset]`.
-  * Some elements in the output may be indeterminable from the input. For those
-  * elements, the value will be determined by `fill_values`.
-  *
-  * @code{.pseudo}
-  * Examples
-  * -------------------------------------------------
-  * input       = [0, 1, 2, 3, 4]
-  * offset      = 3
-  * fill_values = @
-  * return      = [@, @, @, 0, 1]
-  * -------------------------------------------------
-  * input       = [5, 4, 3, 2, 1]
-  * offset      = -2
-  * fill_values = 7
-  * return      = [3, 2, 1, 7, 7]
-  * @endcode
-  *
-  * @note if the input is nullable, the output will be nullable.
-  * @note if the fill value is null, the output will be nullable.
-  *
-  * @param input      Column to be shifted.
-  * @param offset     The offset by which to shift the input.
-  * @param fill_value Fill value for indeterminable outputs.
-  *
-  * @throw cudf::logic_error if @p input dtype is not fixed-with.
-  * @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
-  */
- std::unique_ptr<column> shift(
-   column_view const& input,
-   size_type offset,
-   scalar const& fill_value,
-   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-   cudaStream_t stream                 = 0);
+/**
+ * @brief Creates a new column by shifting all values by an offset.
+ *
+ * @ingroup copy_shift
+ *
+ * Elements will be determined by `output[idx] = input[idx - offset]`.
+ * Some elements in the output may be indeterminable from the input. For those
+ * elements, the value will be determined by `fill_values`.
+ *
+ * @code{.pseudo}
+ * Examples
+ * -------------------------------------------------
+ * input       = [0, 1, 2, 3, 4]
+ * offset      = 3
+ * fill_values = @
+ * return      = [@, @, @, 0, 1]
+ * -------------------------------------------------
+ * input       = [5, 4, 3, 2, 1]
+ * offset      = -2
+ * fill_values = 7
+ * return      = [3, 2, 1, 7, 7]
+ * @endcode
+ *
+ * @note if the input is nullable, the output will be nullable.
+ * @note if the fill value is null, the output will be nullable.
+ *
+ * @param input      Column to be shifted.
+ * @param offset     The offset by which to shift the input.
+ * @param fill_value Fill value for indeterminable outputs.
+ *
+ * @throw cudf::logic_error if @p input dtype is not fixed-with.
+ * @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
+ */
+std::unique_ptr<column> shift(column_view const& input,
+                              size_type offset,
+                              scalar const& fill_value,
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                              cudaStream_t stream                 = 0);
 
- /**
-  * @brief   Returns a new column, where each element is selected from either @p lhs or
-  *          @p rhs based on the value of the corresponding element in @p boolean_mask
-  *
-  * Selects each element i in the output column from either @p rhs or @p lhs using the following
-  * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs : rhs[i]`
-  *
-  * @throws cudf::logic_error if lhs and rhs are not of the same type
-  * @throws cudf::logic_error if boolean mask is not of type bool
-  * @throws cudf::logic_error if boolean mask is not of the same length as rhs
-  * @param[in] lhs left-hand scalar
-  * @param[in] rhs right-hand column_view
-  * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
-  * each element. Null element represents false.
-  * @param[in] mr resource for allocating device memory
-  *
-  * @returns new column with the selected elements
-  */
- std::unique_ptr<column> copy_if_else(
-   scalar const& lhs,
-   column_view const& rhs,
-   column_view const& boolean_mask,
-   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+/**
+ * @brief   Returns a new column, where each element is selected from either @p lhs or
+ *          @p rhs based on the value of the corresponding element in @p boolean_mask
+ *
+ * Selects each element i in the output column from either @p rhs or @p lhs using the following
+ * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs : rhs[i]`
+ *
+ * @throws cudf::logic_error if lhs and rhs are not of the same type
+ * @throws cudf::logic_error if boolean mask is not of type bool
+ * @throws cudf::logic_error if boolean mask is not of the same length as rhs
+ * @param[in] lhs left-hand scalar
+ * @param[in] rhs right-hand column_view
+ * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
+ * each element. Null element represents false.
+ * @param[in] mr resource for allocating device memory
+ *
+ * @returns new column with the selected elements
+ */
+std::unique_ptr<column> copy_if_else(
+  scalar const& lhs,
+  column_view const& rhs,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
- /**
-  * @brief   Returns a new column, where each element is selected from either @p lhs or
-  *          @p rhs based on the value of the corresponding element in @p boolean_mask
-  *
-  * Selects each element i in the output column from either @p rhs or @p lhs using the following
-  * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs[i] : rhs`
-  *
-  * @throws cudf::logic_error if lhs and rhs are not of the same type
-  * @throws cudf::logic_error if boolean mask is not of type bool
-  * @throws cudf::logic_error if boolean mask is not of the same length as lhs
-  * @param[in] lhs left-hand column_view
-  * @param[in] rhs right-hand scalar
-  * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
-  * each element. Null element represents false.
-  * @param[in] mr resource for allocating device memory
-  *
-  * @returns new column with the selected elements
-  */
- std::unique_ptr<column> copy_if_else(
-   column_view const& lhs,
-   scalar const& rhs,
-   column_view const& boolean_mask,
-   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+/**
+ * @brief   Returns a new column, where each element is selected from either @p lhs or
+ *          @p rhs based on the value of the corresponding element in @p boolean_mask
+ *
+ * Selects each element i in the output column from either @p rhs or @p lhs using the following
+ * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs[i] : rhs`
+ *
+ * @throws cudf::logic_error if lhs and rhs are not of the same type
+ * @throws cudf::logic_error if boolean mask is not of type bool
+ * @throws cudf::logic_error if boolean mask is not of the same length as lhs
+ * @param[in] lhs left-hand column_view
+ * @param[in] rhs right-hand scalar
+ * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
+ * each element. Null element represents false.
+ * @param[in] mr resource for allocating device memory
+ *
+ * @returns new column with the selected elements
+ */
+std::unique_ptr<column> copy_if_else(
+  column_view const& lhs,
+  scalar const& rhs,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
- /**
-  * @brief   Returns a new column, where each element is selected from either @p lhs or
-  *          @p rhs based on the value of the corresponding element in @p boolean_mask
-  *
-  * Selects each element i in the output column from either @p rhs or @p lhs using the following
-  * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs : rhs`
-  *
-  * @throws cudf::logic_error if boolean mask is not of type bool
-  * @param[in] lhs left-hand scalar
-  * @param[in] rhs right-hand scalar
-  * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
-  * each element. null element represents false.
-  * @param[in] mr resource for allocating device memory
-  *
-  * @returns new column with the selected elements
-  */
- std::unique_ptr<column> copy_if_else(
-   scalar const& lhs,
-   scalar const& rhs,
-   column_view const& boolean_mask,
-   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+/**
+ * @brief   Returns a new column, where each element is selected from either @p lhs or
+ *          @p rhs based on the value of the corresponding element in @p boolean_mask
+ *
+ * Selects each element i in the output column from either @p rhs or @p lhs using the following
+ * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs : rhs`
+ *
+ * @throws cudf::logic_error if boolean mask is not of type bool
+ * @param[in] lhs left-hand scalar
+ * @param[in] rhs right-hand scalar
+ * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
+ * each element. null element represents false.
+ * @param[in] mr resource for allocating device memory
+ *
+ * @returns new column with the selected elements
+ */
+std::unique_ptr<column> copy_if_else(
+  scalar const& lhs,
+  scalar const& rhs,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
- /**
-  * @brief Scatters rows from the input table to rows of the output corresponding
-  * to true values in a boolean mask.
-  *
-  * @ingroup copy_scatter
-  *
-  * The `i`th row of `input` will be written to the output table at the location
-  * of the `i`th true value in `boolean_mask`. All other rows in the output will
-  * equal the same row in `target`.
-  *
-  * `boolean_mask` should have number of `true`s <= number of rows in `input`.
-  * If boolean mask is `true`, corresponding value in target is updated with
-  * value from corresponding `input` column, else it is left untouched.
-  *
-  * @code{.pseudo}
-  * Example:
-  * input: {{1, 5, 6, 8, 9}}
-  * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
-  * target:       {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
-  *
-  * output:       {{   1,     2,     3,     4,    5,     6,    7,    8,    9,    10}}
-  * @endcode
-  *
-  * @throw  cudf::logic_error if input.num_columns() != target.num_columns()
-  * @throws cudf::logic_error if any `i`th input_column type != `i`th target_column type
-  * @throws cudf::logic_error if boolean_mask.type() != bool
-  * @throws cudf::logic_error if boolean_mask.size() != target.num_rows()
-  * @throws cudf::logic_error if number of `true` in `boolean_mask` > input.num_rows()
-  *
-  * @param[in] input table_view (set of dense columns) to scatter
-  * @param[in] target table_view to modify with scattered values from `input`
-  * @param[in] boolean_mask column_view which acts as boolean mask.
-  * @param[in] mr Optional, The resource to use for all returned allocations
-  *
-  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
-  */
- std::unique_ptr<table> boolean_mask_scatter(
-   table_view const& input,
-   table_view const& target,
-   column_view const& boolean_mask,
-   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+/**
+ * @brief Scatters rows from the input table to rows of the output corresponding
+ * to true values in a boolean mask.
+ *
+ * @ingroup copy_scatter
+ *
+ * The `i`th row of `input` will be written to the output table at the location
+ * of the `i`th true value in `boolean_mask`. All other rows in the output will
+ * equal the same row in `target`.
+ *
+ * `boolean_mask` should have number of `true`s <= number of rows in `input`.
+ * If boolean mask is `true`, corresponding value in target is updated with
+ * value from corresponding `input` column, else it is left untouched.
+ *
+ * @code{.pseudo}
+ * Example:
+ * input: {{1, 5, 6, 8, 9}}
+ * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
+ * target:       {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
+ *
+ * output:       {{   1,     2,     3,     4,    5,     6,    7,    8,    9,    10}}
+ * @endcode
+ *
+ * @throw  cudf::logic_error if input.num_columns() != target.num_columns()
+ * @throws cudf::logic_error if any `i`th input_column type != `i`th target_column type
+ * @throws cudf::logic_error if boolean_mask.type() != bool
+ * @throws cudf::logic_error if boolean_mask.size() != target.num_rows()
+ * @throws cudf::logic_error if number of `true` in `boolean_mask` > input.num_rows()
+ *
+ * @param[in] input table_view (set of dense columns) to scatter
+ * @param[in] target table_view to modify with scattered values from `input`
+ * @param[in] boolean_mask column_view which acts as boolean mask.
+ * @param[in] mr Optional, The resource to use for all returned allocations
+ *
+ * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
+ */
+std::unique_ptr<table> boolean_mask_scatter(
+  table_view const& input,
+  table_view const& target,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
- /**
-  * @brief Scatters scalar values to rows of the output corresponding
-  * to true values in a boolean mask.
-  *
-  * @ingroup copy_scatter
-  *
-  * The `i`th scalar in `input` will be written to all columns of the output
-  * table at the location of the `i`th true value in `boolean_mask`.
-  * All other rows in the output will equal the same row in `target`.
-  *
-  * @code{.pseudo}
-  * Example:
-  * input: {11}
-  * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
-  * target:      {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
-  *
-  * output:       {{   11,    2,     3,     4,   11,    11,    7,   11,   11,    10}}
-  * @endcode
-  *
-  * @throw  cudf::logic_error if input.size() != target.num_columns()
-  * @throws cudf::logic_error if any `i`th input_scalar type != `i`th target_column type
-  * @throws cudf::logic_error if boolean_mask.type() != bool
-  * @throws cudf::logic_error if boolean_mask.size() != target.size()
-  *
-  * @param[in] input scalars to scatter
-  * @param[in] target table_view to modify with scattered values from `input`
-  * @param[in] boolean_mask column_view which acts as boolean mask.
-  * @param[in] mr Optional, The resource to use for all returned allocations
-  *
-  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
-  */
- std::unique_ptr<table> boolean_mask_scatter(
-   std::vector<std::reference_wrapper<scalar>> const& input,
-   table_view const& target,
-   column_view const& boolean_mask,
-   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+/**
+ * @brief Scatters scalar values to rows of the output corresponding
+ * to true values in a boolean mask.
+ *
+ * @ingroup copy_scatter
+ *
+ * The `i`th scalar in `input` will be written to all columns of the output
+ * table at the location of the `i`th true value in `boolean_mask`.
+ * All other rows in the output will equal the same row in `target`.
+ *
+ * @code{.pseudo}
+ * Example:
+ * input: {11}
+ * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
+ * target:      {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
+ *
+ * output:       {{   11,    2,     3,     4,   11,    11,    7,   11,   11,    10}}
+ * @endcode
+ *
+ * @throw  cudf::logic_error if input.size() != target.num_columns()
+ * @throws cudf::logic_error if any `i`th input_scalar type != `i`th target_column type
+ * @throws cudf::logic_error if boolean_mask.type() != bool
+ * @throws cudf::logic_error if boolean_mask.size() != target.size()
+ *
+ * @param[in] input scalars to scatter
+ * @param[in] target table_view to modify with scattered values from `input`
+ * @param[in] boolean_mask column_view which acts as boolean mask.
+ * @param[in] mr Optional, The resource to use for all returned allocations
+ *
+ * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
+ */
+std::unique_ptr<table> boolean_mask_scatter(
+  std::vector<std::reference_wrapper<scalar>> const& input,
+  table_view const& target,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
- /**
-  * @brief Get the element at specified index from a column
-  *
-  * @warning This function is expensive (invokes a kernel launch). So, it is not
-  * recommended to be used in performance sensitive code or inside a loop.
-  *
-  * @throws cudf::logic_error if `index` is not within the range `[0, input.size())`
-  *
-  * @param input Column view to get the element from
-  * @param index Index into `input` to get the element at
-  * @param mr Optional, The resource to use for all returned allocations
-  * @return std::unique_ptr<scalar> Scalar containing the single value
-  */
- std::unique_ptr<scalar> get_element(
-   column_view const& input,
-   size_type index,
-   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+/**
+ * @brief Get the element at specified index from a column
+ *
+ * @warning This function is expensive (invokes a kernel launch). So, it is not
+ * recommended to be used in performance sensitive code or inside a loop.
+ *
+ * @throws cudf::logic_error if `index` is not within the range `[0, input.size())`
+ *
+ * @param input Column view to get the element from
+ * @param index Index into `input` to get the element at
+ * @param mr Optional, The resource to use for all returned allocations
+ * @return std::unique_ptr<scalar> Scalar containing the single value
+ */
+std::unique_ptr<scalar> get_element(
+  column_view const& input,
+  size_type index,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
- /** @} */
- }  // namespace cudf
+/** @} */
+}  // namespace cudf
