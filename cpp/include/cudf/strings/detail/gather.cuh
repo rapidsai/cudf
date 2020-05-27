@@ -24,6 +24,13 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace cudf {
+
+template <typename Iterator>
+constexpr inline bool is_signed_itr()
+{
+  return std::is_signed<typename std::iterator_traits<Iterator>::value_type>::value;
+}
+
 namespace strings {
 namespace detail {
 /**
@@ -87,8 +94,8 @@ std::unique_ptr<cudf::column> gather(
     [d_strings, begin, strings_count, d_offsets, d_chars] __device__(size_type idx) {
       auto index = begin[idx];
       if (NullifyOutOfBounds) {
-        if (std::is_signed<decltype(index)>::value ? ((index < 0) || (index >= strings_count))
-                                                   : (index >= strings_count))
+        if (is_signed_itr<MapIterator>() ? ((index < 0) || (index >= strings_count))
+                                         : (index >= strings_count))
           return;
       }
       if (d_strings.is_null(index)) return;
