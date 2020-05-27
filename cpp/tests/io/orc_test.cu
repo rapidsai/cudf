@@ -91,7 +91,8 @@ struct OrcWriterTimestampTypeTest : public OrcWriterTest {
 };
 
 // Declare typed test cases
-TYPED_TEST_CASE(OrcWriterNumericTypeTest, cudf::test::NumericTypes);
+using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
+TYPED_TEST_CASE(OrcWriterNumericTypeTest, SupportedTypes);
 using SupportedTimestampTypes =
   cudf::test::RemoveIf<cudf::test::ContainedIn<cudf::test::Types<cudf::timestamp_D>>,
                        cudf::test::TimestampTypes>;
@@ -108,7 +109,7 @@ struct OrcChunkedWriterNumericTypeTest : public OrcChunkedWriterTest {
 };
 
 // Declare typed test cases
-TYPED_TEST_CASE(OrcChunkedWriterNumericTypeTest, cudf::test::NumericTypes);
+TYPED_TEST_CASE(OrcChunkedWriterNumericTypeTest, SupportedTypes);
 
 namespace {
 // Generates a vector of uniform random values of type T

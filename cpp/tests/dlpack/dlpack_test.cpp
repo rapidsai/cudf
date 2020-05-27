@@ -223,7 +223,9 @@ template <typename T>
 class DLPackNumericTests : public BaseFixture {
 };
 
-TYPED_TEST_CASE(DLPackNumericTests, NumericTypes);
+// The list of supported types comes from DLDataType_to_data_type() in cpp/src/dlpack/dlpack.cpp
+using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
+TYPED_TEST_CASE(DLPackNumericTests, SupportedTypes);
 
 TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 {
