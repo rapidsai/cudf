@@ -291,7 +291,7 @@ class CategoricalAccessor(object):
             and new_categories.dtype == "object"
         ):
             raise TypeError(
-                "cudf doesnot support mixed types, please type-cast \
+                "cudf does not support mixed types, please type-cast \
                     new_categories to the same type as existing categories."
             )
         common_dtype = np.find_common_type(
