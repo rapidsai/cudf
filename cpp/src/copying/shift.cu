@@ -34,7 +34,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 namespace {
 inline bool __device__ out_of_bounds(size_type size, size_type idx)
 {
@@ -57,7 +56,7 @@ struct shift_functor {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
-    using ScalarType = cudf::experimental::scalar_type_t<T>;
+    using ScalarType = cudf::scalar_type_t<T>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
 
     auto device_input = column_device_view::create(input);
@@ -119,12 +118,11 @@ std::unique_ptr<column> shift(column_view const& input,
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input.type() == fill_value.type(),
-               "shift requires each fill value type to match the corrosponding column type.");
+               "shift requires each fill value type to match the corresponding column type.");
 
   if (input.size() == 0) { return empty_like(input); }
 
   return type_dispatcher(input.type(), shift_functor{}, input, offset, fill_value, mr, stream);
 }
 
-}  // namespace experimental
 }  // namespace cudf

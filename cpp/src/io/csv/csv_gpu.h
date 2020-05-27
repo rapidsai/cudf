@@ -158,7 +158,7 @@ uint32_t gather_row_offsets(uint64_t *row_ctx,
                             size_t byte_range_end,
                             size_t skip_rows,
                             size_t num_row_offsets,
-                            const cudf::experimental::io::ParseOptions &options,
+                            const cudf::io::ParseOptions &options,
                             cudaStream_t stream = 0);
 
 /**
@@ -172,7 +172,7 @@ uint32_t gather_row_offsets(uint64_t *row_ctx,
  **/
 size_t count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
                         rmm::device_vector<char> const &d_data,
-                        const cudf::experimental::io::ParseOptions &options,
+                        const cudf::io::ParseOptions &options,
                         cudaStream_t stream = 0);
 
 /**
@@ -186,7 +186,7 @@ size_t count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
  **/
 void remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
                        rmm::device_vector<char> const &d_data,
-                       const cudf::experimental::io::ParseOptions &options,
+                       const cudf::io::ParseOptions &options,
                        cudaStream_t stream = 0);
 
 /**
@@ -207,7 +207,7 @@ cudaError_t DetectColumnTypes(const char *data,
                               const uint64_t *row_starts,
                               size_t num_rows,
                               size_t num_columns,
-                              const cudf::experimental::io::ParseOptions &options,
+                              const cudf::io::ParseOptions &options,
                               column_parse::flags *flags,
                               column_parse::stats *stats,
                               cudaStream_t stream = (cudaStream_t)0);
@@ -233,7 +233,7 @@ cudaError_t DecodeRowColumnData(const char *data,
                                 const uint64_t *row_starts,
                                 size_t num_rows,
                                 size_t num_columns,
-                                const cudf::experimental::io::ParseOptions &options,
+                                const cudf::io::ParseOptions &options,
                                 const column_parse::flags *flags,
                                 cudf::data_type *dtypes,
                                 void **columns,

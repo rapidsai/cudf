@@ -31,8 +31,10 @@
 - PR #5149 Add Java bindings for PMOD
 - PR #5153 Add Java bindings for extract
 - PR #5196 Add Java bindings for NULL_EQUALS, NULL_MAX and NULL_MIN
+- PR #5192 Add support for `cudf.to_datetime`
 - PR #5203 Add Java bindings for is_integer and is_float
 - PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
+- PR #5293 Add Java bindings for replace_with_backrefs
 
 ## Improvements
 
@@ -58,6 +60,7 @@
 - PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 - PR #4703 Optimize strings concatenate for many columns
+- PR #4769 Remove legacy code from libcudf
 - PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
 - PR #4520 Fix several single char -> single char case mapping values. Add support for single -> multi char mappings.
@@ -160,6 +163,7 @@
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
 - PR #5039 Make `annotate` picklable
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
+- PR #5023 Object oriented join and column agnostic typcasting
 - PR #5049 Add grouping of libcudf apis into doxygen modules
 - PR #5069 Remove duplicate documentation from detail headers
 - PR #5075 Add simple row-group aggregation mechanism in dask_cudf read_parquet
@@ -184,6 +188,7 @@
 - PR #5184 Fix style checks
 - PR #5198 Add detail headers for strings converter functions
 - PR #5199 Add index support in `DataFrame.query`
+- PR #5227 Refactor `detail::gather` API to make use of scoped enumerators
 - PR #5218 Reduce memory usage when categorifying column with null values.
 - PR #5209 Add `nan_as_null` support to `cudf.from_pandas`
 - PR #5207 Break up backref_re.cu into multiple source files to improve compile time
@@ -191,6 +196,11 @@
 - PR #5208 Port search and join benchmark to libcudf++
 - PR #5214 Move docs build script into repository
 - PR #5219 Add per context cache for JIT kernels
+- PR #5250 Improve `to_csv()` support for writing to buffers
+- PR #5233 Remove experimental namespace used during libcudf++ refactor
+- PR #5213 Documentation enhancements to `cudf` python APIs
+- PR #5251 Fix more mispellings in cpp comments and strings
+- PR #5270 Add support to check for "NaT" and "None" strings while typecasting to `datetime64`
 
 ## Bug Fixes
 
@@ -316,6 +326,7 @@
 - PR #5212 Fix memory leak in `dlpack.pyx:from_dlpack()`
 - PR #5224 Add new headers from 5198 to libcudf/meta.yaml
 - PR #5228 Fix datetime64 scalar dtype handling for unsupported time units
+- PR #5256 ORC reader: fix loading individual timestamp columns
 
 
 # cuDF 0.13.0 (31 Mar 2020)

@@ -23,7 +23,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include "./utilities.h"
 
-#include <gmock/gmock.h>
 #include <vector>
 
 struct StringsReplaceTest : public cudf::test::BaseFixture {
@@ -46,7 +45,7 @@ TEST_F(StringsReplaceTest, Replace)
   auto strings_view = cudf::strings_column_view(strings);
 
   {
-    // replace all occurences of 'the ' with '++++ '
+    // replace all occurrences of 'the ' with '++++ '
     auto results = cudf::strings::replace(
       strings_view, cudf::string_scalar("the "), cudf::string_scalar("++++ "));
     std::vector<const char*> h_expected{"++++ quick brown fox jumps over ++++ lazy dog",

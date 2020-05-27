@@ -19,7 +19,6 @@
 
 #include <cudf/replace.hpp>
 
-#include <cudf/cudf.h>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/error.hpp>
@@ -35,43 +34,34 @@ struct ReplaceErrorTest : public cudf::test::BaseFixture {
 // Error: old-values and new-values size mismatch
 TEST_F(ReplaceErrorTest, SizeMismatch)
 {
-  std::vector<int32_t> input_column{7, 5, 6, 3, 1, 2, 8, 4};
-  std::vector<cudf::valid_type> input_valid{0, 0, 1, 1, 1, 1, 1, 1};
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_input_column{
-    input_column.begin(), input_column.end(), input_valid.begin()};
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_values_to_replace_column{{10, 11, 12, 13}};
+  cudf::test::fixed_width_column_wrapper<int32_t> input_column{{7, 5, 6, 3, 1, 2, 8, 4},
+                                                               {0, 0, 1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> values_to_replace_column{{10, 11, 12, 13}};
 
-  ASSERT_THROW(
-    cudf::experimental::replace_nulls(gdf_input_column, gdf_values_to_replace_column, mr()),
-    cudf::logic_error);
+  ASSERT_THROW(cudf::replace_nulls(input_column, values_to_replace_column, mr()),
+               cudf::logic_error);
 }
 
 // Error: column type mismatch
 TEST_F(ReplaceErrorTest, TypeMismatch)
 {
-  std::vector<int32_t> input_column{7, 5, 6, 3, 1, 2, 8, 4};
-  std::vector<cudf::valid_type> input_valid{0, 0, 1, 1, 1, 1, 1, 1};
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_input_column{
-    input_column.begin(), input_column.end(), input_valid.begin()};
-  cudf::test::fixed_width_column_wrapper<float> gdf_values_to_replace_column{
+  cudf::test::fixed_width_column_wrapper<int32_t> input_column{{7, 5, 6, 3, 1, 2, 8, 4},
+                                                               {0, 0, 1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<float> values_to_replace_column{
     {10, 11, 12, 13, 14, 15, 16, 17}};
 
-  EXPECT_THROW(
-    cudf::experimental::replace_nulls(gdf_input_column, gdf_values_to_replace_column, mr()),
-    cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input_column, values_to_replace_column, mr()),
+               cudf::logic_error);
 }
 
 // Error: column type mismatch
 TEST_F(ReplaceErrorTest, TypeMismatchScalar)
 {
-  std::vector<int32_t> input_column{7, 5, 6, 3, 1, 2, 8, 4};
-  std::vector<cudf::valid_type> input_valid{0, 0, 1, 1, 1, 1, 1, 1};
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_input_column{
-    input_column.begin(), input_column.end(), input_valid.begin()};
+  cudf::test::fixed_width_column_wrapper<int32_t> input_column{{7, 5, 6, 3, 1, 2, 8, 4},
+                                                               {0, 0, 1, 1, 1, 1, 1, 1}};
   cudf::numeric_scalar<float> replacement(1);
 
-  EXPECT_THROW(cudf::experimental::replace_nulls(gdf_input_column, replacement, mr()),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input_column, replacement, mr()), cudf::logic_error);
 }
 
 struct ReplaceNullsStringsTest : public cudf::test::BaseFixture {
@@ -91,7 +81,7 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplace)
     replacement.begin(), replacement.end(), replacement_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
 
   cudf::test::expect_columns_equal(*result, expected_w);
 }
@@ -110,7 +100,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceWithNulls)
     replacement.begin(), replacement.end(), replacement_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
 
   cudf::test::expect_columns_equal(*result, expected_w);
 }
@@ -128,7 +118,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceWithAllNulls)
   cudf::test::strings_column_wrapper expected_w{input.begin(), input.end(), input_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
 
   cudf::test::expect_columns_equal(*result, expected_w);
 }
@@ -146,7 +136,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceWithAllEmpty)
   cudf::test::strings_column_wrapper expected_w{input.begin(), input.end(), replacement_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
 
   cudf::test::expect_columns_equal(*result, expected_w);
 }
@@ -164,7 +154,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceNone)
   cudf::test::strings_column_wrapper expected_w{input.begin(), input.end()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
 
   cudf::test::expect_columns_equal(*result, expected_w);
 }
@@ -181,7 +171,7 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
   cudf::test::strings_column_wrapper expected_w{expected.begin(), expected.end()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input_w, *repl, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, *repl, mr()));
 
   cudf::test::expect_columns_equal(*result, expected_w);
 }
@@ -200,7 +190,7 @@ void ReplaceNullsColumn(cudf::test::fixed_width_column_wrapper<T> input,
                         cudf::test::fixed_width_column_wrapper<T> expected)
 {
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input, replacement_values));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input, replacement_values));
   expect_columns_equal(expected, *result);
 }
 
@@ -210,7 +200,7 @@ void ReplaceNullsScalar(cudf::test::fixed_width_column_wrapper<T> input,
                         cudf::test::fixed_width_column_wrapper<T> expected)
 {
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::experimental::replace_nulls(input, replacement_value));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input, replacement_value));
   expect_columns_equal(expected, *result);
 }
 

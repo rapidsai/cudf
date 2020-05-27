@@ -136,8 +136,7 @@ std::unique_ptr<column> hex_to_integers(
                                      mr);
   auto results_view = results->mutable_view();
   // fill output column with integers
-  experimental::type_dispatcher(
-    output_type, dispatch_hex_to_integers_fn{}, d_strings, results_view, stream);
+  type_dispatcher(output_type, dispatch_hex_to_integers_fn{}, d_strings, results_view, stream);
   results->set_null_count(strings.null_count());
   return results;
 }

@@ -22,7 +22,6 @@
 #include "cudf/types.hpp"
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup column_reshape
  * @{
@@ -70,5 +69,4 @@ std::unique_ptr<table> tile(table_view const& input,
                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

@@ -20,7 +20,6 @@
 #include <thrust/transform.h>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_argmin(column_view const& values,
@@ -49,18 +48,18 @@ std::unique_ptr<column> group_argmin(column_view const& values,
     data_type(type_to_id<size_type>()),
     indices->size(),
     static_cast<void const*>(indices->view().template data<size_type>()));
-  auto result_table = cudf::experimental::detail::gather(table_view({key_sort_order}),
-                                                         null_removed_indices,
-                                                         false,
-                                                         indices->nullable(),
-                                                         false,
-                                                         mr,
-                                                         stream);
+  auto result_table =
+    cudf::detail::gather(table_view({key_sort_order}),
+                         null_removed_indices,
+                         indices->nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
+                                             : cudf::detail::out_of_bounds_policy::NULLIFY,
+                         cudf::detail::negative_index_policy::NOT_ALLOWED,
+                         mr,
+                         stream);
 
   return std::move(result_table->release()[0]);
 }
 
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

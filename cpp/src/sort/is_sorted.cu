@@ -24,7 +24,6 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 template <bool has_nulls>
 auto is_sorted(cudf::table_view const& in,
@@ -74,7 +73,5 @@ bool is_sorted(cudf::table_view const& in,
     return detail::is_sorted<false>(in, column_order, null_precedence);
   }
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

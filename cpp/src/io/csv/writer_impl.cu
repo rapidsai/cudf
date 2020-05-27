@@ -57,7 +57,6 @@
 #include <cudf/strings/detail/modify_strings.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace csv {
@@ -227,7 +226,7 @@ struct column_to_strings_fn {
   {
   }
 
-  // Note: `null` replacement with `na_rep` defered to `concatenate()`
+  // Note: `null` replacement with `na_rep` deferred to `concatenate()`
   // instead of column-wise; might be faster
   //
   // Note: Cannot pass `stream` to detail::<fname> version of <fname> calls below, because they are
@@ -493,7 +492,7 @@ void writer::impl::write(table_view const& table,
 
       // split table_view into chunks:
       //
-      vector_views = cudf::experimental::split(table, splits);
+      vector_views = cudf::split(table, splits);
     }
 
     // convert each chunk to CSV:
@@ -508,13 +507,12 @@ void writer::impl::write(table_view const& table,
                      sub_view.end(),
                      std::back_inserter(str_column_vec),
                      [converter](auto const& current_col) {
-                       return cudf::experimental::type_dispatcher(
-                         current_col.type(), converter, current_col);
+                       return cudf::type_dispatcher(current_col.type(), converter, current_col);
                      });
 
       // create string table view from str_column_vec:
       //
-      auto str_table_ptr = std::make_unique<cudf::experimental::table>(std::move(str_column_vec));
+      auto str_table_ptr = std::make_unique<cudf::table>(std::move(str_column_vec));
       table_view str_table_view{std::move(*str_table_ptr)};
 
       // concatenate columns in each row into one big string column
@@ -543,5 +541,4 @@ void writer::write_all(table_view const& table, const table_metadata* metadata, 
 }  // namespace csv
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

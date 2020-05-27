@@ -18,7 +18,7 @@ from cudf._lib.cpp.types cimport (
 )
 
 
-cdef extern from "cudf/quantiles.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[column] quantile (
         column_view input,
