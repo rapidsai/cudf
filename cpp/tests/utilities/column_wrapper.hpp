@@ -205,7 +205,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   fixed_width_column_wrapper() : column_wrapper{}
   {
     std::vector<ElementTo> empty;
-    wrapped.reset(new cudf::column{cudf::data_type{cudf::experimental::type_to_id<ElementTo>()},
+    wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    0,
                                    detail::make_elements<ElementTo>(empty.begin(), empty.end())});
   }
@@ -232,7 +232,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   fixed_width_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
     cudf::size_type size = std::distance(begin, end);
-    wrapped.reset(new cudf::column{cudf::data_type{cudf::experimental::type_to_id<ElementTo>()},
+    wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
                                    detail::make_elements<ElementTo>(begin, end)});
   }
@@ -266,7 +266,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   {
     cudf::size_type size = std::distance(begin, end);
 
-    wrapped.reset(new cudf::column{cudf::data_type{cudf::experimental::type_to_id<ElementTo>()},
+    wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
                                    detail::make_elements<ElementTo>(begin, end),
                                    detail::make_null_mask(v, v + size),

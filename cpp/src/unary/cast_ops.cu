@@ -24,7 +24,6 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 template <typename _T, typename _R>
 struct unary_cast {
@@ -111,7 +110,7 @@ struct dispatch_unary_cast_from {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    return experimental::type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, mr, stream);
+    return type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, mr, stream);
   }
 
   template <
@@ -132,8 +131,7 @@ std::unique_ptr<column> cast(column_view const& input,
 {
   CUDF_EXPECTS(is_fixed_width(type), "Unary cast type must be fixed-width.");
 
-  return experimental::type_dispatcher(
-    input.type(), detail::dispatch_unary_cast_from{input}, type, mr, stream);
+  return type_dispatcher(input.type(), detail::dispatch_unary_cast_from{input}, type, mr, stream);
 }
 
 }  // namespace detail
@@ -146,5 +144,4 @@ std::unique_ptr<column> cast(column_view const& input,
   return detail::cast(input, type, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

@@ -26,8 +26,6 @@
 #include <thrust/sequence.h>
 #include <random>
 
-#include <gmock/gmock.h>
-
 template <typename T>
 struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {
 };
@@ -50,8 +48,8 @@ __global__ void test_value(ScalarDeviceViewType s, ScalarDeviceViewType s1, bool
 TYPED_TEST(TypedScalarDeviceViewTest, Value)
 {
   TypeParam value{7};
-  cudf::experimental::scalar_type_t<TypeParam> s(value);
-  cudf::experimental::scalar_type_t<TypeParam> s1;
+  cudf::scalar_type_t<TypeParam> s(value);
+  cudf::scalar_type_t<TypeParam> s1;
 
   auto scalar_device_view  = cudf::get_scalar_device_view(s);
   auto scalar_device_view1 = cudf::get_scalar_device_view(s1);
@@ -78,7 +76,7 @@ __global__ void test_null(ScalarDeviceViewType s, bool* result)
 TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull)
 {
   TypeParam value = 5;
-  cudf::experimental::scalar_type_t<TypeParam> s(value, false);
+  cudf::scalar_type_t<TypeParam> s(value, false);
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result;
 
@@ -96,7 +94,7 @@ __global__ void test_setnull(ScalarDeviceViewType s)
 
 TYPED_TEST(TypedScalarDeviceViewTest, SetNull)
 {
-  cudf::experimental::scalar_type_t<TypeParam> s;
+  cudf::scalar_type_t<TypeParam> s;
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   s.set_valid(true);
   EXPECT_TRUE(s.is_valid());

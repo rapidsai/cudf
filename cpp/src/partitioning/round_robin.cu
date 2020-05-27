@@ -61,7 +61,7 @@ using VectorT = rmm::device_vector<T>;
  * transpose_dbg = transpose graph of dbg; (i.e., (i -> j) edge in dbg means (j -> i) edge in
  * transpose);
  *
- * (offsets, indxs) = (row_offsets, col_indices) of transpose_dbg;
+ * (offsets, indices) = (row_offsets, col_indices) of transpose_dbg;
  * where (row_offsets, col_indices) are the CSR format of the graph;
  *
  * @Param[in] input The input table to be round-robin partitioned
@@ -70,15 +70,15 @@ using VectorT = rmm::device_vector<T>;
  * @Param[in] mr Device memory allocator
  * @Param[in] stream cuda stream to execute on
  *
- * @Returns A std::pair consisting of an unique_ptr to the partitioned table and the partition
+ * @Returns A std::pair consisting of a unique_ptr to the partitioned table and the partition
  * offsets for each partition within the table
  */
-std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>>
-degenerate_partitions(cudf::table_view const& input,
-                      cudf::size_type num_partitions,
-                      cudf::size_type start_partition,
-                      rmm::mr::device_memory_resource* mr,
-                      cudaStream_t stream)
+std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate_partitions(
+  cudf::table_view const& input,
+  cudf::size_type num_partitions,
+  cudf::size_type start_partition,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
 {
   auto nrows = input.num_rows();
 
@@ -95,12 +95,12 @@ degenerate_partitions(cudf::table_view const& input,
     auto exec = rmm::exec_policy(stream);
     thrust::sequence(exec->on(stream), partition_offsets.begin(), partition_offsets.end());
 
-    auto uniq_tbl = cudf::experimental::detail::gather(input,
-                                                       rotated_iter_begin,
-                                                       rotated_iter_begin + nrows,  // map
-                                                       false,
-                                                       mr,
-                                                       stream);
+    auto uniq_tbl = cudf::detail::gather(input,
+                                         rotated_iter_begin,
+                                         rotated_iter_begin + nrows,  // map
+                                         false,
+                                         mr,
+                                         stream);
 
     auto ret_pair =
       std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
@@ -130,12 +130,12 @@ degenerate_partitions(cudf::table_view const& input,
 
     //...and then use the result, d_row_indices, as gather map:
     //
-    auto uniq_tbl = cudf::experimental::detail::gather(input,
-                                                       d_row_indices.begin(),
-                                                       d_row_indices.end(),  // map
-                                                       false,
-                                                       mr,
-                                                       stream);
+    auto uniq_tbl = cudf::detail::gather(input,
+                                         d_row_indices.begin(),
+                                         d_row_indices.end(),  // map
+                                         false,
+                                         mr,
+                                         stream);
 
     auto ret_pair =
       std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
@@ -170,7 +170,6 @@ degenerate_partitions(cudf::table_view const& input,
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
@@ -252,8 +251,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
       return num_partitions * index_within_partition + partition_index;
     });
 
-  auto uniq_tbl =
-    cudf::experimental::detail::gather(input, iter_begin, iter_begin + nrows, false, mr, stream);
+  auto uniq_tbl = cudf::detail::gather(input, iter_begin, iter_begin + nrows, false, mr, stream);
   auto ret_pair = std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
 
   // this has the effect of rotating the set of partition sizes
@@ -283,16 +281,14 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
 
 }  // namespace detail
 
-std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>>
-round_robin_partition(table_view const& input,
-                      cudf::size_type num_partitions,
-                      cudf::size_type start_partition     = 0,
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robin_partition(
+  table_view const& input,
+  cudf::size_type num_partitions,
+  cudf::size_type start_partition     = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   CUDF_FUNC_RANGE();
-  return cudf::experimental::detail::round_robin_partition(
-    input, num_partitions, start_partition, mr);
+  return cudf::detail::round_robin_partition(input, num_partitions, start_partition, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

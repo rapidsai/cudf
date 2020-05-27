@@ -39,7 +39,6 @@ using std::string;
 using std::vector;
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace csv {
@@ -79,7 +78,7 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
  *
  * @param[in] dtype String containing the basic or extended dtype
  *
- * @return std::pair<gdf_dtype, column_parse::flags> Tuple of dtype and flags
+ * @return Tuple of data_type and flags
  */
 std::tuple<data_type, column_parse::flags> get_dtype_info(const std::string &dtype)
 {
@@ -202,17 +201,17 @@ table_with_metadata reader::impl::read(size_t range_offset,
   }
 
   // Return an empty dataframe if no data and no column metadata to process
-  if (source_->empty() && (args_.names.empty() || args_.dtype.empty())) {
+  if (source_->is_empty() && (args_.names.empty() || args_.dtype.empty())) {
     return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
   }
 
   // Transfer source data to GPU
-  if (!source_->empty()) {
+  if (!source_->is_empty()) {
     const char *h_uncomp_data = nullptr;
     size_t h_uncomp_size      = 0;
 
     auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
-    auto buffer    = source_->get_buffer(range_offset, data_size);
+    auto buffer    = source_->host_read(range_offset, data_size);
 
     std::vector<char> h_uncomp_data_owner;
     if (compression_type_ == "none") {
@@ -220,11 +219,10 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_uncomp_data = reinterpret_cast<const char *>(buffer->data());
       h_uncomp_size = buffer->size();
     } else {
-      CUDF_EXPECTS(getUncompressedHostData(reinterpret_cast<const char *>(buffer->data()),
-                                           buffer->size(),
-                                           compression_type_,
-                                           h_uncomp_data_owner) == GDF_SUCCESS,
-                   "Cannot decompress data");
+      getUncompressedHostData(reinterpret_cast<const char *>(buffer->data()),
+                              buffer->size(),
+                              compression_type_,
+                              h_uncomp_data_owner);
       h_uncomp_data = h_uncomp_data_owner.data();
       h_uncomp_size = h_uncomp_data_owner.size();
     }
@@ -765,19 +763,10 @@ reader::reader(std::string filepath,
 }
 
 // Forward to implementation
-reader::reader(const char *buffer,
-               size_t length,
+reader::reader(std::unique_ptr<cudf::io::datasource> source,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), "", options, mr))
-{
-}
-
-// Forward to implementation
-reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
-               reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), "", options, mr))
+  : _impl(std::make_unique<impl>(std::move(source), "", options, mr))
 {
 }
 
@@ -811,5 +800,4 @@ table_with_metadata reader::read_rows(size_type num_skip_header,
 }  // namespace csv
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

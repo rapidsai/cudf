@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -107,6 +106,43 @@ TYPED_TEST(TypedTraitsTest, NotRelationallyComparable)
   EXPECT_FALSE(comparable);
 
   comparable = cudf::is_relationally_comparable<TypeParam, foo>();
+  EXPECT_FALSE(comparable);
+}
+
+TYPED_TEST(TypedTraitsTest, NotRelationallyComparableWithList)
+{
+  bool comparable = cudf::is_relationally_comparable<TypeParam, cudf::list_view>();
+  EXPECT_FALSE(comparable);
+
+  comparable = cudf::is_relationally_comparable<cudf::list_view, cudf::list_view>();
+  EXPECT_FALSE(comparable);
+}
+
+TYPED_TEST(TypedTraitsTest, EqualityComparable)
+{
+  // All the test types should be comparable with themselves
+  bool comparable = cudf::is_equality_comparable<TypeParam, TypeParam>();
+  EXPECT_TRUE(comparable);
+}
+
+TYPED_TEST(TypedTraitsTest, NotEqualityComparable)
+{
+  // No type should be comparable with an empty dummy type
+  struct foo {
+  };
+  bool comparable = cudf::is_equality_comparable<foo, TypeParam>();
+  EXPECT_FALSE(comparable);
+
+  comparable = cudf::is_equality_comparable<TypeParam, foo>();
+  EXPECT_FALSE(comparable);
+}
+
+TYPED_TEST(TypedTraitsTest, NotEqualityComparableWithList)
+{
+  bool comparable = cudf::is_equality_comparable<TypeParam, cudf::list_view>();
+  EXPECT_FALSE(comparable);
+
+  cudf::is_equality_comparable<cudf::list_view, cudf::list_view>();
   EXPECT_FALSE(comparable);
 }
 

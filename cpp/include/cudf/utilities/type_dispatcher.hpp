@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@
  * and concrete C++ types.
  **/
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup utility_dispatcher
  * @{
@@ -122,6 +121,7 @@ CUDF_TYPE_MAPPING(cudf::timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
 CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
+CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
 
 template <typename T>
 struct type_to_scalar_type_impl {
@@ -161,6 +161,13 @@ template <>  // TODO: this is a temporary solution for make_pair_iterator
 struct type_to_scalar_type_impl<cudf::dictionary32> {
   using ScalarType       = cudf::numeric_scalar<int32_t>;
   using ScalarDeviceType = cudf::numeric_scalar_device_view<int32_t>;
+};
+
+template <>  // TODO: this is to get compilation working. list scalars will be implemented at a
+             // later time.
+struct type_to_scalar_type_impl<cudf::list_view> {
+  using ScalarType = cudf::list_scalar;
+  // using ScalarDeviceType = cudf::list_scalar_device_view;
 };
 
 #ifndef MAP_TIMESTAMP_SCALAR
@@ -326,6 +333,8 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
     case DICTIONARY32:
       return f.template operator()<typename IdTypeMap<DICTIONARY32>::type>(
         std::forward<Ts>(args)...);
+    case LIST:
+      return f.template operator()<typename IdTypeMap<LIST>::type>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported type_id.");
@@ -346,5 +355,4 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
 }
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

@@ -22,7 +22,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
@@ -43,7 +42,7 @@ namespace detail {
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
  *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * @throws cudf::logic_error if `check_bounds == true` and an index exists in
  * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
  * the target table. If `check_bounds == false`, the behavior is undefined.
  *
@@ -84,7 +83,7 @@ std::unique_ptr<table> scatter(
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
  *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * @throws cudf::logic_error if `check_bounds == true` and an index exists in
  * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
  * the target table. If `check_bounds == false`, the behavior is undefined.
  *
@@ -109,7 +108,7 @@ std::unique_ptr<table> scatter(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::boolean_mask_scatter(
+ * @copydoc cudf::boolean_mask_scatter(
                       table_view const& source, table_view const& target,
  *                    column_view const& boolean_mask,
  *                    rmm::mr::device_memory_resource *mr)
@@ -123,7 +122,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& source,
                                             cudaStream_t stream = 0);
 
 /**
- * @copydoc cudf::experimental::boolean_mask_scatter(
+ * @copydoc cudf::boolean_mask_scatter(
  *                    std::vector<std::reference_wrapper<scalar>> const& source,
  *                    table_view const& target,
  *                    column_view const& boolean_mask,
@@ -139,5 +138,4 @@ std::unique_ptr<table> boolean_mask_scatter(
   cudaStream_t stream                 = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

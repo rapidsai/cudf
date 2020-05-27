@@ -70,10 +70,10 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         data_type(type_id id) except +
         type_id id() except +
 
-cdef extern from "cudf/types.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef enum interpolation:
-        LINEAR "cudf::experimental::interpolation::LINEAR"
-        LOWER "cudf::experimental::interpolation::LOWER"
-        HIGHER "cudf::experimental::interpolation::HIGHER"
-        MIDPOINT "cudf::experimental::interpolation::MIDPOINT"
-        NEAREST "cudf::experimental::interpolation::NEAREST"
+        LINEAR "cudf::interpolation::LINEAR"
+        LOWER "cudf::interpolation::LOWER"
+        HIGHER "cudf::interpolation::HIGHER"
+        MIDPOINT "cudf::interpolation::MIDPOINT"
+        NEAREST "cudf::interpolation::NEAREST"

@@ -1,9 +1,8 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-20, NVIDIA CORPORATION.
 
-from io import BytesIO, IOBase, StringIO
+from io import BytesIO, StringIO
 
 import cudf._lib as libcudf
-import cudf._lib.legacy as libcudf_legacy
 from cudf._lib.nvtx import annotate
 from cudf.utils import ioutils
 
@@ -114,17 +113,22 @@ def to_csv(
                 columns = columns.copy()
                 columns.insert(0, df.index.name)
         df = df.reset_index()
+
+    if columns is not None:
+        try:
+            df = df[columns]
+        except KeyError:
+            raise NameError(
+                "Dataframe doesn't have the labels provided in columns"
+            )
+
     rows_per_chunk = chunksize if chunksize else len(df)
 
-    if isinstance(path, IOBase):
-        path = path.name
-
-    return libcudf_legacy.csv.write_csv(
-        cols=df._data,
-        path=path,
+    return libcudf.csv.write_csv(
+        df,
+        path_or_buf=path,
         sep=sep,
         na_rep=na_rep,
-        columns=columns,
         header=header,
         line_terminator=line_terminator,
         rows_per_chunk=rows_per_chunk,

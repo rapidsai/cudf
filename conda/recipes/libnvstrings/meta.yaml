@@ -2,7 +2,6 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set cuda_version='.'.join(environ.get('CUDA_VERSION', '10.0').split('.')[:2]) %}
 
 package:
@@ -10,11 +9,11 @@ package:
   version: {{ version }}
 
 source:
-  path: ../../..
+  git_url: ../../..
 
 build:
-  number: {{ git_revision_count }}
-  string: cuda{{ cuda_version }}_{{ git_revision_count }}
+  number: {{ GIT_DESCRIBE_NUMBER }}
+  string: cuda{{ cuda_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - CC
     - CXX
@@ -42,13 +41,15 @@ requirements:
 
 test:
   commands:
-    - test -f $PREFIX/include/nvstrings/NVStrings.h
     - test -f $PREFIX/include/nvstrings/NVCategory.h
+    - test -f $PREFIX/include/nvstrings/NVStrings.h
     - test -f $PREFIX/include/nvstrings/NVText.h
-    - test -f $PREFIX/include/nvstrings/ipc_transfer.h
     - test -f $PREFIX/include/nvstrings/StringsStatistics.h
-    - test -f $PREFIX/lib/libNVStrings.so
+    - test -f $PREFIX/include/nvstrings/base_category.h
+    - test -f $PREFIX/include/nvstrings/ipc_transfer.h
+    - test -f $PREFIX/include/nvstrings/numeric_category.h
     - test -f $PREFIX/lib/libNVCategory.so
+    - test -f $PREFIX/lib/libNVStrings.so
     - test -f $PREFIX/lib/libNVText.so
 
 about:

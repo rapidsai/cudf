@@ -34,18 +34,16 @@ class RandomAccessFile;
 }
 }  // namespace arrow
 
-// <io/utilities/data_sink.hpp>
 namespace cudf {
 //! IO interfaces
 namespace io {
 class data_sink;
-}
+class datasource;
+}  // namespace io
 }  // namespace cudf
 
 //! cuDF interfaces
 namespace cudf {
-//! In-development features
-namespace experimental {
 //! IO interfaces
 namespace io {
 /**
@@ -70,7 +68,7 @@ enum class io_type {
   HOST_BUFFER,               ///< Input/output is a buffer in host memory,
   ARROW_RANDOM_ACCESS_FILE,  ///< Input/output is an arrow::io::RandomAccessFile
   VOID,                      ///< Input/output is nothing. No work is done. Useful for benchmarking
-  USER_SINK,                 ///< Input/output is handled by a custom user class
+  USER_IMPLEMENTED,          ///< Input/output is handled by a custom user class
 };
 
 /**
@@ -147,6 +145,7 @@ struct source_info {
   std::string filepath;
   std::pair<const char*, size_t> buffer;
   std::shared_ptr<arrow::io::RandomAccessFile> file;
+  cudf::io::datasource* user_source = nullptr;
 
   source_info() = default;
 
@@ -161,6 +160,11 @@ struct source_info {
 
   explicit source_info(const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
     : type(io_type::ARROW_RANDOM_ACCESS_FILE), file(arrow_file)
+  {
+  }
+
+  explicit source_info(cudf::io::datasource* source)
+    : type(io_type::USER_IMPLEMENTED), user_source(source)
   {
   }
 };
@@ -181,11 +185,10 @@ struct sink_info {
   explicit sink_info(std::vector<char>* buffer) : type(io_type::HOST_BUFFER), buffer(buffer) {}
 
   explicit sink_info(class cudf::io::data_sink* user_sink_)
-    : type(io_type::USER_SINK), user_sink(user_sink_)
+    : type(io_type::USER_IMPLEMENTED), user_sink(user_sink_)
   {
   }
 };
 
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

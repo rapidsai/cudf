@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-#include "datasource.hpp"
-
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <cudf/cudf.h>
+#include <cudf/io/datasource.hpp>
+
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
@@ -30,16 +29,35 @@ namespace io {
 /**
  * @brief Implementation class for reading from an Apache Arrow file. The file
  * could be a memory-mapped file or other implementation supported by Arrow.
- **/
+ */
 class arrow_io_source : public datasource {
+  class arrow_io_buffer : public buffer {
+    std::shared_ptr<arrow::Buffer> arrow_buffer;
+
+   public:
+    explicit arrow_io_buffer(std::shared_ptr<arrow::Buffer> arrow_buffer)
+      : arrow_buffer(arrow_buffer)
+    {
+    }
+    size_t size() const override { return arrow_buffer->size(); }
+    const uint8_t *data() const override { return arrow_buffer->data(); }
+  };
+
  public:
   explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file) : arrow_file(file) {}
 
-  const std::shared_ptr<arrow::Buffer> get_buffer(size_t position, size_t length) override
+  std::unique_ptr<buffer> host_read(size_t position, size_t length) override
   {
     std::shared_ptr<arrow::Buffer> out;
     CUDF_EXPECTS(arrow_file->ReadAt(position, length, &out).ok(), "Cannot read file data");
-    return out;
+    return std::make_unique<arrow_io_buffer>(out);
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t *dst) override
+  {
+    int64_t bytes_out = 0;
+    CUDF_EXPECTS(arrow_file->ReadAt(offset, size, &bytes_out, dst).ok(), "Cannot read file data");
+    return bytes_out;
   }
 
   size_t size() const override
@@ -59,7 +77,7 @@ class arrow_io_source : public datasource {
  *
  * Unlike Arrow's memory mapped IO class, this implementation allows memory
  * mapping a subset of the file where the starting offset may not be zero.
- **/
+ */
 class memory_mapped_source : public datasource {
   struct file_wrapper {
     const int fd = -1;
@@ -67,14 +85,23 @@ class memory_mapped_source : public datasource {
     ~file_wrapper() { close(fd); }
   };
 
+  class memory_mapped_buffer : public buffer {
+    size_t _size   = 0;
+    uint8_t *_data = nullptr;
+
+   public:
+    memory_mapped_buffer(uint8_t *data, size_t size) : _data(data), _size(size) {}
+    size_t size() const override { return _size; }
+    const uint8_t *data() const override { return _data; }
+  };
+
  public:
   explicit memory_mapped_source(const char *filepath, size_t offset, size_t size)
   {
-    auto file = file_wrapper(filepath);
+    auto const file = file_wrapper(filepath);
     CUDF_EXPECTS(file.fd != -1, "Cannot open file");
 
-    struct stat st {
-    };
+    struct stat st;
     CUDF_EXPECTS(fstat(file.fd, &st) != -1, "Cannot query file size");
     file_size_ = static_cast<size_t>(st.st_size);
 
@@ -86,13 +113,27 @@ class memory_mapped_source : public datasource {
     if (map_addr_ != nullptr) { munmap(map_addr_, map_size_); }
   }
 
-  const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset, size_t size) override
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    // Clamp length to available data in the mapped region
     CUDF_EXPECTS(offset >= map_offset_, "Requested offset is outside mapping");
-    size = std::min(size, map_size_ - (offset - map_offset_));
 
-    return arrow::Buffer::Wrap(static_cast<uint8_t *>(map_addr_) + (offset - map_offset_), size);
+    // Clamp length to available data in the mapped region
+    auto const read_size = std::min(size, map_size_ - (offset - map_offset_));
+
+    return std::make_unique<memory_mapped_buffer>(
+      static_cast<uint8_t *>(map_addr_) + (offset - map_offset_), read_size);
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t *dst) override
+  {
+    CUDF_EXPECTS(offset >= map_offset_, "Requested offset is outside mapping");
+
+    // Clamp length to available data in the mapped region
+    auto const read_size = std::min(size, map_size_ - (offset - map_offset_));
+
+    auto const src = static_cast<uint8_t *>(map_addr_) + (offset - map_offset_);
+    std::memcpy(dst, src, read_size);
+    return read_size;
   }
 
   size_t size() const override { return file_size_; }
@@ -100,9 +141,10 @@ class memory_mapped_source : public datasource {
  private:
   void map(int fd, size_t offset, size_t size)
   {
-    // Offset for `mmap()` must be page aligned
-    const auto map_offset = offset & ~(sysconf(_SC_PAGESIZE) - 1);
     CUDF_EXPECTS(offset < file_size_, "Offset is past end of file");
+
+    // Offset for `mmap()` must be page aligned
+    auto const map_offset = offset & ~(sysconf(_SC_PAGESIZE) - 1);
 
     // Clamp length to available data in the file
     if (size == 0) {
@@ -128,7 +170,46 @@ class memory_mapped_source : public datasource {
   size_t map_offset_ = 0;
 };
 
-std::unique_ptr<datasource> datasource::create(const std::string filepath,
+/**
+ * @brief Wrapper class for user implemented data sources
+ *
+ * Holds the user-implemented object with a non-owning pointer; The user object is not deleted
+ * when the wrapper object is destroyed.
+ * All API calls are forwarded to the user datasource object.
+ */
+class user_datasource_wrapper : public datasource {
+ public:
+  explicit user_datasource_wrapper(datasource *const source) : source(source) {}
+
+  size_t host_read(size_t offset, size_t size, uint8_t *dst) override
+  {
+    return source->host_read(offset, size, dst);
+  }
+
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    return source->host_read(offset, size);
+  }
+
+  bool supports_device_read() const override { return source->supports_device_read(); }
+
+  size_t device_read(size_t offset, size_t size, uint8_t *dst) override
+  {
+    return source->device_read(offset, size, dst);
+  }
+
+  std::unique_ptr<buffer> device_read(size_t offset, size_t size) override
+  {
+    return source->device_read(offset, size);
+  }
+
+  size_t size() const override { return source->size(); }
+
+ private:
+  datasource *const source;
+};
+
+std::unique_ptr<datasource> datasource::create(const std::string &filepath,
                                                size_t offset,
                                                size_t size)
 {
@@ -136,17 +217,23 @@ std::unique_ptr<datasource> datasource::create(const std::string filepath,
   return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, size);
 }
 
-std::unique_ptr<datasource> datasource::create(const char *data, size_t length)
+std::unique_ptr<datasource> datasource::create(const char *data, size_t size)
 {
   // Use Arrow IO buffer class for zero-copy reads of host memory
   return std::make_unique<arrow_io_source>(
-    std::make_shared<arrow::io::BufferReader>(reinterpret_cast<const uint8_t *>(data), length));
+    std::make_shared<arrow::io::BufferReader>(reinterpret_cast<const uint8_t *>(data), size));
 }
 
 std::unique_ptr<datasource> datasource::create(std::shared_ptr<arrow::io::RandomAccessFile> file)
 {
   // Support derived classes of the top-level Arrow IO interface
   return std::make_unique<arrow_io_source>(file);
+}
+
+std::unique_ptr<datasource> datasource::create(datasource *source)
+{
+  // instantiate a wrapper that forwards the calls to the user implementation
+  return std::make_unique<user_datasource_wrapper>(source);
 }
 
 }  // namespace io

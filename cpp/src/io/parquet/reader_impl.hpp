@@ -25,9 +25,9 @@
 #include "parquet_gpu.h"
 
 #include <io/utilities/column_buffer.hpp>
-#include <io/utilities/datasource.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/readers.hpp>
 
 #include <memory>
@@ -36,7 +36,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace parquet {
@@ -166,5 +165,4 @@ class reader::impl {
 }  // namespace parquet
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

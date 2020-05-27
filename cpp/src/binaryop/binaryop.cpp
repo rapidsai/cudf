@@ -42,7 +42,6 @@
 #include <types.hpp.jit>
 
 namespace cudf {
-namespace experimental {
 
 namespace binops {
 namespace detail {
@@ -54,21 +53,21 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
                                              cudaStream_t stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  if (col.size() == 0) { return rmm::device_buffer{}; }
+  if (col.size() == 0) { return rmm::device_buffer{0, stream, mr}; }
 
   if (not s.is_valid()) {
     return create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
   } else if (s.is_valid() && col.nullable()) {
     return copy_bitmask(col, stream, mr);
   } else {
-    return rmm::device_buffer{};
+    return rmm::device_buffer{0, stream, mr};
   }
 }
 }  // namespace detail
 
 namespace jit {
 
-const std::string hash = "prog_binop.experimental";
+const std::string hash = "prog_binop";
 
 const std::vector<std::string> header_names{
   "operation.h", "traits.h", cudf_types_hpp, cudf_utilities_bit_hpp, cudf_wrappers_timestamps_hpp};
@@ -264,7 +263,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   } else {
     auto new_mask = binops::detail::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
     out           = make_fixed_width_column(
-      output_type, rhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
+      output_type, rhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
   }
 
   if (rhs.size() == 0) { return out; }
@@ -297,7 +296,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   } else {
     auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
     out           = make_fixed_width_column(
-      output_type, lhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
+      output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
   }
 
   if (lhs.size() == 0) { return out; }
@@ -332,7 +331,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   } else {
     auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
     out           = make_fixed_width_column(
-      output_type, lhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
+      output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
   }
 
   // Check for 0 sized data
@@ -363,7 +362,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
   auto out      = make_fixed_width_column(
-    output_type, lhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   // Check for 0 sized data
   if (lhs.size() == 0 || rhs.size() == 0) { return out; }
@@ -415,5 +414,4 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   return detail::binary_operation(lhs, rhs, ptx, output_type, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

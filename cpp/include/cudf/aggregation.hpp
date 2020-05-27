@@ -32,7 +32,6 @@
  */
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup aggregation_factories
  * @{
@@ -194,7 +193,7 @@ std::unique_ptr<aggregation> make_nth_element_aggregation(
 std::unique_ptr<aggregation> make_row_number_aggregation();
 
 /**
- * @brief Factory to create a aggregation base on UDF for PTX or CUDA
+ * @brief Factory to create an aggregation base on UDF for PTX or CUDA
  *
  * @param[in] type: either udf_type::PTX or udf_type::CUDA
  * @param[in] user_defined_aggregator A string containing the aggregator code
@@ -207,5 +206,4 @@ std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
                                                   data_type output_type);
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

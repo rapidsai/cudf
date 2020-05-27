@@ -16,10 +16,8 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 template <typename T, typename InputIterator>
 cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start,
@@ -32,10 +30,10 @@ cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type s
 }
 
 template <typename T, typename InputIterator>
-cudf::experimental::table create_fixed_table(cudf::size_type num_cols,
-                                             cudf::size_type start,
-                                             cudf::size_type col_size,
-                                             InputIterator valids)
+cudf::table create_fixed_table(cudf::size_type num_cols,
+                               cudf::size_type start,
+                               cudf::size_type col_size,
+                               InputIterator valids)
 {
   std::vector<std::unique_ptr<cudf::column>> cols;
   for (int idx = 0; idx < num_cols; idx++) {
@@ -43,7 +41,7 @@ cudf::experimental::table create_fixed_table(cudf::size_type num_cols,
       create_fixed_columns<T>(start + (idx * num_cols), col_size, valids);
     cols.push_back(wrap.release());
   }
-  return cudf::experimental::table(std::move(cols));
+  return cudf::table(std::move(cols));
 }
 
 template <typename T>
@@ -71,10 +69,11 @@ std::vector<cudf::test::fixed_width_column_wrapper<T>> create_expected_columns(
 }
 
 template <typename T>
-std::vector<cudf::experimental::table> create_expected_tables(
-  cudf::size_type num_cols, std::vector<cudf::size_type> const& indices, bool nullable)
+std::vector<cudf::table> create_expected_tables(cudf::size_type num_cols,
+                                                std::vector<cudf::size_type> const& indices,
+                                                bool nullable)
 {
-  std::vector<cudf::experimental::table> result;
+  std::vector<cudf::table> result;
 
   for (unsigned long index = 0; index < indices.size(); index += 2) {
     std::vector<std::unique_ptr<cudf::column>> cols = {};
@@ -96,7 +95,7 @@ std::vector<cudf::experimental::table> create_expected_tables(
       }
     }
 
-    result.push_back(cudf::experimental::table(std::move(cols)));
+    result.push_back(cudf::table(std::move(cols)));
   }
 
   return result;
@@ -124,12 +123,12 @@ inline std::vector<cudf::test::strings_column_wrapper> create_expected_string_co
   return result;
 }
 
-inline std::vector<cudf::experimental::table> create_expected_string_tables(
+inline std::vector<cudf::table> create_expected_string_tables(
   std::vector<std::string> const strings[2],
   std::vector<cudf::size_type> const& indices,
   bool nullable)
 {
-  std::vector<cudf::experimental::table> result = {};
+  std::vector<cudf::table> result = {};
 
   for (unsigned long index = 0; index < indices.size(); index += 2) {
     std::vector<std::unique_ptr<cudf::column>> cols = {};
@@ -148,7 +147,7 @@ inline std::vector<cudf::experimental::table> create_expected_string_tables(
       }
     }
 
-    result.push_back(cudf::experimental::table(std::move(cols)));
+    result.push_back(cudf::table(std::move(cols)));
   }
 
   return result;

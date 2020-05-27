@@ -31,7 +31,6 @@
 #include <rmm/device_buffer.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace avro {
@@ -76,7 +75,7 @@ class metadata : public file_metadata {
    **/
   void init_and_select_rows(int &row_start, int &row_count)
   {
-    const auto buffer = source->get_buffer(0, source->size());
+    const auto buffer = source->host_read(0, source->size());
     avro::container pod(buffer->data(), buffer->size());
     CUDF_EXPECTS(pod.parse(this, row_count, row_start), "Cannot parse metadata");
     row_start = skip_rows;
@@ -150,7 +149,7 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
   } else if (_metadata->codec == "snappy") {
     // Extract the uncompressed length from the snappy stream
     for (size_t i = 0; i < _metadata->block_list.size(); i++) {
-      const auto buffer  = _source->get_buffer(_metadata->block_list[i].offset, 4);
+      const auto buffer  = _source->host_read(_metadata->block_list[i].offset, 4);
       const uint8_t *blk = buffer->data();
       uint32_t blk_len   = blk[0];
       if (blk_len > 0x7f) {
@@ -380,7 +379,7 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, cudaStream_t
 
     if (_metadata->total_data_size > 0) {
       const auto buffer =
-        _source->get_buffer(_metadata->block_list[0].offset, _metadata->total_data_size);
+        _source->host_read(_metadata->block_list[0].offset, _metadata->total_data_size);
       rmm::device_buffer block_data(buffer->data(), buffer->size(), stream);
 
       if (_metadata->codec != "" && _metadata->codec != "null") {
@@ -473,19 +472,10 @@ reader::reader(std::string filepath,
 }
 
 // Forward to implementation
-reader::reader(const char *buffer,
-               size_t length,
+reader::reader(std::unique_ptr<cudf::io::datasource> source,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), options, mr))
-{
-}
-
-// Forward to implementation
-reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
-               reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), options, mr))
+  : _impl(std::make_unique<impl>(std::move(source), options, mr))
 {
 }
 
@@ -504,5 +494,4 @@ table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, c
 }  // namespace avro
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf
