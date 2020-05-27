@@ -37,9 +37,10 @@ namespace {
  *
  * @param[in] columns               Vector of lists columns to concatenate
  * @param[in] total_list_count      Total number of lists contained in the columns
- * @param[in] stream                Stream on which to issue all memory allocation
- * and device kernels
- * @param[in] mr                    Optional resource to use for device memory
+ * @param[in] stream                CUDA stream used for device memory operations
+ * and kernel launches.
+ * @param[in] mr                    Device memory resource used to allocate the
+ * returned column's device memory.
  */
 std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& columns,
                                       size_type total_list_count,
@@ -81,6 +82,7 @@ std::unique_ptr<column> concatenate(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   std::vector<lists_column_view> lists_columns;
+  lists_columns.reserve(columns.size());
   std::transform(
     columns.begin(), columns.end(), std::back_inserter(lists_columns), [](column_view const& c) {
       return lists_column_view(c);
@@ -88,6 +90,7 @@ std::unique_ptr<column> concatenate(
 
   // concatenate children. also prep data needed for offset merging
   std::vector<column_view> children;
+  children.reserve(columns.size());
   size_type total_list_count = 0;
   std::transform(lists_columns.begin(),
                  lists_columns.end(),

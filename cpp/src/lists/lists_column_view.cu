@@ -29,13 +29,13 @@ column_view lists_column_view::parent() const { return static_cast<column_view>(
 
 column_view lists_column_view::offsets() const
 {
-  CUDF_EXPECTS(num_children() > 0, "lists column has no children");
+  CUDF_EXPECTS(num_children() == 2, "lists column has an incorrect number of children");
   return column_view::child(0);
 }
 
 column_view lists_column_view::child() const
 {
-  CUDF_EXPECTS(num_children() > 1, "lists column has no children");
+  CUDF_EXPECTS(num_children() == 2, "lists column has an incorrect number of children");
   return column_view::child(1);
 }
 
