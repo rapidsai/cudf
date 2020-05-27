@@ -67,7 +67,7 @@ struct extract_fn {
 }  // namespace
 
 //
-std::unique_ptr<experimental::table> extract(
+std::unique_ptr<table> extract(
   strings_column_view const& strings,
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -113,16 +113,16 @@ std::unique_ptr<experimental::table> extract(
     //
     results.emplace_back(make_strings_column(indices, stream, mr));
   }
-  return std::make_unique<experimental::table>(std::move(results));
+  return std::make_unique<table>(std::move(results));
 }
 
 }  // namespace detail
 
 // external API
 
-std::unique_ptr<experimental::table> extract(strings_column_view const& strings,
-                                             std::string const& pattern,
-                                             rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> extract(strings_column_view const& strings,
+                               std::string const& pattern,
+                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::extract(strings, pattern, mr);

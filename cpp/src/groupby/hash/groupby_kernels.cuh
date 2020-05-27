@@ -22,7 +22,6 @@
 #include <cudf/utilities/bit.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 namespace hash {
@@ -106,7 +105,7 @@ struct compute_single_pass_aggs {
     if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i)) {
       auto result = map.insert(thrust::make_pair(i, i));
 
-      experimental::detail::aggregate_row<true, true>(
+      cudf::detail::aggregate_row<true, true>(
         output_values, result.first->second, input_values, i, aggs);
     }
   }
@@ -117,5 +116,4 @@ struct compute_single_pass_aggs {
 }  // namespace hash
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

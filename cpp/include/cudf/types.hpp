@@ -54,7 +54,6 @@ device_memory_resource* get_default_resource();
 
 namespace cudf {
 // Forward declaration
-struct table;
 class column;
 class column_view;
 class mutable_column_view;
@@ -76,9 +75,7 @@ class timestamp_scalar_device_view;
 
 class list_scalar;
 
-namespace experimental {
 class table;
-}
 class table_view;
 class mutable_table_view;
 
@@ -163,7 +160,6 @@ enum class mask_state : int32_t {
   ALL_NULL        ///< Null mask allocated, initialized to all elements NULL
 };
 
-namespace experimental {
 /**
  * @brief Interpolation method to use when the desired quantile lies between
  * two data points i and j
@@ -177,8 +173,6 @@ enum class interpolation : int32_t {
   MIDPOINT,  ///< (i + j)/2
   NEAREST    ///< i or j, whichever is nearest
 };
-
-}  // namespace experimental
 
 /**
  * @brief Identifies a column's logical element type

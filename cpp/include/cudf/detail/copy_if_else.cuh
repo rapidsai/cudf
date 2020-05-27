@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
@@ -27,13 +26,11 @@
 #include <cudf/strings/detail/copy_if_else.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <iterator/legacy/iterator.cuh>
 
 #include <cub/cub.cuh>
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {  // anonymous
 
@@ -174,7 +171,7 @@ std::unique_ptr<column> copy_if_else(
   size_type size           = std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, warp_size);
   constexpr int block_size = 256;
-  cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
+  cudf::detail::grid_1d grid{num_els, block_size, 1};
 
   std::unique_ptr<column> out =
     make_fixed_width_column(data_type(type_to_id<Element>()),
@@ -205,7 +202,5 @@ std::unique_ptr<column> copy_if_else(
 }
 
 }  // namespace detail
-
-}  // namespace experimental
 
 }  // namespace cudf

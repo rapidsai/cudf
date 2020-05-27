@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -27,7 +26,6 @@
 #include <algorithm>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 
@@ -112,5 +110,4 @@ std::unique_ptr<column> allocate_like(column_view const& input,
   return detail::allocate_like(input, size, mask_alloc, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

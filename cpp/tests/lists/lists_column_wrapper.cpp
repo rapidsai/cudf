@@ -23,7 +23,7 @@ namespace cudf {
 namespace test {
 
 /**
- * @brief Initialize as a nested list column composed of other list composed of other list columns.
+ * @brief Initialize as a nested list column composed of other list columns.
  *
  * This function handles a special case.  For convenience of declaration, we want to treat these two
  * cases as equivalent

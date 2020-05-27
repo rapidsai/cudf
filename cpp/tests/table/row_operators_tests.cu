@@ -23,7 +23,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <gmock/gmock.h>
 #include <vector>
 
 struct RowOperatorTestForNAN : public cudf::test::BaseFixture {
@@ -54,7 +53,7 @@ TEST_F(RowOperatorTestForNAN, NANSorting)
   std::vector<cudf::null_order> null_precedence_1{cudf::null_order::BEFORE};
   cudf::table_view input_table{{input}};
 
-  auto got1 = cudf::experimental::sorted_order(input_table, column_order, null_precedence_1);
+  auto got1 = cudf::sorted_order(input_table, column_order, null_precedence_1);
 
   cudf::test::expect_columns_equal(expected1, got1->view());
 
@@ -63,7 +62,7 @@ TEST_F(RowOperatorTestForNAN, NANSorting)
   std::vector<cudf::null_order> null_precedence_2{cudf::null_order::AFTER};
   cudf::test::fixed_width_column_wrapper<int32_t> expected2{{6, 2, 0, 5, 4, 1, 3}};
 
-  auto got2 = cudf::experimental::sorted_order(input_table, column_order, null_precedence_2);
+  auto got2 = cudf::sorted_order(input_table, column_order, null_precedence_2);
 
   cudf::test::expect_columns_equal(expected2, got2->view());
 }

@@ -40,7 +40,7 @@ TYPED_TEST(TileTest, NoColumns)
 
   auto expected = in;
 
-  auto actual = cudf::experimental::tile(in, 10);
+  auto actual = cudf::tile(in, 10);
 
   cudf::test::expect_tables_equal(expected, actual->view());
 }
@@ -54,7 +54,7 @@ TYPED_TEST(TileTest, NoRows)
 
   auto expected = in;
 
-  auto actual = cudf::experimental::tile(in, 10);
+  auto actual = cudf::tile(in, 10);
 
   cudf::test::expect_tables_equal(expected, actual->view());
 }
@@ -69,7 +69,7 @@ TYPED_TEST(TileTest, OneColumn)
   fixed_width_column_wrapper<T> expected_a({-1, 0, 1, -1, 0, 1});
   cudf::table_view expected(std::vector<cudf::column_view>{expected_a});
 
-  auto actual = cudf::experimental::tile(in, 2);
+  auto actual = cudf::tile(in, 2);
 
   cudf::test::expect_tables_equal(expected, actual->view());
 }
@@ -84,7 +84,7 @@ TYPED_TEST(TileTest, OneColumnNullable)
   fixed_width_column_wrapper<T> expected_a({-1, 0, 1, -1, 0, 1}, {1, 0, 0, 1, 0, 0});
   cudf::table_view expected(std::vector<cudf::column_view>{expected_a});
 
-  auto actual = cudf::experimental::tile(in, 2);
+  auto actual = cudf::tile(in, 2);
 
   cudf::test::expect_tables_equal(expected, actual->view());
 }
@@ -96,7 +96,7 @@ TYPED_TEST(TileTest, OneColumnNegativeCount)
   fixed_width_column_wrapper<T> in_a({-1, 0, 1}, {1, 0, 0});
   cudf::table_view in(std::vector<cudf::column_view>{in_a});
 
-  EXPECT_THROW(cudf::experimental::tile(in, -1), cudf::logic_error);
+  EXPECT_THROW(cudf::tile(in, -1), cudf::logic_error);
 }
 
 TYPED_TEST(TileTest, OneColumnZeroCount)
@@ -113,7 +113,7 @@ TYPED_TEST(TileTest, OneColumnZeroCount)
 
   cudf::table_view expected(std::vector<cudf::column_view>{expected_a});
 
-  auto actual = cudf::experimental::tile(in, 0);
+  auto actual = cudf::tile(in, 0);
 
   cudf::test::expect_tables_equal(expected, actual->view());
 }

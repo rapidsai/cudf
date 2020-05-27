@@ -39,7 +39,6 @@ using std::string;
 using std::vector;
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace csv {
@@ -79,7 +78,7 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
  *
  * @param[in] dtype String containing the basic or extended dtype
  *
- * @return std::pair<gdf_dtype, column_parse::flags> Tuple of dtype and flags
+ * @return Tuple of data_type and flags
  */
 std::tuple<data_type, column_parse::flags> get_dtype_info(const std::string &dtype)
 {
@@ -220,11 +219,10 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_uncomp_data = reinterpret_cast<const char *>(buffer->data());
       h_uncomp_size = buffer->size();
     } else {
-      CUDF_EXPECTS(getUncompressedHostData(reinterpret_cast<const char *>(buffer->data()),
-                                           buffer->size(),
-                                           compression_type_,
-                                           h_uncomp_data_owner) == GDF_SUCCESS,
-                   "Cannot decompress data");
+      getUncompressedHostData(reinterpret_cast<const char *>(buffer->data()),
+                              buffer->size(),
+                              compression_type_,
+                              h_uncomp_data_owner);
       h_uncomp_data = h_uncomp_data_owner.data();
       h_uncomp_size = h_uncomp_data_owner.size();
     }
@@ -811,5 +809,4 @@ table_with_metadata reader::read_rows(size_type num_skip_header,
 }  // namespace csv
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf
