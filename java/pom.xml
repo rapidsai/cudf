@@ -231,45 +231,6 @@
                 </plugins>
             </build>
         </profile>
-        <profile>
-            <id>COPY_NVRTC</id>
-            <activation>
-                <property>
-                    <name>CUDA_STATIC_RUNTIME</name>
-                    <value>ON</value>
-                </property>
-            </activation>
-            <build>
-            <plugins>
-              <plugin>
-                <artifactId>maven-resources-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>copy-nvrtc</id>
-                        <phase>validate</phase>
-                        <goals>
-                            <goal>copy-resources</goal>
-                        </goals>
-                        <configuration>
-                            <overwrite>true</overwrite>
-                            <skip>${skipNativeCopy}</skip>
-                            <outputDirectory>${basedir}/target/native-deps/${os.arch}/${os.name}</outputDirectory>
-                            <resources>
-                                <resource>
-                                    <!--Set by groovy script-->
-                                    <directory>${cuda.path}</directory>
-                                    <includes>
-                                        <include>libnvrtc.so</include>
-                                    </includes>
-                                </resource>
-                            </resources>
-                        </configuration>
-                    </execution>
-                </executions>
-              </plugin>
-          </plugins>
-      </build>
-        </profile>
     </profiles>
 
     <build>
@@ -454,14 +415,7 @@
                             }
 
                             if (pom.properties['CUDA_STATIC_RUNTIME'] == 'ON') {
-                                // We want to pull in nvrtc in this case
-                                def libnvrtc =  ~/libnvrtc\\.so.*\\s+=>\\s+(.*)libnvrtc.*\\.so.*\\s+.*/
-                                def rtcm = libnvrtc.matcher(sout)
-                                if (rtcm.find()) {
-                                  pom.properties['cuda.path'] = rtcm.group(1)
-                                } else {
-                                  fail('could not find libnvrtc which we need to package when statically linking')
-                                }
+                                println 'WARNING RUNNING WITH STATIC LINKING DOES NOT FULLY WORK. USE WITH CAUTION.'
                             }
                             </source>
                         </configuration>
