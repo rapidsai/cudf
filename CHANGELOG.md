@@ -11,7 +11,6 @@
 ## Bug Fixes
 
 - PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
-
 - PR #5269 Explicitly require NumPy
 
 # cuDF 0.14.0 (Date TBD)
