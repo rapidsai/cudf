@@ -617,10 +617,16 @@ def test_astype_dtype(data, expected):
 
 
 @pytest.mark.parametrize(
-    "data", [[1, 2, 3], [0.0, 6.7, 10.0], ["a", "bd", "ef"]],
-)
-@pytest.mark.parametrize(
-    "add", [[100, 11, 12], [0.01, 9.7, 15.0], ["asdfsdf", "bddf", "eff"], []],
+    "data,add",
+    [
+        ([1, 2, 3], [100, 11, 12]),
+        ([1, 2, 3], [0.01, 9.7, 15.0]),
+        ([0.0, 6.7, 10.0], [100, 11, 12]),
+        ([0.0, 6.7, 10.0], [0.01, 9.7, 15.0]),
+        (["a", "bd", "ef"], ["asdfsdf", "bddf", "eff"]),
+        ([1, 2, 3], []),
+        ([0.0, 6.7, 10.0], []),
+    ],
 )
 def test_add_categories(data, add):
     pds = pd.Series(data, dtype="category")
@@ -660,3 +666,15 @@ def test_add_categories_error(data, add):
 
     with pytest.raises(error_type):
         gds.cat.add_categories(add)
+
+
+def test_add_categories_mixed_error():
+    gds = gd.Series(["a", "bd", "ef"], dtype="category")
+
+    with pytest.raises(TypeError):
+        gds.cat.add_categories([1, 2, 3])
+
+    gds = gd.Series([1, 2, 3], dtype="category")
+
+    with pytest.raises(TypeError):
+        gds.cat.add_categories(["a", "bd", "ef"])
