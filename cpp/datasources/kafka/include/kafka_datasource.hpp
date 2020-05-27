@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/datasource.hpp>
 #include <librdkafka/rdkafkacpp.h>
 #include <sys/time.h>
 #include <map>
@@ -29,7 +30,7 @@ namespace external {
 /**
  * @brief libcudf external datasource for Apache Kafka
  **/
-class kafka_datasource {
+class kafka_datasource : public datasource {
  public:
   /**
    * @brief Retrieves the current configurations of the underlying librdkafka
