@@ -67,7 +67,7 @@ ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type
 /**
  * @copydoc cudf::slice(column_view const&,std::vector<size_type> const&)
  *
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices,
@@ -80,7 +80,7 @@ unpack_result alloc_and_copy(std::vector<column_view> const& t,
 /**
  * @copydoc cudf::contiguous_split
  *
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
 std::vector<contiguous_split_result> contiguous_split(
   cudf::table_view const& input,
@@ -101,7 +101,7 @@ packed_columns pack(cudf::table_view const& input,
  * @copydoc cudf::allocate_like(column_view const&, size_type, mask_allocation_policy,
  * rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> allocate_like(
   column_view const& input,
@@ -114,7 +114,7 @@ std::unique_ptr<column> allocate_like(
  * @copydoc cudf::copy_if_else( column_view const&, column_view const&,
  * column_view const&, rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
@@ -127,7 +127,7 @@ std::unique_ptr<column> copy_if_else(
  * @copydoc cudf::copy_if_else( scalar const&, column_view const&,
  * column_view const&, rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> copy_if_else(
   scalar const& lhs,
@@ -140,7 +140,7 @@ std::unique_ptr<column> copy_if_else(
  * @copydoc cudf::copy_if_else( column_view const&, scalar const&,
  * column_view const&, rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
@@ -153,7 +153,7 @@ std::unique_ptr<column> copy_if_else(
  * @copydoc cudf::copy_if_else( scalar const&, scalar const&,
  * column_view const&, rmm::mr::device_memory_resource*)
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> copy_if_else(
   scalar const& lhs,

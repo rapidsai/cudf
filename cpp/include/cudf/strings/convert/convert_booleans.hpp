@@ -34,7 +34,7 @@ namespace strings {
  *
  * @param strings Strings instance for this operation.
  * @param true_string String to expect for true. Non-matching strings are false.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New BOOL8 column converted from strings.
  */
 std::unique_ptr<column> to_booleans(
@@ -53,7 +53,7 @@ std::unique_ptr<column> to_booleans(
  * @param booleans Boolean column to convert.
  * @param true_string String to use for true in the output column.
  * @param false_string String to use for false in the output column.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> from_booleans(

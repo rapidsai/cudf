@@ -43,8 +43,8 @@ namespace {
  *                    and returns true if that key is to be used in the output dictionary.
  * @param dictionary_column The column to use for creating the new dictionary.
  * @param keys_to_keep_fn Called to determine which keys in `dictionary_column` to keep.
- * @param mr Resource for creating output columns.
- * @param stream CUDA Stream for kernel calls.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 template <typename KeysKeeper>
 std::unique_ptr<column> remove_keys_fn(
@@ -86,10 +86,13 @@ std::unique_ptr<column> remove_keys_fn(
   // create new indices column
   // Example: gather([4,0,3,1,2,2,2,4,0],[0,-1,1,-1,2]) => [2,0,-1,-1,1,1,1,2,0]
   column_view map_indices_view(data_type{INT32}, keys_view.size(), map_indices.data().get());
-  auto table_indices =
-    cudf::detail::gather(
-      table_view{{map_indices_view}}, indices_view, false, false, false, mr, stream)
-      ->release();
+  auto table_indices = cudf::detail::gather(table_view{{map_indices_view}},
+                                            indices_view,
+                                            cudf::detail::out_of_bounds_policy::NULLIFY,
+                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                            mr,
+                                            stream)
+                         ->release();
   std::unique_ptr<column> indices_column(std::move(table_indices.front()));
 
   // compute new nulls -- merge the existing nulls with the newly created ones (value<0)

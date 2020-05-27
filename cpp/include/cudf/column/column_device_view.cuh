@@ -373,8 +373,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * A `column_device_view` should be passed by value into GPU kernels.
    *
    * @param source_view The `column_view` to make usable in device code
-   * @param stream optional, stream on which the memory for children will be
-   * allocated
+   * @param stream CUDA stream used for device memory operations for children columns.
    * @return A `unique_ptr` to a `column_device_view` that makes the data from
    *`source_view` available in device memory.
    */
@@ -465,8 +464,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * A `mutable_column_device_view` should be passed by value into GPU kernels.
    *
    * @param source_view The `column_view` to make usable in device code
-   * @param stream optional, stream on which the memory for children will be
-   * allocated
+   * @param stream CUDA stream used for device memory operations for children columns.
    * @return A `unique_ptr` to a `mutable_column_device_view` that makes the
    * data from `source_view` available in device memory.
    */

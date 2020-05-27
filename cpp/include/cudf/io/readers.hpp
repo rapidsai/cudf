@@ -75,7 +75,7 @@ class reader {
    *
    * @param filepath Path to whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -87,7 +87,7 @@ class reader {
    * @param buffer Pointer to whole dataset
    * @param length Host buffer size in bytes
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(const char *buffer,
                   size_t length,
@@ -99,7 +99,7 @@ class reader {
    *
    * @param file Arrow file object of dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options,
@@ -113,7 +113,7 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -125,7 +125,7 @@ class reader {
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
    * @param metadata Optional location to return table metadata
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -179,7 +179,7 @@ class reader {
    *
    * @param filepath Path to whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -191,7 +191,7 @@ class reader {
    * @param buffer Pointer to whole dataset
    * @param length Host buffer size in bytes
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(const char *buffer,
                   size_t length,
@@ -203,7 +203,7 @@ class reader {
    *
    * @param file Arrow file object of dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options,
@@ -340,7 +340,7 @@ class reader {
    *
    * @param filepath Path to whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -352,7 +352,7 @@ class reader {
    * @param buffer Pointer to whole dataset
    * @param length Host buffer size in bytes
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(const char *buffer,
                   size_t length,
@@ -364,7 +364,7 @@ class reader {
    *
    * @param file Arrow file object of dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options,
@@ -393,7 +393,7 @@ class reader {
    *
    * @param offset Byte offset from the start
    * @param size Number of bytes from the offset; set to 0 for all remaining
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -405,7 +405,7 @@ class reader {
    * @param skip_rows Number of rows to skip from the start
    * @param skip_rows_end Number of rows to skip from the end
    * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -470,7 +470,7 @@ class reader {
    *
    * @param filepath Path to whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -482,7 +482,7 @@ class reader {
    * @param buffer Pointer to whole dataset
    * @param length Host buffer size in bytes
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(const char *buffer,
                   size_t length,
@@ -494,7 +494,7 @@ class reader {
    *
    * @param file Arrow file object of dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options,
@@ -508,7 +508,7 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -519,7 +519,7 @@ class reader {
    *
    * @param stripe Index of the stripe
    * @param stripe_count Number of stripes to read
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
@@ -533,7 +533,7 @@ class reader {
    * @brief Reads and returns specific stripes.
    *
    * @param stripe_list Indices of the stripes to read
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
@@ -547,7 +547,7 @@ class reader {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -603,7 +603,7 @@ class reader {
    *
    * @param filepath Path to whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -615,7 +615,7 @@ class reader {
    * @param buffer Pointer to whole dataset
    * @param length Host buffer size in bytes
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(const char *buffer,
                   size_t length,
@@ -627,7 +627,7 @@ class reader {
    *
    * @param file Arrow file object of dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options,
@@ -641,7 +641,7 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -652,7 +652,7 @@ class reader {
    *
    * @param row_group Index of the row group
    * @param row_group_count Number of row groups to read
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
@@ -666,7 +666,7 @@ class reader {
    * @brief Reads specific row groups.
    *
    * @param row_group_list Indices of the row groups
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
@@ -680,7 +680,7 @@ class reader {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */

@@ -95,9 +95,8 @@ OutputIterator unique_copy(Exec&& exec,
  * @param[out] unique_indices Column to store the index with unique rows
  * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL,
- * nulls are not equal if null_equality::UNEQUAL
- * @param[in] mr Optional, The resource to use for all allocations
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ *                            nulls are not equal if null_equality::UNEQUAL
+ * @param[in] stream          CUDA stream used for device memory operations and kernel launches.
  *
  * @return column_view column_view of unique row index as per specified `keep`, this is actually
  * slice of `unique_indices`.
@@ -204,7 +203,12 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
     keys_view, mutable_unique_indices_view, keep, nulls_equal, stream);
 
   // run gather operation to establish new order
-  return detail::gather(input, unique_indices_view, false, false, false, mr, stream);
+  return detail::gather(input,
+                        unique_indices_view,
+                        detail::out_of_bounds_policy::NULLIFY,
+                        detail::negative_index_policy::NOT_ALLOWED,
+                        mr,
+                        stream);
 }
 
 /**
@@ -248,7 +252,7 @@ struct has_nans {
    * @note This will be applicable only for floating point type columns.
    *
    * @param[in] input The `column_view` which will be checked for `NAN`
-   * @param[in] stream Optional CUDA stream on which to execute kernels
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @returns bool true if `input` has `NAN` else false
    */
@@ -272,7 +276,7 @@ struct has_nans {
    * false
    *
    * @param[in] input The `column_view` which will be checked for `NAN`
-   * @param[in] stream Optional CUDA stream on which to execute kernels
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @returns bool Always false as non-floating point columns can't have `NAN`
    */

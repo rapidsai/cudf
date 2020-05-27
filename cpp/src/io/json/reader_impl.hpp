@@ -102,7 +102,7 @@ class reader::impl {
    *
    * Does not upload the entire file to the GPU
    *
-   * @param[in] stream Cuda stream to execute gpu operations on
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return void
    **/
@@ -124,7 +124,7 @@ class reader::impl {
    *
    * Sets the column_names_ data member
    *
-   * @param[in] stream Cuda stream to execute gpu operations on
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return void
    **/
@@ -135,7 +135,7 @@ class reader::impl {
    *
    * If user does not pass the data types, deduces types from the file content
    *
-   * @param[in] stream Cuda stream to execute gpu operations on
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return void
    **/
@@ -144,7 +144,7 @@ class reader::impl {
   /**
    * @brief Parse the input data and store results a table
    *
-   * @param[in] stream Cuda stream to execute gpu operations on
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return table_with_metadata struct
    **/
@@ -164,7 +164,7 @@ class reader::impl {
    *
    * @param[in] range_offset Number of bytes offset from the start
    * @param[in] range_size Bytes to read; use `0` for all remaining data
-   * @param[in] stream Cuda stream to execute gpu operations on
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Unique pointer to the table data
    **/
