@@ -501,24 +501,30 @@ class CategoricalColumn(column.ColumnBase):
         """
         replaced = column.as_column(self.cat().codes)
 
+        to_replace_col, replacement_col = [], []
+        new_cats = cudf.Series(self.dtype.categories)
+        for old_val, new_val in zip(to_replace, replacement):
+            if new_val not in self.dtype.categories:
+                new_cats = new_cats.replace(old_val, new_val)
+            else:
+                to_replace_col.append(self._encode(old_val))
+                replacement_col.append(self._encode(new_val))
+
         to_replace_col = column.as_column(
-            np.asarray(
-                [self._encode(val) for val in to_replace], dtype=replaced.dtype
-            )
+            np.array(to_replace_col, dtype=replaced.dtype)
         )
         replacement_col = column.as_column(
-            np.asarray(
-                [self._encode(val) for val in replacement],
-                dtype=replaced.dtype,
-            )
+            np.array(replacement_col, dtype=replaced.dtype)
         )
+
+        replaced = column.as_column(self.cat().codes)
 
         output = libcudf.replace.replace(
             replaced, to_replace_col, replacement_col
         )
 
         return column.build_categorical_column(
-            categories=self.dtype.categories,
+            categories=new_cats,
             codes=column.as_column(output.base_data, dtype=output.dtype),
             mask=output.base_mask,
             offset=output.offset,
