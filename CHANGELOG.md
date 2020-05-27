@@ -12,6 +12,7 @@
 
 - PR #5269 Explicitly require NumPy
 - PR #5299 Update package version for Java bindings
+- PR #5300 Add support to ignore `None` in `cudf.concat` input
 
 
 # cuDF 0.14.0 (Date TBD)
