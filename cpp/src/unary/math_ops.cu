@@ -185,7 +185,7 @@ struct DeviceAbs {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::abs(data);
+    return std::is_signed<T>::value ? std::abs(data) : data;
   }
 };
 
