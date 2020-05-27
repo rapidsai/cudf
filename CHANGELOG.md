@@ -4,6 +4,7 @@
 
 ## Improvements
 
+- PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
 
@@ -11,6 +12,7 @@
 
 - PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
 
+- PR #5269 Explicitly require NumPy
 
 # cuDF 0.14.0 (Date TBD)
 
