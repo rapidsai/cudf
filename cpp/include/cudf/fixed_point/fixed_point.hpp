@@ -413,6 +413,81 @@ class fixed_point {
   template <typename Rep1, Radix Rad1>
   CUDA_HOST_DEVICE_CALLABLE friend bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                                                    fixed_point<Rep1, Rad1> const& rhs);
+
+  /**
+   * @brief operator == (for comparing two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are compared <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are compared
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return true if `lhs` and `rhs` are equal, false if not
+   */
+  template <typename Rep1, Radix Rad1>
+  CUDA_HOST_DEVICE_CALLABLE friend bool operator==(fixed_point<Rep1, Rad1> const& lhs,
+                                                   fixed_point<Rep1, Rad1> const& rhs);
+
+  /**
+   * @brief operator == (for comparing two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are compared <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are compared
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return true if `lhs` and `rhs` are equal, false if not
+   */
+  template <typename Rep1, Radix Rad1>
+  CUDA_HOST_DEVICE_CALLABLE friend bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
+                                                   fixed_point<Rep1, Rad1> const& rhs);
+
+  /**
+   * @brief operator == (for comparing two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are compared <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are compared
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return true if `lhs` and `rhs` are equal, false if not
+   */
+  template <typename Rep1, Radix Rad1>
+  CUDA_HOST_DEVICE_CALLABLE friend bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
+                                                   fixed_point<Rep1, Rad1> const& rhs);
+
+  /**
+   * @brief operator == (for comparing two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are compared <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are compared
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return true if `lhs` and `rhs` are equal, false if not
+   */
+  template <typename Rep1, Radix Rad1>
+  CUDA_HOST_DEVICE_CALLABLE friend bool operator<(fixed_point<Rep1, Rad1> const& lhs,
+                                                  fixed_point<Rep1, Rad1> const& rhs);
+
+  /**
+   * @brief operator == (for comparing two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are compared <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are compared
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return true if `lhs` and `rhs` are equal, false if not
+   */
+  template <typename Rep1, Radix Rad1>
+  CUDA_HOST_DEVICE_CALLABLE friend bool operator>(fixed_point<Rep1, Rad1> const& lhs,
+                                                  fixed_point<Rep1, Rad1> const& rhs);
 };
 
 /** @brief Function that converts Rep to `std::string`
@@ -574,18 +649,80 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Ra
                                                       scale_type{lhs._scale - rhs._scale})};
 }
 
+namespace detail {
+
+// EQUALITY COMPARISON Operation
+template <typename Rep1, Radix Rad1>
+CUDA_HOST_DEVICE_CALLABLE std::pair<Rep1, Rep1> get_same_scale_values(Rep1 const& value1,
+                                                                      Rep1 const& value2,
+                                                                      scale_type const& scale1,
+                                                                      scale_type const& scale2)
+{
+  auto const rhsv = scale1 > scale2
+                      ? shift_with_precise_round<Rep1, Rad1>(value2, scale_type{scale1 - scale2})
+                      : value2;
+  auto const lhsv = scale1 < scale2
+                      ? shift_with_precise_round<Rep1, Rad1>(value1, scale_type{scale2 - scale1})
+                      : value1;
+
+  return std::make_pair(lhsv, rhsv);
+}
+
+}  // namespace detail
+
 // EQUALITY COMPARISON Operation
 template <typename Rep1, Radix Rad1>
 CUDA_HOST_DEVICE_CALLABLE bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                                           fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const rhsv = lhs._scale > rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(
-                                                rhs._value, scale_type{lhs._scale - rhs._scale})
-                                            : rhs._value;
-  auto const lhsv = lhs._scale < rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(
-                                                lhs._value, scale_type{rhs._scale - lhs._scale})
-                                            : lhs._value;
-  return rhsv == lhsv;
+  // TODO: Use structure bindings when C++17 upgrade happens
+  auto const values =
+    detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
+  return values.first == values.second;
+}
+
+// LESS THAN OR EQUAL TO Operation
+template <typename Rep1, Radix Rad1>
+CUDA_HOST_DEVICE_CALLABLE bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
+                                          fixed_point<Rep1, Rad1> const& rhs)
+{
+  // TODO: Use structure bindings when C++17 upgrade happens
+  auto const values =
+    detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
+  return values.first <= values.second;
+}
+
+// GREATER THAN OR EQUAL TO Operation
+template <typename Rep1, Radix Rad1>
+CUDA_HOST_DEVICE_CALLABLE bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
+                                          fixed_point<Rep1, Rad1> const& rhs)
+{
+  // TODO: Use structure bindings when C++17 upgrade happens
+  auto const values =
+    detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
+  return values.first >= values.second;
+}
+
+// LESS THAN Operation
+template <typename Rep1, Radix Rad1>
+CUDA_HOST_DEVICE_CALLABLE bool operator<(fixed_point<Rep1, Rad1> const& lhs,
+                                         fixed_point<Rep1, Rad1> const& rhs)
+{
+  // TODO: Use structure bindings when C++17 upgrade happens
+  auto const values =
+    detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
+  return values.first < values.second;
+}
+
+// GREATER THAN Operation
+template <typename Rep1, Radix Rad1>
+CUDA_HOST_DEVICE_CALLABLE bool operator>(fixed_point<Rep1, Rad1> const& lhs,
+                                         fixed_point<Rep1, Rad1> const& rhs)
+{
+  // TODO: Use structure bindings when C++17 upgrade happens
+  auto const values =
+    detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
+  return values.first > values.second;
 }
 
 /**
