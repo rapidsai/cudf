@@ -21,26 +21,25 @@ def test_categorical_basic():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     cudf_cat = as_index(cat)
 
-    pdsr = pd.Series(cat)
-    sr = Series(cat)
-    np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_array())
+    pdsr = pd.Series(cat, index=["p", "q", "r", "s", "t"])
+    sr = Series(cat, index=["p", "q", "r", "s", "t"])
+    assert_eq(pdsr.cat.codes, sr.cat.codes)
 
     # Test attributes
-    assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)
+    assert_eq(pdsr.cat.categories, sr.cat.categories)
     assert pdsr.cat.ordered == sr.cat.ordered
 
     np.testing.assert_array_equal(
         pdsr.cat.codes.values, sr.cat.codes.to_array()
     )
-    np.testing.assert_array_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
 
     string = str(sr)
     expect_str = """
-0 a
-1 a
-2 b
-3 c
-4 a
+p a
+q a
+r b
+s c
+t a
 """
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
     assert_eq(cat.codes, cudf_cat.codes.to_array())
