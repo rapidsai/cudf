@@ -35,6 +35,7 @@
 - PR #5192 Add support for `cudf.to_datetime`
 - PR #5203 Add Java bindings for is_integer and is_float
 - PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
+- PR #5293 Add Java bindings for replace_with_backrefs
 
 ## Improvements
 
@@ -196,9 +197,11 @@
 - PR #5208 Port search and join benchmark to libcudf++
 - PR #5214 Move docs build script into repository
 - PR #5219 Add per context cache for JIT kernels
+- PR #5250 Improve `to_csv()` support for writing to buffers
 - PR #5233 Remove experimental namespace used during libcudf++ refactor
 - PR #5213 Documentation enhancements to `cudf` python APIs
 - PR #5251 Fix more mispellings in cpp comments and strings
+- PR #5270 Add support to check for "NaT" and "None" strings while typecasting to `datetime64`
 
 ## Bug Fixes
 

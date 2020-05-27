@@ -7,6 +7,7 @@ from libcpp.pair cimport pair
 from libcpp.string cimport string
 from cudf._lib.cpp.io.types cimport source_info, sink_info, data_sink, io_type
 
+import codecs
 import errno
 import io
 import os
@@ -41,12 +42,20 @@ cdef source_info make_source_info(src) except*:
 
 
 # Converts the Python sink input to libcudf++ IO sink_info.
-cdef sink_info make_sink_info(src, unique_ptr[data_sink] * data) except*:
-    if isinstance(src, io.IOBase):
-        data.reset(new iobase_data_sink(src))
-        return sink_info(data.get())
-    elif isinstance(src, (int, float, complex, basestring, os.PathLike)):
-        return sink_info(<string> str(src).encode())
+cdef sink_info make_sink_info(src, unique_ptr[data_sink] * sink) except*:
+    if isinstance(src, io.TextIOBase):
+        # Files opened in text mode expect writes to be str rather than bytes,
+        # which requires conversion from utf-8. If the underlying buffer is
+        # utf-8, we can bypass this conversion by writing directly to it.
+        if codecs.lookup(src.encoding).name not in {"utf-8", "ascii"}:
+            raise NotImplementedError(f"Unsupported encoding {src.encoding}")
+        sink.reset(new iobase_data_sink(src.buffer))
+        return sink_info(sink.get())
+    elif isinstance(src, io.IOBase):
+        sink.reset(new iobase_data_sink(src))
+        return sink_info(sink.get())
+    elif isinstance(src, (basestring, os.PathLike)):
+        return sink_info(<string> os.path.expanduser(src).encode())
     else:
         raise TypeError("Unrecognized input type: {}".format(type(src)))
 
