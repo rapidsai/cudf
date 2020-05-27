@@ -1,3 +1,15 @@
+# cuDF 0.15.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+- PR #5268 Rely on NumPy arrays for out-of-band pickling
+- PR #5288 Drop `auto_pickle` decorator #5288
+- PR #5231 Type `Buffer` as `uint8`
+
+## Bug Fixes
+
 # cuDF 0.14.0 (Date TBD)
 
 ## New Features
@@ -31,6 +43,7 @@
 - PR #5149 Add Java bindings for PMOD
 - PR #5153 Add Java bindings for extract
 - PR #5196 Add Java bindings for NULL_EQUALS, NULL_MAX and NULL_MIN
+- PR #5192 Add support for `cudf.to_datetime`
 - PR #5203 Add Java bindings for is_integer and is_float
 - PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
 - PR #5239 Support for custom cuIO datasource classes
@@ -195,8 +208,11 @@
 - PR #5208 Port search and join benchmark to libcudf++
 - PR #5214 Move docs build script into repository
 - PR #5219 Add per context cache for JIT kernels
+- PR #5250 Improve `to_csv()` support for writing to buffers
 - PR #5233 Remove experimental namespace used during libcudf++ refactor
+- PR #5213 Documentation enhancements to `cudf` python APIs
 - PR #5251 Fix more mispellings in cpp comments and strings
+- PR #5261 Add short git commit to conda package name
 
 ## Bug Fixes
 
