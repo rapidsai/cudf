@@ -1,6 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
-import warnings
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
 from unittest.mock import patch
@@ -65,11 +64,6 @@ def test_from_nvstrings_nbytes(mock_byte_count, nbytes):
     mock_byte_count.return_value = nbytes
     expectation = raise_builder(
         [nbytes > libcudf.MAX_STRING_COLUMN_BYTES], MemoryError
-    )
-    warnings.warn(
-        "nvstrings will be removed in 0.15. Please remove this test case.",
-        DeprecationWarning,
-        stacklevel=2,
     )
 
     with expectation:

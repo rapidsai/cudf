@@ -10,8 +10,6 @@ import pandas as pd
 import pyarrow as pa
 from numba import cuda, njit
 
-import nvstrings
-
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.column import Column
@@ -1170,6 +1168,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     * pyarrow array
     * pandas.Categorical objects
     """
+    import nvstrings
+
     if isinstance(arbitrary, ColumnBase):
         if dtype is not None:
             return arbitrary.astype(dtype)
@@ -1186,12 +1186,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             data = data.astype(dtype)
     # TODO: Remove nvstrings here when nvstrings is fully removed
     elif isinstance(arbitrary, nvstrings.nvstrings):
-        warnings.warn(
-            "nvstrings will be removed in 0.15. \
-            Please use equivalent from libcudf",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         byte_count = arbitrary.byte_count()
         if byte_count > libcudf.MAX_STRING_COLUMN_BYTES:
             raise MemoryError(
