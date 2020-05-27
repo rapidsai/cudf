@@ -43,8 +43,8 @@ namespace {
  *                    and returns true if that key is to be used in the output dictionary.
  * @param dictionary_column The column to use for creating the new dictionary.
  * @param keys_to_keep_fn Called to determine which keys in `dictionary_column` to keep.
- * @param mr Resource for creating output columns.
- * @param stream CUDA Stream for kernel calls.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 template <typename KeysKeeper>
 std::unique_ptr<column> remove_keys_fn(
@@ -63,7 +63,7 @@ std::unique_ptr<column> remove_keys_fn(
   // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
   rmm::device_vector<int32_t> map_indices(keys_view.size(), -1);  // init -1 to identify new nulls
   std::unique_ptr<column> keys_column = [&] {
-    auto table_keys = experimental::detail::copy_if(
+    auto table_keys = cudf::detail::copy_if(
                         table_view{{keys_view, keys_positions_view}}, keys_to_keep_fn, mr, stream)
                         ->release();
     keys_positions_view = table_keys[1]->view();
@@ -86,16 +86,19 @@ std::unique_ptr<column> remove_keys_fn(
   // create new indices column
   // Example: gather([4,0,3,1,2,2,2,4,0],[0,-1,1,-1,2]) => [2,0,-1,-1,1,1,1,2,0]
   column_view map_indices_view(data_type{INT32}, keys_view.size(), map_indices.data().get());
-  auto table_indices =
-    experimental::detail::gather(
-      table_view{{map_indices_view}}, indices_view, false, false, false, mr, stream)
-      ->release();
+  auto table_indices = cudf::detail::gather(table_view{{map_indices_view}},
+                                            indices_view,
+                                            cudf::detail::out_of_bounds_policy::NULLIFY,
+                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                            mr,
+                                            stream)
+                         ->release();
   std::unique_ptr<column> indices_column(std::move(table_indices.front()));
 
   // compute new nulls -- merge the existing nulls with the newly created ones (value<0)
   auto d_null_mask = dictionary_column.null_mask();
   auto d_indices   = indices_column->view().data<int32_t>();
-  auto new_nulls   = experimental::detail::valid_if(
+  auto new_nulls   = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(dictionary_column.offset()),
     thrust::make_counting_iterator<size_type>(dictionary_column.offset() +
                                               dictionary_column.size()),
@@ -126,7 +129,7 @@ std::unique_ptr<column> remove_keys(
   CUDF_EXPECTS(keys_view.type() == keys_to_remove.type(), "keys types must match");
 
   // locate keys to remove by searching the keys column
-  auto const matches = experimental::detail::contains(keys_view, keys_to_remove, mr, stream);
+  auto const matches = cudf::detail::contains(keys_view, keys_to_remove, mr, stream);
   auto d_matches     = matches->view().data<bool>();
   // call common utility method to keep the keys not matched to keys_to_remove
   auto key_matcher = [d_matches] __device__(size_type idx) { return !d_matches[idx]; };
@@ -157,9 +160,8 @@ std::unique_ptr<column> remove_unused_keys(
                            dictionary_column.offset());
 
   // search the indices values with key indices to look for any holes
-  auto const matches =
-    experimental::detail::contains(keys_positions_view, indices_view, mr, stream);
-  auto d_matches = matches->view().data<bool>();
+  auto const matches = cudf::detail::contains(keys_positions_view, indices_view, mr, stream);
+  auto d_matches     = matches->view().data<bool>();
 
   // call common utility method to keep the keys that match
   auto key_matcher = [d_matches] __device__(size_type idx) { return d_matches[idx]; };

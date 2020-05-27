@@ -37,8 +37,8 @@ namespace detail {
  * @param lhs First column.
  * @param rhs Second column.
  * @param row_order Indexes for each column.
- * @param mr Resource for allocating device memory.
- * @param stream CUDA stream to use for any kernels in this function.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column.
  */
 template <typename index_type, typename row_order_iterator>
@@ -49,7 +49,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                               rmm::mr::device_memory_resource* mr,
                               cudaStream_t stream)
 {
-  using experimental::detail::side;
+  using cudf::detail::side;
   size_type strings_count = static_cast<size_type>(std::distance(begin, end));
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
   auto execpol    = rmm::exec_policy(stream);

@@ -24,7 +24,6 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup column_search
  * @{
@@ -60,11 +59,10 @@ namespace experimental {
  * @param t               Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
- * @param null_precedence Vector of null_precedence enums
- * values
- * @param mr              Device memory resource to use for device memory allocation
- * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
- * containing the insertion points.
+ * @param null_precedence Vector of null_precedence enums values
+ * @param mr              Device memory resource used to allocate the returned column's device
+ * memory
+ * @return A non-nullable column of cudf::size_type elements containing the insertion points.
  */
 std::unique_ptr<column> lower_bound(
   table_view const& t,
@@ -103,11 +101,10 @@ std::unique_ptr<column> lower_bound(
  * @param column          Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
- * @param null_precedence Vector of null_precedence enums
- * values
- * @param mr              Device memory resource to use for device memory allocation
- * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
- * containing the insertion points.
+ * @param null_precedence Vector of null_precedence enums values
+ * @param mr              Device memory resource used to allocate the returned column's device
+ * memory
+ * @return A non-nullable column of cudf::size_type elements containing the insertion points.
  */
 std::unique_ptr<column> upper_bound(
   table_view const& t,
@@ -160,11 +157,10 @@ bool contains(column_view const& col,
  *
  * @param haystack  A column object
  * @param needles   A column of values to search for in `col`
- * @param mr         Device memory resource to use for device memory allocation
+ * @param mr        Device memory resource used to allocate the returned column's device memory
  *
- * @return std::unique_ptr<column> A column of bool elements containing
- * true if the corresponding entry in haystack is contained in needles and false
- * if it is not.
+ * @return A column of bool elements containing true if the corresponding entry in haystack is
+ * contained in needles and false if it is not.
  */
 std::unique_ptr<column> contains(
   column_view const& haystack,
@@ -172,5 +168,4 @@ std::unique_ptr<column> contains(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf

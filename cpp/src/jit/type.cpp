@@ -44,7 +44,7 @@ struct get_data_ptr_functor {
   template <typename T>
   std::enable_if_t<is_fixed_width<T>(), const void*> operator()(scalar const& s)
   {
-    using ScalarType = experimental::scalar_type_t<T>;
+    using ScalarType = scalar_type_t<T>;
     auto s1          = static_cast<ScalarType const*>(&s);
     return static_cast<const void*>(s1->data());
   }
@@ -58,12 +58,12 @@ struct get_data_ptr_functor {
 
 const void* get_data_ptr(column_view const& view)
 {
-  return experimental::type_dispatcher(view.type(), get_data_ptr_functor{}, view);
+  return type_dispatcher(view.type(), get_data_ptr_functor{}, view);
 }
 
 const void* get_data_ptr(scalar const& s)
 {
-  auto val = experimental::type_dispatcher(s.type(), get_data_ptr_functor{}, s);
+  auto val = type_dispatcher(s.type(), get_data_ptr_functor{}, s);
   return val;
 }
 
@@ -78,7 +78,7 @@ std::string get_type_name(data_type type)
     default: break;
   }
 
-  return experimental::type_dispatcher(type, experimental::type_to_name{});
+  return type_dispatcher(type, type_to_name{});
 }
 
 }  // namespace jit

@@ -25,13 +25,14 @@ from cudf._lib.cpp.io.functions cimport (
 )
 from cudf._lib.cpp.io.types cimport (
     compression_type,
+    data_sink,
     quote_style,
     sink_info,
     source_info,
     table_metadata,
     table_with_metadata
 )
-from cudf._lib.io.utils cimport make_source_info
+from cudf._lib.io.utils cimport make_source_info, make_sink_info
 from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -356,7 +357,7 @@ def read_csv(
 
 cpdef write_csv(
     Table table,
-    file_path=None,
+    path_or_buf=None,
     sep=",",
     na_rep="",
     header=True,
@@ -382,8 +383,8 @@ cpdef write_csv(
     cdef table_metadata metadata_ = table_metadata()
     cdef string true_value_c = 'True'.encode()
     cdef string false_value_c = 'False'.encode()
-    file_path = str(os.path.expanduser(str(file_path))).encode()
-    cdef sink_info snk = sink_info(<string>file_path)
+    cdef unique_ptr[data_sink] data_sink_c
+    cdef sink_info sink_info_c = make_sink_info(path_or_buf, &data_sink_c)
 
     if header is True and table._column_names is not None:
         metadata_.column_names.reserve(len(table._column_names))
@@ -392,7 +393,7 @@ cpdef write_csv(
 
     cdef unique_ptr[write_csv_args] write_csv_args_c = (
         make_unique[write_csv_args](
-            snk, input_table_view, na_c, include_header_c,
+            sink_info_c, input_table_view, na_c, include_header_c,
             rows_per_hunk_c, line_term_c, delim_c, true_value_c,
             false_value_c, &metadata_
         )

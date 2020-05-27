@@ -54,16 +54,15 @@ struct valid_table_filter {
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /*
  * Filters a table to remove null elements.
  */
-std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
-                                                std::vector<size_type> const& keys,
-                                                cudf::size_type keep_threshold,
-                                                rmm::mr::device_memory_resource* mr,
-                                                cudaStream_t stream)
+std::unique_ptr<table> drop_nulls(table_view const& input,
+                                  std::vector<size_type> const& keys,
+                                  cudf::size_type keep_threshold,
+                                  rmm::mr::device_memory_resource* mr,
+                                  cudaStream_t stream)
 {
   auto keys_view = input.select(keys);
   if (keys_view.num_columns() == 0 || keys_view.num_rows() == 0 || not cudf::has_nulls(keys_view)) {
@@ -72,7 +71,7 @@ std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
 
   auto keys_device_view = cudf::table_device_view::create(keys_view, stream);
 
-  return cudf::experimental::detail::copy_if(
+  return cudf::detail::copy_if(
     input, valid_table_filter{*keys_device_view, keep_threshold}, mr, stream);
 }
 
@@ -81,24 +80,23 @@ std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
 /*
  * Filters a table to remove null elements.
  */
-std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
-                                                std::vector<size_type> const& keys,
-                                                cudf::size_type keep_threshold,
-                                                rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> drop_nulls(table_view const& input,
+                                  std::vector<size_type> const& keys,
+                                  cudf::size_type keep_threshold,
+                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::experimental::detail::drop_nulls(input, keys, keep_threshold, mr);
+  return cudf::detail::drop_nulls(input, keys, keep_threshold, mr);
 }
 /*
  * Filters a table to remove null elements.
  */
-std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
-                                                std::vector<size_type> const& keys,
-                                                rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> drop_nulls(table_view const& input,
+                                  std::vector<size_type> const& keys,
+                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::experimental::detail::drop_nulls(input, keys, keys.size(), mr);
+  return cudf::detail::drop_nulls(input, keys, keys.size(), mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

@@ -9,7 +9,7 @@ from cudf._lib.cpp.table.table_view cimport table_view
 cimport cudf._lib.cpp.types as libcudf_types
 
 
-cdef extern from "cudf/search.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/search.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[column] lower_bound(
         table_view t,

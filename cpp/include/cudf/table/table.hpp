@@ -22,7 +22,7 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
+
 /**
  * @addtogroup table_classes
  * @{
@@ -54,10 +54,8 @@ class table {
    * @brief Copy the contents of a `table_view` to construct a new `table`.
    *
    * @param view The view whose contents will be copied to create a new `table`
-   * @param stream Optional, stream on which all memory allocations and copies
-   * will be performed
-   * @param mr Optional, the memory resource that will be used for allocating
-   * the device memory for the new columns
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource used for allocating the device memory for the new columns
    **/
   table(table_view view,
         cudaStream_t stream                 = 0,
@@ -144,5 +142,5 @@ class table {
   size_type _num_rows{};
 };
 /** @} */  // end of group
-}  // namespace experimental
+
 }  // namespace cudf

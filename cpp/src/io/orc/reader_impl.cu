@@ -35,7 +35,6 @@
 #include <array>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace orc {
@@ -261,8 +260,8 @@ class metadata {
           if (index >= get_num_columns()) { index = 0; }
           if (ff.GetColumnName(index) == use_name) {
             selection.emplace_back(index);
+            if (ff.types[index].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
             index++;
-            if (ff.types[i].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
             break;
           }
         }
@@ -314,7 +313,7 @@ struct orc_stream_info {
   uint64_t offset;      // offset in file
   size_t dst_pos;       // offset in memory relative to start of compressed stripe data
   uint32_t length;      // length in file
-  uint32_t gdf_idx;     // gdf column index
+  uint32_t gdf_idx;     // column index
   uint32_t stripe_idx;  // stripe index
 };
 
@@ -632,7 +631,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   const auto selected_stripes =
     _metadata->select_stripes(stripe, max_stripe_count, stripe_indices, skip_rows, num_rows);
 
-  // Association between each ORC column and its gdf_column
+  // Association between each ORC column and its cudf::column
   std::vector<int32_t> orc_col_map(_metadata->get_num_columns(), -1);
 
   // Get a list of column data types
@@ -883,5 +882,4 @@ table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, c
 }  // namespace orc
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

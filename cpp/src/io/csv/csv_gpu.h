@@ -143,7 +143,7 @@ inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
  * @param skip_rows Number of rows to skip (ignored in phase 1)
  * @param num_row_offsets Number of entries in offsets_out array
  * @param options Options that control parsing of individual fields
- * @param stream CUDA stream to use, default 0
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return Number of row contexts
  **/
@@ -158,7 +158,7 @@ uint32_t gather_row_offsets(uint64_t *row_ctx,
                             size_t byte_range_end,
                             size_t skip_rows,
                             size_t num_row_offsets,
-                            const cudf::experimental::io::ParseOptions &options,
+                            const cudf::io::ParseOptions &options,
                             cudaStream_t stream = 0);
 
 /**
@@ -167,12 +167,12 @@ uint32_t gather_row_offsets(uint64_t *row_ctx,
  * @param row_offsets Row offsets in the character data buffer
  * @param d_data Character data buffer
  * @param options Options that control parsing of individual fields
- * @param stream CUDA stream to use, default 0
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  **/
 size_t count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
                         rmm::device_vector<char> const &d_data,
-                        const cudf::experimental::io::ParseOptions &options,
+                        const cudf::io::ParseOptions &options,
                         cudaStream_t stream = 0);
 
 /**
@@ -181,12 +181,12 @@ size_t count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
  * @param row_offsets Row offsets in the character data buffer
  * @param d_data Character data buffer
  * @param options Options that control parsing of individual fields
- * @param stream CUDA stream to use, default 0
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  **/
 void remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
                        rmm::device_vector<char> const &d_data,
-                       const cudf::experimental::io::ParseOptions &options,
+                       const cudf::io::ParseOptions &options,
                        cudaStream_t stream = 0);
 
 /**
@@ -207,7 +207,7 @@ cudaError_t DetectColumnTypes(const char *data,
                               const uint64_t *row_starts,
                               size_t num_rows,
                               size_t num_columns,
-                              const cudf::experimental::io::ParseOptions &options,
+                              const cudf::io::ParseOptions &options,
                               column_parse::flags *flags,
                               column_parse::stats *stats,
                               cudaStream_t stream = (cudaStream_t)0);
@@ -233,7 +233,7 @@ cudaError_t DecodeRowColumnData(const char *data,
                                 const uint64_t *row_starts,
                                 size_t num_rows,
                                 size_t num_columns,
-                                const cudf::experimental::io::ParseOptions &options,
+                                const cudf::io::ParseOptions &options,
                                 const column_parse::flags *flags,
                                 cudf::data_type *dtypes,
                                 void **columns,

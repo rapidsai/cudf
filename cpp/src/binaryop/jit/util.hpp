@@ -19,7 +19,6 @@
 #include <string>
 
 namespace cudf {
-namespace experimental {
 namespace binops {
 namespace jit {
 
@@ -83,5 +82,4 @@ std::string inline get_operator_name(binary_operator op, OperatorType type)
 
 }  // namespace jit
 }  // namespace binops
-}  // namespace experimental
 }  // namespace cudf

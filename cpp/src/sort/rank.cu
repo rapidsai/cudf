@@ -30,7 +30,6 @@
 #include <thrust/sequence.h>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 // Functor to identify unique elements in a sorted order table/column
@@ -95,7 +94,7 @@ rmm::device_vector<size_type> sorted_dense_rank(column_view input_col,
  * @param rank_iter output rank iterator
  * @param tie_breaker tie breaking operator. For example, maximum & minimum.
  * @param transformer transform after tie breaking (useful for average).
- * @param stream stream to run the computations on
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 template <typename TieType,
           typename outputIterator,
@@ -336,5 +335,4 @@ std::unique_ptr<column> rank(column_view const &input,
 {
   return detail::rank(input, method, column_order, null_handling, null_precedence, percentage, mr);
 }
-}  // namespace experimental
 }  // namespace cudf

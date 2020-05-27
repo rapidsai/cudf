@@ -44,8 +44,8 @@ namespace detail {
  * @param rhs_begin Strings of second set of data. Used when filter_fn returns false.
  * @param filter_fn Called to determine which iterator (lhs or rhs) to retrieve an entry for a
  * specific row.
- * @param mr Resource for allocating device memory.
- * @param stream CUDA stream to use kernels in this method.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column.
  */
 template <typename StringPairIterLeft, typename StringPairIterRight, typename Filter>
@@ -62,7 +62,7 @@ std::unique_ptr<cudf::column> copy_if_else(
 
   auto execpol = rmm::exec_policy(stream);
   // create null mask
-  auto valid_mask = cudf::experimental::detail::valid_if(
+  auto valid_mask = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {

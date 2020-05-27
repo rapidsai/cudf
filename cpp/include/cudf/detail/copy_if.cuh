@@ -102,8 +102,7 @@ __launch_bounds__(block_size) __global__
   cudf::size_type block_offset = block_offsets[blockIdx.x];
 
   // one extra warp worth in case the block is not aligned
-  __shared__ bool
-    temp_valids[has_validity ? block_size + cudf::experimental::detail::warp_size : 1];
+  __shared__ bool temp_valids[has_validity ? block_size + cudf::detail::warp_size : 1];
   __shared__ T temp_data[block_size];
 
   cudf::size_type warp_valid_counts{0};
@@ -122,8 +121,7 @@ __launch_bounds__(block_size) __global__
 
     if (has_validity) {
       temp_valids[threadIdx.x] = false;  // init shared memory
-      if (threadIdx.x < cudf::experimental::detail::warp_size)
-        temp_valids[block_size + threadIdx.x] = false;
+      if (threadIdx.x < cudf::detail::warp_size) temp_valids[block_size + threadIdx.x] = false;
       __syncthreads();  // wait for init
     }
 
@@ -133,7 +131,7 @@ __launch_bounds__(block_size) __global__
       // scatter validity mask to shared memory
       if (has_validity and input_view.is_valid(tid)) {
         // determine aligned offset for this warp's output
-        const cudf::size_type aligned_offset = block_offset % cudf::experimental::detail::warp_size;
+        const cudf::size_type aligned_offset      = block_offset % cudf::detail::warp_size;
         temp_valids[local_index + aligned_offset] = true;
       }
     }
@@ -151,16 +149,15 @@ __launch_bounds__(block_size) __global__
       // memory. Only the first and last 32-bit mask elements of each block must
       // use an atomicOr, because these are where other blocks may overlap.
 
-      constexpr int num_warps = block_size / cudf::experimental::detail::warp_size;
+      constexpr int num_warps = block_size / cudf::detail::warp_size;
       // account for partial blocks with non-warp-aligned offsets
-      const int last_index =
-        tmp_block_sum + (block_offset % cudf::experimental::detail::warp_size) - 1;
-      const int last_warp = min(num_warps, last_index / cudf::experimental::detail::warp_size);
-      const int wid       = threadIdx.x / cudf::experimental::detail::warp_size;
-      const int lane      = threadIdx.x % cudf::experimental::detail::warp_size;
+      const int last_index = tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
+      const int last_warp  = min(num_warps, last_index / cudf::detail::warp_size);
+      const int wid        = threadIdx.x / cudf::detail::warp_size;
+      const int lane       = threadIdx.x % cudf::detail::warp_size;
 
       if (tmp_block_sum > 0 && wid <= last_warp) {
-        int valid_index = (block_offset / cudf::experimental::detail::warp_size) + wid;
+        int valid_index = (block_offset / cudf::detail::warp_size) + wid;
 
         // compute the valid mask for this warp
         uint32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[threadIdx.x]);
@@ -193,8 +190,7 @@ __launch_bounds__(block_size) __global__
   }
   // Compute total null_count for this block and add it to global count
   cudf::size_type block_valid_count =
-    cudf::experimental::detail::single_lane_block_sum_reduce<block_size, leader_lane>(
-      warp_valid_counts);
+    cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_counts);
   if (threadIdx.x == 0) {  // one thread computes and adds to null count
     atomicAdd(output_null_count, block_sum - block_valid_count);
   }
@@ -226,7 +222,7 @@ struct scatter_gather_functor {
                     indices.begin(),
                     filter);
 
-    auto output_table = cudf::experimental::detail::gather(
+    auto output_table = cudf::detail::gather(
       cudf::table_view{{input}}, indices.begin(), indices.end(), false, mr, stream);
 
     // There will be only one column
@@ -243,8 +239,8 @@ struct scatter_gather_functor {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream                 = 0)
   {
-    auto output_column = cudf::experimental::detail::allocate_like(
-      input, output_size, cudf::experimental::mask_allocation_policy::RETAIN, mr, stream);
+    auto output_column = cudf::detail::allocate_like(
+      input, output_size, cudf::mask_allocation_policy::RETAIN, mr, stream);
     auto output = output_column->mutable_view();
 
     bool has_valid = input.nullable();
@@ -253,8 +249,8 @@ struct scatter_gather_functor {
                                : scatter_kernel<T, Filter, block_size, false>;
 
     cudf::size_type per_thread =
-      cudf::experimental::detail::elements_per_thread(scatter, input.size(), block_size);
-    cudf::experimental::detail::grid_1d grid{input.size(), block_size, per_thread};
+      cudf::detail::elements_per_thread(scatter, input.size(), block_size);
+    cudf::detail::grid_1d grid{input.size(), block_size, per_thread};
 
     rmm::device_scalar<cudf::size_type> null_count{0, stream};
     if (output.nullable()) {
@@ -283,7 +279,6 @@ struct scatter_gather_functor {
 }  // namespace
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Filters `input` using a Filter function object
@@ -299,7 +294,7 @@ namespace detail {
  * @return unique_ptr<table> The table generated from filtered `input`.
  */
 template <typename Filter>
-std::unique_ptr<experimental::table> copy_if(
+std::unique_ptr<table> copy_if(
   table_view const& input,
   Filter filter,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -307,12 +302,12 @@ std::unique_ptr<experimental::table> copy_if(
 {
   CUDF_FUNC_RANGE();
 
-  if (0 == input.num_rows() || 0 == input.num_columns()) { return experimental::empty_like(input); }
+  if (0 == input.num_rows() || 0 == input.num_columns()) { return empty_like(input); }
 
   constexpr int block_size = 256;
   cudf::size_type per_thread =
     elements_per_thread(compute_block_counts<Filter, block_size>, input.num_rows(), block_size);
-  cudf::experimental::detail::grid_1d grid{input.num_rows(), block_size, per_thread};
+  cudf::detail::grid_1d grid{input.num_rows(), block_size, per_thread};
 
   // allocate temp storage for block counts and offsets
   // TODO: use an uninitialized vector to avoid the initialization kernel
@@ -355,26 +350,25 @@ std::unique_ptr<experimental::table> copy_if(
   CHECK_CUDA(stream);
 
   if (output_size == input.num_rows()) {
-    return std::make_unique<experimental::table>(input, stream, mr);
+    return std::make_unique<table>(input, stream, mr);
   } else if (output_size > 0) {
     std::vector<std::unique_ptr<column>> out_columns(input.num_columns());
     std::transform(input.begin(), input.end(), out_columns.begin(), [&](auto col_view) {
-      return cudf::experimental::type_dispatcher(col_view.type(),
-                                                 scatter_gather_functor<Filter, block_size>{},
-                                                 col_view,
-                                                 output_size,
-                                                 thrust::raw_pointer_cast(block_offsets),
-                                                 filter,
-                                                 mr,
-                                                 stream);
+      return cudf::type_dispatcher(col_view.type(),
+                                   scatter_gather_functor<Filter, block_size>{},
+                                   col_view,
+                                   output_size,
+                                   thrust::raw_pointer_cast(block_offsets),
+                                   filter,
+                                   mr,
+                                   stream);
     });
 
-    return std::make_unique<experimental::table>(std::move(out_columns));
+    return std::make_unique<table>(std::move(out_columns));
   } else {
-    return experimental::empty_like(input);
+    return empty_like(input);
   }
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

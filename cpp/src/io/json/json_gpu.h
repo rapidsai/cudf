@@ -20,7 +20,6 @@
 #include <io/utilities/parsing_utils.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace json {
 namespace gpu {
@@ -36,7 +35,7 @@ namespace gpu {
  * @param[out] valid_fields The bitmaps indicating whether column fields are valid
  * @param[out] num_valid_fields The numbers of valid fields in columns
  * @param[in] opts A set of parsing options
- * @param[in] stream Cuda stream to run kernels on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @returns void
  **/
@@ -61,7 +60,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
  * @param[in] num_columns The number of columns of input data
  * @param[in] rec_starts The start the input data of interest
  * @param[in] num_records The number of lines/rows of input data
- * @param[in] stream Cuda stream to run kernels on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @returns void
  **/
@@ -77,5 +76,4 @@ void detect_data_types(ColumnInfo *column_infos,
 }  // namespace gpu
 }  // namespace json
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

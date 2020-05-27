@@ -41,8 +41,6 @@ class RandomAccessFile;
 
 //! cuDF interfaces
 namespace cudf {
-//! In-development features
-namespace experimental {
 //! IO interfaces
 namespace io {
 namespace detail {
@@ -78,7 +76,7 @@ class reader {
    *
    * @param filepath Path to the file containing the whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -89,7 +87,7 @@ class reader {
    *
    * @param source Input datasource object to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::unique_ptr<cudf::io::datasource> source,
                   reader_options const &options,
@@ -103,7 +101,7 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -115,7 +113,7 @@ class reader {
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
    * @param metadata Optional location to return table metadata
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -169,7 +167,7 @@ class reader {
    *
    * @param filepath Path to the file containing the whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -180,7 +178,7 @@ class reader {
    *
    * @param source Input datasource object to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::unique_ptr<cudf::io::datasource> source,
                   reader_options const &options,
@@ -194,7 +192,7 @@ class reader {
   /*
    * @brief Reads and returns the entire data set.
    *
-   * @return cudf::table object that contains the array of gdf_columns.
+   * @return cudf::table object that contains the array of cudf::column.
    */
   table_with_metadata read_all(cudaStream_t stream = 0);
 
@@ -208,7 +206,7 @@ class reader {
    * @param[in] offset Byte offset from the start
    * @param[in] size Number of bytes from the offset; set to 0 for all remaining
    *
-   * @return cudf::table object that contains the array of gdf_columns
+   * @return cudf::table object that contains the array of cudf::column
    */
   table_with_metadata read_byte_range(size_t offset, size_t size, cudaStream_t stream = 0);
 };
@@ -317,7 +315,7 @@ class reader {
    *
    * @param filepath Path to the file containing the whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -328,7 +326,7 @@ class reader {
    *
    * @param source Input datasource object to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::unique_ptr<cudf::io::datasource> source,
                   reader_options const &options,
@@ -357,7 +355,7 @@ class reader {
    *
    * @param offset Byte offset from the start
    * @param size Number of bytes from the offset; set to 0 for all remaining
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -369,7 +367,7 @@ class reader {
    * @param skip_rows Number of rows to skip from the start
    * @param skip_rows_end Number of rows to skip from the end
    * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -434,7 +432,7 @@ class reader {
    *
    * @param filepath Path to the file containing the whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -445,7 +443,7 @@ class reader {
    *
    * @param source Input datasource object to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::unique_ptr<cudf::io::datasource> source,
                   reader_options const &options,
@@ -459,7 +457,7 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -470,7 +468,7 @@ class reader {
    *
    * @param stripe Index of the stripe
    * @param stripe_count Number of stripes to read
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
@@ -484,7 +482,7 @@ class reader {
    * @brief Reads and returns specific stripes.
    *
    * @param stripe_list Indices of the stripes to read
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
@@ -498,7 +496,7 @@ class reader {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -554,7 +552,7 @@ class reader {
    *
    * @param filepath Path to the file containing the whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -565,7 +563,7 @@ class reader {
    *
    * @param source Input datasource object to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::unique_ptr<cudf::io::datasource> source,
                   reader_options const &options,
@@ -579,7 +577,7 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -590,7 +588,7 @@ class reader {
    *
    * @param row_group Index of the row group
    * @param row_group_count Number of row groups to read
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
@@ -604,7 +602,7 @@ class reader {
    * @brief Reads specific row groups.
    *
    * @param row_group_list Indices of the row groups
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
@@ -618,7 +616,7 @@ class reader {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -629,5 +627,4 @@ class reader {
 
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

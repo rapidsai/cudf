@@ -20,7 +20,6 @@
 #include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 /**
  * @brief Computes sum of elements in input column
@@ -32,8 +31,8 @@ namespace reduction {
  *
  * @param col input column to compute sum
  * @param output_dtype data type of return type and typecast elements of input column
- * @param mr The resource used to allocate the device memory for the returned scalar
- * @param stream Stream to use for any kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Sum as scalar of type `output_dtype`.
  */
 std::unique_ptr<scalar> sum(column_view const& col,
@@ -49,8 +48,8 @@ std::unique_ptr<scalar> sum(column_view const& col,
  *
  * @param col input column to compute minimum.
  * @param output_dtype data type of return type and typecast elements of input column
- * @param mr The resource used to allocate the device memory for the returned scalar
- * @param stream Stream to use for any kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Minimum element as scalar of type `output_dtype`.
  */
 std::unique_ptr<scalar> min(column_view const& col,
@@ -66,8 +65,8 @@ std::unique_ptr<scalar> min(column_view const& col,
  *
  * @param col input column to compute maximum.
  * @param output_dtype data type of return type and typecast elements of input column
- * @param mr The resource used to allocate the device memory for the returned scalar
- * @param stream Stream to use for any kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Maximum element as scalar of type `output_dtype`.
  */
 std::unique_ptr<scalar> max(column_view const& col,
@@ -84,8 +83,8 @@ std::unique_ptr<scalar> max(column_view const& col,
  *
  * @param col input column to compute any_of.
  * @param output_dtype data type of return type and typecast elements of input column
- * @param mr The resource used to allocate the device memory for the returned scalar
- * @param stream Stream to use for any kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return bool scalar if any of elements is true when typecasted to bool
  */
 std::unique_ptr<scalar> any(column_view const& col,
@@ -102,8 +101,8 @@ std::unique_ptr<scalar> any(column_view const& col,
  *
  * @param col input column to compute all_of.
  * @param output_dtype data type of return type and typecast elements of input column
- * @param mr The resource used to allocate the device memory for the returned scalar
- * @param stream Stream to use for any kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return bool scalar if all of elements is true when typecasted to bool
  */
 std::unique_ptr<scalar> all(column_view const& col,
@@ -120,8 +119,8 @@ std::unique_ptr<scalar> all(column_view const& col,
  *
  * @param col input column to compute product.
  * @param output_dtype data type of return type and typecast elements of input column
- * @param mr The resource used to allocate the device memory for the returned scalar
- * @param stream Stream to use for any kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Product as scalar of type `output_dtype`.
  */
 std::unique_ptr<scalar> product(
@@ -140,8 +139,8 @@ std::unique_ptr<scalar> product(
  *
  * @param col input column to compute sum of squares.
  * @param output_dtype data type of return type and typecast elements of input column
- * @param mr The resource used to allocate the device memory for the returned scalar
- * @param stream Stream to use for any kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Sum of squares as scalar of type `output_dtype`.
  */
 std::unique_ptr<scalar> sum_of_squares(
@@ -160,8 +159,8 @@ std::unique_ptr<scalar> sum_of_squares(
  *
  * @param col input column to compute mean.
  * @param output_dtype data type of return type and typecast elements of input column.
- * @param mr The resource used to allocate the device memory for the returned scalar.
- * @param stream Stream to use for any kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Mean as scalar of type `output_dtype`.
  */
 std::unique_ptr<scalar> mean(column_view const& col,
@@ -179,8 +178,8 @@ std::unique_ptr<scalar> mean(column_view const& col,
  *
  * @param col input column to compute variance.
  * @param output_dtype data type of return type and typecast elements of input column.
- * @param mr The resource used to allocate the device memory for the returned scalar.
- * @param stream Stream to use for any kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Variance as scalar of type `output_dtype`.
  */
 std::unique_ptr<scalar> variance(
@@ -200,8 +199,8 @@ std::unique_ptr<scalar> variance(
  *
  * @param col input column to compute standard deviation.
  * @param output_dtype data type of return type and typecast elements of input column.
- * @param mr The resource used to allocate the device memory for the returned scalar.
- * @param stream Stream to use for any kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Standard deviation as scalar of type `output_dtype`.
  */
 std::unique_ptr<scalar> standard_deviation(
@@ -212,5 +211,4 @@ std::unique_ptr<scalar> standard_deviation(
   cudaStream_t stream                 = 0);
 
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

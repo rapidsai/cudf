@@ -29,7 +29,6 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {
 template <typename Transformer>
@@ -45,7 +44,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
 
   if (input.nullable()) {
     auto input_begin =
-      cudf::experimental::detail::make_null_replacement_iterator<string_view>(input, string_view{});
+      cudf::detail::make_null_replacement_iterator<string_view>(input, string_view{});
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input_begin, offsets_transformer);
     offsets_column = cudf::strings::detail::make_offsets_child_column(
@@ -288,14 +287,14 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::list_view>(
 }
 
 /**
- * @copydoc cudf::experimental::clamp(column_view const& input,
+ * @copydoc cudf::clamp(column_view const& input,
                                       scalar const& lo,
                                       scalar const& lo_replace,
                                       scalar const& hi,
                                       scalar const& hi_replace,
                                       rmm::mr::device_memory_resource* mr);
  *
- * @param[in] stream Optional stream on which to issue all memory allocations
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& lo,
@@ -322,7 +321,7 @@ std::unique_ptr<column> clamp(column_view const& input,
     CUDF_EXPECTS(hi_replace.is_valid(stream), "hi_replace can't be null if hi is not null");
   }
 
-  return cudf::experimental::type_dispatcher(
+  return cudf::type_dispatcher(
     input.type(), dispatch_clamp{}, input, lo, lo_replace, hi, hi_replace, mr, stream);
 }
 
@@ -349,5 +348,4 @@ std::unique_ptr<column> clamp(column_view const& input,
   CUDF_FUNC_RANGE();
   return detail::clamp(input, lo, lo, hi, hi, mr);
 }
-}  // namespace experimental
 }  // namespace cudf

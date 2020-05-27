@@ -20,7 +20,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <cudf/cudf.h>
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
 

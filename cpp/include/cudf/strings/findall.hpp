@@ -48,10 +48,10 @@ namespace strings {
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match within each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New table of strings columns.
  */
-std::unique_ptr<experimental::table> findall_re(
+std::unique_ptr<table> findall_re(
   strings_column_view const& strings,
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());

@@ -39,11 +39,11 @@ namespace cudf {
  * @throw cudf::logic_error if the any of the DLTensor fields are unsupported
  *
  * @param managed_tensor a 1D or 2D column-major (Fortran order) tensor
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  *
  * @return Table with a copy of the tensor data
  */
-std::unique_ptr<experimental::table> from_dlpack(
+std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -61,7 +61,7 @@ std::unique_ptr<experimental::table> from_dlpack(
  * or if any of columns have non-zero null count
  *
  * @param input Table to convert to DLPack
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate the returned DLPack tensor's device memory.
  *
  * @return 1D or 2D DLPack tensor with a copy of the table data, or nullptr
  */

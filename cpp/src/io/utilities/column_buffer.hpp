@@ -30,7 +30,6 @@
 #include <rmm/device_buffer.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 /**
@@ -39,8 +38,8 @@ namespace detail {
  * @param type The intended data type to populate
  * @param size The number of elements to be represented by the mask
  * @param state The desired state of the mask
- * @param stream Optional stream to use for device memory alloc and kernels
- * @param mr Optional resource to use for device memory allocation
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned device_buffer
  *
  * @return `rmm::device_buffer` Device buffer allocation
  */
@@ -107,8 +106,8 @@ namespace {
  * @param type List of column chunk descriptors
  * @param size List of page information
  * @param size List of page information
- * @param stream Optional stream to use for device memory alloc and kernels
- * @param mr Optional resource to use for device memory allocation
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @return `std::unique_ptr<cudf::column>` Column from the existing device data
  */
@@ -131,5 +130,4 @@ std::unique_ptr<column> make_column(
 
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

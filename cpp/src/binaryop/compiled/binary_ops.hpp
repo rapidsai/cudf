@@ -20,7 +20,6 @@
 #include <cudf/null_mask.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace binops {
 namespace detail {
 /**
@@ -58,8 +57,8 @@ namespace compiled {
  * @param lhs         The left operand string scalar
  * @param rhs         The right operand string column
  * @param output_type The desired data type of the output column
- * @param mr          Memory resource for allocating output column
- * @param stream      CUDA stream on which to execute kernels
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
@@ -84,8 +83,8 @@ std::unique_ptr<column> binary_operation(
  * @param lhs         The left operand string column
  * @param rhs         The right operand string scalar
  * @param output_type The desired data type of the output column
- * @param mr          Memory resource for allocating output column
- * @param stream      CUDA stream on which to execute kernels
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
@@ -110,8 +109,8 @@ std::unique_ptr<column> binary_operation(
  * @param lhs         The left operand string column
  * @param rhs         The right operand string column
  * @param output_type The desired data type of the output column
- * @param mr          Memory resource for allocating output column
- * @param stream      CUDA stream on which to execute kernels
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
@@ -124,5 +123,4 @@ std::unique_ptr<column> binary_operation(
 
 }  // namespace compiled
 }  // namespace binops
-}  // namespace experimental
 }  // namespace cudf

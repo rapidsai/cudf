@@ -54,17 +54,16 @@ void BM_pre_sorted_nth(benchmark::State& state)
   wrapper vals(data_it, data_it + column_size);
 
   auto keys_table  = cudf::table_view({keys});
-  auto sort_order  = cudf::experimental::sorted_order(keys_table);
-  auto sorted_keys = cudf::experimental::gather(keys_table, *sort_order);
+  auto sort_order  = cudf::sorted_order(keys_table);
+  auto sorted_keys = cudf::gather(keys_table, *sort_order);
   // No need to sort values using sort_order because they were generated randomly
 
-  cudf::experimental::groupby::groupby gb_obj(
-    *sorted_keys, cudf::null_policy::EXCLUDE, cudf::sorted::YES);
+  cudf::groupby::groupby gb_obj(*sorted_keys, cudf::null_policy::EXCLUDE, cudf::sorted::YES);
 
-  std::vector<cudf::experimental::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::experimental::groupby::aggregation_request());
+  std::vector<cudf::groupby::aggregation_request> requests;
+  requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals;
-  requests[0].aggregations.push_back(cudf::experimental::make_nth_element_aggregation(-1));
+  requests[0].aggregations.push_back(cudf::make_nth_element_aggregation(-1));
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);

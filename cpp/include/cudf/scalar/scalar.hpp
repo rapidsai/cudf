@@ -57,7 +57,7 @@ class scalar {
    * @brief Updates the validity of the value
    *
    * @param is_valid true: set the value to valid. false: set it to null
-   * @param stream The CUDA stream to do the operation in
+   * @param stream CUDA stream used for device memory operations.
    */
   void set_valid(bool is_valid, cudaStream_t stream = 0) { _is_valid.set_value(is_valid, stream); }
 
@@ -66,7 +66,7 @@ class scalar {
    *
    * @note Using the value when `is_valid() == false` is undefined behaviour
    *
-   * @param stream The CUDA stream to do the operation in
+   * @param stream CUDA stream used for device memory operations.
    * @return true Value is valid
    * @return false Value is invalid/null
    */
@@ -96,8 +96,8 @@ class scalar {
    *
    * @param type Data type of the scalar
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   scalar(data_type type,
          bool is_valid                       = false,
@@ -126,7 +126,7 @@ class fixed_width_scalar : public scalar {
    * @brief Set the value of the scalar
    *
    * @param value New value of scalar
-   * @param stream The CUDA stream to do the operation in
+   * @param stream CUDA stream used for device memory operations.
    */
   void set_value(T value, cudaStream_t stream = 0)
   {
@@ -142,7 +142,7 @@ class fixed_width_scalar : public scalar {
   /**
    * @brief Get the value of the scalar
    *
-   * @param stream The CUDA stream to do the operation in
+   * @param stream CUDA stream used for device memory operations.
    */
   T value(cudaStream_t stream = 0) const { return _data.value(stream); }
 
@@ -159,22 +159,21 @@ class fixed_width_scalar : public scalar {
  protected:
   rmm::device_scalar<T> _data{};  ///< device memory containing the value
 
-  fixed_width_scalar() : scalar(data_type(experimental::type_to_id<T>())) {}
+  fixed_width_scalar() : scalar(data_type(type_to_id<T>())) {}
 
   /**
    * @brief Construct a new fixed width scalar object
    *
    * @param value The initial value of the scalar
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   fixed_width_scalar(T value,
                      bool is_valid                       = true,
                      cudaStream_t stream                 = 0,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream, mr),
-      _data(value, stream, mr)
+    : scalar(data_type(type_to_id<T>()), is_valid, stream, mr), _data(value, stream, mr)
   {
   }
 
@@ -188,7 +187,7 @@ class fixed_width_scalar : public scalar {
                      bool is_valid                       = true,
                      cudaStream_t stream                 = 0,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream, mr),
+    : scalar(data_type(type_to_id<T>()), is_valid, stream, mr),
       _data{std::forward<rmm::device_scalar<T>>(data)}
   {
   }
@@ -220,8 +219,8 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
    *
    * @param value The initial value of the scalar
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   numeric_scalar(T value,
                  bool is_valid                       = true,
@@ -267,8 +266,8 @@ class string_scalar : public scalar {
    *
    * @param value The value of the string
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   string_scalar(std::string const& string,
                 bool is_valid                       = true,
@@ -284,8 +283,8 @@ class string_scalar : public scalar {
    *
    * @param source string_view pointing string value to copy
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   string_scalar(value_type const& source,
                 bool is_valid                       = true,
@@ -301,8 +300,8 @@ class string_scalar : public scalar {
    *
    * @param data device_scalar string_view pointing string value to copy
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   string_scalar(rmm::device_scalar<value_type>& data,
                 bool is_valid                       = true,
@@ -320,14 +319,14 @@ class string_scalar : public scalar {
   /**
    * @brief Get the value of the scalar in a host std::string
    *
-   * @param stream The CUDA stream to do the operation in
+   * @param stream CUDA stream used for device memory operations.
    */
   std::string to_string(cudaStream_t stream = 0) const;
 
   /**
    * @brief Get the value of the scalar as a string_view
    *
-   * @param stream The CUDA stream to do the operation in
+   * @param stream CUDA stream used for device memory operations.
    */
   value_type value(cudaStream_t stream = 0) const { return value_type{data(), size()}; }
 
@@ -370,8 +369,8 @@ class timestamp_scalar : public detail::fixed_width_scalar<T> {
    *
    * @param value The initial value of the scalar
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   timestamp_scalar(T value,
                    bool is_valid                       = true,
@@ -386,8 +385,8 @@ class timestamp_scalar : public detail::fixed_width_scalar<T> {
    *
    * @param value Integer representing number of ticks since the UNIX epoch
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   timestamp_scalar(typename T::duration::rep value,
                    bool is_valid,

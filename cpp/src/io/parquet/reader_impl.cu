@@ -35,7 +35,6 @@
 #include <regex>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace parquet {
@@ -85,7 +84,7 @@ constexpr type_id to_type_id(parquet::Type physical,
     case parquet::DOUBLE: return type_id::FLOAT64;
     case parquet::BYTE_ARRAY:
     case parquet::FIXED_LEN_BYTE_ARRAY:
-      // Can be mapped to GDF_CATEGORY (32-bit hash) or GDF_STRING (nvstring)
+      // Can be mapped to INT32 (32-bit hash) or STRING
       return strings_to_categorical ? type_id::INT32 : type_id::STRING;
     case parquet::INT96:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
@@ -838,5 +837,4 @@ table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, c
 }  // namespace parquet
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

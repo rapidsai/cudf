@@ -33,8 +33,8 @@ namespace detail {
  * @tparam Iterator Used as input to scan to set the offset values.
  * @param begin The beginning of the input sequence
  * @param end The end of the input sequence
- * @param mr Memory resource to use.
- * @param stream Stream to use for any kernel calls.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return offsets child column for strings column
  */
 template <typename InputIterator>

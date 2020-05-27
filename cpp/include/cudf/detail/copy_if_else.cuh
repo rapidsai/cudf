@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
@@ -27,13 +26,11 @@
 #include <cudf/strings/detail/copy_if_else.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <iterator/legacy/iterator.cuh>
 
 #include <cub/cub.cuh>
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 namespace {  // anonymous
 
@@ -153,8 +150,8 @@ __launch_bounds__(block_size) __global__
  * @param rhs         Begin iterator of rhs range
  * @param filter      Function of type `FilterFn` which determines for index `i` where to get the
  *                    corresponding output value from
- * @param mr          Memory resource to use for allocating the output
- * @param stream      CUDA stream to perform the computation in
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @return            A new column that contains the values from either `lhs` or `rhs` as determined
  *                    by `filter[i]`
  */
@@ -174,7 +171,7 @@ std::unique_ptr<column> copy_if_else(
   size_type size           = std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, warp_size);
   constexpr int block_size = 256;
-  cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
+  cudf::detail::grid_1d grid{num_els, block_size, 1};
 
   std::unique_ptr<column> out =
     make_fixed_width_column(data_type(type_to_id<Element>()),
@@ -187,7 +184,7 @@ std::unique_ptr<column> copy_if_else(
 
   // if we have validity in the output
   if (nullable) {
-    rmm::device_scalar<size_type> valid_count{0, stream, mr};
+    rmm::device_scalar<size_type> valid_count{0, stream};
 
     // call the kernel
     copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, true>
@@ -205,7 +202,5 @@ std::unique_ptr<column> copy_if_else(
 }
 
 }  // namespace detail
-
-}  // namespace experimental
 
 }  // namespace cudf

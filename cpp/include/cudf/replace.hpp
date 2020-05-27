@@ -20,7 +20,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup transformation_replace
  * @{
@@ -31,11 +30,10 @@ namespace experimental {
  *
  * If `input[i]` is NULL, then `output[i]` will contain `replacement[i]`.
  * `input` and `replacement` must be of the same type and size.
- * must be of the same type and same size as the first.
  *
  * @param[in] input A column whose null values will be replaced
  * @param[in] replacement A cudf::column whose values will replace null values in input
- * @param[in] mr Optional device_memory_resource to use for allocations.
+ * @param[in] mr Device memory resource used to allocate device memory of the returned column.
  *
  * @returns A copy of `input` with the null values replaced with corresponding values from
  * `replacement`.
@@ -50,12 +48,10 @@ std::unique_ptr<column> replace_nulls(
  *
  * If `input[i]` is NULL, then `output[i]` will contain `replacement`.
  * `input` and `replacement` must have the same type.
- * a cudf::scalar of the same data type as the column.
- *
  *
  * @param[in] input A column whose null values will be replaced
  * @param[in] replacement Scalar used to replace null values in `input`.
- * @param[in] mr Optional device_memory_resource to use for allocations.
+ * @param[in] mr Device memory resource used to allocate device memory of the returned column.
  *
  * @returns Copy of `input` with null values replaced by `replacement`.
  */
@@ -81,7 +77,7 @@ std::unique_ptr<column> replace_nulls(
  *
  * @param input A column whose NaN values will be replaced
  * @param replacement A cudf::column whose values will replace NaN values in input
- * @param mr Optional device_memory_resource to use for allocations
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A copy of `input` with the NaN values replaced with corresponding values from
  * `replacement`.
  */
@@ -107,7 +103,7 @@ std::unique_ptr<column> replace_nans(
  *
  * @param input A column whose NaN values will be replaced
  * @param replacement A cudf::scalar whose value will replace NaN values in input
- * @param mr Optional device_memory_resource to use for allocations
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A copy of `input` with the NaN values replaced by `replacement`.
  */
 std::unique_ptr<column> replace_nans(
@@ -122,7 +118,7 @@ std::unique_ptr<column> replace_nans(
  * @param input_col The column to find and replace values in.
  * @param values_to_replace The values to replace
  * @param replacement_values The values to replace with
- * @param mr Optional device_memory_resource to use for allocations.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @returns Copy of `input_col` with specified values replaced.
  */
@@ -173,8 +169,7 @@ std::unique_ptr<column> find_and_replace_all(
  * @param[in] hi Maximum clamp value. All elements greater than `hi` will be replaced by
  * `hi_replace`. Ignored if null.
  * @param[in] hi_replace All elements greater than `hi` will be replaced by `hi_replace`.
- * @param[in] mr Optional resource to use for device memory
- *           allocation of the returned result column.
+ * @param[in] mr Device memory resource used to allocate device memory of the returned column.
  *
  * @return Returns a clamped column as per `lo` and `hi` boundaries
  */
@@ -220,8 +215,7 @@ std::unique_ptr<column> clamp(
  * if null.
  * @param[in] hi Maximum clamp value. All elements greater than `hi` will be replaced by `hi`.
  * Ignored if null.
- * @param[in] mr Optional resource to use for device memory
- *           allocation of the returned result column.
+ * @param[in] mr Device memory resource used to allocate device memory of the returned column.
  *
  * @return Returns a clamped column as per `lo` and `hi` boundaries
  */
@@ -232,7 +226,6 @@ std::unique_ptr<column> clamp(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 /**
  * @addtogroup transformation_replace
  * @{

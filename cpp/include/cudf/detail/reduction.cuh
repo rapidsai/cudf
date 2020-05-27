@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
@@ -28,7 +27,6 @@
 #include "reduction_operators.cuh"
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 namespace detail {
 /** --------------------------------------------------------------------------*
@@ -37,7 +35,7 @@ namespace detail {
  * @param[in] d_in      the begin iterator
  * @param[in] num_items the number of items
  * @param[in] op        the reduction operator
- * @param[in] stream    cuda stream
+ * @param[in] stream    CUDA stream used for device memory operations and kernel launches.
  * @returns   Output scalar in device memory
  *
  * @tparam Op               the reduction operator with device binary operator
@@ -81,7 +79,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             identity,
                             stream);
 
-  using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
+  using ScalarType = cudf::scalar_type_t<OutputType>;
   auto s           = new ScalarType(
     std::move(dev_result), true, stream, mr);  // only for string_view, data is copied
   return std::unique_ptr<scalar>(s);
@@ -125,7 +123,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             identity,
                             stream);
 
-  using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
+  using ScalarType = cudf::scalar_type_t<OutputType>;
   auto s = new ScalarType(dev_result, true, stream, mr);  // only for string_view, data is copied
   return std::unique_ptr<scalar>(s);
 }
@@ -152,7 +150,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @param[in] op        the reduction operator
  * @param[in] valid_count   the intermediate operator argument 1
  * @param[in] ddof      the intermediate operator argument 2
- * @param[in] stream    cuda stream
+ * @param[in] stream    CUDA stream used for device memory operations and kernel launches.
  * @returns   Output scalar in device memory
  *
  * The reduction operator must have `intermediate::compute_result()` method.
@@ -203,7 +201,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             stream);
 
   // compute the result value from intermediate value in device
-  using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
+  using ScalarType = cudf::scalar_type_t<OutputType>;
   auto result      = new ScalarType(OutputType{0}, true, stream, mr);
   thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                      intermediate_result.data(),
@@ -216,5 +214,4 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 
 }  // namespace detail
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

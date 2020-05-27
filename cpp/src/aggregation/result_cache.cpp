@@ -17,7 +17,6 @@
 #include <cudf/detail/aggregation/result_cache.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
 bool result_cache::has_result(size_t col_idx, aggregation const& agg) const
@@ -59,5 +58,4 @@ std::unique_ptr<column> result_cache::release_result(size_t col_idx, aggregation
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

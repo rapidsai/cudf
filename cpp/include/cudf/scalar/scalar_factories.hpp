@@ -34,9 +34,8 @@ namespace cudf {
  * @throws cudf::logic_error if `type` is not a numeric type
  *
  * @param type The desired numeric element type
- * @param stream Optional stream on which to issue all memory allocations
- * @param mr Optional resource to use for device memory
- *           allocation of the scalar's `data` and `is_valid` bool.
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
  */
 std::unique_ptr<scalar> make_numeric_scalar(
   data_type type,
@@ -51,9 +50,8 @@ std::unique_ptr<scalar> make_numeric_scalar(
  * @throws cudf::logic_error if `type` is not a timestamp type
  *
  * @param type The desired timestamp element type
- * @param stream Optional stream on which to issue all memory allocations
- * @param mr Optional resource to use for device memory
- *           allocation of the scalar's `data` and `is_valid` bool.
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
  */
 std::unique_ptr<scalar> make_timestamp_scalar(
   data_type type,
@@ -68,9 +66,8 @@ std::unique_ptr<scalar> make_timestamp_scalar(
  * @throws cudf::logic_error if `type` is not a fixed-width type
  *
  * @param type The desired fixed-width element type
- * @param stream Optional stream on which to issue all memory allocations
- * @param mr Optional resource to use for device memory
- *           allocation of the scalar's `data` and `is_valid` bool.
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
  */
 std::unique_ptr<scalar> make_fixed_width_scalar(
   data_type type,
@@ -85,9 +82,8 @@ std::unique_ptr<scalar> make_fixed_width_scalar(
  * @throws std::bad_alloc if device memory allocation fails
  *
  * @param string The `std::string` to copy to device
- * @param stream Optional stream for use with all memory allocations
- * @param mr Optional resource to use for device memory
- *           allocation of the scalar's `data` and `is_valid`.
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
  */
 std::unique_ptr<scalar> make_string_scalar(
   std::string const& string,
@@ -108,9 +104,8 @@ std::unique_ptr<scalar> make_default_constructed_scalar(data_type type);
  *
  * @tparam T Datatype of the value to be represented by the scalar
  * @param value The value to store in the scalar object
- * @param stream Optional stream on which to issue all memory allocations
- * @param mr Optional resource to use for device memory
- *           allocation of the scalar's `data` and `is_valid` bool.
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
  */
 template <typename T>
 std::unique_ptr<scalar> make_fixed_width_scalar(
@@ -118,7 +113,7 @@ std::unique_ptr<scalar> make_fixed_width_scalar(
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
-  return std::make_unique<experimental::scalar_type_t<T>>(value, true, stream, mr);
+  return std::make_unique<scalar_type_t<T>>(value, true, stream, mr);
 }
 
 /** @} */  // end of group

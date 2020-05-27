@@ -20,7 +20,6 @@
 #include <cudf/io/types.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 /**
  * @brief Structure for holding various options used when parsing and
@@ -292,5 +291,4 @@ std::string infer_compression_type(
   const std::vector<std::pair<std::string, std::string>>& ext_to_comp_map);
 
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

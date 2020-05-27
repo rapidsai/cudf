@@ -20,7 +20,6 @@
 #include <cudf/unary.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Creates a column of `BOOL8` elements by applying a predicate to every element between
@@ -32,11 +31,10 @@ namespace detail {
  * @param begin Begining of the sequence of elements
  * @param end End of the sequence of elements
  * @param p Predicate to be applied to each element in `[begin,end)`
- * @param mr Optional, The resource to use for all allocations
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
- * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing
- * predicate is satisfied.
+ * @returns A column of type `BOOL8,` with `true` representing predicate is satisfied.
  */
 
 template <typename InputIterator, typename Predicate>
@@ -58,32 +56,20 @@ std::unique_ptr<column> true_if(
 }
 
 /**
- * @brief Performs unary op on all values in column
+ * @copydoc cudf::unary_operation
  *
- * @param input A `column_view` as input
- * @param op operation to perform
- * @param mr Optional, The resource to use for all allocations
- * @param stream Optional CUDA stream on which to execute kernels
- *
- * @returns std::unique_ptr<cudf::column> Result of the operation
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
-  cudf::experimental::unary_op op,
+  cudf::unary_op op,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
 /**
- * @brief  Casts data from dtype specified in input to dtype specified in output.
- * Supports only fixed-width types.
+ * @copydoc cudf::cast
  *
- * @param column_view Input column
- * @param out_type Desired datatype of output column
- * @param mr Optional, The resource to use for all allocations
- * @param stream Optional CUDA stream on which to execute kernels
- *
- * @returns unique_ptr<column> Result of the cast operation
- * @throw cudf::logic_error if `out_type` is not a fixed-width type
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
@@ -91,9 +77,9 @@ std::unique_ptr<column> cast(column_view const& input,
                              cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::is_nan
+ * @copydoc cudf::is_nan
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> is_nan(
   cudf::column_view const& input,
@@ -101,9 +87,9 @@ std::unique_ptr<column> is_nan(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::is_not_nan
+ * @copydoc cudf::is_not_nan
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> is_not_nan(
   cudf::column_view const& input,
@@ -111,5 +97,4 @@ std::unique_ptr<column> is_not_nan(
   cudaStream_t stream                 = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

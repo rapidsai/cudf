@@ -23,7 +23,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <gmock/gmock.h>
 #include <vector>
 
 // Compares two tables row by row, if table1 row is less than table2, then corresponding row value
@@ -41,7 +40,7 @@ void row_comparison(cudf::table_view input1,
   auto device_table_2 = cudf::table_device_view::create(input2, stream);
   rmm::device_vector<cudf::order> d_column_order(column_order);
 
-  auto comparator = cudf::experimental::row_lexicographic_comparator<false>(
+  auto comparator = cudf::row_lexicographic_comparator<false>(
     *device_table_1, *device_table_2, d_column_order.data().get());
 
   thrust::transform(rmm::exec_policy(stream)->on(stream),

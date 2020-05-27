@@ -46,10 +46,10 @@ namespace strings {
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression pattern with group indicators.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return Columns of strings extracted from the input column.
  */
-std::unique_ptr<experimental::table> extract(
+std::unique_ptr<table> extract(
   strings_column_view const& strings,
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());

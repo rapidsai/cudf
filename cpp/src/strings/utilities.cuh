@@ -15,7 +15,6 @@
  */
 #pragma once
 
-//#include <bitmask/legacy/valid_if.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 
@@ -67,8 +66,8 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  * chars memory.
  * @param strings_count Number of strings.
  * @param null_count Number of nulls in the strings column.
- * @param mr Memory resource to use.
- * @param stream Stream to use for any kernel calls.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return offsets child column and chars child column for a strings column
  */
 template <typename SizeAndExecuteFunction>

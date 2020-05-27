@@ -21,8 +21,8 @@
 #include <hash/hash_allocator.cuh>
 #include <hash/helper_functions.cuh>
 #include <hash/managed.cuh>
-#include <utilities/legacy/device_atomics.cuh>
 
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/utilities/error.hpp>
 
@@ -151,7 +151,7 @@ class concurrent_unordered_map {
    * equal
    * @param allocator The allocator to use for allocation the hash table's
    * storage
-   * @param stream CUDA stream to use for device operations.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   static auto create(size_type capacity,
                      const mapped_type unused_element = std::numeric_limits<key_type>::max(),
@@ -414,7 +414,7 @@ class concurrent_unordered_map {
     }
   }
 
-  gdf_error assign_async(const concurrent_unordered_map& other, cudaStream_t stream = 0)
+  void assign_async(const concurrent_unordered_map& other, cudaStream_t stream = 0)
   {
     if (other.m_capacity <= m_capacity) {
       m_capacity = other.m_capacity;
@@ -430,7 +430,6 @@ class concurrent_unordered_map {
                              m_capacity * sizeof(value_type),
                              cudaMemcpyDefault,
                              stream));
-    return GDF_SUCCESS;
   }
 
   void clear_async(cudaStream_t stream = 0)
@@ -448,7 +447,7 @@ class concurrent_unordered_map {
     }
   }
 
-  gdf_error prefetch(const int dev_id, cudaStream_t stream = 0)
+  void prefetch(const int dev_id, cudaStream_t stream = 0)
   {
     cudaPointerAttributes hashtbl_values_ptr_attributes;
     cudaError_t status = cudaPointerGetAttributes(&hashtbl_values_ptr_attributes, m_hashtbl_values);
@@ -458,8 +457,6 @@ class concurrent_unordered_map {
         cudaMemPrefetchAsync(m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream));
     }
     CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream));
-
-    return GDF_SUCCESS;
   }
 
   /**
@@ -468,7 +465,7 @@ class concurrent_unordered_map {
    * This function is invoked as the deleter of the `std::unique_ptr` returned
    * from the `create()` factory function.
    *
-   * @param stream CUDA stream to use for device operations.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void destroy(cudaStream_t stream = 0)
   {
@@ -503,7 +500,7 @@ class concurrent_unordered_map {
    *are equal
    * @param allocator The allocator to use for allocation the hash table's
    * storage
-   * @param stream CUDA stream to use for device operations.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   concurrent_unordered_map(size_type capacity,
                            const mapped_type unused_element,

@@ -34,7 +34,7 @@ struct get_column_data_impl {
 
 void const* get_column_data(column_view const& col)
 {
-  return experimental::type_dispatcher(col.type(), get_column_data_impl{}, col);
+  return type_dispatcher(col.type(), get_column_data_impl{}, col);
 }
 
 data_type DLDataType_to_data_type(DLDataType type)
@@ -89,7 +89,7 @@ struct data_type_to_DLDataType_impl {
 
 DLDataType data_type_to_DLDataType(data_type type)
 {
-  return experimental::type_dispatcher(type, data_type_to_DLDataType_impl{});
+  return type_dispatcher(type, data_type_to_DLDataType_impl{});
 }
 
 // Context object to own memory allocated for DLManagedTensor
@@ -109,9 +109,9 @@ struct dltensor_context {
 }  // namespace
 
 namespace detail {
-std::unique_ptr<experimental::table> from_dlpack(DLManagedTensor const* managed_tensor,
-                                                 rmm::mr::device_memory_resource* mr,
-                                                 cudaStream_t stream)
+std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
+                                   rmm::mr::device_memory_resource* mr,
+                                   cudaStream_t stream)
 {
   CUDF_EXPECTS(nullptr != managed_tensor, "managed_tensor is null");
   auto const& tensor = managed_tensor->dl_tensor;
@@ -173,7 +173,7 @@ std::unique_ptr<experimental::table> from_dlpack(DLManagedTensor const* managed_
     tensor_data += col_stride;
   }
 
-  return std::make_unique<experimental::table>(std::move(columns));
+  return std::make_unique<table>(std::move(columns));
 }
 
 DLManagedTensor* to_dlpack(table_view const& input,
@@ -250,8 +250,8 @@ DLManagedTensor* to_dlpack(table_view const& input,
 
 }  // namespace detail
 
-std::unique_ptr<experimental::table> from_dlpack(DLManagedTensor const* managed_tensor,
-                                                 rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
+                                   rmm::mr::device_memory_resource* mr)
 {
   return detail::from_dlpack(managed_tensor, mr);
 }

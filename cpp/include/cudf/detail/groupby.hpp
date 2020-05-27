@@ -21,7 +21,6 @@
 #include <utility>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 namespace hash {
@@ -48,5 +47,4 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
 
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

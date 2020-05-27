@@ -23,7 +23,6 @@
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 namespace compound {
 /** --------------------------------------------------------------------------*
@@ -34,14 +33,14 @@ namespace compound {
  * @param[in] ddof   `Delta Degrees of Freedom` used for `std`, `var`.
  *                   The divisor used in calculations is N - ddof, where N
  *                   represents the number of elements.
- * @param[in] mr    The resource to use for all allocations
- * @param[in] stream cuda stream
+ * @param[in] mr     Device memory resource used to allocate the returned scalar's device memory
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @returns   Output scalar in device memory
  *
  * @tparam ElementType  the input column cudf dtype
  * @tparam ResultType   the output cudf dtype
  * @tparam Op           the compound operator derived from
- * `cudf::experimental::reduction::op::compound_op`
+ * `cudf::reduction::op::compound_op`
  * ----------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,
@@ -59,7 +58,7 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
 
   if (col.has_nulls()) {
     auto it =
-      thrust::make_transform_iterator(experimental::detail::make_null_replacement_iterator(
+      thrust::make_transform_iterator(cudf::detail::make_null_replacement_iterator(
                                         *dcol, compound_op.template get_identity<ElementType>()),
                                       compound_op.template get_element_transformer<ResultType>());
     result = detail::reduce<Op, decltype(it), ResultType>(
@@ -131,7 +130,7 @@ struct element_type_dispatcher {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    return cudf::experimental::type_dispatcher(
+    return cudf::type_dispatcher(
       output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, mr, stream);
   }
 
@@ -150,5 +149,4 @@ struct element_type_dispatcher {
 
 }  // namespace compound
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

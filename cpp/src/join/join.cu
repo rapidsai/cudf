@@ -27,7 +27,6 @@
 #include <join/join_common_utils.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
 /**
@@ -59,7 +58,7 @@ auto non_common_column_indices(size_type num_columns,
   return non_common_column_indices;
 }
 
-std::unique_ptr<experimental::table> get_empty_joined_table(
+std::unique_ptr<table> get_empty_joined_table(
   table_view const& left,
   table_view const& right,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common)
@@ -69,13 +68,13 @@ std::unique_ptr<experimental::table> get_empty_joined_table(
                  columns_in_common.end(),
                  right_columns_in_common.begin(),
                  [](auto& col) { return col.second; });
-  std::unique_ptr<experimental::table> empty_left  = experimental::empty_like(left);
-  std::unique_ptr<experimental::table> empty_right = experimental::empty_like(right);
+  std::unique_ptr<table> empty_left  = empty_like(left);
+  std::unique_ptr<table> empty_right = empty_like(right);
   std::vector<size_type> right_non_common_indices =
     non_common_column_indices(right.num_columns(), right_columns_in_common);
   table_view tmp_right_table = (*empty_right).select(right_non_common_indices);
   table_view tmp_table{{*empty_left, tmp_right_table}};
-  return std::make_unique<experimental::table>(tmp_table);
+  return std::make_unique<table>(tmp_table);
 }
 
 VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b)
@@ -118,8 +117,7 @@ struct valid_range {
  * @Param right_indices Vector of indices
  * @Param left_table_row_count Number of rows of left table
  * @Param right_table_row_count Number of rows of right table
- * @param stream Optional, stream on which all memory allocations and copies
- * will be performed
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @Returns  Pair of vectors containing the left join indices complement
  */
@@ -192,8 +190,7 @@ get_left_join_indices_complement(rmm::device_vector<size_type>& right_indices,
  *
  * @param left  Table of left columns to join
  * @param right Table of right  columns to join
- * @param stream stream on which all memory allocations and copies
- * will be performed
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @tparam join_kind The type of join to be performed
  *
  * @returns Join output indices vector pair
@@ -282,7 +279,7 @@ std::vector<std::unique_ptr<column>> combine_join_columns(
  */
 /* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
-std::unique_ptr<experimental::table> construct_join_output_df(
+std::unique_ptr<table> construct_join_output_df(
   table_view const& left,
   table_view const& right,
   VectorPair& joined_indices,
@@ -305,61 +302,59 @@ std::unique_ptr<experimental::table> construct_join_output_df(
 
   bool const nullify_out_of_bounds{JoinKind != join_kind::INNER_JOIN};
 
-  std::unique_ptr<experimental::table> common_table = std::make_unique<experimental::table>();
+  std::unique_ptr<table> common_table = std::make_unique<table>();
   // Construct the joined columns
   if (join_kind::FULL_JOIN == JoinKind) {
     auto complement_indices = get_left_join_indices_complement(
       joined_indices.second, left.num_rows(), right.num_rows(), stream);
     if (not columns_in_common.empty()) {
-      auto common_from_right = experimental::detail::gather(right.select(right_common_col),
-                                                            complement_indices.second.begin(),
-                                                            complement_indices.second.end(),
-                                                            nullify_out_of_bounds,
-                                                            rmm::mr::get_default_resource(),
-                                                            stream);
-      auto common_from_left  = experimental::detail::gather(left.select(left_common_col),
-                                                           joined_indices.first.begin(),
-                                                           joined_indices.first.end(),
-                                                           nullify_out_of_bounds,
-                                                           rmm::mr::get_default_resource(),
-                                                           stream);
+      auto common_from_right = detail::gather(right.select(right_common_col),
+                                              complement_indices.second.begin(),
+                                              complement_indices.second.end(),
+                                              nullify_out_of_bounds,
+                                              rmm::mr::get_default_resource(),
+                                              stream);
+      auto common_from_left  = detail::gather(left.select(left_common_col),
+                                             joined_indices.first.begin(),
+                                             joined_indices.first.end(),
+                                             nullify_out_of_bounds,
+                                             rmm::mr::get_default_resource(),
+                                             stream);
       common_table           = cudf::detail::concatenate(
         {common_from_right->view(), common_from_left->view()}, mr, stream);
     }
     joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
   } else {
     if (not columns_in_common.empty()) {
-      common_table = experimental::detail::gather(left.select(left_common_col),
-                                                  joined_indices.first.begin(),
-                                                  joined_indices.first.end(),
-                                                  nullify_out_of_bounds,
-                                                  mr,
-                                                  stream);
+      common_table = detail::gather(left.select(left_common_col),
+                                    joined_indices.first.begin(),
+                                    joined_indices.first.end(),
+                                    nullify_out_of_bounds,
+                                    mr,
+                                    stream);
     }
   }
 
   // Construct the left non common columns
-  std::unique_ptr<experimental::table> left_table =
-    experimental::detail::gather(left.select(left_noncommon_col),
-                                 joined_indices.first.begin(),
-                                 joined_indices.first.end(),
-                                 nullify_out_of_bounds,
-                                 mr,
-                                 stream);
+  std::unique_ptr<table> left_table = detail::gather(left.select(left_noncommon_col),
+                                                     joined_indices.first.begin(),
+                                                     joined_indices.first.end(),
+                                                     nullify_out_of_bounds,
+                                                     mr,
+                                                     stream);
 
-  std::unique_ptr<experimental::table> right_table =
-    experimental::detail::gather(right.select(right_noncommon_col),
-                                 joined_indices.second.begin(),
-                                 joined_indices.second.end(),
-                                 nullify_out_of_bounds,
-                                 mr,
-                                 stream);
+  std::unique_ptr<table> right_table = detail::gather(right.select(right_noncommon_col),
+                                                      joined_indices.second.begin(),
+                                                      joined_indices.second.end(),
+                                                      nullify_out_of_bounds,
+                                                      mr,
+                                                      stream);
 
-  return std::make_unique<experimental::table>(combine_join_columns(left_table->release(),
-                                                                    left_noncommon_col,
-                                                                    common_table->release(),
-                                                                    left_common_col,
-                                                                    right_table->release()));
+  return std::make_unique<table>(combine_join_columns(left_table->release(),
+                                                      left_noncommon_col,
+                                                      common_table->release(),
+                                                      left_common_col,
+                                                      right_table->release()));
 }
 
 /* --------------------------------------------------------------------------*/
@@ -395,10 +390,8 @@ std::unique_ptr<experimental::table> construct_join_output_df(
  * full join.
  * Else, for every column in `left_on` and `right_on`, an output column will
  * be produced.
- * @param mr The memory resource that will be used for allocating
- * the device memory for the new table
- * @param stream Optional, stream on which all memory allocations and copies
- * will be performed
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @tparam join_kind The type of join to be performed
  *
@@ -408,7 +401,7 @@ std::unique_ptr<experimental::table> construct_join_output_df(
  */
 /* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
-std::unique_ptr<experimental::table> join_call_compute_df(
+std::unique_ptr<table> join_call_compute_df(
   table_view const& left,
   table_view const& right,
   std::vector<size_type> const& left_on,
@@ -449,7 +442,7 @@ std::unique_ptr<experimental::table> join_call_compute_df(
 
 }  // namespace detail
 
-std::unique_ptr<experimental::table> inner_join(
+std::unique_ptr<table> inner_join(
   table_view const& left,
   table_view const& right,
   std::vector<size_type> const& left_on,
@@ -458,11 +451,11 @@ std::unique_ptr<experimental::table> inner_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::INNER_JOIN>(
+  return detail::join_call_compute_df<::cudf::detail::join_kind::INNER_JOIN>(
     left, right, left_on, right_on, columns_in_common, mr);
 }
 
-std::unique_ptr<experimental::table> left_join(
+std::unique_ptr<table> left_join(
   table_view const& left,
   table_view const& right,
   std::vector<size_type> const& left_on,
@@ -471,11 +464,11 @@ std::unique_ptr<experimental::table> left_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::LEFT_JOIN>(
+  return detail::join_call_compute_df<::cudf::detail::join_kind::LEFT_JOIN>(
     left, right, left_on, right_on, columns_in_common, mr);
 }
 
-std::unique_ptr<experimental::table> full_join(
+std::unique_ptr<table> full_join(
   table_view const& left,
   table_view const& right,
   std::vector<size_type> const& left_on,
@@ -484,10 +477,8 @@ std::unique_ptr<experimental::table> full_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::FULL_JOIN>(
+  return detail::join_call_compute_df<::cudf::detail::join_kind::FULL_JOIN>(
     left, right, left_on, right_on, columns_in_common, mr);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

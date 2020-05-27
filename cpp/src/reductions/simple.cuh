@@ -23,7 +23,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 namespace simple {
 /** --------------------------------------------------------------------------*
@@ -31,13 +30,13 @@ namespace simple {
  * which directly compute the reduction by a single step reduction call
  *
  * @param[in] col    input column view
- * @param[in] mr The resource to use for all allocations
- * @param[in] stream cuda stream
+ * @param[in] mr Device memory resource used to allocate the returned scalar's device memory
+ * @param[in] CUDA stream used for device memory operations and kernel launches.
  * @returns   Output scalar in device memory
  *
  * @tparam ElementType  the input column cudf dtype
  * @tparam ResultType   the output cudf dtype
- * @tparam Op           the operator of cudf::experimental::reduction::op::
+ * @tparam Op           the operator of cudf::reduction::op::
  * ----------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> simple_reduction(column_view const& col,
@@ -52,7 +51,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
 
   if (col.has_nulls()) {
     auto it =
-      thrust::make_transform_iterator(experimental::detail::make_null_replacement_iterator(
+      thrust::make_transform_iterator(cudf::detail::make_null_replacement_iterator(
                                         *dcol, simple_op.template get_identity<ElementType>()),
                                       simple_op.template get_element_transformer<ResultType>());
     result = detail::reduce(it, col.size(), Op{}, mr, stream);
@@ -80,8 +79,8 @@ struct result_type_dispatcher {
     //  - bool to/from any arithmetic dtype
     return std::is_convertible<ElementType, ResultType>::value &&
            (std::is_arithmetic<ResultType>::value ||
-            std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
-            std::is_same<Op, cudf::experimental::reduction::op::max>::value) &&
+            std::is_same<Op, cudf::reduction::op::min>::value ||
+            std::is_same<Op, cudf::reduction::op::max>::value) &&
            !std::is_same<ResultType, cudf::list_view>::value;
   }
 
@@ -116,8 +115,8 @@ struct element_type_dispatcher {
   {
     // disable only for string ElementType except for operators min, max
     return !((std::is_same<ElementType, cudf::string_view>::value &&
-              !(std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
-                std::is_same<Op, cudf::experimental::reduction::op::max>::value))
+              !(std::is_same<Op, cudf::reduction::op::min>::value ||
+                std::is_same<Op, cudf::reduction::op::max>::value))
              // disable for list views
              || std::is_same<ElementType, cudf::list_view>::value);
   }
@@ -129,7 +128,7 @@ struct element_type_dispatcher {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    return cudf::experimental::type_dispatcher(
+    return cudf::type_dispatcher(
       output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, mr, stream);
   }
 
@@ -147,5 +146,4 @@ struct element_type_dispatcher {
 
 }  // namespace simple
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

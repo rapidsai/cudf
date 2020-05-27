@@ -26,8 +26,6 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
-
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 

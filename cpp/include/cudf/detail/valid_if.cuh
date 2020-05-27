@@ -27,7 +27,6 @@
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Generate a bitmask where every bit is set for which a predicate is
@@ -79,8 +78,7 @@ __global__ void valid_if_kernel(
  * @param begin The beginning of the sequence
  * @param end The end of the sequence
  * @param p The predicate
- * @param stream Stream on which to execute all GPU activity and device memory
- * allocations.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return A pair containing a `device_buffer` with the new bitmask and it's
  * null count
  */
@@ -100,7 +98,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 
   size_type null_count{0};
   if (size > 0) {
-    rmm::device_scalar<size_type> valid_count{0, stream, mr};
+    rmm::device_scalar<size_type> valid_count{0, stream};
 
     constexpr size_type block_size{256};
     grid_1d grid{size, block_size};
@@ -188,5 +186,4 @@ __global__ void valid_if_n_kernel(InputIterator1 begin1,
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

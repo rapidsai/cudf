@@ -26,7 +26,6 @@
 #include <join/join_kernels.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /* --------------------------------------------------------------------------*/
 /**
@@ -160,8 +159,7 @@ size_type estimate_join_output_size(table_device_view build_table,
  * JoinNoneValue, i.e. -1.
  *
  * @param left  Table of left columns to join
- * @param stream stream on which all memory allocations and copies
- * will be performed
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @returns Join output indices vector pair
  */
@@ -189,8 +187,7 @@ get_trivial_left_join_indices(table_view const& left, cudaStream_t stream)
  * @param right Table of right  columns to join
  * @param flip_join_indices Flag that indicates whether the left and right
  * tables have been flipped, meaning the output indices should also be flipped.
- * @param stream stream on which all memory allocations and copies
- * will be performed
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @tparam join_kind The type of join to be performed
  *
  * @returns Join output indices vector pair
@@ -234,7 +231,7 @@ get_base_hash_join_indices(table_view const& left,
     row_hash hash_build{*build_table};
     rmm::device_scalar<int> failure(0, stream);
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-    experimental::detail::grid_1d config(build_table_num_rows, block_size);
+    detail::grid_1d config(build_table_num_rows, block_size);
     build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
       *hash_table, hash_build, build_table_num_rows, failure.data());
     // Check error code from the kernel
@@ -264,7 +261,7 @@ get_base_hash_join_indices(table_view const& left,
     right_indices.resize(estimated_size);
 
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-    experimental::detail::grid_1d config(probe_table->num_rows(), block_size);
+    detail::grid_1d config(probe_table->num_rows(), block_size);
     write_index.set_value(0);
 
     row_hash hash_probe{*probe_table};
@@ -295,7 +292,5 @@ get_base_hash_join_indices(table_view const& left,
 }
 
 }  // namespace detail
-
-}  // namespace experimental
 
 }  // namespace cudf

@@ -31,7 +31,7 @@ namespace detail {
  * @brief Generic string modification in two passes: 1st pass probes for memory load requirements;
  * 2nd pass executes string modification.
  *
- * @tparam device_probe_functor Functor for probing memory requitements;
+ * @tparam device_probe_functor Functor for probing memory requirements;
  * must implement `__device__ int32_t operator()(size_type idx) const`
  * @tparam device_execute_functor Functor for executing string modification; must
  * implement `__device__ int32_t operator()(size_type idx)`
@@ -41,9 +41,9 @@ namespace detail {
  *
  * @param strings Number Column of strings to apply the modifications on;
  * it is not modified in place; rather a new column is returned instead
- * @param mr Memory resource to use
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * (cannot be a default argument because of the variadic pack);
- * @param stream Stream to use for any kernel calls.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * (cannot be a default argument because of the variadic pack);
  * @param ...args Additional arguments to be forwarded to
  * the probe / execute constructors (can be empty);

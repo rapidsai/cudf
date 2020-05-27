@@ -16,7 +16,6 @@
 #include <cudf/reduction.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 /**
  * @brief Dispatcher for running Scan operation on input column
@@ -48,8 +47,8 @@ struct ScanDispatcher {
                       cudaStream_t stream)
   {
     const size_type size = input_view.size();
-    auto output_column   = experimental::detail::allocate_like(
-      input_view, size, experimental::mask_allocation_policy::NEVER, mr, stream);
+    auto output_column =
+      detail::allocate_like(input_view, size, mask_allocation_policy::NEVER, mr, stream);
     if (null_handling == null_policy::EXCLUDE) {
       output_column->set_null_mask(copy_bitmask(input_view, stream, mr), input_view.null_count());
     }
@@ -95,7 +94,7 @@ struct ScanDispatcher {
     rmm::device_buffer mask =
       create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
     auto d_input = column_device_view::create(input_view, stream);
-    auto v       = experimental::detail::make_validity_iterator(*d_input);
+    auto v       = detail::make_validity_iterator(*d_input);
     auto first_null_position =
       thrust::find_if_not(
         rmm::exec_policy(stream)->on(stream), v, v + input_view.size(), thrust::identity<bool>{}) -
@@ -115,8 +114,8 @@ struct ScanDispatcher {
                       cudaStream_t stream)
   {
     const size_type size = input_view.size();
-    auto output_column   = experimental::detail::allocate_like(
-      input_view, size, experimental::mask_allocation_policy::NEVER, mr, stream);
+    auto output_column =
+      detail::allocate_like(input_view, size, mask_allocation_policy::NEVER, mr, stream);
     if (null_handling == null_policy::EXCLUDE) {
       output_column->set_null_mask(copy_bitmask(input_view, stream, mr), input_view.null_count());
     } else {
@@ -184,8 +183,8 @@ struct ScanDispatcher {
    *
    * @param input     input column view
    * @param inclusive inclusive or exclusive scan
-   * @param mr The resource to use for all allocations
-   * @param stream The stream on which to execute all allocations and copies
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return
    *
    * @tparam T type of input column
@@ -232,37 +231,37 @@ std::unique_ptr<column> scan(const column_view& input,
 
   switch (agg->kind) {
     case aggregation::SUM:
-      return cudf::experimental::type_dispatcher(input.type(),
-                                                 ScanDispatcher<cudf::DeviceSum>(),
-                                                 input,
-                                                 inclusive,
-                                                 null_handling,
-                                                 mr,
-                                                 stream);
+      return cudf::type_dispatcher(input.type(),
+                                   ScanDispatcher<cudf::DeviceSum>(),
+                                   input,
+                                   inclusive,
+                                   null_handling,
+                                   mr,
+                                   stream);
     case aggregation::MIN:
-      return cudf::experimental::type_dispatcher(input.type(),
-                                                 ScanDispatcher<cudf::DeviceMin>(),
-                                                 input,
-                                                 inclusive,
-                                                 null_handling,
-                                                 mr,
-                                                 stream);
+      return cudf::type_dispatcher(input.type(),
+                                   ScanDispatcher<cudf::DeviceMin>(),
+                                   input,
+                                   inclusive,
+                                   null_handling,
+                                   mr,
+                                   stream);
     case aggregation::MAX:
-      return cudf::experimental::type_dispatcher(input.type(),
-                                                 ScanDispatcher<cudf::DeviceMax>(),
-                                                 input,
-                                                 inclusive,
-                                                 null_handling,
-                                                 mr,
-                                                 stream);
+      return cudf::type_dispatcher(input.type(),
+                                   ScanDispatcher<cudf::DeviceMax>(),
+                                   input,
+                                   inclusive,
+                                   null_handling,
+                                   mr,
+                                   stream);
     case aggregation::PRODUCT:
-      return cudf::experimental::type_dispatcher(input.type(),
-                                                 ScanDispatcher<cudf::DeviceProduct>(),
-                                                 input,
-                                                 inclusive,
-                                                 null_handling,
-                                                 mr,
-                                                 stream);
+      return cudf::type_dispatcher(input.type(),
+                                   ScanDispatcher<cudf::DeviceProduct>(),
+                                   input,
+                                   inclusive,
+                                   null_handling,
+                                   mr,
+                                   stream);
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }
@@ -278,5 +277,4 @@ std::unique_ptr<column> scan(const column_view& input,
   return detail::scan(input, agg, inclusive, null_handling, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

@@ -25,7 +25,6 @@
 #include <cmath>
 
 namespace cudf {
-namespace experimental {
 namespace reduction {
 // intermediate data structure to compute `var`, `std`
 template <typename ResultType>
@@ -219,7 +218,7 @@ struct variance : public compound_op<variance> {
   using op = cudf::DeviceSum;
 
   template <typename ResultType>
-  using transformer = cudf::experimental::reduction::transformer_var_std<ResultType>;
+  using transformer = cudf::reduction::transformer_var_std<ResultType>;
 
   template <typename ResultType>
   struct intermediate {
@@ -246,7 +245,7 @@ struct standard_deviation : public compound_op<standard_deviation> {
   using op = cudf::DeviceSum;
 
   template <typename ResultType>
-  using transformer = cudf::experimental::reduction::transformer_var_std<ResultType>;
+  using transformer = cudf::reduction::transformer_var_std<ResultType>;
 
   template <typename ResultType>
   struct intermediate {
@@ -268,5 +267,4 @@ struct standard_deviation : public compound_op<standard_deviation> {
 
 }  // namespace op
 }  // namespace reduction
-}  // namespace experimental
 }  // namespace cudf

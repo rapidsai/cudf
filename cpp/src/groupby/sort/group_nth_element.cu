@@ -24,7 +24,6 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_nth_element(column_view const &values,
@@ -40,7 +39,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
 
-  if (num_groups == 0) { return experimental::empty_like(values); }
+  if (num_groups == 0) { return empty_like(values); }
 
   auto nth_index = rmm::device_vector<size_type>(num_groups, values.size());
 
@@ -64,7 +63,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
     // Returns index of nth value.
     auto values_view = column_device_view::create(values);
     auto bitmask_iterator =
-      thrust::make_transform_iterator(experimental::detail::make_validity_iterator(*values_view),
+      thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
                                       [] __device__(auto b) { return static_cast<size_type>(b); });
     rmm::device_vector<size_type> intra_group_index(values.size());
     // intra group index for valids only.
@@ -104,12 +103,11 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                          return (bitmask_iterator[i] && intra_group_index[i] == nth);
                        });
   }
-  auto output_table = experimental::detail::gather(
+  auto output_table = cudf::detail::gather(
     table_view{{values}}, nth_index.begin(), nth_index.end(), true, mr, stream);
   if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);
   return std::make_unique<column>(std::move(output_table->get_column(0)));
 }
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf
