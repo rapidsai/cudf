@@ -35,15 +35,19 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     if not objs:
         raise ValueError("Need at least one object to concatenate")
 
-    # no-op for single object
-    if len(objs) == 1:
-        return objs[0]
-
     # convert any RangeIndex
     objs = [
         as_index(obj._values) if isinstance(obj, RangeIndex) else obj
         for obj in objs
+        if obj is not None
     ]
+
+    # Return for single object
+    if len(objs) == 1:
+        return objs[0]
+
+    if len(objs) == 0:
+        raise ValueError("All objects passed were None")
 
     typs = set(type(o) for o in objs)
     allowed_typs = {Series, DataFrame}
