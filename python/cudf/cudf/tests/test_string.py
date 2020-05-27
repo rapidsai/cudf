@@ -374,6 +374,22 @@ def test_string_len(ps_gs):
             np.array(["f", "g", "h", "i", "j"]),
             np.array(["f", "g", "h", "i", "j"]),
         ],
+        [
+            pd.Series(["f", "g", "h", "i", "j"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+        ],
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+        ),
+        [
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ],
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ),
         pytest.param(
             (
                 pd.Series(["f", "g", "h", "i", "j"]),
@@ -418,6 +434,11 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
     pd_others = others
     if isinstance(pd_others, pd.Series):
         pd_others = pd_others.values
+    if isinstance(pd_others, (list, tuple)):
+        for elem in pd_others:
+            if isinstance(elem, (pd.Series, Series)):
+                elem.index = ps.index
+
     expect = ps.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
     got = gs.str.cat(others=others, sep=sep, na_rep=na_rep)
 
