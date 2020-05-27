@@ -383,21 +383,19 @@ std::unique_ptr<column> substring_index(strings_column_view const& strings,
   auto colview_ptr = column_device_view::create(strings.parent(), stream);
   auto colview     = *colview_ptr;
   if (colview.nullable()) {
-    return substring_index_functor{}(
-      cudf::detail::make_pair_iterator<string_view, true>(colview),
-      delimiter_itr,
-      count,
-      mr,
-      stream,
-      strings_count);
+    return substring_index_functor{}(cudf::detail::make_pair_iterator<string_view, true>(colview),
+                                     delimiter_itr,
+                                     count,
+                                     mr,
+                                     stream,
+                                     strings_count);
   } else {
-    return substring_index_functor{}(
-      cudf::detail::make_pair_iterator<string_view, false>(colview),
-      delimiter_itr,
-      count,
-      mr,
-      stream,
-      strings_count);
+    return substring_index_functor{}(cudf::detail::make_pair_iterator<string_view, false>(colview),
+                                     delimiter_itr,
+                                     count,
+                                     mr,
+                                     stream,
+                                     strings_count);
   }
 }
 
