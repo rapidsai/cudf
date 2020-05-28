@@ -10,9 +10,9 @@
 
 ## Bug Fixes
 
+- PR #5306 Fix categorical scaler insertion
 - PR #5269 Explicitly require NumPy
 - PR #5299 Update package version for Java bindings
-
 
 # cuDF 0.14.0 (Date TBD)
 
