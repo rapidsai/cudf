@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #4546 Support pandas 1.0+
 
 ## Improvements
 
