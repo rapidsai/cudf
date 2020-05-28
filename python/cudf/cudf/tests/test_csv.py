@@ -395,7 +395,7 @@ def test_csv_reader_usecols_int_char(tmpdir):
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
     pd.util.testing.assert_frame_equal(
-            df_out, out.to_pandas(), check_names=False
+        df_out, out.to_pandas(), check_names=False
     )
 
 
