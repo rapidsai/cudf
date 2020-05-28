@@ -34,9 +34,6 @@ template <typename ForwardFunction, typename ReverseFunction, typename Iterator>
   class transform_mutable_iterator_proxy
 {
   public:
-    using IteratorValue = typename std::iterator_traits<Iterator>::value_type;
-    using Value = typename std::result_of<ForwardFunction(IteratorValue)>::type;
-
     __host__ __device__
     transform_mutable_iterator_proxy(Iterator const& it, ForwardFunction forward, ReverseFunction reverse) :
       it(it), forward(forward), reverse(reverse)
@@ -44,14 +41,16 @@ template <typename ForwardFunction, typename ReverseFunction, typename Iterator>
     }
 
     __thrust_exec_check_disable__
+    template <typename T>
     __host__ __device__
-    operator Value const() const {
+    operator T const() const {
       return forward(*it);
     }
 
     __thrust_exec_check_disable__
+    template <typename T>
     __host__ __device__
-    transform_mutable_iterator_proxy operator=(const Value& x)
+    transform_mutable_iterator_proxy operator=(const T& x)
     {
       *it = reverse(x);
       return *this;
@@ -61,7 +60,7 @@ template <typename ForwardFunction, typename ReverseFunction, typename Iterator>
     __host__ __device__
     transform_mutable_iterator_proxy operator=(const transform_mutable_iterator_proxy& x)
     {
-      *it = reverse(Value{x});
+      *it = reverse(x);
       return *this;
     }
 
@@ -79,7 +78,7 @@ struct transform_mutable_iterator_base
     <
         transform_mutable_iterator<ForwardFunction, ReverseFunction, Iterator>
       , Iterator
-      , typename transform_mutable_iterator_proxy<ForwardFunction, ReverseFunction, Iterator>::Value
+      , typename std::result_of<ForwardFunction(typename std::iterator_traits<Iterator>::value_type)>::type
       , thrust::use_default
       , thrust::use_default
       , transform_mutable_iterator_proxy<ForwardFunction, ReverseFunction, Iterator>

@@ -116,7 +116,7 @@ template <typename ForwardFunction, typename ReverseFunction, typename Iterator>
    *            this \p transform_output_iterator.
    */
     __host__ __device__
-    transform_mutable_iterator(Iterator& out, ForwardFunction forward, ReverseFunction reverse) :
+    transform_mutable_iterator(Iterator const& out, ForwardFunction forward, ReverseFunction reverse) :
       super_t(out), forward(forward), reverse(reverse)
     {
     }
