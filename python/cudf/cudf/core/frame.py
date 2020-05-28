@@ -1597,14 +1597,12 @@ class Frame(libcudf.table.Table):
             self._data.level_names
         )
 
-        frames = [packed_meta.data, packed_data]
+        frames = [packed_meta.data, cudf.core.buffer.Buffer(packed_data)]
 
         return header, frames
 
     @classmethod
     def deserialize(self, header, frames):
-        import rmm
-
         typ = pickle.loads(header["type-serialized"])
         column_names = pickle.loads(header["column_names"])
         categorical_column_names = pickle.loads(
@@ -1625,11 +1623,11 @@ class Frame(libcudf.table.Table):
         num_data_columns = len(column_names)
         num_categorical_columns = len(categorical_column_names)
 
-        if not isinstance(frames[1], rmm.DeviceBuffer):
-            frames[1] = rmm.DeviceBuffer.to_device(frames[1])
+        if not isinstance(frames[1], cudf.core.buffer.Buffer):
+            frames[1] = cudf.core.buffer.Buffer(frames[1])
 
         # unpack into columns
-        columns = libcudf.copying.unpack(frames[0], frames[1])
+        columns = libcudf.copying.unpack(frames[0], frames[1]._owner)
 
         # construct Index
         if num_index_columns:
