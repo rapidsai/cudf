@@ -694,7 +694,7 @@ def test_add_categories(data, add):
 
 
 @pytest.mark.parametrize(
-    ("data, add"),
+    "data,add",
     [
         ([1, 2, 3], [1, 3, 11]),
         ([0.0, 6.7, 10.0], [1, 2, 0.0]),
