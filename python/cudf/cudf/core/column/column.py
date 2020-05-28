@@ -1229,6 +1229,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             arbitrary = cupy.asarray(arbitrary).astype(arb_dtype)
             current_dtype = arb_dtype
 
+        if desc["strides"] is not None and desc.get("mask", None) is None:
+            # Limitation in cupy: Cannot transform a masked array.
+            # Hence guarding with mask == None check.
+            arbitrary = cupy.ascontiguousarray(cupy.asarray(arbitrary))
+
         data = _data_from_cuda_array_interface_desc(arbitrary)
         mask = _mask_from_cuda_array_interface_desc(arbitrary)
         col = build_column(data, dtype=current_dtype, mask=mask)

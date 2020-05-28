@@ -5440,3 +5440,26 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     actual[0] = 3
     expected[0] = 3
     assert_eq(gsr, psr)
+
+
+@pytest.mark.parametrize(
+    "data,cols",
+    [
+        (np.ndarray(shape=(4, 2), dtype=float, order="F"), ["a", "b"]),
+        (np.array([11, 123, -2342, 232]), ["a"]),
+        (cupy.ndarray(shape=(4, 2), dtype=float, order="F"), ["a", "z"]),
+        (cupy.array([11, 123, -2342, 232]), ["z"]),
+        (np.random.randn(2, 4), ["a", "b", "c", "d"]),
+        (cupy.random.randn(2, 4), ["a", "b", "c", "d"]),
+    ],
+)
+def test_dataframe_init_from_arrays_cols(data, cols):
+    pdf = pd.DataFrame(data, columns=cols)
+    gdf = DataFrame(data, columns=cols)
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+    pdf = pd.DataFrame(data)
+    gdf = DataFrame(data)
+
+    assert_eq(pdf, gdf, check_dtype=False)
