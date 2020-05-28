@@ -39,7 +39,9 @@ class Serializable(abc.ABC):
             for c, f in zip(header["is-cuda"], frames)
         ]
         assert all(
-            type(f._owner) is (rmm.DeviceBuffer if c else memoryview)
+            (type(f._owner) is rmm.DeviceBuffer)
+            if c
+            else (type(f) is memoryview)
             for c, f in zip(header["is-cuda"], frames)
         )
         obj = typ.deserialize(header, frames)
