@@ -64,13 +64,21 @@ constexpr auto types_to_ids()
 
 }  // namespace detail
 
+/**
+ * @brief Convert numeric values type T to numeric vector of type TypeParam.
+ *
+ * This will also convert negative values to positive values if the output type is unsigned.
+ *
+ * @param init_list Values used to create the output vector
+ * @return Vector of TypeParam with the values specified
+ */
 template <typename TypeParam, typename T>
 auto make_type_param_vector(std::initializer_list<T> const& init_list)
 {
   std::vector<TypeParam> vec(init_list.size());
   std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
-    if (std::is_unsigned<TypeParam>::value) return static_cast<T>(std::abs(e));
-    return static_cast<T>(e);
+    if (std::is_unsigned<TypeParam>::value) return static_cast<TypeParam>(std::abs(e));
+    return static_cast<TypeParam>(e);
   });
   return vec;
 }
