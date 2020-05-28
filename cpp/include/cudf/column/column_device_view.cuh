@@ -18,6 +18,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <cudf/column/column_view.hpp>
+#include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
@@ -332,9 +333,9 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * Else, if the element at `i` is null, then the value of `p.first` is
    * undefined and `p.second == false`.
    *
-   * @throws `cudf::logic_error` if tparam `has_nulls == true` and
+   * @throws cudf::logic_error if tparam `has_nulls == true` and
    * `nullable() == false`
-   * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+   * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
   template <typename T, bool has_nulls>
   const_pair_iterator<T, has_nulls> pair_begin() const
@@ -347,9 +348,9 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @brief Return a pair iterator to the element following the last element of
    * the column.
    *
-   * @throws `cudf::logic_error` if tparam `has_nulls == true` and
+   * @throws cudf::logic_error if tparam `has_nulls == true` and
    * `nullable() == false`
-   * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+   * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
   template <typename T, bool has_nulls>
   const_pair_iterator<T, has_nulls> pair_end() const
@@ -728,8 +729,8 @@ namespace detail {
  *
  * the return value for element `i` will return `column[i]`
  *
- * @throws `cudf::logic_error` if the column is nullable.
- * @throws `cudf::logic_error` if column datatype and template T type mismatch.
+ * @throws cudf::logic_error if the column is nullable.
+ * @throws cudf::logic_error if column datatype and template T type mismatch.
  *
  * @tparam T The type of elements in the column
  */
@@ -744,7 +745,7 @@ struct value_accessor {
    */
   value_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
   }
 
   __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }
@@ -761,9 +762,9 @@ struct value_accessor {
  * `validity` is validity of the element at `i` if `has_nulls=true` and the
  * column is nullable.
  *
- * @throws `cudf::logic_error` if `has_nulls==true` and the column is not
+ * @throws cudf::logic_error if `has_nulls==true` and the column is not
  * nullable.
- * @throws `cudf::logic_error` if column datatype and template T type mismatch.
+ * @throws cudf::logic_error if column datatype and template T type mismatch.
  *
  * @tparam T The type of elements in the column
  * @tparam has_nulls boolean indicating to treat the column is nullable
@@ -778,7 +779,7 @@ struct pair_accessor {
    */
   pair_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
@@ -799,7 +800,7 @@ struct mutable_value_accessor {
    */
   mutable_value_accessor(mutable_column_device_view& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
   }
 
   __device__ T& operator()(cudf::size_type i) { return col.element<T>(i); }

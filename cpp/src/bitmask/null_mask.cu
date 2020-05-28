@@ -129,7 +129,7 @@ void set_null_mask(
   if (bitmask != nullptr) {
     auto number_of_mask_words =
       num_bitmask_words(end_bit) - begin_bit / detail::size_in_bits<bitmask_type>();
-    cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
+    cudf::detail::grid_1d config(number_of_mask_words, 256);
     set_null_mask_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
       static_cast<bitmask_type *>(bitmask), begin_bit, end_bit, valid, number_of_mask_words);
     CHECK_CUDA(stream);
@@ -365,7 +365,7 @@ rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
   rmm::device_vector<bitmask_type const *> d_masks(masks);
   rmm::device_vector<size_type> d_begin_bits(begin_bits);
 
-  cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
+  cudf::detail::grid_1d config(number_of_mask_words, 256);
   offset_bitmask_and<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
     static_cast<bitmask_type *>(dest_mask.data()),
     d_masks.data().get(),
@@ -425,7 +425,7 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask,
 
   constexpr size_type block_size{256};
 
-  cudf::experimental::detail::grid_1d grid(num_words, block_size);
+  cudf::detail::grid_1d grid(num_words, block_size);
 
   rmm::device_scalar<size_type> non_zero_count(0, stream);
 
@@ -528,7 +528,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
 
   constexpr size_type block_size{256};
 
-  cudf::experimental::detail::grid_1d grid(num_ranges, block_size);
+  cudf::detail::grid_1d grid(num_ranges, block_size);
 
   subtract_set_bits_range_boundaries_kerenel<<<grid.num_blocks,
                                                grid.num_threads_per_block,
@@ -620,7 +620,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask,
   } else {
     auto number_of_mask_words = num_bitmask_words(end_bit - begin_bit);
     dest_mask                 = rmm::device_buffer{num_bytes, stream, mr};
-    cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
+    cudf::detail::grid_1d config(number_of_mask_words, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
       static_cast<bitmask_type *>(dest_mask.data()),
       mask,

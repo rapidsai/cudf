@@ -512,7 +512,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Ra
 #if defined(__CUDACC_DEBUG__)
 
   assert(!addition_overflow<Rep1>(lhsv, rhsv) &&
-         "fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
+         "fixed_point overflow of underlying representation type " + print_rep<Rep1>());
 
 #endif
 
@@ -535,7 +535,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Ra
 #if defined(__CUDACC_DEBUG__)
 
   assert(!subtraction_overflow<Rep1>(lhsv, rhsv) &&
-         "fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
+         "fixed_point overflow of underlying representation type " + print_rep<Rep1>());
 
 #endif
 
@@ -550,7 +550,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Ra
 #if defined(__CUDACC_DEBUG__)
 
   assert(!multiplication_overflow<Rep1>(lhs._value, rhs._value) &&
-         "fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
+         "fixed_point overflow of underlying representation type " + print_rep<Rep1>());
 
 #endif
 
@@ -566,7 +566,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Ra
 #if defined(__CUDACC_DEBUG__)
 
   assert(!division_overflow<Rep1>(lhs._value, rhs._value) &&
-         "fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
+         "fixed_point overflow of underlying representation type " + print_rep<Rep1>());
 
 #endif
 

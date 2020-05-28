@@ -43,7 +43,6 @@
 #include <cub/cub.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
 /**
@@ -122,11 +121,10 @@ struct column_gatherer_impl {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    size_type num_destination_rows = std::distance(gather_map_begin, gather_map_end);
-    cudf::experimental::mask_allocation_policy policy =
-      cudf::experimental::mask_allocation_policy::NEVER;
-    std::unique_ptr<column> destination_column = cudf::experimental::detail::allocate_like(
-      source_column, num_destination_rows, policy, mr, stream);
+    size_type num_destination_rows      = std::distance(gather_map_begin, gather_map_end);
+    cudf::mask_allocation_policy policy = cudf::mask_allocation_policy::NEVER;
+    std::unique_ptr<column> destination_column =
+      cudf::detail::allocate_like(source_column, num_destination_rows, policy, mr, stream);
     Element const* source_data{source_column.data<Element>()};
     Element* destination_data{destination_column->mutable_view().data<Element>()};
 
@@ -328,7 +326,7 @@ void gather_bitmask(table_device_view input,
   auto kernel =
     valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
 
-  cudf::experimental::detail::grid_1d grid{mask_size, block_size, 1};
+  cudf::detail::grid_1d grid{mask_size, block_size, 1};
   kernel<<<grid.num_blocks, block_size, 0, stream>>>(
     counting_it, counting_it, selector, masks, mask_count, mask_size, valid_counts);
 }
@@ -413,10 +411,6 @@ void gather_bitmask(table_view const& source,
  * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
  * `n` is the number of rows in the `source_table`.
  *
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
- * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
- * the source table. If `check_bounds == false`, the behavior is undefined.
- *
  * tparam MapIterator Iterator type for the gather map
  * @param[in] source_table View into the table containing the input columns whose rows will be
  * gathered
@@ -424,12 +418,7 @@ void gather_bitmask(table_view const& source,
  * the source columns to rows in the destination columns
  * @param[in] gather_map_end End of iterator range of integer indices that map the rows in the
  * source columns to rows in the destination columns
- * @param[in] check_bounds Optionally perform bounds checking on the values of `gather_map` and
- * throw an error if any of its values are out of bounds.
- * @param[in] nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds. Currently
- * incompatible with `allow_negative_indices`, i.e., setting both to `true` is undefined.
- * @param[in] allow_negative_indices Interpret each negative index `i` in the gathermap as the
- * positive index `i+num_source_rows`.
+ * @param[in] nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds.
  * @param[in] mr The resource to use for all allocations
  * @param[in] stream The CUDA stream on which to execute kernels
  * @return cudf::table Result of the gather
@@ -450,14 +439,14 @@ std::unique_ptr<table> gather(table_view const& source_table,
 
   for (auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
-    destination_columns.push_back(cudf::experimental::type_dispatcher(source_column.type(),
-                                                                      column_gatherer{},
-                                                                      source_column,
-                                                                      gather_map_begin,
-                                                                      gather_map_end,
-                                                                      nullify_out_of_bounds,
-                                                                      mr,
-                                                                      stream));
+    destination_columns.push_back(cudf::type_dispatcher(source_column.type(),
+                                                        column_gatherer{},
+                                                        source_column,
+                                                        gather_map_begin,
+                                                        gather_map_end,
+                                                        nullify_out_of_bounds,
+                                                        mr,
+                                                        stream));
   }
 
   auto const op =
@@ -468,5 +457,4 @@ std::unique_ptr<table> gather(table_view const& source_table,
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

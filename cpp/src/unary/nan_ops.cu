@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -24,7 +23,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 struct nan_dispatcher {
   template <typename T, typename Predicate>
@@ -66,8 +64,7 @@ std::unique_ptr<column> is_nan(cudf::column_view const& input,
     return element_validity_pair.second and std::isnan(element_validity_pair.first);
   };
 
-  return cudf::experimental::type_dispatcher(
-    input.type(), nan_dispatcher{}, input, predicate, mr, stream);
+  return cudf::type_dispatcher(input.type(), nan_dispatcher{}, input, predicate, mr, stream);
 }
 
 std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
@@ -78,8 +75,7 @@ std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
     return !element_validity_pair.second or !std::isnan(element_validity_pair.first);
   };
 
-  return cudf::experimental::type_dispatcher(
-    input.type(), nan_dispatcher{}, input, predicate, mr, stream);
+  return cudf::type_dispatcher(input.type(), nan_dispatcher{}, input, predicate, mr, stream);
 }
 
 }  // namespace detail
@@ -97,5 +93,4 @@ std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
   return detail::is_not_nan(input, mr);
 }
 
-}  // namespace experimental
 }  // namespace cudf

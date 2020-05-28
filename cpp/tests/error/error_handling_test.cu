@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/cudf.h>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/rmm.h>
@@ -21,16 +20,6 @@
 #include <tests/utilities/base_fixture.hpp>
 
 #include <cstring>
-
-// If this test fails, it means an error code was added without
-// adding support to gdf_error_get_name().
-TEST(ErrorTest, NameEveryError)
-{
-  for (int i = 0; i < N_GDF_ERRORS; i++) {
-    const char* res = gdf_error_get_name((gdf_error)i);
-    ASSERT_EQ(0, strstr(res, "Unknown error"));
-  }
-}
 
 TEST(ExpectsTest, FalseCondition)
 {

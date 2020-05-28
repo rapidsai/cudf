@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.14.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.15.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -412,80 +412,32 @@ add_library(libNVText
 
 add_library(cudf
             src/comms/ipc/ipc.cpp
-            src/column/legacy/column.cpp
-            src/column/legacy/context.cpp
-            src/table/legacy/table.cpp
             src/merge/merge.cu
             src/partitioning/round_robin.cu
-            src/strings/nvcategory_util.cpp
-            src/join/legacy/joining.cu
             src/join/join.cu
             src/join/semi_join.cu
-            src/orderby/legacy/orderby.cu
-            src/predicates/legacy/is_sorted.cu
             src/sort/is_sorted.cu
-            src/sort/legacy/digitize.cu
-            src/groupby/hash/legacy/groupby.cu
-            src/groupby/sort/legacy/sort_helper.cu
-            src/groupby/sort/legacy/groupby.cu
-            src/groupby/legacy/groupby_without_aggregation.cu
-            src/groupby/common/legacy/aggregation_requests.cpp
-            src/rolling/legacy/rolling.cu
-            src/rolling/legacy/jit/code/kernel.cpp
-            src/rolling/legacy/jit/code/operation.cpp
-            src/rolling/legacy/jit/util/type.cpp
-            src/binaryop/legacy/binaryop.cpp
-            src/binaryop/legacy/compiled/binary_ops.cu
-            src/binaryop/legacy/jit/code/kernel.cpp
-            src/binaryop/legacy/jit/code/operation.cpp
-            src/binaryop/legacy/jit/code/traits.cpp
-            src/binaryop/legacy/jit/util/operator.cpp
-            src/binaryop/legacy/jit/util/type.cpp
             src/binaryop/binaryop.cpp
             src/binaryop/compiled/binary_ops.cu
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
-            src/jit/legacy/type.cpp
             src/jit/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/jit/launcher.cpp
-            src/transform/legacy/transform.cpp
             src/transform/jit/code/kernel.cpp
-            src/transform/legacy/nans_to_nulls.cu
             src/transform/transform.cpp
             src/transform/nans_to_nulls.cu
             src/transform/bools_to_mask.cu
-            src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
             src/stream_compaction/drop_duplicates.cu
-            src/stream_compaction/legacy/apply_boolean_mask.cu
-            src/stream_compaction/legacy/drop_nulls.cu
-            src/stream_compaction/legacy/drop_duplicates.cu
-            src/datetime/legacy/datetime_ops.cu
             src/datetime/datetime_ops.cu
-            src/datetime/datetime_util.cpp
             src/hash/hashing.cu
             src/partitioning/partitioning.cu
-            src/hash/legacy/hashing.cu
             src/quantiles/quantile.cu
             src/quantiles/quantiles.cu
-            src/quantiles/legacy/group_quantiles.cu
-            src/reductions/legacy/reductions.cu
-            src/reductions/legacy/min.cu
-            src/reductions/legacy/max.cu
-            src/reductions/legacy/any.cu
-            src/reductions/legacy/all.cu
-            src/reductions/legacy/sum.cu
-            src/reductions/legacy/product.cu
-            src/reductions/legacy/sum_of_squares.cu
-            src/reductions/legacy/mean.cu
-            src/reductions/legacy/var.cu
-            src/reductions/legacy/std.cu
-            src/reductions/legacy/group_std.cu
-            src/reductions/legacy/scan.cu
             src/reductions/reductions.cpp
             src/reductions/min.cu
             src/reductions/max.cu
@@ -498,42 +450,24 @@ add_library(cudf
             src/reductions/var.cu
             src/reductions/std.cu
             src/reductions/scan.cu
-            src/replace/legacy/replace.cu
             src/replace/replace.cu
             src/replace/clamp.cu
-            src/reshape/legacy/stack.cu
             src/reshape/interleave_columns.cu
             src/transpose/transpose.cu
-            src/transpose/legacy/transpose.cu
-            src/merge/legacy/merge.cu
             src/unary/cast_ops.cu
             src/unary/null_ops.cu
             src/unary/nan_ops.cu
-            src/unary/legacy/math_ops.cu
-            src/unary/legacy/cast_ops.cu
-            src/unary/legacy/null_ops.cu
             src/unary/math_ops.cu
             src/unary/unary_ops.cuh
-            src/io/legacy/cuio_common.cpp
-            src/io/legacy/io_functions.cpp
-            src/io/convert/csr/legacy/cudf_to_csr.cu
             src/dlpack/dlpack.cpp
-            src/io/convert/dlpack/legacy/cudf_dlpack.cpp
-            src/io/avro/legacy/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
             src/io/avro/avro.cpp
             src/io/avro/reader_impl.cu
-            src/io/csv/legacy/csv_reader_impl.cu
-            src/io/csv/legacy/csv_writer.cu
-            src/io/csv/legacy/csv_gpu.cu
             src/io/csv/csv_gpu.cu
             src/io/csv/reader_impl.cu
             src/io/csv/writer_impl.cu
-            src/io/json/legacy/json_reader_impl.cu
             src/io/json/reader_impl.cu
             src/io/json/json_gpu.cu
-            src/io/orc/legacy/orc_reader_impl.cu
-            src/io/orc/legacy/orc_writer_impl.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
             src/io/orc/stripe_data.cu
@@ -547,7 +481,6 @@ add_library(cudf
             src/io/parquet/page_hdr.cu
             src/io/parquet/page_enc.cu
             src/io/parquet/page_dict.cu
-            src/io/parquet/legacy/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
             src/io/parquet/reader_impl.cu
             src/io/parquet/writer_impl.cu
@@ -564,13 +497,8 @@ add_library(cudf
             src/io/utilities/parsing_utils.cu
             src/io/utilities/type_conversion.cu
             src/io/utilities/data_sink.cpp
-            src/io/utilities/legacy/parsing_utils.cu
-            src/utilities/legacy/cuda_utils.cu
             src/copying/gather.cu
-            src/utilities/legacy/column_utils.cpp
-            src/utilities/legacy/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
-            src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
             src/copying/scatter.cu
             src/copying/shift.cu
@@ -579,23 +507,12 @@ add_library(cudf
             src/copying/slice.cpp
             src/copying/split.cpp
             src/copying/contiguous_split.cu
-            src/copying/legacy/copy.cpp
-            src/copying/legacy/gather.cu
-            src/copying/legacy/scatter.cu
-            src/copying/legacy/slice.cu
-            src/copying/legacy/split.cu
-            src/bitmask/legacy/legacy_bitmask.cpp
-            src/copying/legacy/copy_range.cu
             src/copying/copy_range.cu
             src/copying/get_element.cu
-            src/filling/legacy/fill.cu
             src/filling/fill.cu
-            src/filling/legacy/repeat.cu
             src/filling/repeat.cu
-            src/filling/legacy/tile.cu
             src/filling/sequence.cu
             src/reshape/tile.cu
-            src/search/legacy/search.cu
             src/search/search.cu
             src/column/column.cu
             src/column/column_view.cpp
@@ -611,7 +528,6 @@ add_library(cudf
             src/sort/sort.cu
             src/sort/stable_sort.cu
             src/sort/rank.cu
-            src/column/legacy/interop.cpp
             src/strings/attributes.cu
             src/strings/case.cu
             src/strings/wrap.cu
@@ -639,6 +555,8 @@ add_library(cudf
             src/strings/regex/regexec.cu
             src/strings/replace/replace_re.cu
             src/strings/replace/backref_re.cu
+            src/strings/replace/backref_re_medium.cu
+            src/strings/replace/backref_re_large.cu
             src/strings/replace/multi_re.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu

@@ -67,3 +67,12 @@ def test_to_pandas_nullable_bool():
 
     assert_eq(gsr_not_null.to_pandas(), psr_not_null)
     assert_eq(gsr_has_null.to_pandas(), psr_has_null)
+
+def test_can_cast_safely_has_nulls():
+    data = Series([1, 2, 3, None], dtype="float32")._column
+    to_dtype = np.dtype("int64")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = Series([1, 2, 3.1, None], dtype="float32")._column
+    assert not data.can_cast_safely(to_dtype)

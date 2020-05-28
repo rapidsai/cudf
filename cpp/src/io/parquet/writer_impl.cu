@@ -32,7 +32,6 @@
 #include <rmm/device_buffer.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace parquet {
@@ -995,5 +994,4 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
 }  // namespace parquet
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

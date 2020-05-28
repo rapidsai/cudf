@@ -200,6 +200,29 @@ def test_dataframe_join_cats():
     assert set(got["c"].to_array()) & set(cc)
 
 
+def test_dataframe_join_combine_cats():
+    lhs = cudf.DataFrame({"join_index": ["a", "b", "c"], "data_x": [1, 2, 3]})
+    rhs = cudf.DataFrame({"join_index": ["b", "c", "d"], "data_y": [2, 3, 4]})
+
+    lhs["join_index"] = lhs["join_index"].astype("category")
+    rhs["join_index"] = rhs["join_index"].astype("category")
+
+    lhs = lhs.set_index("join_index")
+    rhs = rhs.set_index("join_index")
+
+    lhs_pd = lhs.to_pandas()
+    rhs_pd = rhs.to_pandas()
+
+    lhs_pd.index = lhs_pd.index.astype("object")
+    rhs_pd.index = rhs_pd.index.astype("object")
+
+    expect = lhs_pd.join(rhs_pd, how="outer")
+    expect.index = expect.index.astype("category")
+    got = lhs.join(rhs, how="outer")
+
+    assert_eq(sorted(expect.index), sorted(got.index))
+
+
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
 def test_dataframe_join_mismatch_cats(how):
     pdf1 = pd.DataFrame(
@@ -229,32 +252,16 @@ def test_dataframe_join_mismatch_cats(how):
     got = join_gdf.to_pandas()
     expect = join_pdf.fillna(-1)  # note: cudf join doesn't mask NA
 
+    # We yield a categorical here whereas pandas gives Object.
+    expect.index = expect.index.astype("category")
     # cudf creates the columns in different order than pandas for right join
     if how == "right":
         got = got[["data_col_left", "data_col_right"]]
 
     expect.data_col_right = expect.data_col_right.astype(np.int64)
     expect.data_col_left = expect.data_col_left.astype(np.int64)
-    # Expect has the wrong index type. Quick fix to get index type working
-    # again I think this implies that CategoricalIndex.to_pandas() is not
-    # working correctly, since the below corrects it. Remove this line for
-    # an annoying error. TODO: Make CategoricalIndex.to_pandas() work
-    # correctly for the below case.
-    # Error:
-    # AssertionError: Categorical Expected type <class
-    # 'pandas.core.arrays.categorical.Categorical'>, found <class
-    # 'numpy.ndarray'> instead
-    expect.index = pd.Categorical(expect.index)
-    pd.util.testing.assert_frame_equal(
-        got,
-        expect,
-        check_names=False,
-        check_index_type=False,
-        # For inner joins, pandas returns
-        # weird categories.
-        check_categorical=how != "inner",
-    )
-    assert list(got.index) == list(expect.index)
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("on", ["key1", ["key1", "key2"], None])
@@ -1085,6 +1092,36 @@ def test_typecast_on_join_no_float_round():
 
 
 @pytest.mark.parametrize(
+    "dtypes",
+    [
+        (np.dtype("int8"), np.dtype("int16")),
+        (np.dtype("int16"), np.dtype("int32")),
+        (np.dtype("int32"), np.dtype("int64")),
+        (np.dtype("float32"), np.dtype("float64")),
+        (np.dtype("int32"), np.dtype("float32")),
+    ],
+)
+def test_typecast_on_join_overflow_unsafe(dtypes):
+    dtype_l, dtype_r = dtypes
+    if dtype_l.kind == "i":
+        dtype_l_max = np.iinfo(dtype_l).max
+    elif dtype_l.kind == "f":
+        dtype_l_max = np.finfo(dtype_r).max
+
+    lhs = cudf.DataFrame({"a": [1, 2, 3, 4, 5]}, dtype=dtype_l)
+    rhs = cudf.DataFrame({"a": [1, 2, 3, 4, dtype_l_max + 1]}, dtype=dtype_r)
+
+    with pytest.warns(
+        UserWarning,
+        match=(
+            f"can't safely cast column"
+            f" from right with type {dtype_r} to {dtype_l}"
+        ),
+    ):
+        merged = lhs.merge(rhs, on="a", how="left")  # noqa: F841
+
+
+@pytest.mark.parametrize(
     "dtype_l",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
 )
@@ -1135,11 +1172,9 @@ def test_typecast_on_join_categorical(dtype_l, dtype_r):
     join_data_l = Series([1, 2, 3, 4, 5], dtype=dtype_l)
     join_data_r = Series([1, 2, 3, 4, 6], dtype=dtype_r)
     if dtype_l == "category":
-        exp_dtype = join_data_l.dtype
-        exp_categories = join_data_l.astype(int)._column
+        exp_dtype = join_data_l.dtype.categories.dtype
     elif dtype_r == "category":
-        exp_dtype = join_data_r.dtype
-        exp_categories = join_data_r.astype(int)._column
+        exp_dtype = join_data_r.dtype.categories.dtype
 
     gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
@@ -1155,7 +1190,164 @@ def test_typecast_on_join_categorical(dtype_l, dtype_r):
             "B_y": exp_other_data,
         }
     )
-    expect["join_col"] = expect["join_col"].cat.set_categories(exp_categories)
 
     got = gdf_l.merge(gdf_r, on="join_col", how="inner")
-    assert_eq(expect, got, check_dtype=False)
+    assert_eq(expect, got)
+
+
+def test_typecast_on_join_indexes():
+    join_data_l = Series([1, 2, 3, 4, 5], dtype="int8")
+    join_data_r = Series([1, 2, 3, 4, 6], dtype="int32")
+    other_data = ["a", "b", "c", "d", "e"]
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    gdf_l = gdf_l.set_index("join_col")
+    gdf_r = gdf_r.set_index("join_col")
+
+    exp_join_data = [1, 2, 3, 4]
+    exp_other_data = ["a", "b", "c", "d"]
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_data,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+    expect = expect.set_index("join_col")
+
+    got = gdf_l.join(gdf_r, how="inner", lsuffix="_x", rsuffix="_y")
+
+    assert_eq(expect, got)
+
+
+def test_typecast_on_join_multiindices():
+    join_data_l_0 = Series([1, 2, 3, 4, 5], dtype="int8")
+    join_data_l_1 = Series([2, 3, 4.1, 5.9, 6], dtype="float32")
+    join_data_l_2 = Series([7, 8, 9, 0, 1], dtype="float32")
+
+    join_data_r_0 = Series([1, 2, 3, 4, 5], dtype="int32")
+    join_data_r_1 = Series([2, 3, 4, 5, 6], dtype="int32")
+    join_data_r_2 = Series([7, 8, 9, 0, 0], dtype="float64")
+
+    other_data = ["a", "b", "c", "d", "e"]
+
+    gdf_l = DataFrame(
+        {
+            "join_col_0": join_data_l_0,
+            "join_col_1": join_data_l_1,
+            "join_col_2": join_data_l_2,
+            "B": other_data,
+        }
+    )
+    gdf_r = DataFrame(
+        {
+            "join_col_0": join_data_r_0,
+            "join_col_1": join_data_r_1,
+            "join_col_2": join_data_r_2,
+            "B": other_data,
+        }
+    )
+
+    gdf_l = gdf_l.set_index(["join_col_0", "join_col_1", "join_col_2"])
+    gdf_r = gdf_r.set_index(["join_col_0", "join_col_1", "join_col_2"])
+
+    exp_join_data_0 = Series([1, 2], dtype="int32")
+    exp_join_data_1 = Series([2, 3], dtype="float64")
+    exp_join_data_2 = Series([7, 8], dtype="float64")
+    exp_other_data = Series(["a", "b"])
+
+    expect = DataFrame(
+        {
+            "join_col_0": exp_join_data_0,
+            "join_col_1": exp_join_data_1,
+            "join_col_2": exp_join_data_2,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+    expect = expect.set_index(["join_col_0", "join_col_1", "join_col_2"])
+    got = gdf_l.join(gdf_r, how="inner", lsuffix="_x", rsuffix="_y")
+
+    assert_eq(expect, got)
+
+
+def test_typecast_on_join_indexes_matching_categorical():
+    join_data_l = Series(["a", "b", "c", "d", "e"], dtype="category")
+    join_data_r = Series(["a", "b", "c", "d", "e"], dtype="str")
+    other_data = [1, 2, 3, 4, 5]
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    gdf_l = gdf_l.set_index("join_col")
+    gdf_r = gdf_r.set_index("join_col")
+
+    exp_join_data = ["a", "b", "c", "d", "e"]
+    exp_other_data = [1, 2, 3, 4, 5]
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_data,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+    expect = expect.set_index("join_col")
+    got = gdf_l.join(gdf_r, how="inner", lsuffix="_x", rsuffix="_y")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "lhs",
+    [
+        cudf.Series([1, 2, 3], name="a"),
+        cudf.DataFrame({"a": [2, 3, 4], "c": [4, 5, 6]}),
+    ],
+)
+@pytest.mark.parametrize(
+    "rhs",
+    [
+        cudf.Series([1, 2, 3], name="b"),
+        cudf.DataFrame({"b": [2, 3, 4], "c": [4, 5, 6]}),
+    ],
+)
+@pytest.mark.parametrize(
+    "how", ["left", "inner", "outer", "leftanti", "leftsemi"]
+)
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"left_on": "a", "right_on": "b"},
+        {"left_index": True, "right_on": "b"},
+        {"left_on": "a", "right_index": True},
+        {"left_index": True, "right_index": True},
+        {
+            "left_on": "a",
+            "right_on": "b",
+            "left_index": True,
+            "right_index": True,
+        },
+    ],
+)
+def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):
+
+    if how in ("leftsemi", "leftanti") and (
+        kwargs.get("left_index") or kwargs.get("right_index")
+    ):
+        pytest.skip("Index joins not compatible with leftsemi and leftanti")
+
+    check_lhs = lhs.copy()
+    check_rhs = rhs.copy()
+    if isinstance(lhs, Series):
+        check_lhs = lhs.to_frame()
+    if isinstance(rhs, Series):
+        check_rhs = rhs.to_frame()
+
+    expect = check_lhs.merge(check_rhs, how=how, **kwargs)
+    got = lhs.merge(rhs, how=how, **kwargs)
+
+    assert_eq(expect, got)

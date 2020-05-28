@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include "datetime.cuh"
 
 #include <cudf/detail/utilities/trie.cuh>
+#include <cudf/lists/list_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/bit.hpp>
@@ -29,7 +30,7 @@
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
 
-using namespace ::cudf::experimental::io;
+using namespace ::cudf::io;
 
 namespace cudf {
 namespace io {
@@ -205,7 +206,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   while (col < num_columns) {
     if (start > stop) { break; }
 
-    pos = cudf::experimental::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
+    pos = cudf::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
 
     // Checking if this is a column that the user wants --- user can filter
     // columns
@@ -291,14 +292,14 @@ template <typename T, int base>
 __inline__ __device__ T
 decode_value(const char *data, long start, long end, ParseOptions const &opts)
 {
-  return cudf::experimental::io::gpu::parse_numeric<T, base>(data, start, end, opts);
+  return cudf::io::gpu::parse_numeric<T, base>(data, start, end, opts);
 }
 
 template <typename T>
 __inline__ __device__ T
 decode_value(const char *data, long start, long end, ParseOptions const &opts)
 {
-  return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts);
+  return cudf::io::gpu::parse_numeric<T>(data, start, end, opts);
 }
 
 template <>
@@ -351,6 +352,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
 }
 
 // The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
 template <>
 __inline__ __device__ cudf::string_view decode_value(const char *data,
                                                      long start,
@@ -359,6 +361,8 @@ __inline__ __device__ cudf::string_view decode_value(const char *data,
 {
   return cudf::string_view{};
 }
+
+// The purpose of this is merely to allow compilation ONLY
 template <>
 __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
                                                       long start,
@@ -366,6 +370,17 @@ __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
                                                       ParseOptions const &opts)
 {
   return cudf::dictionary32{};
+}
+
+// The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
+template <>
+__inline__ __device__ cudf::list_view decode_value(const char *data,
+                                                   long start,
+                                                   long end,
+                                                   ParseOptions const &opts)
+{
+  return cudf::list_view{};
 }
 
 /**
@@ -522,7 +537,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   while (col < num_columns) {
     if (start > stop) break;
 
-    pos = cudf::experimental::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
+    pos = cudf::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
 
     if (flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
@@ -536,7 +551,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
       if (!is_na && start <= (tempPos)) {  // Empty fields are not legal values
 
-        // Type dispatcher does not handle GDF_STRINGS
+        // Type dispatcher does not handle STRING
         if (dtype[actual_col].id() == cudf::type_id::STRING) {
           long end = pos;
           if (opts.keepquotes == false) {
@@ -549,15 +564,15 @@ __global__ void __launch_bounds__(csvparse_block_dim)
           str_list[rec_id].first = raw_csv + start;
           str_list[rec_id].second = end - start;
         } else {
-          if (cudf::experimental::type_dispatcher(dtype[actual_col],
-                                                  decode_op{},
-                                                  raw_csv,
-                                                  data[actual_col],
-                                                  rec_id,
-                                                  start,
-                                                  tempPos,
-                                                  opts,
-                                                  flags[col])) {
+          if (cudf::type_dispatcher(dtype[actual_col],
+                                    decode_op{},
+                                    raw_csv,
+                                    data[actual_col],
+                                    rec_id,
+                                    start,
+                                    tempPos,
+                                    opts,
+                                    flags[col])) {
             // set the valid bitmap - all bits were set to 0 to start
             set_bit(valid[actual_col], rec_id);
           }
@@ -907,7 +922,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
 
 size_t __host__ count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
                                  rmm::device_vector<char> const &data,
-                                 const cudf::experimental::io::ParseOptions &opts,
+                                 const cudf::io::ParseOptions &opts,
                                  cudaStream_t stream)
 {
   const char *d_data  = data.data().get();
@@ -927,7 +942,7 @@ size_t __host__ count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets
 
 void __host__ remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
                                 rmm::device_vector<char> const &data,
-                                const cudf::experimental::io::ParseOptions &opts,
+                                const cudf::io::ParseOptions &opts,
                                 cudaStream_t stream)
 {
   const char *d_data  = data.data().get();

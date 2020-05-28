@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -218,6 +218,14 @@ struct create_column_from_view {
       view.null_count(),
       std::move(children));
   }
+
+  template <typename ColumnType,
+            std::enable_if_t<std::is_same<ColumnType, cudf::list_view>::value> * = nullptr>
+  std::unique_ptr<column> operator()()
+  {
+    CUDF_FAIL("list_view not supported yet");
+    return nullptr;
+  }
 };
 }  // anonymous namespace
 
@@ -225,8 +233,7 @@ struct create_column_from_view {
 column::column(column_view view, cudaStream_t stream, rmm::mr::device_memory_resource *mr)
   :  // Move is needed here because the dereference operator of unique_ptr returns
      // an lvalue reference, which would otherwise dispatch to the copy constructor
-    column{std::move(
-      *experimental::type_dispatcher(view.type(), create_column_from_view{view, stream, mr}))}
+    column{std::move(*type_dispatcher(view.type(), create_column_from_view{view, stream, mr}))}
 {
 }
 

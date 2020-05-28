@@ -56,18 +56,17 @@ std::unique_ptr<column> add_keys(
     std::vector<column_view>{old_keys, new_keys}, rmm::mr::get_default_resource(), stream);
   // sort and remove any duplicates from the combined keys
   // drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
-  auto table_keys =
-    experimental::detail::drop_duplicates(table_view{{*combined_keys}},
-                                          std::vector<size_type>{0},  // only one key column
-                                          experimental::duplicate_keep_option::KEEP_FIRST,
-                                          null_equality::EQUAL,
-                                          mr,
-                                          stream)
-      ->release();
+  auto table_keys = cudf::detail::drop_duplicates(table_view{{*combined_keys}},
+                                                  std::vector<size_type>{0},  // only one key column
+                                                  duplicate_keep_option::KEEP_FIRST,
+                                                  null_equality::EQUAL,
+                                                  mr,
+                                                  stream)
+                      ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
   // create a map for the indices
   // lower_bound([a,b,c,d,e,f],[a,b,c,d,f]) = [0,1,2,3,5]
-  auto map_indices = cudf::experimental::detail::lower_bound(
+  auto map_indices = cudf::detail::lower_bound(
     table_view{{keys_column->view()}},
     table_view{{old_keys}},
     std::vector<order>{order::ASCENDING},
@@ -82,13 +81,12 @@ std::unique_ptr<column> add_keys(
                            nullptr,
                            0,
                            dictionary_column.offset());
-  auto table_indices = cudf::experimental::detail::gather(table_view{{map_indices->view()}},
-                                                          indices_view,
-                                                          false,
-                                                          true,
-                                                          false,  // ignore out-of-bounds
-                                                          mr,
-                                                          stream)
+  auto table_indices = cudf::detail::gather(table_view{{map_indices->view()}},
+                                            indices_view,
+                                            cudf::detail::out_of_bounds_policy::IGNORE,
+                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                            mr,
+                                            stream)
                          ->release();
   // the result may contain nulls if the input contains nulls and the corresponding index is
   // therefore invalid

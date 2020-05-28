@@ -21,7 +21,6 @@
 #include <memory>
 
 namespace cudf {
-namespace experimental {
 /**
  * @addtogroup transformation_transform
  * @{
@@ -42,7 +41,7 @@ namespace experimental {
  * @param outout_type   The output type that is compatible with the output type in the UDF
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
  * @param mr            The memory resource to use for for all device allocations
- * @return cudf::column The column resulting from applying the unary function to
+ * @return              The column resulting from applying the unary function to
  *                      every element of the input
  **/
 std::unique_ptr<column> transform(
@@ -56,7 +55,7 @@ std::unique_ptr<column> transform(
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
  * preserving existing null values and also returns new null_count.
  *
- * @throws `cudf::logic_error` if `input.type()` is a non-floating type
+ * @throws cudf::logic_error if `input.type()` is a non-floating type
  *
  * @param input         An immutable view of the input column of floating-point type
  * @param mr            The memory resource to use for for all device allocations
@@ -73,7 +72,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * if element `i` is `false` or null, bit `i` is unset (`0`).
  *
  *
- * @throws `cudf::logic_error` if `input.type()` is a non-boolean type
+ * @throws cudf::logic_error if `input.type()` is a non-boolean type
  *
  * @param input        Boolean elements to convert to a bitmask.
  * @param mr            The memory resource used to allocate the returned bitmask.
@@ -85,5 +84,4 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
-}  // namespace experimental
 }  // namespace cudf
