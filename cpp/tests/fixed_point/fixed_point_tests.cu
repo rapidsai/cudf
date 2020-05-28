@@ -467,14 +467,14 @@ TEST_F(FixedPointTest, Decimal32ColumnLikeAssignment)
   Column input{std::vector<Rep>{100, 125, 150}, scale_type{-2}};
   Column output{std::vector<Rep>{0, 0, 0}, scale_type{-4}};
 
-  std::transform(input.cbegin(), input.cend(), output.begin(),
-    [](FP fp) {
+  std::transform(input.begin(), input.end(), output.begin(),
+    [](auto fp) {
       return fp;
     });
 
   std::vector<double> expected{1., 1.25, 1.5};
-  auto result_it = thrust::make_transform_iterator(output.cbegin(),
-    [](FP fp) {
+  auto result_it = thrust::make_transform_iterator(output.begin(),
+    [](auto fp) {
       return double{fp};
     });
   EXPECT_TRUE(std::equal(expected.cbegin(), expected.cend(), result_it));
@@ -492,14 +492,14 @@ TEST_F(FixedPointTest, Decimal32ColumnLikeAddition)
   Column output{std::vector<Rep>{0, 0, 0}, scale_type{-4}};
 
   // std::transform doesn't get two inputs until C++17 :(
-  thrust::transform(input1.cbegin(), input1.cend(), input2.cbegin(), output.begin(),
-    [](FP fp1, FP fp2) {
+  thrust::transform(input1.begin(), input1.end(), input2.begin(), output.begin(),
+    [](FP fp1, FP fp2) { // auto doesn't work here; can't resolve operator +
       return fp1 + fp2;
     });
 
   std::vector<double> expected{5., 6., 8.}; // fractional part rounded off from addition
-  auto result_it = thrust::make_transform_iterator(output.cbegin(),
-    [](FP fp) {
+  auto result_it = thrust::make_transform_iterator(output.begin(),
+    [](auto fp) {
       return double{fp};
     });
   EXPECT_TRUE(std::equal(expected.cbegin(), expected.cend(), result_it));
