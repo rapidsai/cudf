@@ -149,7 +149,9 @@ def test_rolling_getitem():
 
 
 def test_rolling_getitem_window():
-    index = pd.DatetimeIndex(start="2000-01-01", end="2000-01-02", freq="1h")
+    index = pd.DatetimeIndex(
+        pd.date_range("2000-01-01", "2000-01-02", freq="1h")
+    )
     pdf = pd.DataFrame({"x": np.arange(len(index))}, index=index)
     gdf = cudf.from_pandas(pdf)
     assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean())
