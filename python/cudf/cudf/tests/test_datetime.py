@@ -807,3 +807,30 @@ def test_datetime_scalar_timeunit_cast(timeunit):
     pdf["b"] = testscalar
 
     assert_eq(pdf, gdf)
+
+
+def test_str_null_to_datetime():
+    psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "NaT"])
+    gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", "NaT"])
+
+    assert_eq(psr.astype("datetime64[s]"), gsr.astype("datetime64[s]"))
+
+    psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", None])
+    gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", None])
+
+    assert_eq(psr.astype("datetime64[s]"), gsr.astype("datetime64[s]"))
+
+    psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
+    gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
+
+    error_type = None
+    try:
+        psr.astype("datetime64[s]")
+    except Exception as e:
+        error_type = type(e)
+
+    if error_type is None:
+        raise Exception("Expected psr.astype('datetime64[s]') to fail")
+
+    with pytest.raises(ValueError):
+        gsr.astype("datetime64[s]")
