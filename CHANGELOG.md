@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #5222 Adding clip feature support to DataFrame and Series
+
 ## Improvements
 
 - PR #5268 Rely on NumPy arrays for out-of-band pickling

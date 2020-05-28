@@ -355,6 +355,132 @@ class Frame(libcudf.table.Table):
                 result.columns = self.columns
                 return result
 
+    def clip(self, lower=None, upper=None, inplace=False, axis=1):
+        """
+        Trim values at input threshold(s).
+
+        Assigns values outside boundary to boundary values.
+        Thresholds can be singular values or array like,
+        and in the latter case the clipping is performed
+        element-wise in the specified axis. Currently only
+        `axis=1` is supported.
+
+        Parameters
+        ----------
+        lower : scalar or array_like, default None
+            Minimum threshold value. All values below this
+            threshold will be set to it. If it is None,
+            there will be no clipping based on lower.
+            In case of Series/Index, lower is expected to be
+            a scalar or an array of size 1.
+        upper : scalar or array_like, default None
+            Maximum threshold value. All values below this
+            threshold will be set to it. If it is None,
+            there will be no clipping based on upper.
+            In case of Series, upper is expected to be
+            a scalar or an array of size 1.
+        inplace : bool, default False
+
+        Returns
+        -------
+        Clipped DataFrame/Series/Index/MultiIndex
+
+        Examples
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3, 4], "b":['a', 'b', 'c', 'd']})
+        >>> df.clip(lower=[2, 'b'], upper=[3, 'c'])
+           a  b
+        0  2  b
+        1  2  b
+        2  3  c
+        3  3  c
+
+        >>> df.clip(lower=None, upper=[3, 'c'])
+           a  b
+        0  1  a
+        1  2  b
+        2  3  c
+        3  3  c
+
+        >>> df.clip(lower=[2, 'b'], upper=None)
+           a  b
+        0  2  b
+        1  2  b
+        2  3  c
+        3  4  d
+
+        >>> df.clip(lower=2, upper=3, inplace=True)
+        >>> df
+           a  b
+        0  2  2
+        1  2  3
+        2  3  3
+        3  3  3
+
+        >>> import cudf
+        >>> sr = cudf.Series([1, 2, 3, 4])
+        >>> sr.clip(lower=2, upper=3)
+        0    2
+        1    2
+        2    3
+        3    3
+        dtype: int64
+
+        >>> sr.clip(lower=None, upper=3)
+        0    1
+        1    2
+        2    3
+        3    3
+        dtype: int64
+
+        >>> sr.clip(lower=2, upper=None, inplace=True)
+        >>> sr
+        0    2
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        """
+
+        if axis != 1:
+            raise NotImplementedError("`axis is not yet supported in clip`")
+
+        if lower is None and upper is None:
+            return None if inplace is True else self.copy(deep=True)
+
+        if is_scalar(lower):
+            lower = np.full(self._num_columns, lower)
+        if is_scalar(upper):
+            upper = np.full(self._num_columns, upper)
+
+        if len(lower) != len(upper):
+            raise ValueError("Length of lower and upper should be equal")
+
+        if len(lower) != self._num_columns:
+            raise ValueError(
+                """Length of lower/upper should be
+                equal to number of columns in
+                DataFrame/Series/Index/MultiIndex"""
+            )
+
+        output = self.copy(deep=False)
+        if output.ndim == 1:
+            # In case of series and Index,
+            # swap lower and upper if lower > upper
+            if (
+                lower[0] is not None
+                and upper[0] is not None
+                and (lower[0] > upper[0])
+            ):
+                lower[0], upper[0] = upper[0], lower[0]
+
+        for i, name in enumerate(self._data):
+            output._data[name] = self._data[name].clip(lower[i], upper[i])
+
+        output._copy_categories(self, include_index=False)
+
+        return self._mimic_inplace(output, inplace=inplace)
+
     def _normalize_scalars(self, other):
         """
         Try to normalizes scalar values as per self dtype

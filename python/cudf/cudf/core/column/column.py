@@ -135,6 +135,13 @@ class ColumnBase(Column, Serializable):
             sr[~mask_bytes] = None
         return sr
 
+    def clip(self, lo, hi):
+        if is_categorical_dtype(self):
+            input_col = self.astype(self.categories.dtype)
+            return libcudf.replace.clip(input_col, lo, hi).astype(self.dtype)
+        else:
+            return libcudf.replace.clip(self, lo, hi)
+
     def equals(self, other):
         if self is other:
             return True
