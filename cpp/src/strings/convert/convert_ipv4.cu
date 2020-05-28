@@ -23,9 +23,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <strings/utilities.cuh>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform.h>
-#include <cmath>
 
 namespace cudf {
 namespace strings {
@@ -46,7 +44,7 @@ struct ipv4_to_integers_fn {
   {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str  = d_strings.element<string_view>(idx);
-    int32_t ipvals[4]  = {0};  // IPV4 format: xxx.xxx.xxx.xxx
+    uint32_t ipvals[4] = {0};  // IPV4 format: xxx.xxx.xxx.xxx
     int32_t ipv_idx    = 0;
     int32_t factor     = 1;
     const char* in_ptr = d_str.data();
@@ -57,11 +55,12 @@ struct ipv4_to_integers_fn {
         ++ipv_idx;
         factor = 1;
       } else {
-        ipvals[ipv_idx] = (ipvals[ipv_idx] * factor) + static_cast<int32_t>(ch - '0');
+        ipvals[ipv_idx] = (ipvals[ipv_idx] * factor) + static_cast<uint32_t>(ch - '0');
         factor          = 10;
       }
     }
-    return static_cast<int64_t>(ipvals[0] << 24) + (ipvals[1] << 16) + (ipvals[2] << 8) + ipvals[3];
+    uint32_t result = (ipvals[0] << 24) + (ipvals[1] << 16) + (ipvals[2] << 8) + ipvals[3];
+    return static_cast<int64_t>(result);
   }
 };
 
