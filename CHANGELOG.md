@@ -594,6 +594,7 @@
 - PR #5525 Make sure to allocate bitmasks of string columns only once
 - PR #5336 Initialize conversion tables on a per-context basis
 - PR #5283 Fix strings::ipv4_to_integers overflow to negative
+- PR #5306 Fix categorical scaler insertion
 - PR #5269 Explicitly require NumPy
 - PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
 - PR #5333 Fix `DataFrame.loc` issue with list like argument
@@ -703,6 +704,8 @@
 
 
 # cuDF 0.14.0 (03 Jun 2020)
+
+# cuDF 0.14.0 (Date TBD)
 
 ## New Features
 
