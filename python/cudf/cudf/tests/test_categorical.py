@@ -695,3 +695,70 @@ def test_categorical_insertion(data, dtype):
     pd_df.assign(cat_col=pd.Series(data, dtype=dtype).cat.categorical)
     cd_df.assign(cat_col=pd.Series(data, dtype=dtype).cat.categorical)
     assert_eq(pd_df, cd_df)
+<<<<<<< HEAD
+=======
+
+
+@pytest.mark.parametrize(
+    ("data,add"),
+    [
+        ([1, 2, 3], [100, 11, 12]),
+        ([1, 2, 3], [0.01, 9.7, 15.0]),
+        ([0.0, 6.7, 10.0], [100, 11, 12]),
+        ([0.0, 6.7, 10.0], [0.01, 9.7, 15.0]),
+        (["a", "bd", "ef"], ["asdfsdf", "bddf", "eff"]),
+        ([1, 2, 3], []),
+        ([0.0, 6.7, 10.0], []),
+    ],
+)
+def test_add_categories(data, add):
+    pds = pd.Series(data, dtype="category")
+    gds = gd.Series(data, dtype="category")
+
+    expected = pds.cat.add_categories(add)
+    actual = gds.cat.add_categories(add)
+    assert_eq(expected.cat.codes, actual.cat.codes)
+
+    # Need to type-cast pandas object to str due to mixed-type
+    # support in "object"
+    assert_eq(
+        expected.cat.categories.astype("str")
+        if (expected.cat.categories.dtype == "object")
+        else expected.cat.categories,
+        actual.cat.categories,
+    )
+
+
+@pytest.mark.parametrize(
+    "data,add",
+    [
+        ([1, 2, 3], [1, 3, 11]),
+        ([0.0, 6.7, 10.0], [1, 2, 0.0]),
+        (["a", "bd", "ef"], ["a", "bd", "a"]),
+    ],
+)
+def test_add_categories_error(data, add):
+    pds = pd.Series(data, dtype="category")
+    gds = gd.Series(data, dtype="category")
+
+    error_type = None
+    try:
+        pds.cat.add_categories(add)
+    except Exception as e:
+        error_type = type(e)
+
+    with pytest.raises(error_type):
+        gds.cat.add_categories(add)
+
+
+def test_add_categories_mixed_error():
+    gds = gd.Series(["a", "bd", "ef"], dtype="category")
+
+    with pytest.raises(TypeError):
+        gds.cat.add_categories([1, 2, 3])
+
+    gds = gd.Series([1, 2, 3], dtype="category")
+
+    with pytest.raises(TypeError):
+        gds.cat.add_categories(["a", "bd", "ef"])
+>>>>>>> fix parameerization style
