@@ -154,7 +154,9 @@ class CategoricalAccessor(object):
         out_col = self._column
         if not out_col.ordered:
             kwargs["ordered"] = True
-            out_col = self._set_categories(self._column.categories, **kwargs)
+            out_col = self._set_categories(
+                self._column.categories, self._column.categories, **kwargs
+            )
 
         return self._return_or_inplace(out_col, **kwargs)
 
@@ -225,7 +227,9 @@ class CategoricalAccessor(object):
         out_col = self._column
         if out_col.ordered:
             kwargs["ordered"] = False
-            out_col = self._set_categories(self.categories, **kwargs)
+            out_col = self._set_categories(
+                self._column.categories, self.categories, **kwargs
+            )
 
         return self._return_or_inplace(out_col, **kwargs)
 
@@ -281,10 +285,35 @@ class CategoricalAccessor(object):
         Categories (5, int64): [1, 2, 0, 3, 4]
         """
         new_categories = column.as_column(new_categories)
-        new_categories = self._column.categories.append(new_categories)
+        old_categories = self._column.categories
+
+        if (
+            old_categories.dtype == "object"
+            and new_categories.dtype != "object"
+        ) or (
+            new_categories.dtype == "object"
+            and old_categories.dtype != "object"
+        ):
+            raise TypeError(
+                "cudf does not support mixed types, please type-cast \
+                    new_categories to the same type as existing categories."
+            )
+        common_dtype = np.find_common_type(
+            [old_categories.dtype, new_categories.dtype], []
+        )
+
+        new_categories = new_categories.astype(common_dtype, copy=False)
+        old_categories = old_categories.astype(common_dtype, copy=False)
+
+        if old_categories.isin(new_categories).any():
+            raise ValueError("new categories must not include old categories")
+
+        new_categories = old_categories.append(new_categories)
         out_col = self._column
         if not self._categories_equal(new_categories, **kwargs):
-            out_col = self._set_categories(new_categories, **kwargs)
+            out_col = self._set_categories(
+                old_categories, new_categories, **kwargs
+            )
 
         return self._return_or_inplace(out_col, **kwargs)
 
@@ -359,10 +388,8 @@ class CategoricalAccessor(object):
         dtype: category
         Categories (2, int64): [1, 2]
         """
-        from cudf import Series
-
         cats = self.categories.to_series()
-        removals = Series(removals, dtype=cats.dtype)
+        removals = cudf.Series(removals, dtype=cats.dtype)
         removals_mask = removals.isin(cats)
 
         # ensure all the removals are in the current categories
@@ -375,7 +402,9 @@ class CategoricalAccessor(object):
         new_categories = cats[~cats.isin(removals)]._column
         out_col = self._column
         if not self._categories_equal(new_categories, **kwargs):
-            out_col = self._set_categories(new_categories, **kwargs)
+            out_col = self._set_categories(
+                self._column.categories, new_categories, **kwargs
+            )
 
         return self._return_or_inplace(out_col, **kwargs)
 
@@ -499,7 +528,9 @@ class CategoricalAccessor(object):
                     ),
                 )
             elif not self._categories_equal(new_categories, **kwargs):
-                out_col = self._set_categories(new_categories, **kwargs)
+                out_col = self._set_categories(
+                    self._column.categories, new_categories, **kwargs
+                )
 
         return self._return_or_inplace(out_col, **kwargs)
 
@@ -579,7 +610,9 @@ class CategoricalAccessor(object):
                 "items in new_categories are not the same as in "
                 "old categories"
             )
-        out_col = self._set_categories(new_categories, **kwargs)
+        out_col = self._set_categories(
+            self._column.categories, new_categories, **kwargs
+        )
 
         return self._return_or_inplace(out_col, **kwargs)
 
@@ -589,13 +622,11 @@ class CategoricalAccessor(object):
             return False
         # if order doesn't matter, sort before the equals call below
         if not kwargs.get("ordered", self.ordered):
-            from cudf.core.series import Series
-
-            cur_categories = Series(cur_categories).sort_values()
-            new_categories = Series(new_categories).sort_values()
+            cur_categories = cudf.Series(cur_categories).sort_values()
+            new_categories = cudf.Series(new_categories).sort_values()
         return cur_categories._column.equals(new_categories._column)
 
-    def _set_categories(self, new_categories, **kwargs):
+    def _set_categories(self, current_categories, new_categories, **kwargs):
         """Returns a new CategoricalColumn with the categories set to the
         specified *new_categories*.
 
@@ -604,9 +635,7 @@ class CategoricalAccessor(object):
         Assumes ``new_categories`` is the same dtype as the current categories
         """
 
-        from cudf import DataFrame, Series
-
-        cur_cats = self._column.categories
+        cur_cats = column.as_column(current_categories)
         new_cats = column.as_column(new_categories)
 
         # Join the old and new categories to build a map from
@@ -617,7 +646,9 @@ class CategoricalAccessor(object):
         if not (kwargs.get("is_unique", False) or new_cats.is_unique):
             # drop_duplicates() instead of unique() to preserve order
             new_cats = (
-                Series(new_cats).drop_duplicates(ignore_index=True)._column
+                cudf.Series(new_cats)
+                .drop_duplicates(ignore_index=True)
+                ._column
             )
 
         cur_codes = self.codes
@@ -625,9 +656,9 @@ class CategoricalAccessor(object):
         old_codes = cupy.arange(len(cur_cats), dtype=cur_codes.dtype)
         new_codes = cupy.arange(len(new_cats), dtype=cur_codes.dtype)
 
-        new_df = DataFrame({"new_codes": new_codes, "cats": new_cats})
-        old_df = DataFrame({"old_codes": old_codes, "cats": cur_cats})
-        cur_df = DataFrame({"old_codes": cur_codes, "order": cur_order})
+        new_df = cudf.DataFrame({"new_codes": new_codes, "cats": new_cats})
+        old_df = cudf.DataFrame({"old_codes": old_codes, "cats": cur_cats})
+        cur_df = cudf.DataFrame({"old_codes": cur_codes, "order": cur_order})
 
         # Join the old and new categories and line up their codes
         df = old_df.merge(new_df, on="cats", how="left")
@@ -654,7 +685,6 @@ class CategoricalAccessor(object):
         Returns an object of the type of the column owner or updates the column
         of the owner (Series or Index) to mimic an inplace operation
         """
-        from cudf import Series
         from cudf.core.index import CategoricalIndex
 
         owner = self._parent
@@ -666,8 +696,8 @@ class CategoricalAccessor(object):
                 return new_col
             elif isinstance(owner, CategoricalIndex):
                 return CategoricalIndex(new_col, name=owner.name)
-            elif isinstance(owner, Series):
-                return Series(new_col, index=owner.index, name=owner.name)
+            elif isinstance(owner, cudf.Series):
+                return cudf.Series(new_col, index=owner.index, name=owner.name)
 
 
 class CategoricalColumn(column.ColumnBase):
@@ -988,7 +1018,7 @@ class CategoricalColumn(column.ColumnBase):
             fill_value = column.as_column(fill_value, nan_as_null=False)
             # TODO: only required if fill_value has a subset of the categories:
             fill_value = fill_value.cat()._set_categories(
-                self.categories, is_unique=True
+                fill_value.cat().categories, self.categories, is_unique=True
             )
             fill_value = column.as_column(fill_value.codes).astype(
                 self.codes.dtype

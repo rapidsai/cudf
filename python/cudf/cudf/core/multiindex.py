@@ -245,6 +245,12 @@ class MultiIndex(Index):
         )
         return self.codes
 
+    @property
+    def ndim(self):
+        """Dimension of the data. For MultiIndex ndim is always 2.
+        """
+        return 2
+
     def isin(self, values, level=None):
         """Return a boolean array where the index values are in values.
 
