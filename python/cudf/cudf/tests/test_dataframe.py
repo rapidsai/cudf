@@ -5443,17 +5443,47 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
 
 
 @pytest.mark.parametrize(
-    "data,cols",
+    "data,cols,index",
     [
-        (np.ndarray(shape=(4, 2), dtype=float, order="F"), ["a", "b"]),
-        (np.array([11, 123, -2342, 232]), ["a"]),
-        (cupy.ndarray(shape=(4, 2), dtype=float, order="F"), ["a", "z"]),
-        (cupy.array([11, 123, -2342, 232]), ["z"]),
-        (np.random.randn(2, 4), ["a", "b", "c", "d"]),
-        (cupy.random.randn(2, 4), ["a", "b", "c", "d"]),
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            ["a", "b", "c", "d"],
+        ),
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            [0, 20, 30, 10],
+        ),
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            [0, 1, 2, 3],
+        ),
+        (np.array([11, 123, -2342, 232]), ["a"], [1, 2, 11, 12]),
+        (np.array([11, 123, -2342, 232]), ["a"], ["khsdjk", "a", "z", "kk"]),
+        (
+            cupy.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "z"],
+            ["a", "z", "a", "z"],
+        ),
+        (cupy.array([11, 123, -2342, 232]), ["z"], [0, 1, 1, 0]),
+        (cupy.array([11, 123, -2342, 232]), ["z"], [1, 2, 3, 4]),
+        (cupy.array([11, 123, -2342, 232]), ["z"], ["a", "z", "d", "e"]),
+        (np.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
+        (np.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
+        (cupy.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
+        (cupy.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
     ],
 )
-def test_dataframe_init_from_arrays_cols(data, cols):
+def test_dataframe_init_from_arrays_cols(data, cols, index):
+    # verify with columns & index
+    pdf = pd.DataFrame(data, columns=cols, index=index)
+    gdf = DataFrame(data, columns=cols, index=index)
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+    # verify with columns
     pdf = pd.DataFrame(data, columns=cols)
     gdf = DataFrame(data, columns=cols)
 
