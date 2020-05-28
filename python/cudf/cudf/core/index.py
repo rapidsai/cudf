@@ -367,31 +367,31 @@ class Index(Frame, Serializable):
         on = level
         # In case of MultiIndex, it will be None as
         # we don't need to update name
-        left_name = lhs.name
-        right_name = rhs.name
+        left_names = lhs.names
+        right_names = rhs.names
         # There should be no `None` values in Joined indices,
         # so essentially it would be `left/right` or 'inner'
         # in case of MultiIndex
         if isinstance(lhs, cudf.MultiIndex):
             if level is not None and isinstance(level, int):
                 on = lhs._data.get_by_index(level).names[0]
-            right_name = on or right_name
-            on = right_name
+            right_names = (on,) or right_names
+            on = right_names[0]
             if how == "outer":
                 how = "left"
             elif how == "right":
                 how = "inner"
         else:
             # Both are nomal indices
-            right_name = left_name
-            on = right_name
+            right_names = left_names
+            on = right_names[0]
 
-        lhs = lhs.to_frame(index=False, name=left_name)
-        rhs = rhs.to_frame(index=False, name=right_name)
+        lhs.names = left_names
+        rhs.names = right_names
 
         output = lhs._merge(rhs, how=how, on=on, sort=sort)
 
-        return output.set_index(list(output._data.names)).index
+        return output
 
     def rename(self, name, inplace=False):
         """
