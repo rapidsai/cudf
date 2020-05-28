@@ -275,12 +275,12 @@ class fixed_point {
     return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
   }
 
-  operator scaled_integer<Rep>() const
+  CUDA_HOST_DEVICE_CALLABLE operator scaled_integer<Rep>() const
   {
     return scaled_integer<Rep>{_value, _scale};
   }
 
-  fixed_point<Rep, Rad> rescale(scale_type scale) const {
+  CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep, Rad> rescale(scale_type scale) const {
     auto value = detail::shift<Rep, Rad, Rep>(_value, scale_type{scale - _scale});
     return fixed_point<Rep, Rad>{scaled_integer<Rep>{value, scale}};
   }
