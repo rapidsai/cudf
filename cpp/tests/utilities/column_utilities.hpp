@@ -113,10 +113,14 @@ std::string to_string(std::vector<bitmask_type> const& null_mask,
  * Supports indentation of all output.  For example, if the displayed output of your column
  * would be
  *
+ * @code{.pseudo}
  * "1,2,3,4,5"
+ * @endcode
  * and the `indent` parameter was "   ", that indentation would be prepended to
  * result in the output
+ * @code{.pseudo}
  * "   1,2,3,4,5"
+ * @endcode
  *
  * The can be useful for displaying complex types. An example use case would be for
  * displaying the nesting of a LIST type column (via recursion).

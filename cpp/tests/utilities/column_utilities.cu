@@ -141,9 +141,7 @@ void print_differences(thrust::device_vector<int> const& differences,
   std::string depth_str = depth > 0 ? "depth " + std::to_string(depth) + std::string("\n") : "";
 
   if (print_all_differences) {
-    //
     //  If there are differences, display them all
-    //
     std::ostringstream buffer;
     buffer << depth_str << "differences:" << std::endl;
 
@@ -153,9 +151,7 @@ void print_differences(thrust::device_vector<int> const& differences,
 
     std::unique_ptr<cudf::table> diff_table = cudf::gather(source_table, diff_column);
 
-    //
     //  Need to pull back the differences
-    //
     std::vector<std::string> h_left_strings  = to_strings(diff_table->get_column(0));
     std::vector<std::string> h_right_strings = to_strings(diff_table->get_column(1));
 
@@ -166,9 +162,7 @@ void print_differences(thrust::device_vector<int> const& differences,
 
     EXPECT_EQ(differences.size(), size_t{0}) << buffer.str();
   } else {
-    //
     //  If there are differences, just display the first one
-    //
     int index = differences[0];
 
     auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);

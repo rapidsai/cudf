@@ -26,7 +26,7 @@ namespace cudf {
  */
 class lists_column_view : private column_view {
  public:
-  lists_column_view(column_view lists_column);
+  lists_column_view(column_view const& lists_column);
   lists_column_view(lists_column_view&& lists_view)      = default;
   lists_column_view(const lists_column_view& lists_view) = default;
   ~lists_column_view()                                   = default;

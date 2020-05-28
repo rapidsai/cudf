@@ -396,15 +396,18 @@ std::unique_ptr<column> make_strings_column(
 
 /**
  * @brief Constructs a LIST type column given offsets column, child column,
- * and null mask and null count. The columns and mask are moved into the
- * resulting lists column.
+ * and null mask and null count.
+ *
+ * The columns and mask are moved into the resulting lists column.
  *
  * @param num_lists The number of lists the column represents.
- * @param offsets_column The column of offset values for this column.
- *                       The number of elements is one more than the total number
- *                       of lists.
+ * @param offsets_column The column of offset values for this column. Each value should represent
+ *                       the starting offset into the child elements that corresponds to the
+ *                       beginning of the row, with the first row starting at 0. The length of row
+ *                       N can be determined by subtracting offsets[N+1] - offsets[N]. The total
+ * number of offsets should be 1 longer than the # of rows in the column.
  * @param child_column The child column referenced by the lists formed by the
- *                     offsets_column. Note : the child column may itself be
+ *                     offsets_column. Note: the child column may itself be
  *                     further nested.
  * @param null_count The number of null list entries.
  * @param null_mask The bits specifying the null lists in device memory.

@@ -41,28 +41,31 @@ void lists_column_wrapper::build_from_nested(std::initializer_list<lists_column_
                                              std::vector<bool> const& v)
 {
   auto valids = cudf::test::make_counting_transform_iterator(
-    0, [&v](auto i) { return v.size() <= 0 ? true : v[i]; });
+    0, [&v](auto i) { return v.empty() ? true : v[i]; });
 
   // preprocess the incoming lists. unwrap any "root" lists and just use their
   // underlying non-list data.
   // also, sanity check everything to make sure the types of all the columns are the same
   std::vector<column_view> cols;
   type_id child_id = EMPTY;
-  std::transform(
-    elements.begin(), elements.end(), std::back_inserter(cols), [&](lists_column_wrapper const& l) {
-      // potentially unwrap
-      cudf::column_view col = l.root ? lists_column_view(*l.wrapped).child() : *l.wrapped;
+  std::transform(elements.begin(),
+                 elements.end(),
+                 std::back_inserter(cols),
+                 [&child_id](lists_column_wrapper const& l) {
+                   // potentially unwrap
+                   cudf::column_view col =
+                     l.root ? lists_column_view(*l.wrapped).child() : *l.wrapped;
 
-      // verify all children are of the same type (C++ allows you to use initializer
-      // lists that could construct an invalid list column type)
-      if (child_id == EMPTY) {
-        child_id = col.type().id();
-      } else {
-        CUDF_EXPECTS(child_id == col.type().id(), "Mismatched list types");
-      }
+                   // verify all children are of the same type (C++ allows you to use initializer
+                   // lists that could construct an invalid list column type)
+                   if (child_id == EMPTY) {
+                     child_id = col.type().id();
+                   } else {
+                     CUDF_EXPECTS(child_id == col.type().id(), "Mismatched list types");
+                   }
 
-      return col;
-    });
+                   return col;
+                 });
 
   // generate offsets column and do some type checking to make sure the user hasn't passed an
   // invalid initializer list

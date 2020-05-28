@@ -512,20 +512,23 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @code{.cpp}
    * // Creates a LIST column with 1 list composed of 5 total integers
    * auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
-   * // [{0, 1, 2, 3, 4}]
+   * // [{0, 2, 4, 6, 8}]
    * lists_column_wrapper l(elements, elements+5);
    * @endcode
    *
    * @param begin Beginning of the sequence
    * @param end End of the sequence
    */
-  template <typename InputIterator,
-            std::enable_if_t<is_fixed_width<typename InputIterator::value_type>()>* = nullptr>
+  template <
+    typename InputIterator,
+    std::enable_if_t<is_fixed_width<typename std::iterator_traits<InputIterator>::value_type>()>* =
+      nullptr>
   lists_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    build_from_non_nested(std::move(
-      cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end)
-        .release()));
+    build_from_non_nested(
+      std::move(cudf::test::fixed_width_column_wrapper<
+                  typename std::iterator_traits<InputIterator>::value_type>(begin, end)
+                  .release()));
   }
 
   /**
@@ -559,7 +562,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    * // Creates a LIST column with 1 lists composed of 5 total integers
    * auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
    * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
-   * // [{0, NULL, 2, NULL, 4}]
+   * // [{0, NULL, 4, NULL, 8}]
    * lists_column_wrapper l(elements, elements+5, validity);
    * @endcode
    *

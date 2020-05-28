@@ -35,6 +35,8 @@ using FixedWidthTypesNoBool = cudf::test::
   Concat<cudf::test::IntegralTypes, cudf::test::FloatingPointTypes, cudf::test::TimestampTypes>;
 TYPED_TEST_CASE(ListColumnWrapperTestTyped, FixedWidthTypesNoBool);
 
+// Explicitly typed test (int) to distinguish between inferred construction and explicitly
+// cast construction (TYPED_TEST cases)
 TEST_F(ListColumnWrapperTest, ListOfInts)
 {
   using namespace cudf;
@@ -90,6 +92,8 @@ TEST_F(ListColumnWrapperTest, ListOfInts)
   }
 }
 
+// Explicitly typed test (int) to distinguish between inferred construction and explicitly
+// cast construction (TYPED_TEST cases)
 TEST_F(ListColumnWrapperTest, ListOfIntsWithValidity)
 {
   using namespace cudf;
@@ -147,6 +151,8 @@ TEST_F(ListColumnWrapperTest, ListOfIntsWithValidity)
   }
 }
 
+// Explicitly typed test (int) to distinguish between inferred construction and explicitly
+// cast construction (TYPED_TEST cases)
 TEST_F(ListColumnWrapperTest, ListOfIntsFromIterator)
 {
   using namespace cudf;
@@ -178,6 +184,8 @@ TEST_F(ListColumnWrapperTest, ListOfIntsFromIterator)
   test::expect_columns_equal(e_data, data);
 }
 
+// Explicitly typed test (int) to distinguish between inferred construction and explicitly
+// cast construction (TYPED_TEST cases)
 TEST_F(ListColumnWrapperTest, ListOfIntsFromIteratorWithValidity)
 {
   using namespace cudf;
@@ -212,6 +220,8 @@ TEST_F(ListColumnWrapperTest, ListOfIntsFromIteratorWithValidity)
   test::expect_columns_equal(e_data, data);
 }
 
+// Explicitly typed test (int) to distinguish between inferred construction and explicitly
+// cast construction (TYPED_TEST cases)
 TEST_F(ListColumnWrapperTest, ListOfListOfInts)
 {
   using namespace cudf;
@@ -291,6 +301,8 @@ TEST_F(ListColumnWrapperTest, ListOfListOfInts)
   }
 }
 
+// Explicitly typed test (int) to distinguish between inferred construction and explicitly
+// cast construction (TYPED_TEST cases)
 TEST_F(ListColumnWrapperTest, ListOfListOfIntsWithValidity)
 {
   using namespace cudf;
@@ -379,79 +391,8 @@ TEST_F(ListColumnWrapperTest, ListOfListOfIntsWithValidity)
   }
 }
 
-TEST_F(ListColumnWrapperTest, ListOfStrings)
-{
-  using namespace cudf;
-
-  // List<string>, 2 rows
-  //
-  // List<cudf::string_view>:
-  // Length : 2
-  // Offsets : 0, 2, 5
-  // Children :
-  //    one, two, three, four, five
-  {
-    test::lists_column_wrapper list{{"one", "two"}, {"three", "four", "five"}};
-
-    lists_column_view lcv(list);
-    EXPECT_EQ(lcv.size(), 2);
-
-    auto offsets = lcv.offsets();
-    EXPECT_EQ(offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 5});
-    test::expect_columns_equal(e_offsets, offsets);
-
-    auto data = lcv.child();
-    EXPECT_EQ(data.size(), 5);
-    test::strings_column_wrapper e_data({"one", "two", "three", "four", "five"});
-    test::expect_columns_equal(e_data, data);
-  }
-}
-
-TEST_F(ListColumnWrapperTest, ListOfListOfStrings)
-{
-  using namespace cudf;
-
-  // List<List<string>>, 2 rows
-  //
-  // List<List<cudf::string_view>>:
-  // Length : 2
-  // Offsets : 0, 2, 4
-  // Children :
-  //    List<cudf::string_view>:
-  //    Length : 4
-  //    Offsets : 0, 2, 5, 6, 8
-  //    Children :
-  //      one, two, three, four, five, eight, nine, ten
-  {
-    test::lists_column_wrapper list{{{"one", "two"}, {"three", "four", "five"}},
-                                    {{"eight"}, {"nine", "ten"}}};
-
-    lists_column_view lcv(list);
-    EXPECT_EQ(lcv.size(), 2);
-
-    auto offsets = lcv.offsets();
-    EXPECT_EQ(offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 4});
-    test::expect_columns_equal(e_offsets, offsets);
-
-    auto child = lcv.child();
-    lists_column_view childv(child);
-    EXPECT_EQ(childv.size(), 4);
-
-    auto child_offsets = childv.offsets();
-    EXPECT_EQ(child_offsets.size(), 5);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 5, 6, 8});
-    test::expect_columns_equal(e_child_offsets, child_offsets);
-
-    auto child_data = childv.child();
-    EXPECT_EQ(child_data.size(), 8);
-    test::strings_column_wrapper e_child_data(
-      {"one", "two", "three", "four", "five", "eight", "nine", "ten"});
-    test::expect_columns_equal(e_child_data, child_data);
-  }
-}
-
+// Explicitly typed test (int) to distinguish between inferred construction and explicitly
+// cast construction (TYPED_TEST cases)
 TEST_F(ListColumnWrapperTest, ListOfListOfListOfIntsWithValidity)
 {
   using namespace cudf;
@@ -513,6 +454,222 @@ TEST_F(ListColumnWrapperTest, ListOfListOfListOfIntsWithValidity)
     test::fixed_width_column_wrapper<int> e_child_child_data(
       {1, 2, 3, 4, -1, -2, -3, -4, -5, -6, -7, 0});
     test::expect_columns_equal(child_child_data, child_child_data);
+  }
+}
+
+// Explicitly typed test (string) to distinguish between inferred construction and explicitly
+// cast construction (TYPED_TEST cases)
+TEST_F(ListColumnWrapperTest, ListOfStrings)
+{
+  using namespace cudf;
+
+  // List<string>, 2 rows
+  //
+  // List<cudf::string_view>:
+  // Length : 2
+  // Offsets : 0, 2, 5
+  // Children :
+  //    one, two, three, four, five
+  {
+    test::lists_column_wrapper list{{"one", "two"}, {"three", "four", "five"}};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 2);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 3);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 5});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto data = lcv.child();
+    EXPECT_EQ(data.size(), 5);
+    test::strings_column_wrapper e_data({"one", "two", "three", "four", "five"});
+    test::expect_columns_equal(e_data, data);
+  }
+}
+
+// Explicitly typed test (string) to distinguish between inferred construction and explicitly
+// cast construction (TYPED_TEST cases)
+TEST_F(ListColumnWrapperTest, ListOfListOfStrings)
+{
+  using namespace cudf;
+
+  // List<List<string>>, 2 rows
+  //
+  // List<List<cudf::string_view>>:
+  // Length : 2
+  // Offsets : 0, 2, 4
+  // Children :
+  //    List<cudf::string_view>:
+  //    Length : 4
+  //    Offsets : 0, 2, 5, 6, 8
+  //    Children :
+  //      one, two, three, four, five, eight, nine, ten
+  {
+    test::lists_column_wrapper list{{{"one", "two"}, {"three", "four", "five"}},
+                                    {{"eight"}, {"nine", "ten"}}};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 2);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 3);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 4});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 4);
+
+    auto child_offsets = childv.offsets();
+    EXPECT_EQ(child_offsets.size(), 5);
+    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 5, 6, 8});
+    test::expect_columns_equal(e_child_offsets, child_offsets);
+
+    auto child_data = childv.child();
+    EXPECT_EQ(child_data.size(), 8);
+    test::strings_column_wrapper e_child_data(
+      {"one", "two", "three", "four", "five", "eight", "nine", "ten"});
+    test::expect_columns_equal(e_child_data, child_data);
+  }
+}
+
+// Explicitly typed test (bool) to distinguish between inferred construction and explicitly
+// cast construction (TYPED_TEST cases)
+TEST_F(ListColumnWrapperTest, ListOfBools)
+{
+  using namespace cudf;
+
+  // List<bool>, 1 row
+  //
+  // List<bool>:
+  // Length : 1
+  // Offsets : 0, 2
+  // Children :
+  //   1, 0
+  //
+  {
+    test::lists_column_wrapper list{true, false};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 1);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 2);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto data = lcv.child();
+    EXPECT_EQ(data.size(), 2);
+    test::fixed_width_column_wrapper<bool> e_data({true, false});
+    test::expect_columns_equal(e_data, data);
+  }
+
+  // List<bool>, 1 row
+  //
+  // List<bool>:
+  // Length : 1
+  // Offsets : 0, 3
+  // Children :
+  //   1, 0, 0
+  //
+  {
+    test::lists_column_wrapper list{{true, false, false}};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 1);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 2);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 3});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto data = lcv.child();
+    EXPECT_EQ(data.size(), 3);
+    test::fixed_width_column_wrapper<bool> e_data({true, false, false});
+    test::expect_columns_equal(e_data, data);
+  }
+}
+
+// Explicitly typed test (bool) to distinguish between inferred construction and explicitly
+// cast construction (TYPED_TEST cases)
+TEST_F(ListColumnWrapperTest, ListOfBoolsWithValidity)
+{
+  using namespace cudf;
+
+  auto valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? true : false; });
+
+  // List<bool>, 3 rows
+  //
+  // List<bool>:
+  // Length : 3
+  // Offsets : 0, 2, 4, 7
+  // Children :
+  //   1, NULL, 0, NULL, 0, NULL, 0
+  {
+    test::lists_column_wrapper list{
+      {{true, true}, valids}, {{false, true}, valids}, {{false, true, false}, valids}};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 3);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 4, 7});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto data = lcv.child();
+    EXPECT_EQ(data.size(), 7);
+    test::fixed_width_column_wrapper<bool> e_data({true, true, false, true, false, true, false},
+                                                  valids);
+    test::expect_columns_equal(e_data, data);
+  }
+}
+
+// Explicitly typed test (bool) to distinguish between inferred construction and explicitly
+// cast construction (TYPED_TEST cases)
+TEST_F(ListColumnWrapperTest, ListOfListOfBools)
+{
+  using namespace cudf;
+
+  // List<List<bool>> 3 rows
+  //
+  // List<List<bool>>:
+  // Length : 3
+  // Offsets : 0, 2, 5, 6
+  // Children :
+  //    List<bool>:
+  //    Length : 6
+  //    Offsets : 0, 2, 4, 7, 8, 9, 11
+  //    Children :
+  //      0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1
+  {
+    test::lists_column_wrapper list{
+      {{false, true}, {true, true}}, {{true, false, true}, {true}, {true}}, {{false, true}}};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 3);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 5, 6});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 6);
+
+    auto child_offsets = childv.offsets();
+    EXPECT_EQ(child_offsets.size(), 7);
+    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 4, 7, 8, 9, 11});
+    test::expect_columns_equal(e_child_offsets, child_offsets);
+
+    auto child_data = childv.child();
+    EXPECT_EQ(child_data.size(), 11);
+    test::fixed_width_column_wrapper<bool> e_child_data(
+      {false, true, true, true, true, false, true, true, true, false, true});
+    test::expect_columns_equal(e_child_data, child_data);
   }
 }
 
