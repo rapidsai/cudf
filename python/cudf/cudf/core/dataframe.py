@@ -217,10 +217,28 @@ class DataFrame(Frame, Serializable):
                         ),
                     )
                 )
-        elif hasattr(data, "__array_interface__") or hasattr(
-            data, "__cuda_array_interface__"
-        ):
-            new_df = self.from_records(data, index=index, columns=columns)
+        elif hasattr(data, "__array_interface__"):
+            arr_interface = data.__array_interface__
+            if (
+                len(arr_interface["shape"]) == 1
+                and len(arr_interface["descr"]) == 1
+            ):
+                new_df = self._from_columns(
+                    [data], index=index, columns=columns
+                )
+            else:
+                new_df = self.from_records(data, index=index, columns=columns)
+            self._data = new_df._data
+            self._index = new_df._index
+            self.columns = new_df.columns
+        elif hasattr(data, "__cuda_array_interface__"):
+            arr_interface = data.__cuda_array_interface__
+            if len(arr_interface["shape"]) == 1:
+                new_df = self._from_columns(
+                    [data], index=index, columns=columns
+                )
+            else:
+                new_df = self.from_records(data, index=index, columns=columns)
             self._data = new_df._data
             self._index = new_df._index
             self.columns = new_df.columns
@@ -4228,7 +4246,7 @@ class DataFrame(Frame, Serializable):
 
     @classmethod
     def from_records(self, data, index=None, columns=None, nan_as_null=False):
-        """Convert from a numpy array, recarray or a structured array.
+        """Convert from a numpy recarray or a structured array.
 
         Parameters
         ----------
@@ -4250,11 +4268,7 @@ class DataFrame(Frame, Serializable):
                 )
             )
 
-        if data.ndim == 1 and data.dtype.names is None:
-            # If data is a 1-d numpy array.
-            num_cols = 1
-        else:
-            num_cols = len(data[0])
+        num_cols = len(data[0])
 
         if columns is None and data.dtype.names is None:
             names = [i for i in range(num_cols)]
@@ -4273,11 +4287,8 @@ class DataFrame(Frame, Serializable):
             for i, k in enumerate(names):
                 df[k] = Series(data[:, i], nan_as_null=nan_as_null)
         elif data.ndim == 1:
-            if data.dtype.names is None:
-                df[names[0]] = Series(data, nan_as_null=nan_as_null)
-            else:
-                for k in names:
-                    df[k] = Series(data[k], nan_as_null=nan_as_null)
+            for k in names:
+                df[k] = Series(data[k], nan_as_null=nan_as_null)
 
         if index is not None:
             indices = data[index]
@@ -4350,7 +4361,7 @@ class DataFrame(Frame, Serializable):
         )
         return self.as_gpu_matrix()
 
-    def _from_columns(cols, index=None, columns=None):
+    def _from_columns(self, cols, index=None, columns=None):
         """
         Construct a DataFrame from a list of Columns
         """
