@@ -219,13 +219,9 @@ class DataFrame(Frame, Serializable):
                 )
         elif hasattr(data, "__array_interface__"):
             arr_interface = data.__array_interface__
-            if (
-                len(arr_interface["shape"]) == 1
-                and len(arr_interface["descr"]) == 1
-            ):
-                new_df = self._from_columns(
-                    [data], index=index, columns=columns
-                )
+            if len(arr_interface["descr"]) == 1:
+                # not record arrays
+                new_df = self._from_arrays(data, index=index, columns=columns)
             else:
                 new_df = self.from_records(data, index=index, columns=columns)
             self._data = new_df._data
@@ -233,10 +229,8 @@ class DataFrame(Frame, Serializable):
             self.columns = new_df.columns
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
-            if len(arr_interface["shape"]) == 1:
-                new_df = self._from_columns(
-                    [data], index=index, columns=columns
-                )
+            if len(arr_interface["descr"]) == 1:
+                new_df = self._from_arrays(data, index=index, columns=columns)
             else:
                 new_df = self.from_records(data, index=index, columns=columns)
             self._data = new_df._data
@@ -4291,8 +4285,65 @@ class DataFrame(Frame, Serializable):
                 df[k] = Series(data[k], nan_as_null=nan_as_null)
 
         if index is not None:
-            indices = data[index]
-            return df.set_index(indices.astype(np.int64))
+            if is_scalar(index):
+                indices = data[index]
+                return df.set_index(indices.astype(np.int64))
+            else:
+                df._index = as_index(index)
+        return df
+
+    @classmethod
+    def _from_arrays(self, data, index=None, columns=None, nan_as_null=False):
+        """Convert a numpy/cupy array to DataFrame.
+
+        Parameters
+        ----------
+        data : numpy/cupy array of ndim 1 or 2,
+            dimensions greater than 2 are not supported yet.
+        index : Index or array-like
+            Index to use for resulting frame. Will default to
+            RangeIndex if no indexing information part of input data and
+            no index provided.
+        columns : list of str
+            List of column names to include.
+
+        Returns
+        -------
+        DataFrame
+        """
+
+        data = cupy.asarray(data)
+        if data.ndim != 1 and data.ndim != 2:
+            raise ValueError(
+                "records dimension expected 1 or 2 but found {!r}".format(
+                    data.ndim
+                )
+            )
+
+        if data.ndim == 2:
+            num_cols = len(data[0])
+        else:
+            # Since we validate ndim to be either 1 or 2 above,
+            # this case can be assumed to be ndim == 1.
+            num_cols = 1
+
+        if columns is None:
+            names = [i for i in range(num_cols)]
+        else:
+            if len(columns) != num_cols:
+                msg = "columns length expected {!r} but found {!r}"
+                raise ValueError(msg.format(num_cols, len(columns)))
+            names = columns
+
+        df = DataFrame()
+        if data.ndim == 2:
+            for i, k in enumerate(names):
+                df[k] = Series(data[:, i], nan_as_null=nan_as_null)
+        elif data.ndim == 1:
+            df[names[0]] = Series(data, nan_as_null=nan_as_null)
+
+        if index is not None:
+            df._index = as_index(index)
         return df
 
     @classmethod
