@@ -75,10 +75,9 @@ struct interleave_columns_functor {
       // First compute the column and the row this item belongs to
       auto source_row_idx = idx % num_columns;
       auto source_col_idx = idx / num_columns;
-      size_type bytes{0};
-      if (!d_table.column(source_row_idx).is_null(source_col_idx))
-        bytes = d_table.column(source_row_idx).element<string_view>(source_col_idx).size_bytes();
-      return bytes;
+      return d_table.column(source_row_idx).is_valid(source_col_idx)
+               ? d_table.column(source_row_idx).element<string_view>(source_col_idx).size_bytes()
+               : 0;
     };
     auto offsets_transformer_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<size_type>(0), offsets_transformer);
