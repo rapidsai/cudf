@@ -8,6 +8,7 @@
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
 - PR #5308 Coerce frames to `Buffer`s in deserialization
+- PR #5309 Handle host frames in serialization
 
 ## Bug Fixes
 
