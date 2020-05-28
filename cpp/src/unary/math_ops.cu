@@ -183,9 +183,14 @@ struct DeviceFloor {
 
 struct DeviceAbs {
   template <typename T>
-  __device__ T operator()(T data)
+  std::enable_if_t<std::is_signed<T>::value, T> __device__ operator()(T data)
   {
-    return std::is_signed<T>::value ? std::abs(data) : data;
+    return std::abs(data);
+  }
+  template <typename T>
+  std::enable_if_t<!std::is_signed<T>::value, T> __device__ operator()(T data)
+  {
+    return data;
   }
 };
 

@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -171,7 +172,7 @@ struct integer_to_string_size_fn {
     // for all integer types, the max() and min() values have the same number of digits
     value = (value == std::numeric_limits<IntegerType>::min())
               ? std::numeric_limits<IntegerType>::max()
-              : abs(value);
+              : cudf::util::absolute_value(value);
     // largest 8-byte unsigned value is 18446744073709551615 (20 digits)
     size_type digits =
       (value < 10
@@ -252,8 +253,9 @@ struct integer_to_string_fn {
     int digits_idx = 0;
     while (value != 0) {
       assert(digits_idx < MAX_DIGITS);
-      digits[digits_idx++] = '0' + abs(value % base);
-      value                = value / base;
+      digits[digits_idx++] = '0' + cudf::util::absolute_value(value % base);
+      // next digit
+      value = value / base;
     }
     char* ptr = d_buffer;
     if (is_negative) *ptr++ = '-';

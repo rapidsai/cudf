@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -124,11 +125,12 @@ TYPED_TEST(cudf_math_test, ABS)
   std::vector<T> h_input_v(colSize);
   std::vector<T> h_expect_v(colSize);
 
-  T init_value = std::is_signed<T>::value ? static_cast<T>(-1 * colSize) : static_cast<T>(colSize);
-  std::iota(std::begin(h_input_v), std::end(h_input_v), init_value);
+  std::iota(std::begin(h_input_v),
+            std::end(h_input_v),
+            std::is_unsigned<T>::value ? colSize : -1 * colSize);
 
   std::transform(std::cbegin(h_input_v), std::cend(h_input_v), std::begin(h_expect_v), [](auto e) {
-    return std::abs(e);
+    return cudf::util::absolute_value(e);
   });
 
   cudf::test::fixed_width_column_wrapper<T> const input(std::cbegin(h_input_v),
