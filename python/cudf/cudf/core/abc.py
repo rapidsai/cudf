@@ -38,6 +38,10 @@ class Serializable(abc.ABC):
             cudf.core.buffer.Buffer(f) if c else memoryview(f)
             for c, f in zip(header["is-cuda"], frames)
         ]
+        assert all(
+            type(f._owner) is (rmm.DeviceBuffer if c else memoryview)
+            for c, f in zip(header["is-cuda"], frames)
+        )
         obj = typ.deserialize(header, frames)
 
         return obj
