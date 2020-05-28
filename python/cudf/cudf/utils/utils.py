@@ -89,7 +89,10 @@ def scalar_broadcast_to(scalar, size, dtype=None):
         return column.column_empty(size, dtype=dtype, masked=True)
 
     if isinstance(scalar, pd.Categorical):
-        return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
+        if dtype==None:
+            return scalar_broadcast_to(scalar.categories[0], size).astype(scalar.dtype)
+        else:
+            return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
 
     scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
     dtype = scalar.dtype
