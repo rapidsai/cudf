@@ -10,6 +10,7 @@
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
 - PR #5308 Coerce frames to `Buffer`s in deserialization
+- PR #5248 Support interleave_columns for string types
 
 ## Bug Fixes
 
@@ -56,7 +57,6 @@
 - PR #5192 Add support for `cudf.to_datetime`
 - PR #5203 Add Java bindings for is_integer and is_float
 - PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
-- PR #5248 Support interleave_columns for string types
 - PR #5293 Add Java bindings for replace_with_backrefs
 
 ## Improvements
