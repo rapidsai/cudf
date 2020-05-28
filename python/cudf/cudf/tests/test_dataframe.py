@@ -1073,14 +1073,43 @@ def test_from_records(dtypes):
     gdf = gd.DataFrame.from_records(rec_ary, columns=["a", "b", "c", "d"])
     df = pd.DataFrame.from_records(rec_ary, columns=["a", "b", "c", "d"])
     assert isinstance(gdf, gd.DataFrame)
-
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+    assert_eq(df, gdf)
 
     gdf = gd.DataFrame.from_records(rec_ary)
     df = pd.DataFrame.from_records(rec_ary)
     assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
 
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+def test_from_records_index():
+    rec_ary = np.array(
+        [("Rex", 9, 81.0), ("Fido", 3, 27.0)],
+        dtype=[("name", "U10"), ("age", "i4"), ("weight", "f4")],
+    )
+    gdf = gd.DataFrame.from_records(rec_ary, index="name")
+    df = pd.DataFrame.from_records(rec_ary, index="name")
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
+
+    gdf = gd.DataFrame.from_records(rec_ary, index="age")
+    df = pd.DataFrame.from_records(rec_ary, index="age")
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
+
+    gdf = gd.DataFrame.from_records(rec_ary, index="weight")
+    df = pd.DataFrame.from_records(rec_ary, index="weight")
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
+
+    gdf = gd.DataFrame.from_records(rec_ary, index=[10, 11])
+    df = pd.DataFrame.from_records(rec_ary, index=[10, 11])
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
+
+    gdf = gd.DataFrame.from_records(rec_ary, index=["abc", "xyz"])
+    df = pd.DataFrame.from_records(rec_ary, index=["abc", "xyz"])
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
 
 
 def test_from_gpu_matrix():

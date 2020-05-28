@@ -4286,8 +4286,7 @@ class DataFrame(Frame, Serializable):
 
         if index is not None:
             if is_scalar(index):
-                indices = data[index]
-                return df.set_index(indices.astype(np.int64))
+                df = df.set_index(index)
             else:
                 df._index = as_index(index)
         return df
