@@ -613,3 +613,51 @@ def test_categorical_dtype(categories, ordered):
 def test_astype_dtype(data, expected):
     got = data.astype("category").cat.codes.dtype
     np.testing.assert_equal(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4],
+        ["a", "1", "2", "1", "a"],
+        pd.Series(["a", "1", "22", "1", "aa"]),
+        pd.Series(["a", "1", "22", "1", "aa"], dtype="category"),
+        pd.Series([1, 2, 3, 4], dtype="int64"),
+        pd.Series([1, 2.3, 3, 4], dtype="float"),
+        [None, 1, None, 2, None],
+        ["a"],
+    ],
+)
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pd.CategoricalDtype(categories=["aa", "bb", "cc"]),
+        pd.CategoricalDtype(categories=[2, 4, 10, 100]),
+        pd.CategoricalDtype(categories=["aa", "bb", "c"]),
+        pd.CategoricalDtype(categories=["a", "bb", "c"]),
+        pd.CategoricalDtype(categories=["a", "b", "c"]),
+        pd.CategoricalDtype(categories=["22", "b", "c"]),
+        pd.CategoricalDtype(categories=["a"]),
+    ],
+)
+def test_categorical_insertion(data, dtype):
+    ### insert categorical series
+    pd_df = pd.DataFrame()
+    pd_df['a'] = np.ones(len(data))
+    cd_df = gd.from_pandas(pd_df)
+
+    pd_df.assign(cat_col = pd.Series(data, dtype=dtype))
+    cd_df.assign(cat_col = pd.Series(data, dtype=dtype))
+    assert_eq(pd_df, cd_df)
+
+    ## insert categorical array
+    ## needed for dask_cudf support of including file name 
+    ## as a categorical column
+    ## seee issue: https://github.com/rapidsai/cudf/issues/2269
+    pd_df = pd.DataFrame()
+    pd_df['a'] = np.ones(len(data))
+    cd_df = gd.from_pandas(pd_df)
+
+    pd_df.assign(cat_col = pd.Series(data, dtype=dtype).cat.categorical)
+    cd_df.assign(cat_col = pd.Series(data, dtype=dtype).cat.categorical)
+    assert_eq(pd_df, cd_df)

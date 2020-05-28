@@ -70,7 +70,10 @@ def scalar_broadcast_to(scalar, size, dtype=None):
         return column_empty(size, dtype=dtype, masked=True)
 
     if isinstance(scalar, pd.Categorical):
-        return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
+        if dtype==None:
+            return scalar_broadcast_to(scalar.categories[0], size).astype(scalar.dtype)
+        else:
+            return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
 
     if isinstance(scalar, str) and (is_string_dtype(dtype) or dtype is None):
         dtype = "object"
