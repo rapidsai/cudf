@@ -1111,6 +1111,42 @@ def test_from_records_index():
     assert isinstance(gdf, gd.DataFrame)
     assert_eq(df, gdf)
 
+    gdf = gd.DataFrame.from_records(
+        rec_ary, columns=["first", "second", "third"], index=["abc", "xyz"]
+    )
+    df = pd.DataFrame.from_records(
+        rec_ary, columns=["first", "second", "third"], index=["abc", "xyz"]
+    )
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
+
+    gdf = gd.DataFrame.from_records(
+        rec_ary, columns=["first", "second", "third"], index="name"
+    )
+    df = pd.DataFrame.from_records(
+        rec_ary, columns=["first", "second", "third"], index="name"
+    )
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
+
+    gdf = gd.DataFrame.from_records(
+        rec_ary, columns=["first", "second", "third"], index="age"
+    )
+    df = pd.DataFrame.from_records(
+        rec_ary, columns=["first", "second", "third"], index="age"
+    )
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
+
+    gdf = gd.DataFrame.from_records(
+        rec_ary, columns=["first", "second", "third"], index=[10, 11]
+    )
+    df = pd.DataFrame.from_records(
+        rec_ary, columns=["first", "second", "third"], index=[10, 11]
+    )
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
+
 
 def test_from_gpu_matrix():
     h_ary = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
