@@ -132,9 +132,9 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
     source_ = datasource::create(filepath_, range_offset, map_range_size);
   }
 
-  if (!source_->empty()) {
+  if (!source_->is_empty()) {
     auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
-    buffer_        = source_->get_buffer(range_offset, data_size);
+    buffer_        = source_->host_read(range_offset, data_size);
   }
 
   byte_range_offset_ = range_offset;
@@ -546,19 +546,10 @@ reader::reader(std::string filepath,
 }
 
 // Forward to implementation
-reader::reader(const char *buffer,
-               size_t length,
+reader::reader(std::unique_ptr<cudf::io::datasource> source,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), "", options, mr))
-{
-}
-
-// Forward to implementation
-reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
-               reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), "", options, mr))
+  : _impl(std::make_unique<impl>(std::move(source), "", options, mr))
 {
 }
 

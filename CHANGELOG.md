@@ -34,6 +34,7 @@
 - PR #5192 Add support for `cudf.to_datetime`
 - PR #5203 Add Java bindings for is_integer and is_float
 - PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
+- PR #5239 Support for custom cuIO datasource classes
 - PR #5293 Add Java bindings for replace_with_backrefs
 
 ## Improvements
