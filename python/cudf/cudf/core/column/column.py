@@ -133,6 +133,13 @@ class ColumnBase(Column, Serializable):
             sr[~mask_bytes] = None
         return sr
 
+    def clip(self, lo, hi):
+        if is_categorical_dtype(self):
+            input_col = self.astype(self.categories.dtype)
+            return libcudf.replace.clip(input_col, lo, hi).astype(self.dtype)
+        else:
+            return libcudf.replace.clip(self, lo, hi)
+
     def equals(self, other):
         if self is other:
             return True
@@ -220,7 +227,10 @@ class ColumnBase(Column, Serializable):
                 ._column
             )
             objs = [
-                o.cat()._set_categories(cats, is_unique=True) for o in objs
+                o.cat()._set_categories(
+                    o.cat().categories, cats, is_unique=True
+                )
+                for o in objs
             ]
             # Map `objs` into a list of the codes until we port Categorical to
             # use the libcudf++ Category data type.

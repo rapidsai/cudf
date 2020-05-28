@@ -3920,6 +3920,18 @@ class StringColumn(column.ColumnBase):
         )
         return col
 
+    def can_cast_safely(self, to_dtype):
+        to_dtype = np.dtype(to_dtype)
+
+        if self.dtype == to_dtype:
+            return True
+        elif to_dtype.kind in ("i") and not cpp_is_integer(self).all():
+            return False
+        elif to_dtype.kind in ("f") and not cpp_is_float(self).all():
+            return False
+        else:
+            return True
+
     def find_and_replace(self, to_replace, replacement, all_nan):
         """
         Return col with *to_replace* replaced with *value*

@@ -73,7 +73,7 @@ class Buffer(Serializable):
             "data": (self.ptr, False),
             "shape": (self.size,),
             "strides": (1,),
-            "typestr": "|i1",
+            "typestr": "|u1",
             "version": 0,
         }
         return intf
