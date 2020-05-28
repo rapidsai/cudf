@@ -1081,69 +1081,26 @@ def test_from_records(dtypes):
     assert_eq(df, gdf)
 
 
-def test_from_records_index():
+@pytest.mark.parametrize("columns", [None, ["first", "second", "third"]])
+@pytest.mark.parametrize(
+    "index",
+    [
+        None,
+        ["first", "second"],
+        "name",
+        "age",
+        "weight",
+        [10, 11],
+        ["abc", "xyz"],
+    ],
+)
+def test_from_records_index(columns, index):
     rec_ary = np.array(
         [("Rex", 9, 81.0), ("Fido", 3, 27.0)],
         dtype=[("name", "U10"), ("age", "i4"), ("weight", "f4")],
     )
-    gdf = gd.DataFrame.from_records(rec_ary, index="name")
-    df = pd.DataFrame.from_records(rec_ary, index="name")
-    assert isinstance(gdf, gd.DataFrame)
-    assert_eq(df, gdf)
-
-    gdf = gd.DataFrame.from_records(rec_ary, index="age")
-    df = pd.DataFrame.from_records(rec_ary, index="age")
-    assert isinstance(gdf, gd.DataFrame)
-    assert_eq(df, gdf)
-
-    gdf = gd.DataFrame.from_records(rec_ary, index="weight")
-    df = pd.DataFrame.from_records(rec_ary, index="weight")
-    assert isinstance(gdf, gd.DataFrame)
-    assert_eq(df, gdf)
-
-    gdf = gd.DataFrame.from_records(rec_ary, index=[10, 11])
-    df = pd.DataFrame.from_records(rec_ary, index=[10, 11])
-    assert isinstance(gdf, gd.DataFrame)
-    assert_eq(df, gdf)
-
-    gdf = gd.DataFrame.from_records(rec_ary, index=["abc", "xyz"])
-    df = pd.DataFrame.from_records(rec_ary, index=["abc", "xyz"])
-    assert isinstance(gdf, gd.DataFrame)
-    assert_eq(df, gdf)
-
-    gdf = gd.DataFrame.from_records(
-        rec_ary, columns=["first", "second", "third"], index=["abc", "xyz"]
-    )
-    df = pd.DataFrame.from_records(
-        rec_ary, columns=["first", "second", "third"], index=["abc", "xyz"]
-    )
-    assert isinstance(gdf, gd.DataFrame)
-    assert_eq(df, gdf)
-
-    gdf = gd.DataFrame.from_records(
-        rec_ary, columns=["first", "second", "third"], index="name"
-    )
-    df = pd.DataFrame.from_records(
-        rec_ary, columns=["first", "second", "third"], index="name"
-    )
-    assert isinstance(gdf, gd.DataFrame)
-    assert_eq(df, gdf)
-
-    gdf = gd.DataFrame.from_records(
-        rec_ary, columns=["first", "second", "third"], index="age"
-    )
-    df = pd.DataFrame.from_records(
-        rec_ary, columns=["first", "second", "third"], index="age"
-    )
-    assert isinstance(gdf, gd.DataFrame)
-    assert_eq(df, gdf)
-
-    gdf = gd.DataFrame.from_records(
-        rec_ary, columns=["first", "second", "third"], index=[10, 11]
-    )
-    df = pd.DataFrame.from_records(
-        rec_ary, columns=["first", "second", "third"], index=[10, 11]
-    )
+    gdf = gd.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    df = pd.DataFrame.from_records(rec_ary, columns=columns, index=index)
     assert isinstance(gdf, gd.DataFrame)
     assert_eq(df, gdf)
 
