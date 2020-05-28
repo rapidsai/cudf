@@ -23,6 +23,7 @@ class Serializable(abc.ABC):
 
     def device_serialize(self):
         header, frames = self.serialize()
+        assert all((type(f) is cudf.core.buffer.Buffer) for f in frames)
         header["type-serialized"] = pickle.dumps(type(self))
         header["lengths"] = [f.nbytes for f in frames]
         return header, frames
@@ -32,8 +33,7 @@ class Serializable(abc.ABC):
         for f in frames:
             # some frames are empty -- meta/empty partitions/etc
             if len(f) > 0:
-                # assert hasattr(f, "__cuda_array_interface__")
-                pass
+                assert hasattr(f, "__cuda_array_interface__")
 
         typ = pickle.loads(header["type-serialized"])
         obj = typ.deserialize(header, frames)
@@ -42,12 +42,7 @@ class Serializable(abc.ABC):
 
     def host_serialize(self):
         header, frames = self.device_serialize()
-        frames = [
-            cudf.core.buffer.Buffer(f).to_host_array().view("u1").data
-            if hasattr(f, "__cuda_array_interface__")
-            else f
-            for f in frames
-        ]
+        frames = [f.to_host_array().view("u1").data for f in frames]
         return header, frames
 
     @classmethod

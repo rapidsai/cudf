@@ -10,7 +10,6 @@ from libc.stdint cimport int32_t, uint8_t
 
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
-import cudf
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar

@@ -616,7 +616,7 @@ std::unique_ptr<column> shift(column_view const& input,
  * @param[in] rhs right-hand column_view
  * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
  * each element. Null element represents false.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements
  */
@@ -640,7 +640,7 @@ std::unique_ptr<column> copy_if_else(
  * @param[in] rhs right-hand scalar
  * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
  * each element. Null element represents false.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements
  */
@@ -662,7 +662,7 @@ std::unique_ptr<column> copy_if_else(
  * @param[in] rhs right-hand scalar
  * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
  * each element. null element represents false.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements
  */
@@ -704,7 +704,7 @@ std::unique_ptr<column> copy_if_else(
  * @param[in] input table_view (set of dense columns) to scatter
  * @param[in] target table_view to modify with scattered values from `input`
  * @param[in] boolean_mask column_view which acts as boolean mask.
- * @param[in] mr Device memory resource used to allocate device memory of the returned table.
+ * @param[in] mr Optional, The resource to use for all returned allocations
  *
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
  */
@@ -741,7 +741,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @param[in] input scalars to scatter
  * @param[in] target table_view to modify with scattered values from `input`
  * @param[in] boolean_mask column_view which acts as boolean mask.
- * @param[in] mr Device memory resource used to allocate device memory of the returned table.
+ * @param[in] mr Optional, The resource to use for all returned allocations
  *
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
  */
@@ -761,7 +761,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  *
  * @param input Column view to get the element from
  * @param index Index into `input` to get the element at
- * @param mr Device memory resource used to allocate the returned scalar's device memory.
+ * @param mr Optional, The resource to use for all returned allocations
  * @return std::unique_ptr<scalar> Scalar containing the single value
  */
 std::unique_ptr<scalar> get_element(
