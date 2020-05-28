@@ -2,17 +2,23 @@
 
 ## New Features
 
+- PR #5222 Adding clip feature support to DataFrame and Series
+
 ## Improvements
 
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
 - PR #5305 Add support for `numpy`/`cupy` array in `DataFrame` construction
+- PR #5308 Coerce frames to `Buffer`s in deserialization
 
 ## Bug Fixes
 
+- PR #5283 Fix strings::ipv4_to_integers overflow to negative
 - PR #5269 Explicitly require NumPy
+- PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
 - PR #5299 Update package version for Java bindings
+
 
 
 # cuDF 0.14.0 (Date TBD)
@@ -51,6 +57,7 @@
 - PR #5192 Add support for `cudf.to_datetime`
 - PR #5203 Add Java bindings for is_integer and is_float
 - PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
+- PR #5293 Add Java bindings for replace_with_backrefs
 
 ## Improvements
 
@@ -217,6 +224,7 @@
 - PR #5213 Documentation enhancements to `cudf` python APIs
 - PR #5251 Fix more mispellings in cpp comments and strings
 - PR #5261 Add short git commit to conda package name
+- PR #5270 Add support to check for "NaT" and "None" strings while typecasting to `datetime64`
 
 ## Bug Fixes
 
