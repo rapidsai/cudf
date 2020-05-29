@@ -19,7 +19,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/table/table.hpp>
 
-#include "generate_input.hpp"
+#include "../generate_input.hpp"
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
@@ -41,8 +41,6 @@ class ParquetWrite : public cudf::benchmark {
 class ParquetWriteChunked : public cudf::benchmark {
 };
 
-cudf::test::temp_directory tmpdir("gbenchmarks");
-
 void PQ_write(benchmark::State& state)
 {
   int64_t total_desired_bytes = state.range(0);
@@ -51,7 +49,6 @@ void PQ_write(benchmark::State& state)
   cudf::size_type el_size = 4;
   int64_t num_rows        = total_desired_bytes / (num_cols * el_size);
 
-  srand(31337);
   auto tbl              = create_random_table<int>(num_cols, num_rows, true);
   cudf::table_view view = tbl->view();
 
