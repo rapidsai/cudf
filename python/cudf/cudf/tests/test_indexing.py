@@ -282,6 +282,9 @@ def test_dataframe_loc(scalar, step):
         pdf2.loc[begin:end, ["c", "d", "a"]],
     )
 
+    # loc with list like indexing
+    assert_eq(df.loc[[0]], pdf.loc[[0]])
+
 
 def test_dataframe_loc_duplicate_index_scalar():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 2, 1, 4, 2])
