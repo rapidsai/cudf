@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 project(NVSTRINGS_TESTS LANGUAGES C CXX CUDA)
 
@@ -26,7 +26,9 @@ endfunction(ConfigureTest)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+include_directories("${CUB_INCLUDE_DIR}"
+                    "${THRUST_INCLUDE_DIR}"
+                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${GTEST_INCLUDE_DIR}"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${RMM_INCLUDE}")

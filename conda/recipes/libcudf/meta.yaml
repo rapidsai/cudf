@@ -25,7 +25,7 @@ build:
 
 requirements:
   build:
-    - cmake >=3.12.4
+    - cmake >=3.14.0
   host:
     - librmm {{ minor_version }}.*
     - libnvstrings {{ minor_version }}.*

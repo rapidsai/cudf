@@ -23,7 +23,7 @@ build:
     
 requirements:
   build:
-    - cmake >=3.12
+    - cmake >=3.14
   host:
     - python
     - setuptools

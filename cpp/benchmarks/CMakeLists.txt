@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 project(CUDF_BENCHS LANGUAGES C CXX CUDA)
 
@@ -22,12 +22,13 @@ endfunction(ConfigureBench)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+include_directories("${CUB_INCLUDE_DIR}"
+                    "${THRUST_INCLUDE_DIR}"
+                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
