@@ -27,7 +27,7 @@ namespace detail {
  * @copydoc cudf::repeat(table_view const&, column_view const&, bool,
  * rmm::mr::device_memory_resource*)
  *
- * @param stream CUDA stream to run this function
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
@@ -39,7 +39,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
  * @copydoc cudf::repeat(table_view const&, scalar const&,
  * rmm::mr::device_memory_resource*)
  *
- * @param stream CUDA stream to run this function
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> repeat(table_view const& input_table,
                               scalar const& count,

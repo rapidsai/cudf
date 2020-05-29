@@ -30,8 +30,8 @@ namespace simple {
  * which directly compute the reduction by a single step reduction call
  *
  * @param[in] col    input column view
- * @param[in] mr The resource to use for all allocations
- * @param[in] stream cuda stream
+ * @param[in] mr Device memory resource used to allocate the returned scalar's device memory
+ * @param[in] CUDA stream used for device memory operations and kernel launches.
  * @returns   Output scalar in device memory
  *
  * @tparam ElementType  the input column cudf dtype

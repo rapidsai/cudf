@@ -212,8 +212,8 @@ struct column_scatterer {
  * are to be scattered
  * @param[in] check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param[in] mr The resource to use for all allocations
- * @param[in] stream The stream to use for CUDA operations
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return Result of scattering values from source to target
  **/

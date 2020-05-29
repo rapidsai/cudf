@@ -31,11 +31,10 @@ namespace detail {
  * @param begin Begining of the sequence of elements
  * @param end End of the sequence of elements
  * @param p Predicate to be applied to each element in `[begin,end)`
- * @param mr Optional, The resource to use for all allocations
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
- * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing
- * predicate is satisfied.
+ * @returns A column of type `BOOL8,` with `true` representing predicate is satisfied.
  */
 
 template <typename InputIterator, typename Predicate>
@@ -59,7 +58,7 @@ std::unique_ptr<column> true_if(
 /**
  * @copydoc cudf::unary_operation
  *
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
@@ -70,7 +69,7 @@ std::unique_ptr<cudf::column> unary_operation(
 /**
  * @copydoc cudf::cast
  *
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
@@ -80,7 +79,7 @@ std::unique_ptr<column> cast(column_view const& input,
 /**
  * @copydoc cudf::is_nan
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> is_nan(
   cudf::column_view const& input,
@@ -90,7 +89,7 @@ std::unique_ptr<column> is_nan(
 /**
  * @copydoc cudf::is_not_nan
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> is_not_nan(
   cudf::column_view const& input,
