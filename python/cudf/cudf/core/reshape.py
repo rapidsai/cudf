@@ -34,7 +34,6 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     if not objs:
         raise ValueError("Need at least one object to concatenate")
 
-    # convert any RangeIndex
     objs = [obj for obj in objs if obj is not None]
 
     # Return for single object
