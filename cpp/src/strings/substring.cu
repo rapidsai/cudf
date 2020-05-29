@@ -305,53 +305,51 @@ struct compute_substring_indices {
       strings_count,
       [delim_itr, delimiter_count, start_char_pos, end_char_pos, d_column] __device__(
         size_type idx) {
+        auto const& delim_val_pair = delim_itr[idx];
+        auto const& delim_val      = delim_val_pair.first;  // Don't use it yet
+
         // If the column value for this row is null, result is null.
         // If the delimiter count is 0, result is empty string.
-        if (d_column.is_null(idx) || !delimiter_count) { return; }
-
-        auto const& delim_val_pair = delim_itr[idx];
-        auto const& col_val        = d_column.element<string_view>(idx);
-
         // If the global delimiter or the row specific delimiter is invalid or if it is empty, row
         // value is empty.
-        // If the column value for the row is empty, the row value is empty.
-        if (!delim_val_pair.second || delim_val_pair.first.empty() || col_val.empty()) { return; }
+        if (!d_column.is_null(idx) && delimiter_count && delim_val_pair.second &&
+            !delim_val.empty()) {
+          auto const& col_val = d_column.element<string_view>(idx);
 
-        auto const& delim_val = delim_val_pair.first;
+          // If the column value for the row is empty, the row value is empty.
+          if (!col_val.empty()) {
+            auto const col_val_len   = col_val.length();
+            auto const delimiter_len = delim_val.length();
 
-        auto const col_val_len   = col_val.length();
-        auto const delimiter_len = delim_val.length();
+            auto nsearches      = (delimiter_count < 0) ? -delimiter_count : delimiter_count;
+            size_type start_pos = 0;
+            size_type end_pos   = col_val_len;
+            bool keep_searching = true;
 
-        auto nsearches      = (delimiter_count < 0) ? -delimiter_count : delimiter_count;
-        size_type start_pos = 0;
-        size_type end_pos   = col_val_len;
-
-        for (auto i = 0; i < nsearches; ++i) {
-          if (delimiter_count < 0) {
-            end_pos = col_val.rfind(delim_val, 0, end_pos);
-            if (end_pos == -1) {
-              start_char_pos[idx] = 0;
-              end_char_pos[idx]   = col_val_len;
-              return;
+            for (auto i = 0; keep_searching && i < nsearches; ++i) {
+              if (delimiter_count < 0) {
+                end_pos = col_val.rfind(delim_val, 0, end_pos);
+                if (end_pos == -1) {
+                  start_char_pos[idx] = 0;
+                  end_char_pos[idx]   = col_val_len;
+                  keep_searching      = false;
+                } else if (i + 1 == nsearches) {
+                  start_char_pos[idx] = end_pos + delimiter_len;
+                  end_char_pos[idx]   = col_val_len;
+                }
+              } else {
+                auto char_pos = col_val.find(delim_val, start_pos);
+                if (char_pos == -1) {
+                  start_char_pos[idx] = 0;
+                  end_char_pos[idx]   = col_val_len;
+                  keep_searching      = false;
+                } else if (i + 1 == nsearches) {
+                  start_char_pos[idx] = 0;
+                  end_char_pos[idx]   = char_pos;
+                } else
+                  start_pos = char_pos + delimiter_len;
+              }
             }
-            if (i + 1 == nsearches) {
-              start_char_pos[idx] = end_pos + delimiter_len;
-              end_char_pos[idx]   = col_val_len;
-              return;
-            }
-          } else {
-            auto char_pos = col_val.find(delim_val, start_pos);
-            if (char_pos == -1) {
-              start_char_pos[idx] = 0;
-              end_char_pos[idx]   = col_val_len;
-              return;
-            }
-            if (i + 1 == nsearches) {
-              start_char_pos[idx] = 0;
-              end_char_pos[idx]   = char_pos;
-              return;
-            } else
-              start_pos = char_pos + delimiter_len;
           }
         }
       });
