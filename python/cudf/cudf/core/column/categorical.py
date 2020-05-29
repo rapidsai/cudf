@@ -527,11 +527,13 @@ class CategoricalAccessor(object):
                         categories=new_categories, ordered=ordered
                     ),
                 )
-            elif not self._categories_equal(new_categories, **kwargs):
+            elif (
+                not self._categories_equal(new_categories, **kwargs)
+                or self.ordered != ordered
+            ):
                 out_col = self._set_categories(
                     self._column.categories, new_categories, **kwargs
                 )
-
         return self._return_or_inplace(out_col, **kwargs)
 
     def reorder_categories(self, new_categories, **kwargs):
@@ -624,7 +626,7 @@ class CategoricalAccessor(object):
         if not kwargs.get("ordered", self.ordered):
             cur_categories = cudf.Series(cur_categories).sort_values()
             new_categories = cudf.Series(new_categories).sort_values()
-        return cur_categories._column.equals(new_categories._column)
+        return cur_categories.equals(new_categories)
 
     def _set_categories(self, current_categories, new_categories, **kwargs):
         """Returns a new CategoricalColumn with the categories set to the
