@@ -257,6 +257,23 @@ class RollingTest : public cudf::test::BaseFixture {
     return col.release();
   }
 
+  template <typename OutputType,
+            typename agg_op,
+            bool is_mean_of_timestamp,
+            std::enable_if_t<!is_mean_of_timestamp>* = nullptr>
+  auto run_op(OutputType& val, OutputType const& in)
+  {
+    val = agg_op{}(in, val);
+  }
+  template <typename OutputType,
+            typename agg_op,
+            bool is_mean_of_timestamp,
+            std::enable_if_t<is_mean_of_timestamp>* = nullptr>
+  auto run_op(OutputType& val, OutputType const& in)
+  {
+    val = static_cast<OutputType>(agg_op{}(in.time_since_epoch(), val.time_since_epoch()));
+  }
+
   template <typename agg_op,
             cudf::aggregation::Kind k,
             typename OutputType,
@@ -297,7 +314,8 @@ class RollingTest : public cudf::test::BaseFixture {
       size_type count = 0;
       for (size_type j = start_index; j < end_index; j++) {
         if (!input.nullable() || cudf::bit_is_set(valid_mask, j)) {
-          val = op(static_cast<OutputType>(in_col[j]), val);
+          run_op<OutputType, agg_op, (is_mean and cudf::is_timestamp<OutputType>())>(
+            val, static_cast<OutputType>(in_col[j]));
           count++;
         }
       }
