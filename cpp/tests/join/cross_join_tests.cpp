@@ -33,61 +33,56 @@ struct JoinTest : public cudf::test::BaseFixture {
 
 TEST_F(JoinTest, CrossJoin)
 {
-  std::vector<const char*> a_strings{"quick", "accénted", "turtlé", "composéd"};
-  std::vector<const char*> b_strings{"result", "", "words"};
-  std::vector<const char*> e_strings3{"quick",
-                                      "quick",
-                                      "quick",
-                                      "accénted",
-                                      "accénted",
-                                      "accénted",
-                                      "turtlé",
-                                      "turtlé",
-                                      "turtlé",
-                                      "composéd",
-                                      "composéd",
-                                      "composéd"};
-  std::vector<const char*> e_strings7{
+  auto a_strings  = std::vector<const char*>{"quick", "accénted", "turtlé", "composéd"};
+  auto b_strings  = std::vector<const char*>{"result", "", "words"};
+  auto e_strings3 = std::vector<const char*>{"quick",
+                                             "quick",
+                                             "quick",
+                                             "accénted",
+                                             "accénted",
+                                             "accénted",
+                                             "turtlé",
+                                             "turtlé",
+                                             "turtlé",
+                                             "composéd",
+                                             "composéd",
+                                             "composéd"};
+  auto e_strings7 = std::vector<const char*>{
     "result", "", "words", "result", "", "words", "result", "", "words", "result", "", "words"};
 
-  column_wrapper<int32_t> a_0{10, 20, 20, 50};
-  column_wrapper<float> a_1{5.0, .5, .5, .7};
-  column_wrapper<int8_t> a_2{90, 77, 78, 41};
-
-  cudf::test::strings_column_wrapper a_3(
+  auto a_0 = column_wrapper<int32_t>{10, 20, 20, 50};
+  auto a_1 = column_wrapper<float>{5.0, .5, .5, .7};
+  auto a_2 = column_wrapper<int8_t>{90, 77, 78, 41};
+  auto a_3 = cudf::test::strings_column_wrapper(
     a_strings.begin(),
     a_strings.end(),
     thrust::make_transform_iterator(a_strings.begin(), [](auto str) { return str != nullptr; }));
 
-  column_wrapper<int32_t> b_0{10, 20, 20};
-  column_wrapper<float> b_1{5.0, .7, .7};
-  column_wrapper<int8_t> b_2{90, 75, 62};
-
-  cudf::test::strings_column_wrapper b_3(
+  auto b_0 = column_wrapper<int32_t>{10, 20, 20};
+  auto b_1 = column_wrapper<float>{5.0, .7, .7};
+  auto b_2 = column_wrapper<int8_t>{90, 75, 62};
+  auto b_3 = cudf::test::strings_column_wrapper(
     b_strings.begin(),
     b_strings.end(),
     thrust::make_transform_iterator(b_strings.begin(), [](auto str) { return str != nullptr; }));
 
-  column_wrapper<int32_t> expect_0{10, 10, 10, 20, 20, 20, 20, 20, 20, 50, 50, 50};
-  column_wrapper<float> expect_1{5.0, 5.0, 5.0, .5, .5, .5, .5, .5, .5, .7, .7, .7};
-  column_wrapper<int8_t> expect_2{90, 90, 90, 77, 77, 77, 78, 78, 78, 41, 41, 41};
-
-  cudf::test::strings_column_wrapper expect_3(
+  auto expect_0 = column_wrapper<int32_t>{10, 10, 10, 20, 20, 20, 20, 20, 20, 50, 50, 50};
+  auto expect_1 = column_wrapper<float>{5.0, 5.0, 5.0, .5, .5, .5, .5, .5, .5, .7, .7, .7};
+  auto expect_2 = column_wrapper<int8_t>{90, 90, 90, 77, 77, 77, 78, 78, 78, 41, 41, 41};
+  auto expect_3 = cudf::test::strings_column_wrapper(
     e_strings3.begin(),
     e_strings3.end(),
     thrust::make_transform_iterator(e_strings3.begin(), [](auto str) { return str != nullptr; }));
-
-  column_wrapper<int32_t> expect_4{10, 20, 20, 10, 20, 20, 10, 20, 20, 10, 20, 20};
-  column_wrapper<float> expect_5{5.0, .7, .7, 5.0, .7, .7, 5.0, .7, .7, 5.0, .7, .7};
-  column_wrapper<int8_t> expect_6{90, 75, 62, 90, 75, 62, 90, 75, 62, 90, 75, 62};
-
-  cudf::test::strings_column_wrapper expect_7(
+  auto expect_4 = column_wrapper<int32_t>{10, 20, 20, 10, 20, 20, 10, 20, 20, 10, 20, 20};
+  auto expect_5 = column_wrapper<float>{5.0, .7, .7, 5.0, .7, .7, 5.0, .7, .7, 5.0, .7, .7};
+  auto expect_6 = column_wrapper<int8_t>{90, 75, 62, 90, 75, 62, 90, 75, 62, 90, 75, 62};
+  auto expect_7 = cudf::test::strings_column_wrapper(
     e_strings7.begin(),
     e_strings7.end(),
     thrust::make_transform_iterator(e_strings7.begin(), [](auto str) { return str != nullptr; }));
 
-  cudf::table_view table_a{{a_0, a_1, a_2, a_3}};
-  cudf::table_view table_b{{b_0, b_1, b_2, b_3}};
+  auto table_a = cudf::table_view{{a_0, a_1, a_2, a_3}};
+  auto table_b = cudf::table_view{{b_0, b_1, b_2, b_3}};
 
   auto join_table = cudf::cross_join(table_a, table_b);
 
@@ -105,20 +100,19 @@ TEST_F(JoinTest, CrossJoin)
 
 TEST_F(JoinTest, CrossJoin_exceptions)
 {
-  std::vector<const char*> b_strings{"quick", "words", "result", nullptr};
+  auto b_strings = std::vector<const char*>{"quick", "words", "result", nullptr};
 
-  column_wrapper<int32_t> b_0{10, 20, 20, 50};
-  column_wrapper<float> b_1{5.0, .7, .7, .7};
-  column_wrapper<int8_t> b_2{90, 75, 62, 41};
-
-  cudf::test::strings_column_wrapper b_3(
+  auto b_0 = column_wrapper<int32_t>{10, 20, 20, 50};
+  auto b_1 = column_wrapper<float>{5.0, .7, .7, .7};
+  auto b_2 = column_wrapper<int8_t>{90, 75, 62, 41};
+  auto b_3 = cudf::test::strings_column_wrapper(
     b_strings.begin(),
     b_strings.end(),
     thrust::make_transform_iterator(b_strings.begin(), [](auto str) { return str != nullptr; }));
 
-  std::vector<std::unique_ptr<cudf::column>> column_a;
-  cudf::table table_a(std::move(column_a));
-  cudf::table_view table_b{{b_0, b_1, b_2, b_3}};
+  auto column_a = std::vector<std::unique_ptr<cudf::column>>{};
+  auto table_a  = cudf::table(std::move(column_a));
+  auto table_b  = cudf::table_view{{b_0, b_1, b_2, b_3}};
 
   //
   //  table_a has no columns, table_b has columns
@@ -131,39 +125,36 @@ TEST_F(JoinTest, CrossJoin_exceptions)
 
 TEST_F(JoinTest, CrossJoin_empty_result)
 {
-  std::vector<const char*> a_strings{};
-  std::vector<const char*> b_strings{"quick", "words", "result", nullptr};
-  std::vector<const char*> e_strings{};
+  auto a_strings = std::vector<const char*>{};
+  auto b_strings = std::vector<const char*>{"quick", "words", "result", nullptr};
+  auto e_strings = std::vector<const char*>{};
 
-  column_wrapper<int32_t> a_0{};
-  column_wrapper<float> a_1{};
-  column_wrapper<int8_t> a_2{};
-
-  cudf::test::strings_column_wrapper a_3(
+  auto a_0 = column_wrapper<int32_t>{};
+  auto a_1 = column_wrapper<float>{};
+  auto a_2 = column_wrapper<int8_t>{};
+  auto a_3 = cudf::test::strings_column_wrapper(
     a_strings.begin(),
     a_strings.end(),
     thrust::make_transform_iterator(a_strings.begin(), [](auto str) { return str != nullptr; }));
 
-  column_wrapper<int32_t> b_0{10, 20, 20, 50};
-  column_wrapper<float> b_1{5.0, .7, .7, .7};
-  column_wrapper<int8_t> b_2{90, 75, 62, 41};
-
-  cudf::test::strings_column_wrapper b_3(
+  auto b_0 = column_wrapper<int32_t>{10, 20, 20, 50};
+  auto b_1 = column_wrapper<float>{5.0, .7, .7, .7};
+  auto b_2 = column_wrapper<int8_t>{90, 75, 62, 41};
+  auto b_3 = cudf::test::strings_column_wrapper(
     b_strings.begin(),
     b_strings.end(),
     thrust::make_transform_iterator(b_strings.begin(), [](auto str) { return str != nullptr; }));
 
-  column_wrapper<int32_t> expect_0{};
-  column_wrapper<float> expect_1{};
-  column_wrapper<int8_t> expect_2{};
-
-  cudf::test::strings_column_wrapper expect_3(
+  auto expect_0 = column_wrapper<int32_t>{};
+  auto expect_1 = column_wrapper<float>{};
+  auto expect_2 = column_wrapper<int8_t>{};
+  auto expect_3 = cudf::test::strings_column_wrapper(
     e_strings.begin(),
     e_strings.end(),
     thrust::make_transform_iterator(e_strings.begin(), [](auto str) { return str != nullptr; }));
 
-  cudf::table_view table_a{{a_0, a_1, a_2, a_3}};
-  cudf::table_view table_b{{b_0, b_1, b_2, b_3}};
+  auto table_a = cudf::table_view{{a_0, a_1, a_2, a_3}};
+  auto table_b = cudf::table_view{{b_0, b_1, b_2, b_3}};
 
   auto join_table = cudf::cross_join(table_a, table_b);
 

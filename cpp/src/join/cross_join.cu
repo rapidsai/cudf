@@ -57,8 +57,8 @@ std::unique_ptr<cudf::table> cross_join(
 
   // If left or right table has no rows, return an empty table with all columns
   if ((0 == left.num_rows()) || (0 == right.num_rows())) {
-    auto empty_left_columns{empty_like(left)->release()};
-    auto empty_right_columns{empty_like(right)->release()};
+    auto empty_left_columns  = empty_like(left)->release();
+    auto empty_right_columns = empty_like(right)->release();
     std::move(empty_right_columns.begin(),
               empty_right_columns.end(),
               std::back_inserter(empty_left_columns));
@@ -66,15 +66,15 @@ std::unique_ptr<cudf::table> cross_join(
   }
 
   // Repeat left table
-  numeric_scalar<size_type> num_repeats{right.num_rows()};
-  auto left_repeated{detail::repeat(left, num_repeats, mr, stream)};
+  numeric_scalar<size_type> num_repeats = right.num_rows();
+  auto left_repeated                    = detail::repeat(left, num_repeats, mr, stream);
 
   // Tile right table
-  auto right_tiled{detail::tile(right, left.num_rows(), mr, stream)};
+  auto right_tiled = detail::tile(right, left.num_rows(), mr, stream);
 
   // Concatenate all repeated/tiled columns into one table
-  auto left_repeated_columns{left_repeated->release()};
-  auto right_tiled_columns{right_tiled->release()};
+  auto left_repeated_columns = left_repeated->release();
+  auto right_tiled_columns   = right_tiled->release();
   std::move(right_tiled_columns.begin(),
             right_tiled_columns.end(),
             std::back_inserter(left_repeated_columns));
