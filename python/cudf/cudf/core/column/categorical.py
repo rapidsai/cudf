@@ -527,10 +527,7 @@ class CategoricalAccessor(object):
                         categories=new_categories, ordered=ordered
                     ),
                 )
-            elif (
-                not self._categories_equal(new_categories, **kwargs)
-                or self.ordered != ordered
-            ):
+            elif not self._categories_equal(new_categories, **kwargs):
                 out_col = self._set_categories(
                     self._column.categories, new_categories, **kwargs
                 )
@@ -619,6 +616,8 @@ class CategoricalAccessor(object):
         return self._return_or_inplace(out_col, **kwargs)
 
     def _categories_equal(self, new_categories, **kwargs):
+        if self.ordered is not kwargs['ordered']:
+            return False
         cur_categories = self._column.categories
         if len(new_categories) != len(cur_categories):
             return False

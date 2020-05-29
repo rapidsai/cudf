@@ -3369,6 +3369,21 @@ def test_series_astype_to_categorical_ordered(ordered):
         gsr.astype("int32").astype(ordered_dtype_gd).astype('int32'),
     )
 
+@pytest.mark.parametrize("ordered", [True, False])
+def test_series_astype_cat_ordered_to_unordered(ordered):
+    pd_dtype = pd.CategoricalDtype(categories=[1,2,3], ordered=ordered)
+    pd_to_dtype = pd.CategoricalDtype(categories=[1,2,3], ordered=not ordered)
+    gd_dtype = gd.CategoricalDtype.from_pandas(pd_dtype)
+    gd_to_dtype = gd.CategoricalDtype.from_pandas(pd_to_dtype)
+
+    psr = pd.Series([1,2,3], dtype=pd_dtype)
+    gsr = gd.Series([1,2,3], dtype=gd_dtype)
+
+    expect = psr.astype(pd_to_dtype)
+    got = gsr.astype(gd_to_dtype)
+
+    assert_eq(expect, got)
+
 
 def test_series_astype_null_cases():
     data = [1, 2, None, 3]
