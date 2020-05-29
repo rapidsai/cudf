@@ -18,6 +18,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/repeat.hpp>
+#include <cudf/detail/reshape.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/join.hpp>
 #include <cudf/reshape.hpp>
@@ -69,7 +70,7 @@ std::unique_ptr<cudf::table> cross_join(
   auto left_repeated{detail::repeat(left, num_repeats, mr, stream)};
 
   // Tile right table
-  auto right_tiled{cudf::tile(right, left.num_rows(), mr)};
+  auto right_tiled{detail::tile(right, left.num_rows(), mr, stream)};
 
   // Concatenate all repeated/tiled columns into one table
   auto left_repeated_columns{left_repeated->release()};
