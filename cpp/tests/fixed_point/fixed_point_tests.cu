@@ -217,15 +217,22 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXRounding)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  decimalXX ZERO_FROM_FOUR_0{4, scale_type{0}};
-  decimalXX ZERO_FROM_FOUR_1{4, scale_type{1}};
-  decimalXX TEN_FROM_FIVE_0{5, scale_type{0}};
-  decimalXX TEN_FROM_FIVE_1{5, scale_type{1}};
+  decimalXX ZERO_0{0, scale_type{0}};
+  decimalXX ZERO_1{4, scale_type{1}};
+  decimalXX FOUR_0{4, scale_type{0}};
+  decimalXX FIVE_0{5, scale_type{0}};
+  decimalXX TEN_0{10, scale_type{0}};
+  decimalXX TEN_1{5, scale_type{1}};
 
-  EXPECT_EQ(ZERO_FROM_FOUR_1 + TEN_FROM_FIVE_1, TEN_FROM_FIVE_1);
-  EXPECT_EQ(ZERO_FROM_FOUR_0 + TEN_FROM_FIVE_1, TEN_FROM_FIVE_1);
-  EXPECT_TRUE(ZERO_FROM_FOUR_1 == ZERO_FROM_FOUR_1);
-  EXPECT_TRUE(TEN_FROM_FIVE_0 == TEN_FROM_FIVE_1);
+  decimalXX FOURTEEN_0{14, scale_type{0}};
+
+  EXPECT_EQ(ZERO_0, ZERO_1);
+  EXPECT_EQ(TEN_0, TEN_1);
+
+  EXPECT_EQ(ZERO_1 + TEN_1, TEN_1);
+  EXPECT_EQ(FOUR_0 + TEN_1, TEN_1);  // TODO change
+  EXPECT_TRUE(ZERO_1 == ZERO_1);
+  EXPECT_TRUE(FIVE_0 == TEN_1);  // TODO change
 }
 
 TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust)
