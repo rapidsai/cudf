@@ -45,7 +45,7 @@ namespace strings {
  * @param start First character position to include in the search.
  * @param stop Last position (exclusive) to include in the search.
  *             Default of -1 will search to the end of the string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New integer column with character position values.
  */
 std::unique_ptr<column> find(strings_column_view const& strings,
@@ -73,7 +73,7 @@ std::unique_ptr<column> find(strings_column_view const& strings,
  * @param start First position to include in the search.
  * @param stop Last position (exclusive) to include in the search.
  *             Default of -1 will search starting at the end of the string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New integer column with character position values.
  */
 std::unique_ptr<column> rfind(
@@ -93,7 +93,7 @@ std::unique_ptr<column> rfind(
  *
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New BOOL8 column.
  */
 std::unique_ptr<column> contains(
@@ -113,7 +113,7 @@ std::unique_ptr<column> contains(
  *
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New BOOL8 column.
  */
 std::unique_ptr<column> starts_with(
@@ -133,7 +133,7 @@ std::unique_ptr<column> starts_with(
  *
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New BOOL8 column.
  */
 std::unique_ptr<column> ends_with(
