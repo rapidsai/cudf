@@ -3365,8 +3365,8 @@ def test_series_astype_to_categorical_ordered(ordered):
     )
     ordered_dtype_gd = gd.CategoricalDtype.from_pandas(ordered_dtype_pd)
     assert_eq(
-        psr.astype("int32").astype(ordered_dtype_pd),
-        gsr.astype("int32").astype(ordered_dtype_gd),
+        psr.astype("int32").astype(ordered_dtype_pd).astype('int32'),
+        gsr.astype("int32").astype(ordered_dtype_gd).astype('int32'),
     )
 
 
@@ -4272,9 +4272,14 @@ def test_df_astype_to_categorical_ordered(ordered):
     pdf["bar"] = psr
     gdf = DataFrame.from_pandas(pdf)
 
+    ordered_dtype_pd = pd.CategoricalDtype(
+        categories=[1, 2, 3], ordered=ordered
+    )
+    ordered_dtype_gd = gd.CategoricalDtype.from_pandas(ordered_dtype_pd)
+
     assert_eq(
-        gdf.astype("int32"),
-        gdf.astype("int32"),
+        pdf.astype(ordered_dtype_pd).astype('int32'),
+        gdf.astype(ordered_dtype_gd).astype('int32'),
     )
 
 
