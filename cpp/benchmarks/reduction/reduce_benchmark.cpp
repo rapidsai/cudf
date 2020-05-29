@@ -30,8 +30,7 @@ class Reduction : public cudf::benchmark {
 };
 
 template <typename type>
-void BM_reduction(benchmark::State& state,
-                  std::unique_ptr<cudf::aggregation> const& agg)
+void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::aggregation> const& agg)
 {
   using wrapper = cudf::test::fixed_width_column_wrapper<type>;
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
@@ -41,12 +40,12 @@ void BM_reduction(benchmark::State& state,
     0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
   wrapper values(data_it, data_it + column_size);
 
-  auto input_column            = cudf::column_view(values);
-  cudf::data_type output_dtype = (agg->kind == cudf::aggregation::MEAN ||
-                                  agg->kind == cudf::aggregation::VARIANCE ||
-                                  agg->kind == cudf::aggregation::STD)
-                                   ? cudf::data_type{cudf::FLOAT64}
-                                   : input_column.type();
+  auto input_column = cudf::column_view(values);
+  cudf::data_type output_dtype =
+    (agg->kind == cudf::aggregation::MEAN || agg->kind == cudf::aggregation::VARIANCE ||
+     agg->kind == cudf::aggregation::STD)
+      ? cudf::data_type{cudf::FLOAT64}
+      : input_column.type();
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
