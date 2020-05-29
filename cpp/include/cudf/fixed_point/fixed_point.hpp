@@ -215,10 +215,8 @@ CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_ty
   -> Rep
 {
   if (scale == 0) return value;
-  int64_t const base   = static_cast<int64_t>(Rad);
-  int64_t const factor = ipow<int64_t, Rad>(std::abs(scale));
-  int64_t const temp   = scale <= 0 ? value * (factor * base) : value / (factor / base);
-  return std::roundf(static_cast<double>(temp) / base);
+  T const factor = ipow<int64_t, Rad>(std::abs(scale));
+  return std::roundf(scale <= 0 ? value * factor : value / factor);
 }
 
 }  // namespace detail
