@@ -327,5 +327,36 @@ std::unique_ptr<cudf::table> left_anti_join(
   std::vector<cudf::size_type> const& return_columns,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief  Performs a cross join on the specified columns of two
+ * tables (left, right)
+ *
+ * The cross join returns the cartesian product of rows from each table.
+ *
+ * The approach is to repeat the left table by the number of rows in the right table
+ * and tile the right table by the number of rows in the left table.
+ *
+ * @throws cudf::logic_error if number of columns in either `left` or `right` table is 0
+ * @throws cudf::logic_error if number of returned columns is 0
+ *
+ * @param[in] left                  The left table
+ * @param[in] right                 The right table
+ * @param[in] return_left_columns   A vector of column indices from `left` to include in the
+ *                                  returned table.
+ * @param[in] return_right_columns  A vector of column indices from `right` to include in the
+ *                                  returned table.
+ * @param[in] mr                    Device memory resource to use for device memory allocation
+ *
+ * @returns                         Result of cross joining `left` and `right` tables, keeping
+ *                                  columns specified by `return_left_columns` and
+ *                                  `return_right_columns`.
+ */
+std::unique_ptr<cudf::table> cross_join(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& return_left_columns,
+  std::vector<cudf::size_type> const& return_right_columns,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** @} */  // end of group
 }  // namespace cudf
