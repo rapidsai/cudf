@@ -5,9 +5,11 @@ include(FetchContent)
 
 FetchContent_Declare(
     cub
-    GIT_REPOSITORY https://github.com/thrust/cub
+    GIT_REPOSITORY https://github.com/thrust/cub.git
     GIT_TAG        1.9.10
     GIT_SHALLOW    true
+    PATCH_COMMAND
+        COMMAND    sed -i "508,509 s/$<SEMICOLON>/ = 0$<SEMICOLON>/" cub/device/dispatch/dispatch_histogram.cuh
 )
 
 FetchContent_GetProperties(cub)
@@ -22,7 +24,7 @@ set(CUB_INCLUDE_DIR "${cub_SOURCE_DIR}" PARENT_SCOPE)
 
 FetchContent_Declare(
     thrust
-    GIT_REPOSITORY https://github.com/thrust/thrust
+    GIT_REPOSITORY https://github.com/thrust/thrust.git
     GIT_TAG        1.9.10
     GIT_SHALLOW    true
 )
