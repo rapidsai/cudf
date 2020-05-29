@@ -56,7 +56,7 @@ namespace strings {
  * @param repl Replacement string if target is found.
  * @param maxrepl Maximum times to replace if target appears multiple times in the input string.
  *        Default of -1 specifies replace all occurrences of target in each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> replace(
@@ -96,7 +96,7 @@ std::unique_ptr<column> replace(
  *        Default is 0, first character position.
  * @param stop End position (exclusive) to use for replacement.
  *        Default of -1 specifies the end of each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> replace_slice(
@@ -141,7 +141,7 @@ std::unique_ptr<column> replace_slice(
  * @param strings Strings column for this operation.
  * @param targets Strings to search for in each string.
  * @param repls Corresponding replacement strings for target strings.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> replace(
@@ -164,7 +164,7 @@ std::unique_ptr<column> replace(
  *
  * @param strings Strings column for this operation.
  * @param repl Replacement string for null entries. Default is empty string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> replace_nulls(

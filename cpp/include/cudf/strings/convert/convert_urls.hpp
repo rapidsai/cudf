@@ -37,7 +37,7 @@ namespace strings {
  * Any null entries will result in corresponding null entries in the output column.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> url_encode(
@@ -58,7 +58,7 @@ std::unique_ptr<column> url_encode(
  * Any null entries will result in corresponding null entries in the output column.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> url_decode(

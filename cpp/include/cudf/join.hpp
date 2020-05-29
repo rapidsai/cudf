@@ -76,7 +76,7 @@ namespace cudf {
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.  For each of these pairs (L, R), L
  * should exist in `left_on` and R should exist in `right_on`.
- * @param mr Memory resource used to allocate the returned table and columns
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
@@ -141,7 +141,7 @@ std::unique_ptr<cudf::table> inner_join(
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.  For each of these pairs (L, R), L
  * should exist in `left_on` and R should exist in `right_on`.
- * @param mr Memory resource used to allocate the returned table and columns
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
@@ -206,7 +206,7 @@ std::unique_ptr<cudf::table> left_join(
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.  For each of these pairs (L, R), L
  * should exist in `left_on` and R should exist in `right_on`.
- * @param mr Memory resource used to allocate the returned table and columns
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
@@ -258,7 +258,8 @@ std::unique_ptr<cudf::table> full_join(
  *                             indicated by `left_on[i]`.
  * @param[in] return_columns   A vector of column indices from `left` to
  *                             include in the returned table.
- * @param[in] mr               Device memory resource to use for device memory allocation
+ * @param[in] mr               Device memory resource used to allocate the returned table's device
+ *                             memory
  *
  * @returns                    Result of joining `left` and `right` tables on the columns
  *                             specified by `left_on` and `right_on`. The resulting table
@@ -311,7 +312,8 @@ std::unique_ptr<cudf::table> left_semi_join(
  *                             indicated by `left_on[i]`.
  * @param[in] return_columns   A vector of column indices from `left` to
  *                             include in the returned table.
- * @param[in] mr               Device memory resource to use for device memory allocation
+ * @param[in] mr               Device memory resource used to allocate the returned table's device
+ *                             memory
  *
  * @returns                    Result of joining `left` and `right` tables on the columns
  *                             specified by `left_on` and `right_on`. The resulting table

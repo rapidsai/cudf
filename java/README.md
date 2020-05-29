@@ -53,13 +53,15 @@ CUDA 10.0:
 Build the native code first, and make sure the a JDK is installed and available. 
 If you use the default cmake options libcudart will be dynamically linked to libcudf and librmm
 which are included.  If you do this the resulting jar will have a classifier associated with it
-because that jar can only be used with a single version of the CUDA runtime.  If you want
-to remove that requirement you can build RMM and cuDF with `-DCUDA_STATIC_RUNTIME=ON` when
-running cmake, and similarly -DCUDA_STATIC_RUNTIME=ON when running maven.  This will statically 
-link in the CUDA runtime and result in a jar with no
-classifier that should run on any host that has a version of the driver new enough to support
-the runtime that this was built with.  Official releases will indicate in the release notes
-the minimum driver version required.
+because that jar can only be used with a single version of the CUDA runtime.  
+
+
+There is experimental work to try and remove that requirement but it is not fully functional
+you can build RMM and cuDF with `-DCUDA_STATIC_RUNTIME=ON` when running cmake, and similarly 
+`-DCUDA_STATIC_RUNTIME=ON` when running maven.  This will statically link in the CUDA runtime
+and result in a jar with no classifier that should run on any host that has a version of the
+driver new enough to support the runtime that this was built with. Unfortunately `libnvrtc` is still
+required for runtime code generation which also is tied to a specific version of cuda.
 
 To build with maven for dynamic linking you would run.
 
