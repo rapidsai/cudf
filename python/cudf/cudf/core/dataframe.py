@@ -4240,12 +4240,13 @@ class DataFrame(Frame, Serializable):
 
     @classmethod
     def from_records(self, data, index=None, columns=None, nan_as_null=False):
-        """Convert from a numpy recarray or a structured array.
+        """
+        Convert structured or record ndarray to DataFrame.
 
         Parameters
         ----------
         data : numpy structured dtype or recarray of ndim=2
-        index : str
+        index : str, array-like
             The name of the index column in *data*.
             If None, the default index is used.
         columns : list of str
