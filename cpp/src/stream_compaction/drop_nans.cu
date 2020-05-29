@@ -86,13 +86,13 @@ std::unique_ptr<table> drop_nans(table_view const& input,
                                  cudaStream_t stream)
 {
   auto keys_view = input.select(keys);
-  if (keys_view.num_columns() == 0 || keys_view.num_rows() == 0 || not cudf::has_nulls(keys_view)) {
+  if (keys_view.num_columns() == 0 || keys_view.num_rows() == 0) {
     return std::make_unique<table>(input, stream, mr);
   }
 
   for (auto key_col = keys_view.begin(); key_col < keys_view.end(); ++key_col)
     CUDF_EXPECTS((key_col->type().id() == FLOAT32) || (key_col->type().id() == FLOAT64),
-                 "Key column is not of type floating");
+                 "Key column is not of type floating-point");
 
   auto keys_device_view = cudf::table_device_view::create(keys_view, stream);
 
