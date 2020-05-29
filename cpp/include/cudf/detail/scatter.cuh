@@ -29,6 +29,26 @@
 
 namespace cudf {
 namespace detail {
+
+/**
+ * @brief Convert a scatter map into a gather map.
+ *
+ * The caller is expected to use the output map on a subsequent gather_bitmask()
+ * function using the PASSTHROUGH op since the resulting map may contain index
+ * values outside the target's range.
+ *
+ * First, the gather-map is initialized with invalid entries.
+ * The gather_rows is used since it should always be outside the target size.
+ *
+ * Then, the `output[scatter_map[i]] = i`.
+ *
+ * @tparam MapIterator Iterator type of the input scatter map.
+ * @param scatter_map_begin Beginning of scatter map.
+ * @param scatter_map_end End of the scatter map.
+ * @param gather_rows Number of rows in the output map.
+ * @param stream Stream used for CUDA kernel calls.
+ * @return Output gather map.
+ */
 template <typename MapIterator>
 auto scatter_to_gather(MapIterator scatter_map_begin,
                        MapIterator scatter_map_end,
@@ -37,15 +57,13 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 {
   using MapValueType = typename thrust::iterator_traits<MapIterator>::value_type;
 
-  // TODO: This is only used to call gather_bitmask below.
-  //       Recommend changing to use a pair-iterator to idenitfy pass-through elements instead.
-  // static_assert(std::is_signed<MapValueType>::value,
-  //              "Need different invalid index if unsigned index types are added");
-  auto const invalid_index = gather_rows;  // static_cast<MapValueType>(-1);
+  // The gather_map is initialized with gather_rows value to identify pass-through entries
+  // when calling the gather_bitmask() which applies a pass-through whenever it finds a
+  // value outside the range of the target column. And the gather_rows value here will
+  // always be outside the valid range.
+  auto gather_map = rmm::device_vector<MapValueType>(gather_rows, gather_rows);
 
   // Convert scatter map to a gather map
-  auto gather_map = rmm::device_vector<MapValueType>(gather_rows, invalid_index);
-
   thrust::scatter(
     rmm::exec_policy(stream)->on(stream),
     thrust::make_counting_iterator<MapValueType>(0),
