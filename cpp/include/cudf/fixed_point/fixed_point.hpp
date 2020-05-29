@@ -82,7 +82,7 @@ template <typename Rep,
                                      is_supported_representation_type<Rep>())>* = nullptr>
 CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
 {
-  if (exponent == 0) return static_cast<Rep>(Base);
+  if (exponent == 0) return static_cast<Rep>(1);
   auto extra  = static_cast<Rep>(1);
   auto square = static_cast<Rep>(Base);
   while (exponent > 1) {
@@ -178,9 +178,41 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T shift(T const& val, scale_type const& scal
 template <typename Rep,
           Radix Rad,
           typename T,
-          typename std::enable_if_t<is_supported_construction_value_type<T>()>* = nullptr>
+          typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
 CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_type const& scale)
-  -> int64_t
+  -> Rep
+{
+  if (scale == 0)
+    return value;
+  else if (scale > 0) {
+    // Add the equivalent of 0.5 before truncating
+    Rep const factor = ipow<Rep, Rad>(scale._t - 1);
+    Rep const half   = (static_cast<Rep>(Rad) / 2) * factor;
+    T const rounded  = value >= 0 ? value + half : value - half;
+    return rounded / (factor * static_cast<Rep>(Rad));
+  } else
+    return left_shift<Rep, Rad>(value, scale);
+}
+
+/** @brief Function that performs precise shift to avoid "lossiness"
+ * inherent in floating point values
+ *
+ * Example: `auto n = fixed_point<int32_t, Radix::BASE_10>{1.001, scale_type{-3}}`
+ * will construct n to have a value of 1 without the precise shift
+ *
+ * @tparam Rep Representation type needed for integer exponentiation
+ * @tparam Rad The radix which will act as the base in the exponentiation
+ * @tparam T Type for value `val` being shifted and the return type
+ * @param value The value being shifted
+ * @param scale The amount to shift the value by
+ * @return Shifted value of type T
+ */
+template <typename Rep,
+          Radix Rad,
+          typename T,
+          typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_type const& scale)
+  -> Rep
 {
   if (scale == 0) return value;
   int64_t const base   = static_cast<int64_t>(Rad);
@@ -241,8 +273,7 @@ class fixed_point {
             typename std::enable_if_t<is_supported_construction_value_type<T>() &&
                                       is_supported_representation_type<Rep>()>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE explicit fixed_point(T const& value, scale_type const& scale)
-    : _value{static_cast<Rep>(detail::shift_with_precise_round<Rep, Rad>(value, scale))},
-      _scale{scale}
+    : _value{detail::shift_with_precise_round<Rep, Rad>(value, scale)}, _scale{scale}
   {
   }
 
