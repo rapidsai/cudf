@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #5327 Add `cudf::cross_join` feature
 
 ## Improvements
 - PR #5245 Add column reduction benchmark
