@@ -986,8 +986,6 @@ class CategoricalColumn(column.ColumnBase):
             np.array(replacement_col, dtype=replaced.dtype)
         )
 
-        replaced = column.as_column(self.cat().codes)
-
         output = libcudf.replace.replace(
             replaced, to_replace_col, replacement_col
         )
