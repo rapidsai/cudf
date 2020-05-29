@@ -86,20 +86,8 @@ TEST_F(JoinTest, CrossJoin)
     e_strings7.end(),
     thrust::make_transform_iterator(e_strings7.begin(), [](auto str) { return str != nullptr; }));
 
-  std::vector<std::unique_ptr<cudf::column>> column_a;
-  column_a.push_back(a_0.release());
-  column_a.push_back(a_1.release());
-  column_a.push_back(a_2.release());
-  column_a.push_back(a_3.release());
-
-  std::vector<std::unique_ptr<cudf::column>> column_b;
-  column_b.push_back(b_0.release());
-  column_b.push_back(b_1.release());
-  column_b.push_back(b_2.release());
-  column_b.push_back(b_3.release());
-
-  cudf::table table_a(std::move(column_a));
-  cudf::table table_b(std::move(column_b));
+  cudf::table_view table_a{{a_0, a_1, a_2, a_3}};
+  cudf::table_view table_b{{b_0, b_1, b_2, b_3}};
 
   auto join_table = cudf::cross_join(table_a, table_b);
 
@@ -129,15 +117,8 @@ TEST_F(JoinTest, CrossJoin_exceptions)
     thrust::make_transform_iterator(b_strings.begin(), [](auto str) { return str != nullptr; }));
 
   std::vector<std::unique_ptr<cudf::column>> column_a;
-
-  std::vector<std::unique_ptr<cudf::column>> column_b;
-  column_b.push_back(b_0.release());
-  column_b.push_back(b_1.release());
-  column_b.push_back(b_2.release());
-  column_b.push_back(b_3.release());
-
   cudf::table table_a(std::move(column_a));
-  cudf::table table_b(std::move(column_b));
+  cudf::table_view table_b{{b_0, b_1, b_2, b_3}};
 
   //
   //  table_a has no columns, table_b has columns
@@ -181,20 +162,8 @@ TEST_F(JoinTest, CrossJoin_empty_result)
     e_strings.end(),
     thrust::make_transform_iterator(e_strings.begin(), [](auto str) { return str != nullptr; }));
 
-  std::vector<std::unique_ptr<cudf::column>> column_a;
-  column_a.push_back(a_0.release());
-  column_a.push_back(a_1.release());
-  column_a.push_back(a_2.release());
-  column_a.push_back(a_3.release());
-
-  std::vector<std::unique_ptr<cudf::column>> column_b;
-  column_b.push_back(b_0.release());
-  column_b.push_back(b_1.release());
-  column_b.push_back(b_2.release());
-  column_b.push_back(b_3.release());
-
-  cudf::table table_a(std::move(column_a));
-  cudf::table table_b(std::move(column_b));
+  cudf::table_view table_a{{a_0, a_1, a_2, a_3}};
+  cudf::table_view table_b{{b_0, b_1, b_2, b_3}};
 
   auto join_table = cudf::cross_join(table_a, table_b);
 
