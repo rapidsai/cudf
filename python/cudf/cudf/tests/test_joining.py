@@ -1282,6 +1282,35 @@ def test_index_join_corner_cases():
 
     assert_eq(expected, got)
 
+    # Pandas Index.join on categorical column returns generic column
+    # but cudf will be returning a categorical column itself.
+    lhs = ["a", "b"]
+    rhs = ["a"]
+    level = "a"
+    how = "inner"
+    l_df["a"] = l_df["a"].astype("category")
+    r_df["a"] = r_df["a"].astype("category")
+    p_lhs = l_pdf.set_index(lhs).index
+    p_rhs = r_pdf.set_index(rhs).index
+    g_lhs = l_df.set_index(lhs).index
+    g_rhs = r_df.set_index(rhs).index
+    expected = (
+        p_lhs.join(p_rhs, level=level, how=how)
+        .to_frame(index=False)
+        .sort_values(by=lhs)
+        .reset_index(drop=True)
+    )
+    got = (
+        g_lhs.join(g_rhs, level=level, how=how)
+        .to_frame(index=False)
+        .sort_values(by=lhs)
+        .reset_index(drop=True)
+    )
+
+    got["a"] = got["a"].astype(expected["a"].dtype)
+
+    assert_eq(expected, got)
+
 
 def test_index_join_exception_cases():
     l_df = DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})
