@@ -91,7 +91,7 @@ string_character_types& operator|=(string_character_types& lhs, string_character
  * @param verify_types Only verify against these character types.
  *                     Default `ALL_TYPES` means return `true`
  *                     iff all characters match `types`.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> all_characters_of_type(
@@ -117,7 +117,7 @@ std::unique_ptr<column> all_characters_of_type(
  * Any null row results in a null entry for that row in the output column.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> is_integer(
@@ -134,11 +134,9 @@ std::unique_ptr<column> is_integer(
  * Any null entry or empty string will cause this function to return `false`.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
  * @return true if all string are valid
  */
-bool all_integer(strings_column_view const& strings,
-                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+bool all_integer(strings_column_view const& strings);
 
 /**
  * @brief Returns a boolean column identifying strings in which all
@@ -157,7 +155,7 @@ bool all_integer(strings_column_view const& strings,
  * Any null row results in a null entry for that row in the output column.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> is_float(
@@ -174,11 +172,9 @@ std::unique_ptr<column> is_float(
  * Any null entry or empty string will cause this function to return `false`.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
  * @return true if all string are valid
  */
-bool all_float(strings_column_view const& strings,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+bool all_float(strings_column_view const& strings);
 
 /** @} */  // end of doxygen group
 }  // namespace strings

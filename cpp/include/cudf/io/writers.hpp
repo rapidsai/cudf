@@ -75,7 +75,7 @@ class writer {
    *
    * @param sinkp The data sink to write the data to
    * @param options Settings for controlling writing behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sinkp,
                   writer_options const& options,
@@ -91,7 +91,7 @@ class writer {
    *
    * @param table Set of columns to output
    * @param metadata Table metadata and column names
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void write_all(table_view const& table,
                  const table_metadata* metadata = nullptr,
@@ -161,7 +161,7 @@ class writer {
    *
    * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   writer_options const& options,
@@ -179,7 +179,7 @@ class writer {
    * @param metadata Table metadata and column names
    * @param return_filemetadata If true, return the raw file metadata
    * @param metadata_out_file_path Column chunks file path to be set in the raw output metadata
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::unique_ptr<std::vector<uint8_t>> write_all(table_view const& table,
                                                   const table_metadata* metadata = nullptr,
@@ -323,7 +323,7 @@ class writer {
    *
    * @param sinkp The data sink to write the data to
    * @param options Settings for controlling writing behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   writer(std::unique_ptr<cudf::io::data_sink> sinkp,
          writer_options const& options,
@@ -342,7 +342,7 @@ class writer {
    *
    * @param table Set of columns to output
    * @param metadata Table metadata and column names
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void write_all(table_view const& table,
                  const table_metadata* metadata = nullptr,

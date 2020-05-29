@@ -47,7 +47,7 @@ namespace nvtext {
  *               Default is 2 = bigram.
  * @param separator The string to use for separating ngram tokens.
  *                  Default is "_" character.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings columns of tokens.
  */
 std::unique_ptr<cudf::column> generate_ngrams(

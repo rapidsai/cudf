@@ -10,8 +10,6 @@ import pandas as pd
 import pyarrow as pa
 from numba import cuda, njit
 
-import nvstrings
-
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.column import Column
@@ -1194,36 +1192,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         data = arbitrary._values
         if dtype is not None:
             data = data.astype(dtype)
-    # TODO: Remove nvstrings here when nvstrings is fully removed
-    elif isinstance(arbitrary, nvstrings.nvstrings):
-        byte_count = arbitrary.byte_count()
-        if byte_count > libcudf.MAX_STRING_COLUMN_BYTES:
-            raise MemoryError(
-                "Cannot construct string columns "
-                "containing > {} bytes. "
-                "Consider using dask_cudf to partition "
-                "your data.".format(libcudf.MAX_STRING_COLUMN_BYTES_STR)
-            )
-        sbuf = Buffer.empty(arbitrary.byte_count())
-        obuf = Buffer.empty(
-            (arbitrary.size() + 1) * np.dtype("int32").itemsize
-        )
-
-        nbuf = None
-        if arbitrary.null_count() > 0:
-            nbuf = create_null_mask(
-                arbitrary.size(), state=MaskState.UNINITIALIZED
-            )
-            arbitrary.set_null_bitmask(nbuf.ptr, bdevmem=True)
-        arbitrary.to_offsets(sbuf.ptr, obuf.ptr, None, bdevmem=True)
-        children = (
-            build_column(obuf, dtype="int32"),
-            build_column(sbuf, dtype="int8"),
-        )
-        data = build_column(
-            data=None, dtype="object", mask=nbuf, children=children
-        )
-        data._nvstrings = arbitrary
 
     elif isinstance(arbitrary, Buffer):
         if dtype is None:
@@ -1256,6 +1224,37 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             if nan_as_null or (mask is None and nan_as_null is None):
                 col = utils.time_col_replace_nulls(col)
         return col
+
+    # TODO: Remove nvstrings here when nvstrings is fully removed
+    elif type(arbitrary).__name__ == "nvstrings":
+        byte_count = arbitrary.byte_count()
+        if byte_count > libcudf.MAX_STRING_COLUMN_BYTES:
+            raise MemoryError(
+                "Cannot construct string columns "
+                "containing > {} bytes. "
+                "Consider using dask_cudf to partition "
+                "your data.".format(libcudf.MAX_STRING_COLUMN_BYTES_STR)
+            )
+        sbuf = Buffer.empty(arbitrary.byte_count())
+        obuf = Buffer.empty(
+            (arbitrary.size() + 1) * np.dtype("int32").itemsize
+        )
+
+        nbuf = None
+        if arbitrary.null_count() > 0:
+            nbuf = create_null_mask(
+                arbitrary.size(), state=MaskState.UNINITIALIZED
+            )
+            arbitrary.set_null_bitmask(nbuf.ptr, bdevmem=True)
+        arbitrary.to_offsets(sbuf.ptr, obuf.ptr, None, bdevmem=True)
+        children = (
+            build_column(obuf, dtype="int32"),
+            build_column(sbuf, dtype="int8"),
+        )
+        data = build_column(
+            data=None, dtype="object", mask=nbuf, children=children
+        )
+        data._nvstrings = arbitrary
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
