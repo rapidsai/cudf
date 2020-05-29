@@ -28,12 +28,8 @@ class Serializable(abc.ABC):
 
     @classmethod
     def device_deserialize(cls, header, frames):
-        for f in frames:
-            # some frames are empty -- meta/empty partitions/etc
-            if len(f) > 0:
-                assert hasattr(f, "__cuda_array_interface__")
-
         typ = pickle.loads(header["type-serialized"])
+        frames = [cudf.core.buffer.Buffer(f) for f in frames]
         obj = typ.deserialize(header, frames)
 
         return obj
