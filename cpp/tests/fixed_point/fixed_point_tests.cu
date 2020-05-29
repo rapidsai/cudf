@@ -215,22 +215,22 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyAddition)
 
   decimalXX a_3{1.250, scale_type{-3}};
 
-  // 1.25 + 1.205 = 2.455
+  // 1.250 + 1.205 = 2.455
   decimalXX b_3{1.205, scale_type{-3}};
   decimalXX c_3{2.455, scale_type{-3}};
   EXPECT_EQ(a_3 + b_3, c_3);
 
-  // 1.25 + 1.21 = 2.46
+  // 1.250 + 1.21 = 2.46
   decimalXX b_2{1.205, scale_type{-2}};
   decimalXX c_2{2.46, scale_type{-2}};
   EXPECT_EQ(a_3 + b_2, c_2);
 
-  // 1.25 + 1.2 = 2.5
+  // 1.250 + 1.2 = 2.5
   decimalXX b_1{1.205, scale_type{-1}};
   decimalXX c_1{2.5, scale_type{-1}};
   EXPECT_EQ(a_3 + b_1, c_1);
 
-  // 1.25 + 1. = 2.
+  // 1.250 + 1. = 2.
   decimalXX b_0{1.205, scale_type{0}};
   decimalXX c_0{2., scale_type{0}};
   EXPECT_EQ(a_3 + b_0, c_0);
