@@ -11,6 +11,7 @@
 - PR #5231 Type `Buffer` as `uint8`
 - PR #5308 Coerce frames to `Buffer`s in deserialization
 - PR #5248 Support interleave_columns for string types
+- PR #5317 Optimize fixed_point rounding shift for integers
 
 ## Bug Fixes
 
