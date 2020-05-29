@@ -219,20 +219,26 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXRounding)
 
   decimalXX ZERO_0{0, scale_type{0}};
   decimalXX ZERO_1{4, scale_type{1}};
+  decimalXX THREE_0{3, scale_type{0}};
   decimalXX FOUR_0{4, scale_type{0}};
   decimalXX FIVE_0{5, scale_type{0}};
   decimalXX TEN_0{10, scale_type{0}};
   decimalXX TEN_1{5, scale_type{1}};
 
   decimalXX FOURTEEN_0{14, scale_type{0}};
+  decimalXX FIFTEEN_0{15, scale_type{0}};
 
   EXPECT_EQ(ZERO_0, ZERO_1);
   EXPECT_EQ(TEN_0, TEN_1);
 
   EXPECT_EQ(ZERO_1 + TEN_1, TEN_1);
-  EXPECT_EQ(FOUR_0 + TEN_1, TEN_1);  // TODO change
+  EXPECT_EQ(FOUR_0 + TEN_1, FOURTEEN_0);
   EXPECT_TRUE(ZERO_1 == ZERO_1);
-  EXPECT_TRUE(FIVE_0 == TEN_1);  // TODO change
+  EXPECT_TRUE(FIVE_0 != TEN_1);
+  EXPECT_TRUE(FIVE_0 + FIVE_0 + FIVE_0 == FIFTEEN_0);
+  EXPECT_TRUE(FIVE_0 + FIVE_0 + FIVE_0 != TEN_1);
+  EXPECT_TRUE(FIVE_0 * THREE_0 == FIFTEEN_0);
+  EXPECT_TRUE(FIVE_0 * THREE_0 != TEN_1);
 }
 
 TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust)
