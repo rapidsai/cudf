@@ -13,6 +13,7 @@
 - PR #5308 Coerce frames to `Buffer`s in deserialization
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
+- PR #5332 Remove outdated dask-xgboost docs
 
 ## Bug Fixes
 
