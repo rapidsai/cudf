@@ -220,8 +220,11 @@ class DataFrame(Frame, Serializable):
         else:
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
-                    data = [data]
-                self._init_from_list_like(data, index=index, columns=columns)
+                    self._from_columns([data], index=index, columns=columns)
+                else:
+                    self._init_from_list_like(
+                        data, index=index, columns=columns
+                    )
 
             else:
                 if not is_dict_like(data):
@@ -4335,14 +4338,13 @@ class DataFrame(Frame, Serializable):
         )
         return self.as_gpu_matrix()
 
-    def _from_columns(cols, index=None, columns=None):
+    def _from_columns(self, cols, index=None, columns=None):
         """
         Construct a DataFrame from a list of Columns
         """
-        df = cudf.DataFrame(dict(zip(range(len(cols)), cols)), index=index)
-        if columns is not None:
-            df.columns = columns
-        return df
+        self._init_from_dict_like(
+            dict(zip(range(len(cols)), cols)), index=index, columns=columns
+        )
 
     def quantile(
         self,
