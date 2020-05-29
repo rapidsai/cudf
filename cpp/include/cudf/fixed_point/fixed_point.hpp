@@ -415,6 +415,21 @@ class fixed_point {
                                                    fixed_point<Rep1, Rad1> const& rhs);
 
   /**
+   * @brief operator != (for comparing two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are compared <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are compared
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return true if `lhs` and `rhs` are not equal, false if not
+   */
+  template <typename Rep1, Radix Rad1>
+  CUDA_HOST_DEVICE_CALLABLE friend bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
+                                                   fixed_point<Rep1, Rad1> const& rhs);
+
+  /**
    * @brief operator <= (for comparing two `fixed_point` numbers)
    *
    * If `_scale`s are equal, `_value`s are compared <br>
@@ -664,6 +679,17 @@ CUDA_HOST_DEVICE_CALLABLE bool operator==(fixed_point<Rep1, Rad1> const& lhs,
   auto const values =
     detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
   return values.first == values.second;
+}
+
+// EQUALITY NOT COMPARISON Operation
+template <typename Rep1, Radix Rad1>
+CUDA_HOST_DEVICE_CALLABLE bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
+                                          fixed_point<Rep1, Rad1> const& rhs)
+{
+  // TODO: Use structure bindings when C++17 upgrade happens
+  auto const values =
+    detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
+  return values.first != values.second;
 }
 
 // LESS THAN OR EQUAL TO Operation
