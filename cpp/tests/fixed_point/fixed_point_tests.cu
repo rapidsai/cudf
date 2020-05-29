@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <limits>
@@ -445,8 +446,6 @@ struct FPToRep {
 template <typename Rep, Radix Rad>
 class ColumnLike {
  public:
-  using FP = fixed_point<Rep, Rad>;
-
   ColumnLike(size_t size, scale_type scale):
     _data{size}, _scale{scale} {}
 
@@ -474,6 +473,10 @@ class ColumnLike {
     return begin() + _data.size();
   }
 
+  auto size() const {
+    return _data.size();
+  }
+
  private:
   template <typename Rep1, Radix Rad1>
   friend class DeviceColumnLike;
@@ -485,8 +488,6 @@ class ColumnLike {
 template <typename Rep, Radix Rad>
 class DeviceColumnLike {
  public:
-  using FP = fixed_point<Rep, Rad>;
-
   DeviceColumnLike(size_t size, scale_type scale):
     _data{size}, _scale{scale} {}
 
@@ -516,6 +517,10 @@ class DeviceColumnLike {
 
   auto end() {
     return begin() + _data.size();
+  }
+
+  auto size() const {
+    return _data.size();
   }
 
  private:
@@ -591,6 +596,48 @@ TEST_F(FixedPointTest, Decimal32DeviceColumnLikeAddition)
   auto output_host = Column{output};
 
   std::vector<double> expected{5., 6., 8.}; // fractional part rounded off from addition
+  auto result_it = thrust::make_transform_iterator(output_host.begin(),
+    [](auto fp) {
+      return double{fp};
+    });
+  EXPECT_TRUE(std::equal(expected.cbegin(), expected.cend(), result_it));
+}
+
+template <typename Input, typename Output>
+__global__ void ReverseKernel(Input in, Output out, size_t n) {
+  int i = threadIdx.x + blockIdx.x * blockDim.x;
+
+  if (i < n) {
+    out[n - i - 1] = in[i];
+  }
+}
+
+template <typename Input, typename Output>
+void Reverse(Input start, Input end, Output out) {
+  int size = end - start;
+  constexpr int block_size{128};
+  cudf::detail::grid_1d grid_config{size, block_size};
+  int grid_size = grid_config.num_blocks;
+  ReverseKernel<Input, Output><<<grid_size, block_size>>>
+    (start, out, size);
+}
+
+TEST_F(FixedPointTest, Decimal32DeviceDereference)
+{
+  using Rep = int32_t;
+  constexpr auto Rad = Radix::BASE_10;
+  using Column = ColumnLike<Rep, Rad>;
+  using DeviceColumn = DeviceColumnLike<Rep, Rad>;
+  using FP = fixed_point<Rep, Rad>;
+
+  DeviceColumn input{{100, 125, 150, 175, 200}, scale_type{-2}};
+  DeviceColumn output{input.size(), scale_type{-1}};
+
+  Reverse(input.begin(), input.end(), output.begin());
+
+  auto output_host = Column{output};
+
+  std::vector<double> expected{2.0, 1.7, 1.5, 1.2, 1.0};
   auto result_it = thrust::make_transform_iterator(output_host.begin(),
     [](auto fp) {
       return double{fp};
