@@ -186,10 +186,11 @@ CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_ty
     return value;
   else if (scale > 0) {
     // Add the equivalent of 0.5 before truncating
-    Rep const factor = ipow<Rep, Rad>(scale._t - 1);
-    Rep const half   = (static_cast<Rep>(Rad) / 2) * factor;
-    T const rounded  = value >= 0 ? value + half : value - half;
-    return rounded / (factor * static_cast<Rep>(Rad));
+    constexpr Rep base = static_cast<Rep>(Rad);
+    Rep const factor   = ipow<Rep, Rad>(scale._t - 1);
+    Rep const half     = (base / 2) * factor;
+    auto const rounded = value >= 0 ? value + half : value - half;
+    return rounded / (factor * base);
   } else
     return left_shift<Rep, Rad>(value, scale);
 }
