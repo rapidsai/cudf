@@ -121,6 +121,30 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift(T const& val, scale_type const
   return val / ipow<Rep, Rad>(scale._t);
 }
 
+/** @brief Function that performs a rounding `right shift` scale "times" on the `val`
+ *
+ * The scaled integer equivalent of 0.5 is added to the value before truncating such that
+ * any remaining fractional part will be rounded away from zero.
+ *
+ * Note: perform this operation when constructing with positive scale
+ *
+ * @tparam Rep Representation type needed for integer exponentiation
+ * @tparam Rad The radix which will act as the base in the exponentiation
+ * @tparam T Type for value `val` being shifted and the return type
+ * @param val The value being shifted
+ * @param scale The amount to shift the value by
+ * @return Shifted value of type T
+ */
+template <typename Rep, Radix Rad, typename T>
+CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift_rounded(T const& val, scale_type const& scale)
+{
+  constexpr Rep base = static_cast<Rep>(Rad);
+  Rep const factor   = ipow<Rep, Rad>(scale._t - 1);
+  Rep const half     = (base / 2) * factor;
+  auto const rounded = val >= 0 ? val + half : val - half;
+  return rounded / (factor * base);
+}
+
 /** @brief Function that performs a `left shift` scale "times" on the `val`
  *
  * Note: perform this operation when constructing with negative scale
@@ -184,14 +208,9 @@ CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_ty
 {
   if (scale == 0)
     return value;
-  else if (scale > 0) {
-    // Add the equivalent of 0.5 before truncating
-    constexpr Rep base = static_cast<Rep>(Rad);
-    Rep const factor   = ipow<Rep, Rad>(scale._t - 1);
-    Rep const half     = (base / 2) * factor;
-    auto const rounded = value >= 0 ? value + half : value - half;
-    return rounded / (factor * base);
-  } else
+  else if (scale > 0)
+    return right_shift_rounded<Rep, Rad>(value, scale);
+  else
     return left_shift<Rep, Rad>(value, scale);
 }
 
