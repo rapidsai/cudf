@@ -65,6 +65,7 @@ def test_from_nvstrings_nbytes(mock_byte_count, nbytes):
     expectation = raise_builder(
         [nbytes > libcudf.MAX_STRING_COLUMN_BYTES], MemoryError
     )
+
     with expectation:
         Series(nvstrings.to_device([""]))
 

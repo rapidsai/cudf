@@ -56,7 +56,7 @@ namespace cudf {
  * rows in the source columns to rows in the destination columns.
  * @param[in] check_bounds Optionally perform bounds checking on the values
  * of `gather_map` and throw an error if any of its values are out of bounds.
- * @param[in] mr The resource to use for all allocations
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return std::unique_ptr<table> Result of the gather
  */
 std::unique_ptr<table> gather(
@@ -99,7 +99,7 @@ std::unique_ptr<table> gather(
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(
@@ -139,7 +139,7 @@ std::unique_ptr<table> scatter(
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(
@@ -172,8 +172,8 @@ std::unique_ptr<column> empty_like(column_view const& input);
  *
  * @param[in] input Immutable view of input column to emulate
  * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
- * @param[in] mr Optional, The resource to use for all allocations
- * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the same
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @return A column with sufficient uninitialized capacity to hold the same
  * number of elements as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(
@@ -188,7 +188,7 @@ std::unique_ptr<column> allocate_like(
  * @param[in] input Immutable view of input column to emulate
  * @param[in] size The desired number of elements that the new column should have capacity for
  * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
- * @param[in] mr Optional, The resource to use for all allocations
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  * @return A column with sufficient uninitialized capacity to hold the specified number of elements
  * as `input` of the same type as `input.type()`
  */
@@ -273,7 +273,7 @@ void copy_range_in_place(column_view const& source,
  * @param source_end The index of the last element in the source range
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
- * @param mr Memory resource to allocate the result target column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return std::unique_ptr<column> The result target column
  */
 std::unique_ptr<column> copy_range(
@@ -476,8 +476,8 @@ struct contiguous_split_result {
  *
  * @param input View of a table to split
  * @param splits A vector of indices where the view will be split
- * @param[in] mr Optional, The resource to use for all returned allocations
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] mr Device memory resource used to allocate the returned result's device memory
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
  * buffer.
  */
@@ -501,7 +501,7 @@ std::vector<contiguous_split_result> contiguous_split(
  * @param[in] rhs right-hand column_view
  * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
  * each element. Null element represents false.
- * @param[in] mr resource for allocating device memory
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
  */
@@ -564,7 +564,7 @@ std::unique_ptr<column> shift(column_view const& input,
  * @param[in] rhs right-hand column_view
  * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
  * each element. Null element represents false.
- * @param[in] mr resource for allocating device memory
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
  */
@@ -588,7 +588,7 @@ std::unique_ptr<column> copy_if_else(
  * @param[in] rhs right-hand scalar
  * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
  * each element. Null element represents false.
- * @param[in] mr resource for allocating device memory
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
  */
@@ -610,7 +610,7 @@ std::unique_ptr<column> copy_if_else(
  * @param[in] rhs right-hand scalar
  * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
  * each element. null element represents false.
- * @param[in] mr resource for allocating device memory
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
  */
@@ -652,7 +652,7 @@ std::unique_ptr<column> copy_if_else(
  * @param[in] input table_view (set of dense columns) to scatter
  * @param[in] target table_view to modify with scattered values from `input`
  * @param[in] boolean_mask column_view which acts as boolean mask.
- * @param[in] mr Optional, The resource to use for all returned allocations
+ * @param[in] mr Device memory resource used to allocate device memory of the returned table.
  *
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
  */
@@ -689,7 +689,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @param[in] input scalars to scatter
  * @param[in] target table_view to modify with scattered values from `input`
  * @param[in] boolean_mask column_view which acts as boolean mask.
- * @param[in] mr Optional, The resource to use for all returned allocations
+ * @param[in] mr Device memory resource used to allocate device memory of the returned table.
  *
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
  */
@@ -709,7 +709,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  *
  * @param input Column view to get the element from
  * @param index Index into `input` to get the element at
- * @param mr Optional, The resource to use for all returned allocations
+ * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return std::unique_ptr<scalar> Scalar containing the single value
  */
 std::unique_ptr<scalar> get_element(
