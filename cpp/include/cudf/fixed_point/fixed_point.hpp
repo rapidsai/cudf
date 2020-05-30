@@ -189,6 +189,23 @@ CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_ty
   return std::roundf(static_cast<double>(temp) / base);
 }
 
+template <typename Rep1, Radix Rad1>
+CUDA_HOST_DEVICE_CALLABLE std::pair<Rep1, Rep1> get_same_scale_values(Rep1 const& value1,
+                                                                      Rep1 const& value2,
+                                                                      scale_type const& scale1,
+                                                                      scale_type const& scale2)
+{
+  auto const new_value1 =
+    scale1 > scale2 ? shift_with_precise_round<Rep1, Rad1>(value1, scale_type{scale2 - scale1})
+                    : value1;
+
+  auto const new_value2 =
+    scale1 < scale2 ? shift_with_precise_round<Rep1, Rad1>(value2, scale_type{scale1 - scale2})
+                    : value2;
+
+  return std::make_pair(new_value1, new_value2);
+}
+
 }  // namespace detail
 
 /**
@@ -576,13 +593,11 @@ template <typename Rep1, Radix Rad1>
 CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
                                                             fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const rhsv = lhs._scale > rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(
-                                                rhs._value, scale_type{lhs._scale - rhs._scale})
-                                            : rhs._value;
-  auto const lhsv = lhs._scale < rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(
-                                                lhs._value, scale_type{rhs._scale - lhs._scale})
-                                            : lhs._value;
-  auto const scale = lhs._scale > rhs._scale ? lhs._scale : rhs._scale;
+  // TODO: Use structure bindings when C++17 upgrade happens
+  auto const values =
+    detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
+
+  auto const scale = lhs._scale < rhs._scale ? lhs._scale : rhs._scale;
 
 #if defined(__CUDACC_DEBUG__)
 
@@ -591,7 +606,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Ra
 
 #endif
 
-  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhsv + rhsv, scale)};
+  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(values.first + values.second, scale)};
 }
 
 // MINUS Operation
@@ -599,13 +614,11 @@ template <typename Rep1, Radix Rad1>
 CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
                                                             fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const rhsv = lhs._scale > rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(
-                                                rhs._value, scale_type{lhs._scale - rhs._scale})
-                                            : rhs._value;
-  auto const lhsv = lhs._scale < rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(
-                                                lhs._value, scale_type{rhs._scale - lhs._scale})
-                                            : lhs._value;
-  auto const scale = lhs._scale > rhs._scale ? lhs._scale : rhs._scale;
+  // TODO: Use structure bindings when C++17 upgrade happens
+  auto const values =
+    detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
+
+  auto const scale = lhs._scale < rhs._scale ? lhs._scale : rhs._scale;
 
 #if defined(__CUDACC_DEBUG__)
 
@@ -614,7 +627,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Ra
 
 #endif
 
-  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhsv - rhsv, scale)};
+  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(values.first - values.second, scale)};
 }
 
 // MULTIPLIES Operation
@@ -648,27 +661,6 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Ra
   return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(std::roundf(lhs._value * 1.0 / rhs._value),
                                                       scale_type{lhs._scale - rhs._scale})};
 }
-
-namespace detail {
-
-// EQUALITY COMPARISON Operation
-template <typename Rep1, Radix Rad1>
-CUDA_HOST_DEVICE_CALLABLE std::pair<Rep1, Rep1> get_same_scale_values(Rep1 const& value1,
-                                                                      Rep1 const& value2,
-                                                                      scale_type const& scale1,
-                                                                      scale_type const& scale2)
-{
-  auto const rhsv = scale1 > scale2
-                      ? shift_with_precise_round<Rep1, Rad1>(value2, scale_type{scale1 - scale2})
-                      : value2;
-  auto const lhsv = scale1 < scale2
-                      ? shift_with_precise_round<Rep1, Rad1>(value1, scale_type{scale2 - scale1})
-                      : value1;
-
-  return std::make_pair(lhsv, rhsv);
-}
-
-}  // namespace detail
 
 // EQUALITY COMPARISON Operation
 template <typename Rep1, Radix Rad1>
