@@ -25,7 +25,7 @@ namespace detail {
  * @copydoc cudf::dictionary::get_index(dictionary_column_view const&,scalar
  * const&,rmm::mr::device_memory_resource*)
  *
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<numeric_scalar<int32_t>> get_index(
   dictionary_column_view const& dictionary,
