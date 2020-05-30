@@ -162,6 +162,12 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXMath)
   EXPECT_EQ(THREE - TWO, ONE);
   EXPECT_EQ(TWO / ONE, TWO);
   EXPECT_EQ(SIX / TWO, THREE);
+
+  decimalXX a{1.23, scale_type{-2}};
+  decimalXX b{0, scale_type{0}};
+
+  EXPECT_EQ(a + b, a);
+  EXPECT_EQ(a - b, a);
 }
 
 TYPED_TEST(FixedPointTestBothReps, ComparisonOperators)
