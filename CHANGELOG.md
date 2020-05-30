@@ -21,6 +21,7 @@
 - PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
 - PR #5299 Update package version for Java bindings
 - PR #5300 Add support to ignore `None` in `cudf.concat` input
+- PR #5334 Fix pickling sizeof test
 - PR #5329 Fix broken alias from DataFrame.{at,iat} to {loc, iloc}
 
 
