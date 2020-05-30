@@ -11,6 +11,7 @@
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
 - PR #5308 Coerce frames to `Buffer`s in deserialization
+- PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
 
 ## Bug Fixes
@@ -20,6 +21,7 @@
 - PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
 - PR #5299 Update package version for Java bindings
 - PR #5300 Add support to ignore `None` in `cudf.concat` input
+- PR #5334 Fix pickling sizeof test
 
 
 # cuDF 0.14.0 (Date TBD)
