@@ -189,11 +189,18 @@ CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_ty
   return std::roundf(static_cast<double>(temp) / base);
 }
 
+template <typename Rep>
+struct values_and_scale {
+  Rep lhs;
+  Rep rhs;
+  scale_type scale;
+};
+
 template <typename Rep1, Radix Rad1>
-CUDA_HOST_DEVICE_CALLABLE std::pair<Rep1, Rep1> get_same_scale_values(Rep1 const& value1,
-                                                                      Rep1 const& value2,
-                                                                      scale_type const& scale1,
-                                                                      scale_type const& scale2)
+CUDA_HOST_DEVICE_CALLABLE values_and_scale<Rep1> get_same_scale_values(Rep1 const& value1,
+                                                                       Rep1 const& value2,
+                                                                       scale_type const& scale1,
+                                                                       scale_type const& scale2)
 {
   auto const new_value1 =
     scale1 > scale2 ? shift_with_precise_round<Rep1, Rad1>(value1, scale_type{scale2 - scale1})
@@ -203,7 +210,10 @@ CUDA_HOST_DEVICE_CALLABLE std::pair<Rep1, Rep1> get_same_scale_values(Rep1 const
     scale1 < scale2 ? shift_with_precise_round<Rep1, Rad1>(value2, scale_type{scale1 - scale2})
                     : value2;
 
-  return std::make_pair(new_value1, new_value2);
+  auto const scale = scale1 < scale2 ? scale1 : scale2;
+
+  return values_and_scale<Rep1>{
+    static_cast<Rep1>(new_value1), static_cast<Rep1>(new_value2), scale};
 }
 
 }  // namespace detail
@@ -597,8 +607,6 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Ra
   auto const values =
     detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
 
-  auto const scale = lhs._scale < rhs._scale ? lhs._scale : rhs._scale;
-
 #if defined(__CUDACC_DEBUG__)
 
   assert(("fixed_point overflow of underlying representation type " + print_rep<Rep1>(),
@@ -606,7 +614,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Ra
 
 #endif
 
-  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(values.first + values.second, scale)};
+  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(values.lhs + values.rhs, values.scale)};
 }
 
 // MINUS Operation
@@ -618,8 +626,6 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Ra
   auto const values =
     detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
 
-  auto const scale = lhs._scale < rhs._scale ? lhs._scale : rhs._scale;
-
 #if defined(__CUDACC_DEBUG__)
 
   assert(("fixed_point overflow of underlying representation type " + print_rep<Rep1>(),
@@ -627,7 +633,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Ra
 
 #endif
 
-  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(values.first - values.second, scale)};
+  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(values.lhs - values.rhs, values.scale)};
 }
 
 // MULTIPLIES Operation
@@ -670,7 +676,7 @@ CUDA_HOST_DEVICE_CALLABLE bool operator==(fixed_point<Rep1, Rad1> const& lhs,
   // TODO: Use structure bindings when C++17 upgrade happens
   auto const values =
     detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
-  return values.first == values.second;
+  return values.lhs == values.rhs;
 }
 
 // EQUALITY NOT COMPARISON Operation
@@ -681,7 +687,7 @@ CUDA_HOST_DEVICE_CALLABLE bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
   // TODO: Use structure bindings when C++17 upgrade happens
   auto const values =
     detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
-  return values.first != values.second;
+  return values.lhs != values.rhs;
 }
 
 // LESS THAN OR EQUAL TO Operation
@@ -692,7 +698,7 @@ CUDA_HOST_DEVICE_CALLABLE bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
   // TODO: Use structure bindings when C++17 upgrade happens
   auto const values =
     detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
-  return values.first <= values.second;
+  return values.lhs <= values.rhs;
 }
 
 // GREATER THAN OR EQUAL TO Operation
@@ -703,7 +709,7 @@ CUDA_HOST_DEVICE_CALLABLE bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
   // TODO: Use structure bindings when C++17 upgrade happens
   auto const values =
     detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
-  return values.first >= values.second;
+  return values.lhs >= values.rhs;
 }
 
 // LESS THAN Operation
@@ -714,7 +720,7 @@ CUDA_HOST_DEVICE_CALLABLE bool operator<(fixed_point<Rep1, Rad1> const& lhs,
   // TODO: Use structure bindings when C++17 upgrade happens
   auto const values =
     detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
-  return values.first < values.second;
+  return values.lhs < values.rhs;
 }
 
 // GREATER THAN Operation
@@ -725,7 +731,7 @@ CUDA_HOST_DEVICE_CALLABLE bool operator>(fixed_point<Rep1, Rad1> const& lhs,
   // TODO: Use structure bindings when C++17 upgrade happens
   auto const values =
     detail::get_same_scale_values<Rep1, Rad1>(lhs._value, rhs._value, lhs._scale, rhs._scale);
-  return values.first > values.second;
+  return values.lhs > values.rhs;
 }
 
 /**
