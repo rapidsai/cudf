@@ -2054,6 +2054,8 @@ def test_string_int_to_ipv4_dtype_fail(dtype):
         slice(-1, -2, -1),
         slice(-2, -1, -1),
         slice(-2, -1, 1),
+        slice(0),
+        slice(None),
     ],
 )
 def test_string_str_subscriptable(data, index):
