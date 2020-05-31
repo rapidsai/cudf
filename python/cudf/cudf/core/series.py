@@ -751,13 +751,22 @@ class Series(Frame, Serializable):
         return not len(self)
 
     def __getitem__(self, arg):
-        try:
+        if isinstance(arg, slice):
             return self.iloc[arg]
-        except Exception as e:
-            try:
-                return self.loc[arg]
-            except Exception:
-                raise e
+        else:
+            return self.loc[arg]
+
+    def __iter__(self):
+        self.i = 0
+        return self
+
+    def __next__(self):
+        if self.i < len(self):
+            result = self._column[self.i]
+            self.i += 1
+            return result
+        else:
+            raise StopIteration
 
     def __setitem__(self, key, value):
         if isinstance(key, slice):
