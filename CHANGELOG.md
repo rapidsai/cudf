@@ -6,7 +6,6 @@
 
 ## Improvements
 - PR #5245 Add column reduction benchmark
-
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
@@ -22,6 +21,7 @@
 - PR #5299 Update package version for Java bindings
 - PR #5300 Add support to ignore `None` in `cudf.concat` input
 - PR #5334 Fix pickling sizeof test
+- PR #5326 Fix `DataFrame.__init__` for list of scalar inputs and related dask issue
 
 
 # cuDF 0.14.0 (Date TBD)
