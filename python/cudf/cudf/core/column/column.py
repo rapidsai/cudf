@@ -1458,6 +1458,18 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             raise ValueError("Data must be 1-dimensional")
 
         arbitrary = np.asarray(arbitrary)
+        if (
+            arbitrary.ndim > 0
+            and arbitrary.size > 0
+            and hasattr(arbitrary[0], "__cuda_array_interface__")
+        ):
+            return as_column(
+                cupy.asarray(arbitrary, dtype=arbitrary[0].dtype),
+                nan_as_null=nan_as_null,
+                dtype=dtype,
+                length=length,
+            )
+
         if not arbitrary.flags["C_CONTIGUOUS"]:
             arbitrary = np.ascontiguousarray(arbitrary)
 
