@@ -279,6 +279,16 @@ class Index(Frame, Serializable):
         """
         return self._values.to_arrow()
 
+    def tolist(self):
+        """
+        Return a list type from index data.
+
+        Returns
+        -------
+        list
+        """
+        return self.to_arrow().to_pylist()
+
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
