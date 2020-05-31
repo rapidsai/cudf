@@ -2032,3 +2032,37 @@ def test_string_int_to_ipv4_dtype_fail(dtype):
     gsr = Series([1, 2, 3, 4, 5]).astype(dtype)
     with pytest.raises(TypeError):
         gsr._column.int2ip()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "pqr", "tuv"],
+        ["aaaaaaaaaaaa"],
+        ["aaaaaaaaaaaa", "bdfeqwert", "poiuytre"],
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        0,
+        1,
+        2,
+        slice(0, 1, 2),
+        slice(0, 5, 2),
+        slice(-1, -2, 1),
+        slice(-1, -2, -1),
+        slice(-2, -1, -1),
+        slice(-2, -1, 1),
+    ],
+)
+def test_string_str_subscriptable(data, index):
+    psr = pd.Series(data)
+    gsr = Series(data)
+
+    assert_eq(psr.str[index], gsr.str[index])
+
+    psi = pd.Index(data)
+    gsi = StringIndex(data)
+
+    assert_eq(psi.str[index], gsi.str[index])
