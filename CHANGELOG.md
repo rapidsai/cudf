@@ -3,10 +3,10 @@
 ## New Features
 
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #5342 Add support for `StringMethods.__getitem__`
 
 ## Improvements
 - PR #5245 Add column reduction benchmark
-
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
