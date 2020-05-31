@@ -44,7 +44,7 @@ namespace nvtext {
  * for row `i` in the output column.
  *
  * @param strings Strings column to normalize.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings columns of normalized strings.
  */
 std::unique_ptr<cudf::column> normalize_spaces(

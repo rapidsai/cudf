@@ -72,7 +72,7 @@ namespace nvtext {
  *                  The default of empty string will separate tokens using whitespace.
  * @param separator The string to use for separating ngram tokens.
  *                  Default is "_" character.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings columns of tokens.
  */
 std::unique_ptr<cudf::column> ngrams_tokenize(
