@@ -270,7 +270,8 @@ def test_pandas_concat_compatibility_axis1():
 
 @pytest.mark.parametrize("index", [[0, 1, 2], [2, 1, 0], [5, 9, 10]])
 @pytest.mark.parametrize("names", [False, (0, 1)])
-@pytest.mark.parametrize("data", [(["a", "b", "c"], ["XX", "YY", "ZZ"])])
+@pytest.mark.parametrize("data", [(["a", "b", "c"], ["a", "b", "c"]),
+                                  (["a", "b", "c"], ["XX", "YY", "ZZ"])])
 def test_pandas_concat_compatibility_axis1(index, names, data):
     s1 = gd.Series(data[0], index=[0, 1, 2])
     s2 = gd.Series(data[1], index=index)
