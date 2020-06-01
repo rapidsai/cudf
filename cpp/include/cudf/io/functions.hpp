@@ -258,11 +258,7 @@ struct read_csv_args {
  *  #include <cudf/io/functions.hpp>
  *  ...
  *  std::string filepath = "dataset.csv";
-<<<<<<< HEAD
- *  cudf::experimental::io::read_csv_args args{cudf::source_info(filepath)};
-=======
  *  cudf::io::read_csv_args args{cudf::source_info(filepath)};
->>>>>>> fea-cuio-abstract-datasource
  *  ...
  *  auto result = cudf::read_csv(args);
  * @endcode
@@ -331,21 +327,12 @@ struct write_csv_args : detail::csv::writer_options {
  *  #include <cudf/io/functions.hpp>
  *  ...
  *  std::string filepath = "dataset.csv";
-<<<<<<< HEAD
- *  cudf::experimental::io::sink_info sink_info(filepath);
- *
- *  cudf::experimental::io::write_csv_args args{sink_info, table->view(), na, include_header,
- * rows_per_chunk};
- *  ...
- *  cudf::experimental::io::write_csv(args);
-=======
  *  cudf::io::sink_info sink_info(filepath);
  *
  *  cudf::io::write_csv_args args{sink_info, table->view(), na, include_header,
  * rows_per_chunk};
  *  ...
  *  cudf::io::write_csv(args);
->>>>>>> fea-cuio-abstract-datasource
  * @endcode
  *
  * @param args Settings for controlling writing behavior

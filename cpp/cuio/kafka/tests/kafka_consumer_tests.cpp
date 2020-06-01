@@ -34,25 +34,36 @@
     return RUN_ALL_TESTS();                 \
   }
 
+namespace kafka = cudf::io::external::kafka;
+
 struct KafkaDatasourceTest : public ::testing::Test {
 };
 
-TEST_F(KafkaDatasourceTest, UserImplementedSource)
+TEST_F(KafkaDatasourceTest, MissingGroupID)
 {
-  namespace kafka = cudf::io::external::kafka;
-
+  // group.id is a required configuration.
   std::map<std::string, std::string> kafka_configs;
   kafka_configs.insert({"bootstrap.servers", "localhost:9092"});
-  kafka_configs.insert({"group.id", "libcudf_consumer"});
-  kafka_configs.insert({"auto.offset.reset", "beginning"});
 
-  kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n");
+  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
+               cudf::logic_error);
+}
 
-  cudf::io::read_csv_args in_args{cudf::io::source_info{&kc}};
-  in_args.dtype   = {"int8", "int16", "int32"};
-  in_args.header  = -1;
-  auto result     = cudf::io::read_csv(in_args);
-  auto const view = result.tbl->view();
+TEST_F(KafkaDatasourceTest, InvalidConfigValues)
+{
+  // Give a made up configuration value
+  std::map<std::string, std::string> kafka_configs;
+  kafka_configs.insert({"completely_made_up_config", "wrong"});
+
+  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
+               cudf::logic_error);
+
+  kafka_configs.clear();
+
+  // Give a good config property with a bad value
+  kafka_configs.insert({"message.max.bytes", "this should be a number not text"});
+  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
+               cudf::logic_error);
 }
 
 CUDF_DATASOURCE_TEST_PROGRAM_MAIN()

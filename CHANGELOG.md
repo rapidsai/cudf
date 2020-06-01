@@ -6,6 +6,7 @@
 - PR #5222 Adding clip feature support to DataFrame and Series
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
+- PR #3504 Add External Kafka Datasource
 
 ## Improvements
 - PR #5245 Add column reduction benchmark
@@ -233,7 +234,6 @@
 - PR #5213 Documentation enhancements to `cudf` python APIs
 - PR #5251 Fix more mispellings in cpp comments and strings
 - PR #5261 Add short git commit to conda package name
-- PR #5270 Add support to check for "NaT" and "None" strings while typecasting to `datetime64`
 - PR #5254 Deprecate nvstrings, nvcategory and nvtext
 - PR #5270 Add support to check for "NaT" and "None" strings while typecasting to `datetime64`
 - PR #5298 Remove unused native deps from java library
@@ -379,8 +379,6 @@
 - PR #3861 Added Series.sum feature for String
 - PR #4069 Added cast of numeric columns from/to String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
-- PR #3504 Add External Kafka Datasource
-- PR #4088 Added asString() on ColumnVector in Java that takes a format string
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
 - PR #4100 Add set_keys function for dictionary columns
@@ -887,9 +885,6 @@
 - PR #3490 Add pair iterators for columns
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
 - PR #3469 Add string functionality for replace API
-- PR #3527 Add string functionality for merge API
-- PR #3557 Add contiguous_split() function.
-- PR #3507 Define and implement new binary operation APIs
 - PR #3273 Define and implement new reduction APIs
 
 ## Improvements

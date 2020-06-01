@@ -138,7 +138,7 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
-option(BUILD_DATASOURCES "Configure CMake to build cuDF datasources" OFF)
+option(BUILD_CUIO "Configure CMake to build cuIO" OFF)
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
@@ -843,23 +843,23 @@ add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
 
 
 ####################################################################################################
-# - cuDF Datasources
-if(BUILD_DATASOURCES)
+# - cuIO - OFF by default due to increased number of dependencies
+if(BUILD_CUIO)
 
-    # Kafka datasource
-    message(STATUS "KAFKA DATASOURCE: ENABLED")
-    add_library(kafka_datasource
-        datasources/kafka/src/kafka_consumer.cpp
+    # cuIO library
+    add_library(libcuio
+        cuio/kafka/src/kafka_consumer.cpp
     )
 
-    include_directories("${CMAKE_SOURCE_DIR}/datasources/kafka/include")
+    # Include paths
+    include_directories("${CMAKE_SOURCE_DIR}/cuio/kafka/include")
     
     # Rename installation to proper name for later finding
-    set_target_properties(kafka_datasource PROPERTIES OUTPUT_NAME "KafkaDatasource")
-    set_target_properties(kafka_datasource PROPERTIES BUILD_RPATH "\$ORIGIN")
+    set_target_properties(libcuio PROPERTIES OUTPUT_NAME "cuIO")
+    set_target_properties(libcuio PROPERTIES BUILD_RPATH "\$ORIGIN")
 
     ###################################################################################################
-    # - find librdkafka -------------------------------------------------------------------------------
+    # cuIO - Kafka ------------------------------------------------------------------------------------
 
     find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
     find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
@@ -867,39 +867,52 @@ if(BUILD_DATASOURCES)
     message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
     message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
 
-    target_link_libraries(kafka_datasource ${RDKAFKA++_LIBRARY})
+    target_link_libraries(libcuio ${RDKAFKA++_LIBRARY})
 
-    target_link_libraries(cudf kafka_datasource)
+    ###################################################################################################
+    # - cuIO Install ----------------------------------------------------------------------------------
+    target_link_libraries(cudf libcuio)
 
-    install(TARGETS kafka_datasource
+    install(TARGETS libcuio
             DESTINATION lib
-            COMPONENT kafka_datasource)
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/datasource/kafka/include
+            COMPONENT libcuio)
+
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cuio/kafka/include
             DESTINATION include
-            COMPONENT kafka_datasource)
+            COMPONENT libcuio)
+
+    add_custom_target(install_cuio
+            COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=libcuio -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+            DEPENDS libcuio)
 
     ####################################################################################################
-    # - Datasource Tests
+    # - cuIO Tests
     if(BUILD_TESTS)
         if(GTEST_FOUND)
             message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
             include_directories(${GTEST_INCLUDE_DIR})
-            add_subdirectory(${CMAKE_SOURCE_DIR}/datasources/kafka/tests)
+            add_subdirectory(${CMAKE_SOURCE_DIR}/cuio/kafka/tests)
         else()
             message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
         endif(GTEST_FOUND)
     endif(BUILD_TESTS)
         
-    message(STATUS "KAFKA_DATASOURCE_TEST_LIST set to: ${KAFKA_DATASOURCE_TEST_LIST}")
+    message(STATUS "CUIO_TEST_LIST set to: ${CUIO_TEST_LIST}")
 
-    add_custom_target(build_tests_datasources
-                      DEPENDS ${KAFKA_DATASOURCE_TEST_LIST})
+    add_custom_target(build_tests_cuio
+                      DEPENDS ${CUIO_TEST_LIST})
 
-    add_custom_target(test_datasources
-                      COMMAND ctest -E "NVSTRINGS"
-                      DEPENDS build_tests_datasources)
+    add_custom_target(test_cuio
+                      COMMAND ctest -E "CUIO"
+                      DEPENDS build_tests_cuio)
 
     ####################################################################################################
-    # - Datasource Documentation
+    # - cuIO documentation
+    add_custom_command(OUTPUT CUIO_DOXYGEN
+                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cuio/doxygen
+                   COMMAND doxygen Doxyfile
+                   VERBATIM)
 
-endif(BUILD_DATASOURCES)
+    add_custom_target(docs_cuio DEPENDS CUIO_DOXYGEN)
+
+endif(BUILD_CUIO)

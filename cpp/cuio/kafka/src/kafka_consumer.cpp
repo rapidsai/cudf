@@ -15,6 +15,7 @@
  */
 
 #include "kafka_consumer.hpp"
+#include <librdkafka/rdkafkacpp.h>
 
 namespace cudf {
 namespace io {
@@ -28,15 +29,28 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
                                int64_t end_offset,
                                int batch_timeout,
                                std::string delimiter)
+  : topic_name_(topic_name),
+    partition_(partition),
+    start_offset_(start_offset),
+    end_offset_(end_offset),
+    batch_timeout_(batch_timeout),
+    delimiter_(delimiter)
 {
   kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
 
-  // Ignore 'errstr_' values. librdkafka guards against "invalid" values. 'errstr_' is only warning
-  // if improper key is provided, we ignore those messages from the consumer
-  for (auto const &x : configs) { kafka_conf_->set(x.first, x.second, errstr_); }
+  // Set configs and check for invalids
+  for (auto const &x : configs) {
+    conf_res_ = kafka_conf_->set(x.first, x.second, errstr_);
+    if (conf_res_ == RdKafka::Conf::ConfResult::CONF_UNKNOWN) {
+      CUDF_FAIL("'" + x.first + ", is an invalid librdkafka configuration property");
+    } else if (conf_res_ == RdKafka::Conf::ConfResult::CONF_INVALID) {
+      CUDF_FAIL("'" + x.second +
+                "' contains an invalid configuration value for librdkafka property '" + x.first +
+                "'");
+    }
+  }
 
-  // Kafka 0.9 > requires at least a group.id in the configuration so lets
-  // make sure that is present.
+  // Kafka 0.9 > requires group.id in the configuration
   conf_res_ = kafka_conf_->get("group.id", conf_val);
   if (conf_res_ == RdKafka::Conf::ConfResult::CONF_UNKNOWN) {
     CUDF_FAIL(
@@ -46,32 +60,9 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
   consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(
     RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
 
-  // We read fill the local buffer with messages so the datasource->size() invocation
+  // Pre fill the local buffer with messages so the datasource->size() invocation
   // will return a valid size.
-  int64_t messages_read = 0;
-  int64_t batch_size    = end_offset - start_offset;
-  int64_t end           = now() + batch_timeout;
-  int remaining_timeout = batch_timeout;
-
-  update_consumer_toppar_assignment(topic_name, partition, start_offset);
-
-  while (messages_read < batch_size) {
-    RdKafka::Message *msg = consumer_->consume(remaining_timeout);
-
-    if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
-      buffer_.append(static_cast<char *>(msg->payload()));
-      buffer_.append(delimiter);
-      messages_read++;
-    }
-
-    remaining_timeout = end - now();
-    if (remaining_timeout < 0) {
-      delete msg;
-      break;
-    }
-
-    delete msg;
-  }
+  consume_to_buffer();
 }
 
 std::unique_ptr<cudf::io::datasource::buffer> kafka_consumer::host_read(size_t offset, size_t size)

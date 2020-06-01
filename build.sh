@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -v -g -n -l -datasources --allgpuarch --disable_nvtx --show_depr_warn -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n] [-h] [-l] [-datasources]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -v -g -n -l -libcuio --allgpuarch --disable_nvtx --show_depr_warn -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n] [-h] [-l] [-libcuio]
    clean                - remove all existing build artifacts and configuration (start
                           over)
    libnvstrings         - build the nvstrings C++ code only
@@ -33,7 +33,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n
    -g                   - build for debug
    -n                   - no install step
    -l                   - build legacy tests
-   -datasources         - build the cudf C++ datasources
+   -libcuio             - build the cuio C++ code only
    --allgpuarch         - build for all supported GPU architectures
    --disable_nvtx       - disable inserting NVTX profiling ranges
    --show_depr_warn     - show cmake deprecation warnings
@@ -58,7 +58,7 @@ BUILD_NVTX=ON
 BUILD_TESTS=OFF
 BUILD_LEGACY_TESTS=OFF
 BUILD_DISABLE_DEPRECATION_WARNING=ON
-BUILD_DATASOURCES=OFF
+BUILD_CUIO=OFF
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -104,9 +104,6 @@ fi
 if hasArg -l; then
     BUILD_LEGACY_TESTS=ON
 fi
-if hasArg -datasources; then
-    BUILD_DATASOURCES=ON
-fi
 if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
 fi
@@ -121,6 +118,9 @@ if hasArg --disable_nvtx; then
 fi
 if hasArg --show_depr_warn; then
     BUILD_DISABLE_DEPRECATION_WARNING=OFF
+fi
+if hasArg -libcuio; then
+    BUILD_CUIO=ON
 fi
 
 # If clean given, run it prior to any other steps
@@ -148,7 +148,7 @@ fi
 ################################################################################
 # Configure, build, and install libnvstrings
 
-if buildAll || hasArg libnvstrings || hasArg libcudf; then
+if buildAll || hasArg libnvstrings || hasArg libcudf || hasArg -libcuio; then
 
     mkdir -p ${LIB_BUILD_DIR}
     cd ${LIB_BUILD_DIR}
@@ -160,7 +160,7 @@ if buildAll || hasArg libnvstrings || hasArg libcudf; then
           -DBUILD_LEGACY_TESTS=${BUILD_LEGACY_TESTS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-          -DBUILD_DATASOURCES=${BUILD_DATASOURCES} ..
+          -DBUILD_CUIO=${BUILD_CUIO} ..
 fi
 
 if buildAll || hasArg libnvstrings; then
@@ -201,10 +201,6 @@ if buildAll || hasArg libcudf; then
 
     if [[ ${BUILD_TESTS} == "ON" ]]; then
         make -j${PARALLEL_LEVEL} build_tests_cudf VERBOSE=${VERBOSE}
-
-        if hasArg -datasources; then
-            make -j${PARALLEL_LEVEL} build_tests_datasources VERBOSE=${VERBOSE}
-        fi
     fi
 
     if [[ ${BUILD_BENCHMARKS} == "ON" ]]; then
@@ -232,5 +228,20 @@ if buildAll || hasArg dask_cudf; then
         python setup.py install --single-version-externally-managed --record=record.txt
     else
         python setup.py build_ext --inplace
+    fi
+fi
+
+# Do not build cuio with 'buildAll'
+if hasArg -libcuio; then
+
+    cd ${LIB_BUILD_DIR}
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        make -j${PARALLEL_LEVEL} install_cuio VERBOSE=${VERBOSE}
+    else
+        make -j${PARALLEL_LEVEL} cuio VERBOSE=${VERBOSE}
+    fi
+
+    if [[ ${BUILD_TESTS} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_tests_cuio VERBOSE=${VERBOSE}
     fi
 fi

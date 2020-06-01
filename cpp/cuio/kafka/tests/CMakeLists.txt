@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(KAFKA_DATASOURCE_TESTS LANGUAGES C CXX CUDA)
+project(CUIO_TESTS LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -22,27 +22,9 @@ elseif(DEFINED ENV{CONDA_PREFIX})
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 
 ###################################################################################################
-# - common test utils -----------------------------------------------------------------------------
-
-# add_library(cudftestutil STATIC
-#             "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/utilities/base_fixture.cpp"
-#             "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/utilities/column_utilities.cu"
-#             "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/utilities/scalar_utilities.cu"
-#             "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/utilities/table_utilities.cu"
-#             "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/strings/utilities.cu")
-
-# set_property(TARGET cudftestutil PROPERTY POSITION_INDEPENDENT_CODE ON)
-
-#target_link_libraries(cudftestutil cudf)
-
-# install(TARGETS cudftestutil
-#         DESTINATION lib
-#         COMPONENT cudf)
-
-###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
-set(KAFKA_DATASOURCE_TEST_LIST CACHE INTERNAL "KAFKA_DATASOURCE_TEST_LIST")
+set(CUIO_TEST_LIST CACHE INTERNAL "CUIO_TEST_LIST")
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME}
@@ -52,7 +34,7 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
-    set(KAFKA_DATASOURCE_TEST_LIST ${KAFKA_DATASOURCE_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "KAFKA_DATASOURCE_TEST_LIST")
+    set(CUIO_TEST_LIST ${CUIO_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUIO_TEST_LIST")
 endfunction(ConfigureTest)
 
 ###################################################################################################
