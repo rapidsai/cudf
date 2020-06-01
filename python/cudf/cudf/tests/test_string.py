@@ -364,7 +364,7 @@ def test_string_len(ps_gs):
         # xref pandas-dev/#33436
         pytest.param(
             pd.Index(["f", "g", "h", "i", "j"]),
-            marks=pytest.mark.xfail(reason="Pandas bug"),
+            marks=pytest.mark.xfail(reason="https://github.com/pandas-dev/pandas/pull/33436"),
         ),
         (
             np.array(["f", "g", "h", "i", "j"]),
@@ -401,7 +401,7 @@ def test_string_len(ps_gs):
                 np.array(["f", "a", "b", "f", "a"]),
                 pd.Index(["f", "g", "h", "i", "j"]),
             ),
-            marks=pytest.mark.xfail(reason="Pandas bug"),
+            marks=pytest.mark.xfail(reason="https://github.com/pandas-dev/pandas/pull/33436"),
         ),
         pytest.param(
             [
@@ -414,7 +414,7 @@ def test_string_len(ps_gs):
                 np.array(["f", "a", "b", "f", "a"]),
                 pd.Index(["f", "g", "h", "i", "j"]),
             ],
-            marks=pytest.mark.xfail(reason="Pandas bug"),
+            marks=pytest.mark.xfail(reason="https://github.com/pandas-dev/pandas/pull/33436"),
         ),
     ],
 )
