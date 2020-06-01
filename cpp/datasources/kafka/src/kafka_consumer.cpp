@@ -15,27 +15,19 @@
  */
 
 #include "kafka_consumer.hpp"
-#include <memory>
 
 namespace cudf {
 namespace io {
 namespace external {
 namespace kafka {
 
-std::unique_ptr<cudf::io::datasource::buffer> kafka_consumer::host_read(size_t offset, size_t size)
-{
-  auto datasource_buffer = std::make_unique<message_buffer>("\n");
-
-  while (datasource_buffer->size() < size) {
-    RdKafka::Message *msg = consumer_->consume(default_timeout_);
-    if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) { datasource_buffer->add_message(msg); }
-    delete msg;
-  }
-
-  return datasource_buffer;
-}
-
-kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs)
+kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
+                               std::string topic_name,
+                               int partition,
+                               int64_t start_offset,
+                               int64_t end_offset,
+                               int batch_timeout,
+                               std::string delimiter)
 {
   kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
 
@@ -55,7 +47,48 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs)
 
   consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(
     RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
+
+  int64_t messages_read = 0;
+  int64_t batch_size    = end_offset - start_offset;
+  int64_t end           = now() + batch_timeout;
+  int remaining_timeout = batch_timeout;
+
+  update_consumer_toppar_assignment(topic_name, partition, start_offset);
+
+  while (messages_read < batch_size) {
+    RdKafka::Message *msg = consumer_->consume(remaining_timeout);
+
+    if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
+      buffer_.append(static_cast<char *>(msg->payload()));
+      buffer_.append(delimiter);
+      messages_read++;
+    }
+
+    remaining_timeout = end - now();
+    if (remaining_timeout < 0) {
+      delete msg;
+      break;
+    }
+
+    delete msg;
+  }
 }
+
+std::unique_ptr<cudf::io::datasource::buffer> kafka_consumer::host_read(size_t offset, size_t size)
+{
+  printf("kafka_consumer::host_read(first) called...\n");
+  printf("Offset: %lu, Size: %lu\n", offset, size);
+  size = std::min(size, buffer_.size() - offset);
+  return std::make_unique<message_buffer>((uint8_t *)buffer_.data() + offset, size);
+}
+
+size_t kafka_consumer::host_read(size_t offset, size_t size, uint8_t *dst)
+{
+  printf("kafka_consumer::host_read() called...\n");
+  return 0;
+}
+
+size_t kafka_consumer::size() const { return buffer_.size(); }
 
 int64_t kafka_consumer::get_committed_offset(std::string topic, int partition)
 {

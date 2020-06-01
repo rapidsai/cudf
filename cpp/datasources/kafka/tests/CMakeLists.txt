@@ -48,7 +48,7 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME}
                     ${CMAKE_TEST_SRC})
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest pthread cudf cudftestutil)
+    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest cudf pthread)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
@@ -95,3 +95,5 @@ endif(CONDA_LINK_DIRS)
 # - create tests ----------------------------------------------------------------------------------
 
 ConfigureTest(KAFKA_DATASOURCE_HOST_READ   "${CMAKE_CURRENT_SOURCE_DIR}/kafka_consumer_tests.cpp")
+
+enable_testing()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,31 +15,44 @@
  */
 
 #include <gtest/gtest.h>
+#include <map>
+#include <memory>
+#include <string>
+#include "kafka_consumer.hpp"
+
+#include <cudf/io/datasource.hpp>
+#include <cudf/io/functions.hpp>
+#include <cudf/strings/string_view.cuh>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
+
+#define CUDF_DATASOURCE_TEST_PROGRAM_MAIN() \
+  int main(int argc, char** argv)           \
+  {                                         \
+    ::testing::InitGoogleTest(&argc, argv); \
+    return RUN_ALL_TESTS();                 \
+  }
 
 struct KafkaDatasourceTest : public ::testing::Test {
 };
 
 TEST_F(KafkaDatasourceTest, UserImplementedSource)
 {
-  //   constexpr auto num_rows = 10;
-  //   auto int8_values        = random_values<int8_t>(num_rows);
-  //   auto int16_values       = random_values<int16_t>(num_rows);
-  //   auto int32_values       = random_values<int32_t>(num_rows);
+  namespace kafka = cudf::io::external::kafka;
 
-  //   std::ostringstream csv_data;
-  //   for (int i = 0; i < num_rows; ++i) {
-  //     csv_data << std::to_string(int8_values[i]) << "," << int16_values[i] << "," <<
-  //     int32_values[i]
-  //              << "\n";
-  //   }
-  //   TestSource source{csv_data.str()};
-  //   cudf_io::read_csv_args in_args{cudf_io::source_info{&source}};
-  //   in_args.dtype  = {"int8", "int16", "int32"};
-  //   in_args.header = -1;
-  //   auto result    = cudf_io::read_csv(in_args);
+  std::map<std::string, std::string> kafka_configs;
+  kafka_configs.insert({"bootstrap.servers", "localhost:9092"});
+  kafka_configs.insert({"group.id", "libcudf_consumer"});
+  kafka_configs.insert({"auto.offset.reset", "beginning"});
 
-  //   auto const view = result.tbl->view();
-  //   expect_column_data_equal(int8_values, view.column(0));
-  //   expect_column_data_equal(int16_values, view.column(1));
-  //   expect_column_data_equal(int32_values, view.column(2));
+  kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n");
+
+  cudf::io::read_csv_args in_args{cudf::io::source_info{&kc}};
+  in_args.dtype   = {"int8", "int16", "int32"};
+  in_args.header  = -1;
+  auto result     = cudf::io::read_csv(in_args);
+  auto const view = result.tbl->view();
 }
+
+CUDF_DATASOURCE_TEST_PROGRAM_MAIN()

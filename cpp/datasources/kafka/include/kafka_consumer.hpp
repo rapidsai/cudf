@@ -17,6 +17,7 @@
 
 #include <librdkafka/rdkafkacpp.h>
 #include <sys/time.h>
+#include <algorithm>
 #include <cudf/io/datasource.hpp>
 #include <map>
 #include <memory>
@@ -32,21 +33,19 @@ namespace kafka {
  **/
 class message_buffer : public cudf::io::datasource::buffer {
  public:
-  message_buffer(const char *message_delimter) : _message_delimiter(message_delimter) {}
+  message_buffer(uint8_t *data, size_t size) : _data(data), _size(size) {}
 
-  size_t size() const { return _buffer.size(); }
+  size_t size() const override { return _size; }
 
-  const uint8_t *data() const { return 0; }
-
-  bool add_message(RdKafka::Message *msg)
+  const uint8_t *data() const
   {
-    _buffer.append(static_cast<char *>(msg->payload()));
-    _buffer.append(_message_delimiter);
+    return _data;
+    // return reinterpret_cast<const uint8_t *>(&_buffer[0]); }
   }
 
  private:
-  const char *_message_delimiter;
-  std::string _buffer;
+  uint8_t *const _data;
+  size_t const _size;
 };
 
 /**
@@ -61,9 +60,19 @@ class kafka_consumer : public cudf::io::datasource {
    * @param configs key/value pairs of librdkafka configurations that will be
    *passed to the librdkafka client
    **/
-  kafka_consumer(std::map<std::string, std::string> configs);
+  kafka_consumer(std::map<std::string, std::string> configs,
+                 std::string topic_name,
+                 int partition,
+                 int64_t start_offset,
+                 int64_t end_offset,
+                 int batch_timeout,
+                 std::string delimiter);
 
   std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size);
+
+  size_t size() const;
+
+  size_t host_read(size_t offset, size_t size, uint8_t *dst);
 
   /**
    * @brief Acknowledge messages have been successfully read to the Kafka
@@ -156,10 +165,10 @@ class kafka_consumer : public cudf::io::datasource {
   RdKafka::ErrorCode err_;              // RDKafka ErrorCode from operation
   std::string errstr_;                  // Textual representation of Error
   std::string conf_val;                 // String value of a RDKafka configuration request
-  int32_t default_timeout_ = 10000;     // Default timeout for server bound operations - 10 seconds
 
+  int32_t default_timeout_    = 10000;  // Default timeout for server bound operations - 10 seconds
   int64_t kafka_start_offset_ = 0;
-  int32_t kafka_batch_size_   = 10000;  // 10K is the Kafka standard. Max is 999,999
+  int32_t default_batch_size_ = 10000;  // 10K is the Kafka standard. Max is 999,999
   int64_t msg_count_          = 0;      // Running tally of the messages consumed
   std::string buffer_;
 
