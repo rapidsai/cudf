@@ -59,9 +59,9 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 
   // The gather_map is initialized with gather_rows value to identify pass-through entries
   // when calling the gather_bitmask() which applies a pass-through whenever it finds a
-  // value outside the range of the target column. And the gather_rows value here will
-  // always be outside the valid range.
-  auto gather_map = rmm::device_vector<MapValueType>(gather_rows, gather_rows);
+  // value outside the range of the target column.
+  // We'll use the gather_rows value for this since it should always be outside the valid range.
+  auto gather_map = rmm::device_vector<size_type>(gather_rows, gather_rows);
 
   // Convert scatter map to a gather map
   thrust::scatter(
