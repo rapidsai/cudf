@@ -1207,7 +1207,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             arbitrary = cupy.asarray(arbitrary).astype(arb_dtype)
             current_dtype = arb_dtype
 
-        if desc["strides"] is not None and desc.get("mask", None) is None:
+        if (
+            desc["strides"] is not None
+            and desc["strides"] != current_dtype.itemsize
+            and desc.get("mask", None) is None
+        ):
             # Limitation in cupy: Cannot transform a masked array.
             # Hence guarding with mask == None check.
             arbitrary = cupy.ascontiguousarray(cupy.asarray(arbitrary))
