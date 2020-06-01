@@ -2160,12 +2160,14 @@ class DataFrame(Frame, Serializable):
         """
         return _DataFrameIlocIndexer(self)
 
+    @property
     def iat(self):
         """
         Alias for ``DataFrame.iloc``; provided for compatibility with Pandas.
         """
         return self.iloc
 
+    @property
     def at(self):
         """
         Alias for ``DataFrame.loc``; provided for compatibility with Pandas.
