@@ -325,11 +325,7 @@ class column_view : public detail::column_view_base {
   /**
    * TODO
    */
-  column_view logical_cast(data_type type)
-  {
-    CUDF_EXPECTS(is_logically_castable(_type, type), "types are not logically castable");
-    return column_view{type, _size, _data, _null_mask, _null_count, _offset, _children};
-  }
+  column_view logical_cast(data_type type);
 
   /**
    * @brief Returns the specified child

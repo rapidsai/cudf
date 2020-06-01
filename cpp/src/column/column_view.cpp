@@ -90,6 +90,12 @@ column_view::column_view(data_type type,
   }
 }
 
+column_view column_view::logical_cast(data_type type)
+{
+  CUDF_EXPECTS(is_logically_castable(_type, type), "types are not logically castable");
+  return column_view{type, _size, _data, _null_mask, _null_count, _offset, _children};
+}
+
 // Mutable view constructor
 mutable_column_view::mutable_column_view(data_type type,
                                          size_type size,
