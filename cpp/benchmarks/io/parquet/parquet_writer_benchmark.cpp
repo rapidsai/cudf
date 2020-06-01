@@ -32,7 +32,7 @@
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-constexpr int64_t data_size = 1 << 10;
+constexpr int64_t data_size = 512 << 20;
 
 namespace cudf_io = cudf::io;
 
@@ -45,38 +45,45 @@ void PQ_write(benchmark::State& state)
 {
   int64_t const total_desired_bytes = state.range(0);
   cudf::size_type const num_cols    = state.range(1);
+  cudf_io::compression_type const compression =
+    state.range(2) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
 
-  constexpr auto el_size = sizeof(T);
-  int64_t const num_rows = total_desired_bytes / (num_cols * el_size);
+  int64_t const col_bytes = total_desired_bytes / num_cols;
 
-  auto const tbl  = create_random_table<T>(num_cols, num_rows, true);
+  auto const tbl  = create_random_table<T>(num_cols, col_bytes, true);
   auto const view = tbl->view();
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf_io::write_parquet_args args{cudf_io::sink_info(), view};
+    cudf_io::write_parquet_args args{cudf_io::sink_info(), view, nullptr, compression};
     cudf_io::write_parquet(args);
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0));
 }
 
-#define PWBM_BENCHMARK_DEFINE(name, type)                 \
+#define UNCOMPRESSED 0
+#define SNAPPY 1
+
+#define PWBM_BENCHMARK(name, type, compression)           \
   BENCHMARK_TEMPLATE_DEFINE_F(ParquetWrite, name, type)   \
   (::benchmark::State & state) { PQ_write<type>(state); } \
   BENCHMARK_REGISTER_F(ParquetWrite, name)                \
-    ->Args({data_size, 64})                               \
+    ->Args({data_size, 64, compression})                  \
     ->Unit(benchmark::kMillisecond)                       \
     ->UseManualTime();
 
 // TODO: cover all supported types here
+#define PWBM_BENCH_ALL_TYPES(compression)                   \
+  PWBM_BENCHMARK(Short##compression, short, compression);   \
+  PWBM_BENCHMARK(Int##compression, int, compression);       \
+  PWBM_BENCHMARK(Long##compression, long, compression);     \
+  PWBM_BENCHMARK(Float##compression, float, compression);   \
+  PWBM_BENCHMARK(Double##compression, double, compression); \
+  PWBM_BENCHMARK(String##compression, std::string, compression);
 
-PWBM_BENCHMARK_DEFINE(Short, short);
-PWBM_BENCHMARK_DEFINE(Int, int);
-PWBM_BENCHMARK_DEFINE(Long, long);
+PWBM_BENCH_ALL_TYPES(UNCOMPRESSED)
 
-PWBM_BENCHMARK_DEFINE(Float, float);
-PWBM_BENCHMARK_DEFINE(Double, double);
+PWBM_BENCH_ALL_TYPES(SNAPPY)
 
-// TODO: add support for strings in create_random_table
-// PWBM_BENCHMARK_DEFINE(String, std::string);
+// TODO support random timestamps
