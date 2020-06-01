@@ -17,13 +17,14 @@ try:
             return x.host_serialize()
 
     @cuda_deserialize.register(Serializable)
-    @dask_deserialize.register(Serializable)
-    def deserialize_cudf_object(header, frames):
+    def cuda_deserialize_cudf_object(header, frames):
         with log_errors():
-            if header["serializer"] == "cuda":
-                return Serializable.device_deserialize(header, frames)
-            elif header["serializer"] == "dask":
-                return Serializable.host_deserialize(header, frames)
+            return Serializable.device_deserialize(header, frames)
+
+    @dask_deserialize.register(Serializable)
+    def dask_deserialize_cudf_object(header, frames):
+        with log_errors():
+            return Serializable.host_deserialize(header, frames)
 
 
 except ImportError:
