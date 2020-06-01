@@ -13,7 +13,7 @@
 
 ## Bug Fixes
 
-- PR #5306 Fix categorical scaler insertion
+- PR #5306 Fix categorical scalar insertion
 - PR #5283 Fix strings::ipv4_to_integers overflow to negative
 - PR #5269 Explicitly require NumPy
 - PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
