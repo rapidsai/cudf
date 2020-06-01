@@ -105,7 +105,9 @@ std::unique_ptr<column> slice_strings(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Returns a column of strings after searching for @p delimiter @p count number of
+ * @brief Slices a column of strings by using a delimiter as a slice point.
+ *
+ * Returns a column of strings after searching for @p delimiter @p count number of
  * times in the source @p strings forward if @p count is positive or backwards if @p count is
  * negative. If @p count is positive, it returns a substring from the start of the source @p
  * strings up until @p count occurrence of the @delimiter not including the @p delimiter.
@@ -145,7 +147,9 @@ std::unique_ptr<column> slice_strings(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Returns a column of strings after searching the delimiter defined per row from
+ * @brief Slices a column of strings by using a delimiter column as slice points.
+ *
+ * Returns a column of strings after searching the delimiter defined per row from
  * @p delimiter_strings @p count number of times in the source @p strings forward if @p count
  * is positive or backwards if @p count is negative. If @p count is positive, it returns a
  * substring from the start of the source @p strings up until @p count occurrence of the

@@ -3,7 +3,7 @@
 ## New Features
 
 - PR #5222 Adding clip feature support to DataFrame and Series
-- PR #5303 Add substring_index functionality for strings
+- PR #5303 Add slice_strings functionality using delimiter string
 
 ## Improvements
 - PR #5245 Add column reduction benchmark

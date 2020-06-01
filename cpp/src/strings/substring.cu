@@ -199,7 +199,7 @@ struct substring_from_fn {
   }
 };
 
-struct dispatch_substring_from_fn {
+struct compute_substrings_from_fn {
   /**
    * @brief Returns strings column with substrings based on the ranges in the
    * individual starts and stops column position values.
@@ -264,7 +264,7 @@ struct compute_substrings {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    return dispatch_substring_from_fn{}(d_column,
+    return compute_substrings_from_fn{}(d_column,
                                         null_count,
                                         starts_column.data<PositionType>(),
                                         stops_column.data<PositionType>(),
@@ -312,8 +312,7 @@ struct compute_substring_indices {
         // If the delimiter count is 0, result is empty string.
         // If the global delimiter or the row specific delimiter is invalid or if it is empty, row
         // value is empty.
-        if (!d_column.is_null(idx) && delimiter_count && delim_val_pair.second &&
-            !delim_val.empty()) {
+        if (!d_column.is_null(idx) && delim_val_pair.second && !delim_val.empty()) {
           auto const& col_val = d_column.element<string_view>(idx);
 
           // If the column value for the row is empty, the row value is empty.
@@ -377,7 +376,7 @@ std::unique_ptr<column> slice_strings(
   CUDF_EXPECTS(stops_column.null_count() == 0, "Parameter stops must not contain nulls.");
   CUDF_EXPECTS(starts_column.type().id() != data_type{BOOL8}.id(),
                "Positions values must not be bool type.");
-  CUDF_EXPECTS(is_fixed_width(starts_column.type()), "Positions values must be an integral type.");
+  CUDF_EXPECTS(is_fixed_width(starts_column.type()), "Positions values must be fixed width type.");
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
@@ -411,12 +410,16 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
-  // Compute the substring indices first
-  compute_substring_indices{}(
-    d_column, delimiter_itr, count, start_char_pos, end_char_pos, mr, stream);
+
+  // If delimiter count is 0, the output column will contain empty strings
+  if (count) {
+    // Compute the substring indices first
+    compute_substring_indices{}(
+      d_column, delimiter_itr, count, start_char_pos, end_char_pos, mr, stream);
+  }
 
   // Extract the substrings using the indices next
-  return dispatch_substring_from_fn{}(
+  return compute_substrings_from_fn{}(
     d_column, strings.null_count(), start_char_pos, end_char_pos, mr, stream);
 }
 
