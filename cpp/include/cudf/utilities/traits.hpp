@@ -373,7 +373,7 @@ constexpr inline bool is_nested(data_type type)
 /**
  * TODO
  */
-template <typename TypeFrom, typename TypeTo>
+template <typename FromType, typename ToType>
 struct is_logically_castable_impl : std::false_type {};
 
 // Allow cast to same type
@@ -394,22 +394,22 @@ MAP_CASTABLE_TYPES(cudf::timestamp_ms, cudf::timestamp_ms::duration::rep);
 MAP_CASTABLE_TYPES(cudf::timestamp_us, cudf::timestamp_us::duration::rep);
 MAP_CASTABLE_TYPES(cudf::timestamp_ns, cudf::timestamp_ns::duration::rep);
 
-template <typename TypeFrom>
+template <typename FromType>
 struct is_logically_castable_to_impl
 {
-  template <typename TypeTo>
+  template <typename ToType>
   constexpr bool operator()()
   {
-    return is_logically_castable_impl<TypeFrom, TypeTo>::value;
+    return is_logically_castable_impl<FromType, ToType>::value;
   }
 };
 
 struct is_logically_castable_from_impl
 {
-  template <typename TypeFrom>
+  template <typename FromType>
   constexpr bool operator()(data_type to)
   {
-    return type_dispatcher(to, is_logically_castable_to_impl<TypeFrom>{});
+    return type_dispatcher(to, is_logically_castable_to_impl<FromType>{});
   }
 };
 
