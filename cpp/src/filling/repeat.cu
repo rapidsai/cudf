@@ -135,12 +135,11 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
-                              scalar const& count,
+                              size_type count,
                               rmm::mr::device_memory_resource* mr,
                               cudaStream_t stream)
 {
-  CUDF_EXPECTS(count.is_valid(), "count cannot be null");
-  auto stride = cudf::type_dispatcher(count.type(), count_accessor{&count}, stream);
+  auto stride = count;
   CUDF_EXPECTS(stride >= 0, "count value should be non-negative");
   CUDF_EXPECTS(
     static_cast<int64_t>(input_table.num_rows()) * stride <= std::numeric_limits<size_type>::max(),
@@ -168,7 +167,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
-                              scalar const& count,
+                              size_type count,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
