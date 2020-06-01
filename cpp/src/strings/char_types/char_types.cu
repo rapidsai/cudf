@@ -110,9 +110,7 @@ std::unique_ptr<column> is_integer(
   return results;
 }
 
-bool all_integer(strings_column_view const& strings,
-                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                 cudaStream_t stream                 = 0)
+bool all_integer(strings_column_view const& strings, cudaStream_t stream = 0)
 {
   auto strings_column  = column_device_view::create(strings.parent(), stream);
   auto d_column        = *strings_column;
@@ -155,9 +153,7 @@ std::unique_ptr<column> is_float(
   return results;
 }
 
-bool all_float(strings_column_view const& strings,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-               cudaStream_t stream                 = 0)
+bool all_float(strings_column_view const& strings, cudaStream_t stream = 0)
 {
   auto strings_column  = column_device_view::create(strings.parent(), stream);
   auto d_column        = *strings_column;
@@ -199,16 +195,16 @@ std::unique_ptr<column> is_float(strings_column_view const& strings,
   return detail::is_float(strings, mr);
 }
 
-bool all_integer(strings_column_view const& strings, rmm::mr::device_memory_resource* mr)
+bool all_integer(strings_column_view const& strings)
 {
   CUDF_FUNC_RANGE();
-  return detail::all_integer(strings, mr);
+  return detail::all_integer(strings);
 }
 
-bool all_float(strings_column_view const& strings, rmm::mr::device_memory_resource* mr)
+bool all_float(strings_column_view const& strings)
 {
   CUDF_FUNC_RANGE();
-  return detail::all_float(strings, mr);
+  return detail::all_float(strings);
 }
 
 }  // namespace strings

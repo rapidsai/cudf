@@ -66,7 +66,7 @@ namespace strings {
  * @param strings Strings instance for this operation.
  * @param timestamp_type The timestamp type used for creating the output column.
  * @param format String specifying the timestamp format in strings.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New datetime column.
  */
 std::unique_ptr<column> to_timestamps(
@@ -117,7 +117,7 @@ std::unique_ptr<column> to_timestamps(
  * @param timestamps Timestamp values to convert.
  * @param format The string specifying output format.
  *        Default format is "%Y-%m-%dT%H:%M:%SZ".
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with formatted timestamps.
  */
 std::unique_ptr<column> from_timestamps(
