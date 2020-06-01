@@ -20,11 +20,11 @@
 - PR #5283 Fix strings::ipv4_to_integers overflow to negative
 - PR #5269 Explicitly require NumPy
 - PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
+- PR #5333 Fix `DataFrame.loc` issue with list like argument
 - PR #5299 Update package version for Java bindings
 - PR #5300 Add support to ignore `None` in `cudf.concat` input
 - PR #5334 Fix pickling sizeof test
 - PR #5337 Fix broken alias from DataFrame.{at,iat} to {loc, iloc}
-
 
 # cuDF 0.14.0 (Date TBD)
 
