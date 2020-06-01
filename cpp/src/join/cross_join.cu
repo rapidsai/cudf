@@ -30,27 +30,15 @@
 namespace cudf {
 namespace detail {
 /**
- * @brief  Performs a cross join on two tables (left, right)
+ * @copydoc cudf::cross_join
  *
- * The cross join returns the cartesian product of rows from each table.
- *
- * The approach is to repeat the left table by the number of rows in the right table
- * and tile the right table by the number of rows in the left table.
- *
- * @throws cudf::logic_error if number of columns in either `left` or `right` table is 0
- *
- * @param[in] left                  The left table
- * @param[in] right                 The right table
- * @param[in] mr                    Device memory resource to use for device memory allocation
- * @param[in] stream                Cuda stream
- *
- * @returns                         Result of cross joining `left` and `right` tables
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0)
+  cudaStream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   CUDF_EXPECTS(0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS(0 != right.num_columns(), "Right table is empty");
@@ -70,7 +58,7 @@ std::unique_ptr<cudf::table> cross_join(
   auto left_repeated                    = detail::repeat(left, num_repeats, mr, stream);
 
   // Tile right table
-  auto right_tiled = detail::tile(right, left.num_rows(), mr, stream);
+  auto right_tiled = detail::tile(right, left.num_rows(), stream, mr);
 
   // Concatenate all repeated/tiled columns into one table
   auto left_repeated_columns = left_repeated->release();
@@ -88,7 +76,7 @@ std::unique_ptr<cudf::table> cross_join(cudf::table_view const& left,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::cross_join(left, right, mr, 0);
+  return detail::cross_join(left, right, 0, mr);
 }
 
 }  // namespace cudf

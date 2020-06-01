@@ -25,11 +25,11 @@ namespace detail {
 /**
  * @copydoc cudf::tile
  *
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 std::unique_ptr<table> tile(table_view const& input,
                             size_type count,
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                            cudaStream_t stream                 = 0);
+                            cudaStream_t stream                 = 0,
+                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace detail
 }  // namespace cudf

@@ -39,8 +39,8 @@ struct tile_functor {
 namespace detail {
 std::unique_ptr<table> tile(const table_view &in,
                             size_type count,
-                            rmm::mr::device_memory_resource *mr,
-                            cudaStream_t stream)
+                            cudaStream_t stream,
+                            rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(count >= 0, "Count cannot be negative");
 
@@ -61,7 +61,7 @@ std::unique_ptr<table> tile(const table_view &in,
                             rmm::mr::device_memory_resource *mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::tile(in, count, mr, 0);
+  return detail::tile(in, count, 0, mr);
 }
 
 }  // namespace cudf
