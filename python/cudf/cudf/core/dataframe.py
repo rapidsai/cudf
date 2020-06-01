@@ -4367,6 +4367,14 @@ class DataFrame(Frame, Serializable):
         -------
         DataFrame
         """
+        warnings.warn(
+            "DataFrame.from_gpu_matrix will be removed in 0.16. \
+                Please use cudf.DataFrame() to create a DataFrame \
+                out of a gpu matrix",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         if data.ndim != 2:
             raise ValueError(
                 "matrix dimension expected 2 but found {!r}".format(data.ndim)
