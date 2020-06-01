@@ -201,6 +201,10 @@ if buildAll || hasArg libcudf; then
 
     if [[ ${BUILD_TESTS} == "ON" ]]; then
         make -j${PARALLEL_LEVEL} build_tests_cudf VERBOSE=${VERBOSE}
+
+        if hasArg -datasources; then
+            make -j${PARALLEL_LEVEL} build_tests_datasources VERBOSE=${VERBOSE}
+        fi
     fi
 
     if [[ ${BUILD_BENCHMARKS} == "ON" ]]; then

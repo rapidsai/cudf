@@ -15,28 +15,32 @@
  */
 
 #include "kafka_consumer.hpp"
+#include <memory>
 
 namespace cudf {
 namespace io {
 namespace external {
+namespace kafka {
 
-kafka_consumer::kafka_consumer()
+std::unique_ptr<cudf::io::datasource::buffer> kafka_consumer::host_read(size_t offset, size_t size)
 {
-  // Create an empty RdKafka::Conf instance. The configurations will be applied
-  // later.
-  kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
+  auto datasource_buffer = std::make_unique<message_buffer>("\n");
+
+  while (datasource_buffer->size() < size) {
+    RdKafka::Message *msg = consumer_->consume(default_timeout_);
+    if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) { datasource_buffer->add_message(msg); }
+    delete msg;
+  }
+
+  return datasource_buffer;
 }
 
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs)
 {
-  // Construct the RdKafka::Conf object
   kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
-  configure_datasource(configs);
-}
 
-bool kafka_consumer::configure_datasource(std::map<std::string, std::string> configs)
-{
-  // Set Kafka global configurations
+  // Ignore 'errstr_' values. librdkafka guards against "invalid" values. 'errstr_' is only warning
+  // if improper key is provided, we ignore those as those don't influent the consumer.
   for (auto const &x : configs) { kafka_conf_->set(x.first, x.second, errstr_); }
 
   // Kafka 0.9 > requires at least a group.id in the configuration so lets
@@ -51,8 +55,6 @@ bool kafka_consumer::configure_datasource(std::map<std::string, std::string> con
 
   consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(
     RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
-
-  return true;
 }
 
 int64_t kafka_consumer::get_committed_offset(std::string topic, int partition)
@@ -175,6 +177,7 @@ bool kafka_consumer::close(int timeout)
   delete kafka_conf_.get();
 }
 
+}  // namespace kafka
 }  // namespace external
 }  // namespace io
 }  // namespace cudf

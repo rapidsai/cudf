@@ -844,14 +844,12 @@ add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
 
 ####################################################################################################
 # - cuDF Datasources
-message(STATUS "BUILD_DATASOURCES: ${BUILD_DATASOURCES}")
 if(BUILD_DATASOURCES)
 
     # Kafka datasource
     message(STATUS "KAFKA DATASOURCE: ENABLED")
     add_library(kafka_datasource
         datasources/kafka/src/kafka_consumer.cpp
-        datasources/kafka/src/kafka_producer.cpp
     )
 
     include_directories("${CMAKE_SOURCE_DIR}/datasources/kafka/include")
@@ -879,5 +877,29 @@ if(BUILD_DATASOURCES)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/datasource/kafka/include
             DESTINATION include
             COMPONENT kafka_datasource)
+
+    ####################################################################################################
+    # - Datasource Tests
+    if(BUILD_TESTS)
+        if(GTEST_FOUND)
+            message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+            include_directories(${GTEST_INCLUDE_DIR})
+            add_subdirectory(${CMAKE_SOURCE_DIR}/datasources/kafka/tests)
+        else()
+            message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+        endif(GTEST_FOUND)
+    endif(BUILD_TESTS)
+        
+    message(STATUS "KAFKA_DATASOURCE_TEST_LIST set to: ${KAFKA_DATASOURCE_TEST_LIST}")
+
+    add_custom_target(build_tests_datasources
+                      DEPENDS ${KAFKA_DATASOURCE_TEST_LIST})
+
+    add_custom_target(test_datasources
+                      COMMAND ctest -E "NVSTRINGS"
+                      DEPENDS build_tests_datasources)
+
+    ####################################################################################################
+    # - Datasource Documentation
 
 endif(BUILD_DATASOURCES)

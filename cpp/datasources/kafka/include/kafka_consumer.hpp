@@ -15,23 +15,45 @@
  */
 #pragma once
 
-#include "kafka_datasource.hpp"
+#include <librdkafka/rdkafkacpp.h>
+#include <sys/time.h>
+#include <cudf/io/datasource.hpp>
+#include <map>
+#include <memory>
+#include <string>
 
 namespace cudf {
 namespace io {
 namespace external {
+namespace kafka {
+
+/**
+ * @brief implementation for holding kafka messages
+ **/
+class message_buffer : public cudf::io::datasource::buffer {
+ public:
+  message_buffer(const char *message_delimter) : _message_delimiter(message_delimter) {}
+
+  size_t size() const { return _buffer.size(); }
+
+  const uint8_t *data() const { return 0; }
+
+  bool add_message(RdKafka::Message *msg)
+  {
+    _buffer.append(static_cast<char *>(msg->payload()));
+    _buffer.append(_message_delimiter);
+  }
+
+ private:
+  const char *_message_delimiter;
+  std::string _buffer;
+};
 
 /**
  * @brief libcudf external datasource for Apache Kafka
  **/
-class kafka_consumer : public kafka_datasource {
+class kafka_consumer : public cudf::io::datasource {
  public:
-  /**
-   * @brief Create Kafka Consumer instance that is unable to consume/produce
-   * but is able to assist with configurations
-   **/
-  kafka_consumer();
-
   /**
    * @brief Create a fully capable Kafka Consumer instance that can
    *consume/produce
@@ -41,16 +63,7 @@ class kafka_consumer : public kafka_datasource {
    **/
   kafka_consumer(std::map<std::string, std::string> configs);
 
-  /**
-   * @brief Applies the specified configurations to the underlying librdkafka
-   *client
-   *
-   * @param configs Map of key/value pairs that represent the librdkafka
-   *configurations to be applied
-   *
-   * @return True on success or False otherwise
-   **/
-  bool configure_datasource(std::map<std::string, std::string> configs);
+  std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size);
 
   /**
    * @brief Acknowledge messages have been successfully read to the Kafka
@@ -136,10 +149,18 @@ class kafka_consumer : public kafka_datasource {
   virtual ~kafka_consumer(){};
 
  protected:
+  std::unique_ptr<RdKafka::Conf> kafka_conf_;  // RDKafka configuration object
   std::unique_ptr<RdKafka::KafkaConsumer> consumer_ = NULL;
-  int64_t kafka_start_offset_                       = 0;
-  int32_t kafka_batch_size_ = 10000;  // 10K is the Kafka standard. Max is 999,999
-  int64_t msg_count_        = 0;      // Running tally of the messages consumed
+
+  RdKafka::Conf::ConfResult conf_res_;  // Result from configuration update operation
+  RdKafka::ErrorCode err_;              // RDKafka ErrorCode from operation
+  std::string errstr_;                  // Textual representation of Error
+  std::string conf_val;                 // String value of a RDKafka configuration request
+  int32_t default_timeout_ = 10000;     // Default timeout for server bound operations - 10 seconds
+
+  int64_t kafka_start_offset_ = 0;
+  int32_t kafka_batch_size_   = 10000;  // 10K is the Kafka standard. Max is 999,999
+  int64_t msg_count_          = 0;      // Running tally of the messages consumed
   std::string buffer_;
 
  private:
@@ -154,8 +175,19 @@ class kafka_consumer : public kafka_datasource {
     _toppars.push_back(RdKafka::TopicPartition::create(topic, partition, offset));
     return consumer_.get()->assign(_toppars);
   }
+
+  /**
+   * Convenience method for getting "now()" in Kafka's standard format
+   **/
+  int64_t now()
+  {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return ((int64_t)tv.tv_sec * 1000) + (tv.tv_usec / 1000);
+  }
 };
 
+}  // namespace kafka
 }  // namespace external
 }  // namespace io
 }  // namespace cudf
