@@ -757,16 +757,12 @@ class Series(Frame, Serializable):
             return self.loc[arg]
 
     def __iter__(self):
-        self.i = 0
-        return self
-
-    def __next__(self):
-        if self.i < len(self):
-            result = self._column[self.i]
-            self.i += 1
-            return result
-        else:
-            raise StopIteration
+        raise TypeError(
+            "Creation of an Iterator over a cudf.Series is not allowed, "
+            "To create an iterator, explicitly convert to any of the objects "
+            "supporting iteration using .to_pandas(), "
+            ".to_arrow(), .values_host."
+        )
 
     def __setitem__(self, key, value):
         if isinstance(key, slice):
@@ -930,14 +926,16 @@ class Series(Frame, Serializable):
         else:
             output = preprocess.to_pandas().__repr__()
         lines = output.split("\n")
-        if is_categorical_dtype(preprocess.dtype):
-            for idx, value in enumerate(preprocess):
-                if value is None:
-                    lines[idx] = lines[idx].replace(" NaN", "null")
-        if is_datetime_dtype(preprocess.dtype):
-            for idx, value in enumerate(preprocess):
-                if value is None:
-                    lines[idx] = lines[idx].replace(" NaT", "null")
+        if preprocess.null_count:
+            if is_categorical_dtype(preprocess.dtype):
+                for idx in range(len(preprocess)):
+                    if preprocess[idx] is None:
+                        lines[idx] = lines[idx].replace(" NaN", "null")
+
+            if is_datetime_dtype(preprocess.dtype):
+                for idx in range(len(preprocess)):
+                    if preprocess[idx] is None:
+                        lines[idx] = lines[idx].replace(" NaT", "null")
         if is_categorical_dtype(preprocess.dtype):
             category_memory = lines[-1]
             lines = lines[:-1]

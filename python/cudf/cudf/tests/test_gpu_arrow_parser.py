@@ -159,7 +159,7 @@ def test_gpu_parse_arrow_cats():
     assert sr_idx.dtype == np.int32
     assert sr_name.dtype == "category"
     assert sr_weight.dtype == np.double
-    assert set(sr_name) == {"apple", "pear", "orange", "grape"}
+    assert set(sr_name.to_pandas()) == {"apple", "pear", "orange", "grape"}
 
     expected = get_expected_values()
     for i in range(len(sr_idx)):
@@ -208,7 +208,18 @@ def test_gpu_parse_arrow_int(dtype):
     columns = gar.to_dict()
     assert columns["depdelay"].dtype == dtype
     assert set(columns) == {"depdelay", "arrdelay"}
-    assert list(columns["depdelay"]) == [0, 0, -3, -2, 11, 6, -7, -4, 4, -3]
+    assert list(columns["depdelay"].to_pandas()) == [
+        0,
+        0,
+        -3,
+        -2,
+        11,
+        6,
+        -7,
+        -4,
+        4,
+        -3,
+    ]
 
 
 @pytest.mark.skipif(

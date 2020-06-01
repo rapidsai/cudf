@@ -198,7 +198,7 @@ def test_groupby_cats():
     df["cats"] = pd.Categorical(list("aabaacaab"))
     df["vals"] = np.random.random(len(df))
 
-    cats = np.asarray(list(df["cats"]))
+    cats = df["cats"].values_host
     vals = df["vals"].to_array()
 
     grouped = df.groupby(["cats"], as_index=False).mean()
@@ -207,10 +207,9 @@ def test_groupby_cats():
 
     got_cats = grouped["cats"]
 
-    for c, v in zip(got_cats, got_vals):
-        print(c, v)
-        expect = vals[cats == c].mean()
-        np.testing.assert_almost_equal(v, expect)
+    for i in range(len(got_vals)):
+        expect = vals[cats == got_cats[i]].mean()
+        np.testing.assert_almost_equal(got_vals[i], expect)
 
 
 def test_groupby_iterate_groups():

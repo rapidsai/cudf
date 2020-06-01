@@ -263,7 +263,7 @@ def test_dataframe_basic():
     gdf = DataFrame({"id": [0, 1], "val": [None, None]})
     gdf["val"] = gdf["val"].astype("int")
 
-    assert all(gdf["val"].isnull())
+    assert gdf["val"].isnull().all()
 
 
 def test_dataframe_drop_method():
@@ -444,7 +444,7 @@ def test_dataframe_to_string():
     df["c"] = masked
 
     # check data
-    values = list(masked)
+    values = masked.copy()
     validids = [0, 2, 3, 5]
     densearray = masked.to_array()
     np.testing.assert_equal(data[validids], densearray)

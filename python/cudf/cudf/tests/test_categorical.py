@@ -177,8 +177,8 @@ def test_categorical_element_indexing():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    assert list(pdsr) == list(sr)
-    assert list(pdsr.cat.codes) == list(sr.cat.codes)
+    assert_eq(pdsr, sr)
+    assert_eq(pdsr.cat.codes, sr.cat.codes)
 
 
 def test_categorical_masking():
