@@ -198,9 +198,7 @@ def is_list_like(obj):
     """
     from collections.abc import Sequence
 
-    if isinstance(obj, (Sequence,)) and not isinstance(obj, (str, bytes)):
-        return True
-    if isinstance(obj, np.ndarray):
+    if isinstance(obj, (Sequence, np.ndarray)) and not isinstance(obj, (str, bytes)):
         return True
     else:
         return False
