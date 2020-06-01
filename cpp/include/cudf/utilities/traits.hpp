@@ -370,5 +370,68 @@ constexpr inline bool is_nested(data_type type)
   return cudf::type_dispatcher(type, is_nested_impl{});
 }
 
+/**
+ * TODO
+ */
+template <typename TypeFrom, typename TypeTo>
+constexpr inline bool is_logically_castable()
+{
+  return false;
+}
+
+// Allow cast to same type
+template <typename Type>
+constexpr inline bool is_logically_castable<Type, Type>()
+{
+  return true;
+}
+
+#ifndef MAP_CASTABLE_TYPES
+#define MAP_CASTABLE_TYPES(Type1, Type2) \
+template <> \
+constexpr inline bool is_logically_castable<Type1, Type2>() \
+{ \
+  return true; \
+} \
+template <> \
+constexpr inline bool is_logically_castable<Type2, Type1>() \
+{ \
+  return true; \
+}
+#endif
+
+MAP_CASTABLE_TYPES(cudf::timestamp_D, cudf::timestamp_D::duration::rep);
+MAP_CASTABLE_TYPES(cudf::timestamp_s, cudf::timestamp_s::duration::rep);
+MAP_CASTABLE_TYPES(cudf::timestamp_ms, cudf::timestamp_ms::duration::rep);
+MAP_CASTABLE_TYPES(cudf::timestamp_us, cudf::timestamp_us::duration::rep);
+MAP_CASTABLE_TYPES(cudf::timestamp_ns, cudf::timestamp_ns::duration::rep);
+
+template <typename TypeFrom>
+struct is_logically_castable_to_impl
+{
+  template <typename TypeTo>
+  constexpr bool operator()()
+  {
+    return is_logically_castable<TypeFrom, TypeTo>();
+  }
+};
+
+struct is_logically_castable_from_impl
+{
+  template <typename TypeFrom>
+  constexpr bool operator()(data_type to)
+  {
+    return type_dispatcher(to, is_logically_castable_to_impl<TypeFrom>{});
+  }
+};
+
+/**
+ * TODO
+ */
+constexpr bool is_logically_castable(data_type from, data_type to)
+{
+  return type_dispatcher(from, is_logically_castable_from_impl{}, to);
+}
+
 /** @} */
 }  // namespace cudf
