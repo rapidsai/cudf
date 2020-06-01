@@ -114,12 +114,15 @@ def test_json_reader(json_files):
 
         assert_eq(expect_series, got_series)
 
-@pytest.mark.xfail(reason='https://github.com/pandas-dev/pandas/pull/33373')
 @pytest.mark.filterwarnings("ignore:Can't infer compression")
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_json_writer(tmpdir, pdf, gdf):
     pdf_df_fname = tmpdir.join("pdf_df.json")
     gdf_df_fname = tmpdir.join("gdf_df.json")
+
+    #xref 'https://github.com/pandas-dev/pandas/pull/33373')
+    pdf = pdf.drop('col_bool', axis=1)
+    gdf = gdf.drop('col_bool', axis=1)
 
     pdf.to_json(pdf_df_fname)
     gdf.to_json(gdf_df_fname)
