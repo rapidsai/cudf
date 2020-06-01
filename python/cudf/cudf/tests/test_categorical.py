@@ -692,8 +692,11 @@ def test_categorical_insertion(data, dtype):
     pd_df["a"] = np.ones(len(data))
     cd_df = gd.from_pandas(pd_df)
 
-    pd_df.assign(cat_col=pd.Series(data, dtype=dtype).cat.categorical)
-    cd_df.assign(cat_col=pd.Series(data, dtype=dtype).cat.categorical)
+    cat_col = pd.Categorical(
+        values=data, categories=list(dtype.categories), ordered=None
+    )
+    pd_df.assign(cat_col=cat_col)
+    cd_df.assign(cat_col=cat_col)
     assert_eq(pd_df, cd_df)
 <<<<<<< HEAD
 =======
