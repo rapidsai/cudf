@@ -127,7 +127,9 @@ class Frame(libcudf.table.Table):
                                 cols[idx]
                                 .cat()
                                 ._set_categories(
-                                    categories[idx], is_unique=True
+                                    cols[idx].cat().categories,
+                                    categories[idx],
+                                    is_unique=True,
                                 )
                                 .codes
                             )
@@ -352,6 +354,132 @@ class Frame(libcudf.table.Table):
                     result.index = self.index[start:stop]
                 result.columns = self.columns
                 return result
+
+    def clip(self, lower=None, upper=None, inplace=False, axis=1):
+        """
+        Trim values at input threshold(s).
+
+        Assigns values outside boundary to boundary values.
+        Thresholds can be singular values or array like,
+        and in the latter case the clipping is performed
+        element-wise in the specified axis. Currently only
+        `axis=1` is supported.
+
+        Parameters
+        ----------
+        lower : scalar or array_like, default None
+            Minimum threshold value. All values below this
+            threshold will be set to it. If it is None,
+            there will be no clipping based on lower.
+            In case of Series/Index, lower is expected to be
+            a scalar or an array of size 1.
+        upper : scalar or array_like, default None
+            Maximum threshold value. All values below this
+            threshold will be set to it. If it is None,
+            there will be no clipping based on upper.
+            In case of Series, upper is expected to be
+            a scalar or an array of size 1.
+        inplace : bool, default False
+
+        Returns
+        -------
+        Clipped DataFrame/Series/Index/MultiIndex
+
+        Examples
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3, 4], "b":['a', 'b', 'c', 'd']})
+        >>> df.clip(lower=[2, 'b'], upper=[3, 'c'])
+           a  b
+        0  2  b
+        1  2  b
+        2  3  c
+        3  3  c
+
+        >>> df.clip(lower=None, upper=[3, 'c'])
+           a  b
+        0  1  a
+        1  2  b
+        2  3  c
+        3  3  c
+
+        >>> df.clip(lower=[2, 'b'], upper=None)
+           a  b
+        0  2  b
+        1  2  b
+        2  3  c
+        3  4  d
+
+        >>> df.clip(lower=2, upper=3, inplace=True)
+        >>> df
+           a  b
+        0  2  2
+        1  2  3
+        2  3  3
+        3  3  3
+
+        >>> import cudf
+        >>> sr = cudf.Series([1, 2, 3, 4])
+        >>> sr.clip(lower=2, upper=3)
+        0    2
+        1    2
+        2    3
+        3    3
+        dtype: int64
+
+        >>> sr.clip(lower=None, upper=3)
+        0    1
+        1    2
+        2    3
+        3    3
+        dtype: int64
+
+        >>> sr.clip(lower=2, upper=None, inplace=True)
+        >>> sr
+        0    2
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        """
+
+        if axis != 1:
+            raise NotImplementedError("`axis is not yet supported in clip`")
+
+        if lower is None and upper is None:
+            return None if inplace is True else self.copy(deep=True)
+
+        if is_scalar(lower):
+            lower = np.full(self._num_columns, lower)
+        if is_scalar(upper):
+            upper = np.full(self._num_columns, upper)
+
+        if len(lower) != len(upper):
+            raise ValueError("Length of lower and upper should be equal")
+
+        if len(lower) != self._num_columns:
+            raise ValueError(
+                """Length of lower/upper should be
+                equal to number of columns in
+                DataFrame/Series/Index/MultiIndex"""
+            )
+
+        output = self.copy(deep=False)
+        if output.ndim == 1:
+            # In case of series and Index,
+            # swap lower and upper if lower > upper
+            if (
+                lower[0] is not None
+                and upper[0] is not None
+                and (lower[0] > upper[0])
+            ):
+                lower[0], upper[0] = upper[0], lower[0]
+
+        for i, name in enumerate(self._data):
+            output._data[name] = self._data[name].clip(lower[i], upper[i])
+
+        output._copy_categories(self, include_index=False)
+
+        return self._mimic_inplace(output, inplace=inplace)
 
     def _normalize_scalars(self, other):
         """
@@ -1466,19 +1594,36 @@ class Frame(libcudf.table.Table):
     def _merge(
         self,
         right,
-        on,
-        left_on,
-        right_on,
-        left_index,
-        right_index,
-        how,
-        sort,
-        lsuffix,
-        rsuffix,
-        method,
-        indicator,
-        suffixes,
+        on=None,
+        left_on=None,
+        right_on=None,
+        left_index=False,
+        right_index=False,
+        how="inner",
+        sort=False,
+        lsuffix=None,
+        rsuffix=None,
+        method="hash",
+        indicator=False,
+        suffixes=("_x", "_y"),
     ):
+        # Merge doesn't support right, so just swap
+        if how == "right":
+            return right._merge(
+                self,
+                on=on,
+                left_on=right_on,
+                right_on=left_on,
+                left_index=right_index,
+                right_index=left_index,
+                how="left",
+                sort=sort,
+                lsuffix=rsuffix,
+                rsuffix=lsuffix,
+                method=method,
+                indicator=indicator,
+                suffixes=suffixes,
+            )
 
         lhs = self
         rhs = right
@@ -1509,7 +1654,7 @@ class Frame(libcudf.table.Table):
         # the key column on the other side will be used to sort.
         # If no index is specified, return a new RangeIndex
         if sort:
-            to_sort = self.__class__()
+            to_sort = cudf.DataFrame()
             if left_index and right_index:
                 by = list(to_return._index._data.columns)
                 if left_on and right_on:
@@ -1521,13 +1666,16 @@ class Frame(libcudf.table.Table):
             else:
                 # left_on == right_on, or different names but same columns
                 # in both cases we can sort by either
-                by = list(to_return[mergeop.left_on]._data.columns)
+                by = [to_return._data[name] for name in mergeop.left_on]
             for i, col in enumerate(by):
                 to_sort[i] = col
             inds = to_sort.argsort()
-            to_return = to_return.take(
-                inds, keep_index=(left_index or right_index)
-            )
+            if isinstance(to_return, cudf.Index):
+                to_return = to_return.take(inds)
+            else:
+                to_return = to_return.take(
+                    inds, keep_index=(left_index or right_index)
+                )
             return to_return
         else:
             return to_return

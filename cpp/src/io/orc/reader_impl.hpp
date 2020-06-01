@@ -58,7 +58,7 @@ class reader::impl {
    *
    * @param source Dataset source
    * @param options Settings for controlling reading behavior
-   * @param mr Resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<datasource> source,
                 reader_options const &options,
@@ -72,7 +72,7 @@ class reader::impl {
    * @param stripe Stripe index to select
    * @param max_stripe_count Max number of consecutive stripes if greater than 0
    * @param stripe_indices Indices of individual stripes to load if non-null [max_stripe_count]
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with metadata
    */
@@ -94,7 +94,7 @@ class reader::impl {
    * @param num_stripes Number of stripes making up column chunks
    * @param row_groups List of row index descriptors
    * @param row_index_stride Distance between each row index
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Device buffer to decompressed page data
    */
@@ -118,7 +118,7 @@ class reader::impl {
    * @param row_groups List of row index descriptors
    * @param row_index_stride Distance between each row index
    * @param out_buffers Output columns' device buffers
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks,
                           size_t num_dicts,

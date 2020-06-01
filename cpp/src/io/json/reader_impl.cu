@@ -174,7 +174,7 @@ void reader::impl::decompress_input()
  *
  * Does not upload the entire file to the GPU
  *
- * @param[in] stream Cuda stream to execute gpu operations on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return void
  **/
@@ -293,7 +293,7 @@ void reader::impl::upload_data_to_device()
  *
  * Sets the column_names_ data member
  *
- * @param[in] stream Cuda stream to execute gpu operations on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return void
  **/
@@ -347,7 +347,7 @@ void reader::impl::set_column_names(cudaStream_t stream)
  *
  * If user does not pass the data types, deduces types from the file content
  *
- * @param[in] stream Cuda stream to execute gpu operations on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return void
  **/
@@ -425,7 +425,7 @@ void reader::impl::set_data_types(cudaStream_t stream)
 /**
  * @brief Parse the input data and store results a table
  *
- * @param[in] stream Cuda stream to execute gpu operations on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return table_with_metadata struct
  **/
@@ -507,7 +507,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
  *
  * @param[in] range_offset Number of bytes offset from the start
  * @param[in] range_size Bytes to read; use `0` for all remaining data
- * @param[in] stream Cuda stream to execute gpu operations on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return Unique pointer to the table data
  **/

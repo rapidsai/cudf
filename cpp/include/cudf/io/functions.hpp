@@ -73,7 +73,8 @@ struct read_avro_args {
  * @endcode
  *
  * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
  *
  * @return The set of columns along with metadata
  */
@@ -146,7 +147,8 @@ struct read_json_args {
  * @endcode
  *
  * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
  *
  * @return The set of columns along with metadata
  */
@@ -266,7 +268,8 @@ struct read_csv_args {
  * @endcode
  *
  * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
  *
  * @return The set of columns along with metadata
  */
@@ -346,7 +349,7 @@ struct write_csv_args : detail::csv::writer_options {
  * @endcode
  *
  * @param args Settings for controlling writing behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource to use for device memory allocation
  */
 void write_csv(write_csv_args const& args,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -407,7 +410,8 @@ struct read_orc_args {
  * @endcode
  *
  * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
  *
  * @return The set of columns
  */
@@ -461,7 +465,8 @@ struct read_parquet_args {
  * @endcode
  *
  * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
  *
  * @return The set of columns along with metadata
  */
@@ -517,7 +522,7 @@ struct write_orc_args {
  * @endcode
  *
  * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource to use for device memory allocation
  */
 void write_orc(write_orc_args const& args,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -578,7 +583,7 @@ struct orc_chunked_state;
  * @endcode
  *
  * @param[in] args Settings for controlling writing behavior
- * @param[in] mr Optional resource to use for device memory allocation
+ * @param[in] mr Device memory resource to use for device memory allocation
  *
  * @returns pointer to an anonymous state structure storing information about the chunked write.
  * this pointer must be passed to all subsequent write_orc_chunked() and write_orc_chunked_end()
@@ -665,7 +670,7 @@ struct write_parquet_args {
  * @endcode
  *
  * @param args Settings for controlling writing behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource to use for device memory allocation
  *
  * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
  *         requested in write_parquet_args (empty blob otherwise)
@@ -746,7 +751,7 @@ struct pq_chunked_state;
  * @endcode
  *
  * @param[in] args Settings for controlling writing behavior
- * @param[in] mr Optional resource to use for device memory allocation
+ * @param[in] mr Device memory resource to use for device memory allocation
  *
  * @returns pointer to an anonymous state structure storing information about the chunked write.
  * this pointer must be passed to all subsequent write_parquet_chunked() and
