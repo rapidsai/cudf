@@ -9,7 +9,7 @@ FetchContent_Declare(
     GIT_TAG        1.9.10
     GIT_SHALLOW    true
     PATCH_COMMAND
-        COMMAND    sed -i "508,509 s/$<SEMICOLON>/ = 0$<SEMICOLON>/" cub/device/dispatch/dispatch_histogram.cuh
+        COMMAND    sed -i "494 a histogram_sweep_config.template Init<typename Policy110::HistogramSweepPolicy>()$<SEMICOLON>" cub/device/dispatch/dispatch_histogram.cuh
 )
 
 FetchContent_GetProperties(cub)
