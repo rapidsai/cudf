@@ -3,13 +3,16 @@
 ## New Features
 
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #5342 Add support for `StringMethods.__getitem__`
 
 ## Improvements
-
+- PR #5245 Add column reduction benchmark
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
 - PR #5308 Coerce frames to `Buffer`s in deserialization
+- PR #5309 Handle host frames in serialization
+- PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
 
 ## Bug Fixes
@@ -18,8 +21,10 @@
 - PR #5269 Explicitly require NumPy
 - PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
 - PR #5299 Update package version for Java bindings
+- PR #5300 Add support to ignore `None` in `cudf.concat` input
+- PR #5334 Fix pickling sizeof test
+- PR #5337 Fix broken alias from DataFrame.{at,iat} to {loc, iloc}
 - PR #5319 Disallow SUM and specialize MEAN of timestamp types
-
 
 
 # cuDF 0.14.0 (Date TBD)
@@ -58,6 +63,7 @@
 - PR #5192 Add support for `cudf.to_datetime`
 - PR #5203 Add Java bindings for is_integer and is_float
 - PR #5205 Add ci test for libcudf, libnvstrings headers existence check in meta.yml
+- PR #5239 Support for custom cuIO datasource classes
 - PR #5293 Add Java bindings for replace_with_backrefs
 
 ## Improvements
@@ -225,7 +231,10 @@
 - PR #5213 Documentation enhancements to `cudf` python APIs
 - PR #5251 Fix more mispellings in cpp comments and strings
 - PR #5261 Add short git commit to conda package name
+- PR #5254 Deprecate nvstrings, nvcategory and nvtext
 - PR #5270 Add support to check for "NaT" and "None" strings while typecasting to `datetime64`
+- PR #5298 Remove unused native deps from java library
+- PR #5216 Make documentation uniform for params
 
 ## Bug Fixes
 
@@ -352,6 +361,7 @@
 - PR #5224 Add new headers from 5198 to libcudf/meta.yaml
 - PR #5228 Fix datetime64 scalar dtype handling for unsupported time units
 - PR #5256 ORC reader: fix loading individual timestamp columns
+- PR #5285 Fix DEBUG compilation failure due to `fixed_point.hpp`
 
 
 # cuDF 0.13.0 (31 Mar 2020)

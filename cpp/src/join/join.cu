@@ -117,8 +117,7 @@ struct valid_range {
  * @Param right_indices Vector of indices
  * @Param left_table_row_count Number of rows of left table
  * @Param right_table_row_count Number of rows of right table
- * @param stream Optional, stream on which all memory allocations and copies
- * will be performed
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @Returns  Pair of vectors containing the left join indices complement
  */
@@ -191,8 +190,7 @@ get_left_join_indices_complement(rmm::device_vector<size_type>& right_indices,
  *
  * @param left  Table of left columns to join
  * @param right Table of right  columns to join
- * @param stream stream on which all memory allocations and copies
- * will be performed
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @tparam join_kind The type of join to be performed
  *
  * @returns Join output indices vector pair
@@ -392,10 +390,8 @@ std::unique_ptr<table> construct_join_output_df(
  * full join.
  * Else, for every column in `left_on` and `right_on`, an output column will
  * be produced.
- * @param mr The memory resource that will be used for allocating
- * the device memory for the new table
- * @param stream Optional, stream on which all memory allocations and copies
- * will be performed
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @tparam join_kind The type of join to be performed
  *
