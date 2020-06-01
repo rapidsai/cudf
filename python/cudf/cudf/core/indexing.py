@@ -176,6 +176,10 @@ class _DataFrameIndexer(object):
             if type(arg[0]) is slice:
                 if not is_scalar(arg[1]):
                     return False
+            elif pd.api.types.is_list_like(arg[0]) and (
+                pd.api.types.is_list_like(arg[1]) or type(arg[1]) is slice
+            ):
+                return False
             else:
                 if pd.api.types.is_bool_dtype(
                     as_column(arg[0]).dtype
