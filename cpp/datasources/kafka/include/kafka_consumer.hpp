@@ -29,36 +29,38 @@ namespace external {
 namespace kafka {
 
 /**
- * @brief implementation for holding kafka messages
- **/
-class message_buffer : public cudf::io::datasource::buffer {
- public:
-  message_buffer(uint8_t *data, size_t size) : _data(data), _size(size) {}
-
-  size_t size() const override { return _size; }
-
-  const uint8_t *data() const
-  {
-    return _data;
-    // return reinterpret_cast<const uint8_t *>(&_buffer[0]); }
-  }
-
- private:
-  uint8_t *const _data;
-  size_t const _size;
-};
-
-/**
  * @brief libcudf external datasource for Apache Kafka
  **/
 class kafka_consumer : public cudf::io::datasource {
+  /**
+   * @brief Implementation for holding kafka messages
+   **/
+  class message_buffer : public buffer {
+   public:
+    message_buffer(uint8_t *data, size_t size) : _data(data), _size(size) {}
+
+    size_t size() const { return _size; }
+
+    const uint8_t *data() const { return _data; }
+
+   private:
+    uint8_t *const _data;
+    size_t const _size;
+  };
+
  public:
   /**
-   * @brief Create a fully capable Kafka Consumer instance that can
-   *consume/produce
+   * @brief Instantiate a Kafka consumer object
    *
    * @param configs key/value pairs of librdkafka configurations that will be
-   *passed to the librdkafka client
+   *                passed to the librdkafka client
+   * @param topic_name name of the Kafka topic to consume from
+   * @param partition partition to consume from; 0 - (TOPIC_NUM_PARTITIONS - 1)
+   * @param start_offset seek position for the specified TOPPAR (Topic/Partition combo)
+   * @param end_offset position in the specified TOPPAR to read to
+   * @param batch_timeout maximum read time allowed. If end_offset is not reached before
+   *                      batch_timeout is a smaller subset will be returned
+   * @param delimiter optional delimiter that should be placed between kafka messages, Ex: "\n"
    **/
   kafka_consumer(std::map<std::string, std::string> configs,
                  std::string topic_name,
@@ -75,84 +77,6 @@ class kafka_consumer : public cudf::io::datasource {
   size_t host_read(size_t offset, size_t size, uint8_t *dst);
 
   /**
-   * @brief Acknowledge messages have been successfully read to the Kafka
-   *cluster
-   *
-   * @param topic Name of the topic the offset should be set for
-   * @param partition Topic partition for the offset
-   * @param offset The offset value that should be applied as the last read
-   *message
-   *
-   * @return True on success and False otherwise
-   **/
-  bool commit_offset(std::string topic, int partition, int64_t offset);
-
-  /**
-   * @brief Retrieves the earliest and latest message offsets for the specified
-   *TOPPAR
-   *
-   * @param topic Name of the topic the offset should be set for
-   * @param partition Topic partition for the offset
-   * @param timeout how long the operation should wait for a response from the
-   *Kafka server before throwing error
-   * @param cached True query Kafka server, False use the last response received
-   *cache value
-   *
-   * @return Map containing keys "low" & "high" along with the int64_t offset
-   *for the specified TOPPAR instance
-   **/
-  std::map<std::string, int64_t> get_watermark_offset(std::string topic,
-                                                      int partition,
-                                                      int timeout,
-                                                      bool cached);
-
-  /**
-   * @brief Retrieves the latest committed offset for a TOPPAR instance
-   *
-   * @param topic Kafka Topic name
-   * @param partition Associated Topic partition number
-   *
-   * @return Offset of the latest commiited offset
-   **/
-  int64_t get_committed_offset(std::string topic, int partition);
-
-  /**
-   * @brief Read messages from a Kafka TOPPAR based on parameters
-   *
-   * @param topic Name of Kafka topic to read from
-   * @param partition Partition in the Topic to read from
-   * @param start_offset Beginning offset for the read operation
-   * @param end_offset Last message that should be read from the TOPPAR
-   * @param timeout Millisecond timeout before the read operation should fail
-   * @param delimiter The delimiter that should be applied to the concatenated
-   *messages before being sent to cuDF
-   *
-   * @return String with all of the individual messages from Kafka concatenated
-   *together ready for handoff to cuDF
-   **/
-  std::string consume_range(std::string topic,
-                            int partition,
-                            int64_t start_offset,
-                            int64_t end_offset,
-                            int batch_timeout,
-                            std::string delimiter);
-
-  /**
-   * @brief Invoke librdkafka unsubscribe from the Kafka TOPPAR instance
-   *
-   * @return True if success or False otherwise
-   **/
-  bool unsubscribe();
-
-  /**
-   * @brief Close and free all socket, memory, and filesystem resources used by
-   *this consumer
-   *
-   * @return True on success or False otherwise
-   **/
-  bool close(int timeout);
-
-  /**
    * @brief Base class destructor
    **/
   virtual ~kafka_consumer(){};
@@ -166,10 +90,6 @@ class kafka_consumer : public cudf::io::datasource {
   std::string errstr_;                  // Textual representation of Error
   std::string conf_val;                 // String value of a RDKafka configuration request
 
-  int32_t default_timeout_    = 10000;  // Default timeout for server bound operations - 10 seconds
-  int64_t kafka_start_offset_ = 0;
-  int32_t default_batch_size_ = 10000;  // 10K is the Kafka standard. Max is 999,999
-  int64_t msg_count_          = 0;      // Running tally of the messages consumed
   std::string buffer_;
 
  private:
