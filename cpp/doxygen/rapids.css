@@ -1,0 +1,68 @@
+.sm-dox {
+  background-image:none;
+  background-color: #7306ff;
+  color: white;
+  font-family:"Open Sans",sans-serif;
+  text-transform: uppercase;
+  text-decoration: none;
+  text-shadow: none;
+}
+
+.sm-dox a, 
+.sm-dox a:focus,
+.sm-dox a:hover,
+.sm-dox a:active,
+.sm-dox a.highlighted {
+  color: white;
+  font-family:"Open Sans",sans-serif;
+  text-decoration: none;
+  text-shadow: none;
+  font-size: 1em;
+  font-weight: normal;
+  background-image:none;
+}
+
+.sm-dox a:hover {
+  background-image:none;
+  color: #a785e7;
+  -webkit-transition: all 0.3s ease-in-out;
+  -moz-transition: all 0.3s ease-in-out;
+  -o-transition: all 0.3s ease-in-out;
+  transition: all 0.3s ease-in-out;
+}
+
+.sm-dox ul a:hover {
+  background-image:none;
+  color: black;
+  -webkit-transition: all 0.3s ease-in-out;
+  -moz-transition: all 0.3s ease-in-out;
+  -o-transition: all 0.3s ease-in-out;
+  transition: all 0.3s ease-in-out;
+}
+
+.sm-dox a.current {
+  font-weight: bold;
+}
+
+.sm-dox a span.sub-arrow {
+  color: white;
+}
+
+.navpath ul
+{
+	font-size: 13px;
+  background-image:none;
+	height:30px;
+  line-height:30px;
+  background-color: #FAF6FF;
+	color:#AB57FF;
+	border:solid 1px #D3A8FF;
+	overflow:hidden;
+	margin:0px;
+	padding:0px;
+}
+
+.navpath li.navelem {
+  background-color: #FAF6FF;
+  /*background-color: #efefef;
+}
