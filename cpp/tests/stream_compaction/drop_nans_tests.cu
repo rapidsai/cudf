@@ -128,3 +128,13 @@ TEST_F(DropNANsTest, EmptyKeys)
   auto got = cudf::drop_nans(input, keys);
   cudf::test::expect_tables_equal(input, got->view());
 }
+
+TEST_F(DropNANsTest, NonFloatingKey)
+{
+  cudf::test::fixed_width_column_wrapper<float> col1{{1.0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{2};
+  cudf::test::fixed_width_column_wrapper<double> col3{{3.0}};
+  cudf::table_view input{{col1, col2, col3}};
+  std::vector<cudf::size_type> keys{0, 1};
+  EXPECT_THROW(cudf::drop_nans(input, keys), cudf::logic_error);
+}

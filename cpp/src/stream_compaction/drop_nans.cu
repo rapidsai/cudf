@@ -90,9 +90,10 @@ std::unique_ptr<table> drop_nans(table_view const& input,
     return std::make_unique<table>(input, stream, mr);
   }
 
-  for (auto key_col = keys_view.begin(); key_col < keys_view.end(); ++key_col)
+  for (auto key_col = keys_view.begin(); key_col < keys_view.end(); ++key_col) {
     CUDF_EXPECTS((key_col->type().id() == FLOAT32) || (key_col->type().id() == FLOAT64),
                  "Key column is not of type floating-point");
+  }
 
   auto keys_device_view = cudf::table_device_view::create(keys_view, stream);
 

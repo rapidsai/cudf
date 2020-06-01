@@ -105,7 +105,7 @@ std::unique_ptr<table> drop_nulls(
  * @brief Filters a table to remove NANs with threshold count.
  *
  * Filters the rows of the `input` considering specified columns indicated in
- * `keys` for NANs. These key columns should be of floating-point type.
+ * `keys` for NANs. These key columns must be of floating-point type.
  *
  * Given an input table_view, row `i` from the input columns is copied to
  * the output if the same row `i` of @p keys has at least @p keep_threshold
@@ -148,7 +148,7 @@ std::unique_ptr<table> drop_nans(
  * @brief Filters a table to remove NANs.
  *
  * Filters the rows of the `input` considering specified columns indicated in
- * `keys` for NANs. These key columns should be of floating-point type.
+ * `keys` for NANs. These key columns must be of floating-point type.
  *
  * @code{.pseudo}
  *          input   {col1: {1.0, 2.0, 3.0, NAN},
