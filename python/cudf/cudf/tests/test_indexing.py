@@ -248,6 +248,12 @@ def test_dataframe_loc(scalar, step):
     # Full slice
     assert_eq(df.loc[:, "c"], pdf.loc[:, "c"])
 
+    # Repeat with at[]
+    assert_eq(df.loc[:, ["a"]], df.at[:, ["a"]])
+    assert_eq(df.loc[:, "d"], df.at[:, "d"])
+    assert_eq(df.loc[scalar], df.at[scalar])
+    assert_eq(df.loc[:, "c"], df.at[:, "c"])
+
     begin = 110
     end = 122
 
@@ -271,6 +277,16 @@ def test_dataframe_loc(scalar, step):
         df.loc[begin, "a":"a"], pdf.loc[begin, "a":"a"], check_dtype=False
     )
 
+    # Repeat with at[]
+    assert_eq(
+        df.loc[begin:end:step, ["c", "d", "a"]],
+        df.at[begin:end:step, ["c", "d", "a"]],
+    )
+    assert_eq(df.loc[begin:end, ["c", "d"]], df.at[begin:end, ["c", "d"]])
+    assert_eq(df.loc[begin:end:step, "a":"c"], df.at[begin:end:step, "a":"c"])
+    assert_eq(df.loc[begin:begin, "a"], df.at[begin:begin, "a"])
+    assert_eq(df.loc[begin, "a":"a"], df.at[begin, "a":"a"], check_dtype=False)
+
     # Make int64 index
     offset = 50
     df2 = df[offset:]
@@ -281,6 +297,9 @@ def test_dataframe_loc(scalar, step):
         df2.loc[begin:end, ["c", "d", "a"]],
         pdf2.loc[begin:end, ["c", "d", "a"]],
     )
+
+    # loc with list like indexing
+    assert_eq(df.loc[[0]], pdf.loc[[0]])
 
 
 def test_dataframe_loc_duplicate_index_scalar():
@@ -537,6 +556,22 @@ def test_dataframe_iloc(nelem):
     assert_eq(gdf.iloc[0], pdf.iloc[0])
     assert_eq(gdf.iloc[1], pdf.iloc[1])
     assert_eq(gdf.iloc[nelem - 1], pdf.iloc[nelem - 1])
+
+    # Repeat the above with iat[]
+    assert_eq(gdf.iloc[-1:1], gdf.iat[-1:1])
+    assert_eq(gdf.iloc[nelem - 1 : -1], gdf.iat[nelem - 1 : -1])
+    assert_eq(gdf.iloc[0 : nelem - 1], gdf.iat[0 : nelem - 1])
+    assert_eq(gdf.iloc[0:nelem], gdf.iat[0:nelem])
+    assert_eq(gdf.iloc[1:1], gdf.iat[1:1])
+    assert_eq(gdf.iloc[1:2], gdf.iat[1:2])
+    assert_eq(gdf.iloc[nelem - 1 : nelem + 1], gdf.iat[nelem - 1 : nelem + 1])
+    assert_eq(gdf.iloc[nelem : nelem * 2], gdf.iat[nelem : nelem * 2])
+
+    assert_eq(gdf.iloc[-1 * nelem], gdf.iat[-1 * nelem])
+    assert_eq(gdf.iloc[-1], gdf.iat[-1])
+    assert_eq(gdf.iloc[0], gdf.iat[0])
+    assert_eq(gdf.iloc[1], gdf.iat[1])
+    assert_eq(gdf.iloc[nelem - 1], gdf.iat[nelem - 1])
 
 
 @pytest.mark.xfail(raises=AssertionError, reason="Series.index are different")
