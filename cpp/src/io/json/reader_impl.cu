@@ -132,9 +132,9 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
     source_ = datasource::create(filepath_, range_offset, map_range_size);
   }
 
-  if (!source_->empty()) {
+  if (!source_->is_empty()) {
     auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
-    buffer_        = source_->get_buffer(range_offset, data_size);
+    buffer_        = source_->host_read(range_offset, data_size);
   }
 
   byte_range_offset_ = range_offset;
@@ -174,7 +174,7 @@ void reader::impl::decompress_input()
  *
  * Does not upload the entire file to the GPU
  *
- * @param[in] stream Cuda stream to execute gpu operations on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return void
  **/
@@ -293,7 +293,7 @@ void reader::impl::upload_data_to_device()
  *
  * Sets the column_names_ data member
  *
- * @param[in] stream Cuda stream to execute gpu operations on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return void
  **/
@@ -347,7 +347,7 @@ void reader::impl::set_column_names(cudaStream_t stream)
  *
  * If user does not pass the data types, deduces types from the file content
  *
- * @param[in] stream Cuda stream to execute gpu operations on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return void
  **/
@@ -425,7 +425,7 @@ void reader::impl::set_data_types(cudaStream_t stream)
 /**
  * @brief Parse the input data and store results a table
  *
- * @param[in] stream Cuda stream to execute gpu operations on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return table_with_metadata struct
  **/
@@ -507,7 +507,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
  *
  * @param[in] range_offset Number of bytes offset from the start
  * @param[in] range_size Bytes to read; use `0` for all remaining data
- * @param[in] stream Cuda stream to execute gpu operations on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return Unique pointer to the table data
  **/
@@ -546,19 +546,10 @@ reader::reader(std::string filepath,
 }
 
 // Forward to implementation
-reader::reader(const char *buffer,
-               size_t length,
+reader::reader(std::unique_ptr<cudf::io::datasource> source,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), "", options, mr))
-{
-}
-
-// Forward to implementation
-reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
-               reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), "", options, mr))
+  : _impl(std::make_unique<impl>(std::move(source), "", options, mr))
 {
 }
 

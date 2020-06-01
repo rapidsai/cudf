@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-20, NVIDIA CORPORATION.
 
 import csv
 import gzip
@@ -1321,6 +1321,33 @@ def test_csv_writer_file_handle(tmpdir):
 
     gdf2 = pd.read_csv(gdf_df_fname)
     assert_eq(gdf, gdf2)
+
+
+def test_csv_writer_file_append(tmpdir):
+
+    gdf1 = cudf.DataFrame({"a": [1, 2, 3], "b": ["xxx", "yyyy", "zzzzz"]})
+    gdf2 = cudf.DataFrame({"a": [4, 5, 6], "b": ["foo", "bar", "baz"]})
+
+    gdf_df_fname = tmpdir.join("gdf_df_append.csv")
+    with open(gdf_df_fname, "w") as f:
+        gdf1.to_csv(f, index=False)
+    with open(gdf_df_fname, "a") as f:
+        gdf2.to_csv(f, header=False, index=False)
+
+    result = cudf.read_csv(gdf_df_fname)
+    expected = cudf.concat([gdf1, gdf2], ignore_index=True)
+    assert_eq(result, expected)
+
+
+def test_csv_writer_buffer(tmpdir):
+
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": ["xxx", "yyyy", "zzzzz"]})
+
+    buffer = BytesIO()
+    gdf.to_csv(buffer, index=False)
+
+    result = cudf.read_csv(buffer)
+    assert_eq(result, gdf)
 
 
 @pytest.mark.parametrize("dtype", dtypes)
