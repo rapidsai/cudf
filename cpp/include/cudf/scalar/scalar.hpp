@@ -416,4 +416,76 @@ class timestamp_scalar : public detail::fixed_width_scalar<T> {
   typename T::duration::rep ticks_since_epoch() { return this->value().time_since_epoch().count(); }
 };
 
+/**
+ * @brief An owning class to represent a duration value in device memory
+ *
+ * @ingroup scalar_classes
+ *
+ * @tparam T the data type of the duration value
+ * @see cudf/wrappers/durations.hpp for a list of allowed types
+ */
+template <typename T>
+class duration_scalar : public detail::fixed_width_scalar<T> {
+  static_assert(is_duration<T>(), "Unexpected non-duration type");
+
+ public:
+  duration_scalar()                             = default;
+  ~duration_scalar()                            = default;
+  duration_scalar(duration_scalar&& other)      = default;
+  duration_scalar(duration_scalar const& other) = default;
+  duration_scalar& operator=(duration_scalar const& other) = delete;
+  duration_scalar& operator=(duration_scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new duration scalar object
+   *
+   * @param value The initial value of the scalar
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  duration_scalar(T value,
+                  bool is_valid                       = true,
+                  cudaStream_t stream                 = 0,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
+  {
+  }
+
+  /**
+   * @brief Construct a new duration scalar object from an integer
+   *
+   * @param value Integer representing number of ticks
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  duration_scalar(typename T::rep value,
+                  bool is_valid,
+                  cudaStream_t stream                 = 0,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
+  {
+  }
+
+  /**
+   * @brief Construct a new duration scalar object from existing device memory.
+   *
+   * @param[in] data The scalar's data in device memory
+   * @param[in] is_valid Whether the value held by the scalar is valid
+   */
+  duration_scalar(rmm::device_scalar<T>&& data,
+                  bool is_valid                       = true,
+                  cudaStream_t stream                 = 0,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
+  {
+  }
+
+  /**
+   * @brief Return the duration in number of ticks.
+   */
+  typename T::rep count() { return this->value().count(); }
+};
+
 }  // namespace cudf
