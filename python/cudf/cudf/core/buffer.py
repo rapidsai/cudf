@@ -3,6 +3,7 @@ import operator
 import pickle
 
 import numpy as np
+from cupy.core.internal import get_c_contiguity
 
 import rmm
 from rmm import DeviceBuffer, _DevicePointer
@@ -150,5 +151,5 @@ def confirm_1d_contiguous(array_interface):
     shape = array_interface["shape"]
     itemsize = np.dtype(array_interface["typestr"]).itemsize
     if strides is not None:
-        if not cupy.core.internal.get_c_contiguity(shape, strides, itemsize):
+        if not get_c_contiguity(shape, strides, itemsize):
             raise ValueError("Buffer data must be 1D C-contiguous")
