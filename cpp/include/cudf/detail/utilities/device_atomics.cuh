@@ -35,6 +35,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <type_traits>
 
@@ -443,6 +444,19 @@ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
   // Unwrap the input timestamp to its underlying duration value representation.
   // Use the underlying representation's type to apply operation for the cudf::detail::timestamp
   auto update_value_rep = update_value.time_since_epoch().count();
+  auto fun              = cudf::detail::genericAtomicOperationImpl<R, BinaryOp>{};
+  return T(fun(reinterpret_cast<R*>(address), update_value_rep, op));
+}
+
+// specialization for cudf::detail::duration types
+template <typename T, typename BinaryOp>
+typename std::enable_if_t<cudf::is_duration<T>(), T> __forceinline__ __device__
+genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
+{
+  using R = typename T::rep;
+  // Unwrap the input duration to its underlying duration value representation.
+  // Use the underlying representation's type to apply operation for the cudf::detail::duration
+  auto update_value_rep = update_value.count();
   auto fun              = cudf::detail::genericAtomicOperationImpl<R, BinaryOp>{};
   return T(fun(reinterpret_cast<R*>(address), update_value_rep, op));
 }
