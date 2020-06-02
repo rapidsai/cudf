@@ -5525,12 +5525,24 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
     assert_eq(pdf, gdf, check_dtype=False)
 
 
-@pytest.mark.parametrize("col_data", [range(5), ["a"], [1], []])
+@pytest.mark.parametrize(
+    "col_data",
+    [
+        range(5),
+        ["a", "b", "x", "y", "z"],
+        [1.0, 0.213, 0.34332],
+        ["a"],
+        [1],
+        [0.2323],
+        [],
+    ],
+)
 @pytest.mark.parametrize(
     "assign_val",
     [
         1,
         2,
+        0.32324,
         "abc",
         np.array("abc", dtype="object"),
         np.array("abc", dtype="str"),
