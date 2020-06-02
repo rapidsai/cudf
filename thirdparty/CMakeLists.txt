@@ -8,6 +8,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/thrust/cub.git
     GIT_TAG        1.9.10
     GIT_SHALLOW    true
+    # TODO(rongou): remove this after upgrading to new CUB release.
     PATCH_COMMAND
         COMMAND    sed -i "494 a histogram_sweep_config.template Init<typename Policy110::HistogramSweepPolicy>()$<SEMICOLON>" cub/device/dispatch/dispatch_histogram.cuh
 )
