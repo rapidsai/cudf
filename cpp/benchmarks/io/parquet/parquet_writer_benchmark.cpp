@@ -73,17 +73,21 @@ void PQ_write(benchmark::State& state)
     ->Unit(benchmark::kMillisecond)                       \
     ->UseManualTime();
 
-// TODO: cover all supported types here
-#define PWBM_BENCH_ALL_TYPES(compression)                   \
-  PWBM_BENCHMARK(Short##compression, short, compression);   \
-  PWBM_BENCHMARK(Int##compression, int, compression);       \
-  PWBM_BENCHMARK(Long##compression, long, compression);     \
-  PWBM_BENCHMARK(Float##compression, float, compression);   \
-  PWBM_BENCHMARK(Double##compression, double, compression); \
-  PWBM_BENCHMARK(String##compression, std::string, compression);
+#define PWBM_BENCH_ALL_TYPES(compression)                                      \
+  PWBM_BENCHMARK(Boolean##compression, bool, compression);                     \
+  PWBM_BENCHMARK(Byte##compression, int8_t, compression);                      \
+  PWBM_BENCHMARK(Short##compression, int16_t, compression);                    \
+  PWBM_BENCHMARK(Int##compression, int32_t, compression);                      \
+  PWBM_BENCHMARK(Long##compression, int64_t, compression);                     \
+  PWBM_BENCHMARK(Float##compression, float, compression);                      \
+  PWBM_BENCHMARK(Double##compression, double, compression);                    \
+  PWBM_BENCHMARK(String##compression, std::string, compression);               \
+  PWBM_BENCHMARK(Timestamp_days##compression, cudf::timestamp_D, compression); \
+  PWBM_BENCHMARK(Timestamp_sec##compression, cudf::timestamp_s, compression);  \
+  PWBM_BENCHMARK(Timestamp_ms##compression, cudf::timestamp_ms, compression);  \
+  PWBM_BENCHMARK(Timestamp_us##compression, cudf::timestamp_us, compression);  \
+  PWBM_BENCHMARK(Timestamp_ns##compression, cudf::timestamp_ns, compression);
 
 PWBM_BENCH_ALL_TYPES(UNCOMPRESSED)
 
 PWBM_BENCH_ALL_TYPES(SNAPPY)
-
-// TODO support random timestamps
