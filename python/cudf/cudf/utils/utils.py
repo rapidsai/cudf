@@ -58,7 +58,7 @@ def check_equals_int(a, b):
 
 
 def scalar_broadcast_to(scalar, size, dtype=None):
-    from cudf.utils.dtypes import to_cudf_compatible_scalar, is_string_dtype
+    from cudf.utils.dtypes import to_cudf_compatible_scalar
     from cudf.core.column import column_empty
 
     if isinstance(size, (tuple, list)):
@@ -72,13 +72,10 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     if isinstance(scalar, pd.Categorical):
         return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
 
-    if isinstance(scalar, str) and (is_string_dtype(dtype) or dtype is None):
-        dtype = "object"
-    else:
-        scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
-        dtype = scalar.dtype
+    scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
+    dtype = scalar.dtype
 
-    if np.dtype(dtype) == np.dtype("object"):
+    if np.dtype(dtype).kind in ("O", "U"):
         from cudf.core.column import as_column
 
         gather_map = cupy.zeros(size, dtype="int32")

@@ -162,8 +162,6 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if val is None:
         return val
 
-    dtype = "str" if is_string_dtype(dtype) else dtype
-
     if not is_scalar(val):
         raise ValueError(
             f"Cannot convert value of type {type(val).__name__} "
@@ -171,7 +169,10 @@ def to_cudf_compatible_scalar(val, dtype=None):
         )
 
     if isinstance(val, np.ndarray) and np.ndim(val) == 0:
-        val = np.asscalar(val)
+        val = val.item()
+
+    if ((dtype is None) and isinstance(val, str)) or is_string_dtype(dtype):
+        dtype = "str"
 
     val = pd.api.types.pandas_dtype(type(val)).type(val)
 
