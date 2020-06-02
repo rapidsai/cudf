@@ -66,12 +66,16 @@ class numeric_scalar;
 class string_scalar;
 template <typename T>
 class timestamp_scalar;
+template <typename T>
+class duration_scalar;
 
 template <typename T>
 class numeric_scalar_device_view;
 class string_scalar_device_view;
 template <typename T>
 class timestamp_scalar_device_view;
+template <typename T>
+class duration_scalar_device_view;
 
 class list_scalar;
 
@@ -191,6 +195,16 @@ enum type_id {
   TIMESTAMP_MILLISECONDS,  ///< duration of milliseconds since Unix Epoch in int64
   TIMESTAMP_MICROSECONDS,  ///< duration of microseconds since Unix Epoch in int64
   TIMESTAMP_NANOSECONDS,   ///< duration of nanoseconds since Unix Epoch in int64
+  DURATION_YEARS,          ///< duration of years in int32
+  DURATION_MONTHS,         ///< duration of months in int32
+  DURATION_WEEKS,          ///< duration of weeks in int32
+  DURATION_DAYS,           ///< duration of days in int32
+  DURATION_HOURS,          ///< duration of hours in int32
+  DURATION_MINUTES,        ///< duration of minutes in int32
+  DURATION_SECONDS,        ///< duration of seconds in int64
+  DURATION_MILLISECONDS,   ///< duration of milliseconds in int64
+  DURATION_MICROSECONDS,   ///< duration of microseconds in int64
+  DURATION_NANOSECONDS,    ///< duration of nanoseconds in int64
   DICTIONARY32,            ///< Dictionary type using int32 indices
   STRING,                  ///< String elements
   LIST,                    ///< List elements
