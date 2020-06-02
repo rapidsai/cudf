@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import functools
 from collections import OrderedDict
 from math import floor, isinf, isnan
@@ -12,6 +14,8 @@ import rmm
 
 import cudf
 from cudf.core.buffer import Buffer
+from cudf.core.column import column_empty
+from cudf.utils.dtypes import to_cudf_compatible_scalar
 
 mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
@@ -58,8 +62,6 @@ def check_equals_int(a, b):
 
 
 def scalar_broadcast_to(scalar, size, dtype=None):
-    from cudf.utils.dtypes import to_cudf_compatible_scalar
-    from cudf.core.column import column_empty
 
     if isinstance(size, (tuple, list)):
         size = size[0]
