@@ -54,31 +54,9 @@ struct duration : Duration {
  */
 
 /**
- * @brief Type alias representing an int32_t duration of years.
- **/
-using duration_Y =
-  detail::duration<simt::std::chrono::duration<int32_t, simt::std::ratio<31556952>>>;
-/**
- * @brief Type alias representing an int32_t duration of months.
- **/
-using duration_M =
-  detail::duration<simt::std::chrono::duration<int32_t, simt::std::ratio<2629746>>>;
-/**
- * @brief Type alias representing an int32_t duration of weeks.
- **/
-using duration_W = detail::duration<simt::std::chrono::duration<int32_t, simt::std::ratio<604800>>>;
-/**
  * @brief Type alias representing an int32_t duration of days.
  **/
 using duration_D = detail::duration<simt::std::chrono::duration<int32_t, simt::std::ratio<86400>>>;
-/**
- * @brief Type alias representing an int32_t duration of hours.
- **/
-using duration_h = detail::duration<simt::std::chrono::duration<int32_t, simt::std::ratio<3600>>>;
-/**
- * @brief Type alias representing an int32_t duration of minutes.
- **/
-using duration_m = detail::duration<simt::std::chrono::duration<int32_t, simt::std::ratio<60>>>;
 /**
  * @brief Type alias representing an int64_t duration of seconds.
  **/
@@ -96,12 +74,7 @@ using duration_us = detail::duration<simt::std::chrono::duration<int64_t, simt::
  **/
 using duration_ns = detail::duration<simt::std::chrono::duration<int64_t, simt::std::nano>>;
 
-static_assert(sizeof(duration_Y) == sizeof(typename duration_Y::rep), "");
-static_assert(sizeof(duration_M) == sizeof(typename duration_M::rep), "");
-static_assert(sizeof(duration_W) == sizeof(typename duration_W::rep), "");
 static_assert(sizeof(duration_D) == sizeof(typename duration_D::rep), "");
-static_assert(sizeof(duration_h) == sizeof(typename duration_h::rep), "");
-static_assert(sizeof(duration_m) == sizeof(typename duration_m::rep), "");
 static_assert(sizeof(duration_s) == sizeof(typename duration_s::rep), "");
 static_assert(sizeof(duration_ms) == sizeof(typename duration_ms::rep), "");
 static_assert(sizeof(duration_us) == sizeof(typename duration_us::rep), "");
@@ -133,12 +106,7 @@ namespace std {
     }                                                               \
   }
 
-DURATION_LIMITS(cudf::duration_Y);
-DURATION_LIMITS(cudf::duration_M);
-DURATION_LIMITS(cudf::duration_W);
 DURATION_LIMITS(cudf::duration_D);
-DURATION_LIMITS(cudf::duration_h);
-DURATION_LIMITS(cudf::duration_m);
 DURATION_LIMITS(cudf::duration_s);
 DURATION_LIMITS(cudf::duration_ms);
 DURATION_LIMITS(cudf::duration_us);

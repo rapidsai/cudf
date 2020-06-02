@@ -364,12 +364,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
     return Type{};                                                    \
   }
 #endif
-DURATION_DECODE_VALUE(duration_Y)
-DURATION_DECODE_VALUE(duration_M)
-DURATION_DECODE_VALUE(duration_W)
 DURATION_DECODE_VALUE(duration_D)
-DURATION_DECODE_VALUE(duration_h)
-DURATION_DECODE_VALUE(duration_m)
 DURATION_DECODE_VALUE(duration_s)
 DURATION_DECODE_VALUE(duration_ms)
 DURATION_DECODE_VALUE(duration_us)

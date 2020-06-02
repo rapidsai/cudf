@@ -70,12 +70,7 @@ using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>
                                               std::is_same<cudf::timestamp_us, T>,
                                               std::is_same<cudf::timestamp_ns, T>>;
 template <typename T>
-using is_duration_t = simt::std::disjunction<std::is_same<cudf::duration_Y, T>,
-                                             std::is_same<cudf::duration_M, T>,
-                                             std::is_same<cudf::duration_W, T>,
-                                             std::is_same<cudf::duration_D, T>,
-                                             std::is_same<cudf::duration_h, T>,
-                                             std::is_same<cudf::duration_m, T>,
+using is_duration_t = simt::std::disjunction<std::is_same<cudf::duration_D, T>,
                                              std::is_same<cudf::duration_s, T>,
                                              std::is_same<cudf::duration_ms, T>,
                                              std::is_same<cudf::duration_us, T>,
