@@ -12,6 +12,7 @@
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
+- PR #5305 Add support for `numpy`/`cupy` array in `DataFrame` construction
 - PR #5308 Coerce frames to `Buffer`s in deserialization
 - PR #5309 Handle host frames in serialization
 - PR #5312 Test serializing `Series` after `slice`
