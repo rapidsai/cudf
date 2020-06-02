@@ -85,6 +85,7 @@ class Buffer(Serializable):
 
     def _init_from_array_like(self, data, owner):
         if hasattr(data, "__cuda_array_interface__"):
+            confirm_1d_contiguous(data.__cuda_array_interface__)
             ptr, size = _buffer_data_from_array_interface(
                 data.__cuda_array_interface__
             )
@@ -92,6 +93,7 @@ class Buffer(Serializable):
             self.size = size
             self._owner = owner or data
         elif hasattr(data, "__array_interface__"):
+            confirm_1d_contiguous(data.__array_interface__)
             ptr, size = _buffer_data_from_array_interface(
                 data.__array_interface__
             )
@@ -141,3 +143,12 @@ def _buffer_data_from_array_interface(array_interface):
     )
     size = functools.reduce(operator.mul, shape)
     return ptr, size * itemsize
+
+
+def confirm_1d_contiguous(array_interface):
+    strides = array_interface["strides"]
+    shape = array_interface["shape"]
+    itemsize = np.dtype(array_interface["typestr"]).itemsize
+    if strides is not None:
+        if not cupy.core.internal.get_c_contiguity(shape, strides, itemsize):
+            raise ValueError("Buffer data must be 1D C-contiguous")
