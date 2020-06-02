@@ -59,6 +59,16 @@ std::unique_ptr<scalar> make_timestamp_scalar(data_type type,
   return type_dispatcher(type, scalar_construction_helper{}, stream, mr);
 }
 
+// Allocate storage for a single duration element
+std::unique_ptr<scalar> make_duration_scalar(data_type type,
+                                             cudaStream_t stream,
+                                             rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(is_duration(type), "Invalid, non-duration type.");
+
+  return type_dispatcher(type, scalar_construction_helper{}, stream, mr);
+}
+
 // Allocate storage for a single fixed width element
 std::unique_ptr<scalar> make_fixed_width_scalar(data_type type,
                                                 cudaStream_t stream,
