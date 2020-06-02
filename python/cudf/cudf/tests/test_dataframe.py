@@ -5543,8 +5543,10 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
         1,
         2,
         np.array(2),
+        cupy.array(2),
         0.32324,
         np.array(0.34248),
+        cupy.array(0.34248),
         "abc",
         np.array("abc", dtype="object"),
         np.array("abc", dtype="str"),
@@ -5556,7 +5558,11 @@ def test_dataframe_assign_scalar(col_data, assign_val):
     pdf = pd.DataFrame({"a": col_data})
     gdf = DataFrame({"a": col_data})
 
-    pdf["b"] = assign_val
+    pdf["b"] = (
+        cupy.asnumpy(assign_val)
+        if isinstance(assign_val, cupy.ndarray)
+        else assign_val
+    )
     gdf["b"] = assign_val
 
     assert_eq(pdf, gdf)
@@ -5568,8 +5574,10 @@ def test_dataframe_assign_scalar(col_data, assign_val):
         1,
         2,
         np.array(2),
+        cupy.array(2),
         0.32324,
         np.array(0.34248),
+        cupy.array(0.34248),
         "abc",
         np.array("abc", dtype="object"),
         np.array("abc", dtype="str"),
@@ -5583,8 +5591,10 @@ def test_dataframe_assign_scalar(col_data, assign_val):
         1,
         2,
         np.array(2),
+        cupy.array(2),
         0.32324,
         np.array(0.34248),
+        cupy.array(0.34248),
         "abc",
         np.array("abc", dtype="object"),
         np.array("abc", dtype="str"),
@@ -5593,10 +5603,21 @@ def test_dataframe_assign_scalar(col_data, assign_val):
     ],
 )
 def test_dataframe_assign_scalar_with_scalar_cols(col_data, assign_val):
-    pdf = pd.DataFrame({"a": col_data}, index=["dummy_mandatory_index"])
+    pdf = pd.DataFrame(
+        {
+            "a": cupy.asnumpy(col_data)
+            if isinstance(col_data, cupy.ndarray)
+            else col_data
+        },
+        index=["dummy_mandatory_index"],
+    )
     gdf = DataFrame({"a": col_data}, index=["dummy_mandatory_index"])
 
-    pdf["b"] = assign_val
+    pdf["b"] = (
+        cupy.asnumpy(assign_val)
+        if isinstance(assign_val, cupy.ndarray)
+        else assign_val
+    )
     gdf["b"] = assign_val
 
     assert_eq(pdf, gdf)
