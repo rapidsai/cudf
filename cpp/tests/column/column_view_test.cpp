@@ -28,50 +28,42 @@
 #include <thrust/sequence.h>
 #include <random>
 
-template <typename T, typename T2=void>
-struct rep_type_t
-{
+template <typename T, typename T2 = void>
+struct rep_type_t {
   using type = void;
 };
 
 template <typename T>
-struct rep_type_t<T, typename std::enable_if<cudf::is_timestamp<T>()>::type>
-{
+struct rep_type_t<T, typename std::enable_if<cudf::is_timestamp<T>()>::type> {
   using type = typename T::duration::rep;
 };
 
 template <typename T>
-struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {};
+struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(ColumnViewAllTypesTests, cudf::test::FixedWidthTypes);
 
 template <typename FromType, typename ToType>
 void do_logical_cast(cudf::column_view const& input)
 {
-  if (std::is_same<FromType, ToType>::value)
-  {
+  if (std::is_same<FromType, ToType>::value) {
     // Cast to same type
     auto output = input.logical_cast(input.type());
     cudf::test::expect_columns_equal(output, input);
-  }
-  else if (std::is_same<typename rep_type_t<FromType>::type, ToType>::value)
-  {
+  } else if (std::is_same<typename rep_type_t<FromType>::type, ToType>::value) {
     // Cast to integer type and back to timestamp
     cudf::data_type integer_type{cudf::type_to_id<ToType>()};
     auto integer_view = input.logical_cast(integer_type);
-    auto output = integer_view.logical_cast(input.type());
+    auto output       = integer_view.logical_cast(input.type());
     cudf::test::expect_columns_equal(output, input);
-  }
-  else if (std::is_same<typename rep_type_t<ToType>::type, FromType>::value)
-  {
+  } else if (std::is_same<typename rep_type_t<ToType>::type, FromType>::value) {
     // Cast to timestamp type and back to integer
     cudf::data_type timestamp_type{cudf::type_to_id<ToType>()};
     auto timestamp_view = input.logical_cast(timestamp_type);
-    auto output = timestamp_view.logical_cast(input.type());
+    auto output         = timestamp_view.logical_cast(input.type());
     cudf::test::expect_columns_equal(output, input);
-  }
-  else
-  {
+  } else {
     // Other casts not allowed
     cudf::data_type type{cudf::type_to_id<ToType>()};
     EXPECT_THROW(input.logical_cast(type), cudf::logic_error);

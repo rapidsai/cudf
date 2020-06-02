@@ -371,18 +371,22 @@ constexpr inline bool is_nested(data_type type)
 }
 
 template <typename FromType, typename ToType>
-struct is_logically_castable_impl : std::false_type {};
+struct is_logically_castable_impl : std::false_type {
+};
 
 // Allow cast to same type
 template <typename Type>
-struct is_logically_castable_impl<Type, Type> : std::true_type {};
+struct is_logically_castable_impl<Type, Type> : std::true_type {
+};
 
 #ifndef MAP_CASTABLE_TYPES
-#define MAP_CASTABLE_TYPES(Type1, Type2) \
-template <> \
-struct is_logically_castable_impl<Type1, Type2> : std::true_type {}; \
-template <> \
-struct is_logically_castable_impl<Type2, Type1> : std::true_type {};
+#define MAP_CASTABLE_TYPES(Type1, Type2)                             \
+  template <>                                                        \
+  struct is_logically_castable_impl<Type1, Type2> : std::true_type { \
+  };                                                                 \
+  template <>                                                        \
+  struct is_logically_castable_impl<Type2, Type1> : std::true_type { \
+  };
 #endif
 
 // Allow cast from timestamp to integer representation
@@ -393,8 +397,7 @@ MAP_CASTABLE_TYPES(cudf::timestamp_us, cudf::timestamp_us::duration::rep);
 MAP_CASTABLE_TYPES(cudf::timestamp_ns, cudf::timestamp_ns::duration::rep);
 
 template <typename FromType>
-struct is_logically_castable_to_impl
-{
+struct is_logically_castable_to_impl {
   template <typename ToType>
   constexpr bool operator()()
   {
@@ -402,8 +405,7 @@ struct is_logically_castable_to_impl
   }
 };
 
-struct is_logically_castable_from_impl
-{
+struct is_logically_castable_from_impl {
   template <typename FromType>
   constexpr bool operator()(data_type to)
   {
