@@ -69,6 +69,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/reduction_functions.hpp
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
+    - test -f $PREFIX/include/cudf/detail/reshape.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/detail/search.hpp
     - test -f $PREFIX/include/cudf/detail/sequence.hpp

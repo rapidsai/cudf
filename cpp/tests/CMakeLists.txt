@@ -160,6 +160,7 @@ ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
 set(JOIN_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/join/cross_join_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/join/semi_join_tests.cpp")
 
 ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
