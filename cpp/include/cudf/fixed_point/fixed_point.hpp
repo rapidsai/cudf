@@ -489,6 +489,15 @@ class fixed_point {
   CUDA_HOST_DEVICE_CALLABLE friend bool operator>(fixed_point<Rep1, Rad1> const& lhs,
                                                   fixed_point<Rep1, Rad1> const& rhs);
 
+  /**
+   * @brief Method for creating a `fixed_point` number with a new `scale`
+   *
+   * The `fixed_point` number returned will have the same value, underlying representation and
+   * radix as `this`, the only thing changed is the scale
+   *
+   * @param scale The `scale` of the returned `fixed_point` number
+   * @return `fixed_point` number with a new `scale`
+   */
   CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep, Rad> rescaled(scale_type scale) const
   {
     if (scale == _scale) return *this;
