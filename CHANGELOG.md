@@ -6,6 +6,7 @@
 - PR #5222 Adding clip feature support to DataFrame and Series
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
+- PR #5364 Validate array interface during buffer construction
 
 ## Improvements
 - PR #5245 Add column reduction benchmark
