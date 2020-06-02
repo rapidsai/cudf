@@ -5542,7 +5542,9 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
     [
         1,
         2,
+        np.array(2),
         0.32324,
+        np.array(0.34248),
         "abc",
         np.array("abc", dtype="object"),
         np.array("abc", dtype="str"),
