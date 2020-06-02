@@ -19,6 +19,7 @@
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
 - PR #5354 Split Dask deserialization methods by dask/cuda
+- PR #5363 Handle `0-dim` inputs while broadcasting to a column
 
 ## Bug Fixes
 
