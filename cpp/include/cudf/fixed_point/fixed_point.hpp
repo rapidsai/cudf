@@ -189,13 +189,6 @@ CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_ty
   return std::roundf(static_cast<double>(temp) / base);
 }
 
-template <typename Rep>
-struct values_and_scale {
-  Rep lhs;
-  Rep rhs;
-  scale_type scale;
-};
-
 }  // namespace detail
 
 /**
