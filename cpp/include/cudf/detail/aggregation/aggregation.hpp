@@ -300,6 +300,13 @@ struct target_type_impl<Source,
   using type = Source;
 };
 
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source,
+                        k,
+                        std::enable_if_t<is_duration<Source>() && is_sum_product_agg(k)>> {
+  using type = Source;
+};
+
 // Always use `double` for VARIANCE
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::VARIANCE> {
