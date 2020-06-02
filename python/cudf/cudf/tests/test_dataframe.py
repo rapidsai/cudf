@@ -4436,7 +4436,15 @@ def test_rowwise_ops(data, op):
     assert_eq(expected, got, check_less_precise=7)
 
 
-@pytest.mark.parametrize("data", [[5.0, 6.0, 7.0], "single value"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [5.0, 6.0, 7.0],
+        "single value",
+        np.array(1, dtype="int64"),
+        np.array(0.6273643, dtype="float64"),
+    ],
+)
 def test_insert(data):
     pdf = pd.DataFrame.from_dict({"A": [1, 2, 3], "B": ["a", "b", "c"]})
     gdf = DataFrame.from_pandas(pdf)
@@ -5515,3 +5523,26 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
     gdf = DataFrame(data)
 
     assert_eq(pdf, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize("col_data", [range(5), ["a"], [1], []])
+@pytest.mark.parametrize(
+    "assign_val",
+    [
+        1,
+        2,
+        "abc",
+        np.array("abc", dtype="object"),
+        np.array("abc", dtype="str"),
+        np.array("abc"),
+        None,
+    ],
+)
+def test_dataframe_assign_scalar(col_data, assign_val):
+    pdf = pd.DataFrame({"a": col_data})
+    gdf = DataFrame({"a": col_data})
+
+    pdf["b"] = assign_val
+    gdf["b"] = assign_val
+
+    assert_eq(pdf, gdf)
