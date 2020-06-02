@@ -13,8 +13,9 @@ from numba import njit
 import rmm
 
 import cudf
+import cudf._lib.replace as replace
+from cudf.core import column
 from cudf.core.buffer import Buffer
-from cudf.core.column import column_empty
 from cudf.utils.dtypes import to_cudf_compatible_scalar
 
 mask_dtype = np.dtype(np.int32)
@@ -69,7 +70,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     if scalar is None:
         if dtype is None:
             dtype = "object"
-        return column_empty(size, dtype=dtype, masked=True)
+        return column.column_empty(size, dtype=dtype, masked=True)
 
     if isinstance(scalar, pd.Categorical):
         return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
@@ -78,13 +79,11 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     dtype = scalar.dtype
 
     if np.dtype(dtype).kind in ("O", "U"):
-        from cudf.core.column import as_column
-
         gather_map = cupy.zeros(size, dtype="int32")
-        scalar_str_col = as_column([scalar], dtype="str")
+        scalar_str_col = column.as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
     else:
-        out_col = column_empty(size, dtype=dtype)
+        out_col = column.column_empty(size, dtype=dtype)
         if out_col.size != 0:
             out_col.data_array_view[:] = scalar
         return out_col
@@ -187,9 +186,8 @@ def get_result_name(left, right):
     -------
     name : object {string or None}
     """
-    from cudf import Series, Index
 
-    if isinstance(right, (Series, Index, pd.Series, pd.Index)):
+    if isinstance(right, (cudf.Series, cudf.Index, pd.Series, pd.Index)):
         name = compare_and_get_name(left, right)
     else:
         name = left.name
@@ -257,10 +255,9 @@ def get_null_series(size, dtype=np.bool):
     -------
     a null cudf series of provided `size` and `dtype`
     """
-    from cudf.core import Series, column
 
     empty_col = column.column_empty(size, dtype, True)
-    return Series(empty_col)
+    return cudf.Series(empty_col)
 
 
 # taken from dask array
@@ -338,7 +335,7 @@ class ColumnValuesMappingMixin:
 
     def __setitem__(self, key, value):
 
-        value = cudf.core.column.as_column(value)
+        value = column.as_column(value)
         super().__setitem__(key, value)
 
 
@@ -416,13 +413,11 @@ def to_nested_dict(d):
 
 
 def time_col_replace_nulls(input_col):
-    from cudf.core.column import column_empty_like, as_column
-    import cudf._lib.replace as replace
 
-    null = column_empty_like(input_col, masked=True, newsize=1)
+    null = column.column_empty_like(input_col, masked=True, newsize=1)
     out_col = replace.replace(
         input_col,
-        as_column(
+        column.as_column(
             Buffer(np.array([np.datetime64("NaT")], dtype=input_col.dtype)),
             dtype=input_col.dtype,
         ),
