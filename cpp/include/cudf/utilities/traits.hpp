@@ -370,9 +370,6 @@ constexpr inline bool is_nested(data_type type)
   return cudf::type_dispatcher(type, is_nested_impl{});
 }
 
-/**
- * TODO
- */
 template <typename FromType, typename ToType>
 struct is_logically_castable_impl : std::false_type {};
 
@@ -388,6 +385,7 @@ template <> \
 struct is_logically_castable_impl<Type2, Type1> : std::true_type {};
 #endif
 
+// Allow cast from timestamp to integer representation
 MAP_CASTABLE_TYPES(cudf::timestamp_D, cudf::timestamp_D::duration::rep);
 MAP_CASTABLE_TYPES(cudf::timestamp_s, cudf::timestamp_s::duration::rep);
 MAP_CASTABLE_TYPES(cudf::timestamp_ms, cudf::timestamp_ms::duration::rep);
@@ -414,7 +412,14 @@ struct is_logically_castable_from_impl
 };
 
 /**
- * TODO
+ * @brief Indicates whether `from` is logically castable to `to`
+ *
+ * Column views that have binary compatible representations (e.g. timestamps and their integer
+ * representation) can be logically cast to another type.
+ *
+ * @param from The `data_type` to convert from
+ * @param to The `data_type` to convert to
+ * @return true if the types are logically castable
  */
 constexpr bool is_logically_castable(data_type from, data_type to)
 {

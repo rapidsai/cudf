@@ -323,7 +323,14 @@ class column_view : public detail::column_view_base {
               std::vector<column_view> const& children = {});
 
   /**
-   * TODO
+   * @brief Zero-copy cast between binary compatible types
+   * 
+   * Can be used to cast timestamp columns to their underlying integer representation
+   * 
+   * @throws cudf::logic_error if the specified type is not compatible
+   * 
+   * @param type The `data_type` to cast to
+   * @return Column view with the specified type
    */
   column_view logical_cast(data_type type) const;
 
