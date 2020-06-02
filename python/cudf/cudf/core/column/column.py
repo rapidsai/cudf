@@ -3,6 +3,7 @@
 import pickle
 import warnings
 from numbers import Number
+from types import SimpleNamespace
 
 import cupy
 import numpy as np
@@ -901,7 +902,6 @@ class ColumnBase(Column, Serializable):
         }
 
         if self.nullable and self.has_nulls:
-            from types import SimpleNamespace
 
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
@@ -1203,21 +1203,30 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         current_dtype = np.dtype(desc["typestr"])
 
         arb_dtype = check_cast_unsupported_dtype(current_dtype)
+
+        if desc.get("mask", None) is not None:
+            # Extract and remove the mask from arbitrary before
+            # passing to cupy.asarray
+            mask = _mask_from_cuda_array_interface_desc(arbitrary)
+            arbitrary = SimpleNamespace(__cuda_array_interface__=desc.copy())
+            arbitrary.__cuda_array_interface__["mask"] = None
+            desc = arbitrary.__cuda_array_interface__
+        else:
+            mask = None
+
+        arbitrary = cupy.asarray(arbitrary)
+
         if arb_dtype != current_dtype:
-            arbitrary = cupy.asarray(arbitrary).astype(arb_dtype)
+            arbitrary = arbitrary.astype(arb_dtype)
             current_dtype = arb_dtype
 
         if (
             desc["strides"] is not None
-            and desc["strides"] != current_dtype.itemsize
-            and desc.get("mask", None) is None
+            and not (arbitrary.itemsize,) == arbitrary.strides
         ):
-            # Limitation in cupy: Cannot transform a masked array.
-            # Hence guarding with mask == None check.
-            arbitrary = cupy.ascontiguousarray(cupy.asarray(arbitrary))
+            arbitrary = cupy.ascontiguousarray(arbitrary)
 
         data = _data_from_cuda_array_interface_desc(arbitrary)
-        mask = _mask_from_cuda_array_interface_desc(arbitrary)
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
