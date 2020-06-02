@@ -5560,3 +5560,43 @@ def test_dataframe_assign_scalar(col_data, assign_val):
     gdf["b"] = assign_val
 
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "col_data",
+    [
+        1,
+        2,
+        np.array(2),
+        0.32324,
+        np.array(0.34248),
+        "abc",
+        np.array("abc", dtype="object"),
+        np.array("abc", dtype="str"),
+        np.array("abc"),
+        None,
+    ],
+)
+@pytest.mark.parametrize(
+    "assign_val",
+    [
+        1,
+        2,
+        np.array(2),
+        0.32324,
+        np.array(0.34248),
+        "abc",
+        np.array("abc", dtype="object"),
+        np.array("abc", dtype="str"),
+        np.array("abc"),
+        None,
+    ],
+)
+def test_dataframe_assign_scalar_with_scalar_cols(col_data, assign_val):
+    pdf = pd.DataFrame({"a": col_data}, index=["dummy_mandatory_index"])
+    gdf = DataFrame({"a": col_data}, index=["dummy_mandatory_index"])
+
+    pdf["b"] = assign_val
+    gdf["b"] = assign_val
+
+    assert_eq(pdf, gdf)
