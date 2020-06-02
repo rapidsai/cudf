@@ -4,6 +4,7 @@
 
 - PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
 
