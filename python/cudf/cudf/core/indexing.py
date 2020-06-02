@@ -8,7 +8,6 @@ import cudf
 from cudf._lib.nvtx import annotate
 from cudf.utils.dtypes import (
     is_categorical_dtype,
-    is_datetime_dtype,
     is_scalar,
     to_cudf_compatible_scalar,
 )
@@ -37,6 +36,28 @@ def indices_from_labels(obj, labels):
     lhs = cudf.DataFrame({"__": cupy.arange(len(labels))}, index=labels)
     rhs = cudf.DataFrame({"_": cupy.arange(len(obj))}, index=obj.index)
     return lhs.join(rhs).sort_values("__")["_"]
+
+
+def get_label_range_or_mask(index, start, stop, step):
+    if (
+        not (start is None and stop is None)
+        and type(index) is cudf.core.index.DatetimeIndex
+        and index.is_monotonic is False
+    ):
+        start = pd.to_datetime(start)
+        stop = pd.to_datetime(stop)
+        if start is not None and stop is not None:
+            if start > stop:
+                return slice(0, 0, None)
+            boolean_mask = (index >= start) and (index <= stop)
+        elif start is not None:
+            boolean_mask = index >= start
+        else:
+            boolean_mask = index <= stop
+        return boolean_mask
+    else:
+        start, stop = index.find_label_range(start, stop)
+        return slice(start, stop, step)
 
 
 class _SeriesIlocIndexer(object):
@@ -116,30 +137,9 @@ class _SeriesLocIndexer(object):
                 raise IndexError("label scalar is out of bound")
 
         elif isinstance(arg, slice):
-            if (
-                is_datetime_dtype(self._sr.index.dtype)
-                and self._sr.index.is_monotonic is False
-            ):
-                start = pd.to_datetime(arg.start)
-                stop = pd.to_datetime(arg.stop)
-                if start is not None and stop is not None:
-                    if start > stop:
-                        return slice(0, 0, arg.step)
-                    return (self._sr.index >= start) and (
-                        self._sr.index <= stop
-                    )
-                elif start is not None:
-                    return self._sr.index >= start
-                elif stop is not None:
-                    return self._sr.index <= stop
-                else:
-                    return arg
-            else:
-                start_index, stop_index = self._sr.index.find_label_range(
-                    arg.start, arg.stop
-                )
-                return slice(start_index, stop_index, arg.step)
-
+            return get_label_range_or_mask(
+                self._sr.index, arg.start, arg.stop, arg.step
+            )
         elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
                 arg = cudf.MultiIndex.from_pandas(arg)
@@ -292,33 +292,13 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 return columns_df.index._get_row_major(columns_df, arg[0])
         else:
             if isinstance(arg[0], slice):
-                if (
-                    not (arg[0].start is None and arg[0].stop is None)
-                    and is_datetime_dtype(columns_df.index.dtype)
-                    and columns_df.index.is_monotonic is False
-                ):
-                    start = pd.to_datetime(arg[0].start)
-                    stop = pd.to_datetime(arg[0].stop)
-                    index = columns_df.index
-                    if start is not None and stop is not None:
-                        if start > stop:
-                            return columns_df._empty_like(keep_index=True)
-                        boolean_mask = index >= start and index <= stop
-                    elif start is not None:
-                        boolean_mask = index >= start
-                    else:
-                        boolean_mask = index <= stop
-                    df = columns_df._apply_boolean_mask(boolean_mask)
+                out = get_label_range_or_mask(
+                    columns_df.index, arg[0].start, arg[0].stop, arg[0].step
+                )
+                if isinstance(out, slice):
+                    df = columns_df._slice(out)
                 else:
-                    (
-                        start_index,
-                        stop_index,
-                    ) = columns_df.index.find_label_range(
-                        arg[0].start, arg[0].stop
-                    )
-
-                    pos_slice = slice(start_index, stop_index, arg[0].step)
-                    df = columns_df._slice(pos_slice)
+                    df = columns_df._apply_boolean_mask(out)
             else:
                 tmp_arg = arg
                 if is_scalar(arg[0]):
