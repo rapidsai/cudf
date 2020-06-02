@@ -7,6 +7,7 @@
 - PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
+- PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 
 ## Improvements
 - PR #5245 Add column reduction benchmark
