@@ -38,11 +38,11 @@ constexpr int64_t data_size = 512 << 20;
 namespace cudf_io = cudf::io;
 
 template <typename T>
-class ParquetWrite : public cudf::benchmark {
+class OrcWrite : public cudf::benchmark {
 };
 
 template <typename T>
-void PQ_write(benchmark::State& state)
+void ORC_write(benchmark::State& state)
 {
   int64_t const total_desired_bytes = state.range(0);
   cudf::size_type const num_cols    = state.range(1);
@@ -56,20 +56,20 @@ void PQ_write(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf_io::write_parquet_args args{cudf_io::sink_info(), view, nullptr, compression};
-    cudf_io::write_parquet(args);
+    cudf_io::write_orc_args args{cudf_io::sink_info(), view, nullptr, compression};
+    cudf_io::write_orc(args);
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0));
 }
 
-#define PARQ_WR_BENCHMARK_DEFINE(name, datatype, compression) \
-  BENCHMARK_TEMPLATE_DEFINE_F(ParquetWrite, name, datatype)   \
-  (::benchmark::State & state) { PQ_write<datatype>(state); } \
-  BENCHMARK_REGISTER_F(ParquetWrite, name)                    \
-    ->Args({data_size, 64, compression})                      \
-    ->Unit(benchmark::kMillisecond)                           \
+#define ORC_WR_BENCHMARK_DEFINE(name, datatype, compression)   \
+  BENCHMARK_TEMPLATE_DEFINE_F(OrcWrite, name, datatype)        \
+  (::benchmark::State & state) { ORC_write<datatype>(state); } \
+  BENCHMARK_REGISTER_F(OrcWrite, name)                         \
+    ->Args({data_size, 64, compression})                       \
+    ->Unit(benchmark::kMillisecond)                            \
     ->UseManualTime();
 
-CUIO_BENCH_ALL_TYPES(PARQ_WR_BENCHMARK_DEFINE, UNCOMPRESSED)
-CUIO_BENCH_ALL_TYPES(PARQ_WR_BENCHMARK_DEFINE, USE_SNAPPY)
+CUIO_BENCH_ALL_TYPES(ORC_WR_BENCHMARK_DEFINE, UNCOMPRESSED)
+CUIO_BENCH_ALL_TYPES(ORC_WR_BENCHMARK_DEFINE, USE_SNAPPY)

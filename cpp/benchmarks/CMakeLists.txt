@@ -194,3 +194,19 @@ set(PARQUET_WRITER_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_writer_benchmark.cpp")
 
 ConfigureBench(PARQUET_WRITER_BENCH "${PARQUET_WRITER_BENCH_SRC}")
+
+###################################################################################################
+# - orc writer benchmark -----------------------------------------------------------------------------
+
+set(ORC_WRITER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_writer_benchmark.cpp")
+
+ConfigureBench(ORC_WRITER_BENCH "${ORC_WRITER_BENCH_SRC}")
+
+###################################################################################################
+# - csv writer benchmark -----------------------------------------------------------------------------
+
+set(CSV_WRITER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_writer_benchmark.cpp")
+
+ConfigureBench(CSV_WRITER_BENCH "${CSV_WRITER_BENCH_SRC}")

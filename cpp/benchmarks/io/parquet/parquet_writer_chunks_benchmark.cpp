@@ -19,7 +19,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/table/table.hpp>
 
-#include "../generate_input.hpp"
+#include "../cuio_benchmarks_common.hpp"
+#include "../cuio_generate_benchmark_input.hpp"
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
