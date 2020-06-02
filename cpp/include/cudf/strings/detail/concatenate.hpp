@@ -34,8 +34,8 @@ namespace detail {
  * ```
  *
  * @param columns List of string columns to concatenate.
- * @param mr Resource for allocating device memory.
- * @param stream CUDA stream to use for any kernels in this function.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New column with concatenated results.
  */
 std::unique_ptr<column> concatenate(

@@ -1,8 +1,15 @@
+import warnings
 import weakref
 
 import rmm  # noqa: F401
 
 import pyniNVStrings
+
+warnings.warn(
+    "nvstrings will be removed in 0.15. Please use equivalent from libcudf",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 def to_device(strs):

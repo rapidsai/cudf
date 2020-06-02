@@ -156,9 +156,9 @@ struct metadata : public FileMetaData {
     constexpr auto ender_len  = sizeof(file_ender_s);
 
     const auto len           = source->size();
-    const auto header_buffer = source->get_buffer(0, header_len);
+    const auto header_buffer = source->host_read(0, header_len);
     const auto header        = (const file_header_s *)header_buffer->data();
-    const auto ender_buffer  = source->get_buffer(len - ender_len, ender_len);
+    const auto ender_buffer  = source->host_read(len - ender_len, ender_len);
     const auto ender         = (const file_ender_s *)ender_buffer->data();
     CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
     CUDF_EXPECTS(header->magic == PARQUET_MAGIC && ender->magic == PARQUET_MAGIC,
@@ -166,7 +166,7 @@ struct metadata : public FileMetaData {
     CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                  "Incorrect footer length");
 
-    const auto buffer = source->get_buffer(len - ender->footer_len - ender_len, ender->footer_len);
+    const auto buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
     CompactProtocolReader cp(buffer->data(), ender->footer_len);
     CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
     CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
@@ -371,7 +371,7 @@ void reader::impl::read_column_chunks(std::vector<rmm::device_buffer> &page_data
       next_chunk++;
     }
     if (io_size != 0) {
-      auto buffer         = _source->get_buffer(io_offset, io_size);
+      auto buffer         = _source->host_read(io_offset, io_size);
       page_data[chunk]    = rmm::device_buffer(buffer->data(), buffer->size(), stream);
       uint8_t *d_compdata = reinterpret_cast<uint8_t *>(page_data[chunk].data());
       do {
@@ -796,19 +796,10 @@ reader::reader(std::string filepath,
 }
 
 // Forward to implementation
-reader::reader(const char *buffer,
-               size_t length,
+reader::reader(std::unique_ptr<cudf::io::datasource> source,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), options, mr))
-{
-}
-
-// Forward to implementation
-reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
-               reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), options, mr))
+  : _impl(std::make_unique<impl>(std::move(source), options, mr))
 {
 }
 

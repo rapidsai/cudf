@@ -1,9 +1,16 @@
+import warnings
 import weakref
 
 import rmm  # noqa: F401
 
 import nvstrings as nvs
 import pyniNVCategory
+
+warnings.warn(
+    "nvcategory will be removed in 0.15. Please use equivalent from libcudf",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 def to_device(strs):
