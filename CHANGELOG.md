@@ -2,30 +2,37 @@
 
 ## New Features
 
+- PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #5327 Add `cudf::cross_join` feature
+- PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
+- PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 
 ## Improvements
 - PR #5245 Add column reduction benchmark
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
+- PR #5305 Add support for `numpy`/`cupy` array in `DataFrame` construction
 - PR #5308 Coerce frames to `Buffer`s in deserialization
 - PR #5309 Handle host frames in serialization
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
 - PR #5349 Improve libcudf documentation CSS style
+- PR #5354 Split Dask deserialization methods by dask/cuda
 
 ## Bug Fixes
 
 - PR #5283 Fix strings::ipv4_to_integers overflow to negative
 - PR #5269 Explicitly require NumPy
 - PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
+- PR #5333 Fix `DataFrame.loc` issue with list like argument
 - PR #5299 Update package version for Java bindings
 - PR #5300 Add support to ignore `None` in `cudf.concat` input
 - PR #5334 Fix pickling sizeof test
 - PR #5337 Fix broken alias from DataFrame.{at,iat} to {loc, iloc}
-
+- PR #5347 Fix APPLY_BOOLEAN_MASK_BENCH segfault 
 
 # cuDF 0.14.0 (Date TBD)
 

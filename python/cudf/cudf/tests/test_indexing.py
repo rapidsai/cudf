@@ -298,11 +298,8 @@ def test_dataframe_loc(scalar, step):
         pdf2.loc[begin:end, ["c", "d", "a"]],
     )
 
-    # Repeat with at[]
-    assert_eq(
-        df2.loc[begin:end, ["c", "d", "a"]],
-        df2.at[begin:end, ["c", "d", "a"]],
-    )
+    # loc with list like indexing
+    assert_eq(df.loc[[0]], pdf.loc[[0]])
 
 
 def test_dataframe_loc_duplicate_index_scalar():
