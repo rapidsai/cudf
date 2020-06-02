@@ -30,7 +30,8 @@
 - PR #5300 Add support to ignore `None` in `cudf.concat` input
 - PR #5334 Fix pickling sizeof test
 - PR #5337 Fix broken alias from DataFrame.{at,iat} to {loc, iloc}
-- PR #5347 Fix APPLY_BOOLEAN_MASK_BENCH segfault 
+- PR #5347 Fix APPLY_BOOLEAN_MASK_BENCH segfault
+- PR #5368 Fix loc indexing issue with `datetime` type index 
 
 # cuDF 0.14.0 (Date TBD)
 
