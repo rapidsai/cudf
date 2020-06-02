@@ -499,19 +499,91 @@ class Index(Frame, Serializable):
             else:
                 return result._values.all()
 
-    def join(self, other, method, how="left", return_indexers=False):
-        column_join_res = self._values.join(
-            other._values,
-            how=how,
-            return_indexers=return_indexers,
-            method=method,
-        )
-        if return_indexers:
-            joined_col, indexers = column_join_res
-            joined_index = as_index(joined_col)
-            return joined_index, indexers
+    def join(
+        self, other, how="left", level=None, return_indexers=False, sort=False
+    ):
+        """
+        Compute join_index and indexers to conform data structures
+        to the new index.
+
+        Parameters
+        ----------
+        other : Index.
+        how : {'left', 'right', 'inner', 'outer'}
+        return_indexers : bool, default False
+        sort : bool, default False
+            Sort the join keys lexicographically in the result Index. If False,
+            the order of the join keys depends on the join type (how keyword).
+
+        Returns: index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> lhs = cudf.DataFrame(
+        ...     {"a":[2, 3, 1], "b":[3, 4, 2]}).set_index(['a', 'b']
+        ... ).index
+        >>> rhs = cudf.DataFrame({"a":[1, 4, 3]}).set_index('a').index
+        >>> lhs.join(rhs, how='inner')
+        MultiIndex(levels=[0    1
+        1    3
+        dtype: int64, 0    2
+        1    4
+        dtype: int64],
+        codes=   a  b
+        0  1  1
+        1  0  0)
+        """
+
+        if isinstance(self, cudf.MultiIndex) and isinstance(
+            other, cudf.MultiIndex
+        ):
+            raise TypeError(
+                "Join on level between two MultiIndex objects is ambiguous"
+            )
+
+        if level is not None and not is_scalar(level):
+            raise ValueError("level should be an int or a label only")
+
+        if isinstance(other, cudf.MultiIndex):
+            if how == "left":
+                how = "right"
+            elif how == "right":
+                how = "left"
+            rhs = self.copy(deep=False)
+            lhs = other.copy(deep=False)
         else:
-            return column_join_res
+            lhs = self.copy(deep=False)
+            rhs = other.copy(deep=False)
+
+        on = level
+        # In case of MultiIndex, it will be None as
+        # we don't need to update name
+        left_names = lhs.names
+        right_names = rhs.names
+        # There should be no `None` values in Joined indices,
+        # so essentially it would be `left/right` or 'inner'
+        # in case of MultiIndex
+        if isinstance(lhs, cudf.MultiIndex):
+            if level is not None and isinstance(level, int):
+                on = lhs._data.get_by_index(level).names[0]
+            right_names = (on,) or right_names
+            on = right_names[0]
+            if how == "outer":
+                how = "left"
+            elif how == "right":
+                how = "inner"
+        else:
+            # Both are nomal indices
+            right_names = left_names
+            on = right_names[0]
+
+        lhs.names = left_names
+        rhs.names = right_names
+
+        output = lhs._merge(rhs, how=how, on=on, sort=sort)
+
+        return output
 
     def rename(self, name, inplace=False):
         """

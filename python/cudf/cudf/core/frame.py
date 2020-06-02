@@ -1594,19 +1594,36 @@ class Frame(libcudf.table.Table):
     def _merge(
         self,
         right,
-        on,
-        left_on,
-        right_on,
-        left_index,
-        right_index,
-        how,
-        sort,
-        lsuffix,
-        rsuffix,
-        method,
-        indicator,
-        suffixes,
+        on=None,
+        left_on=None,
+        right_on=None,
+        left_index=False,
+        right_index=False,
+        how="inner",
+        sort=False,
+        lsuffix=None,
+        rsuffix=None,
+        method="hash",
+        indicator=False,
+        suffixes=("_x", "_y"),
     ):
+        # Merge doesn't support right, so just swap
+        if how == "right":
+            return right._merge(
+                self,
+                on=on,
+                left_on=right_on,
+                right_on=left_on,
+                left_index=right_index,
+                right_index=left_index,
+                how="left",
+                sort=sort,
+                lsuffix=rsuffix,
+                rsuffix=lsuffix,
+                method=method,
+                indicator=indicator,
+                suffixes=suffixes,
+            )
 
         lhs = self
         rhs = right
@@ -1637,7 +1654,7 @@ class Frame(libcudf.table.Table):
         # the key column on the other side will be used to sort.
         # If no index is specified, return a new RangeIndex
         if sort:
-            to_sort = self.__class__()
+            to_sort = cudf.DataFrame()
             if left_index and right_index:
                 by = list(to_return._index._data.columns)
                 if left_on and right_on:
@@ -1649,13 +1666,16 @@ class Frame(libcudf.table.Table):
             else:
                 # left_on == right_on, or different names but same columns
                 # in both cases we can sort by either
-                by = list(to_return[mergeop.left_on]._data.columns)
+                by = [to_return._data[name] for name in mergeop.left_on]
             for i, col in enumerate(by):
                 to_sort[i] = col
             inds = to_sort.argsort()
-            to_return = to_return.take(
-                inds, keep_index=(left_index or right_index)
-            )
+            if isinstance(to_return, cudf.Index):
+                to_return = to_return.take(inds)
+            else:
+                to_return = to_return.take(
+                    inds, keep_index=(left_index or right_index)
+                )
             return to_return
         else:
             return to_return
