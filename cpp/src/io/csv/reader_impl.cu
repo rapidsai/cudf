@@ -201,17 +201,17 @@ table_with_metadata reader::impl::read(size_t range_offset,
   }
 
   // Return an empty dataframe if no data and no column metadata to process
-  if (source_->empty() && (args_.names.empty() || args_.dtype.empty())) {
+  if (source_->is_empty() && (args_.names.empty() || args_.dtype.empty())) {
     return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
   }
 
   // Transfer source data to GPU
-  if (!source_->empty()) {
+  if (!source_->is_empty()) {
     const char *h_uncomp_data = nullptr;
     size_t h_uncomp_size      = 0;
 
     auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
-    auto buffer    = source_->get_buffer(range_offset, data_size);
+    auto buffer    = source_->host_read(range_offset, data_size);
 
     std::vector<char> h_uncomp_data_owner;
     if (compression_type_ == "none") {
@@ -763,19 +763,10 @@ reader::reader(std::string filepath,
 }
 
 // Forward to implementation
-reader::reader(const char *buffer,
-               size_t length,
+reader::reader(std::unique_ptr<cudf::io::datasource> source,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), "", options, mr))
-{
-}
-
-// Forward to implementation
-reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
-               reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), "", options, mr))
+  : _impl(std::make_unique<impl>(std::move(source), "", options, mr))
 {
 }
 

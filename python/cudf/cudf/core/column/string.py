@@ -9,8 +9,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import nvstrings
-
 import cudf._lib as libcudf
 import cudf._lib.string_casting as str_cast
 from cudf._lib.nvtext.generate_ngrams import (
@@ -172,6 +170,8 @@ class StringMethods(object):
 
                 @functools.wraps(passed_attr)
                 def wrapper(*args, **kwargs):
+                    import nvstrings
+
                     ret = passed_attr(*args, **kwargs)
                     if isinstance(ret, nvstrings.nvstrings):
                         ret = Series(
@@ -301,6 +301,12 @@ class StringMethods(object):
         keys = dir(type(self))
         # TODO: Remove along with `__getattr__` above when all is ported
         return set(keys + dir(self._column.nvstrings))
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return self.slice(start=key.start, stop=key.stop, step=key.step)
+        else:
+            return self.get(key)
 
     def len(self, **kwargs):
         """
@@ -3728,6 +3734,9 @@ class StringColumn(column.ColumnBase):
                 mask_ptr = self.mask_ptr
             else:
                 mask_ptr = None
+
+            import nvstrings
+
             if self.size == 0:
                 self._nvstrings = nvstrings.to_device([])
             else:

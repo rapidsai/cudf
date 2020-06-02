@@ -45,7 +45,7 @@ namespace strings {
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New table of strings columns.
  */
 std::unique_ptr<table> split(strings_column_view const& strings_column,
@@ -72,7 +72,7 @@ std::unique_ptr<table> split(strings_column_view const& strings_column,
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New strings columns.
  */
 std::unique_ptr<table> rsplit(
@@ -119,7 +119,7 @@ struct contiguous_split_record_result {
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned result's device memory.
  * @return contiguous_split_record_result New vector of strings column_view
  *         objects
  *         (each column_view element of the vector holds splits from a string
@@ -151,7 +151,7 @@ contiguous_split_record_result contiguous_split_record(
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned result's device memory.
  * @return contiguous_split_record_result New vector of strings column_view
  *         objects
  *         (each column_view element of the vector holds splits from a string

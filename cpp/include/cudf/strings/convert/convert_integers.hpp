@@ -45,7 +45,7 @@ namespace strings {
  *
  * @param strings Strings instance for this operation.
  * @param output_type Type of integer numeric column to return.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with integers converted from strings.
  */
 std::unique_ptr<column> to_integers(
@@ -65,7 +65,7 @@ std::unique_ptr<column> to_integers(
  * @throw cudf::logic_error if integers column is not integral type.
  *
  * @param integers Numeric column to convert.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with integers as strings.
  */
 std::unique_ptr<column> from_integers(
@@ -92,7 +92,7 @@ std::unique_ptr<column> from_integers(
  *
  * @param strings Strings instance for this operation.
  * @param output_type Type of integer numeric column to return.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with integers converted from strings.
  */
 std::unique_ptr<column> hex_to_integers(
