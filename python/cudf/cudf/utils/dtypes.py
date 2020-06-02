@@ -146,6 +146,7 @@ def is_scalar(val):
         or isinstance(val, str)
         or isinstance(val, numbers.Number)
         or np.isscalar(val)
+        or (isinstance(val, np.ndarray) and np.ndim(val) == 0)
         or isinstance(val, pd.Timestamp)
         or (isinstance(val, pd.Categorical) and len(val) == 1)
     )
@@ -168,6 +169,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
             f"Cannot convert value of type {type(val).__name__} "
             " to cudf scalar"
         )
+
+    if isinstance(val, np.ndarray) and np.ndim(val) == 0:
+        val = np.asscalar(val)
 
     val = pd.api.types.pandas_dtype(type(val)).type(val)
 
