@@ -312,44 +312,36 @@ struct compute_substring_indices {
         // If the delimiter count is 0, result is empty string.
         // If the global delimiter or the row specific delimiter is invalid or if it is empty, row
         // value is empty.
-        if (!d_column.is_null(idx) && delim_val_pair.second && !delim_val.empty()) {
-          auto const& col_val = d_column.element<string_view>(idx);
+        if (d_column.is_null(idx) || !delim_val_pair.second || delim_val.empty()) return;
+        auto const& col_val = d_column.element<string_view>(idx);
 
-          // If the column value for the row is empty, the row value is empty.
-          if (!col_val.empty()) {
-            auto const col_val_len   = col_val.length();
-            auto const delimiter_len = delim_val.length();
+        // If the column value for the row is empty, the row value is empty.
+        if (!col_val.empty()) {
+          auto const col_val_len   = col_val.length();
+          auto const delimiter_len = delim_val.length();
 
-            auto nsearches      = (delimiter_count < 0) ? -delimiter_count : delimiter_count;
-            size_type start_pos = 0;
-            size_type end_pos   = col_val_len;
-            bool keep_searching = true;
+          auto nsearches           = (delimiter_count < 0) ? -delimiter_count : delimiter_count;
+          bool const left_to_right = (delimiter_count > 0);
 
-            for (auto i = 0; keep_searching && i < nsearches; ++i) {
-              if (delimiter_count < 0) {
-                end_pos = col_val.rfind(delim_val, 0, end_pos);
-                if (end_pos == -1) {
-                  start_char_pos[idx] = 0;
-                  end_char_pos[idx]   = col_val_len;
-                  keep_searching      = false;
-                } else if (i + 1 == nsearches) {
-                  start_char_pos[idx] = end_pos + delimiter_len;
-                  end_char_pos[idx]   = col_val_len;
-                }
-              } else {
-                auto char_pos = col_val.find(delim_val, start_pos);
-                if (char_pos == -1) {
-                  start_char_pos[idx] = 0;
-                  end_char_pos[idx]   = col_val_len;
-                  keep_searching      = false;
-                } else if (i + 1 == nsearches) {
-                  start_char_pos[idx] = 0;
-                  end_char_pos[idx]   = char_pos;
-                } else
-                  start_pos = char_pos + delimiter_len;
-              }
-            }
+          size_type start_pos = start_char_pos[idx];
+          size_type end_pos   = col_val_len;
+          size_type char_pos  = -1;
+
+          end_char_pos[idx] = col_val_len;
+
+          for (auto i = 0; i < nsearches; ++i) {
+            char_pos = left_to_right ? col_val.find(delim_val, start_pos)
+                                     : col_val.rfind(delim_val, 0, end_pos);
+            if (char_pos == -1) return;
+            if (left_to_right)
+              start_pos = char_pos + delimiter_len;
+            else
+              end_pos = char_pos;
           }
+          if (left_to_right)
+            end_char_pos[idx] = char_pos;
+          else
+            start_char_pos[idx] = end_pos + delimiter_len;
         }
       });
   }
@@ -412,7 +404,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
   auto d_column       = *strings_column;
 
   // If delimiter count is 0, the output column will contain empty strings
-  if (count) {
+  if (count != 0) {
     // Compute the substring indices first
     compute_substring_indices{}(
       d_column, delimiter_itr, count, start_char_pos, end_char_pos, mr, stream);

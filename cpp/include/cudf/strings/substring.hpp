@@ -108,17 +108,18 @@ std::unique_ptr<column> slice_strings(
  * @brief Slices a column of strings by using a delimiter as a slice point.
  *
  * Returns a column of strings after searching for @p delimiter @p count number of
- * times in the source @p strings forward if @p count is positive or backwards if @p count is
- * negative. If @p count is positive, it returns a substring from the start of the source @p
- * strings up until @p count occurrence of the @delimiter not including the @p delimiter.
- * If @p count is negative, it returns a substring from the start of the @p count occurrence of
- * the @delimiter in the source @p strings past the delimiter until the end of the string.
+ * times in the source @p strings from left to right if @p count is positive or from
+ * right to left if @p count is negative. If @p count is positive, it returns a substring
+ * from the start of the source @p strings up until @p count occurrence of the @delimiter
+ * not including the @p delimiter. If @p count is negative, it returns a substring from
+ * the start of the @p count occurrence of the @delimiter in the source @p strings past
+ * the delimiter until the end of the string.
  *
  * The search for @delimiter in @p strings is case sensitive.
  * If the row value of @p strings is null, the row value in the output column will be null.
- * If the @p count is 0 or if @p delimiter is invalid, output column will be an empty string.
- * If the @p delimiter or the column value for a row is empty, the row value in the output
- * column will be empty.
+ * If the @p count is 0 or if @p delimiter is invalid or empty, every row in the output column
+ * will be an empty string.
+ * If the column value for a row is empty, the row value in the output column will be empty.
  * If @p count occurrences of @p delimiter isn't found, the row value in the output column will
  * be the row value from the input @p strings column.
  *
@@ -136,7 +137,7 @@ std::unique_ptr<column> slice_strings(
  * @param strings Strings instance for this operation.
  * @param delimiter UTF-8 encoded string to search for in each string.
  * @param count Number of times to search for delimiter in each string. If the value is positive,
- *              forward search of delimiter is performed; else, a backward search is performed.
+ *              delimiter is searched from left to right; else, it is searched from right to left.
  * @param mr Resource for allocating device memory.
  * @return New strings column containing the substrings.
  */
@@ -150,18 +151,18 @@ std::unique_ptr<column> slice_strings(
  * @brief Slices a column of strings by using a delimiter column as slice points.
  *
  * Returns a column of strings after searching the delimiter defined per row from
- * @p delimiter_strings @p count number of times in the source @p strings forward if @p count
- * is positive or backwards if @p count is negative. If @p count is positive, it returns a
- * substring from the start of the source @p strings up until @p count occurrence of the
- * delimiter for that row not including that delimiter. If @p count is negative, it returns a
- * substring from the start of the @p count occurrence of the delimiter for that row in the
- * source @p strings past the delimiter until the end of the string.
+ * @p delimiter_strings @p count number of times in the source @p strings from left to right
+ * if @p count is positive or from right to left if @p count is negative. If @p count is
+ * positive, it returns a substring from the start of the source @p strings up until
+ * @p count occurrence of the delimiter for that row not including that delimiter. If @p count
+ * is negative, it returns a substring from the start of the @p count occurrence of the
+ * delimiter for that row in the source @p strings past the delimiter until the end of the string.
  *
  * The search for @p delimiter_strings in @p strings is case sensitive.
  * If the @p count is 0, every row in the output column will be an empty string.
  * If the row value of @p strings is null, the row value in the output column will be null.
  * If the row value from @p delimiter_strings is invalid or null, the row value in the
- * output column will an empty string.
+ * output column will be an empty string.
  * If the row value from @p delimiter_strings or the column value for a row is empty, the
  * row value in the output column will be empty.
  * If @p count occurrences of delimiter isn't found, the row value in the output column will
@@ -185,7 +186,7 @@ std::unique_ptr<column> slice_strings(
  * @param strings Strings instance for this operation.
  * @param delimiter_strings UTF-8 encoded string for each row.
  * @param count Number of times to search for delimiter in each string. If the value is positive,
- *              forward search of delimiter is performed; else, a backward search is performed.
+ *              delimiter is searched from left to right; else, it is searched from right to left.
  * @param mr Resource for allocating device memory.
  * @return New strings column containing the substrings.
  */
