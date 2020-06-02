@@ -325,7 +325,7 @@ class column_view : public detail::column_view_base {
   /**
    * TODO
    */
-  column_view logical_cast(data_type type);
+  column_view logical_cast(data_type type) const;
 
   /**
    * @brief Returns the specified child
