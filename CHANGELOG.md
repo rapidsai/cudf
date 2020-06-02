@@ -30,6 +30,8 @@
 - PR #5334 Fix pickling sizeof test
 - PR #5337 Fix broken alias from DataFrame.{at,iat} to {loc, iloc}
 - PR #5347 Fix APPLY_BOOLEAN_MASK_BENCH segfault 
+- PR #5326 Fix `DataFrame.__init__` for list of scalar inputs and related dask issue
+
 
 # cuDF 0.14.0 (Date TBD)
 
