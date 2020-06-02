@@ -29,6 +29,7 @@ from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
     is_categorical_dtype,
+    is_datetime_dtype,
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
@@ -263,6 +264,65 @@ class ColumnBase(Column, Serializable):
             )
 
         return col
+
+    def histogram(self, bins=10, dropna=True):
+        """
+        Compute the histogram of a column.
+        Histogram for strings is not supported.
+
+        Parameters
+        ----------
+        bins : int, array-like input. By default 10
+            If bins is an int, it represents the number of bins.
+            If bins is an array-like, it represents a bin edges.
+
+        dropna : bool
+            If True, histogram is calculated without NAs else with NAs.
+            Currently only dropna=True is supported.
+
+        Returns
+        -------
+        (hist, bin_edges)
+            where hist is a column storing the values of the
+            histogram, and bin_edges is a column storing the bin edges.
+        """
+
+        column = self
+        if dropna is True:
+            column = column.dropna()
+        else:
+            raise NotImplementedError("dropna=False is not supported")
+
+        if is_categorical_dtype(column.dtype):
+            if is_string_dtype(column.cat().categories.dtype):
+                raise ValueError("str dtype is not supported")
+            column = column.astype(column.cat().categories.dtype)
+        elif is_string_dtype(column.dtype):
+            raise ValueError("str dtype is not supported")
+
+        if is_datetime_dtype(column.dtype):
+            if is_scalar(bins):
+                raise ValueError("For datetime column, bins must be list like")
+            column = column.as_numerical_column("int64")
+            bins = as_column(bins).astype("int64")
+
+        if not is_scalar(bins):
+            bins = cupy.asarray(bins)
+        col_ndarray = cupy.asarray(column)
+
+        hist, bin_edges = cupy.histogram(col_ndarray, bins=bins)
+
+        if is_datetime_dtype(self.dtype):
+            return (as_column(hist), as_column(bin_edges).astype(self.dtype))
+        elif is_categorical_dtype(self.dtype) and is_datetime_dtype(
+            self.cat().categories.dtype
+        ):
+            return (
+                as_column(hist),
+                as_column(bin_edges).astype(self.cat().categories.dtype),
+            )
+        else:
+            return (as_column(hist), as_column(bin_edges))
 
     def dropna(self):
         dropped_col = self.as_frame().dropna()._as_column()

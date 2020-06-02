@@ -16,6 +16,7 @@ from cudf.core.column import column
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, does_not_raise, gen_rand
+from cudf.utils.dtypes import is_datetime_dtype, is_scalar
 
 
 def test_init_via_list_of_tuples():
@@ -5440,3 +5441,63 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     actual[0] = 3
     expected[0] = 3
     assert_eq(gsr, psr)
+
+
+@pytest.mark.parametrize("bins", [3, 20, [1, 10, 30, 70]])
+@pytest.mark.parametrize(
+    "data_type",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
+@pytest.mark.parametrize("as_category", [True, False])
+def test_series_histogram(bins, data_type, as_category):
+    data = np.random.randint(0, 50, 50).astype(data_type)
+    if is_datetime_dtype(data.dtype) and is_scalar(bins):
+        # For datetime, bins must be array-like
+        return
+    if not is_scalar(bins):
+        bins = np.array(bins).astype(data_type)
+    if as_category is True:
+        sr = Series(data).astype("category")
+    else:
+        sr = Series(data)
+
+    expect = np.histogram(data, bins)
+    expect = (Series(expect[0]), Series(expect[1]))
+    got = sr.histogram(bins)
+
+    assert_eq(expect[0], got[0])
+    assert_eq(expect[1], got[1])
+
+
+def test_series_histogram_exception():
+    data = np.random.randint(0, 50, 50)
+
+    # dropna=False is not implemented
+    sr = Series(data)
+    with pytest.raises(NotImplementedError):
+        sr.histogram(dropna=False)
+
+    # datetime column needs array_like bins in same dtype
+    sr = sr.astype("datetime64[s]")
+    with pytest.raises(ValueError):
+        sr.histogram(bins=3)
+
+    # str type column is not supported
+    sr = Series(["a", "b", "c", "d", "a", "c"])
+    with pytest.raises(ValueError):
+        sr.histogram(bins=3)
+
+    sr = sr.astype("category")
+    with pytest.raises(ValueError):
+        sr.histogram(bins=3)

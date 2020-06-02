@@ -1555,6 +1555,61 @@ class Series(Frame, Serializable):
         """
         return self._column.has_nulls
 
+    def histogram(self, bins=10, dropna=True):
+        """
+        Compute the histogram of a series.
+        Histogram for strings is not supported.
+
+        Parameters
+        ----------
+        bins : int, array-like input. By default 10
+            If bins is an int, it represents the number of bins.
+            If bins is an array-like, it represents a bin edges.
+
+        dropna : bool
+            If True, histogram is calculated without NAs else with NAs.
+            Currently only dropna=True is supported.
+
+        Returns
+        -------
+        (hist, bin_edges)
+            where hist is a Series storing the values of the
+            histogram, and bin_edges is a Series storing the bin edges.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series([1, 2, 3, 4, 10, 15, 18, 30, 40, 50, 90, 120])
+        >>> print(sr.histogram(bins=6))
+        (0    7
+         1    2
+         2    1
+         3    0
+         4    1
+         5    1
+         dtype: int64, 0      1.000000
+         1     20.833333
+         2     40.666667
+         3     60.500000
+         4     80.333333
+         5    100.166667
+         6    120.000000
+         dtype: float64)
+
+        >>> print(sr.histogram(bins=[2, 10, 40, 150]))
+        (0    3
+         1    4
+         2    4
+         dtype: int64, 0      2
+         1     10
+         2     40
+         3    150
+         dtype: int64)
+        """
+        hist, bin_edges = self._column.histogram(bins, dropna=dropna)
+
+        return (cudf.Series(hist), cudf.Series(bin_edges))
+
     def dropna(self):
         """
         Return a Series with null values removed.
