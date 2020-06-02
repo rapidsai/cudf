@@ -331,8 +331,10 @@ std::unique_ptr<cudf::table> left_anti_join(
  * @brief Performs a cross join on two tables (`left`, `right`)
  *
  * The cross join returns the cartesian product of rows from each table.
- * @note Warning: This function can easily cause out-of-memory errors. The size of the output is equal to 
- *  `left.num_rows() * right.num_rows()`. Use with caution. 
+ *
+ * @note Warning: This function can easily cause out-of-memory errors. The size of the output is
+ * equal to `left.num_rows() * right.num_rows()`. Use with caution.
+ *
  * @code{.pseudo}
  *          Left a: {0, 1, 2}
  *          Right b: {3, 4, 5}
