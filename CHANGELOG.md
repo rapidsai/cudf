@@ -19,6 +19,7 @@
 - PR #5309 Handle host frames in serialization
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
+- PR #5302 Add missing comparison operators to `fixed_point` type
 - PR #5354 Split Dask deserialization methods by dask/cuda
 
 ## Bug Fixes
