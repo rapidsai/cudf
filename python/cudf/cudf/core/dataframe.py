@@ -2769,13 +2769,15 @@ class DataFrame(Frame, Serializable):
 
         Parameters
         ----------
-        mapper : dict-like or function, optional dict-like or functions
-            transformations to apply to the index/column values depending
-            on selected `axis`.
-        index : dict-like or function, optional dict-like or functions
-            transformations to apply to the index axis' values.
-        columns : dict-like or function, optional dict-like or functions
-            transformations to apply to the columns axis' values.
+        mapper : dict-like or function, default None
+            optional dict-like or functions transformations to apply to 
+            the index/column values depending on selected `axis`.
+        index : dict-like, default None
+            Optional dict-like transformations to apply to the index axis' 
+            values. Does not support functions for axis 0 yet.
+        columns : dict-like or function, default None
+            optional dict-like or functions transformations to apply to 
+            the columns axis' values.
         axis: int, default 0
             Axis to rename with mapper.
             0 or 'index' for index
@@ -2807,7 +2809,7 @@ class DataFrame(Frame, Serializable):
 
         if index:
             out = DataFrame(
-                index=[index.get(item, item) for item in self.index]
+                index=list(map(lambda x: index.get(x, x), self.index))
             )
         else:
             out = DataFrame(index=self.index)
