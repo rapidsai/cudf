@@ -1626,7 +1626,7 @@ class Frame(libcudf.table.Table):
         rhs = right
 
         from cudf.core.join import Merge
-        
+
         mergeop = Merge(
             lhs,
             rhs,

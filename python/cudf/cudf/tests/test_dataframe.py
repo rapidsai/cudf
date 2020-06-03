@@ -343,6 +343,7 @@ def test_dataframe_column_drop_via_attr():
 
     assert tuple(df.columns) == tuple("a")
 
+
 @pytest.mark.parametrize("axis", [0, "index"])
 def test_dataframe_index_rename(axis):
     pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
@@ -369,6 +370,7 @@ def test_dataframe_index_rename(axis):
     got = gdf.rename({1: "x", 2: "y"})
 
     assert_eq([str(item) for item in expect.index], list(got.index))
+
 
 @pytest.mark.parametrize("axis", [1, "columns"])
 def test_dataframe_column_rename(axis):
@@ -397,6 +399,7 @@ def test_dataframe_column_rename(axis):
     got = gdf.rename(columns=rename_mapper)
 
     assert_eq(expect, got)
+
 
 def test_dataframe_pop():
     pdf = pd.DataFrame(

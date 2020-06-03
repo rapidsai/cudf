@@ -2770,13 +2770,13 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
         mapper : dict-like or function, default None
-            optional dict-like or functions transformations to apply to 
+            optional dict-like or functions transformations to apply to
             the index/column values depending on selected `axis`.
         index : dict-like, default None
-            Optional dict-like transformations to apply to the index axis' 
+            Optional dict-like transformations to apply to the index axis'
             values. Does not support functions for axis 0 yet.
         columns : dict-like or function, default None
-            optional dict-like or functions transformations to apply to 
+            optional dict-like or functions transformations to apply to
             the columns axis' values.
         axis: int, default 0
             Axis to rename with mapper.
@@ -2786,7 +2786,7 @@ class DataFrame(Frame, Serializable):
             Also copy underlying data
         inplace: boolean, default False
             Return new DataFrame.  If True, assign columns without copy
-        
+
         Returns
         -------
         DataFrame
