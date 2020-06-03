@@ -421,7 +421,7 @@ struct is_logically_castable_from_impl {
  *
  * @param from The `data_type` to convert from
  * @param to The `data_type` to convert to
- * @return true if the types are logically castable
+ * @return `true` if the types are logically castable
  */
 constexpr bool is_logically_castable(data_type from, data_type to)
 {
