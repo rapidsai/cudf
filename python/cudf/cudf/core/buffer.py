@@ -59,7 +59,7 @@ class Buffer(Serializable):
                 data = memoryview(data)
             except TypeError:
                 raise TypeError("data must be Buffer, array-like or integer")
-            self._init_from_array_like(np.asarray(data), owner)
+            self._init_from_array_like(np.asarray(data).view('|u1'), owner)
 
     def __len__(self):
         return self.size
@@ -85,6 +85,7 @@ class Buffer(Serializable):
         return data
 
     def _init_from_array_like(self, data, owner):
+
         if hasattr(data, "__cuda_array_interface__"):
             confirm_1d_contiguous(data.__cuda_array_interface__)
             ptr, size = _buffer_data_from_array_interface(
@@ -150,6 +151,9 @@ def confirm_1d_contiguous(array_interface):
     strides = array_interface["strides"]
     shape = array_interface["shape"]
     itemsize = np.dtype(array_interface["typestr"]).itemsize
+    typestr = array_interface["typestr"]
+    if typestr != "|u1":
+        raise TypeError("Buffer data must be of uint8 type")
     if strides is not None:
         if not get_c_contiguity(shape, strides, itemsize):
             raise ValueError("Buffer data must be 1D C-contiguous")

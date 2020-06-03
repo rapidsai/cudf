@@ -21,7 +21,7 @@ arr_len = 10
 def test_buffer_from_cuda_array_interface(data):
     data, expect_success = data
     if expect_success:
-        buf = Buffer(data=data, size=data.size)
+        buf = Buffer(data=data.view('|u1'), size=data.size)
     else:
         with pytest.raises(ValueError):
-            buf = Buffer(data=data, size=data.size)
+            buf = Buffer(data=data.view('|u1'), size=data.size)
