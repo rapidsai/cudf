@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 
 import rmm
-from rmm import DeviceBuffer, _DevicePointer
+from rmm import DeviceBuffer
 
 from cudf.core.abc import Serializable
 
@@ -17,7 +17,7 @@ class Buffer(Serializable):
 
         Parameters
         ----------
-        data : Buffer, rmm._DevicePointer, array_like, int
+        data : Buffer, array_like, int
             An array-like object or integer representing a
             device or host pointer to pre-allocated memory.
         size : int, optional
@@ -31,10 +31,6 @@ class Buffer(Serializable):
         if isinstance(data, Buffer):
             self.ptr = data.ptr
             self.size = data.size
-            self._owner = owner or data
-        elif isinstance(data, _DevicePointer):
-            self.ptr = data.ptr
-            self.size = size
             self._owner = owner or data
         elif hasattr(data, "__array_interface__") or hasattr(
             data, "__cuda_array_interface__"
