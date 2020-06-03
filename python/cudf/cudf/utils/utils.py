@@ -13,7 +13,6 @@ from numba import njit
 import rmm
 
 import cudf
-import cudf._lib.replace as replace
 from cudf.core import column
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
@@ -415,7 +414,7 @@ def to_nested_dict(d):
 def time_col_replace_nulls(input_col):
 
     null = column.column_empty_like(input_col, masked=True, newsize=1)
-    out_col = replace.replace(
+    out_col = cudf._lib.replace.replace(
         input_col,
         column.as_column(
             Buffer(np.array([np.datetime64("NaT")], dtype=input_col.dtype)),
