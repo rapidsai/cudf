@@ -27,7 +27,7 @@ namespace detail {
 /**
  * @copydoc cudf::sorted_order
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> sorted_order(
   table_view input,
@@ -39,7 +39,7 @@ std::unique_ptr<column> sorted_order(
 /**
  * @copydoc cudf::stable_sorted_order
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> stable_sorted_order(
   table_view input,
@@ -51,7 +51,7 @@ std::unique_ptr<column> stable_sorted_order(
 /**
  * @copydoc cudf::sort_by_key
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> sort_by_key(
   table_view const& values,

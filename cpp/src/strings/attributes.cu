@@ -40,8 +40,8 @@ namespace {
  * @tparam UnaryFunction Device function that returns an integer given a string_view.
  * @param strings Strings instance for this operation.
  * @param ufn Function returns an integer for each string.
- * @param stream Stream to use for any kernels in this function.
- * @param mr Resource for allocating device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New INT32 column with lengths for each string.
  */
 template <typename UnaryFunction>

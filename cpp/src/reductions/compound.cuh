@@ -33,8 +33,8 @@ namespace compound {
  * @param[in] ddof   `Delta Degrees of Freedom` used for `std`, `var`.
  *                   The divisor used in calculations is N - ddof, where N
  *                   represents the number of elements.
- * @param[in] mr    The resource to use for all allocations
- * @param[in] stream cuda stream
+ * @param[in] mr     Device memory resource used to allocate the returned scalar's device memory
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @returns   Output scalar in device memory
  *
  * @tparam ElementType  the input column cudf dtype
