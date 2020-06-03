@@ -2015,8 +2015,8 @@ def test_series_rename():
     pds = pd.Series([1, 2, 3], name="asdf")
     gds = Series([1, 2, 3], name="asdf")
 
-    expect = pds.rename("new_name")
-    got = gds.rename("new_name")
+    expect = pds.rename("new_name", axis=1)
+    got = gds.rename("new_name", axis=1)
 
     assert_eq(expect, got)
 

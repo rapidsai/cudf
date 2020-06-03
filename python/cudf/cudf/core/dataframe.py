@@ -2235,7 +2235,7 @@ class DataFrame(Frame, Serializable):
             raise ValueError(msg)
 
         mapper = dict(zip(old_cols, new_names))
-        self.rename(mapper=mapper, inplace=True)
+        self.rename(mapper=mapper, inplace=True, axis=1)
 
     @property
     def index(self):
@@ -2745,24 +2745,46 @@ class DataFrame(Frame, Serializable):
         del self[item]
         return popped
 
-    def rename(self, mapper=None, columns=None, copy=True, inplace=False):
-        """
-        Alter column labels.
+    def rename(
+        self,
+        mapper=None,
+        index=None,
+        columns=None,
+        axis=0,
+        copy=True,
+        inplace=False,
+    ):
+        """Alter column and index labels.
 
         Function / dict values must be unique (1-to-1). Labels not contained in
         a dict / Series will be left as-is. Extra labels listed don’t throw an
         error.
 
+        DataFrame.rename supports two calling conventions
+
+        `(index=index_mapper, columns=columns_mapper, ...)`
+        `(mapper, axis={0/'index' or 1/'column'}, ...)`
+
+        We highly recommend using keyword arguments to clarify your intent.
+
         Parameters
         ----------
-        mapper, columns : dict-like or function, optional
-            dict-like or functions transformations to apply to
-            the column axis' values.
+        mapper : dict-like or function, optional dict-like or functions
+            transformations to apply to the index/column values depending
+            on selected `axis`.
+        index : dict-like or function, optional dict-like or functions
+            transformations to apply to the index axis' values.
+        columns : dict-like or function, optional dict-like or functions
+            transformations to apply to the columns axis' values.
+        axis: int, default 0
+            Axis to rename with mapper.
+            0 or 'index' for index
+            1  or 'columns' for columns
         copy : boolean, default True
             Also copy underlying data
         inplace: boolean, default False
             Return new DataFrame.  If True, assign columns without copy
-
+        
         Returns
         -------
         DataFrame
@@ -2770,36 +2792,48 @@ class DataFrame(Frame, Serializable):
         Notes
         -----
         Difference from pandas:
-          * Support axis='columns' only.
-          * Not supporting: index, level
+            * Not supporting: level
 
         Rename will not overwite column names. If a list with duplicates is
         passed, column names will be postfixed with a number.
         """
-        # Pandas defaults to using columns over mapper
-        if columns:
-            mapper = columns
+        if mapper is None and index is None and columns is None:
+            return self.copy(deep=copy)
 
-        out = DataFrame(index=self.index)
-        if isinstance(mapper, Mapping):
+        index = mapper if index is None and axis in (0, "index") else index
+        columns = (
+            mapper if columns is None and axis in (1, "columns") else columns
+        )
+
+        if index:
+            out = DataFrame(
+                index=[index.get(item, item) for item in self.index]
+            )
+        else:
+            out = DataFrame(index=self.index)
+
+        if columns:
             postfix = 1
-            # It is possible for DataFrames with a MultiIndex columns object
-            # to have columns with the same name. The following use of
-            # _cols.items and ("_1", "_2"... allows the use of
-            # rename in this case
-            for key, col in self._data.items():
-                if key in mapper:
-                    if mapper[key] in out.columns:
-                        out_column = mapper[key] + "_" + str(postfix)
-                        postfix += 1
+            if isinstance(columns, Mapping):
+                # It is possible for DataFrames with a MultiIndex columns
+                # object to have columns with the same name. The followig
+                # use of _cols.items and ("_1", "_2"... allows the use of
+                # rename in this case
+                for key, col in self._data.items():
+                    if key in columns:
+                        if columns[key] in out._data:
+                            out_column = columns[key] + "_" + str(postfix)
+                            postfix += 1
+                        else:
+                            out_column = columns[key]
+                        out[out_column] = col
                     else:
-                        out_column = mapper[key]
-                    out[out_column] = col
-                else:
-                    out[key] = col
-        elif callable(mapper):
-            for col in self._data.names:
-                out[mapper(col)] = self[col]
+                        out[key] = col
+            elif callable(columns):
+                for key, col in self._data.items():
+                    out[columns(key)] = col
+        else:
+            out._data = self._data
 
         if inplace:
             self._data = out._data

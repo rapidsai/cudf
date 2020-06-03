@@ -172,8 +172,8 @@ def test_index_rename():
     pds = pd.Index([1, 2, 3], name="asdf")
     gds = as_index(pds)
 
-    expect = pds.rename("new_name")
-    got = gds.rename("new_name")
+    expect = pds.rename("new_name", axis=1)
+    got = gds.rename("new_name", axis=1)
 
     assert_eq(expect, got)
     """
@@ -195,13 +195,13 @@ def test_index_rename_inplace():
     gds = as_index(pds)
 
     # inplace=False should yield a deep copy
-    gds_renamed_deep = gds.rename("new_name", inplace=False)
+    gds_renamed_deep = gds.rename("new_name", inplace=False, axis=1)
 
     assert gds_renamed_deep._values.data_ptr != gds._values.data_ptr
 
     # inplace=True returns none
     expected_ptr = gds._values.data_ptr
-    gds.rename("new_name", inplace=True)
+    gds.rename("new_name", inplace=True, axis=1)
 
     assert expected_ptr == gds._values.data_ptr
 
@@ -210,7 +210,7 @@ def test_index_rename_preserves_arg():
     idx1 = GenericIndex([1, 2, 3], name="orig_name")
 
     # this should be an entirely new object
-    idx2 = idx1.rename("new_name", inplace=False)
+    idx2 = idx1.rename("new_name", inplace=False, axis=1)
 
     assert idx2.name == "new_name"
     assert idx1.name == "orig_name"
