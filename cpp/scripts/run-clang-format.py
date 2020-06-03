@@ -30,7 +30,7 @@ DEFAULT_DIRS = [
     "cpp/benchmarks",
     "cpp/include",
     "cpp/include/cudf",
-    "cpp/src",
+    "cpp/include/nvtext" "cpp/src",
     "cpp/tests",
 ]
 
