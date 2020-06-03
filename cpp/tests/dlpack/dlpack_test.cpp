@@ -224,6 +224,7 @@ class DLPackNumericTests : public BaseFixture {
 };
 
 // The list of supported types comes from DLDataType_to_data_type() in cpp/src/dlpack/dlpack.cpp
+// TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5353
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
 TYPED_TEST_CASE(DLPackNumericTests, SupportedTypes);
 

@@ -115,6 +115,7 @@ struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
 };
 
 // Declare typed test cases
+// TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
 TYPED_TEST_CASE(ParquetWriterNumericTypeTest, SupportedTypes);
 using SupportedTimestampTypes = cudf::test::TimestampTypes;
