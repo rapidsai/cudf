@@ -38,11 +38,11 @@ struct boolean_mask_filter {
   {
     if (true == has_nulls) {
       bool valid   = boolean_mask.is_valid(i);
-      bool is_true = boolean_mask.data<bool>()[i];
+      bool is_true = boolean_mask.begin<bool>()[i];
 
       return is_true && valid;
     } else {
-      return boolean_mask.data<bool>()[i];
+      return boolean_mask.begin<bool>()[i];
     }
   }
 

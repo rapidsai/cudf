@@ -126,7 +126,7 @@ __launch_bounds__(block_size) __global__
     }
 
     if (mask_true) {
-      temp_data[local_index] = input_view.data<T>()[tid];  // scatter data to shared
+      temp_data[local_index] = input_view.begin<T>()[tid];  // scatter data to shared
 
       // scatter validity mask to shared memory
       if (has_validity and input_view.is_valid(tid)) {

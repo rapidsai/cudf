@@ -67,10 +67,10 @@ static constexpr int BLOCK_SIZE = 256;
 // return the new_value for output column at index `idx`
 template <class T, bool replacement_has_nulls>
 __device__ auto get_new_value(cudf::size_type idx,
-                              const T* __restrict__ input_data,
-                              const T* __restrict__ values_to_replace_begin,
-                              const T* __restrict__ values_to_replace_end,
-                              const T* __restrict__ d_replacement_values,
+                              cudf::column_device_view::const_iterator<T> input_data,
+                              cudf::column_device_view::const_iterator<T> values_to_replace_begin,
+                              cudf::column_device_view::const_iterator<T> values_to_replace_end,
+                              cudf::column_device_view::const_iterator<T> d_replacement_values,
                               cudf::bitmask_type const* __restrict__ replacement_valid)
 {
   auto found_ptr =
@@ -263,13 +263,13 @@ __global__ void replace_kernel(cudf::column_device_view input,
       output_is_valid = input_is_valid;
     }
     if (input_is_valid)
-      thrust::tie(output_data[i], output_is_valid) = get_new_value<T, replacement_has_nulls>(
-        i,
-        input.data<T>(),
-        values_to_replace.data<T>(),
-        values_to_replace.data<T>() + values_to_replace.size(),
-        replacement.data<T>(),
-        replacement.null_mask());
+      thrust::tie(output_data[i], output_is_valid) =
+        get_new_value<T, replacement_has_nulls>(i,
+                                                input.begin<T>(),
+                                                values_to_replace.begin<T>(),
+                                                values_to_replace.end<T>(),
+                                                replacement.begin<T>(),
+                                                replacement.null_mask());
 
     /* output valid counts calculations*/
     if (input_has_nulls or replacement_has_nulls) {

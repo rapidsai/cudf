@@ -52,7 +52,7 @@ struct chars_size_transform {
   {
     if (col.size() > 0) {
       constexpr auto offsets_index = strings_column_view::offsets_column_index;
-      auto d_offsets               = col.child(offsets_index).data<int32_t>();
+      auto d_offsets               = col.child(offsets_index).begin<int32_t>();
       return d_offsets[col.size() + col.offset()] - d_offsets[col.offset()];
     } else {
       return 0;
@@ -145,7 +145,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
     auto const offset_index      = output_index - *offset_it;
     auto const& input_view       = input_views[partition_index];
     constexpr auto offsets_child = strings_column_view::offsets_column_index;
-    auto const* input_data       = input_view.child(offsets_child).data<int32_t>();
+    auto const input_data        = input_view.child(offsets_child).begin<int32_t>();
     output_data[output_index] =
       input_data[offset_index + input_view.offset()]  // handle parent offset
       - input_data[input_view.offset()]               // subract first offset if non-zero
@@ -198,11 +198,11 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
     auto const offset_index = output_index - *offset_it;
     auto const& input_view  = input_views[partition_index];
 
-    constexpr auto offsets_child   = strings_column_view::offsets_column_index;
-    auto const* input_offsets_data = input_view.child(offsets_child).data<int32_t>();
+    constexpr auto offsets_child  = strings_column_view::offsets_column_index;
+    auto const input_offsets_data = input_view.child(offsets_child).begin<int32_t>();
 
-    constexpr auto chars_child   = strings_column_view::chars_column_index;
-    auto const* input_chars_data = input_view.child(chars_child).data<char>();
+    constexpr auto chars_child  = strings_column_view::chars_column_index;
+    auto const input_chars_data = input_view.child(chars_child).begin<char>();
 
     auto const first_char     = input_offsets_data[input_view.offset()];
     output_data[output_index] = input_chars_data[offset_index + first_char];

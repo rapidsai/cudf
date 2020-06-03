@@ -47,7 +47,7 @@ namespace {
 struct base_split_tokenizer {
   __device__ const char* get_base_ptr() const
   {
-    return d_strings.child(strings_column_view::chars_column_index).data<char>();
+    return d_strings.child(strings_column_view::chars_column_index).hack_data<char>();
   }
 
   __device__ string_view const get_string(size_type idx) const

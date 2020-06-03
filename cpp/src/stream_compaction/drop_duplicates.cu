@@ -234,7 +234,7 @@ struct check_for_nan {
    */
   __device__ bool operator()(size_type index)
   {
-    return std::isnan(_input.data<T>()[index]) and _input.is_valid(index);
+    return std::isnan(_input.begin<T>()[index]) and _input.is_valid(index);
   }
 
  protected:

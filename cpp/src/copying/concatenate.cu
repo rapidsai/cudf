@@ -178,7 +178,7 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
     // Copy input data to output
     auto const offset_index   = output_index - *offset_it;
     auto const& input_view    = input_views[partition_index];
-    auto const* input_data    = input_view.data<T>();
+    auto const input_data     = input_view.begin<T>();
     output_data[output_index] = input_data[offset_index];
 
     if (Nullable) {

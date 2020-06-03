@@ -81,12 +81,21 @@ class alignas(16) column_device_view_base {
    * @tparam T The type to cast to
    * @return T const* Typed pointer to underlying data, including the offset
    */
+
+  template <typename T>
+  __host__ __device__ T const* hack_data() const noexcept
+  {
+    return head<T>() + _offset;
+  }
+
+ protected:
   template <typename T>
   __host__ __device__ T const* data() const noexcept
   {
     return head<T>() + _offset;
   }
 
+ public:
   /**
    * @brief Returns the number of elements in the column.
    */
@@ -294,7 +303,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * For columns with null elements, use `make_null_replacement_iterator`.
    */
   template <typename T>
-  const_iterator<T> begin() const
+  __host__ __device__ const_iterator<T> begin() const
   {
     return const_iterator<T>{count_it{0}, detail::value_accessor<T>{*this}};
   }
@@ -309,7 +318,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * For columns with null elements, use `make_null_replacement_iterator`.
    */
   template <typename T>
-  const_iterator<T> end() const
+  __host__ __device__ const_iterator<T> end() const
   {
     return const_iterator<T>{count_it{size()}, detail::value_accessor<T>{*this}};
   }
@@ -741,12 +750,13 @@ struct value_accessor {
    * @brief constructor
    * @param[in] _col column device view of cudf column
    */
-  value_accessor(column_device_view const& _col) : col{_col}
+  __host__ __device__ value_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
+    // TODO fix
+    // CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
   }
 
-  __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }
+  __host__ __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }
 };
 
 /**
