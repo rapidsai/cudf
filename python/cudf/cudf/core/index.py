@@ -61,6 +61,16 @@ class Index(Frame, Serializable):
     """The root interface for all Series indexes.
     """
 
+    def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
+        """
+        Return Series with duplicate values removed
+        """
+        result = super().drop_duplicates(
+            subset=[self.name], keep=keep, ignore_index=ignore_index
+        )
+
+        return self._mimic_inplace(result, inplace=inplace)
+
     def serialize(self):
         """Serialize into pickle format suitable for file storage or network
         transmission.
