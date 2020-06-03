@@ -279,18 +279,40 @@ class DataFrame(Frame, Serializable):
         if columns is None:
             columns = self._get_union_of_indices([d.index for d in data])
 
-        # longest_series = max(map(lambda x: len(x), data))
+        series_lengths = list(map(lambda x: len(x), data))
 
-        for col in range(len(data)):
-            self._data[col] = column.as_column(data[col])
+        if series_lengths.count(series_lengths[0]) == len(series_lengths):
+            for col in range(len(data)):
+                self._data[col] = column.as_column(data[col])
 
-        self.columns = columns
-        self._index = index
-        # import pdb;pdb.set_trace()
-        transpose = self.T
-        self._data = transpose._data
-        self._index = transpose.columns
-        self.columns = transpose._index
+            self.columns = columns
+            self._index = index
+            # import pdb;pdb.set_trace()
+            transpose = self.T
+            self._data = transpose._data
+            self._index = transpose.columns
+            self.columns = transpose._index
+        else:
+            longest_series = max(max(series_lengths), len(columns))
+            import pdb
+
+            pdb.set_trace()
+            for col in range(len(data)):
+                current_col = column.as_column(data[col])
+                extra_padding = column.column_empty_like(
+                    current_col,
+                    masked=True,
+                    newsize=longest_series - len(current_col),
+                )
+                self._data[col] = current_col.append(extra_padding)
+
+            self.columns = [*range(len(data))]
+            self._index = RangeIndex(0, longest_series)
+            # import pdb;pdb.set_trace()
+            transpose = self.T
+            self._data = transpose._data
+            self._index = transpose._index
+            self.columns = transpose.columns
 
     def _init_from_list_like(self, data, index=None, columns=None):
         if index is None:
