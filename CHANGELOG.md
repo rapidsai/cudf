@@ -4,8 +4,11 @@
 
 - PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
+- PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
+- PR #5303 Add slice_strings functionality using delimiter string
 
 ## Improvements
 - PR #5245 Add column reduction benchmark
@@ -17,10 +20,13 @@
 - PR #5309 Handle host frames in serialization
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
+- PR #5302 Add missing comparison operators to `fixed_point` type
 - PR #5354 Split Dask deserialization methods by dask/cuda
+- PR #5363 Handle `0-dim` inputs while broadcasting to a column
 
 ## Bug Fixes
 
+- PR #5336 Initialize conversion tables on a per-context basis
 - PR #5283 Fix strings::ipv4_to_integers overflow to negative
 - PR #5269 Explicitly require NumPy
 - PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
@@ -32,6 +38,9 @@
 - PR #5347 Fix APPLY_BOOLEAN_MASK_BENCH segfault 
 - PR #5326 Fix `DataFrame.__init__` for list of scalar inputs and related dask issue
 
+- PR #5347 Fix APPLY_BOOLEAN_MASK_BENCH segfault
+- PR #5368 Fix loc indexing issue with `datetime` type index 
+- PR #5367 Fix API for `cudf::repeat` in `cudf::cross_join`
 
 # cuDF 0.14.0 (Date TBD)
 
