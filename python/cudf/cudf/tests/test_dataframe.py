@@ -343,6 +343,32 @@ def test_dataframe_column_drop_via_attr():
 
     assert tuple(df.columns) == tuple("a")
 
+@pytest.mark.parametrize("axis", [0, "index"])
+def test_dataframe_index_rename(axis):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.rename(mapper={1: 5, 2: 6}, axis=axis)
+    got = gdf.rename(mapper={1: 5, 2: 6}, axis=axis)
+
+    assert_eq(expect, got)
+
+    # `pandas` can support indexes with mixed values. We automatically convert
+    # an index with mixed values to a `StringIndex`. Breaking the comparison.
+    expect = pdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
+    got = gdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
+
+    assert_eq([str(item) for item in expect.index], list(got.index))
+
+    expect = pdf.rename(index={1: "x", 2: "y"})
+    got = gdf.rename(index={1: "x", 2: "y"})
+
+    assert_eq([str(item) for item in expect.index], list(got.index))
+
+    expect = pdf.rename({1: "x", 2: "y"})
+    got = gdf.rename({1: "x", 2: "y"})
+
+    assert_eq([str(item) for item in expect.index], list(got.index))
 
 @pytest.mark.parametrize("axis", [1, "columns"])
 def test_dataframe_column_rename(axis):
