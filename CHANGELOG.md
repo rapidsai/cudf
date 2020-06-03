@@ -15,6 +15,7 @@
 - PR #5309 Handle host frames in serialization
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
+- PR #5373 Remove legacy nvstrings/nvcategory/nvtext
 
 ## Bug Fixes
 
