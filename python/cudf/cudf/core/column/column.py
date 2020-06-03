@@ -3,14 +3,13 @@
 import pickle
 import warnings
 from numbers import Number
+from types import SimpleNamespace
 
 import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda, njit
-
-import nvstrings
 
 import cudf
 import cudf._lib as libcudf
@@ -903,7 +902,6 @@ class ColumnBase(Column, Serializable):
         }
 
         if self.nullable and self.has_nulls:
-            from types import SimpleNamespace
 
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
@@ -1194,8 +1192,59 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         data = arbitrary._values
         if dtype is not None:
             data = data.astype(dtype)
+
+    elif isinstance(arbitrary, Buffer):
+        if dtype is None:
+            raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
+        data = build_column(arbitrary, dtype=dtype)
+
+    elif hasattr(arbitrary, "__cuda_array_interface__"):
+        desc = arbitrary.__cuda_array_interface__
+        current_dtype = np.dtype(desc["typestr"])
+
+        arb_dtype = check_cast_unsupported_dtype(current_dtype)
+
+        if desc.get("mask", None) is not None:
+            # Extract and remove the mask from arbitrary before
+            # passing to cupy.asarray
+            mask = _mask_from_cuda_array_interface_desc(arbitrary)
+            arbitrary = SimpleNamespace(__cuda_array_interface__=desc.copy())
+            arbitrary.__cuda_array_interface__["mask"] = None
+            desc = arbitrary.__cuda_array_interface__
+        else:
+            mask = None
+
+        arbitrary = cupy.asarray(arbitrary)
+
+        if arb_dtype != current_dtype:
+            arbitrary = arbitrary.astype(arb_dtype)
+            current_dtype = arb_dtype
+
+        if (
+            desc["strides"] is not None
+            and not (arbitrary.itemsize,) == arbitrary.strides
+        ):
+            arbitrary = cupy.ascontiguousarray(arbitrary)
+
+        data = _data_from_cuda_array_interface_desc(arbitrary)
+        col = build_column(data, dtype=current_dtype, mask=mask)
+
+        if dtype is not None:
+            col = col.astype(dtype)
+
+        if isinstance(col, cudf.core.column.CategoricalColumn):
+            return col
+        elif np.issubdtype(col.dtype, np.floating):
+            if nan_as_null or (mask is None and nan_as_null is None):
+                mask = libcudf.transform.nans_to_nulls(col.fillna(np.nan))
+                col = col.set_mask(mask)
+        elif np.issubdtype(col.dtype, np.datetime64):
+            if nan_as_null or (mask is None and nan_as_null is None):
+                col = utils.time_col_replace_nulls(col)
+        return col
+
     # TODO: Remove nvstrings here when nvstrings is fully removed
-    elif isinstance(arbitrary, nvstrings.nvstrings):
+    elif type(arbitrary).__name__ == "nvstrings":
         byte_count = arbitrary.byte_count()
         if byte_count > libcudf.MAX_STRING_COLUMN_BYTES:
             raise MemoryError(
@@ -1224,38 +1273,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             data=None, dtype="object", mask=nbuf, children=children
         )
         data._nvstrings = arbitrary
-
-    elif isinstance(arbitrary, Buffer):
-        if dtype is None:
-            raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
-        data = build_column(arbitrary, dtype=dtype)
-
-    elif hasattr(arbitrary, "__cuda_array_interface__"):
-        desc = arbitrary.__cuda_array_interface__
-        current_dtype = np.dtype(desc["typestr"])
-
-        arb_dtype = check_cast_unsupported_dtype(current_dtype)
-        if arb_dtype != current_dtype:
-            arbitrary = cupy.asarray(arbitrary).astype(arb_dtype)
-            current_dtype = arb_dtype
-
-        data = _data_from_cuda_array_interface_desc(arbitrary)
-        mask = _mask_from_cuda_array_interface_desc(arbitrary)
-        col = build_column(data, dtype=current_dtype, mask=mask)
-
-        if dtype is not None:
-            col = col.astype(dtype)
-
-        if isinstance(col, cudf.core.column.CategoricalColumn):
-            return col
-        elif np.issubdtype(col.dtype, np.floating):
-            if nan_as_null or (mask is None and nan_as_null is None):
-                mask = libcudf.transform.nans_to_nulls(col.fillna(np.nan))
-                col = col.set_mask(mask)
-        elif np.issubdtype(col.dtype, np.datetime64):
-            if nan_as_null or (mask is None and nan_as_null is None):
-                col = utils.time_col_replace_nulls(col)
-        return col
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):

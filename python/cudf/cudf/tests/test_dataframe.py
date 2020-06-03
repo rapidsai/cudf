@@ -1072,14 +1072,36 @@ def test_from_records(dtypes):
     gdf = gd.DataFrame.from_records(rec_ary, columns=["a", "b", "c", "d"])
     df = pd.DataFrame.from_records(rec_ary, columns=["a", "b", "c", "d"])
     assert isinstance(gdf, gd.DataFrame)
-
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+    assert_eq(df, gdf)
 
     gdf = gd.DataFrame.from_records(rec_ary)
     df = pd.DataFrame.from_records(rec_ary)
     assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
 
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+@pytest.mark.parametrize("columns", [None, ["first", "second", "third"]])
+@pytest.mark.parametrize(
+    "index",
+    [
+        None,
+        ["first", "second"],
+        "name",
+        "age",
+        "weight",
+        [10, 11],
+        ["abc", "xyz"],
+    ],
+)
+def test_from_records_index(columns, index):
+    rec_ary = np.array(
+        [("Rex", 9, 81.0), ("Fido", 3, 27.0)],
+        dtype=[("name", "U10"), ("age", "i4"), ("weight", "f4")],
+    )
+    gdf = gd.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    df = pd.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
 
 
 def test_from_gpu_matrix():
@@ -5453,3 +5475,56 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     actual[0] = 3
     expected[0] = 3
     assert_eq(gsr, psr)
+
+
+@pytest.mark.parametrize(
+    "data,cols,index",
+    [
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            ["a", "b", "c", "d"],
+        ),
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            [0, 20, 30, 10],
+        ),
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            [0, 1, 2, 3],
+        ),
+        (np.array([11, 123, -2342, 232]), ["a"], [1, 2, 11, 12]),
+        (np.array([11, 123, -2342, 232]), ["a"], ["khsdjk", "a", "z", "kk"]),
+        (
+            cupy.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "z"],
+            ["a", "z", "a", "z"],
+        ),
+        (cupy.array([11, 123, -2342, 232]), ["z"], [0, 1, 1, 0]),
+        (cupy.array([11, 123, -2342, 232]), ["z"], [1, 2, 3, 4]),
+        (cupy.array([11, 123, -2342, 232]), ["z"], ["a", "z", "d", "e"]),
+        (np.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
+        (np.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
+        (cupy.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
+        (cupy.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
+    ],
+)
+def test_dataframe_init_from_arrays_cols(data, cols, index):
+    # verify with columns & index
+    pdf = pd.DataFrame(data, columns=cols, index=index)
+    gdf = DataFrame(data, columns=cols, index=index)
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+    # verify with columns
+    pdf = pd.DataFrame(data, columns=cols)
+    gdf = DataFrame(data, columns=cols)
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+    pdf = pd.DataFrame(data)
+    gdf = DataFrame(data)
+
+    assert_eq(pdf, gdf, check_dtype=False)
