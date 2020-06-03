@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -25,7 +25,8 @@
 #include <tests/utilities/type_list_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <thrust/sequence.h>
+#include <thrust/iterator/counting_iterator.h>
+
 #include <random>
 
 template <typename T, typename T2 = void>
@@ -44,25 +45,20 @@ struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {
 
 TYPED_TEST_CASE(ColumnViewAllTypesTests, cudf::test::FixedWidthTypes);
 
-template <typename FromType, typename ToType>
-void do_logical_cast(cudf::column_view const& input)
+template <typename FromType, typename ToType, typename Iterator>
+void do_logical_cast(cudf::column_view const& input, Iterator begin, Iterator end)
 {
   if (std::is_same<FromType, ToType>::value) {
     // Cast to same type
     auto output = input.logical_cast(input.type());
     cudf::test::expect_columns_equal(output, input);
-  } else if (std::is_same<typename rep_type_t<FromType>::type, ToType>::value) {
-    // Cast to integer type and back to timestamp
-    cudf::data_type integer_type{cudf::type_to_id<ToType>()};
-    auto integer_view = input.logical_cast(integer_type);
-    auto output       = integer_view.logical_cast(input.type());
-    cudf::test::expect_columns_equal(output, input);
-  } else if (std::is_same<typename rep_type_t<ToType>::type, FromType>::value) {
-    // Cast to timestamp type and back to integer
-    cudf::data_type timestamp_type{cudf::type_to_id<ToType>()};
-    auto timestamp_view = input.logical_cast(timestamp_type);
-    auto output         = timestamp_view.logical_cast(input.type());
-    cudf::test::expect_columns_equal(output, input);
+  } else if (std::is_same<typename rep_type_t<FromType>::type, ToType>::value ||
+             std::is_same<FromType, typename rep_type_t<ToType>::type>::value) {
+    // Cast integer to timestamp or vice versa
+    cudf::data_type type{cudf::type_to_id<ToType>()};
+    auto output = input.logical_cast(type);
+    cudf::test::fixed_width_column_wrapper<ToType> expected(begin, end);
+    cudf::test::expect_columns_equal(output, expected);
   } else {
     // Other casts not allowed
     cudf::data_type type{cudf::type_to_id<ToType>()};
@@ -72,18 +68,21 @@ void do_logical_cast(cudf::column_view const& input)
 
 TYPED_TEST(ColumnViewAllTypesTests, LogicalCast)
 {
-  cudf::test::fixed_width_column_wrapper<TypeParam> input({1, 2, 3, 4, 5, 6, 7, 8});
+  auto begin = thrust::make_counting_iterator(1);
+  auto end = thrust::make_counting_iterator(16);
 
-  do_logical_cast<TypeParam, int8_t>(input);
-  do_logical_cast<TypeParam, int16_t>(input);
-  do_logical_cast<TypeParam, int32_t>(input);
-  do_logical_cast<TypeParam, int64_t>(input);
-  do_logical_cast<TypeParam, float>(input);
-  do_logical_cast<TypeParam, double>(input);
-  do_logical_cast<TypeParam, bool>(input);
-  do_logical_cast<TypeParam, cudf::timestamp_D>(input);
-  do_logical_cast<TypeParam, cudf::timestamp_s>(input);
-  do_logical_cast<TypeParam, cudf::timestamp_ms>(input);
-  do_logical_cast<TypeParam, cudf::timestamp_us>(input);
-  do_logical_cast<TypeParam, cudf::timestamp_ns>(input);
+  cudf::test::fixed_width_column_wrapper<TypeParam> input(begin, end);
+
+  do_logical_cast<TypeParam, int8_t>(input, begin, end);
+  do_logical_cast<TypeParam, int16_t>(input, begin, end);
+  do_logical_cast<TypeParam, int32_t>(input, begin, end);
+  do_logical_cast<TypeParam, int64_t>(input, begin, end);
+  do_logical_cast<TypeParam, float>(input, begin, end);
+  do_logical_cast<TypeParam, double>(input, begin, end);
+  do_logical_cast<TypeParam, bool>(input, begin, end);
+  do_logical_cast<TypeParam, cudf::timestamp_D>(input, begin, end);
+  do_logical_cast<TypeParam, cudf::timestamp_s>(input, begin, end);
+  do_logical_cast<TypeParam, cudf::timestamp_ms>(input, begin, end);
+  do_logical_cast<TypeParam, cudf::timestamp_us>(input, begin, end);
+  do_logical_cast<TypeParam, cudf::timestamp_ns>(input, begin, end);
 }

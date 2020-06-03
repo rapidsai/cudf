@@ -389,7 +389,7 @@ struct is_logically_castable_impl<Type, Type> : std::true_type {
   };
 #endif
 
-// Allow cast from timestamp to integer representation
+// Allow cast between timestamp and integer representation
 MAP_CASTABLE_TYPES(cudf::timestamp_D, cudf::timestamp_D::duration::rep);
 MAP_CASTABLE_TYPES(cudf::timestamp_s, cudf::timestamp_s::duration::rep);
 MAP_CASTABLE_TYPES(cudf::timestamp_ms, cudf::timestamp_ms::duration::rep);
@@ -417,7 +417,7 @@ struct is_logically_castable_from_impl {
  * @brief Indicates whether `from` is logically castable to `to`
  *
  * Column views that have binary compatible representations (e.g. timestamps and their integer
- * representation) can be logically cast to another type.
+ * representation) can be logically cast to another type without making a copy.
  *
  * @param from The `data_type` to convert from
  * @param to The `data_type` to convert to
