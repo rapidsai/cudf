@@ -2070,8 +2070,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * r is now [false, true, false]
    * ```
    * Any null string entries return corresponding null output column entries.
-   * For supported regex patterns refer to:
-   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
    *
    * @param pattern Regex pattern to match to each string.
    * @return New ColumnVector of boolean results for each string.
@@ -2093,8 +2091,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * r is now [false, true, true]
    * ```
    * Any null string entries return corresponding null output column entries.
-   * For supported regex patterns refer to:
-   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
    *
    * @param pattern Regex pattern to match to each string.
    * @return New ColumnVector of boolean results for each string.
@@ -2111,8 +2107,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * return a column in the table. Null entries are added if the string
    * does not match. Any null inputs also result in null output entries.
    *
-   * For supported regex patterns refer to:
-   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
    * @param pattern the pattern to use
    * @return the table of extracted matches
    * @throws CudfException if any error happens including if the RE does
