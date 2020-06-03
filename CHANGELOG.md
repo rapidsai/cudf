@@ -21,6 +21,7 @@
 - PR #5248 Support interleave_columns for string types
 - PR #5302 Add missing comparison operators to `fixed_point` type
 - PR #5354 Split Dask deserialization methods by dask/cuda
+- PR #5363 Handle `0-dim` inputs while broadcasting to a column
 
 ## Bug Fixes
 
