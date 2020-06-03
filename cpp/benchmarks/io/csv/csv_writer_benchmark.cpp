@@ -16,15 +16,8 @@
 
 #include <benchmark/benchmark.h>
 
-#include <cudf/column/column.hpp>
-#include <cudf/table/table.hpp>
-
 #include "../cuio_benchmarks_common.hpp"
 #include "../cuio_generate_benchmark_input.hpp"
-
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
 
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
@@ -33,7 +26,7 @@
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-constexpr int64_t data_size = 512 << 20;
+constexpr int64_t data_size = 512 << 20;  // 512 MB
 
 namespace cudf_io = cudf::io;
 
@@ -44,10 +37,10 @@ class CsvWrite : public cudf::benchmark {
 template <typename T>
 void CSV_write(benchmark::State& state)
 {
-  int64_t const total_desired_bytes = state.range(0);
-  cudf::size_type const num_cols    = state.range(1);
+  int64_t const total_bytes      = state.range(0);
+  cudf::size_type const num_cols = state.range(1);
 
-  int64_t const col_bytes = total_desired_bytes / num_cols;
+  int64_t const col_bytes = total_bytes / num_cols;
 
   auto const tbl  = create_random_table<T>(num_cols, col_bytes, true);
   auto const view = tbl->view();
@@ -58,7 +51,7 @@ void CSV_write(benchmark::State& state)
     cudf_io::write_csv(args);
   }
 
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0));
+  state.SetBytesProcessed(total_bytes * state.iterations());
 }
 
 #define CSV_WR_BENCHMARK_DEFINE(name, datatype, compression)   \
@@ -69,5 +62,5 @@ void CSV_write(benchmark::State& state)
     ->Unit(benchmark::kMillisecond)                            \
     ->UseManualTime();
 
-// no compression support, compression parameter unused
+// no compression support; compression parameter unused
 CUIO_BENCH_ALL_TYPES(CSV_WR_BENCHMARK_DEFINE, UNCOMPRESSED)

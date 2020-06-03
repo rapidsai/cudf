@@ -13,9 +13,11 @@
 template <typename T>
 constexpr auto stddev()
 {
-  return 1l << (sizeof(T) * 4);  // wider distribution for wider types
+  // Columns of wider types -> larger range of values
+  return 1l << (sizeof(T) * 4);
 }
 
+// Type trait for  cudf timestamp types
 template <typename>
 struct is_timestamp {
   constexpr static bool value = false;
@@ -26,25 +28,14 @@ struct is_timestamp<cudf::detail::timestamp<T>> {
   constexpr static bool value = true;
 };
 
+// nanoseconds in the type's unit
 template <typename Ts>
 constexpr int64_t nanoseconds();
 
 template <>
-constexpr int64_t nanoseconds<cudf::timestamp_D>()
+constexpr int64_t nanoseconds<cudf::timestamp_ns>()
 {
-  return 24l * 60 * 60 * 1000 * 1000 * 1000;
-}
-
-template <>
-constexpr int64_t nanoseconds<cudf::timestamp_s>()
-{
-  return 1000l * 1000 * 1000;
-}
-
-template <>
-constexpr int64_t nanoseconds<cudf::timestamp_ms>()
-{
-  return 1000l * 1000;
+  return 1;
 }
 
 template <>
@@ -54,42 +45,60 @@ constexpr int64_t nanoseconds<cudf::timestamp_us>()
 }
 
 template <>
-constexpr int64_t nanoseconds<cudf::timestamp_ns>()
+constexpr int64_t nanoseconds<cudf::timestamp_ms>()
 {
-  return 1;
+  return 1000l * 1000;
 }
 
+template <>
+constexpr int64_t nanoseconds<cudf::timestamp_s>()
+{
+  return 1000l * 1000 * 1000;
+}
+
+template <>
+constexpr int64_t nanoseconds<cudf::timestamp_D>()
+{
+  return 24l * 60 * 60 * nanoseconds<cudf::timestamp_s>();
+}
+
+auto& deterministic_engine()
+{
+  static unsigned seed = 13377331;
+  static std::mt19937 engine{seed};
+  return engine;
+}
+
+// implementation for timestamp types
 template <typename T, std::enable_if_t<is_timestamp<T>::value, int> = 0>
 T random_element()
 {
+  // Timestamp for June 2020
   static constexpr int64_t current_ns    = 1591053936l * nanoseconds<cudf::timestamp_s>();
   static constexpr auto timestamp_spread = 1. / (2 * 365 * 24 * 60 * 60);  // one in two years
 
-  // TODO: extract seed + engine into a single function
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
   static std::geometric_distribution<int64_t> seconds_gen{timestamp_spread};
   static std::uniform_int_distribution<int64_t> nanoseconds_gen{0,
                                                                 nanoseconds<cudf::timestamp_s>()};
 
-  // most timestamps will corespond to recent years
-  auto const timestamp_ns =
-    current_ns - seconds_gen(engine) * nanoseconds<cudf::timestamp_s>() - nanoseconds_gen(engine);
+  // Most timestamps will corespond to recent years
+  auto const timestamp_ns = current_ns -
+                            seconds_gen(deterministic_engine()) * nanoseconds<cudf::timestamp_s>() -
+                            nanoseconds_gen(deterministic_engine());
 
   return T(timestamp_ns / nanoseconds<T>());  // convert to the type precision
 }
 
+// implementation for numeric types
 template <typename T, std::enable_if_t<not is_timestamp<T>::value, int> = 0>
 T random_element()
 {
   static constexpr T lower_bound = std::numeric_limits<T>::lowest();
   static constexpr T upper_bound = std::numeric_limits<T>::max();
 
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
   static std::normal_distribution<> gaussian{0., stddev<T>()};
 
-  auto elem = gaussian(engine);
+  auto elem = gaussian(deterministic_engine());
   if (lower_bound >= 0) elem = abs(elem);
   elem = std::max(std::min(elem, (double)upper_bound), (double)lower_bound);
 
@@ -99,10 +108,8 @@ T random_element()
 template <>
 bool random_element<bool>()
 {
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
   static std::uniform_int_distribution<> uniform{0, 1};
-  return uniform(engine) == 1;
+  return uniform(deterministic_engine()) == 1;
 }
 
 template <typename T>
@@ -110,7 +117,8 @@ std::unique_ptr<cudf::column> create_random_column(cudf::size_type col_bytes, bo
 {
   const cudf::size_type num_rows = col_bytes / sizeof(T);
 
-  // every 100th element is invalid
+  // Every 100th element is invalid
+  // TODO: should this also be random?
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 100 == 0 ? false : true; });
 
@@ -136,14 +144,16 @@ std::unique_ptr<cudf::column> create_random_column<std::string>(cudf::size_type 
   static constexpr int avg_string_len = 16;
   const cudf::size_type num_rows      = col_bytes / avg_string_len;
 
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
   std::poisson_distribution<> dist(avg_string_len);
 
   std::vector<int32_t> offsets{0};
-  for (int i = 1; i < num_rows; ++i) { offsets.push_back(offsets.back() + dist(engine)); }
+  offsets.reserve(num_rows + 1);
+  for (int i = 1; i < num_rows; ++i) {
+    offsets.push_back(offsets.back() + dist(deterministic_engine()));
+  }
   std::vector<char> chars;
   chars.reserve(offsets.back() + 1);
+  // Use a pattern so there can be more unique strings in the column
   for (int i = 0; i <= offsets.back(); ++i) { chars.push_back('a' + i % 26); }
 
   return cudf::make_strings_column(chars, offsets);

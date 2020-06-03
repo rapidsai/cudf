@@ -16,6 +16,7 @@
 
 #pragma once
 
+// used to make CUIO_BENCH_ALL_TYPES calls more readable
 #define UNCOMPRESSED 0
 #define USE_SNAPPY 1
 
@@ -42,3 +43,6 @@
     ->Args({data_size, 64, compression})                                 \
     ->Unit(benchmark::kMillisecond)                                      \
     ->UseManualTime();
+
+// sample CUIO_BENCH_ALL_TYPES use
+// CUIO_BENCH_ALL_TYPES(SAMPLE_BENCHMARK_DEFINE, USE_SNAPPY)

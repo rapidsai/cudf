@@ -33,7 +33,7 @@
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-constexpr int64_t data_size = 1 << 30;
+constexpr int64_t data_size = 1 << 30;  // 1 GB
 
 namespace cudf_io = cudf::io;
 
@@ -50,7 +50,7 @@ void PQ_write(benchmark::State& state)
   cudf::size_type el_size = 4;
   int64_t num_rows        = total_desired_bytes / (num_cols * el_size);
 
-  auto tbl              = create_random_table<int>(num_cols, num_rows, true);
+  auto tbl              = create_random_table<int32_t>(num_cols, num_rows, true);
   cudf::table_view view = tbl->view();
 
   for (auto _ : state) {
@@ -73,7 +73,7 @@ void PQ_write_chunked(benchmark::State& state)
 
   std::vector<std::unique_ptr<cudf::table>> tables;
   for (cudf::size_type idx = 0; idx < num_tables; idx++) {
-    tables.push_back(create_random_table<int>(num_cols, num_rows, true));
+    tables.push_back(create_random_table<int32_t>(num_cols, num_rows, true));
   }
 
   for (auto _ : state) {
