@@ -827,6 +827,7 @@ def test_dataframe_hash_partition_masked_value(nrows):
             got_value = row.val
             assert expected_value == got_value
 
+
 @pytest.mark.parametrize("nrows", [3, 10, 50])
 def test_dataframe_hash_partition_masked_keys(nrows):
     gdf = DataFrame()
@@ -3344,7 +3345,6 @@ def test_series_astype_string_to_other(as_dtype):
         "datetime64[ms]",
         "datetime64[us]",
         "datetime64[ns]",
-        "str",
     ],
 )
 def test_series_astype_datetime_to_other(as_dtype):
@@ -3352,6 +3352,23 @@ def test_series_astype_datetime_to_other(as_dtype):
     psr = pd.Series(data)
     gsr = gd.from_pandas(psr)
     assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+@pytest.mark.parametrize(
+    "inp",
+    [
+        ("datetime64[ns]", "2011-01-01 00:00:00.000000000"),
+        ("datetime64[us]", "2011-01-01 00:00:00.000000"),
+        ("datetime64[ms]", "2011-01-01 00:00:00.000"),
+        ("datetime64[s]", "2011-01-01 00:00:00"),
+    ],
+)
+def test_series_astype_datetime_to_string(inp):
+    dtype, expect = inp
+    base_date = "2011-01-01"
+    sr = Series([base_date], dtype=dtype)
+    got = sr.astype(str)[0]
+    assert expect == got
 
 
 @pytest.mark.parametrize(
@@ -3387,19 +3404,22 @@ def test_series_astype_to_categorical_ordered(ordered):
     )
     ordered_dtype_gd = gd.CategoricalDtype.from_pandas(ordered_dtype_pd)
     assert_eq(
-        psr.astype("int32").astype(ordered_dtype_pd).astype('int32'),
-        gsr.astype("int32").astype(ordered_dtype_gd).astype('int32'),
+        psr.astype("int32").astype(ordered_dtype_pd).astype("int32"),
+        gsr.astype("int32").astype(ordered_dtype_gd).astype("int32"),
     )
+
 
 @pytest.mark.parametrize("ordered", [True, False])
 def test_series_astype_cat_ordered_to_unordered(ordered):
-    pd_dtype = pd.CategoricalDtype(categories=[1,2,3], ordered=ordered)
-    pd_to_dtype = pd.CategoricalDtype(categories=[1,2,3], ordered=not ordered)
+    pd_dtype = pd.CategoricalDtype(categories=[1, 2, 3], ordered=ordered)
+    pd_to_dtype = pd.CategoricalDtype(
+        categories=[1, 2, 3], ordered=not ordered
+    )
     gd_dtype = gd.CategoricalDtype.from_pandas(pd_dtype)
     gd_to_dtype = gd.CategoricalDtype.from_pandas(pd_to_dtype)
 
-    psr = pd.Series([1,2,3], dtype=pd_dtype)
-    gsr = gd.Series([1,2,3], dtype=gd_dtype)
+    psr = pd.Series([1, 2, 3], dtype=pd_dtype)
+    gsr = gd.Series([1, 2, 3], dtype=gd_dtype)
 
     expect = psr.astype(pd_to_dtype)
     got = gsr.astype(gd_to_dtype)
@@ -3440,9 +3460,7 @@ def test_series_astype_null_cases():
 
     assert_eq(
         gd.Series(data, dtype="datetime64[ms]"),
-        gd.Series(data, dtype="category").astype(
-            "datetime64[ms]"
-        ),
+        gd.Series(data, dtype="category").astype("datetime64[ms]"),
     )
 
     # string to other
@@ -3467,12 +3485,15 @@ def test_series_astype_null_cases():
     )
 
     # datetime to other
-    data = ["2001-01-01 00:00:00.000000", "2001-02-01 00:00:00.000000", None, "2001-03-01 00:00:00.000000"]
+    data = [
+        "2001-01-01 00:00:00.000000",
+        "2001-02-01 00:00:00.000000",
+        None,
+        "2001-03-01 00:00:00.000000",
+    ]
     assert_eq(
         gd.from_pandas(pd.Series(data)),
-        gd.from_pandas(pd.Series(data, dtype="datetime64[ns]")).astype(
-            "str"
-        ),
+        gd.from_pandas(pd.Series(data, dtype="datetime64[ns]")).astype("str"),
     )
 
     assert_eq(
@@ -4060,7 +4081,9 @@ def test_isin_dataframe(data, values):
             got = gdf.isin(values)
         except ValueError as e:
             if str(e) == "Lengths must match.":
-                pytest.xfail(reason='xref https://github.com/pandas-dev/pandas/issues/34256')
+                pytest.xfail(
+                    reason="xref https://github.com/pandas-dev/pandas/issues/34256"
+                )
 
         assert_eq(got, expected)
 
@@ -4244,7 +4267,12 @@ def test_df_astype_string_to_other(as_dtype):
     ],
 )
 def test_df_astype_datetime_to_other(as_dtype):
-    data = ["1991-11-20 00:00:00.000000", "2004-12-04 00:00:00.000000", "2016-09-13 00:00:00.000000", None]
+    data = [
+        "1991-11-20 00:00:00.000000",
+        "2004-12-04 00:00:00.000000",
+        "2016-09-13 00:00:00.000000",
+        None,
+    ]
 
     gdf = DataFrame()
     expect = DataFrame()
@@ -4315,8 +4343,8 @@ def test_df_astype_to_categorical_ordered(ordered):
     ordered_dtype_gd = gd.CategoricalDtype.from_pandas(ordered_dtype_pd)
 
     assert_eq(
-        pdf.astype(ordered_dtype_pd).astype('int32'),
-        gdf.astype(ordered_dtype_gd).astype('int32'),
+        pdf.astype(ordered_dtype_pd).astype("int32"),
+        gdf.astype(ordered_dtype_gd).astype("int32"),
     )
 
 
