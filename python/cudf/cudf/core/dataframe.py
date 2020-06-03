@@ -259,11 +259,51 @@ class DataFrame(Frame, Serializable):
         if dtype:
             self._data = self.astype(dtype)._data
 
+    def _get_union_of_indices(self, indexes):
+        if len(indexes) == 1:
+            return indexes[0]
+        else:
+            merged_index = cudf.core.Index._concat(indexes)
+            temp_df = cudf.DataFrame(
+                {
+                    "merged_ind": merged_index,
+                    "order": cupy.arange(len(merged_index)),
+                }
+            )
+            temp_df = temp_df.drop_duplicates("merged_ind")
+            temp_df = temp_df.sort_values("order")
+            merged_index = as_index(temp_df._data["merged_ind"])
+            return merged_index
+
+    def _init_from_series_list(self, data, columns, index):
+        if columns is None:
+            columns = self._get_union_of_indices([d.index for d in data])
+
+        # longest_series = max(map(lambda x: len(x), data))
+
+        for col in range(len(data)):
+            self._data[col] = column.as_column(data[col])
+
+        self.columns = columns
+        self._index = index
+        # import pdb;pdb.set_trace()
+        transpose = self.T
+        self._data = transpose._data
+        self._index = transpose.columns
+        self.columns = transpose._index
+
     def _init_from_list_like(self, data, index=None, columns=None):
         if index is None:
             index = RangeIndex(start=0, stop=len(data))
         else:
             index = as_index(index)
+
+        if isinstance(data[0], cudf.Series):
+            self._init_from_series_list(
+                data=data, columns=columns, index=index
+            )
+            return
+
         self._index = as_index(index)
         data = list(itertools.zip_longest(*data))
 
