@@ -50,26 +50,26 @@ void do_logical_cast(cudf::column_view const& input, Iterator begin, Iterator en
 {
   if (std::is_same<FromType, ToType>::value) {
     // Cast to same type
-    auto output = input.logical_cast(input.type());
+    auto output = cudf::logical_cast(input, input.type());
     cudf::test::expect_columns_equal(output, input);
   } else if (std::is_same<typename rep_type_t<FromType>::type, ToType>::value ||
              std::is_same<FromType, typename rep_type_t<ToType>::type>::value) {
     // Cast integer to timestamp or vice versa
     cudf::data_type type{cudf::type_to_id<ToType>()};
-    auto output = input.logical_cast(type);
+    auto output = cudf::logical_cast(input, type);
     cudf::test::fixed_width_column_wrapper<ToType> expected(begin, end);
     cudf::test::expect_columns_equal(output, expected);
   } else {
     // Other casts not allowed
     cudf::data_type type{cudf::type_to_id<ToType>()};
-    EXPECT_THROW(input.logical_cast(type), cudf::logic_error);
+    EXPECT_THROW(cudf::logical_cast(input, type), cudf::logic_error);
   }
 }
 
 TYPED_TEST(ColumnViewAllTypesTests, LogicalCast)
 {
   auto begin = thrust::make_counting_iterator(1);
-  auto end = thrust::make_counting_iterator(16);
+  auto end   = thrust::make_counting_iterator(16);
 
   cudf::test::fixed_width_column_wrapper<TypeParam> input(begin, end);
 

@@ -323,18 +323,6 @@ class column_view : public detail::column_view_base {
               std::vector<column_view> const& children = {});
 
   /**
-   * @brief Zero-copy cast between binary compatible types
-   *
-   * Can be used to cast timestamp columns to their underlying integer representation
-   *
-   * @throws cudf::logic_error if the specified type is not compatible
-   *
-   * @param type The `data_type` to cast to
-   * @return Column view with the specified type
-   */
-  column_view logical_cast(data_type type) const;
-
-  /**
    * @brief Returns the specified child
    *
    * @param child_index The index of the desired child
@@ -348,6 +336,8 @@ class column_view : public detail::column_view_base {
   size_type num_children() const noexcept { return _children.size(); }
 
  private:
+  friend column_view logical_cast(column_view const& input, data_type type);
+
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
 };                                       // namespace cudf
@@ -538,5 +528,18 @@ class mutable_column_view : public detail::column_view_base {
  * @return size_type The number of descendants of the parent
  **/
 size_type count_descendants(column_view parent);
+
+/**
+ * @brief Zero-copy cast between binary compatible types
+ *
+ * Can be used to cast timestamp columns to their underlying integer representation
+ *
+ * @throws cudf::logic_error if the specified type is not compatible
+ *
+ * @param input The `column_view` to cast from
+ * @param type The `data_type` to cast to
+ * @return New `column_view` wrapping the same data as `input` but cast to `type`
+ */
+column_view logical_cast(column_view const& input, data_type type);
 
 }  // namespace cudf

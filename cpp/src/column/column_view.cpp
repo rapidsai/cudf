@@ -90,12 +90,6 @@ column_view::column_view(data_type type,
   }
 }
 
-column_view column_view::logical_cast(data_type type) const
-{
-  CUDF_EXPECTS(is_logically_castable(_type, type), "types are not logically castable");
-  return column_view{type, _size, _data, _null_mask, _null_count, _offset, _children};
-}
-
 // Mutable view constructor
 mutable_column_view::mutable_column_view(data_type type,
                                          size_type size,
@@ -135,6 +129,18 @@ size_type count_descendants(column_view parent)
     count += count_descendants(parent.child(i));
   }
   return count;
+}
+
+column_view logical_cast(column_view const& input, data_type type)
+{
+  CUDF_EXPECTS(is_logically_castable(input._type, type), "types are not logically castable");
+  return column_view{type,
+                     input._size,
+                     input._data,
+                     input._null_mask,
+                     input._null_count,
+                     input._offset,
+                     input._children};
 }
 
 }  // namespace cudf
