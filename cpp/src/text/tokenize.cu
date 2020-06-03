@@ -25,6 +25,7 @@
 #include <nvtext/tokenize.hpp>
 #include <text/utilities/tokenize_ops.cuh>
 
+#include <thrust/count.h>
 #include <thrust/transform.h>
 
 namespace nvtext {
@@ -150,6 +151,68 @@ std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& stri
     stream);
 }
 
+// tokenize on every character
+std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const& strings_column,
+                                                 cudaStream_t stream,
+                                                 rmm::mr::device_memory_resource* mr)
+{
+  auto strings_count = strings_column.size();
+  if (strings_count == 0) { return cudf::make_empty_column(cudf::data_type{cudf::STRING}); }
+
+  auto execpol   = rmm::exec_policy(stream);
+  auto d_offsets = strings_column.offsets().data<int32_t>();
+  d_offsets += strings_column.offset();  // nvbug-2808421 : do not combine with the previous line
+  auto offset      = thrust::device_pointer_cast(d_offsets)[0];
+  auto chars_bytes = thrust::device_pointer_cast(d_offsets)[strings_count] - offset;
+  auto d_chars     = strings_column.chars().data<uint8_t>();
+  d_chars += offset;
+
+  // This will return true for the beginning of each UTF-8 character byte.
+  // The (0xC0 & 0x80) bit pattern identifies a continuation byte of a character.
+  auto begin_char_fn = [] __device__(uint8_t byte) { return (byte & 0xC0) != 0x80; };
+
+  // To minimize memory, count the number of characters so we can
+  // build the output offsets without an intermediate buffer.
+  // In the worst case each byte is a character so the output is 4x the input.
+  auto strings_view = cudf::column_device_view::create(strings_column.parent(), stream);
+  cudf::size_type num_characters =
+    thrust::count_if(execpol->on(stream), d_chars, d_chars + chars_bytes, begin_char_fn);
+
+  // no characters check -- this could happen in all-empty or all-null strings column
+  if (num_characters == 0) { return cudf::make_empty_column(cudf::data_type{cudf::STRING}); }
+
+  // create output offsets column
+  // -- conditionally copy a counting iterator where
+  //    the first byte of each character is located
+  auto offsets_column = cudf::make_numeric_column(
+    cudf::data_type{cudf::INT32}, num_characters + 1, cudf::mask_state::UNALLOCATED, stream, mr);
+  auto d_new_offsets = offsets_column->mutable_view().begin<int32_t>();
+  thrust::copy_if(execpol->on(stream),
+                  thrust::make_counting_iterator<int32_t>(0),
+                  thrust::make_counting_iterator<int32_t>(chars_bytes),
+                  d_new_offsets,
+                  [d_chars] __device__(auto idx) { return (d_chars[idx] & 0xC0) != 0x80; });
+  // also need to set the final value to the size of the chars column
+  CUDA_TRY(cudaMemcpyAsync(
+    d_new_offsets + num_characters, &chars_bytes, sizeof(int32_t), cudaMemcpyHostToDevice, stream));
+
+  // create the output chars column
+  // -- just a copy of the input's chars column
+  // -- create a view here to account for the column offset
+  cudf::column_view chars_view(
+    cudf::data_type{cudf::INT32}, chars_bytes, d_chars, nullptr, 0, offset);
+  auto chars_column = std::make_unique<cudf::column>(chars_view, stream, mr);
+
+  // return new strings column
+  return cudf::make_strings_column(num_characters,
+                                   std::move(offsets_column),
+                                   std::move(chars_column),
+                                   0,
+                                   rmm::device_buffer{},
+                                   stream,
+                                   mr);
+}
+
 }  // namespace detail
 
 // external APIs
@@ -184,6 +247,13 @@ std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& stri
 {
   CUDF_FUNC_RANGE();
   return detail::count_tokens(strings, delimiters, mr);
+}
+
+std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const& strings,
+                                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::character_tokenize(strings, 0, mr);
 }
 
 }  // namespace nvtext
