@@ -296,14 +296,12 @@ if(BUILD_TESTS)
         message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
         include_directories(${GTEST_INCLUDE_DIR})
         add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
-        add_subdirectory(${CMAKE_SOURCE_DIR}/custrings/tests)
     else()
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
     endif(GTEST_FOUND)
 endif(BUILD_TESTS)
 
 message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
-message(STATUS "NVSTRINGS_TEST_LIST set to: ${NVSTRINGS_TEST_LIST}")
 
 ###################################################################################################
 # - add google benchmark --------------------------------------------------------------------------
@@ -365,50 +363,6 @@ endif(CONDA_LINK_DIRS)
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
-
-add_library(libNVStrings
-            custrings/strings/NVStrings.cu
-            custrings/strings/NVStringsImpl.cu
-            custrings/strings/array.cu
-            custrings/strings/attrs.cu
-            custrings/strings/case.cu
-            custrings/strings/combine.cu
-            custrings/strings/convert.cu
-            custrings/strings/count.cu
-            custrings/strings/datetime.cu
-            custrings/strings/extract.cu
-            custrings/strings/extract_record.cu
-            custrings/strings/find.cu
-            custrings/strings/findall.cu
-            custrings/strings/findall_record.cu
-            custrings/strings/modify.cu
-            custrings/strings/pad.cu
-            custrings/strings/replace.cu
-            custrings/strings/replace_backref.cu
-            custrings/strings/replace_multi.cu
-            custrings/strings/split.cu
-            custrings/strings/strip.cu
-            custrings/strings/substr.cu
-            custrings/strings/urlencode.cu
-            custrings/util.cu
-            custrings/regex/regexec.cpp
-            custrings/regex/regcomp.cpp)
-
-add_library(libNVCategory
-            custrings/category/NVCategory.cu
-            custrings/category/numeric_category.cu
-            custrings/category/numeric_category_int.cu
-            custrings/category/numeric_category_long.cu
-            custrings/category/numeric_category_float.cu
-            custrings/category/numeric_category_double.cu)
-
-add_library(libNVText
-            custrings/text/NVText.cu
-            custrings/text/edit_distance.cu
-            custrings/text/ngram.cu
-            custrings/text/stemmer.cu
-            custrings/text/tokens.cu
-            custrings/util.cu)
 
 add_library(cudf
             src/comms/ipc/ipc.cpp
@@ -603,18 +557,8 @@ add_library(cudf
             src/aggregation/result_cache.cpp
 )
 
-# Rename installation to proper names for later finding
-set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
-set_target_properties(libNVCategory PROPERTIES OUTPUT_NAME "NVCategory")
-set_target_properties(libNVText PROPERTIES OUTPUT_NAME "NVText")
-
 # Override RPATH for cudf
 set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
-
-# Override RPATH for nvstrings
-set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")
-set_target_properties(libNVCategory PROPERTIES BUILD_RPATH "\$ORIGIN")
-set_target_properties(libNVText PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
@@ -745,36 +689,11 @@ endif(HT_DEFAULT_ALLOCATOR)
 # Get all the symbols from the Arrow CUDA Library for Cython
 set(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
 
-# link targets for NVStrings
-target_link_libraries(libNVStrings rmm ${CUDART_LIBRARY} cuda)
-target_link_libraries(libNVCategory libNVStrings rmm ${CUDART_LIBRARY} cuda)
-target_link_libraries(libNVText libNVStrings rmm ${CUDART_LIBRARY} cuda)
-
 # link targets for cuDF
-target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
-
-# install targets for NVStrings
-install(TARGETS libNVStrings
-        DESTINATION lib
-        COMPONENT nvstrings)
-
-install(TARGETS libNVCategory
-        DESTINATION lib
-        COMPONENT nvstrings)
-
-install(TARGETS libNVText
-        DESTINATION lib
-        COMPONENT nvstrings)
-
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/nvstrings
-        DESTINATION include
-        COMPONENT nvstrings)
-
-add_custom_target(nvstrings
-                  DEPENDS libNVStrings libNVCategory libNVText)
 
 # install targets for cuDF
 install(TARGETS cudf
@@ -800,37 +719,18 @@ if(BUILD_TESTS)
     add_dependencies(install_cudf cudftestutil)
 endif(BUILD_TESTS)
 
-add_custom_target(install_nvstrings
-                  COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=nvstrings -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
-                  DEPENDS nvstrings)
-
 add_custom_target(build_tests_cudf
                   DEPENDS ${CUDF_TEST_LIST})
 
-add_custom_target(build_tests_nvstrings
-                  DEPENDS ${NVSTRINGS_TEST_LIST})
-
 add_custom_target(test_cudf
-                  COMMAND ctest -E "NVSTRINGS"
+                  COMMAND ctest
                   DEPENDS build_tests_cudf)
-
-add_custom_target(test_nvstrings
-                  COMMAND ctest -R "NVSTRINGS"
-                  DEPENDS build_tests_nvstrings)
 
 add_custom_target(build_benchmarks_cudf
                   DEPENDS ${BENCHMARK_LIST})
 
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------
-
-# doc targets for nvstrings
-add_custom_command(OUTPUT NVSTRINGS_DOXYGEN
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/custrings/doxygen
-                   COMMAND doxygen Doxyfile
-                   VERBATIM
-)
-add_custom_target(docs_nvstrings DEPENDS NVSTRINGS_DOXYGEN)
 
 # doc targets for cuDF
 add_custom_command(OUTPUT CUDF_DOXYGEN
