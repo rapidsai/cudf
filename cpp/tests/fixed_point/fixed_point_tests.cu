@@ -162,6 +162,31 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXMath)
   EXPECT_EQ(THREE - TWO, ONE);
   EXPECT_EQ(TWO / ONE, TWO);
   EXPECT_EQ(SIX / TWO, THREE);
+
+  decimalXX a{1.23, scale_type{-2}};
+  decimalXX b{0, scale_type{0}};
+
+  EXPECT_EQ(a + b, a);
+  EXPECT_EQ(a - b, a);
+}
+
+TYPED_TEST(FixedPointTestBothReps, ComparisonOperators)
+{
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  decimalXX ONE{1, scale_type{-1}};
+  decimalXX TWO{2, scale_type{-2}};
+  decimalXX THREE{3, scale_type{-3}};
+  decimalXX SIX{6, scale_type{-4}};
+
+  EXPECT_TRUE(ONE + ONE >= TWO);
+
+  EXPECT_TRUE(ONE + ONE <= TWO);
+  EXPECT_TRUE(ONE * TWO < THREE);
+  EXPECT_TRUE(THREE * TWO > THREE);
+  EXPECT_TRUE(THREE - TWO >= ONE);
+  EXPECT_TRUE(TWO / ONE < THREE);
+  EXPECT_TRUE(SIX / TWO >= ONE);
 }
 
 TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision)
@@ -198,15 +223,73 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXRounding)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  decimalXX ZERO_FROM_FOUR_0{4, scale_type{0}};
-  decimalXX ZERO_FROM_FOUR_1{4, scale_type{1}};
-  decimalXX TEN_FROM_FIVE_0{5, scale_type{0}};
-  decimalXX TEN_FROM_FIVE_1{5, scale_type{1}};
+  decimalXX ZERO_0{0, scale_type{0}};
+  decimalXX ZERO_1{4, scale_type{1}};
+  decimalXX THREE_0{3, scale_type{0}};
+  decimalXX FOUR_0{4, scale_type{0}};
+  decimalXX FIVE_0{5, scale_type{0}};
+  decimalXX TEN_0{10, scale_type{0}};
+  decimalXX TEN_1{5, scale_type{1}};
 
-  EXPECT_EQ(ZERO_FROM_FOUR_1 + TEN_FROM_FIVE_1, TEN_FROM_FIVE_1);
-  EXPECT_EQ(ZERO_FROM_FOUR_0 + TEN_FROM_FIVE_1, TEN_FROM_FIVE_1);
-  EXPECT_TRUE(ZERO_FROM_FOUR_1 == ZERO_FROM_FOUR_1);
-  EXPECT_TRUE(TEN_FROM_FIVE_0 == TEN_FROM_FIVE_1);
+  decimalXX FOURTEEN_0{14, scale_type{0}};
+  decimalXX FIFTEEN_0{15, scale_type{0}};
+
+  EXPECT_EQ(ZERO_0, ZERO_1);
+  EXPECT_EQ(TEN_0, TEN_1);
+
+  EXPECT_EQ(ZERO_1 + TEN_1, TEN_1);
+  EXPECT_EQ(FOUR_0 + TEN_1, FOURTEEN_0);
+  EXPECT_TRUE(ZERO_0 == ZERO_1);
+  EXPECT_TRUE(FIVE_0 != TEN_1);
+  EXPECT_TRUE(FIVE_0 + FIVE_0 + FIVE_0 == FIFTEEN_0);
+  EXPECT_TRUE(FIVE_0 + FIVE_0 + FIVE_0 != TEN_1);
+  EXPECT_TRUE(FIVE_0 * THREE_0 == FIFTEEN_0);
+  EXPECT_TRUE(FIVE_0 * THREE_0 != TEN_1);
+}
+
+TYPED_TEST(FixedPointTestBothReps, ArithmeticWithDifferentScales)
+{
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  decimalXX a{1, scale_type{0}};
+  decimalXX b{1.2, scale_type{-1}};
+  decimalXX c{1.23, scale_type{-2}};
+  decimalXX d{1.111, scale_type{-3}};
+
+  decimalXX x{2.2, scale_type{-1}};
+  decimalXX y{3.43, scale_type{-2}};
+  decimalXX z{4.541, scale_type{-3}};
+
+  decimalXX xx{0.2, scale_type{-1}};
+  decimalXX yy{0.03, scale_type{-2}};
+  decimalXX zz{0.119, scale_type{-3}};
+
+  EXPECT_EQ(a + b, x);
+  EXPECT_EQ(a + b + c, y);
+  EXPECT_EQ(a + b + c + d, z);
+  EXPECT_EQ(b - a, xx);
+  EXPECT_EQ(c - b, yy);
+  EXPECT_EQ(c - d, zz);
+}
+
+TYPED_TEST(FixedPointTestBothReps, RescaledTest)
+{
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  decimalXX num0{1, scale_type{0}};
+  decimalXX num1{1.2, scale_type{-1}};
+  decimalXX num2{1.23, scale_type{-2}};
+  decimalXX num3{1.235, scale_type{-3}};
+  decimalXX num4{1.2346, scale_type{-4}};
+  decimalXX num5{1.23457, scale_type{-5}};
+  decimalXX num6{1.234567, scale_type{-6}};
+
+  EXPECT_EQ(num0, num6.rescaled(scale_type{0}));
+  EXPECT_EQ(num1, num6.rescaled(scale_type{-1}));
+  EXPECT_EQ(num2, num6.rescaled(scale_type{-2}));
+  EXPECT_EQ(num3, num6.rescaled(scale_type{-3}));
+  EXPECT_EQ(num4, num6.rescaled(scale_type{-4}));
+  EXPECT_EQ(num5, num6.rescaled(scale_type{-5}));
 }
 
 TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyAddition)
@@ -264,6 +347,9 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust)
 
 TEST_F(FixedPointTest, OverflowDecimal32)
 {
+  // This flag is needed to avoid warnings with ASSERT_DEATH
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
 #if defined(__CUDACC_DEBUG__)
@@ -271,8 +357,8 @@ TEST_F(FixedPointTest, OverflowDecimal32)
   decimal32 num0{2, scale_type{-9}};
   decimal32 num1{-2, scale_type{-9}};
 
-  ASSERT_NO_THROW(num0 + num0);
-  ASSERT_NO_THROW(num1 - num0);
+  ASSERT_DEATH(num0 + num0, ".*");
+  ASSERT_DEATH(num1 - num0, ".*");
 
   decimal32 min{std::numeric_limits<int32_t>::min(), scale_type{0}};
   decimal32 max{std::numeric_limits<int32_t>::max(), scale_type{0}};
@@ -280,19 +366,22 @@ TEST_F(FixedPointTest, OverflowDecimal32)
   decimal32 ONE{1, scale_type{0}};
   decimal32 TWO{2, scale_type{0}};
 
-  ASSERT_NO_THROW(min / NEG_ONE);
-  ASSERT_NO_THROW(max * TWO);
-  ASSERT_NO_THROW(min * TWO);
-  ASSERT_NO_THROW(max + ONE);
-  ASSERT_NO_THROW(max - NEG_ONE);
-  ASSERT_NO_THROW(min - ONE);
-  ASSERT_NO_THROW(max - NEG_ONE);
+  ASSERT_DEATH(min / NEG_ONE, ".*");
+  ASSERT_DEATH(max * TWO, ".*");
+  ASSERT_DEATH(min * TWO, ".*");
+  ASSERT_DEATH(max + ONE, ".*");
+  ASSERT_DEATH(max - NEG_ONE, ".*");
+  ASSERT_DEATH(min - ONE, ".*");
+  ASSERT_DEATH(max - NEG_ONE, ".*");
 
 #endif
 }
 
 TEST_F(FixedPointTest, OverflowDecimal64)
 {
+  // This flag is needed to avoid warnings with ASSERT_DEATH
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+
   using decimal64 = fixed_point<int64_t, Radix::BASE_10>;
 
 #if defined(__CUDACC_DEBUG__)
@@ -300,8 +389,8 @@ TEST_F(FixedPointTest, OverflowDecimal64)
   decimal64 num0{5, scale_type{-18}};
   decimal64 num1{-5, scale_type{-18}};
 
-  ASSERT_NO_THROW(num0 + num0);
-  ASSERT_NO_THROW(num1 - num0);
+  ASSERT_DEATH(num0 + num0, ".*");
+  ASSERT_DEATH(num1 - num0, ".*");
 
   decimal64 min{std::numeric_limits<int64_t>::min(), scale_type{0}};
   decimal64 max{std::numeric_limits<int64_t>::max(), scale_type{0}};
@@ -309,13 +398,13 @@ TEST_F(FixedPointTest, OverflowDecimal64)
   decimal64 ONE{1, scale_type{0}};
   decimal64 TWO{2, scale_type{0}};
 
-  ASSERT_NO_THROW(min / NEG_ONE);
-  ASSERT_NO_THROW(max * TWO);
-  ASSERT_NO_THROW(min * TWO);
-  ASSERT_NO_THROW(max + ONE);
-  ASSERT_NO_THROW(max - NEG_ONE);
-  ASSERT_NO_THROW(min - ONE);
-  ASSERT_NO_THROW(max - NEG_ONE);
+  ASSERT_DEATH(min / NEG_ONE, ".*");
+  ASSERT_DEATH(max * TWO, ".*");
+  ASSERT_DEATH(min * TWO, ".*");
+  ASSERT_DEATH(max + ONE, ".*");
+  ASSERT_DEATH(max - NEG_ONE, ".*");
+  ASSERT_DEATH(min - ONE, ".*");
+  ASSERT_DEATH(max - NEG_ONE, ".*");
 
 #endif
 }

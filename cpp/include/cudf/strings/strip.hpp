@@ -62,7 +62,7 @@ enum class strip_type {
  * string. Default is both.
  * @param to_strip UTF-8 encoded characters to strip from each string.
  *        Default is empty string which indicates strip whitespace characters.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> strip(

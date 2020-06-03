@@ -39,8 +39,8 @@ enum class negative_index_policy : bool { ALLOWED, NOT_ALLOWED };
  * ALLOW`.
  * @param[in] negative_index_policy Interpret each negative index `i` in the
  * gathermap as the positive index `i+num_source_rows`.
- * @param[in] mr The resource to use for all allocations
- * @param[in] stream The CUDA stream on which to execute kernels
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @return cudf::table Result of the gather
  */
 std::unique_ptr<table> gather(table_view const& source_table,

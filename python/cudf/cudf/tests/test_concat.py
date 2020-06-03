@@ -102,6 +102,10 @@ def test_concat_errors():
     with pytest.raises(ValueError):
         gd.concat([])
 
+    # All None
+    with pytest.raises(ValueError):
+        gd.concat([None, None])
+
     # Mismatched types
     with pytest.raises(ValueError):
         gd.concat([gdf, gdf.x])
@@ -251,3 +255,19 @@ def test_concat_duplicate_columns():
     cdf_med = cdf.groupby(["id4", "id5"])[["v3"]].quantile(q=0.5)
     with pytest.raises(NotImplementedError):
         gd.concat([cdf_med, cdf_std], axis=1)
+
+
+def test_concat_mixed_input():
+    pdf1 = pd.DataFrame({"a": [10, 20, 30]})
+    pdf2 = pd.DataFrame({"a": [11, 22, 33]})
+
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
+
+    assert_eq(
+        pd.concat([pdf1, None, pdf2, None]),
+        gd.concat([gdf1, None, gdf2, None]),
+    )
+    assert_eq(pd.concat([pdf1, None]), gd.concat([gdf1, None]))
+    assert_eq(pd.concat([None, pdf2]), gd.concat([None, gdf2]))
+    assert_eq(pd.concat([None, pdf2, pdf1]), gd.concat([None, gdf2, gdf1]))

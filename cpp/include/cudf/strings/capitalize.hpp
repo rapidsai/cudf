@@ -38,7 +38,7 @@ namespace strings {
  * ```
  *
  * @param[in] strings String column.
- * @param[in] mr Resource for allocating device memory.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  * @return Column of strings capitalized from the input column.
  */
 std::unique_ptr<column> capitalize(
@@ -62,7 +62,7 @@ std::unique_ptr<column> capitalize(
  * ```
  *
  * @param[in] strings String column.
- * @param[in] mr Resource for allocating device memory.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  * @return Column of title strings.
  */
 std::unique_ptr<column> title(
