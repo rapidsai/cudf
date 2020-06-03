@@ -292,31 +292,19 @@ TYPED_TEST(FixedPointTestBothReps, RescaledTest)
   EXPECT_EQ(num5, num6.rescaled(scale_type{-5}));
 }
 
-TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyAddition)
+TYPED_TEST(FixedPointTestBothReps, RescaledRounding)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  decimalXX a_3{1.250, scale_type{-3}};
+  decimalXX num0{1500, scale_type{0}};
+  decimalXX num1{1499, scale_type{0}};
+  decimalXX num2{-1499, scale_type{0}};
+  decimalXX num3{-1500, scale_type{0}};
 
-  // 1.250 + 1.205 = 2.455
-  decimalXX b_3{1.205, scale_type{-3}};
-  decimalXX c_3{2.455, scale_type{-3}};
-  EXPECT_EQ(a_3 + b_3, c_3);
-
-  // 1.250 + 1.21 = 2.46
-  decimalXX b_2{1.205, scale_type{-2}};
-  decimalXX c_2{2.46, scale_type{-2}};
-  EXPECT_EQ(a_3 + b_2, c_2);
-
-  // 1.250 + 1.2 = 2.5
-  decimalXX b_1{1.205, scale_type{-1}};
-  decimalXX c_1{2.5, scale_type{-1}};
-  EXPECT_EQ(a_3 + b_1, c_1);
-
-  // 1.250 + 1. = 2.
-  decimalXX b_0{1.205, scale_type{0}};
-  decimalXX c_0{2., scale_type{0}};
-  EXPECT_EQ(a_3 + b_0, c_0);
+  EXPECT_EQ(2000, static_cast<TypeParam>(num0.rescaled(scale_type{3})));
+  EXPECT_EQ(1000, static_cast<TypeParam>(num1.rescaled(scale_type{3})));
+  EXPECT_EQ(-1000, static_cast<TypeParam>(num2.rescaled(scale_type{3})));
+  EXPECT_EQ(-2000, static_cast<TypeParam>(num3.rescaled(scale_type{3})));
 }
 
 TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust)
