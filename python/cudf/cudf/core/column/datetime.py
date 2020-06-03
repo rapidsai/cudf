@@ -24,6 +24,12 @@ _numpy_to_pandas_conversion = {
     "D": 1000000000 * 86400,
 }
 
+_dtype_to_format_conversion = {
+    'datetime64[ns]': "%Y-%m-%d %H:%M:%S.%9f",
+    'datetime64[us]':"%Y-%m-%d %H:%M:%S.%6f",
+    'datetime64[ms]':"%Y-%m-%d %H:%M:%S.%3f",
+    'datetime64[s]':"%Y-%m-%d %H:%M:%S",
+}
 
 class DatetimeColumn(column.ColumnBase):
     def __init__(
@@ -142,7 +148,8 @@ class DatetimeColumn(column.ColumnBase):
     def as_string_column(self, dtype, **kwargs):
         from cudf.core.column import string
         if not kwargs.get("format"):
-            kwargs["format"] = "%Y-%m-%d %H:%M:%S.%f"
+            fmt = _dtype_to_format_conversion.get(self.dtype.name, '%Y-%m-%d %H:%M:%S')
+            kwargs["format"] = fmt
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
