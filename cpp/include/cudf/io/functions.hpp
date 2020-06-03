@@ -692,6 +692,10 @@ struct write_parquet_chunked_args {
   statistics_freq stats_level = statistics_freq::STATISTICS_ROWGROUP;
   /// Optional associated metadata.
   const table_metadata_with_nullability* metadata;
+  /// Optionally return the raw parquet file metadata output
+  bool return_filemetadata = false;
+  /// Column chunks file path to be set in the raw output metadata
+  std::string metadata_out_file_path;
 
   write_parquet_chunked_args() = default;
 

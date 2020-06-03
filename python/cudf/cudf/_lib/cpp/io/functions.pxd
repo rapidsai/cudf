@@ -190,6 +190,8 @@ cdef extern from "cudf/io/functions.hpp" \
         cudf_io_types.compression_type compression
         cudf_io_types.statistics_freq stats_level
         const cudf_io_types.table_metadata *metadata
+        bool return_filemetadata
+        string metadata_out_file_path
 
         write_parquet_chunked_args() except +
         write_parquet_chunked_args(

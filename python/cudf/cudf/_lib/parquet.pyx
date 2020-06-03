@@ -309,11 +309,17 @@ cdef class ParquetWriter:
     cdef object index
 
     def __cinit__(self, object path, object index=None,
-                  object compression=None, str statistics="ROWGROUP"):
+                  object compression=None, str statistics="ROWGROUP",
+                  object metadata_file_path=None):
         self.sink = make_sink_info(path, &self._data_sink)
         self.stat_freq = _get_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
+        self.metadata_out_file_path = metadata_out_file_path
+        if metadata_file_path is not None:
+            self.return_filemetadata = True
+        else:
+            self.return_filemetadata = False
 
     def write_table(self, Table table):
         """ Writes a single table to the file """
@@ -356,6 +362,13 @@ cdef class ParquetWriter:
             args = write_parquet_chunked_args(self.sink,
                                               tbl_meta.get(),
                                               self.comp_type, self.stat_freq)
+
+        # Update metadata-collection options
+        if self.metadata_file_path is not None:
+            args.metadata_out_file_path = str.encode(metadata_file_path)
+            args.return_filemetadata = True
+
+        with nogil:
             self.state = write_parquet_chunked_begin(args)
 
 
