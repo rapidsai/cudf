@@ -269,11 +269,6 @@ class StringMethods(object):
                 else:
                     return self._parent._mimic_inplace(new_col, inplace=False)
 
-    def __dir__(self):
-        keys = dir(type(self))
-        # TODO: Remove along with `__getattr__` above when all is ported
-        return set(keys)
-
     def __getitem__(self, key):
         if isinstance(key, slice):
             return self.slice(start=key.start, stop=key.stop, step=key.step)
