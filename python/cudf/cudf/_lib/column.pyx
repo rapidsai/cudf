@@ -2,7 +2,6 @@
 
 import numpy as np
 import pandas as pd
-import cython
 import rmm
 
 import cudf
@@ -28,7 +27,6 @@ from cudf._lib.cpp.column.column_view cimport column_view
 cimport cudf._lib.cpp.types as libcudf_types
 
 
-@cython.auto_pickle(True)
 cdef class Column:
     """
     A Column stores columnar data in device memory.

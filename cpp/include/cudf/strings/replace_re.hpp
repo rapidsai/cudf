@@ -39,7 +39,7 @@ namespace strings {
  * @param repl The string used to replace the matched sequence in each string.
  *        Default is an empty string.
  * @param maxrepl The maximum number of times to replace the matched pattern within each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> replace_re(
@@ -60,7 +60,7 @@ std::unique_ptr<column> replace_re(
  * @param strings Strings instance for this operation.
  * @param patterns The regular expression patterns to search within each string.
  * @param repls The strings used for replacement.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> replace_re(
@@ -80,7 +80,7 @@ std::unique_ptr<column> replace_re(
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression patterns to search within each string.
  * @param repl The replacement template for creating the output string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> replace_with_backrefs(

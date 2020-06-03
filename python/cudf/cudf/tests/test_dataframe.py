@@ -343,6 +343,60 @@ def test_dataframe_column_drop_via_attr():
 
     assert tuple(df.columns) == tuple("a")
 
+@pytest.mark.parametrize("axis", [0, "index"])
+def test_dataframe_index_rename(axis):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.rename(mapper={1: 5, 2: 6}, axis=axis)
+    got = gdf.rename(mapper={1: 5, 2: 6}, axis=axis)
+
+    assert_eq(expect, got)
+
+    # `pandas` can support indexes with mixed values. We automatically convert
+    # an index with mixed values to a `StringIndex`. Breaking the comparison.
+    expect = pdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
+    got = gdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
+
+    assert_eq([str(item) for item in expect.index], list(got.index))
+
+    expect = pdf.rename(index={1: "x", 2: "y"})
+    got = gdf.rename(index={1: "x", 2: "y"})
+
+    assert_eq([str(item) for item in expect.index], list(got.index))
+
+    expect = pdf.rename({1: "x", 2: "y"})
+    got = gdf.rename({1: "x", 2: "y"})
+
+    assert_eq([str(item) for item in expect.index], list(got.index))
+
+@pytest.mark.parametrize("axis", [1, "columns"])
+def test_dataframe_column_rename(axis):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.rename(mapper=lambda name: 2 * name, axis=axis)
+    got = gdf.rename(mapper=lambda name: 2 * name, axis=axis)
+
+    assert_eq(expect, got)
+
+    expect = pdf.rename(columns=lambda name: 2 * name)
+    got = gdf.rename(columns=lambda name: 2 * name)
+
+    assert_eq(expect, got)
+
+    rename_mapper = {"a": "z", "b": "y", "c": "x"}
+    expect = pdf.rename(columns=rename_mapper)
+    got = gdf.rename(columns=rename_mapper)
+
+    assert_eq(expect, got)
+
+    gdf = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    rename_mapper = {"a": "z", "b": "z", "c": "z"}
+    expect = DataFrame({"z": [1, 2, 3], "z_1": [4, 5, 6], "z_2": [7, 8, 9]})
+    got = gdf.rename(columns=rename_mapper)
+
+    assert_eq(expect, got)
 
 def test_dataframe_pop():
     pdf = pd.DataFrame(
@@ -1073,14 +1127,36 @@ def test_from_records(dtypes):
     gdf = gd.DataFrame.from_records(rec_ary, columns=["a", "b", "c", "d"])
     df = pd.DataFrame.from_records(rec_ary, columns=["a", "b", "c", "d"])
     assert isinstance(gdf, gd.DataFrame)
-
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+    assert_eq(df, gdf)
 
     gdf = gd.DataFrame.from_records(rec_ary)
     df = pd.DataFrame.from_records(rec_ary)
     assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
 
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+@pytest.mark.parametrize("columns", [None, ["first", "second", "third"]])
+@pytest.mark.parametrize(
+    "index",
+    [
+        None,
+        ["first", "second"],
+        "name",
+        "age",
+        "weight",
+        [10, 11],
+        ["abc", "xyz"],
+    ],
+)
+def test_from_records_index(columns, index):
+    rec_ary = np.array(
+        [("Rex", 9, 81.0), ("Fido", 3, 27.0)],
+        dtype=[("name", "U10"), ("age", "i4"), ("weight", "f4")],
+    )
+    gdf = gd.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    df = pd.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
 
 
 def test_from_gpu_matrix():
@@ -1964,63 +2040,6 @@ def test_series_all_valid_nan(num_elements):
     data = [np.nan] * num_elements
     sr = Series(data, nan_as_null=False)
     np.testing.assert_equal(sr.null_count, 0)
-
-
-@pytest.mark.parametrize("axis", [0, "index"])
-def test_dataframe_index_rename(axis):
-    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    gdf = DataFrame.from_pandas(pdf)
-
-    expect = pdf.rename(mapper={1: 5, 2: 6}, axis=axis)
-    got = gdf.rename(mapper={1: 5, 2: 6}, axis=axis)
-
-    assert_eq(expect, got)
-
-    # `pandas` can support indexes with mixed values. We automatically convert
-    # an index with mixed values to a `StringIndex`. Breaking the comparison.
-    expect = pdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
-    got = gdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
-
-    assert_eq([str(item) for item in expect.index], list(got.index))
-
-    expect = pdf.rename(index={1: "x", 2: "y"})
-    got = gdf.rename(index={1: "x", 2: "y"})
-
-    assert_eq([str(item) for item in expect.index], list(got.index))
-
-    expect = pdf.rename({1: "x", 2: "y"})
-    got = gdf.rename({1: "x", 2: "y"})
-
-    assert_eq([str(item) for item in expect.index], list(got.index))
-
-
-@pytest.mark.parametrize("axis", [1, "columns"])
-def test_dataframe_column_rename(axis):
-    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    gdf = DataFrame.from_pandas(pdf)
-
-    expect = pdf.rename(mapper=lambda name: 2 * name, axis=axis)
-    got = gdf.rename(mapper=lambda name: 2 * name, axis=axis)
-
-    assert_eq(expect, got)
-
-    expect = pdf.rename(columns=lambda name: 2 * name)
-    got = gdf.rename(columns=lambda name: 2 * name)
-
-    assert_eq(expect, got)
-
-    rename_mapper = {"a": "z", "b": "y", "c": "x"}
-    expect = pdf.rename(columns=rename_mapper)
-    got = gdf.rename(columns=rename_mapper)
-
-    assert_eq(expect, got)
-
-    gdf = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    rename_mapper = {"a": "z", "b": "z", "c": "z"}
-    expect = DataFrame({"z": [1, 2, 3], "z_1": [4, 5, 6], "z_2": [7, 8, 9]})
-    got = gdf.rename(columns=rename_mapper)
-
-    assert_eq(expect, got)
 
 
 def test_series_rename():
@@ -4331,10 +4350,10 @@ def test_df_astype_to_categorical_ordered(ordered):
         ("category", {}),
         ("category", {"ordered": True}),
         ("category", {"ordered": False}),
-        ("datetime64[s]", {"format": "%Y-%m-%d"}),
-        ("datetime64[ms]", {"format": "%Y-%m-%d"}),
-        ("datetime64[us]", {"format": "%Y-%m-%d"}),
-        ("datetime64[ns]", {"format": "%Y-%m-%d"}),
+        ("datetime64[s]", {}),
+        ("datetime64[ms]", {}),
+        ("datetime64[us]", {}),
+        ("datetime64[ns]", {}),
         ("str", {}),
     ],
 )
@@ -5474,3 +5493,56 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     actual[0] = 3
     expected[0] = 3
     assert_eq(gsr, psr)
+
+
+@pytest.mark.parametrize(
+    "data,cols,index",
+    [
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            ["a", "b", "c", "d"],
+        ),
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            [0, 20, 30, 10],
+        ),
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            [0, 1, 2, 3],
+        ),
+        (np.array([11, 123, -2342, 232]), ["a"], [1, 2, 11, 12]),
+        (np.array([11, 123, -2342, 232]), ["a"], ["khsdjk", "a", "z", "kk"]),
+        (
+            cupy.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "z"],
+            ["a", "z", "a", "z"],
+        ),
+        (cupy.array([11, 123, -2342, 232]), ["z"], [0, 1, 1, 0]),
+        (cupy.array([11, 123, -2342, 232]), ["z"], [1, 2, 3, 4]),
+        (cupy.array([11, 123, -2342, 232]), ["z"], ["a", "z", "d", "e"]),
+        (np.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
+        (np.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
+        (cupy.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
+        (cupy.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
+    ],
+)
+def test_dataframe_init_from_arrays_cols(data, cols, index):
+    # verify with columns & index
+    pdf = pd.DataFrame(data, columns=cols, index=index)
+    gdf = DataFrame(data, columns=cols, index=index)
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+    # verify with columns
+    pdf = pd.DataFrame(data, columns=cols)
+    gdf = DataFrame(data, columns=cols)
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+    pdf = pd.DataFrame(data)
+    gdf = DataFrame(data)
+
+    assert_eq(pdf, gdf, check_dtype=False)

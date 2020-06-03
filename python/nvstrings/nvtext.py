@@ -1,7 +1,15 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
+import warnings
+
 import nvstrings as nvs
 import pyniNVText
+
+warnings.warn(
+    "nvtext will be removed in 0.15. Please use equivalent from libcudf",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 def tokenize(strs, delimiter=None):

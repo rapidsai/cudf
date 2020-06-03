@@ -591,3 +591,135 @@ def test_replace_inplace():
 
     with pytest.raises(TypeError):
         gdf.replace(-1, [])
+
+
+@pytest.mark.parametrize(
+    ("lower", "upper"),
+    [([2, 7.4], [4, 7.9]), ([2, 7.4], None), (None, [4, 7.9],)],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_clip(lower, upper, inplace):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3, 4, 5], "b": [7.1, 7.24, 7.5, 7.8, 8.11]}
+    )
+    gdf = DataFrame.from_pandas(pdf)
+
+    got = gdf.clip(lower=lower, upper=upper, inplace=inplace)
+    expect = pdf.clip(lower=lower, upper=upper, axis=1)
+
+    if inplace is True:
+        assert_eq(expect, gdf)
+    else:
+        assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    ("lower", "upper"), [("b", "d"), ("b", None), (None, "c"), (None, None)],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_category_clip(lower, upper, inplace):
+    data = ["a", "b", "c", "d", "e"]
+    pdf = pd.DataFrame({"a": data})
+    gdf = DataFrame.from_pandas(pdf)
+    gdf["a"] = gdf["a"].astype("category")
+
+    expect = pdf.clip(lower=lower, upper=upper)
+    got = gdf.clip(lower=lower, upper=upper, inplace=inplace)
+
+    if inplace is True:
+        assert_eq(expect, gdf.astype("str"))
+    else:
+        assert_eq(expect, got.astype("str"))
+
+
+@pytest.mark.parametrize(
+    ("lower", "upper"),
+    [([2, 7.4], [4, 7.9, "d"]), ([2, 7.4, "a"], [4, 7.9, "d"])],
+)
+def test_dataframe_exceptions_for_clip(lower, upper):
+    gdf = DataFrame({"a": [1, 2, 3, 4, 5], "b": [7.1, 7.24, 7.5, 7.8, 8.11]})
+
+    with pytest.raises(ValueError):
+        gdf.clip(lower=lower, upper=upper)
+
+
+@pytest.mark.parametrize(
+    ("data", "lower", "upper"),
+    [
+        ([1, 2, 3, 4, 5], 2, 4),
+        ([1, 2, 3, 4, 5], 2, None),
+        ([1, 2, 3, 4, 5], None, 4),
+        ([1, 2, 3, 4, 5], None, None),
+        ([1, 2, 3, 4, 5], 4, 2),
+        (["a", "b", "c", "d", "e"], "b", "d"),
+        (["a", "b", "c", "d", "e"], "b", None),
+        (["a", "b", "c", "d", "e"], None, "d"),
+        (["a", "b", "c", "d", "e"], "d", "b"),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_series_clip(data, lower, upper, inplace):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(data)
+
+    expect = psr.clip(lower=lower, upper=upper)
+    got = gsr.clip(lower=lower, upper=upper, inplace=inplace)
+
+    if inplace is True:
+        assert_eq(expect, gsr)
+    else:
+        assert_eq(expect, got)
+
+
+def test_series_exceptions_for_clip():
+
+    with pytest.raises(ValueError):
+        Series([1, 2, 3, 4]).clip([1, 2], [2, 3])
+
+    with pytest.raises(NotImplementedError):
+        Series([1, 2, 3, 4]).clip(1, 2, axis=0)
+
+
+@pytest.mark.parametrize(
+    ("data", "lower", "upper"),
+    [
+        ([1, 2, 3, 4, 5], 2, 4),
+        ([1, 2, 3, 4, 5], 2, None),
+        ([1, 2, 3, 4, 5], None, 4),
+        ([1, 2, 3, 4, 5], None, None),
+        (["a", "b", "c", "d", "e"], "b", "d"),
+        (["a", "b", "c", "d", "e"], "b", None),
+        (["a", "b", "c", "d", "e"], None, "d"),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_index_clip(data, lower, upper, inplace):
+    pdf = pd.DataFrame({"a": data})
+    index = DataFrame.from_pandas(pdf).set_index("a").index
+
+    expect = pdf.clip(lower=lower, upper=upper)
+    got = index.clip(lower=lower, upper=upper, inplace=inplace)
+
+    if inplace is True:
+        assert_eq(expect, index.to_frame(index=False))
+    else:
+        assert_eq(expect, got.to_frame(index=False))
+
+
+@pytest.mark.parametrize(
+    ("lower", "upper"), [([2, 3], [4, 5]), ([2, 3], None), (None, [4, 5],)],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_multiindex_clip(lower, upper, inplace):
+    df = pd.DataFrame({"a": [1, 2, 3, 4, 5], "b": [1, 2, 3, 4, 5]})
+    gdf = DataFrame.from_pandas(df)
+
+    index = gdf.set_index(["a", "b"]).index
+
+    expected = df.clip(lower=lower, upper=upper, inplace=inplace, axis=1)
+    got = index.clip(lower=lower, upper=upper, inplace=inplace)
+
+    if inplace is True:
+        assert_eq(df, index.to_frame(index=False))
+    else:
+        assert_eq(expected, got.to_frame(index=False))
