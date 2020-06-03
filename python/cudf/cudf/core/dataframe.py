@@ -2833,7 +2833,7 @@ class DataFrame(Frame, Serializable):
                 for key, col in self._data.items():
                     out[columns(key)] = col
         else:
-            out._data = self._data
+            out._data = self._data.copy(deep=copy)
 
         if inplace:
             self._data = out._data
