@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,6 @@ public class NativeDepsLoader {
   private static final String[] loadOrder = new String[] {
       "boost_filesystem",
       "rmm",
-      "NVStrings",
-      "NVCategory",
       "cudf",
       "cudfjni"
   };
@@ -51,7 +49,6 @@ public class NativeDepsLoader {
           loadDep(os, arch, toLoad);
         }
         loaded = true;
-        Rmm.defaultInitialize();
       } catch (Throwable t) {
         log.error("Could not load cudf jni library...", t);
       }

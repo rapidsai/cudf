@@ -17,49 +17,42 @@
  * limitations under the License.
  */
 
-#include <tests/binaryop/binop-fixture.hpp>
 #include <cudf/binaryop.hpp>
-
+#include <tests/binaryop/binop-fixture.hpp>
 
 namespace cudf {
 namespace test {
 namespace binop {
+struct BinopVerifyInputTest : public BinaryOperationTest {
+};
 
+TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType)
+{
+  using TypeLhs = int64_t;
+  using TypeRhs = int64_t;
 
-struct BinopVerifyInputTest : public BinaryOperationTest {};
+  auto lhs = make_random_wrapped_scalar<TypeLhs>();
+  auto rhs = make_random_wrapped_column<TypeRhs>(10);
 
-
-TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType) {
-    using TypeLhs = int64_t;
-    using TypeRhs = int64_t;
-
-    auto lhs = make_random_wrapped_scalar<TypeLhs>();
-    auto rhs = make_random_wrapped_column<TypeRhs>(10);
-
-    EXPECT_THROW(
-        cudf::experimental::binary_operation(lhs, rhs,
-            cudf::experimental::binary_operator::ADD,
-            data_type(type_id::NUM_TYPE_IDS)),
-        cudf::logic_error);
+  EXPECT_THROW(
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_id::NUM_TYPE_IDS)),
+    cudf::logic_error);
 }
 
+TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize)
+{
+  using TypeOut = int64_t;
+  using TypeLhs = int64_t;
+  using TypeRhs = int64_t;
 
-TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize) {
-    using TypeOut = int64_t;
-    using TypeLhs = int64_t;
-    using TypeRhs = int64_t;
+  auto lhs = make_random_wrapped_column<TypeLhs>(1);
+  auto rhs = make_random_wrapped_column<TypeRhs>(10);
 
-    auto lhs = make_random_wrapped_column<TypeLhs>(1);
-    auto rhs = make_random_wrapped_column<TypeRhs>(10);
-
-    EXPECT_THROW(
-        cudf::experimental::binary_operation(lhs, rhs,
-            cudf::experimental::binary_operator::ADD,
-            data_type(experimental::type_to_id<TypeOut>())),
-        cudf::logic_error);
+  EXPECT_THROW(
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>())),
+    cudf::logic_error);
 }
 
-
-} // namespace binop
-} // namespace test
-} // namespace cudf
+}  // namespace binop
+}  // namespace test
+}  // namespace cudf

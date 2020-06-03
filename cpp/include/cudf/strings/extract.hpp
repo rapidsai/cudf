@@ -18,35 +18,42 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @addtogroup strings_substring
+ * @{
+ */
 
 /**
- * @brief Returns a vector of strings columns for each matching group specified in the given regular expression pattern.
+ * @brief Returns a vector of strings columns for each matching group specified in the given regular
+ * expression pattern.
  *
  * All the strings for the first group will go in the first output column; the second group
  * go in the second column and so on. Null entries are added if the string does match.
  *
  * Any null string entries return corresponding null output column entries.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["a1","b2","c3"]
  * r = extract(s,"([ab])(\\d)")
  * r is now [["a","b",null],
  *           ["1","2",null]]
- * ```
+ * @endcode
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression pattern with group indicators.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return Columns of strings extracted from the input column.
  */
-std::unique_ptr<experimental::table> extract( strings_column_view const& strings,
-                                              std::string const& pattern,
-                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<table> extract(
+  strings_column_view const& strings,
+  std::string const& pattern,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

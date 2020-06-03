@@ -16,19 +16,23 @@
 
 #pragma once
 
-#include <vector>
-#include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <memory>
+#include <vector>
 
 namespace cudf {
-namespace experimental {
+/**
+ * @addtogroup column_merge
+ * @{
+ */
 
 /**
  * @brief Merge a set of sorted tables.
- * 
+ *
  * Merges sorted tables into one sorted table
  * containing data from all tables.
  *
+ * ```
  * Example 1:
  * input:
  * table 1 => col 1 {0, 1, 2, 3}
@@ -40,8 +44,9 @@ namespace experimental {
  * output:
  * table => col 1 {0, 1, 1, 2, 2, 2, 3, 4}
  *          col 2 {4, 5, 8, 6, 8, 9, 7, 9}
- *
- * Example 2: 
+ * ```
+ * ```
+ * Example 2:
  * input:
  * table 1 => col 0 {1, 0}
  *            col 1 {'c', 'b'}
@@ -58,8 +63,8 @@ namespace experimental {
  *  Lex-sorting is on columns {0,1}; hence, lex-sorting of ((L0 x L1) V (R0 x R1)) is:
  *  (0,'b', GREEN), (1,'a', NULL), (1,'c', RED)
  *
- *  (third column, the "color", just "goes along for the ride"; 
- *   meaning is permutted according to the data movements dictated 
+ *  (third column, the "color", just "goes along for the ride";
+ *   meaning is permutted according to the data movements dictated
  *   by lexicographic ordering of columns 0 and 1);
  *
  *   with result columns:
@@ -67,32 +72,32 @@ namespace experimental {
  *   Res0 = {0,1,1}
  *   Res1 = {'b', 'a', 'c'}
  *   Res2 = {GREEN, NULL, RED}
- * 
- * 
- * @throws cudf::logic_error if tables in `tables_to_merge` have different 
+ * ```
+ *
+ * @throws cudf::logic_error if tables in `tables_to_merge` have different
  * number of columns
- * @throws cudf::logic_error if tables in `tables_to_merge` have columns with 
+ * @throws cudf::logic_error if tables in `tables_to_merge` have columns with
  * mismatched types
  * @throws cudf::logic_error if `key_cols` is empty
- * @throws cudf::logic_error if `key_cols` size is larger than the number of 
+ * @throws cudf::logic_error if `key_cols` size is larger than the number of
  * columns in `tables_to_merge` tables
  * @throws cudf::logic_error if `key_cols` size and `column_order` size mismatches
- * 
- * @Param[in] tables_to_merge Non-empty list of tables to be merged
- * @Param[in] key_cols Indices of left_cols and right_cols to be used
+ *
+ * @param[in] tables_to_merge Non-empty list of tables to be merged
+ * @param[in] key_cols Indices of left_cols and right_cols to be used
  *                     for comparison criteria
- * @Param[in] column_order Sort order types of columns indexed by key_cols
- * @Param[in] null_precedence Array indicating the order of nulls with respect
+ * @param[in] column_order Sort order types of columns indexed by key_cols
+ * @param[in] null_precedence Array indicating the order of nulls with respect
  * to non-nulls for the indexing columns (key_cols)
  *
- * @Returns A table containing sorted data from all input tables
+ * @returns A table containing sorted data from all input tables
  */
-std::unique_ptr<cudf::experimental::table> merge(std::vector<table_view> const& tables_to_merge,
-                                                 std::vector<cudf::size_type> const& key_cols,
-                                                 std::vector<cudf::order> const& column_order,
-                                                 std::vector<cudf::null_order> const& null_precedence = {},
-                                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<cudf::table> merge(
+  std::vector<table_view> const& tables_to_merge,
+  std::vector<cudf::size_type> const& key_cols,
+  std::vector<cudf::order> const& column_order,
+  std::vector<cudf::null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr                  = rmm::mr::get_default_resource());
 
-}  // namespace experimental
+/** @} */  // end of group
 }  // namespace cudf
-

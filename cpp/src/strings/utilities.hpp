@@ -15,29 +15,9 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/strings/string_view.cuh>
-#include <cudf/strings/detail/utilities.hpp>
-
-#include <rmm/thrust_rmm_allocator.h>
-
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-
-/**
- * @brief Creates a temporary string_view object from a host string.
- *
- * @param[in] str Null-terminated, encoded string in CPU memory.
- * @param[in] stream Stream to execute any device code against.
- * @return Device object pointer.
- */
-std::unique_ptr<string_view, std::function<void(string_view*)>>
-    string_from_host( const char* str, cudaStream_t stream=0 );
-
+namespace cudf {
+namespace strings {
+namespace detail {
 // Type for the character flags table.
 using character_flags_table_type = uint8_t;
 
@@ -68,7 +48,18 @@ using character_cases_table_type = uint16_t;
  */
 const character_cases_table_type* get_character_cases_table();
 
+/**
+ * @brief Returns pointer to device memory that contains the special
+ * case mapping table. On first call, this will copy the table into
+ * device memory and is guaranteed to be thread-safe.
+ *
+ * This table is used to handle special case character mappings that
+ * don't trivially work with the normal character cases table.
+ *
+ * @return Device memory pointer to the special case mapping table
+ */
+const struct special_case_mapping* get_special_case_mapping_table();
 
-} // namespace detail
-} // namespace strings
-} // namespace cudf
+}  // namespace detail
+}  // namespace strings
+}  // namespace cudf

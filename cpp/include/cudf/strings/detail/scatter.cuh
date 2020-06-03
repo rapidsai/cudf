@@ -15,19 +15,15 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-
+namespace cudf {
+namespace strings {
+namespace detail {
 /**
  * @brief Scatters strings into a copy of the target column
  * according to a scatter map.
@@ -38,7 +34,7 @@ namespace detail
  *
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
- * 
+ *
  * The caller must update the null mask in the output column.
  *
  * @tparam SourceIterator must produce string_view objects
@@ -48,42 +44,47 @@ namespace detail
  * @param scatter_map Iterator of indices into the output column.
  * @param target The set of columns into which values from the source column
  *        are to be scattered.
- * @param mr The resource to use for all allocations
- * @param stream The stream to use for CUDA operations
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column.
  */
-template<typename SourceIterator, typename MapIterator>
-std::unique_ptr<column> scatter( SourceIterator begin, SourceIterator end,
-                                 MapIterator scatter_map,
-                                 strings_column_view const& target,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                 cudaStream_t stream = 0)
+template <typename SourceIterator, typename MapIterator>
+std::unique_ptr<column> scatter(
+  SourceIterator begin,
+  SourceIterator end,
+  MapIterator scatter_map,
+  strings_column_view const& target,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0)
 {
-    auto strings_count = target.size();
-    if( strings_count == 0 )
-        return make_empty_strings_column(mr,stream);
+  auto strings_count = target.size();
+  if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
-    // create null mask -- caller must update this
-    rmm::device_buffer null_mask;
-    if( target.has_nulls() )
-        null_mask = copy_bitmask(target.parent(),stream,mr);
+  // create null mask -- caller must update this
+  rmm::device_buffer null_mask;
+  if (target.has_nulls()) null_mask = copy_bitmask(target.parent(), stream, mr);
 
-    // create string vectors
-    rmm::device_vector<string_view> target_vector = create_string_vector_from_column(target,stream);
-    // do the scatter
-    thrust::scatter( rmm::exec_policy(stream)->on(stream),
-                     begin, end, scatter_map, target_vector.begin() );
+  // create string vectors
+  rmm::device_vector<string_view> target_vector = create_string_vector_from_column(target, stream);
+  // do the scatter
+  thrust::scatter(
+    rmm::exec_policy(stream)->on(stream), begin, end, scatter_map, target_vector.begin());
 
-    // build offsets column
-    auto offsets_column = child_offsets_from_string_vector(target_vector,mr,stream);
-    // build chars column
-    auto chars_column = child_chars_from_string_vector(target_vector,offsets_column->view().data<int32_t>(),0,mr,stream);
+  // build offsets column
+  auto offsets_column = child_offsets_from_string_vector(target_vector, mr, stream);
+  // build chars column
+  auto chars_column = child_chars_from_string_vector(
+    target_vector, offsets_column->view().data<int32_t>(), 0, mr, stream);
 
-    return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
-                               UNKNOWN_NULL_COUNT, std::move(null_mask), stream, mr);
+  return make_strings_column(strings_count,
+                             std::move(offsets_column),
+                             std::move(chars_column),
+                             UNKNOWN_NULL_COUNT,
+                             std::move(null_mask),
+                             stream,
+                             mr);
 }
 
-
-} // namespace detail
-} // namespace strings
-} // namespace cudf
+}  // namespace detail
+}  // namespace strings
+}  // namespace cudf

@@ -20,7 +20,6 @@ package ai.rapids.cudf;
 
 import ai.rapids.cudf.HostColumnVector.Builder;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -38,12 +37,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.LongStream;
 
 import static ai.rapids.cudf.Aggregate.max;
+import static ai.rapids.cudf.Aggregate.first;
+import static ai.rapids.cudf.Aggregate.last;
 import static ai.rapids.cudf.Table.TestBuilder;
 import static ai.rapids.cudf.Table.count;
 import static ai.rapids.cudf.Table.mean;
@@ -52,6 +50,7 @@ import static ai.rapids.cudf.Table.sum;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -139,11 +138,11 @@ public class TableTest extends CudfTestBase {
                 "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT32:
-            assertEquals(expected.getFloat(expectedRow), cv.getFloat(tableRow), 0.0001,
+            assertEqualsWithinPercentage(expected.getFloat(expectedRow), cv.getFloat(tableRow), 0.0001,
                 "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT64:
-            assertEquals(expected.getDouble(expectedRow), cv.getDouble(tableRow), 0.0001,
+            assertEqualsWithinPercentage(expected.getDouble(expectedRow), cv.getDouble(tableRow), 0.0001,
                 "Column " + colName + " Row " + tableRow);
             break;
           case STRING:
@@ -1053,6 +1052,52 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testInterleaveIntColumns() {
+    try (Table t = new Table.TestBuilder()
+          .column(1,2,3,4,5)
+          .column(6,7,8,9,10)
+          .build();
+         ColumnVector expected = ColumnVector.fromInts(1,6,2,7,3,8,4,9,5,10);
+         ColumnVector actual = t.interleaveColumns()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testInterleaveFloatColumns() {
+    try (Table t = new Table.TestBuilder()
+        .column(1f,2f,3f,4f,5f)
+        .column(6f,7f,8f,9f,10f)
+        .build();
+         ColumnVector expected = ColumnVector.fromFloats(1f,6f,2f,7f,3f,8f,4f,9f,5f,10f);
+         ColumnVector actual = t.interleaveColumns()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testInterleaveStringColumns() {
+    try (Table t = new Table.TestBuilder()
+        .column("a", "b", "c")
+        .column("d", "e", "f")
+        .build()) {
+      assertThrows(CudfException.class, () -> t.interleaveColumns(),
+          "Only fixed-width types are supported in interleave_columns");
+    }
+  }
+
+  @Test
+  void testInterleaveMixedColumns() {
+    try (Table t = new Table.TestBuilder()
+        .column(1f,2f,3f,4f,5f)
+        .column(6,7,8,9,10)
+        .build()) {
+      assertThrows(CudfException.class, () -> t.interleaveColumns(),
+          "All columns must have the same data type in interleave_columns");
+    }
+  }
+
+  @Test
   void testConcatNoNulls() {
     try (Table t1 = new Table.TestBuilder()
         .column(1, 2, 3)
@@ -1120,7 +1165,6 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  @Disabled
   @Test
   void testContiguousSplitWithStrings() {
     ContiguousTable[] splits = null;
@@ -1242,6 +1286,8 @@ public class TableTest extends CudfTestBase {
       DataInputStream din = new DataInputStream(bin);
       try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(din)) {
         assertTablesAreEqual(t, result.getTable());
+        assertEquals(result.getTable(), result.getContiguousTable().getTable());
+        assertNotNull(result.getContiguousTable().getBuffer());
       }
     }
   }
@@ -1253,6 +1299,7 @@ public class TableTest extends CudfTestBase {
     ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
     try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(bin)) {
       assertNull(result.getTable());
+      assertNull(result.getContiguousTable());
       assertEquals(10, result.getNumRows());
     }
   }
@@ -1264,6 +1311,7 @@ public class TableTest extends CudfTestBase {
     ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
     try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(bin)) {
       assertNull(result.getTable());
+      assertNull(result.getContiguousTable());
       assertEquals(0, result.getNumRows());
     }
   }
@@ -1539,8 +1587,12 @@ public class TableTest extends CudfTestBase {
           ByteArrayInputStream bin2 = new ByteArrayInputStream(bout2.toByteArray());
           try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin2)) {
             assertPartialTablesAreEqual(t, 0, t.getRowCount(), found.getTable(), false);
+            assertEquals(found.getTable(), found.getContiguousTable().getTable());
+            assertNotNull(found.getContiguousTable().getBuffer());
           }
-          assertNull(JCudfSerialization.readTableFrom(bin2).getTable());
+          JCudfSerialization.TableAndRowCountPair tp = JCudfSerialization.readTableFrom(bin2);
+          assertNull(tp.getTable());
+          assertNull(tp.getContiguousTable());
         } finally {
           for (HostMemoryBuffer buff: buffers) {
             buff.close();
@@ -1574,8 +1626,12 @@ public class TableTest extends CudfTestBase {
           ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
           try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin)) {
             assertPartialTablesAreEqual(t, i, len, found.getTable(), i == 0 && len == t.getRowCount());
+            assertEquals(found.getTable(), found.getContiguousTable().getTable());
+            assertNotNull(found.getContiguousTable().getBuffer());
           }
-          assertNull(JCudfSerialization.readTableFrom(bin).getTable());
+          JCudfSerialization.TableAndRowCountPair tp = JCudfSerialization.readTableFrom(bin);
+          assertNull(tp.getTable());
+          assertNull(tp.getContiguousTable());
         }
       }
     }
@@ -1729,6 +1785,45 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testWindowingRowNumber() {
+    try (Table unsorted = new Table.TestBuilder().column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+                                                 .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+                                                 .column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+                                                 .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+                                                 .build();
+         ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+
+      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2))) {
+        ColumnVector sortedAggColumn = sorted.getColumn(3);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        WindowOptions.Builder windowBuilder = WindowOptions.builder().minPeriods(1);
+
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                                            .aggregateWindows(WindowAggregate.row_number(3, windowBuilder.window(2,1).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(1,2,2,2, 1,2,2,2, 1,2,2,2);
+        ) {
+          assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+        }
+
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                                            .aggregateWindows(WindowAggregate.row_number(3, windowBuilder.window(3,2).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(1,2,3,3, 1,2,3,3, 1,2,3,3);
+        ) {
+          assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+        }
+
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                                            .aggregateWindows(WindowAggregate.row_number(3, windowBuilder.window(4,3).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(1,2,3,4, 1,2,3,4, 1,2,3,4);
+        ) {
+          assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+        }
+       }
+    }
+  }
+
+  @Test
   void testWindowingMean() {
     try (Table unsorted = new Table.TestBuilder().column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
                                                  .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
@@ -1805,6 +1900,31 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testWindowingWithoutGroupByColumns() {
+    try (Table unsorted = new Table.TestBuilder().column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+                                                 .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+                                                 .build();
+         ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+
+      try (Table sorted = unsorted.orderBy(Table.asc(0))) {
+        ColumnVector sortedAggColumn = sorted.getColumn(1);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        WindowOptions window = WindowOptions.builder()
+                                            .minPeriods(1)
+                                            .window(2, 1)
+                                            .build();
+
+        try (Table windowAggResults = sorted.groupBy().aggregateWindows(WindowAggregate.sum(1, window));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedLongs(12L, 13L, 15L, 17L, 25L, 24L, 19L, 18L, 10L, 14L, 12L, 12L);
+        ) {
+          assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+        }
+      }
+    }
+  }
+
+  @Test
   void testTimeRangeWindowingCount() {
     try (Table unsorted = new Table.TestBuilder().column(             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
                                                  .column(             0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
@@ -1870,6 +1990,97 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testTimeRangeWindowingRowNumber() {
+    try (Table unsorted = new Table.TestBuilder().column(             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+                                                 .column(             0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
+                                                 .timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp Key
+                                                 .column(             7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8) // Agg Column
+                                                 .build()) {
+      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(3);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        WindowOptions window = WindowOptions.builder()
+            .minPeriods(1)
+            .window(3, 0)
+            .timestampColumnIndex(2)
+            .build();
+
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                  .aggregateWindowsOverTimeRanges(WindowAggregate.row_number(3, window));
+             ColumnVector expect = ColumnVector.fromBoxedInts(1, 2, 3, 4,  1, 2, 3, 4,  1, 2, 3, 4, 5)) {
+          assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testTimeRangeWindowingCountDescendingTimestamps() {
+    try (Table unsorted = new Table.TestBuilder().column(             1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1, 1) // GBY Key
+                                                 .column(             0, 0, 0, 0,  1, 1, 1, 1,  2, 2, 2, 2, 2) // GBY Key
+                                                 .timestampDayColumn( 7, 6, 6, 5,  5, 4, 4, 3,  3, 3, 2, 1, 1) // Timestamp Key
+                                                 .column(             7, 5, 1, 9,  7, 9, 8, 2,  8, 0, 6, 6, 8) // Agg Column
+                                                 .build()) {
+      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.desc(2));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(3);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        WindowOptions window_0 = WindowOptions.builder()
+            .minPeriods(1)
+            .window(2, 1)
+            .timestampColumnIndex(2)
+            .timestampDescending()
+            .build();
+
+        WindowOptions window_1 = WindowOptions.builder()
+            .minPeriods(1)
+            .window(3, 0)
+            .timestampColumnIndex(2)
+            .timestampDescending()
+            .build();
+
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                  .aggregateWindowsOverTimeRanges(
+                    WindowAggregate.count(3, window_0),
+                    WindowAggregate.sum  (3, window_1));
+             ColumnVector expect_0 = ColumnVector.fromBoxedInts(3,  4,  4,  4,  3, 4, 4, 4,  3, 3, 5, 5, 5);
+             ColumnVector expect_1 = ColumnVector.fromBoxedLongs(7L, 13L, 13L, 22L,  7L, 24L, 24L, 26L,  8L, 8L, 14L, 28L, 28L)) {
+          assertColumnsAreEqual(expect_0, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(expect_1, windowAggResults.getColumn(1));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testTimeRangeWindowingWithoutGroupByColumns() {
+    try (Table unsorted = new Table.TestBuilder().timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp Key
+                                                 .column(             7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8) // Agg Column
+                                                 .build()) {
+      try (Table sorted = unsorted.orderBy(Table.asc(0));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(1);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        WindowOptions window = WindowOptions.builder()
+            .minPeriods(1)
+            .window(1, 1)
+            .timestampColumnIndex(0)
+            .build();
+
+        try (Table windowAggResults = sorted.groupBy()
+                  .aggregateWindowsOverTimeRanges(WindowAggregate.count(1, window));
+             ColumnVector expect = ColumnVector.fromBoxedInts(3, 3, 6, 6, 6, 6, 7, 7, 6, 6, 5, 5, 3)) {
+          assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+        }
+      }
+    }
+  }
+
+  @Test
   void testInvalidWindowTypeExceptions() {
       try (Table table = new Table.TestBuilder().column(             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
                                                 .column(             0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
@@ -1918,6 +2129,48 @@ public class TableTest extends CudfTestBase {
         // count(3)
         assertEquals(nullCountCol2.getInt(0), 2);
         assertEquals(nullCountCol2.getInt(1), 3); // counts only the non-nulls
+      }
+    }
+  }
+
+  @Test
+  void testGroupByCountWithNullsIncluded() {
+    try (Table t1 = new Table.TestBuilder()
+            .column(null, null,    1,    1,    1,    1)
+            .column(   1,    1,    1,    1,    1,    1)
+            .column(   1,    1, null, null,    1,    1)
+            .column(   1,    1,    1, null,    1,    1)
+            .build()) {
+      try (Table tmp = t1.groupBy(0).aggregate(count(1, true), count(2, true), count(3, true), count(3));
+           Table t3 = tmp.orderBy(Table.asc(0, true));
+           HostColumnVector groupCol = t3.getColumn(0).copyToHost();
+           HostColumnVector countCol = t3.getColumn(1).copyToHost();
+           HostColumnVector nullCountCol = t3.getColumn(2).copyToHost();
+           HostColumnVector nullCountCol2 = t3.getColumn(3).copyToHost();
+           HostColumnVector nullCountCol3 = t3.getColumn(4).copyToHost()) {
+        // verify t3
+        assertEquals(2, t3.getRowCount());
+
+        // compare the grouping columns
+        assertTrue(groupCol.isNull(0));
+        assertEquals(groupCol.getInt(1), 1);
+
+        // compare the agg columns
+        // count(1, true)
+        assertEquals(countCol.getInt(0), 2);
+        assertEquals(countCol.getInt(1), 4);
+
+        // count(2, true)
+        assertEquals(nullCountCol.getInt(0), 2);
+        assertEquals(nullCountCol.getInt(1), 4); // counts including nulls
+
+        // count(3, true)
+        assertEquals(nullCountCol2.getInt(0), 2);
+        assertEquals(nullCountCol2.getInt(1), 4); // counts including nulls
+
+        // count(3)
+        assertEquals(nullCountCol3.getInt(0), 2);
+        assertEquals(nullCountCol3.getInt(1), 3); // counts only the non-nulls
       }
     }
   }
@@ -2124,6 +2377,66 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByFirstExcludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(13, 14)
+                 .build();
+         Table found = input.groupBy(0).aggregate(first(1, false))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByLastExcludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(12, 15)
+                 .build();
+         Table found = input.groupBy(0).aggregate(last(1, false))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByFirstIncludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(null, 14)
+                 .build();
+         Table found = input.groupBy(0).aggregate(first(1, true))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByLastIncludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(12, null)
+                 .build();
+         Table found = input.groupBy(0).aggregate(last(1, true))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
   void testGroupByAvg() {
     try (Table t1 = new Table.TestBuilder().column( 1,  1,  1,  1,  1,  1)
                                            .column( 1,  3,  3,  5,  5,  0)
@@ -2183,8 +2496,8 @@ public class TableTest extends CudfTestBase {
             .sorted(Comparator.naturalOrder())
             .collect(Collectors.toList());
 
-        assertEquals(3.5666f, sortedMean.get(0), 0.0001);
-        assertEquals(5.2666f, sortedMean.get(1), 0.0001);
+        assertEqualsWithinPercentage(3.5666f, sortedMean.get(0), 0.0001);
+        assertEqualsWithinPercentage(5.2666f, sortedMean.get(1), 0.0001);
 
         // verify sum
         List<Double> sortedSum = new ArrayList<>();
@@ -2194,8 +2507,8 @@ public class TableTest extends CudfTestBase {
             .sorted(Comparator.naturalOrder())
             .collect(Collectors.toList());
 
-        assertEquals(10.7f, sortedSum.get(0), 0.0001);
-        assertEquals(15.8f, sortedSum.get(1), 0.0001);
+        assertEqualsWithinPercentage(10.7f, sortedSum.get(0), 0.0001);
+        assertEqualsWithinPercentage(15.8f, sortedSum.get(1), 0.0001);
 
         // verify min
         List<Double> sortedMin = new ArrayList<>();
@@ -2205,8 +2518,8 @@ public class TableTest extends CudfTestBase {
             .sorted(Comparator.naturalOrder())
             .collect(Collectors.toList());
 
-        assertEquals(1.3f, sortedMin.get(0), 0.0001);
-        assertEquals(2.3f, sortedMin.get(1), 0.0001);
+        assertEqualsWithinPercentage(1.3f, sortedMin.get(0), 0.0001);
+        assertEqualsWithinPercentage(2.3f, sortedMin.get(1), 0.0001);
 
         // verify max
         List<Integer> sortedMax = new ArrayList<>();
@@ -2390,16 +2703,58 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private final class MyBufferConsumer implements HostBufferConsumer, AutoCloseable {
+    public final HostMemoryBuffer buffer;
+    long offset = 0;
+
+    public MyBufferConsumer() {
+      buffer = HostMemoryBuffer.allocate(10 * 1024 * 1024);
+    }
+
+    @Override
+    public void handleBuffer(HostMemoryBuffer src, long len) {
+      try {
+        this.buffer.copyFromHostBuffer(offset, src, 0, len);
+        offset += len;
+      } finally {
+        src.close();
+      }
+    }
+
+    @Override
+    public void close() {
+      buffer.close();
+    }
+  }
+
+  @Test
+  void testParquetWriteToBufferChunked() {
+    try (Table table0 = getExpectedFileTable();
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+         try (TableWriter writer = Table.writeParquetChunked(ParquetWriterOptions.DEFAULT, consumer)) {
+           writer.write(table0);
+           writer.write(table0);
+           writer.write(table0);
+         }
+      try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
+           Table concat = Table.concatenate(table0, table0, table0)) {
+        assertTablesAreEqual(concat, table1);
+      }
+    }
+  }
+
   @Test
   void testParquetWriteToFileWithNames() throws IOException {
     File tempFile = File.createTempFile("test-names", ".parquet");
     try (Table table0 = getExpectedFileTable()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth")
+          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
           .build();
-      table0.writeParquet(options, tempFile.getAbsoluteFile());
+      try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
       try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
@@ -2413,12 +2768,14 @@ public class TableTest extends CudfTestBase {
     File tempFile = File.createTempFile("test-names-metadata", ".parquet");
     try (Table table0 = getExpectedFileTable()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth")
+          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
           .withMetadata("somekey", "somevalue")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
           .build();
-      table0.writeParquet(options, tempFile.getAbsoluteFile());
+      try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
       try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
@@ -2435,12 +2792,30 @@ public class TableTest extends CudfTestBase {
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
           .build();
-      table0.writeParquet(options, tempFile.getAbsoluteFile());
+      try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
       try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
     } finally {
       tempFile.delete();
+    }
+  }
+
+  @Test
+  void testORCWriteToBufferChunked() {
+    try (Table table0 = getExpectedFileTable();
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+      try (TableWriter writer = Table.writeORCChunked(ORCWriterOptions.DEFAULT, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+      }
+      try (Table table1 = Table.readORC(ORCOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
+           Table concat = Table.concatenate(table0, table0, table0)) {
+        assertTablesAreEqual(concat, table1);
+      }
     }
   }
 

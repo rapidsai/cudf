@@ -15,17 +15,13 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-
+namespace cudf {
+namespace strings {
+namespace detail {
 /**
  * @brief Returns a strings column replacing a range of rows
  * with the specified string.
@@ -39,16 +35,17 @@ namespace detail
  * @param begin First row index to include the new string.
  * @param end Last row index (exclusive).
  * @param value String to use when filling the range.
- * @param mr Resource for allocating device memory.
- * @param stream CUDA stream to use for any kernels in this function.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column.
  */
-std::unique_ptr<column> fill( strings_column_view const& strings,
-                              size_type begin, size_type end,
-                              string_scalar const& value,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream = 0 );
+std::unique_ptr<column> fill(strings_column_view const& strings,
+                             size_type begin,
+                             size_type end,
+                             string_scalar const& value,
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                             cudaStream_t stream                 = 0);
 
-} // namespace detail
-} // namespace strings
-} // namespace cudf
+}  // namespace detail
+}  // namespace strings
+}  // namespace cudf

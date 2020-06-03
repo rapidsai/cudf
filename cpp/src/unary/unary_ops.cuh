@@ -17,67 +17,64 @@
 #ifndef UNARY_OPS_H
 #define UNARY_OPS_H
 
-#include <cudf/unary.hpp>
 #include <rmm/thrust_rmm_allocator.h>
-#include <cudf/utilities/error.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
+#include <cudf/unary.hpp>
+#include <cudf/utilities/error.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace unary {
-
-template<typename T, typename Tout, typename F>
+template <typename T, typename Tout, typename F>
 struct launcher {
-    static std::unique_ptr<cudf::column>
-    launch(cudf::column_view const& input,
-           cudf::experimental::unary_op op,
-           rmm::mr::device_memory_resource* mr,
-           cudaStream_t stream = 0) {
+  static std::unique_ptr<cudf::column> launch(cudf::column_view const& input,
+                                              cudf::unary_op op,
+                                              rmm::mr::device_memory_resource* mr,
+                                              cudaStream_t stream = 0)
+  {
+    std::unique_ptr<cudf::column> output = [&] {
+      if (op == cudf::unary_op::NOT) {
+        auto type = cudf::data_type{cudf::BOOL8};
+        auto size = input.size();
 
-        std::unique_ptr<cudf::column> output = [&] {
-            if (op == cudf::experimental::unary_op::NOT) {
+        return std::make_unique<column>(type,
+                                        size,
+                                        rmm::device_buffer{size * cudf::size_of(type), 0, mr},
+                                        copy_bitmask(input, 0, mr),
+                                        input.null_count());
 
-                auto type = cudf::data_type{cudf::BOOL8};
-                auto size = input.size();
+      } else {
+        return cudf::detail::allocate_like(
+          input, input.size(), mask_allocation_policy::NEVER, mr, stream);
+      }
+    }();
 
-                return std::make_unique<column>(
-                    type, size,
-                    rmm::device_buffer{size * cudf::size_of(type), 0, mr},
-                    copy_bitmask(input, 0, mr),
-                    input.null_count());
+    if (input.size() == 0) return output;
 
-            } else {
-                return cudf::experimental::allocate_like(input);
-            }
-        } ();
+    auto output_view = output->mutable_view();
 
-        if (input.size() == 0) return output;
+    CUDF_EXPECTS(input.size() > 0, "Launcher requires input size to be non-zero.");
+    CUDF_EXPECTS(input.size() == output_view.size(),
+                 "Launcher requires input and output size to be equal.");
 
-        auto output_view = output->mutable_view();
+    if (input.nullable())
+      output->set_null_mask(
+        rmm::device_buffer{input.null_mask(), bitmask_allocation_size_bytes(input.size())},
+        input.null_count());
 
-        CUDF_EXPECTS(input.size() > 0,                   "Launcher requires input size to be non-zero.");
-        CUDF_EXPECTS(input.size() == output_view.size(), "Launcher requires input and output size to be equal.");
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      input.begin<T>(),
+                      input.end<T>(),
+                      output_view.begin<Tout>(),
+                      F{});
 
-        if (input.nullable())
-            output->set_null_mask(
-                rmm::device_buffer{ input.null_mask(), bitmask_allocation_size_bytes(input.size()) },
-                input.null_count());
+    CHECK_CUDA(stream);
 
-        thrust::transform(
-            rmm::exec_policy(stream)->on(stream),
-            input.begin<T>(),
-            input.end<T>(),
-            output_view.begin<Tout>(),
-            F{});
-
-        CHECK_CUDA(stream);
-
-        return output;
-    }
+    return output;
+  }
 };
 
-} // unary
-} // namespace experimental
-} // cudf
+}  // namespace unary
+}  // namespace cudf
 
-#endif // UNARY_OPS_H
+#endif  // UNARY_OPS_H

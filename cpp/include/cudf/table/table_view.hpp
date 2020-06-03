@@ -21,18 +21,18 @@
 #include <algorithm>
 #include <vector>
 
-/**---------------------------------------------------------------------------*
+/**
  * @file table_view.hpp
  * @brief A `(mutable_)table_view` is a set of `(mutable_)column_view`s of equal
  * size.
  *
  * A `(mutable_)table_view` is non-owning and trivially copyable and should be
  * passed by value.
- *---------------------------------------------------------------------------**/
+ **/
 
 namespace cudf {
 namespace detail {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Base class for a table of `ColumnView`s
  *
  * This class should not be used directly. Instead:
@@ -43,23 +43,23 @@ namespace detail {
  * available in both `table_view` and `mutable_table_view`.
  *
  * @tparam ColumnView The type of column view the table contains
- *---------------------------------------------------------------------------**/
+ **/
 template <typename ColumnView>
 class table_view_base {
   static_assert(std::is_same<ColumnView, column_view>::value or
-                    std::is_same<ColumnView, mutable_column_view>::value,
+                  std::is_same<ColumnView, mutable_column_view>::value,
                 "table_view_base can only be instantiated with column_view or "
                 "column_view_base.");
 
  private:
   std::vector<ColumnView> _columns{};  ///< ColumnViews to columns of equal size
-  size_type _num_rows{};  ///< The number of elements in every column
+  size_type _num_rows{};               ///< The number of elements in every column
 
  public:
-  using iterator = decltype(std::begin(_columns));
+  using iterator       = decltype(std::begin(_columns));
   using const_iterator = decltype(std::cbegin(_columns));
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a table from a vector of column views
    *
    * @note Because a `std::vector` is constructible from a
@@ -74,36 +74,36 @@ class table_view_base {
    * @throws cudf::logic_error If all views do not have the same size
    *
    * @param cols The vector of columns to construct the table from
-   *---------------------------------------------------------------------------**/
+   **/
   explicit table_view_base(std::vector<ColumnView> const& cols);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns an iterator to the first view in the `table`.
-   *---------------------------------------------------------------------------**/
+   **/
   iterator begin() noexcept { return std::begin(_columns); }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns an iterator to the first view in the `table`.
-   *---------------------------------------------------------------------------**/
+   **/
   const_iterator begin() const noexcept { return std::begin(_columns); }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns an iterator one past the last column view in the `table`.
    *
    * `end()` acts as a place holder. Attempting to dereference it results in
    * undefined behavior.
-   *---------------------------------------------------------------------------**/
+   **/
   iterator end() noexcept { return std::end(_columns); }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns an iterator one past the last column view in the `table`.
    *
    * `end()` acts as a place holder. Attempting to dereference it results in
    * undefined behavior.
-   *---------------------------------------------------------------------------**/
+   **/
   const_iterator end() const noexcept { return std::end(_columns); }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns a reference to the view of the specified column
    *
    * @throws std::out_of_range
@@ -111,17 +111,17 @@ class table_view_base {
    *
    * @param column_index The index of the desired column
    * @return A reference to the desired column
-   *---------------------------------------------------------------------------**/
+   **/
   ColumnView const& column(size_type column_index) const;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the number of columns
-   *---------------------------------------------------------------------------**/
+   **/
   size_type num_columns() const noexcept { return _columns.size(); }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the number of rows
-   *---------------------------------------------------------------------------**/
+   **/
   size_type num_rows() const noexcept { return _num_rows; }
 
   table_view_base() = default;
@@ -136,21 +136,23 @@ class table_view_base {
 };
 }  // namespace detail
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief A set of `column_view`s of the same size.
  *
+ * @ingroup table_classes
+ *
  * All public member functions and constructors are inherited from
- *`table_view_base<column_view>`.
- *---------------------------------------------------------------------------**/
+ * `table_view_base<column_view>`.
+ **/
 class table_view : public detail::table_view_base<column_view> {
   using detail::table_view_base<column_view>::table_view_base;
 
-public:
+ public:
   using ColumnView = column_view;
 
   table_view() = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a table from a vector of table views
    *
    * @note Because a `std::vector` is constructible from a
@@ -167,10 +169,10 @@ public:
    * If number of rows mismatch
    *
    * @param views The vector of table views to construct the table from
-   *---------------------------------------------------------------------------**/
-  table_view(std::vector<table_view> const &views);
+   **/
+  table_view(std::vector<table_view> const& views);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns a table_view with set of specified columns.
    *
    * @throws std::out_of_range
@@ -179,33 +181,36 @@ public:
    * @param column_indices Indices of columns in the table
    * @return A table_view consisting of columns from the original table
    * specified by the elements of `column_indices`
-   *---------------------------------------------------------------------------**/
+   **/
   table_view select(std::vector<size_type> const& column_indices) const;
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief A set of `mutable_column_view`s of the same size.
  *
+ * @ingroup table_classes
+ *
  * All public member functions and constructors are inherited from
- *`table_view_base<mutable_column_view>`.
- *---------------------------------------------------------------------------**/
+ * `table_view_base<mutable_column_view>`.
+ **/
 class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   using detail::table_view_base<mutable_column_view>::table_view_base;
 
-public:
+ public:
   using ColumnView = mutable_column_view;
 
   mutable_table_view() = default;
 
-  mutable_column_view& column(size_type column_index) const {
+  mutable_column_view& column(size_type column_index) const
+  {
     return const_cast<mutable_column_view&>(table_view_base::column(column_index));
   }
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Creates an immutable `table_view` of the columns
-   *---------------------------------------------------------------------------**/
+   **/
   operator table_view();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a table from a vector of table views
    *
    * @note Because a `std::vector` is constructible from a
@@ -222,27 +227,29 @@ public:
    * If number of rows mismatch
    *
    * @param views The vector of table views to construct the table from
-   *---------------------------------------------------------------------------**/
-  mutable_table_view(std::vector<mutable_table_view> const &views);
+   **/
+  mutable_table_view(std::vector<mutable_table_view> const& views);
 };
 
-inline bool has_nulls(table_view view) {
-  return std::any_of(view.begin(), view.end(),
-                     [](column_view col) { return col.has_nulls(); });
+inline bool has_nulls(table_view view)
+{
+  return std::any_of(view.begin(), view.end(), [](column_view col) { return col.has_nulls(); });
 }
 
-/**---------------------------------------------------------------------------*
-   * @brief Checks if two `table_view`s have columns of same types
-   *
-   * @param lhs left-side table_view operand
-   * @param rhs right-side table_view operand
-   * @return boolean comparison result
-   *---------------------------------------------------------------------------**/
-inline bool have_same_types(table_view const& lhs, table_view const& rhs) {
-  return std::equal(lhs.begin(), lhs.end(),
-                    rhs.begin(), rhs.end(),
-                    [](column_view const& lcol, column_view const& rcol){
-                      return (lcol.type() == rcol.type());
-                    });
+/*
+ * @brief Checks if two `table_view`s have columns of same types
+ *
+ * @param lhs left-side table_view operand
+ * @param rhs right-side table_view operand
+ * @return boolean comparison result
+ */
+inline bool have_same_types(table_view const& lhs, table_view const& rhs)
+{
+  return std::equal(
+    lhs.begin(),
+    lhs.end(),
+    rhs.begin(),
+    rhs.end(),
+    [](column_view const& lcol, column_view const& rcol) { return (lcol.type() == rcol.type()); });
 }
 }  // namespace cudf

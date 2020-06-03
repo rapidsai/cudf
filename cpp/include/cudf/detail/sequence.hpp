@@ -16,34 +16,38 @@
 
 #pragma once
 
-#include <cudf/filling.hpp>
 #include <cudf/detail/sequence.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/types.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
+/**
+ * @copydoc cudf::sequence(size_type size, scalar const& init, scalar const& step,
+ *                                       rmm::mr::device_memory_resource* mr =
+ *rmm::mr::get_default_resource())
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ **/
+std::unique_ptr<column> sequence(
+  size_type size,
+  scalar const& init,
+  scalar const& step,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::experimental::sequence(size_type size, scalar const& init, scalar const& step,
- *                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+ * @copydoc cudf::sequence(size_type size, scalar const& init,
+                                         rmm::mr::device_memory_resource* mr =
+ rmm::mr::get_default_resource())
  *
- * @param stream CUDA stream to run this function
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
-std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar const& step,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                 cudaStream_t stream = 0);
-
-/**
- * @copydoc cudf::experimental::sequence(size_type size, scalar const& init,
-                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
- *
- * @param stream CUDA stream to run this function
- **/
-std::unique_ptr<column> sequence(size_type size, scalar const& init,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                 cudaStream_t stream = 0);
+std::unique_ptr<column> sequence(
+  size_type size,
+  scalar const& init,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

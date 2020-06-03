@@ -15,13 +15,15 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @addtogroup strings_find
+ * @{
+ */
 
 /**
  * @brief Returns a column with character position values where each
@@ -30,24 +32,27 @@ namespace strings
  * The size of the output column is targets.size() * strings.size().
  * output[i] contains the position of target[i % targets.size()] in string[i/targets.size()]
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["abc","def"]
  * t = ["a","c","e"]
  * r = find_multiple(s,t)
  * r is now [ 0, 2,-1,   // for "abc": "a" at pos 0, "c" at pos 2, "e" not found
  *           -1,-1, 1 ]  // for "def": "a" and "b" not found, "e" at  pos 1
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error targets is empty or contains nulls
  *
  * @param strings Strings instance for this operation.
  * @param targets Strings to search for in each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New integer column with character position values.
  */
-std::unique_ptr<column> find_multiple( strings_column_view const& strings,
-                                       strings_column_view const& targets,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> find_multiple(
+  strings_column_view const& strings,
+  strings_column_view const& targets,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

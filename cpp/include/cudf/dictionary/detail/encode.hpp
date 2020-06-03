@@ -19,14 +19,9 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
-
-namespace cudf
-{
-namespace dictionary
-{
-namespace detail
-{
-
+namespace cudf {
+namespace dictionary {
+namespace detail {
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
  *
@@ -49,16 +44,15 @@ namespace detail
  *
  * @param column The column to dictionary encode.
  * @param indices_type The integer type to use for the indices.
- * @param mr Optional resource to use for device memory allocation.
- * @param stream Optional stream on which to issue all memory allocation and
- *               device kernels.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Returns a dictionary column.
  */
 std::unique_ptr<column> encode(
-    column_view const& column,
-    data_type indices_type = data_type{INT32},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  column_view const& column,
+  data_type indices_type              = data_type{INT32},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Create a column by gathering the keys from the provided
@@ -71,15 +65,15 @@ std::unique_ptr<column> encode(
  * ```
  *
  * @param dictionary_column Existing dictionary column.
- * @param mr Resource for allocating memory for the output.
- * @param stream Optional stream on which to issue all memory allocation and
- *               device kernels.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New column with type matching the dictionary_column's keys.
  */
-std::unique_ptr<column> decode( dictionary_column_view const& dictionary_column,
-                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                cudaStream_t stream = 0);
+std::unique_ptr<column> decode(
+  dictionary_column_view const& dictionary_column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
-} // namespace detail
-} // namespace dictionary
-} // namespace cudf
+}  // namespace detail
+}  // namespace dictionary
+}  // namespace cudf

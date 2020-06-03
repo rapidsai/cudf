@@ -27,9 +27,7 @@ if not CUDA_HOME:
     CUDA_HOME = os.path.dirname(os.path.dirname(path_to_cuda_gdb))
 
 if not os.path.isdir(CUDA_HOME):
-    raise OSError(
-        f"Invalid CUDA_HOME: " "directory does not exist: {CUDA_HOME}"
-    )
+    raise OSError(f"Invalid CUDA_HOME: directory does not exist: {CUDA_HOME}")
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
@@ -86,7 +84,7 @@ setup(
     ),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf._lib*"]), ["*.pxd"],
+        find_packages(include=["cudf._lib*", "cudf._cuda*"]), ["*.pxd"],
     ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,

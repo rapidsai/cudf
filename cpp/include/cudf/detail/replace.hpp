@@ -23,60 +23,64 @@
 
 namespace cudf {
 namespace detail {
-
 /**
- * @brief Replaces all null values in a column with corresponding values of another column
+ * @copydoc cudf::replace_nulls(column_view const&, column_view const&,
+ * rmm::mr::device_memory_resource*)
  *
- * `input` and `replacement` must be of the same type and size.
- * must be of the same type and same size as the first.
- *
- * @param[in] input A column whose null values will be replaced
- * @param[in] replacement A cudf::column whose values will replace null values in input
- * @param[in] mr A rmm::mr::device_memory_resource pointer to be used for allocations.
- * @param[in] stream Optional stream in which to perform allocations
- *
- * @returns A copy of `input` with the null values replaced with corresponding values from `replacement`.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> replace_nulls(column_view const& input,
-                                            cudf::column_view const& replacement,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                            cudaStream_t stream = 0);
+std::unique_ptr<column> replace_nulls(
+  column_view const& input,
+  cudf::column_view const& replacement,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
-  * @brief Replaces all null values in a column with a scalar.
-  *
-  * `input` and `replacement` must have the same type.
-  * a cudf::scalar of the same data type as the column.
-  *
-  *
-  * @param[in] input A column whose null values will be replaced
-  * @param[in] replacement Scalar used to replace null values in `input`.
-  * @param[in] mr A rmm::mr::device_memory_resource pointer to be used for allocations.
-  * @param[in] stream Optional stream in which to perform allocations
-  *
-  * @returns Copy of `input` with null values replaced by `replacement`.
-  */
-std::unique_ptr<column> replace_nulls(column_view const& input,
-                                            scalar const& replacement,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                            cudaStream_t stream = 0);
-
-/**
- *  @brief Replace all `old_values[i]` present in `input_col` with `new_values[i]`.
- *        with `new_values[i]`.
+ * @copydoc cudf::replace_nulls(column_view const&, scalar const&,
+ * rmm::mr::device_memory_resource*)
  *
- * @param input_col The column to find and replace values in.
- * @param values_to_replace The values to replace
- * @param replacement_values The values to replace with
- * @param[in] mr A rmm::mr::device_memory_resource pointer to be used for allocations.
- * @param stream The CUDA stream to use for operations
- *
- * @return Copy of `input` with specified values replaced.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> find_and_replace_all(column_view const& input_col,
-                                                   column_view const& values_to_replace,
-                                                   column_view const& replacement_values,
-                                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                                   cudaStream_t stream = 0);
+std::unique_ptr<column> replace_nulls(
+  column_view const& input,
+  scalar const& replacement,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @copydoc cudf::replace_nans(column_view const&, column_view const&,
+ * rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> replace_nans(
+  column_view const& input,
+  column_view const& replacement,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @copydoc cudf::replace_nans(column_view const&, scalar const&,
+ * rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> replace_nans(
+  column_view const& input,
+  scalar const& replacement,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @copydoc cudf::find_and_replace_all
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> find_and_replace_all(
+  column_view const& input_col,
+  column_view const& values_to_replace,
+  column_view const& replacement_values,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 }  // namespace detail
-} // namespace cudf
+}  // namespace cudf

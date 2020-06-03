@@ -16,142 +16,191 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/utilities/traits.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/copy_if_else.cuh>
-#include <iterator/legacy/iterator.cuh>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/device_scalar.hpp>
 #include <cub/cub.cuh>
-
+#include <rmm/device_scalar.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
+namespace {  // anonymous
 
-namespace {    // anonymous
-
-template <size_type block_size, typename T, typename LeftIter, typename RightIter, typename Filter, bool has_validity>
-__launch_bounds__(block_size)
-__global__
-void copy_if_else_kernel(  LeftIter lhs,
+template <size_type block_size,
+          typename T,
+          typename LeftIter,
+          typename RightIter,
+          typename Filter,
+          bool has_validity>
+__launch_bounds__(block_size) __global__
+  void copy_if_else_kernel(LeftIter lhs,
                            RightIter rhs,
                            Filter filter,
                            mutable_column_device_view out,
-                           size_type * __restrict__ const valid_count)
+                           size_type *__restrict__ const valid_count)
 {
-   const size_type tid = threadIdx.x + blockIdx.x * block_size;
-   const int warp_id = tid / warp_size;
-   const size_type warps_per_grid = gridDim.x * block_size / warp_size;
+  const size_type tid            = threadIdx.x + blockIdx.x * block_size;
+  const int warp_id              = tid / warp_size;
+  const size_type warps_per_grid = gridDim.x * block_size / warp_size;
 
-   // begin/end indices for the column data
-   size_type begin = 0;
-   size_type end = out.size();   
-   // warp indices.  since 1 warp == 32 threads == sizeof(bit_mask_t) * 8,
-   // each warp will process one (32 bit) of the validity mask via
-   // __ballot_sync()
-   size_type warp_begin = cudf::word_index(begin);
-   size_type warp_end = cudf::word_index(end-1);
+  // begin/end indices for the column data
+  size_type begin = 0;
+  size_type end   = out.size();
+  // warp indices.  since 1 warp == 32 threads == sizeof(bit_mask_t) * 8,
+  // each warp will process one (32 bit) of the validity mask via
+  // __ballot_sync()
+  size_type warp_begin = cudf::word_index(begin);
+  size_type warp_end   = cudf::word_index(end - 1);
 
-   // lane id within the current warp
-   constexpr size_type leader_lane{0};
-   const int lane_id = threadIdx.x % warp_size;
+  // lane id within the current warp
+  constexpr size_type leader_lane{0};
+  const int lane_id = threadIdx.x % warp_size;
 
-   size_type warp_valid_count{0};
+  size_type warp_valid_count{0};
 
-   // current warp.
-   size_type warp_cur = warp_begin + warp_id;
-   size_type index = tid;
-   while(warp_cur <= warp_end){
-      bool in_range = (index >= begin && index < end);
+  // current warp.
+  size_type warp_cur = warp_begin + warp_id;
+  size_type index    = tid;
+  while (warp_cur <= warp_end) {
+    bool in_range = (index >= begin && index < end);
 
-      bool valid = true;
-      if(has_validity){
-         valid = in_range && (filter(index) ? thrust::get<1>(lhs[index]) : thrust::get<1>(rhs[index]));
+    bool valid = true;
+    if (has_validity) {
+      valid = in_range && (filter(index) ? thrust::get<1>(lhs[index]) : thrust::get<1>(rhs[index]));
+    }
+
+    // do the copy if-else
+    if (in_range) {
+      out.element<T>(index) = filter(index) ? static_cast<T>(thrust::get<0>(lhs[index]))
+                                            : static_cast<T>(thrust::get<0>(rhs[index]));
+    }
+
+    // update validity
+    if (has_validity) {
+      // the final validity mask for this warp
+      int warp_mask = __ballot_sync(0xFFFF'FFFF, valid && in_range);
+      // only one guy in the warp needs to update the mask and count
+      if (lane_id == 0) {
+        out.set_mask_word(warp_cur, warp_mask);
+        warp_valid_count += __popc(warp_mask);
       }
+    }
 
-      // do the copy if-else
-      if(in_range){          
-         out.element<T>(index) = filter(index) ?   static_cast<T>(thrust::get<0>(lhs[index])) :
-                                                   static_cast<T>(thrust::get<0>(rhs[index]));
-      }
+    // next grid
+    warp_cur += warps_per_grid;
+    index += block_size * gridDim.x;
+  }
 
-      // update validity
-      if(has_validity){
-         // the final validity mask for this warp
-         int warp_mask = __ballot_sync(0xFFFF'FFFF, valid && in_range);
-         // only one guy in the warp needs to update the mask and count
-         if(lane_id == 0){
-            out.set_mask_word(warp_cur, warp_mask);
-            warp_valid_count += __popc(warp_mask);
-         }
-      }
-
-      // next grid
-      warp_cur += warps_per_grid;
-      index += block_size * gridDim.x;
-   }
-
-   if(has_validity){
-      // sum all null counts across all warps
-      size_type block_valid_count = single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
-      // block_valid_count will only be valid on thread 0
-      if(threadIdx.x == 0){
-         // using an atomic here because there are multiple blocks doing this work
-         atomicAdd(valid_count, block_valid_count);
-      }
-   }
+  if (has_validity) {
+    // sum all null counts across all warps
+    size_type block_valid_count =
+      single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
+    // block_valid_count will only be valid on thread 0
+    if (threadIdx.x == 0) {
+      // using an atomic here because there are multiple blocks doing this work
+      atomicAdd(valid_count, block_valid_count);
+    }
+  }
 }
 
 }  // anonymous namespace
 
-
-template <typename Element, typename FilterFn, typename LeftIter, typename RightIter>
-std::unique_ptr<column> copy_if_else(data_type type, bool nullable,
-                                     LeftIter lhs_begin, 
-                                     LeftIter lhs_end,
-                                     RightIter rhs, 
-                                     FilterFn filter,                                     
-                                     rmm::mr::device_memory_resource *mr,
-                                     cudaStream_t stream)
+/**
+ * @brief Returns a new column, where each element is selected from either of two input ranges based
+ * on a filter
+ *
+ * Given two ranges lhs and rhs, and a unary filter function, this function will allocate and return
+ * an output column that contains `lhs[i]` if `function(i) == true` or `rhs[i]` if `function(i) ==
+ * false`. The validity of the elements is propagated to the output.
+ *
+ * The range lhs is defined by iterators `[lhs_begin, lhs_end)`. The `size` of output is
+ * determined by the distance between `lhs_begin` and `lhs_end`.
+ *
+ * The range rhs is defined by `[rhs, rhs + size)`
+ *
+ * Example:
+ * @code{.pseudo}
+ * lhs = {1, 2, 3, -, 5}
+ * rhs = {-, 6, 7, 8, 9}
+ *
+ * filter = [](i) {
+ *   bool arr[5] = {1, 1, 0, 1, 0}
+ *   return arr[i];
+ * }
+ *
+ * output = {1, 2, 7, -, 9}
+ * @endcode
+ *
+ * @tparam FilterFn   A function of type `bool(size_type)`
+ * @tparam LeftIter   An iterator of pair type where `first` is the value and `second` is the
+ *                    validity
+ * @tparam RightIter  An iterator of pair type where `first` is the value and `second` is the
+ *                    validity
+ * @param nullable    Indicate whether either input range can contain nulls
+ * @param lhs_begin   Begin iterator of lhs range
+ * @param lhs_end     End iterator of lhs range
+ * @param rhs         Begin iterator of rhs range
+ * @param filter      Function of type `FilterFn` which determines for index `i` where to get the
+ *                    corresponding output value from
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @param stream      CUDA stream used for device memory operations and kernel launches.
+ * @return            A new column that contains the values from either `lhs` or `rhs` as determined
+ *                    by `filter[i]`
+ */
+template <typename FilterFn, typename LeftIter, typename RightIter>
+std::unique_ptr<column> copy_if_else(
+  bool nullable,
+  LeftIter lhs_begin,
+  LeftIter lhs_end,
+  RightIter rhs,
+  FilterFn filter,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0)
 {
-   size_type size = std::distance(lhs_begin, lhs_end);
-   size_type num_els = cudf::util::round_up_safe(size, warp_size);
-   constexpr int block_size = 256;
-   cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
+  using Element =
+    typename thrust::tuple_element<0, typename thrust::iterator_traits<LeftIter>::value_type>::type;
 
-   std::unique_ptr<column> out = make_fixed_width_column(type, size, nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
-   
-   auto out_v = mutable_column_device_view::create(*out);
+  size_type size           = std::distance(lhs_begin, lhs_end);
+  size_type num_els        = cudf::util::round_up_safe(size, warp_size);
+  constexpr int block_size = 256;
+  cudf::detail::grid_1d grid{num_els, block_size, 1};
 
-   // if we have validity in the output
-   if(nullable){
-      rmm::device_scalar<size_type> valid_count{0, stream, mr};
+  std::unique_ptr<column> out =
+    make_fixed_width_column(data_type(type_to_id<Element>()),
+                            size,
+                            nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED,
+                            stream,
+                            mr);
 
-      // call the kernel
-      copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, true><<<grid.num_blocks, block_size, 0, stream>>>(
-         lhs_begin, rhs, filter, *out_v, valid_count.data());
-      
-      out->set_null_count(size - valid_count.value());      
-   } else {
-      // call the kernel
-      copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, false><<<grid.num_blocks, block_size, 0, stream>>>(
-         lhs_begin, rhs, filter, *out_v, nullptr);      
-   }
+  auto out_v = mutable_column_device_view::create(*out);
 
-   return out;
+  // if we have validity in the output
+  if (nullable) {
+    rmm::device_scalar<size_type> valid_count{0, stream};
+
+    // call the kernel
+    copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, true>
+      <<<grid.num_blocks, block_size, 0, stream>>>(
+        lhs_begin, rhs, filter, *out_v, valid_count.data());
+
+    out->set_null_count(size - valid_count.value());
+  } else {
+    // call the kernel
+    copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, false>
+      <<<grid.num_blocks, block_size, 0, stream>>>(lhs_begin, rhs, filter, *out_v, nullptr);
+  }
+
+  return out;
 }
 
 }  // namespace detail
-
-}  // namespace experimental
 
 }  // namespace cudf

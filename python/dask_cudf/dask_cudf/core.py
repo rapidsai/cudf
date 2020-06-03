@@ -23,11 +23,6 @@ import cudf
 import cudf._lib as libcudf
 
 from dask_cudf import sorting
-from dask_cudf.accessor import (
-    CachedAccessor,
-    CategoricalAccessor,
-    DatetimeAccessor,
-)
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -392,10 +387,6 @@ def nsmallest_agg(x, **kwargs):
     return cudf.concat(x).nsmallest(**kwargs)
 
 
-def unique_k_agg(x, **kwargs):
-    return cudf.concat(x).unique_k(**kwargs)
-
-
 class Series(_Frame, dd.core.Series):
     _partition_type = cudf.Series
 
@@ -412,17 +403,6 @@ class Series(_Frame, dd.core.Series):
         sum = self.sum(split_every=split_every)
         n = self.count(split_every=split_every)
         return sum / n
-
-    def unique_k(self, k, split_every=None):
-        return reduction(
-            self,
-            chunk=M.unique_k,
-            aggregate=unique_k_agg,
-            meta=self._meta,
-            token="unique-k",
-            split_every=split_every,
-            k=k,
-        )
 
     @derived_from(pd.DataFrame)
     def var(
@@ -460,12 +440,6 @@ class Series(_Frame, dd.core.Series):
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
-
-    # ----------------------------------------------------------------------
-    # Accessor Methods
-    # ----------------------------------------------------------------------
-    dt = CachedAccessor("dt", DatetimeAccessor)
-    cat = CachedAccessor("cat", CategoricalAccessor)
 
 
 class Index(Series, dd.core.Index):
@@ -654,7 +628,25 @@ def reduction(
     return dd.core.new_dd_object(dsk, b, meta, (None, None))
 
 
-from_cudf = dd.from_pandas
+def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
+    if isinstance(getattr(data, "index", None), cudf.MultiIndex):
+        raise NotImplementedError(
+            "dask_cudf does not support MultiIndex Dataframes."
+        )
+
+    name = name or ("from_cudf-" + tokenize(data, npartitions or chunksize))
+    return dd.from_pandas(
+        data,
+        npartitions=npartitions,
+        chunksize=chunksize,
+        sort=sort,
+        name=name,
+    )
+
+
+from_cudf.__doc__ = (
+    "Wraps main-line Dask from_pandas...\n" + dd.from_pandas.__doc__
+)
 
 
 def from_dask_dataframe(df):

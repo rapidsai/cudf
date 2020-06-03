@@ -16,19 +16,17 @@
 
 #pragma once
 
-#include <cudf/groupby.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
+#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/groupby.hpp>
 #include <cudf/utilities/bit.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
 namespace detail {
 namespace hash {
- 
 /**
- * @brief Compute single-pass aggregations and store results into a sparse 
+ * @brief Compute single-pass aggregations and store results into a sparse
  * `output_values` table, and populate `map` with indices of unique keys
  *
  * The hash map is built by inserting every row `i` from the `keys` and
@@ -69,46 +67,45 @@ struct compute_single_pass_aggs {
   Map map;
   size_type num_keys;
   table_device_view input_values;
-  mutable_table_device_view output_values; 
+  mutable_table_device_view output_values;
   aggregation::Kind const* __restrict__ aggs;
-  bitmask_type const*  __restrict__ row_bitmask;
+  bitmask_type const* __restrict__ row_bitmask;
 
   /**
    * @brief Construct a new compute_single_pass_aggs functor object
-   * 
+   *
    * @param map Hash map object to insert key,value pairs into.
    * @param num_keys The number of rows in input keys table
-   * @param input_values The table whose rows will be aggregated in the values 
+   * @param input_values The table whose rows will be aggregated in the values
    * of the hash map
    * @param output_values Table that stores the results of aggregating rows of
    * `input_values`.
-   * @param aggs The set of aggregation operations to perform accross the 
+   * @param aggs The set of aggregation operations to perform accross the
    * columns of the `input_values` rows
    * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
    * value in row `i` of input keys. Only used if `skip_rows_with_nulls` is `true`
    */
-  compute_single_pass_aggs(
-    Map map,
-    size_type num_keys,
-    table_device_view input_values,
-    mutable_table_device_view output_values, 
-    aggregation::Kind const* aggs,
-    bitmask_type const* row_bitmask)
-  : map(map),
-    num_keys(num_keys),
-    input_values(input_values),
-    output_values(output_values),
-    aggs(aggs),
-    row_bitmask(row_bitmask)
-  {}
+  compute_single_pass_aggs(Map map,
+                           size_type num_keys,
+                           table_device_view input_values,
+                           mutable_table_device_view output_values,
+                           aggregation::Kind const* aggs,
+                           bitmask_type const* row_bitmask)
+    : map(map),
+      num_keys(num_keys),
+      input_values(input_values),
+      output_values(output_values),
+      aggs(aggs),
+      row_bitmask(row_bitmask)
+  {
+  }
 
-  __device__ void operator()(size_type i) {
-    if (not skip_rows_with_nulls or
-        cudf::bit_is_set(row_bitmask, i))
-    {
+  __device__ void operator()(size_type i)
+  {
+    if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i)) {
       auto result = map.insert(thrust::make_pair(i, i));
 
-      experimental::detail::aggregate_row<true, true>(
+      cudf::detail::aggregate_row<true, true>(
         output_values, result.first->second, input_values, i, aggs);
     }
   }
@@ -119,5 +116,4 @@ struct compute_single_pass_aggs {
 }  // namespace hash
 }  // namespace detail
 }  // namespace groupby
-}  // namespace experimental
 }  // namespace cudf

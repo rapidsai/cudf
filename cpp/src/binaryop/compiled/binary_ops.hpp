@@ -20,13 +20,25 @@
 #include <cudf/null_mask.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace binops {
 namespace detail {
 /**
  * @brief Computes output valid mask for op between a column and a scalar
  */
-rmm::device_buffer scalar_col_valid_mask_and(column_view const& col, scalar const& s, cudaStream_t stream, rmm::mr::device_memory_resource* mr);
+rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
+                                             scalar const& s,
+                                             cudaStream_t stream,
+                                             rmm::mr::device_memory_resource* mr);
+}  // namespace detail
+
+/**
+ * @brief Does the binop need to know if an operand is null/invalid to perform special
+ * processing?
+ */
+inline bool null_using_binop(binary_operator op)
+{
+  return op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_MIN ||
+         op == binary_operator::NULL_MAX;
 }
 
 namespace compiled {
@@ -45,17 +57,17 @@ namespace compiled {
  * @param lhs         The left operand string scalar
  * @param rhs         The right operand string column
  * @param output_type The desired data type of the output column
- * @param mr          Memory resource for allocating output column
- * @param stream      CUDA stream on which to execute kernels
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
-    scalar const& lhs,
-    column_view const& rhs,
-    binary_operator op,
-    data_type output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  scalar const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Performs a binary operation between a string column and a string
@@ -71,17 +83,17 @@ std::unique_ptr<column> binary_operation(
  * @param lhs         The left operand string column
  * @param rhs         The right operand string scalar
  * @param output_type The desired data type of the output column
- * @param mr          Memory resource for allocating output column
- * @param stream      CUDA stream on which to execute kernels
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
-    column_view const& lhs,
-    scalar const& rhs,
-    binary_operator op,
-    data_type output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  column_view const& lhs,
+  scalar const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Performs a binary operation between two string columns.
@@ -97,19 +109,18 @@ std::unique_ptr<column> binary_operation(
  * @param lhs         The left operand string column
  * @param rhs         The right operand string column
  * @param output_type The desired data type of the output column
- * @param mr          Memory resource for allocating output column
- * @param stream      CUDA stream on which to execute kernels
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
-    column_view const& lhs,
-    column_view const& rhs,
-    binary_operator op,
-    data_type output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  column_view const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
-} // namespace compiled
-} // namespace binops
-} // namespace experimental
-} // namespace cudf
+}  // namespace compiled
+}  // namespace binops
+}  // namespace cudf

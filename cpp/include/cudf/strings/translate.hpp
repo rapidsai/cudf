@@ -18,10 +18,12 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @addtogroup strings_modify
+ * @{
+ */
 
 /**
  * @brief Translates individual characters within each string.
@@ -30,20 +32,24 @@ namespace strings
  *
  * Null string entries result in null entries in the output column.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["aa","bbb","cccc","abcd"]
  * t = [['a','A'],['b',''],['d':'Q']]
  * r = translate(s,t)
  * r is now ["AA", "", "cccc", "AcQ"]
- * ```
+ * @endcode
  *
  * @param strings Strings instance for this operation.
  * @param chars_table Table of UTF-8 character mappings.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with padded strings.
  */
-std::unique_ptr<column> translate( strings_column_view const& strings,
-                                   std::vector<std::pair<char_utf8,char_utf8>> const& chars_table,
-                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+std::unique_ptr<column> translate(
+  strings_column_view const& strings,
+  std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

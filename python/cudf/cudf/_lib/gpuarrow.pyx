@@ -1,14 +1,29 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
-import pyarrow as pa
-from pyarrow.lib cimport *
-from cudf._lib.cudf import *
-from cudf._lib.cudf cimport *
-from cudf._lib.arrow._cuda cimport *
-from cudf._lib.arrow.libarrow_cuda cimport *
+from libcpp.memory cimport unique_ptr
+from cudf._lib.move cimport move
+from cudf._lib.arrow._cuda cimport (
+    CudaBuffer
+)
+from cudf._lib.cpp.arrow.libarrow_cuda cimport (
+    CCudaBufferReader
+)
+from cudf._lib.cpp.gpuarrow cimport CCudaMessageReader
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
-
-from cudf._lib.includes.gpuarrow cimport *
+from pyarrow.includes.libarrow cimport (
+    CMessage,
+    CBufferReader,
+    CMessageReader,
+    CRecordBatchStreamReader
+)
+from pyarrow.lib cimport (
+    _CRecordBatchReader,
+    Buffer,
+    Schema,
+    check_status,
+    pyarrow_wrap_schema
+)
+import pyarrow as pa
 
 
 cdef class CudaRecordBatchStreamReader(_CRecordBatchReader):
@@ -28,11 +43,11 @@ cdef class CudaRecordBatchStreamReader(_CRecordBatchReader):
         with nogil:
             message_reader = CCudaMessageReader.Open(data_, schema_)
             check_status(CRecordBatchStreamReader.Open2(
-                unique_ptr[CMessageReader](message_reader.release()),
-                &self.reader
+                move(message_reader), &self.reader
             ))
 
         self.schema = pyarrow_wrap_schema(self.reader.get().schema())
+
 
 cdef CBufferReader* schema_to_buffer_reader(schema):
     cdef Buffer host_buf
@@ -44,6 +59,7 @@ cdef CBufferReader* schema_to_buffer_reader(schema):
         host_buf = <Buffer> as_pa_buffer(schema)
     return new CBufferReader(host_buf.buffer)
 
+
 cdef CCudaBufferReader* to_buffer_reader(object obj):
     cdef CudaBuffer cuda_buf
     if pyarrow_is_cudabuffer(obj):
@@ -53,6 +69,7 @@ cdef CCudaBufferReader* to_buffer_reader(object obj):
     else:
         raise ValueError('unrecognized device buffer')
     return new CCudaBufferReader(cuda_buf.buffer)
+
 
 cdef public api bint pyarrow_is_cudabuffer(object buffer):
     return isinstance(buffer, CudaBuffer)

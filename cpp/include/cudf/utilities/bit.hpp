@@ -26,7 +26,6 @@
 
 namespace cudf {
 namespace detail {
-
 // Work around a bug in NVRTC that fails to compile assert() in constexpr
 // functions (fixed after CUDA 11.0)
 #if defined __GNUC__
@@ -38,33 +37,39 @@ namespace detail {
 #ifdef NDEBUG
 #define constexpr_assert(CHECK) static_cast<void>(0)
 #else
-#define constexpr_assert(CHECK) \
-  (LIKELY(CHECK) ? void(0) : [] { assert(!#CHECK); }())
+#define constexpr_assert(CHECK) (LIKELY(CHECK) ? void(0) : [] { assert(!#CHECK); }())
 #endif
 
 template <typename T>
-constexpr CUDA_HOST_DEVICE_CALLABLE std::size_t size_in_bits() {
+constexpr CUDA_HOST_DEVICE_CALLABLE std::size_t size_in_bits()
+{
   static_assert(CHAR_BIT == 8, "Size of a byte must be 8 bits.");
   return sizeof(T) * CHAR_BIT;
 }
 }  // namespace detail
 
-/**---------------------------------------------------------------------------*
+/**
+ * @addtogroup utility_bitmask
+ * @{
+ */
+
+/**
  * @brief Returns the index of the word containing the specified bit.
- *---------------------------------------------------------------------------**/
-constexpr CUDA_HOST_DEVICE_CALLABLE size_type word_index(size_type bit_index) {
+ **/
+constexpr CUDA_HOST_DEVICE_CALLABLE size_type word_index(size_type bit_index)
+{
   return bit_index / detail::size_in_bits<bitmask_type>();
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns the position within a word of the specified bit.
- *---------------------------------------------------------------------------**/
-constexpr CUDA_HOST_DEVICE_CALLABLE size_type
-intra_word_index(size_type bit_index) {
+ **/
+constexpr CUDA_HOST_DEVICE_CALLABLE size_type intra_word_index(size_type bit_index)
+{
   return bit_index % detail::size_in_bits<bitmask_type>();
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Sets the specified bit to `1`
  *
  * This function is not thread-safe, i.e., attempting to update bits within the
@@ -72,15 +77,14 @@ intra_word_index(size_type bit_index) {
  *
  * @param bitmask The bitmask containing the bit to set
  * @param bit_index Index of the bit to set
- *---------------------------------------------------------------------------**/
-CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bitmask_type* bitmask,
-                                              size_type bit_index) {
+ **/
+CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bitmask_type* bitmask, size_type bit_index)
+{
   assert(nullptr != bitmask);
-  bitmask[word_index(bit_index)] |=
-      (bitmask_type{1} << intra_word_index(bit_index));
+  bitmask[word_index(bit_index)] |= (bitmask_type{1} << intra_word_index(bit_index));
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Sets the specified bit to `0`
  *
  * This function is not thread-safe, i.e., attempting to update bits within the
@@ -88,53 +92,50 @@ CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bitmask_type* bitmask,
  *
  * @param bitmask The bitmask containing the bit to clear
  * @param bit_index The index of the bit to clear
- *---------------------------------------------------------------------------**/
-CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask,
-                                                size_type bit_index) {
+ **/
+CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask, size_type bit_index)
+{
   assert(nullptr != bitmask);
-  bitmask[word_index(bit_index)] |=
-      ~(bitmask_type{1} << intra_word_index(bit_index));
+  bitmask[word_index(bit_index)] |= ~(bitmask_type{1} << intra_word_index(bit_index));
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether the specified bit is set to `1`
  *
  * @param bit_index Index of the bit to test
  * @return true The specified bit is `1`
  * @return false  The specified bit is `0`
- *---------------------------------------------------------------------------**/
-CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask,
-                                          size_type bit_index) {
+ **/
+CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask, size_type bit_index)
+{
   assert(nullptr != bitmask);
-  return bitmask[word_index(bit_index)] &
-         (bitmask_type{1} << intra_word_index(bit_index));
+  return bitmask[word_index(bit_index)] & (bitmask_type{1} << intra_word_index(bit_index));
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a bitmask word with the `n` least significant bits set.
  *
  * Behavior is undefined if `n < 0` or if `n >= size_in_bits<bitmask_type>()`
  *
  * @param n The number of least significant bits to set
  * @return A bitmask word with `n` least significant bits set
- *---------------------------------------------------------------------------**/
-constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type
-set_least_significant_bits(size_type n) {
-  constexpr_assert(0 <= n && n < static_cast<size_type>(
-                                     detail::size_in_bits<bitmask_type>()));
+ **/
+constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_least_significant_bits(size_type n)
+{
+  constexpr_assert(0 <= n && n < static_cast<size_type>(detail::size_in_bits<bitmask_type>()));
   return ((bitmask_type{1} << n) - 1);
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a bitmask word with the `n` most significant bits set.
  *
  * Behavior is undefined if `n < 0` or if `n >= size_in_bits<bitmask_type>()`
  *
  * @param n The number of most significant bits to set
  * @return A bitmask word with `n` most significant bits set
- *---------------------------------------------------------------------------**/
-constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type
-set_most_significant_bits(size_type n) {
+ **/
+constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_most_significant_bits(size_type n)
+{
   constexpr size_type word_size{detail::size_in_bits<bitmask_type>()};
   constexpr_assert(0 <= n && n < word_size);
   return ~((bitmask_type{1} << (word_size - n)) - 1);
@@ -142,7 +143,7 @@ set_most_significant_bits(size_type n) {
 
 #ifdef __CUDACC__
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Sets the specified bit to `1`
  *
  * @note This operation requires a global atomic operation. Therefore, it is
@@ -154,14 +155,14 @@ set_most_significant_bits(size_type n) {
  *
  * @param bitmask The bitmask containing the bit to set
  * @param bit_index  Index of the bit to set
- *---------------------------------------------------------------------------**/
-__device__ inline void set_bit(bitmask_type* bitmask, size_type bit_index) {
+ **/
+__device__ inline void set_bit(bitmask_type* bitmask, size_type bit_index)
+{
   assert(nullptr != bitmask);
-  atomicOr(&bitmask[word_index(bit_index)],
-           (bitmask_type{1} << intra_word_index(bit_index)));
+  atomicOr(&bitmask[word_index(bit_index)], (bitmask_type{1} << intra_word_index(bit_index)));
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Sets the specified bit to `0`
  *
  * @note This operation requires a global atomic operation. Therefore, it is
@@ -172,11 +173,12 @@ __device__ inline void set_bit(bitmask_type* bitmask, size_type bit_index) {
  * This function is thread-safe.
  *
  * @param bit_index  Index of the bit to clear
- *---------------------------------------------------------------------------**/
-__device__ inline void clear_bit(bitmask_type* bitmask, size_type bit_index) {
+ **/
+__device__ inline void clear_bit(bitmask_type* bitmask, size_type bit_index)
+{
   assert(nullptr != bitmask);
-  atomicAnd(&bitmask[word_index(bit_index)],
-            ~(bitmask_type{1} << intra_word_index(bit_index)));
+  atomicAnd(&bitmask[word_index(bit_index)], ~(bitmask_type{1} << intra_word_index(bit_index)));
 }
 #endif
+/** @} */  // end of group
 }  // namespace cudf

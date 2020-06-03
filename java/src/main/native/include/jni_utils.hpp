@@ -17,8 +17,6 @@
 
 #include <jni.h>
 
-#include <rmm/rmm.h>
-
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/utilities/error.hpp>
@@ -28,12 +26,12 @@ namespace jni {
 
 constexpr jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
 
-constexpr char const* CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
-constexpr char const* CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
-constexpr char const* INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
-constexpr char const* ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
-constexpr char const* NPE_CLASS = "java/lang/NullPointerException";
-constexpr char const* OOM_CLASS = "java/lang/OutOfMemoryError";
+constexpr char const *CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
+constexpr char const *CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
+constexpr char const *INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
+constexpr char const *ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
+constexpr char const *NPE_CLASS = "java/lang/NullPointerException";
+constexpr char const *OOM_CLASS = "java/lang/OutOfMemoryError";
 
 /**
  * @brief indicates that a JNI error of some kind was thrown and the main
@@ -68,6 +66,24 @@ inline void check_java_exception(JNIEnv *const env) {
   }
 }
 
+class native_jdoubleArray_accessor {
+public:
+  jdouble *getArrayElements(JNIEnv *const env, jdoubleArray arr) const {
+    return env->GetDoubleArrayElements(arr, NULL);
+  }
+
+  jdoubleArray newArray(JNIEnv *const env, int len) const { return env->NewDoubleArray(len); }
+
+  void setArrayRegion(JNIEnv *const env, jdoubleArray jarr, int start, int len,
+                      jdouble const *arr) const {
+    env->SetDoubleArrayRegion(jarr, start, len, arr);
+  }
+
+  void releaseArrayElements(JNIEnv *const env, jdoubleArray jarr, jdouble *arr, jint mode) const {
+    env->ReleaseDoubleArrayElements(jarr, arr, mode);
+  }
+};
+
 class native_jlongArray_accessor {
 public:
   jlong *getArrayElements(JNIEnv *const env, jlongArray arr) const {
@@ -76,7 +92,8 @@ public:
 
   jlongArray newArray(JNIEnv *const env, int len) const { return env->NewLongArray(len); }
 
-  void setArrayRegion(JNIEnv *const env, jlongArray jarr, int start, int len, jlong const* arr) const {
+  void setArrayRegion(JNIEnv *const env, jlongArray jarr, int start, int len,
+                      jlong const *arr) const {
     env->SetLongArrayRegion(jarr, start, len, arr);
   }
 
@@ -93,7 +110,8 @@ public:
 
   jintArray newArray(JNIEnv *const env, int len) const { return env->NewIntArray(len); }
 
-  void setArrayRegion(JNIEnv *const env, jintArray jarr, int start, int len, jint const* arr) const {
+  void setArrayRegion(JNIEnv *const env, jintArray jarr, int start, int len,
+                      jint const *arr) const {
     env->SetIntArrayRegion(jarr, start, len, arr);
   }
 
@@ -110,7 +128,8 @@ public:
 
   jbyteArray newArray(JNIEnv *const env, int len) const { return env->NewByteArray(len); }
 
-  void setArrayRegion(JNIEnv *const env, jbyteArray jarr, int start, int len, jbyte const* arr) const {
+  void setArrayRegion(JNIEnv *const env, jbyteArray jarr, int start, int len,
+                      jbyte const *arr) const {
     env->SetByteArrayRegion(jarr, start, len, arr);
   }
 
@@ -128,7 +147,7 @@ public:
   jbooleanArray newArray(JNIEnv *const env, int len) const { return env->NewBooleanArray(len); }
 
   void setArrayRegion(JNIEnv *const env, jbooleanArray jarr, int start, int len,
-                      jboolean const* arr) const {
+                      jboolean const *arr) const {
     env->SetBooleanArrayRegion(jarr, start, len, arr);
   }
 
@@ -175,7 +194,7 @@ public:
     check_java_exception(env);
   }
 
-  native_jArray(JNIEnv *const env, N_TYPE const* arr, int len)
+  native_jArray(JNIEnv *const env, N_TYPE const *arr, int len)
       : env(env), orig(access.newArray(env, len)), len(len), data_ptr(NULL) {
     check_java_exception(env);
     access.setArrayRegion(env, orig, 0, len, arr);
@@ -248,6 +267,7 @@ public:
   ~native_jArray() { commit(); }
 };
 
+typedef native_jArray<jdouble, jdoubleArray, native_jdoubleArray_accessor> native_jdoubleArray;
 typedef native_jArray<jlong, jlongArray, native_jlongArray_accessor> native_jlongArray;
 typedef native_jArray<jint, jintArray, native_jintArray_accessor> native_jintArray;
 typedef native_jArray<jbyte, jbyteArray, native_jbyteArray_accessor> native_jbyteArray;
@@ -419,6 +439,7 @@ public:
     this->cstr = other.cstr;
     this->cstr_length = other.cstr_length;
     other.cstr = NULL;
+    return *this;
   }
 
   bool is_null() const noexcept { return orig == NULL; }
@@ -493,9 +514,7 @@ public:
     check_java_exception(env);
   }
 
-  jobjectArray wrapped() {
-    return orig;
-  }
+  jobjectArray wrapped() { return orig; }
 };
 
 /**
@@ -626,104 +645,6 @@ inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowab
   return (jthrowable)ret;
 }
 
-/**
- * @brief create a rmm exception from a given rmmError_t
- */
-inline jthrowable rmmException(JNIEnv *const env, rmmError_t status, jthrowable cause = NULL) {
-  jclass ex_class = env->FindClass("ai/rapids/cudf/RmmException");
-  if (ex_class == NULL) {
-    return NULL;
-  }
-  jmethodID ctor_id =
-      env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V");
-  if (ctor_id == NULL) {
-    return NULL;
-  }
-
-  jstring msg = env->NewStringUTF(rmmGetErrorString(status));
-  if (msg == NULL) {
-    return NULL;
-  }
-
-  jobject ret = env->NewObject(ex_class, ctor_id, msg, cause);
-  return (jthrowable)ret;
-}
-
-/**
- * @brief will properly free something allocated through rmm. If the free fails
- * a java exception will be thrown, but not a C++ exception, so we can try and
- * clean up anything else properly.
- */
-template <typename T> struct rmm_deleter {
-private:
-  JNIEnv *env;
-  cudaStream_t stream;
-
-public:
-  rmm_deleter(JNIEnv *const env = NULL, cudaStream_t stream = 0) noexcept
-      : env(env), stream(stream) {}
-
-  rmm_deleter(const rmm_deleter &other) noexcept : env(other.env), stream(other.stream) {}
-
-  rmm_deleter &operator=(const rmm_deleter &other) {
-    env = other.env;
-    stream = other.stream;
-    return *this;
-  }
-
-  inline void operator()(T *ptr) {
-    rmmError_t rmmStatus = RMM_FREE(ptr, stream);
-    if (RMM_SUCCESS != rmmStatus) {
-      jthrowable cuda_e = NULL;
-      // a NULL env should never happen for something that is going to
-      // actually delete things...
-      if (RMM_ERROR_CUDA_ERROR == rmmStatus) {
-        cuda_e = cuda_exception(env, cudaGetLastError());
-      }
-      jthrowable jt = rmmException(env, rmmStatus, cuda_e);
-      if (jt != NULL) {
-        jthrowable orig = env->ExceptionOccurred();
-        if (orig != NULL) {
-          jclass clz = env->GetObjectClass(jt);
-          if (clz != NULL) {
-            jmethodID id = env->GetMethodID(clz, "addSuppressed", "(Ljava/lang/Throwable;)V");
-            if (id != NULL) {
-              env->CallVoidMethod(jt, id, orig);
-            }
-          }
-        }
-        env->Throw(jt);
-        // Don't throw a C++ exception, we will let java handle it later on.
-      }
-    }
-  }
-};
-
-template <typename T> using jni_rmm_unique_ptr = std::unique_ptr<T, rmm_deleter<T>>;
-
-/**
- * @brief Allocate memory using RMM in a C++ safe way. Will throw java and C++
- * exceptions on errors.
- */
-template <typename T>
-inline jni_rmm_unique_ptr<T> jni_rmm_alloc(JNIEnv *const env, const size_t size,
-                                           const cudaStream_t stream = 0) {
-  T *ptr;
-  rmmError_t rmmStatus = RMM_ALLOC(&ptr, size, stream);
-  if (RMM_SUCCESS != rmmStatus) {
-    jthrowable cuda_e = NULL;
-    if (RMM_ERROR_CUDA_ERROR == rmmStatus) {
-      cuda_e = cuda_exception(env, cudaGetLastError());
-    }
-    jthrowable jt = rmmException(env, rmmStatus, cuda_e);
-    if (jt != NULL) {
-      env->Throw(jt);
-      throw jni_exception("RMM Error...");
-    }
-  }
-  return jni_rmm_unique_ptr<T>(ptr, rmm_deleter<T>(env, stream));
-}
-
 inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   if (cudaSuccess != cuda_status) {
     // Clear the last error so it does not propagate.
@@ -736,15 +657,42 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 }
 
-jobject contiguous_table_from(JNIEnv* env, cudf::experimental::contiguous_split_result & split);
+jobject contiguous_table_from(JNIEnv *env, cudf::contiguous_split_result &split);
 
-native_jobjectArray<jobject> contiguous_table_array(JNIEnv* env, jsize length);
+native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length);
 
-std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
+std::unique_ptr<cudf::aggregation> map_jni_aggregation(jint op);
+
+jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result);
+
+/**
+ * Allocate a HostMemoryBuffer
+ */
+jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned);
+
+/**
+ * Get the address of a HostMemoryBuffer
+ */
+jlong get_host_buffer_address(JNIEnv *env, jobject buffer);
+
+/**
+ * Get the length of a HostMemoryBuffer
+ */
+jlong get_host_buffer_length(JNIEnv *env, jobject buffer);
 
 // Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
 // needs to be attached, the thread will automatically detach when the thread terminates.
-JNIEnv* get_jni_env(JavaVM* jvm);
+JNIEnv *get_jni_env(JavaVM *jvm);
+
+/** Set the device to use for cudf */
+void set_cudf_device(int device);
+
+/**
+ * If the current thread has not set the CUDA device via Cuda.setDevice then this could
+ * set the device, throw an exception, or do nothing depending on how the application has
+ * configured it via Cuda.setAutoSetDeviceMode.
+ */
+void auto_set_device(JNIEnv *env);
 
 } // namespace jni
 } // namespace cudf
@@ -782,24 +730,6 @@ JNIEnv* get_jni_env(JavaVM* jvm);
     }                                                                                              \
   }
 
-#define JNI_RMM_TRY(env, ret_val, call)                                                            \
-  {                                                                                                \
-    rmmError_t internal_rmmStatus = (call);                                                        \
-    if (RMM_SUCCESS != internal_rmmStatus) {                                                       \
-      jthrowable cuda_e = NULL;                                                                    \
-      if (RMM_ERROR_CUDA_ERROR == internal_rmmStatus) {                                            \
-        cuda_e = cudf::jni::cuda_exception(env, cudaGetLastError());                               \
-      }                                                                                            \
-      if (!env->ExceptionCheck()) {                                                                \
-        jthrowable jt = cudf::jni::rmmException(env, internal_rmmStatus, cuda_e);                  \
-        if (jt != NULL) {                                                                          \
-          env->Throw(jt);                                                                          \
-        }                                                                                          \
-      }                                                                                            \
-      return ret_val;                                                                              \
-    }                                                                                              \
-  }
-
 #define JNI_NULL_CHECK(env, obj, error_msg, ret_val)                                               \
   {                                                                                                \
     if ((obj) == 0) {                                                                              \
@@ -823,6 +753,10 @@ JNIEnv* get_jni_env(JavaVM* jvm);
 
 #define CATCH_STD(env, ret_val)                                                                    \
   catch (const std::bad_alloc &e) {                                                                \
+    /* In some cases a cuda exception can be the cause so peek and clear if needed*/               \
+    if (cudaErrorMemoryAllocation == cudaPeekAtLastError()) {                                      \
+      cudaGetLastError();                                                                          \
+    }                                                                                              \
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, "Could not allocate native memory", ret_val);   \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \

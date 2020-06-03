@@ -30,24 +30,25 @@
 #include <rmm/device_buffer.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
-
 /**
  * @brief Creates a `device_buffer` for holding `column` data.
  *
  * @param type The intended data type to populate
  * @param size The number of elements to be represented by the mask
  * @param state The desired state of the mask
- * @param stream Optional stream to use for device memory alloc and kernels
- * @param mr Optional resource to use for device memory allocation
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned device_buffer
  *
  * @return `rmm::device_buffer` Device buffer allocation
  */
 inline rmm::device_buffer create_data(
-    data_type type, size_type size, cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  data_type type,
+  size_type size,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   std::size_t data_size = size_of(type) * size;
 
   rmm::device_buffer data(data_size, stream, mr);
@@ -63,27 +64,27 @@ inline rmm::device_buffer create_data(
 struct column_buffer {
   using str_pair = thrust::pair<const char*, size_type>;
 
-  column_buffer(
-      data_type type, size_type size, bool is_nullable = true, cudaStream_t stream = 0,
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  column_buffer(data_type type,
+                size_type size,
+                bool is_nullable                    = true,
+                cudaStream_t stream                 = 0,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  {
     if (type.id() == type_id::STRING) {
       _strings.resize(size);
     } else {
       _data = create_data(type, size, stream, mr);
     }
-    if (is_nullable) {
-      _null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr);
-    }
+    if (is_nullable) { _null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr); }
     _null_count = 0;
   }
 
   auto data() { return _strings.size() ? _strings.data().get() : _data.data(); }
-  auto data_size() {
-    return std::max(_data.size(), _strings.size() * sizeof(str_pair));
-  }
+  auto data_size() { return std::max(_data.size(), _strings.size() * sizeof(str_pair)); }
 
   template <typename T = uint32_t>
-  auto null_mask() {
+  auto null_mask()
+  {
     return static_cast<T*>(_null_mask.data());
   }
   auto null_mask_size() { return _null_mask.size(); };
@@ -97,7 +98,6 @@ struct column_buffer {
 };
 
 namespace {
-
 /**
  * @brief Creates a column from an existing set of device memory buffers.
  *
@@ -106,21 +106,23 @@ namespace {
  * @param type List of column chunk descriptors
  * @param size List of page information
  * @param size List of page information
- * @param stream Optional stream to use for device memory alloc and kernels
- * @param mr Optional resource to use for device memory allocation
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @return `std::unique_ptr<cudf::column>` Column from the existing device data
  */
 std::unique_ptr<column> make_column(
-    data_type type, size_type size, column_buffer& buffer,
-    cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  data_type type,
+  size_type size,
+  column_buffer& buffer,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   if (type.id() == type_id::STRING) {
     return make_strings_column(buffer._strings, stream, mr);
   } else {
-    return std::make_unique<column>(type, size, std::move(buffer._data),
-                                    std::move(buffer._null_mask),
-                                    buffer._null_count);
+    return std::make_unique<column>(
+      type, size, std::move(buffer._data), std::move(buffer._null_mask), buffer._null_count);
   }
 }
 
@@ -128,5 +130,4 @@ std::unique_ptr<column> make_column(
 
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

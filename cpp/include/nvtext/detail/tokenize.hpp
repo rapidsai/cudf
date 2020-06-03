@@ -19,68 +19,73 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace nvtext
-{
-namespace detail
-{
-
+namespace nvtext {
+namespace detail {
 /**
- * @copydoc nvtext::tokenize(strings_column_view const&,string_scalar const&,rmm::mr::device_memory_resource*)
+ * @copydoc nvtext::tokenize(strings_column_view const&,string_scalar
+ * const&,rmm::mr::device_memory_resource*)
  *
  * @param strings Strings column tokenize.
  * @param delimiter UTF-8 characters used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
- * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any CUDA calls.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings columns of tokens.
  */
-std::unique_ptr<cudf::column> tokenize( cudf::strings_column_view const& strings,
-                                        cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                        cudaStream_t stream = 0 );
+std::unique_ptr<cudf::column> tokenize(
+  cudf::strings_column_view const& strings,
+  cudf::string_scalar const& delimiter = cudf::string_scalar{""},
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource(),
+  cudaStream_t stream                  = 0);
 
 /**
- * @copydoc nvtext::tokenize(strings_column_view const&,strings_column_view const&,rmm::mr::device_memory_resource*)
+ * @copydoc nvtext::tokenize(strings_column_view const&,strings_column_view
+ * const&,rmm::mr::device_memory_resource*)
  *
  * @param strings Strings column to tokenize.
  * @param delimiters Strings used to separate individual strings into tokens.
- * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any CUDA calls.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings columns of tokens.
  */
-std::unique_ptr<cudf::column> tokenize( cudf::strings_column_view const& strings,
-                                        cudf::strings_column_view const& delimiters,
-                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                        cudaStream_t stream = 0 );
+std::unique_ptr<cudf::column> tokenize(
+  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& delimiters,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
- * @copydoc nvtext::count_tokens(strings_column_view const&, string_scalar const&,rmm::mr::device_memory_resource*)
+ * @copydoc nvtext::count_tokens(strings_column_view const&, string_scalar
+ * const&,rmm::mr::device_memory_resource*)
  *
  * @param strings Strings column to use for this operation.
  * @param delimiter Strings used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
- * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any CUDA calls.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New INT32 column of token counts.
  */
-std::unique_ptr<cudf::column> count_tokens( cudf::strings_column_view const& strings,
-                                            cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                            cudaStream_t stream = 0 );
+std::unique_ptr<cudf::column> count_tokens(
+  cudf::strings_column_view const& strings,
+  cudf::string_scalar const& delimiter = cudf::string_scalar{""},
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource(),
+  cudaStream_t stream                  = 0);
 
 /**
- * @copydoc nvtext::count_tokens(strings_column_view const&,strings_column_view const&,rmm::mr::device_memory_resource*)
+ * @copydoc nvtext::count_tokens(strings_column_view const&,strings_column_view
+ * const&,rmm::mr::device_memory_resource*)
  *
  * @param strings Strings column to use for this operation.
  * @param delimiters Strings used to separate each string into tokens.
- * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any CUDA calls.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New INT32 column of token counts.
  */
-std::unique_ptr<cudf::column> count_tokens( cudf::strings_column_view const& strings,
-                                            cudf::strings_column_view const& delimiters,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                            cudaStream_t stream = 0 );
+std::unique_ptr<cudf::column> count_tokens(
+  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& delimiters,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
-} // namespace detail
-} // namespace nvtext
+}  // namespace detail
+}  // namespace nvtext

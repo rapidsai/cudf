@@ -31,7 +31,7 @@ public class WindowAggregate {
   }
 
   public static WindowAggregate count(int columnIndex, WindowOptions windowOptions) {
-    return new WindowAggregate(AggregateOp.COUNT, columnIndex, windowOptions);
+    return new WindowAggregate(AggregateOp.COUNT_ALL, columnIndex, windowOptions);
   }
 
   public static WindowAggregate min(int columnIndex, WindowOptions windowOptions) {
@@ -52,6 +52,10 @@ public class WindowAggregate {
 
   public static WindowAggregate median(int columnIndex, WindowOptions windowOptions) {
     return new WindowAggregate(AggregateOp.MEDIAN, columnIndex, windowOptions);
+  }
+
+  public static WindowAggregate row_number(int columnIndex, WindowOptions windowOptions) {
+    return new WindowAggregate(AggregateOp.ROW_NUMBER, columnIndex, windowOptions);
   }
 
   int getColumnIndex() {

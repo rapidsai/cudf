@@ -16,18 +16,14 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-
-#include <vector>
 
 namespace cudf {
 namespace test {
-
-/**---------------------------------------------------------------------------*
+/**
  * @brief Utility will verify the given strings column is empty.
  *
  * @param strings_column Column of strings to check
- *---------------------------------------------------------------------------**/
+ **/
 void expect_strings_empty(cudf::column_view strings_column);
 
 }  // namespace test

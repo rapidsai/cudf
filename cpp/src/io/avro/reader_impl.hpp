@@ -25,9 +25,9 @@
 #include "avro_gpu.h"
 
 #include <io/utilities/column_buffer.hpp>
-#include <io/utilities/datasource.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/readers.hpp>
 
 #include <memory>
@@ -36,11 +36,9 @@
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace avro {
-
 using namespace cudf::io::avro;
 using namespace cudf::io;
 
@@ -57,7 +55,7 @@ class reader::impl {
    *
    * @param source Dataset source
    * @param options Settings for controlling reading behavior
-   * @param mr Resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<datasource> source,
                 reader_options const &options,
@@ -68,19 +66,18 @@ class reader::impl {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(int skip_rows, int num_rows,
-                           cudaStream_t stream);
+  table_with_metadata read(int skip_rows, int num_rows, cudaStream_t stream);
 
  private:
   /**
    * @brief Decompresses the block data.
    *
    * @param comp_block_data Compressed block data
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Device buffer to decompressed block data
    */
@@ -95,12 +92,13 @@ class reader::impl {
    * @param global_dictionary Dictionary allocation
    * @param total_dictionary_entries Number of dictionary entries
    * @param out_buffers Output columns' device buffers
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void decode_data(const rmm::device_buffer &block_data,
                    const std::vector<std::pair<uint32_t, uint32_t>> &dict,
-                   const hostdevice_vector<uint8_t> &global_dictionary,
-                   size_t total_dictionary_entries, size_t num_rows,
+                   hostdevice_vector<uint8_t> &global_dictionary,
+                   size_t total_dictionary_entries,
+                   size_t num_rows,
                    std::vector<std::pair<int, std::string>> columns,
                    std::vector<column_buffer> &out_buffers,
                    cudaStream_t stream);
@@ -116,5 +114,4 @@ class reader::impl {
 }  // namespace avro
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

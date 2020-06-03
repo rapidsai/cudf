@@ -20,28 +20,24 @@
 #include <vector>
 
 namespace cudf {
-
 namespace detail {
-
 /**
  * @copydoc cudf::segmented_count_set_bits
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::vector<size_type>
-segmented_count_set_bits(bitmask_type const* bitmask,
-                         std::vector<size_type> const& indices,
-                         cudaStream_t stream = 0);
+std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
+                                                std::vector<size_type> const& indices,
+                                                cudaStream_t stream = 0);
 
 /**
  * @copydoc cudf::segmented_count_unset_bits
  *
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::vector<size_type>
-segmented_count_unset_bits(bitmask_type const* bitmask,
-                           std::vector<size_type> const& indices,
-                           cudaStream_t stream = 0);
+std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
+                                                  std::vector<size_type> const& indices,
+                                                  cudaStream_t stream = 0);
 
 }  // namespace detail
 

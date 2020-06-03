@@ -15,13 +15,15 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @addtogroup strings_convert
+ * @{
+ */
 
 /**
  * @brief Converts IPv4 addresses into integers.
@@ -39,16 +41,17 @@ namespace strings
  * integer is undefined.
  *
  * The resulting 32-bit integer is placed in an int64_t to avoid setting the sign-bit
- * in a int32_t type. This could be changed if cudf supported a UINT32 type in the future.
+ * in an int32_t type. This could be changed if cudf supported a UINT32 type in the future.
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT64 column converted from strings.
  */
-std::unique_ptr<column> ipv4_to_integers( strings_column_view const& strings,
-                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> ipv4_to_integers(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Converts integers into IPv4 addresses as strings.
@@ -65,12 +68,14 @@ std::unique_ptr<column> ipv4_to_integers( strings_column_view const& strings,
  *
  * @throw cudf::logic_error if the input column is not INT64 type.
  *
- * @param column Integer (INT64) column to convert.
- * @param mr Resource for allocating device memory.
+ * @param integers Integer (INT64) column to convert.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> integers_to_ipv4( column_view const& integers,
-                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> integers_to_ipv4(
+  column_view const& integers,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
+#include <cudf/copying.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/groupby.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/table/table.hpp>
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/sorting.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/groupby.hpp>
 
-#include <random>
 #include <memory>
+#include <random>
 
-class Groupby : public cudf::benchmark {};
+class Groupby : public cudf::benchmark {
+};
 
 // TODO: put it in a struct so `uniform` can be remade with different min, max
 template <typename T>
@@ -39,41 +40,38 @@ T random_int(T min, T max)
   return uniform(engine);
 }
 
-void BM_pre_sorted_nth(benchmark::State& state){
+void BM_pre_sorted_nth(benchmark::State& state)
+{
   using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
 
   // const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
-  auto data_it = cudf::test::make_counting_transform_iterator(0,
-    [=](cudf::size_type row) { return random_int(0, 100); });
+  auto data_it = cudf::test::make_counting_transform_iterator(
+    0, [=](cudf::size_type row) { return random_int(0, 100); });
 
   wrapper keys(data_it, data_it + column_size);
   wrapper vals(data_it, data_it + column_size);
 
-  auto keys_table = cudf::table_view({keys});
-  auto sort_order = cudf::experimental::sorted_order(keys_table);
-  auto sorted_keys = cudf::experimental::gather(keys_table, *sort_order);
+  auto keys_table  = cudf::table_view({keys});
+  auto sort_order  = cudf::sorted_order(keys_table);
+  auto sorted_keys = cudf::gather(keys_table, *sort_order);
   // No need to sort values using sort_order because they were generated randomly
 
-  cudf::experimental::groupby::groupby gb_obj(*sorted_keys, 
-                                              cudf::include_nulls::NO,
-                                              cudf::sorted::YES);
+  cudf::groupby::groupby gb_obj(*sorted_keys, cudf::null_policy::EXCLUDE, cudf::sorted::YES);
 
-  std::vector<cudf::experimental::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::experimental::groupby::aggregation_request());
+  std::vector<cudf::groupby::aggregation_request> requests;
+  requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals;
-  requests[0].aggregations.push_back(cudf::experimental::make_nth_element_aggregation(-1));
+  requests[0].aggregations.push_back(cudf::make_nth_element_aggregation(-1));
 
-  for(auto _ : state){
+  for (auto _ : state) {
     cuda_event_timer timer(state, true);
     auto result = gb_obj.aggregate(requests);
   }
 }
 
-BENCHMARK_DEFINE_F(Groupby, PreSortedNth)(::benchmark::State& state) {
-  BM_pre_sorted_nth(state);
-}
+BENCHMARK_DEFINE_F(Groupby, PreSortedNth)(::benchmark::State& state) { BM_pre_sorted_nth(state); }
 
 BENCHMARK_REGISTER_F(Groupby, PreSortedNth)
   ->UseManualTime()

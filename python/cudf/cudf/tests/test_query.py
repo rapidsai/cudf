@@ -153,5 +153,60 @@ def test_query_empty_frames():
     got = empty_gdf.query(expr).to_pandas()
     expect = empty_pdf.query(expr)
 
-    # assert euqal results
+    # assert equal results
     assert_frame_equal(got, expect)
+
+
+@pytest.mark.parametrize(("a_val", "b_val", "c_val"), [(4, 3, 15)])
+@pytest.mark.parametrize("index", ["a", ["a", "b"]])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "a < @a_val",
+        "a < @a_val and b > @b_val",
+        "(a < @a_val and b >@b_val) or c >@c_val",
+    ],
+)
+def test_query_with_index_name(index, query, a_val, b_val, c_val):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, None, 3, 4, 5],
+            "b": [5, 4, 3, 2, 1],
+            "c": [12, 15, 17, 19, 27],
+        }
+    )
+    pdf.set_index(index)
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    out = gdf.query(query)
+    expect = pdf.query(query)
+
+    assert_eq(out, expect)
+
+
+@pytest.mark.parametrize(("a_val", "b_val", "c_val"), [(4, 3, 15)])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "index < @a_val",
+        "index < @a_val and b > @b_val",
+        "(index < @a_val and b >@b_val) or c >@c_val",
+    ],
+)
+def test_query_with_index_keyword(query, a_val, b_val, c_val):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, None, 3, 4, 5],
+            "b": [5, 4, 3, 2, 1],
+            "c": [12, 15, 17, 19, 27],
+        }
+    )
+    pdf.set_index("a")
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    out = gdf.query(query)
+    expect = pdf.query(query)
+
+    assert_eq(out, expect)

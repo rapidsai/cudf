@@ -15,14 +15,16 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @addtogroup strings_replace
+ * @{
+ */
 
 /**
  * @brief For each string, replaces any character sequence matching the given pattern
@@ -30,19 +32,22 @@ namespace strings
  *
  * Any null string entries return corresponding null output column entries.
  *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression pattern to search within each string.
  * @param repl The string used to replace the matched sequence in each string.
  *        Default is an empty string.
  * @param maxrepl The maximum number of times to replace the matched pattern within each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace_re( strings_column_view const& strings,
-                                    std::string const& pattern,
-                                    string_scalar const& repl = string_scalar(""),
-                                    size_type maxrepl = -1,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace_re(
+  strings_column_view const& strings,
+  std::string const& pattern,
+  string_scalar const& repl           = string_scalar(""),
+  size_type maxrepl                   = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief For each string, replaces any character sequence matching the given patterns
@@ -50,16 +55,19 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
  *
  * Any null string entries return corresponding null output column entries.
  *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
  * @param strings Strings instance for this operation.
- * @param pattern The regular expression patterns to search within each string.
+ * @param patterns The regular expression patterns to search within each string.
  * @param repls The strings used for replacement.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace_re( strings_column_view const& strings,
-                                    std::vector<std::string> const& patterns,
-                                    strings_column_view const& repls,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace_re(
+  strings_column_view const& strings,
+  std::vector<std::string> const& patterns,
+  strings_column_view const& repls,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief For each string, replaces any character sequence matching the given pattern
@@ -67,16 +75,19 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
  *
  * Any null string entries return corresponding null output column entries.
  *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression patterns to search within each string.
  * @param repl The replacement template for creating the output string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace_with_backrefs( strings_column_view const& strings,
-                                               std::string const& pattern,
-                                               std::string const& repl,
-                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace_with_backrefs(
+  strings_column_view const& strings,
+  std::string const& pattern,
+  std::string const& repl,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

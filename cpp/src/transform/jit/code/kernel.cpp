@@ -15,15 +15,19 @@
  */
 
 namespace cudf {
-namespace experimental {
 namespace transformation {
 namespace jit {
 namespace code {
+const char* kernel_header =
+  R"***(
+    #include <cudf/types.hpp>
+    #include <simt/limits>
+
+    #include <cudf/wrappers/timestamps.hpp>
+  )***";
 
 const char* kernel =
-    R"***(
-    #include <cudf/types.hpp>
-
+  R"***(
     template <typename TypeOut, typename TypeIn>
     __global__
     void kernel(cudf::size_type size,
@@ -40,10 +44,9 @@ const char* kernel =
           GENERIC_UNARY_OP(&out_data[i], in_data[i]);  
         }
     }
-)***";
+  )***";
 
 }  // namespace code
 }  // namespace jit
 }  // namespace transformation
-}  // namespace experimental
 }  // namespace cudf

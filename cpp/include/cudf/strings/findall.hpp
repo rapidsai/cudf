@@ -18,10 +18,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @addtogroup strings_contains
+ * @{
+ */
 
 /**
  * @brief Returns a table of strings columns for each matching occurrence of the
@@ -30,16 +32,30 @@ namespace strings
  * The number of output columns is determined by the string with the most
  * matches.
  *
+ * @code{.pseudo}
+ * Example:
+ * s = ["bunny","rabbit"]
+ * r = findall(s, "[ab]"")
+ * r is now a table of 3 columns:
+ *   ["b","a"]
+ *   [null,"b"]
+ *   [null,"b"]
+ * @endcode
+ *
  * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match within each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New table of strings columns.
  */
-std::unique_ptr<experimental::table> findall_re( strings_column_view const& strings,
-                                                 std::string const& pattern,
-                                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<table> findall_re(
+  strings_column_view const& strings,
+  std::string const& pattern,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

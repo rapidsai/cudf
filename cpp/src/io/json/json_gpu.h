@@ -20,38 +20,38 @@
 #include <io/utilities/parsing_utils.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace json {
 namespace gpu {
-
-
 /**
- * @brief Convert a buffer of input data (text) into raw cuDF column data. 
+ * @brief Convert a buffer of input data (text) into raw cuDF column data.
  *
  * @param[in] input_data The entire data to read
  * @param[in] dtypes The data type of each column
  * @param[out] output_columns The output column data
- * @param[in] num_records The number of lines/rows 
+ * @param[in] num_records The number of lines/rows
  * @param[in] num_columns The number of columns
  * @param[in] rec_starts The start of each data record
  * @param[out] valid_fields The bitmaps indicating whether column fields are valid
- * @param[out] num_valid_fields The numbers of valid fields in columns 
+ * @param[out] num_valid_fields The numbers of valid fields in columns
  * @param[in] opts A set of parsing options
- * @param[in] stream Cuda stream to run kernels on
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @returns void
  **/
-void convert_json_to_columns(rmm::device_buffer const& input_data, 
-                          data_type *const dtypes, void *const *output_columns,
-                          cudf::size_type num_records, cudf::size_type num_columns,  
-                          const uint64_t *rec_starts,                        
-                          bitmask_type *const *valid_fields, cudf::size_type *num_valid_fields,
-                          ParseOptions const& opts,
-                          cudaStream_t stream = 0);
+void convert_json_to_columns(rmm::device_buffer const &input_data,
+                             data_type *const dtypes,
+                             void *const *output_columns,
+                             cudf::size_type num_records,
+                             cudf::size_type num_columns,
+                             const uint64_t *rec_starts,
+                             bitmask_type *const *valid_fields,
+                             cudf::size_type *num_valid_fields,
+                             ParseOptions const &opts,
+                             cudaStream_t stream = 0);
 
 /**
- * @brief Process a buffer of data and determine information about the column types within.  
+ * @brief Process a buffer of data and determine information about the column types within.
  *
  * @param[out] column_infos The count for each column data type
  * @param[in] data Input data buffer
@@ -59,19 +59,21 @@ void convert_json_to_columns(rmm::device_buffer const& input_data,
  * @param[in] opts A set of parsing options
  * @param[in] num_columns The number of columns of input data
  * @param[in] rec_starts The start the input data of interest
- * @param[in] num_records The number of lines/rows of input data 
- * @param[in] stream Cuda stream to run kernels on
+ * @param[in] num_records The number of lines/rows of input data
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @returns void
  **/
 void detect_data_types(ColumnInfo *column_infos,
-                     const char *data, size_t data_size, 
-                     const ParseOptions &options, int num_columns,
-                     const uint64_t *rec_starts, cudf::size_type num_records,
-                     cudaStream_t stream = 0);
+                       const char *data,
+                       size_t data_size,
+                       const ParseOptions &options,
+                       int num_columns,
+                       const uint64_t *rec_starts,
+                       cudf::size_type num_records,
+                       cudaStream_t stream = 0);
 
 }  // namespace gpu
 }  // namespace json
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

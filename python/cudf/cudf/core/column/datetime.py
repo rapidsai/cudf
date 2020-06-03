@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+
 import datetime as dt
 
 import numpy as np
@@ -5,7 +7,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf._lib as libcudf
-import cudf._libxx as libcudfxx
+from cudf._lib.nvtx import annotate
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -17,12 +19,16 @@ _numpy_to_pandas_conversion = {
     "us": 1000,
     "ms": 1000000,
     "s": 1000000000,
+    "m": 60000000000,
+    "h": 3600000000000,
     "D": 1000000000 * 86400,
 }
 
 
 class DatetimeColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, size=None, offset=0):
+    def __init__(
+        self, data, dtype, mask=None, size=None, offset=0, null_count=None
+    ):
         """
         Parameters
         ----------
@@ -40,7 +46,12 @@ class DatetimeColumn(column.ColumnBase):
             size = data.size // dtype.itemsize
             size = size - offset
         super().__init__(
-            data, size=size, dtype=dtype, mask=mask, offset=offset
+            data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
         )
         assert self.dtype.type is np.datetime64
         self._time_unit, _ = np.datetime_data(self.dtype)
@@ -86,7 +97,7 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("weekday")
 
     def get_dt_field(self, field):
-        return libcudfxx.datetime.extract_datetime_component(self, field)
+        return libcudf.datetime.extract_datetime_component(self, field)
 
     def normalize_binop_value(self, other):
         if isinstance(other, dt.datetime):
@@ -95,7 +106,7 @@ class DatetimeColumn(column.ColumnBase):
         if isinstance(other, pd.Timestamp):
             m = _numpy_to_pandas_conversion[self.time_unit]
             ary = utils.scalar_broadcast_to(
-                other.value * m, shape=len(self), dtype=self.dtype
+                other.value * m, size=len(self), dtype=self.dtype
             )
         elif isinstance(other, np.datetime64):
             other = other.astype(self.dtype)
@@ -123,7 +134,7 @@ class DatetimeColumn(column.ColumnBase):
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
-        return libcudfxx.unary.cast(self, dtype=dtype)
+        return libcudf.unary.cast(self, dtype=dtype)
 
     def as_numerical_column(self, dtype, **kwargs):
         return self.as_numerical.astype(dtype)
@@ -185,7 +196,7 @@ class DatetimeColumn(column.ColumnBase):
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
-        result = libcudfxx.replace.replace_nulls(self, fill_value)
+        result = libcudf.replace.replace_nulls(self, fill_value)
         result = column.build_column(
             result.base_data,
             result.dtype,
@@ -222,9 +233,82 @@ class DatetimeColumn(column.ColumnBase):
     def is_unique(self):
         return self.as_numerical.is_unique
 
+    def can_cast_safely(self, to_dtype):
+        if np.issubdtype(to_dtype, np.datetime64):
 
+            to_res, _ = np.datetime_data(to_dtype)
+            self_res, _ = np.datetime_data(self.dtype)
+
+            max_int = np.iinfo(np.dtype("int64")).max
+
+            max_dist = self.max().astype(np.timedelta64, copy=False)
+            min_dist = self.min().astype(np.timedelta64, copy=False)
+
+            self_delta_dtype = np.timedelta64(0, self_res).dtype
+
+            if max_dist <= np.timedelta64(max_int, to_res).astype(
+                self_delta_dtype
+            ) and min_dist <= np.timedelta64(max_int, to_res).astype(
+                self_delta_dtype
+            ):
+                return True
+            else:
+                return False
+        elif to_dtype == np.dtype("int64") or to_dtype == np.dtype("O"):
+            # can safely cast to representation, or string
+            return True
+        else:
+            return False
+
+
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(lhs, rhs, op, out_dtype):
-    libcudfxx.nvtx.range_push("CUDF_BINARY_OP", "orange")
-    out = libcudfxx.binaryop.binaryop(lhs, rhs, op, out_dtype)
-    libcudfxx.nvtx.range_pop()
+    out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
     return out
+
+
+def infer_format(element, **kwargs):
+    """
+    Infers datetime format from a string, also takes cares for `ms` and `ns`
+    """
+    import re
+
+    fmt = pd.core.tools.datetimes._guess_datetime_format(element, **kwargs)
+
+    if fmt is not None:
+        return fmt
+
+    element_parts = element.split(".")
+    if len(element_parts) != 2:
+        raise ValueError("Unable to infer the timestamp format from the data")
+
+    # There is possibility that the element is of following format
+    # '00:00:03.333333 2016-01-01'
+    second_part = re.split(r"(\D+)", element_parts[1], maxsplit=1)
+    subsecond_fmt = ".%" + str(len(second_part[0])) + "f"
+
+    first_part = pd.core.tools.datetimes._guess_datetime_format(
+        element_parts[0], **kwargs
+    )
+    # For the case where first_part is '00:00:03'
+    if first_part is None:
+        tmp = "1970-01-01 " + element_parts[0]
+        first_part = pd.core.tools.datetimes._guess_datetime_format(
+            tmp, **kwargs
+        ).split(" ", 1)[1]
+    if first_part is None:
+        raise ValueError("Unable to infer the timestamp format from the data")
+
+    if len(second_part) > 1:
+        second_part = pd.core.tools.datetimes._guess_datetime_format(
+            "".join(second_part[1:]), **kwargs
+        )
+    else:
+        second_part = ""
+
+    try:
+        fmt = first_part + subsecond_fmt + second_part
+    except Exception:
+        raise ValueError("Unable to infer the timestamp format from the data")
+
+    return fmt

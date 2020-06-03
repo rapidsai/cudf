@@ -24,35 +24,45 @@
 #include "parquet.h"
 
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace parquet {
-   /**
-    * @brief Chunked writer state struct. Contains various pieces of information
-    *        needed that span the begin() / write() / end() call process.
-    */
-   struct pq_chunked_state {
-      /// The writer to be used
-      std::unique_ptr<writer>             wp;  
-      /// Cuda stream to be used
-      cudaStream_t                        stream;  
-      /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
-      cudf::io::parquet::FileMetaData     md;  
-      /// current write position for rowgroups/chunks
-      size_t                              current_chunk_offset;
-      /// optional user metadata
-      table_metadata const*               user_metadata = nullptr;
-      /// only used in the write_chunked() case. copied from the (optionally) user supplied
-      /// argument to write_parquet_chunked_begin()
-      table_metadata_with_nullability     user_metadata_with_nullability;  
-      /// special parameter only used by detail::write() to indicate that we are guaranteeing 
-      /// a single table write.  this enables some internal optimizations.
-      bool                                single_write_mode = false;
-   };
+
+enum class SingleWriteMode : bool { YES, NO };
+
+/**
+ * @brief Chunked writer state struct. Contains various pieces of information
+ *        needed that span the begin() / write() / end() call process.
+ */
+struct pq_chunked_state {
+  /// The writer to be used
+  std::unique_ptr<writer> wp;
+  /// Cuda stream to be used
+  cudaStream_t stream;
+  /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
+  cudf::io::parquet::FileMetaData md;
+  /// current write position for rowgroups/chunks
+  std::size_t current_chunk_offset;
+  /// optional user metadata
+  table_metadata_with_nullability user_metadata_with_nullability;
+  /// special parameter only used by detail::write() to indicate that we are guaranteeing
+  /// a single table write.  this enables some internal optimizations.
+  table_metadata const* user_metadata = nullptr;
+  /// only used in the write_chunked() case. copied from the (optionally) user supplied
+  /// argument to write_parquet_chunked_begin()
+  bool single_write_mode;
+
+  pq_chunked_state() = default;
+
+  pq_chunked_state(table_metadata const* metadata,
+                   SingleWriteMode mode = SingleWriteMode::NO,
+                   cudaStream_t str     = 0)
+    : user_metadata{metadata}, single_write_mode{mode == SingleWriteMode::YES}, stream{str}
+  {
+  }
+};
 
 }  // namespace parquet
 }  // namespace detail
-}  // namespace experimental
 }  // namespace io
-}  // namespce cudf
+}  // namespace cudf

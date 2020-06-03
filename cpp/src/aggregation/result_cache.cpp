@@ -17,85 +17,45 @@
 #include <cudf/detail/aggregation/result_cache.hpp>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
 
-namespace {
-
-struct typed_agg_copier
+bool result_cache::has_result(size_t col_idx, aggregation const& agg) const
 {
- private:
-  std::unique_ptr<aggregation> const& agg;
+  if (col_idx < 0 or col_idx > _cache.size()) return false;
 
- public:
-  typed_agg_copier(std::unique_ptr<aggregation> const& agg) : agg(agg) {}
+  auto result_it = _cache[col_idx].find(agg);
 
-  template <aggregation::Kind k>
-  std::shared_ptr<aggregation> operator()() {
-    using agg_type = experimental::detail::kind_to_type<k>;
-    auto typed_agg = static_cast<agg_type const*>(agg.get());
-    aggregation* copy = new agg_type(*typed_agg);
-    return std::shared_ptr<aggregation>(copy);
-  }
-};
-
-std::shared_ptr<aggregation>
-copy_to_shared_ptr(std::unique_ptr<aggregation> const& agg) {
-  return experimental::detail::aggregation_dispatcher(agg->kind, 
-                                  typed_agg_copier(agg));
+  return (result_it != _cache[col_idx].end());
 }
 
-} // namespace
-
-bool result_cache::has_result(size_t col_idx, 
-                              std::unique_ptr<aggregation> const& agg) const
+void result_cache::add_result(size_t col_idx, aggregation const& agg, std::unique_ptr<column>&& col)
 {
-  if (col_idx < 0 or col_idx > _cache.size())
-    return false;
-
-  auto agg_copy = copy_to_shared_ptr(agg);
-  auto result_it = _cache[col_idx].find(agg_copy);
-
-  if (result_it != _cache[col_idx].end())
-    return true;
-  else
-    return false;
+  // We can't guarantee that agg will outlive the cache, so we need to take ownership of a copy.
+  // To allow lookup by reference, make the key a reference and keep the owner in the value pair.
+  auto owned_agg  = agg.clone();
+  auto const& key = *owned_agg;
+  auto value      = std::make_pair(std::move(owned_agg), std::move(col));
+  _cache[col_idx].emplace(key, std::move(value));
 }
 
-void result_cache::add_result(size_t col_idx, 
-                              std::unique_ptr<aggregation> const& agg,
-                              std::unique_ptr<column>&& col)
-{
-  auto key = copy_to_shared_ptr(agg);
-  column* col_ptr = col.release();
-  _cache[col_idx].emplace(std::move(key), std::unique_ptr<column>(col_ptr));
-}
-
-column_view result_cache::get_result(
-  size_t col_idx, std::unique_ptr<aggregation> const& agg) const
+column_view result_cache::get_result(size_t col_idx, aggregation const& agg) const
 {
   CUDF_EXPECTS(has_result(col_idx, agg), "Result does not exist in cache");
 
-  auto key = copy_to_shared_ptr(agg);
-  auto result_it = _cache[col_idx].find(key);
-  return result_it->second->view();
+  auto result_it = _cache[col_idx].find(agg);
+  return result_it->second.second->view();
 }
 
-std::unique_ptr<column> 
-result_cache::release_result(size_t col_idx,
-                             std::unique_ptr<aggregation> const& agg)
+std::unique_ptr<column> result_cache::release_result(size_t col_idx, aggregation const& agg)
 {
   CUDF_EXPECTS(has_result(col_idx, agg), "Result does not exist in cache");
-
-  auto key = copy_to_shared_ptr(agg);
 
   // unordered_map.extract() is a c++17 feature so we do this:
-  auto result_it = _cache[col_idx].find(key);
-  column* raw_column = result_it->second.release();
+  auto result_it                 = _cache[col_idx].find(agg);
+  std::unique_ptr<column> result = std::move(result_it->second.second);
   _cache[col_idx].erase(result_it);
-  return std::unique_ptr<column>(raw_column);
+  return std::move(result);
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf
