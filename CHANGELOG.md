@@ -26,6 +26,7 @@
 - PR #5354 Split Dask deserialization methods by dask/cuda
 - PR #5363 Handle `0-dim` inputs while broadcasting to a column
 - PR #5379 Avoid chaining `Buffer`s
+- PR #5381 Change numpy usages to cupy in `10min.ipynb`
 
 ## Bug Fixes
 
