@@ -30,13 +30,13 @@ column_view lists_column_view::parent() const { return static_cast<column_view>(
 column_view lists_column_view::offsets() const
 {
   CUDF_EXPECTS(num_children() == 2, "lists column has an incorrect number of children");
-  return column_view::child(0);
+  return column_view::child(offsets_column_index);
 }
 
 column_view lists_column_view::child() const
 {
   CUDF_EXPECTS(num_children() == 2, "lists column has an incorrect number of children");
-  return column_view::child(1);
+  return column_view::child(child_column_index);
 }
 
 }  // namespace cudf

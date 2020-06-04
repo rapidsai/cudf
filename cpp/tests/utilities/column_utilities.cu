@@ -15,6 +15,7 @@
  */
 
 #include "column_utilities.hpp"
+#include "detail/column_utilities.hpp"
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
@@ -377,8 +378,8 @@ static auto numeric_to_string_precise(T value)
 std::string get_nested_type_str(cudf::column_view const& view)
 {
   if (view.type().id() == cudf::LIST) {
-    // OFFSET HACK.
-    return cudf::jit::get_type_name(view.type()) + "<" + get_nested_type_str(view.child(1)) + ">";
+    lists_column_view lcv(view);
+    return cudf::jit::get_type_name(view.type()) + "<" + (lcv.size() > 0 ? get_nested_type_str(lcv.child()) : "") + ">";
   }
   return cudf::jit::get_type_name(view.type());
 }
@@ -420,6 +421,9 @@ struct column_view_printer {
     //  call string version
     //
     auto col_as_strings = cudf::strings::from_timestamps(col);
+    if(col_as_strings->size() == 0){
+      return;
+    }
 
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent);
   }
@@ -476,14 +480,14 @@ struct column_view_printer {
                   std::string const& indent)
   {
     lists_column_view lcv(col);
-
+    
     std::string tmp =
       get_nested_type_str(col) + ":\n" + indent + "Length : " + std::to_string(lcv.size()) + "\n" +
-      indent + "Offsets : " + to_string(lcv.offsets(), ", ") + "\n" +
+      indent + "Offsets : " + (lcv.size() > 0 ? to_string(lcv.offsets(), ", ") : "") + "\n" +
       (lcv.has_nulls() ? indent + "Null count: " + std::to_string(lcv.null_count()) + "\n" +
-                           to_string(bitmask_to_host(col), col.size(), indent) + "\n"
-                       : "") +
-      indent + "Children :\n" + to_string(lcv.child(), ", ", indent + "   ") + "\n";
+                           detail::to_string(bitmask_to_host(col), col.size(), indent) + "\n"
+                       : "") +      
+      indent + "Children :\n" + (lcv.size() > 0 ? detail::to_string(lcv.child(), ", ", indent + "   ") : "") + "\n";
 
     out.push_back(tmp);
   }
@@ -491,8 +495,10 @@ struct column_view_printer {
 
 }  // namespace
 
+namespace detail {
+
 /**
- * @copydoc cudf::test::to_strings
+ * @copydoc cudf::test::detail::to_strings
  *
  */
 std::vector<std::string> to_strings(cudf::column_view const& col, std::string const& indent)
@@ -503,8 +509,9 @@ std::vector<std::string> to_strings(cudf::column_view const& col, std::string co
 }
 
 /**
- * @copydoc cudf::test::to_string(cudf::column_view, std::string, std::string)
+ * @copydoc cudf::test::detail::to_string(cudf::column_view, std::string, std::string)
  *
+ * @param indent Indentation for all output
  */
 std::string to_string(cudf::column_view const& col,
                       std::string const& delimiter,
@@ -523,8 +530,10 @@ std::string to_string(cudf::column_view const& col,
 }
 
 /**
- * @copydoc cudf::test::to_string(std::vector<bitmask_type>, size_type, std::string)
+ * @copydoc cudf::test::detail::to_string(std::vector<bitmask_type>, size_type, std::string)
  *
+ * @param indent Indentation for all output.  See comment in `to_strings` for
+ * a detailed description.
  */
 std::string to_string(std::vector<bitmask_type> const& null_mask,
                       size_type null_mask_size,
@@ -536,6 +545,35 @@ std::string to_string(std::vector<bitmask_type> const& null_mask,
     buffer << (cudf::bit_is_set(null_mask.data(), idx) ? "1" : "0");
   }
   return buffer.str();
+}
+
+}  // namespace detail
+
+/**
+ * @copydoc cudf::test::to_strings
+ *
+ */
+std::vector<std::string> to_strings(cudf::column_view const& col)
+{
+  return detail::to_strings(col);
+}
+
+/**
+ * @copydoc cudf::test::to_string(cudf::column_view, std::string)
+ *
+ */
+std::string to_string(cudf::column_view const& col, std::string const& delimiter)
+{
+  return detail::to_string(col, delimiter);
+}
+
+/**
+ * @copydoc cudf::test::to_string(std::vector<bitmask_type>, size_type)
+ *
+ */
+std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null_mask_size)
+{
+  return detail::to_string(null_mask, null_mask_size);
 }
 
 /**

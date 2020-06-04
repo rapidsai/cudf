@@ -32,6 +32,9 @@ class lists_column_view : private column_view {
   ~lists_column_view()                                   = default;
   lists_column_view& operator=(lists_column_view const&) = default;
   lists_column_view& operator=(lists_column_view&&) = default;
+  
+  static constexpr size_type offsets_column_index{0};
+  static constexpr size_type child_column_index{1};
 
   using column_view::has_nulls;
   using column_view::null_count;
