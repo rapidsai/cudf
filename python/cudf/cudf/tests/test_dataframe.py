@@ -4445,7 +4445,15 @@ def test_rowwise_ops(data, op):
     assert_eq(expected, got, check_less_precise=7)
 
 
-@pytest.mark.parametrize("data", [[5.0, 6.0, 7.0], "single value"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [5.0, 6.0, 7.0],
+        "single value",
+        np.array(1, dtype="int64"),
+        np.array(0.6273643, dtype="float64"),
+    ],
+)
 def test_insert(data):
     pdf = pd.DataFrame.from_dict({"A": [1, 2, 3], "B": ["a", "b", "c"]})
     gdf = DataFrame.from_pandas(pdf)
@@ -5474,6 +5482,31 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
 
 
 @pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 100, 112, 35464],
+        range(100),
+        [],
+        (-10, 21, 32, 32, 1, 2, 3),
+        (),
+        [[1, 2, 3], [1, 2, 3]],
+        [range(100), range(100)],
+        ((1, 2, 3), (1, 2, 3)),
+        [[1, 2, 3]],
+        [range(100)],
+        ((1, 2, 3),),
+    ],
+)
+def test_dataframe_init_1d_list(data):
+    expect = pd.DataFrame(data)
+    actual = DataFrame(data)
+
+    assert_eq(
+        expect, actual, check_index_type=False if len(data) == 0 else True
+    )
+
+
+@pytest.mark.parametrize(
     "data,cols,index",
     [
         (
@@ -5524,3 +5557,101 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
     gdf = DataFrame(data)
 
     assert_eq(pdf, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "col_data",
+    [
+        range(5),
+        ["a", "b", "x", "y", "z"],
+        [1.0, 0.213, 0.34332],
+        ["a"],
+        [1],
+        [0.2323],
+        [],
+    ],
+)
+@pytest.mark.parametrize(
+    "assign_val",
+    [
+        1,
+        2,
+        np.array(2),
+        cupy.array(2),
+        0.32324,
+        np.array(0.34248),
+        cupy.array(0.34248),
+        "abc",
+        np.array("abc", dtype="object"),
+        np.array("abc", dtype="str"),
+        np.array("abc"),
+        None,
+    ],
+)
+def test_dataframe_assign_scalar(col_data, assign_val):
+    pdf = pd.DataFrame({"a": col_data})
+    gdf = DataFrame({"a": col_data})
+
+    pdf["b"] = (
+        cupy.asnumpy(assign_val)
+        if isinstance(assign_val, cupy.ndarray)
+        else assign_val
+    )
+    gdf["b"] = assign_val
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "col_data",
+    [
+        1,
+        2,
+        np.array(2),
+        cupy.array(2),
+        0.32324,
+        np.array(0.34248),
+        cupy.array(0.34248),
+        "abc",
+        np.array("abc", dtype="object"),
+        np.array("abc", dtype="str"),
+        np.array("abc"),
+        None,
+    ],
+)
+@pytest.mark.parametrize(
+    "assign_val",
+    [
+        1,
+        2,
+        np.array(2),
+        cupy.array(2),
+        0.32324,
+        np.array(0.34248),
+        cupy.array(0.34248),
+        "abc",
+        np.array("abc", dtype="object"),
+        np.array("abc", dtype="str"),
+        np.array("abc"),
+        None,
+    ],
+)
+def test_dataframe_assign_scalar_with_scalar_cols(col_data, assign_val):
+    pdf = pd.DataFrame(
+        {
+            "a": cupy.asnumpy(col_data)
+            if isinstance(col_data, cupy.ndarray)
+            else col_data
+        },
+        index=["dummy_mandatory_index"],
+    )
+    gdf = DataFrame({"a": col_data}, index=["dummy_mandatory_index"])
+
+    pdf["b"] = (
+        cupy.asnumpy(assign_val)
+        if isinstance(assign_val, cupy.ndarray)
+        else assign_val
+    )
+    gdf["b"] = assign_val
+
+    assert_eq(pdf, gdf)
