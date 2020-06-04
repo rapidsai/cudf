@@ -1137,13 +1137,15 @@ def test_from_gpu_matrix():
     pd.testing.assert_frame_equal(df, gdf.to_pandas())
 
     gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=0)
-    df = pd.DataFrame(h_ary, index=cupy.asnumpy(d_ary[:, 0]))
+    df = pd.DataFrame(h_ary)
+    df = df.set_index(keys=0, drop=False)
     assert isinstance(gdf, gd.DataFrame)
 
     pd.testing.assert_frame_equal(df, gdf.to_pandas())
 
     gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=1)
-    df = pd.DataFrame(h_ary, index=cupy.asnumpy(d_ary[:, 1]))
+    df = pd.DataFrame(h_ary)
+    df = df.set_index(keys=1, drop=False)
     assert isinstance(gdf, gd.DataFrame)
 
     pd.testing.assert_frame_equal(df, gdf.to_pandas())

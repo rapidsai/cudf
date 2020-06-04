@@ -4414,7 +4414,7 @@ class DataFrame(Frame, Serializable):
 
         if index is not None:
             if isinstance(index, (str, int)):
-                index = as_index(df[index], name=None)
+                index = as_index(df[index])
             else:
                 index = as_index(index)
         else:
