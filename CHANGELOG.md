@@ -12,6 +12,7 @@
 - PR #5303 Add slice_strings functionality using delimiter string
 
 ## Improvements
+
 - PR #5245 Add column reduction benchmark
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
@@ -27,6 +28,7 @@
 - PR #5354 Split Dask deserialization methods by dask/cuda
 - PR #5363 Handle `0-dim` inputs while broadcasting to a column
 - PR #5379 Avoid chaining `Buffer`s
+- PR #5387 Port nvtext replace_tokens API to libcudf
 
 ## Bug Fixes
 
