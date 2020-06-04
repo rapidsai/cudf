@@ -139,6 +139,15 @@ def test_series_basic():
     np.testing.assert_equal(series.to_array(), np.hstack([a1]))
 
 
+def test_series_from_cupy_scalars():
+    data = [0.1, 0.2, 0.3]
+    data_np = np.array(data)
+    data_cp = cupy.array(data)
+    s_np = Series([data_np[0], data_np[2]])
+    s_cp = Series([data_cp[0], data_cp[2]])
+    assert_eq(s_np, s_cp)
+
+
 @pytest.mark.parametrize("a", [[1, 2, 3], [1, 10, 30]])
 @pytest.mark.parametrize("b", [[4, 5, 6], [-11, -100, 30]])
 def test_append_index(a, b):
