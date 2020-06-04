@@ -2818,7 +2818,7 @@ class DataFrame(Frame, Serializable):
             postfix = 1
             if isinstance(columns, Mapping):
                 # It is possible for DataFrames with a MultiIndex columns
-                # object to have columns with the same name. The followig
+                # object to have columns with the same name. The following
                 # use of _cols.items and ("_1", "_2"... allows the use of
                 # rename in this case
                 for key, col in self._data.items():
