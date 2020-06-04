@@ -70,13 +70,14 @@ class CategoricalDtype(ExtensionDtype):
             return True
         elif not isinstance(other, self.__class__):
             return False
+        elif self.ordered != other.ordered:
+            return False
         elif self._categories is None or other._categories is None:
             return True
         else:
             return (
                 self._categories.dtype == other._categories.dtype
                 and self._categories.equals(other._categories)
-                and self.ordered == other.ordered
             )
 
     def construct_from_string(self):

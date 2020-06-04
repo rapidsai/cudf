@@ -9,8 +9,6 @@ from cudf.core import DataFrame, Series
 from cudf.core.index import as_index
 from cudf.tests.utils import assert_eq
 
-from cudf.core.dtypes import CategoricalDtype
-
 
 @pytest.fixture
 def pd_str_cat():
@@ -679,28 +677,3 @@ def test_add_categories_mixed_error():
 
     with pytest.raises(TypeError):
         gds.cat.add_categories(["a", "bd", "ef"])
-
-
-def test_categorical_equal_compare():
-
-    # Categories are actually different values
-    d1 = CategoricalDtype(categories=[1, 2, 3], ordered=False)
-    d2 = CategoricalDtype(categories=[2, 3, 4], ordered=False)
-
-    assert not d1 == d2
-
-    # Categories are the same, but dtypes different
-    d1 = CategoricalDtype(
-        categories=np.array([1, 2, 3], dtype="int32"), ordered=False
-    )
-    d2 = CategoricalDtype(
-        categories=np.array([1, 2, 3], dtype="int64"), ordered=False
-    )
-
-    assert not d1 == d2
-
-    # Categories are the same and same dtype, but ordered is different
-    d1 = CategoricalDtype(categories=[1, 2, 3], ordered=True)
-    d2 = CategoricalDtype(categories=[1, 2, 3], ordered=False)
-
-    assert not d1 == d2
