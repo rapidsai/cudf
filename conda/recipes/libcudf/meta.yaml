@@ -28,7 +28,6 @@ requirements:
     - cmake >=3.12.4
   host:
     - librmm {{ minor_version }}.*
-    - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp 0.15.0.*
     - double-conversion
@@ -69,6 +68,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/reduction_functions.hpp
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
+    - test -f $PREFIX/include/cudf/detail/reshape.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/detail/search.hpp
     - test -f $PREFIX/include/cudf/detail/sequence.hpp

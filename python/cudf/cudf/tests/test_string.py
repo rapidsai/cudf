@@ -2,15 +2,12 @@
 
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
-from unittest.mock import patch
 
 import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-import nvstrings
 
 from cudf import concat
 from cudf.core import DataFrame, Series
@@ -53,21 +50,6 @@ def ps_gs(data, index):
     ps = pd.Series(data, index=index, dtype="str", name="nice name")
     gs = Series(data, index=index, dtype="str", name="nice name")
     return (ps, gs)
-
-
-# TODO: Remove this once NVStrings is fully removed / deprecated
-@pytest.mark.parametrize("nbytes", [0, 2 ** 10, 2 ** 31 - 1, 2 ** 31, 2 ** 32])
-@patch.object(nvstrings.nvstrings, "byte_count")
-def test_from_nvstrings_nbytes(mock_byte_count, nbytes):
-    import cudf._lib as libcudf
-
-    mock_byte_count.return_value = nbytes
-    expectation = raise_builder(
-        [nbytes > libcudf.MAX_STRING_COLUMN_BYTES], MemoryError
-    )
-
-    with expectation:
-        Series(nvstrings.to_device([""]))
 
 
 @pytest.mark.parametrize("construct", [list, np.array, pd.Series, pa.array])
@@ -908,7 +890,7 @@ def test_string_unique(item):
     gs = Series(item)
     # Pandas `unique` returns a numpy array
     pres = pd.Series(ps.unique())
-    # Nvstrings returns sorted unique with `None` placed before other strings
+    # cudf returns sorted unique with `None` placed before other strings
     pres = pres.sort_values(na_position="first").reset_index(drop=True)
     gres = gs.unique()
     assert_eq(pres, gres)

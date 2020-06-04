@@ -36,7 +36,6 @@ requirements:
     - pyarrow 0.15.0.*
     - fastavro >=0.22.0
     - rmm {{ minor_version }}.*
-    - nvstrings {{ minor_version }}.*
     - dlpack
     - fsspec>=0.6.0
 

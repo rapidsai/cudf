@@ -239,8 +239,16 @@ class DataFrame(Frame, Serializable):
         else:
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
-                    data = [data]
-                self._init_from_list_like(data, index=index, columns=columns)
+                    new_df = self._from_columns(
+                        [data], index=index, columns=columns
+                    )
+                    self._data = new_df._data
+                    self._index = new_df._index
+                    self.columns = new_df.columns
+                else:
+                    self._init_from_list_like(
+                        data, index=index, columns=columns
+                    )
 
             else:
                 if not is_dict_like(data):
@@ -4427,10 +4435,11 @@ class DataFrame(Frame, Serializable):
         """
         Construct a DataFrame from a list of Columns
         """
-        df = cls(dict(zip(range(len(cols)), cols)), index=index)
-        if columns is not None:
-            df.columns = columns
-        return df
+        return cls(
+            data=dict(zip(range(len(cols)), cols)),
+            index=index,
+            columns=columns,
+        )
 
     def quantile(
         self,

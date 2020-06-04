@@ -1,6 +1,7 @@
 import numbers
 from collections import namedtuple
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -145,6 +146,7 @@ def is_scalar(val):
         or isinstance(val, str)
         or isinstance(val, numbers.Number)
         or np.isscalar(val)
+        or (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0)
         or isinstance(val, pd.Timestamp)
         or (isinstance(val, pd.Categorical) and len(val) == 1)
     )
@@ -160,13 +162,17 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if val is None:
         return val
 
-    dtype = "str" if is_string_dtype(dtype) else dtype
-
     if not is_scalar(val):
         raise ValueError(
             f"Cannot convert value of type {type(val).__name__} "
             " to cudf scalar"
         )
+
+    if isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0:
+        val = val.item()
+
+    if ((dtype is None) and isinstance(val, str)) or is_string_dtype(dtype):
+        dtype = "str"
 
     val = pd.api.types.pandas_dtype(type(val)).type(val)
 
