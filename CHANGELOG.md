@@ -46,6 +46,7 @@
 - PR #5326 Fix `DataFrame.__init__` for list of scalar inputs and related dask issue
 - PR #5383 Fix cython `type_id` enum mismatch
 - PR #5382 Fix CategoricalDtype equality comparisons
+- PR #5390 Fix Java data type IDs and string interleave test
 - PR #5392 Fix documentation links
 
 
