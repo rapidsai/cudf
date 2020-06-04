@@ -28,15 +28,15 @@ namespace detail {
  * lists columns.
  *
  * @code{.pseudo}
- * s1 = [{0, 1}, {2, 3}]
- * s2 = [{4, 5}, {6, 7}]
+ * s1 = [{0, 1}, {2, 3, 4, 5, 6}]
+ * s2 = [{7, 8, 9}, {10, 11}]
  * r = concatenate(s1, s2)
- * r is now [{0, 1}, {2, 3}, {4, 5}, {6, 7}]
+ * r is now [{0, 1}, {2, 3, 4, 5, 6}, {7, 8, 9}, {10, 11}]
  * @endcode
  *
- * @param columns List of strings columns to concatenate.
- * @param mr Resource for allocating device memory.
- * @param stream CUDA stream to use for any kernels in this function.
+ * @param columns Vector of lists columns to concatenate.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with concatenated results.
  */
 std::unique_ptr<column> concatenate(

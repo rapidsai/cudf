@@ -30,8 +30,8 @@ namespace detail {
  * @param strings_count Number of strings in the column.
  * @param null_count Number of null string entries in the column.
  * @param bytes Number of bytes for the chars column.
- * @param mr Memory resource to use.
- * @param stream Stream to use for any kernel calls.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return The chars child column for a strings column.
  */
 std::unique_ptr<column> create_chars_child_column(
@@ -44,8 +44,8 @@ std::unique_ptr<column> create_chars_child_column(
 /**
  * @brief Create a strings column with no strings.
  *
- * @param mr Memory resource to use.
- * @param stream Stream to use for any kernel calls.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Empty strings column
  */
 std::unique_ptr<column> make_empty_strings_column(
@@ -55,7 +55,7 @@ std::unique_ptr<column> make_empty_strings_column(
  * @brief Creates a string_view vector from a strings column.
  *
  * @param strings Strings column instance.
- * @param stream Stream to execute any device code against.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Device vector of string_views
  */
 rmm::device_vector<string_view> create_string_vector_from_column(cudf::strings_column_view strings,
@@ -65,8 +65,8 @@ rmm::device_vector<string_view> create_string_vector_from_column(cudf::strings_c
  * @brief Creates an offsets column from a string_view vector.
  *
  * @param strings Strings column
- * @param mr Memory resource to use create the output column.
- * @param stream Stream to execute any device code against.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Child offsets column
  */
 std::unique_ptr<cudf::column> child_offsets_from_string_vector(
@@ -80,8 +80,8 @@ std::unique_ptr<cudf::column> child_offsets_from_string_vector(
  * @param strings Strings vector
  * @param d_offsets Offsets vector for placing strings into column's memory.
  * @param null_count Number of null strings.
- * @param mr Memory resource to use create the output column.
- * @param stream Stream to execute any device code against.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Child chars column
  */
 std::unique_ptr<cudf::column> child_chars_from_string_vector(

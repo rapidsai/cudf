@@ -55,8 +55,8 @@ namespace detail {
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr The resource to use for all allocations
- * @param stream The stream to use for CUDA operations
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Result of scattering values from source to target
  **/
 std::unique_ptr<table> scatter(
@@ -95,8 +95,8 @@ std::unique_ptr<table> scatter(
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr The resource to use for all allocations
- * @param stream The stream to use for CUDA operations
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Result of scattering values from source to target
  **/
 std::unique_ptr<table> scatter(
@@ -113,7 +113,7 @@ std::unique_ptr<table> scatter(
  *                    column_view const& boolean_mask,
  *                    rmm::mr::device_memory_resource *mr)
  *
- * @param stream The stream to use for CUDA operations
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> boolean_mask_scatter(table_view const& source,
                                             table_view const& target,
@@ -128,7 +128,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& source,
  *                    column_view const& boolean_mask,
  *                    rmm::mr::device_memory_resource *mr)
  *
- * @param stream The stream to use for CUDA operations
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> boolean_mask_scatter(
   std::vector<std::reference_wrapper<scalar>> const& source,

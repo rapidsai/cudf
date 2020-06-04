@@ -78,8 +78,7 @@ __global__ void valid_if_kernel(
  * @param begin The beginning of the sequence
  * @param end The end of the sequence
  * @param p The predicate
- * @param stream Stream on which to execute all GPU activity and device memory
- * allocations.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return A pair containing a `device_buffer` with the new bitmask and it's
  * null count
  */

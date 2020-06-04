@@ -50,10 +50,8 @@ std::unique_ptr<column> make_empty_column(data_type type);
  * @param[in] size The number of elements in the column
  * @param[in] state Optional, controls allocation/initialization of the
  * column's null mask. By default, no null mask is allocated.
- * @param[in] stream Optional stream on which to issue all memory allocation and
- * device kernels
- * @param[in] mr Optional resource to use for device memory
- * allocation of the column's `data` and `null_mask`.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> make_numeric_column(
   data_type type,
@@ -76,10 +74,8 @@ std::unique_ptr<column> make_numeric_column(
  * @param[in] size The number of elements in the column
  * @param[in] null_mask Null mask to use for this column.
  * @param[in] null_count Optional number of nulls in the null_mask.
- * @param[in] stream Optional stream on which to issue all memory allocation and
- * device kernels
- * @param[in] mr Optional resource to use for device memory
- * allocation of the column's `data` and `null_mask`.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename B>
 std::unique_ptr<column> make_numeric_column(
@@ -112,10 +108,8 @@ std::unique_ptr<column> make_numeric_column(
  * @param[in] size The number of elements in the column
  * @param[in] state Optional, controls allocation/initialization of the
  * column's null mask. By default, no null mask is allocated.
- * @param[in] stream Optional stream on which to issue all memory allocation and
- * device kernels
- * @param[in] mr Optional resource to use for device memory
- * allocation of the column's `data` and `null_mask`.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> make_timestamp_column(
   data_type type,
@@ -138,10 +132,8 @@ std::unique_ptr<column> make_timestamp_column(
  * @param[in] size The number of elements in the column
  * @param[in] null_mask Null mask to use for this column.
  * @param[in] null_count Optional number of nulls in the null_mask.
- * @param[in] stream Optional stream on which to issue all memory allocation and
- * device kernels
- * @param[in] mr Optional resource to use for device memory
- * allocation of the column's `data` and `null_mask`.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename B>
 std::unique_ptr<column> make_timestamp_column(
@@ -174,10 +166,8 @@ std::unique_ptr<column> make_timestamp_column(
  * @param[in] size The number of elements in the column
  * @param[in] state Optional, controls allocation/initialization of the
  * column's null mask. By default, no null mask is allocated.
- * @param[in] stream Optional stream on which to issue all memory allocation and device
- * kernels
- * @param[in] mr Optional resource to use for device memory
- * allocation of the column's `data` and `null_mask`.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> make_fixed_width_column(
   data_type type,
@@ -200,10 +190,8 @@ std::unique_ptr<column> make_fixed_width_column(
  * @param[in] size The number of elements in the column
  * @param[in] null_mask Null mask to use for this column.
  * @param[in] null_count Optional number of nulls in the null_mask.
- * @param[in] stream Optional stream on which to issue all memory allocation and device
- * kernels
- * @param[in] mr Optional resource to use for device memory
- * allocation of the column's `data` and `null_mask`.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 template <typename B>
 std::unique_ptr<column> make_fixed_width_column(
@@ -239,10 +227,9 @@ std::unique_ptr<column> make_fixed_width_column(
  * @param strings The vector of pointer/size pairs.
  *                Each pointer must be a device memory address or `nullptr`
  * (indicating a null string). The size must be the number of bytes.
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
- * @param mr Optional resource to use for device memory
- *           allocation of the column's `null_mask` and children.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used for allocation of the column's `null_mask` and children
+ * columns' device memory.
  */
 std::unique_ptr<column> make_strings_column(
   const rmm::device_vector<thrust::pair<const char*, size_type>>& strings,
@@ -271,10 +258,9 @@ std::unique_ptr<column> make_strings_column(
  * bytes.
  * @param null_placeholder string_view indicating null string in given list of
  * string_views.
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
- * @param mr Optional resource to use for device memory
- *           allocation of the column's `null_mask` and children.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used for allocation of the column's `null_mask` and children
+ * columns' device memory.
  */
 std::unique_ptr<column> make_strings_column(
   const rmm::device_vector<string_view>& string_views,
@@ -310,10 +296,9 @@ std::unique_ptr<column> make_strings_column(
  * @param null_count The number of null string entries. If equal to
  * `UNKNOWN_NULL_COUNT`, the null count will be computed dynamically on the
  * first invocation of `column::null_count()`
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
- * @param mr Optional resource to use for device memory
- *           allocation of the column's `null_mask` and children.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used for allocation of the column's `null_mask` and children
+ * columns' device memory.
  */
 std::unique_ptr<column> make_strings_column(
   const rmm::device_vector<char>& strings,
@@ -351,10 +336,9 @@ std::unique_ptr<column> make_strings_column(
  * @param null_count The number of null string entries. If equal to
  * `UNKNOWN_NULL_COUNT`, the null count will be computed dynamically on the
  * first invocation of `column::null_count()`
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
- * @param mr Optional resource to use for device memory
- *           allocation of the column's `null_mask` and children.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used for allocation of the column's `null_mask` and children
+ * columns' device memory.
  */
 std::unique_ptr<column> make_strings_column(
   const std::vector<char>& strings,
@@ -380,10 +364,9 @@ std::unique_ptr<column> make_strings_column(
  * @param null_count The number of null string entries.
  * @param null_mask The bits specifying the null strings in device memory.
  *                  Arrow format for nulls is used for interpeting this bitmask.
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
- * @param mr Optional resource to use for device memory
- *           allocation of the column's `null_mask` and children.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used for allocation of the column's `null_mask` and children
+ * columns' device memory.
  */
 std::unique_ptr<column> make_strings_column(
   size_type num_strings,
@@ -396,15 +379,51 @@ std::unique_ptr<column> make_strings_column(
 
 /**
  * @brief Constructs a LIST type column given offsets column, child column,
- * and null mask and null count. The columns and mask are moved into the
- * resulting lists column.
+ * and null mask and null count.
+ *
+ * The columns and mask are moved into the resulting lists column.
+ *
+ *
+ * List columns are structured similarly to strings columns.  They contain
+ * a set of offsets which represents the lengths of the lists in each row, and
+ * a "child" column of data that is referenced by the offsets.  Since lists
+ * are a nested type, the child column may itself be further nested.
+ *
+ * When child column at depth N+1 is itself a list, the offsets column at
+ * depth N references the offsets column for depth N+1.  When the child column at depth
+ * N+1 is a leaf type (int, float, etc), the offsets column at depth N references
+ * the data for depth N+1.
+ *
+ * @code{.pseudo}
+ * Example:
+ * List<int>
+ * input:              {{1, 2}, {3, 4, 5}}
+ * offsets (depth 0)   {0, 2, 5}
+ * data    (depth 0)
+ * offsets (depth 1)
+ * data    (depth 1)   {1, 2, 3, 4, 5}
+ * @endcode
+ *
+ * @code{.pseudo}
+ * Example:
+ * List<List<int>>
+ * input:              { {{1, 2}}, {{3, 4, 5}, {6, 7}} }
+ * offsets (depth 0)   {0, 1, 3}
+ * data    (depth 0)
+ * offsets (depth 1)   {0, 2, 5, 7}
+ * data    (depth 1)
+ * offsets (depth 2)
+ * data    (depth 1)   {1, 2, 3, 4, 5, 6, 7}
+ * @endcode
  *
  * @param num_lists The number of lists the column represents.
- * @param offsets_column The column of offset values for this column.
- *                       The number of elements is one more than the total number
- *                       of lists.
- * @param child_column The child column referenced by the lists formed by the
- *                     offsets_column. Note : the child column may itself be
+ * @param offsets_column The column of offset values for this column. Each value should represent
+ *                       the starting offset into the child elements that corresponds to the
+ *                       beginning of the row, with the first row starting at 0. The length of row
+ *                       N can be determined by subtracting offsets[N+1] - offsets[N]. The total
+ * number of offsets should be 1 longer than the # of rows in the column.
+ * @param child_column The column of nested data referenced by the lists represented by the
+ *                     offsets_column. Note: the child column may itself be
  *                     further nested.
  * @param null_count The number of null list entries.
  * @param null_mask The bits specifying the null lists in device memory.
@@ -433,9 +452,8 @@ std::unique_ptr<cudf::column> make_lists_column(
  *
  * @param s The scalar to use for values in the column.
  * @param size The number of rows for the output column.
- * @param stream Optional stream for use with all memory allocation
- *               and device kernels
- * @param mr Optional resource to use for device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> make_column_from_scalar(
   scalar const& s,
