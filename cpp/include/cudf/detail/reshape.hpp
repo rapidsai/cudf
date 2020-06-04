@@ -14,20 +14,22 @@
  * limitations under the License.
  */
 
-#include "datasource_factory.hpp"
-#include <map>
-#include <string>
+#pragma once
+
+#include <cudf/types.hpp>
+
+#include <memory>
 
 namespace cudf {
-namespace io {
-namespace external {
-
-datasource_factory::datasource_factory(std::string external_lib_dir)
-{
-  external_lib_dir_ = boost::filesystem::path(external_lib_dir);
-  load_external_libs();
-}
-
-}  // namespace external
-}  // namespace io
+namespace detail {
+/**
+ * @copydoc cudf::tile
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+std::unique_ptr<table> tile(table_view const& input,
+                            size_type count,
+                            cudaStream_t stream                 = 0,
+                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+}  // namespace detail
 }  // namespace cudf

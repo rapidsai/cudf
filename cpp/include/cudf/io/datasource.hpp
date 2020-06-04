@@ -121,7 +121,8 @@ class datasource {
    * @brief Whether or not this source supports reading directly into device memory.
    *
    * If this function returns true, the datasource will receive calls to device_read() instead of
-   * host_read() when possible. However, it is still possible to receive host_read() calls as well.
+   * host_read() when the reader processes the data on the device. Most readers will still make
+   * host_read() calls, for the parts of input that are processed on the host (e.g. metadata).
    *
    * Data source implementations that don't support direct device reads don't need to override this
    * function. The implementations that do should override it to return false.
