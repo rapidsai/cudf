@@ -38,5 +38,5 @@ cdef extern from "cudf/filling.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[table] repeat(
         const table_view & input,
-        const scalar & count
+        size_type count
     ) except +

@@ -217,11 +217,38 @@ class DataFrame(Frame, Serializable):
                         ),
                     )
                 )
+        elif hasattr(data, "__cuda_array_interface__"):
+            arr_interface = data.__cuda_array_interface__
+            if len(arr_interface["descr"]) == 1:
+                new_df = self._from_arrays(data, index=index, columns=columns)
+            else:
+                new_df = self.from_records(data, index=index, columns=columns)
+            self._data = new_df._data
+            self._index = new_df._index
+            self.columns = new_df.columns
+        elif hasattr(data, "__array_interface__"):
+            arr_interface = data.__array_interface__
+            if len(arr_interface["descr"]) == 1:
+                # not record arrays
+                new_df = self._from_arrays(data, index=index, columns=columns)
+            else:
+                new_df = self.from_records(data, index=index, columns=columns)
+            self._data = new_df._data
+            self._index = new_df._index
+            self.columns = new_df.columns
         else:
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
-                    data = [data]
-                self._init_from_list_like(data, index=index, columns=columns)
+                    new_df = self._from_columns(
+                        [data], index=index, columns=columns
+                    )
+                    self._data = new_df._data
+                    self._index = new_df._index
+                    self.columns = new_df.columns
+                else:
+                    self._init_from_list_like(
+                        data, index=index, columns=columns
+                    )
 
             else:
                 if not is_dict_like(data):
@@ -4209,13 +4236,14 @@ class DataFrame(Frame, Serializable):
         return ret
 
     @classmethod
-    def from_records(self, data, index=None, columns=None, nan_as_null=False):
-        """Convert from a numpy recarray or structured array.
+    def from_records(cls, data, index=None, columns=None, nan_as_null=False):
+        """
+        Convert structured or record ndarray to DataFrame.
 
         Parameters
         ----------
         data : numpy structured dtype or recarray of ndim=2
-        index : str
+        index : str, array-like
             The name of the index column in *data*.
             If None, the default index is used.
         columns : list of str
@@ -4233,6 +4261,7 @@ class DataFrame(Frame, Serializable):
             )
 
         num_cols = len(data[0])
+
         if columns is None and data.dtype.names is None:
             names = [i for i in range(num_cols)]
 
@@ -4246,16 +4275,85 @@ class DataFrame(Frame, Serializable):
             names = columns
 
         df = DataFrame()
+
         if data.ndim == 2:
             for i, k in enumerate(names):
-                df[k] = Series(data[:, i], nan_as_null=nan_as_null)
+                df._data[k] = column.as_column(
+                    data[:, i], nan_as_null=nan_as_null
+                )
         elif data.ndim == 1:
             for k in names:
-                df[k] = Series(data[k], nan_as_null=nan_as_null)
+                df._data[k] = column.as_column(
+                    data[k], nan_as_null=nan_as_null
+                )
 
-        if index is not None:
-            indices = data[index]
-            return df.set_index(indices.astype(np.int64))
+        if index is None:
+            df._index = RangeIndex(start=0, stop=len(data))
+        elif is_scalar(index):
+            df._index = RangeIndex(start=0, stop=len(data))
+            df = df.set_index(index)
+        else:
+            df._index = as_index(index)
+        return df
+
+    @classmethod
+    def _from_arrays(cls, data, index=None, columns=None, nan_as_null=False):
+        """Convert a numpy/cupy array to DataFrame.
+
+        Parameters
+        ----------
+        data : numpy/cupy array of ndim 1 or 2,
+            dimensions greater than 2 are not supported yet.
+        index : Index or array-like
+            Index to use for resulting frame. Will default to
+            RangeIndex if no indexing information part of input data and
+            no index provided.
+        columns : list of str
+            List of column names to include.
+
+        Returns
+        -------
+        DataFrame
+        """
+
+        data = cupy.asarray(data)
+        if data.ndim != 1 and data.ndim != 2:
+            raise ValueError(
+                f"records dimension expected 1 or 2 but found: {data.ndim}"
+            )
+
+        if data.ndim == 2:
+            num_cols = len(data[0])
+        else:
+            # Since we validate ndim to be either 1 or 2 above,
+            # this case can be assumed to be ndim == 1.
+            num_cols = 1
+
+        if columns is None:
+            names = [i for i in range(num_cols)]
+        else:
+            if len(columns) != num_cols:
+                raise ValueError(
+                    f"columns length expected {num_cols} but \
+                        found {len(columns)}"
+                )
+            names = columns
+
+        df = cls()
+        if data.ndim == 2:
+            for i, k in enumerate(names):
+                df._data[k] = column.as_column(
+                    data[:, i], nan_as_null=nan_as_null
+                )
+        elif data.ndim == 1:
+            df._data[names[0]] = column.as_column(
+                data, nan_as_null=nan_as_null
+            )
+
+        if index is None:
+            df._index = RangeIndex(start=0, stop=len(data))
+        else:
+            df._index = as_index(index)
         return df
 
     @classmethod
@@ -4277,6 +4375,14 @@ class DataFrame(Frame, Serializable):
         -------
         DataFrame
         """
+        warnings.warn(
+            "DataFrame.from_gpu_matrix will be removed in 0.16. \
+                Please use cudf.DataFrame() to create a DataFrame \
+                out of a gpu matrix",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         if data.ndim != 2:
             raise ValueError(
                 "matrix dimension expected 2 but found {!r}".format(data.ndim)
@@ -4324,14 +4430,16 @@ class DataFrame(Frame, Serializable):
         )
         return self.as_gpu_matrix()
 
-    def _from_columns(cols, index=None, columns=None):
+    @classmethod
+    def _from_columns(cls, cols, index=None, columns=None):
         """
         Construct a DataFrame from a list of Columns
         """
-        df = cudf.DataFrame(dict(zip(range(len(cols)), cols)), index=index)
-        if columns is not None:
-            df.columns = columns
-        return df
+        return cls(
+            data=dict(zip(range(len(cols)), cols)),
+            index=index,
+            columns=columns,
+        )
 
     def quantile(
         self,
