@@ -160,6 +160,7 @@ test:
     - test -f $PREFIX/include/cudf/utilities/traits.hpp
     - test -f $PREFIX/include/cudf/utilities/type_dispatcher.hpp
     - test -f $PREFIX/include/cudf/wrappers/dictionary.hpp
+    - test -f $PREFIX/include/cudf/wrappers/durations.hpp
     - test -f $PREFIX/include/cudf/wrappers/timestamps.hpp
 
 about:

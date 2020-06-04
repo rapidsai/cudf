@@ -20,6 +20,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/wrappers/dictionary.hpp>
+#include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <string>
 
@@ -124,6 +125,11 @@ CUDF_TYPE_MAPPING(cudf::timestamp_s, type_id::TIMESTAMP_SECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
+CUDF_TYPE_MAPPING(cudf::duration_D, type_id::DURATION_DAYS);
+CUDF_TYPE_MAPPING(cudf::duration_s, type_id::DURATION_SECONDS);
+CUDF_TYPE_MAPPING(cudf::duration_ms, type_id::DURATION_MILLISECONDS);
+CUDF_TYPE_MAPPING(cudf::duration_us, type_id::DURATION_MICROSECONDS);
+CUDF_TYPE_MAPPING(cudf::duration_ns, type_id::DURATION_NANOSECONDS);
 CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
 CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
 
@@ -192,6 +198,20 @@ MAP_TIMESTAMP_SCALAR(timestamp_s)
 MAP_TIMESTAMP_SCALAR(timestamp_ms)
 MAP_TIMESTAMP_SCALAR(timestamp_us)
 MAP_TIMESTAMP_SCALAR(timestamp_ns)
+
+#ifndef MAP_DURATION_SCALAR
+#define MAP_DURATION_SCALAR(Type)                                     \
+  template <>                                                         \
+  struct type_to_scalar_type_impl<Type> {                             \
+    using ScalarType       = cudf::duration_scalar<Type>;             \
+    using ScalarDeviceType = cudf::duration_scalar_device_view<Type>; \
+  };
+#endif
+MAP_DURATION_SCALAR(duration_D)
+MAP_DURATION_SCALAR(duration_s)
+MAP_DURATION_SCALAR(duration_ms)
+MAP_DURATION_SCALAR(duration_us)
+MAP_DURATION_SCALAR(duration_ns)
 
 /**
  * @brief Maps a C++ type to the scalar type required to hold its value
@@ -345,6 +365,21 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
         std::forward<Ts>(args)...);
     case TIMESTAMP_NANOSECONDS:
       return f.template operator()<typename IdTypeMap<TIMESTAMP_NANOSECONDS>::type>(
+        std::forward<Ts>(args)...);
+    case DURATION_DAYS:
+      return f.template operator()<typename IdTypeMap<DURATION_DAYS>::type>(
+        std::forward<Ts>(args)...);
+    case DURATION_SECONDS:
+      return f.template operator()<typename IdTypeMap<DURATION_SECONDS>::type>(
+        std::forward<Ts>(args)...);
+    case DURATION_MILLISECONDS:
+      return f.template operator()<typename IdTypeMap<DURATION_MILLISECONDS>::type>(
+        std::forward<Ts>(args)...);
+    case DURATION_MICROSECONDS:
+      return f.template operator()<typename IdTypeMap<DURATION_MICROSECONDS>::type>(
+        std::forward<Ts>(args)...);
+    case DURATION_NANOSECONDS:
+      return f.template operator()<typename IdTypeMap<DURATION_NANOSECONDS>::type>(
         std::forward<Ts>(args)...);
     case DICTIONARY32:
       return f.template operator()<typename IdTypeMap<DICTIONARY32>::type>(
