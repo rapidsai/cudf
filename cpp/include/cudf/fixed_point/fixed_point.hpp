@@ -138,11 +138,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift(T const& val, scale_type const
 template <typename Rep, Radix Rad, typename T>
 CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift_rounded(T const& val, scale_type const& scale)
 {
-  constexpr Rep base = static_cast<Rep>(Rad);
-  Rep const factor   = ipow<Rep, Rad>(scale._t - 1);
-  Rep const half     = (base / 2) * factor;
-  auto const rounded = val >= 0 ? val + half : val - half;
-  return rounded / (factor * base);
+  Rep const factor = ipow<Rep, Rad>(scale._t);
+  Rep const half   = factor / 2;
+  return (val >= 0 ? val + half : val - half) / factor;
 }
 
 /** @brief Function that performs a `left shift` scale "times" on the `val`
