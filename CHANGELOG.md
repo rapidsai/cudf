@@ -10,6 +10,7 @@
 - PR #5342 Add support for `StringMethods.__getitem__`
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5303 Add slice_strings functionality using delimiter string
+- PR #5301 Add Java bindings for `zfill`
 
 ## Improvements
 - PR #5245 Add column reduction benchmark
