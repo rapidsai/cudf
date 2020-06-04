@@ -26,6 +26,7 @@
 - PR #5302 Add missing comparison operators to `fixed_point` type
 - PR #5354 Split Dask deserialization methods by dask/cuda
 - PR #5363 Handle `0-dim` inputs while broadcasting to a column
+- PR #5379 Avoid chaining `Buffer`s
 
 ## Bug Fixes
 
