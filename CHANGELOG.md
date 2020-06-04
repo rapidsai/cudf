@@ -12,6 +12,7 @@
 - PR #5303 Add slice_strings functionality using delimiter string
 
 ## Improvements
+
 - PR #5245 Add column reduction benchmark
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
@@ -46,6 +47,7 @@
 - PR #5326 Fix `DataFrame.__init__` for list of scalar inputs and related dask issue
 - PR #5383 Fix cython `type_id` enum mismatch
 - PR #5382 Fix CategoricalDtype equality comparisons
+- PR #5385 Fix index issues in `DataFrame.from_gpu_matrix`
 
 
 # cuDF 0.14.0 (Date TBD)
