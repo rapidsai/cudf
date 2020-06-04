@@ -1476,11 +1476,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             raise ValueError("Data must be 1-dimensional")
 
         arbitrary = np.asarray(arbitrary)
-        if not arbitrary.flags["C_CONTIGUOUS"]:
-            arbitrary = np.ascontiguousarray(arbitrary)
 
-        if dtype is not None:
-            arbitrary = arbitrary.astype(dtype)
+        # Handle case that `arbitary` elements are cupy arrays
         if (
             shape
             and shape[0]
@@ -1492,6 +1489,12 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 dtype=dtype,
                 length=length,
             )
+
+        if not arbitrary.flags["C_CONTIGUOUS"]:
+            arbitrary = np.ascontiguousarray(arbitrary)
+
+        if dtype is not None:
+            arbitrary = arbitrary.astype(dtype)
 
         if arb_dtype.kind == "M":
 
