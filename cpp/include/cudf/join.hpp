@@ -327,5 +327,32 @@ std::unique_ptr<cudf::table> left_anti_join(
   std::vector<cudf::size_type> const& return_columns,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Performs a cross join on two tables (`left`, `right`)
+ *
+ * The cross join returns the cartesian product of rows from each table.
+ *
+ * @note Warning: This function can easily cause out-of-memory errors. The size of the output is
+ * equal to `left.num_rows() * right.num_rows()`. Use with caution.
+ *
+ * @code{.pseudo}
+ *          Left a: {0, 1, 2}
+ *          Right b: {3, 4, 5}
+ * Result: { a: {0, 0, 0, 1, 1, 1, 2, 2, 2}, b: {3, 4, 5, 3, 4, 5, 3, 4, 5} }
+ * @endcode
+
+ * @throw cudf::logic_error if number of columns in either `left` or `right` table is 0
+ *
+ * @param left  The left table
+ * @param right The right table
+ * @param mr    Device memory resource used to allocate the returned table's device memory
+ *
+ * @returns     Result of cross joining `left` and `right` tables
+ */
+std::unique_ptr<cudf::table> cross_join(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** @} */  // end of group
 }  // namespace cudf
