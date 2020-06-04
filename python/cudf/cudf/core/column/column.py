@@ -1481,6 +1481,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
         if dtype is not None:
             arbitrary = arbitrary.astype(dtype)
+        elif shape and shape[0] and isinstance(arbitrary[0], cupy.ndarray):
+            arbitrary = arbitrary.astype(arbitrary[0].dtype)
 
         if arb_dtype.kind == "M":
 
