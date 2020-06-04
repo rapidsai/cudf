@@ -21,6 +21,7 @@
 - PR #5309 Handle host frames in serialization
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
+- PR #5386 Remove `cub` from `include_dirs` in `setup.py`
 - PR #5373 Remove legacy nvstrings/nvcategory/nvtext
 - PR #5362 Remove dependency on `rmm._DevicePointer`
 - PR #5302 Add missing comparison operators to `fixed_point` type
