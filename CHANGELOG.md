@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #5292 Add unsigned int type columns to libcudf
 - PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
 - PR #5327 Add `cudf::cross_join` feature
@@ -20,10 +21,12 @@
 - PR #5309 Handle host frames in serialization
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
+- PR #5373 Remove legacy nvstrings/nvcategory/nvtext
 - PR #5362 Remove dependency on `rmm._DevicePointer`
 - PR #5302 Add missing comparison operators to `fixed_point` type
 - PR #5354 Split Dask deserialization methods by dask/cuda
 - PR #5363 Handle `0-dim` inputs while broadcasting to a column
+- PR #5379 Avoid chaining `Buffer`s
 
 ## Bug Fixes
 
@@ -39,6 +42,11 @@
 - PR #5347 Fix APPLY_BOOLEAN_MASK_BENCH segfault
 - PR #5368 Fix loc indexing issue with `datetime` type index 
 - PR #5367 Fix API for `cudf::repeat` in `cudf::cross_join`
+- PR #5377 Handle array of cupy scalars in to_column
+- PR #5326 Fix `DataFrame.__init__` for list of scalar inputs and related dask issue
+- PR #5383 Fix cython `type_id` enum mismatch
+- PR #5382 Fix CategoricalDtype equality comparisons
+
 
 # cuDF 0.14.0 (Date TBD)
 
