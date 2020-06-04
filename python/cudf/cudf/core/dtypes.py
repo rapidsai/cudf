@@ -76,6 +76,7 @@ class CategoricalDtype(ExtensionDtype):
             return (
                 self._categories.dtype == other._categories.dtype
                 and self._categories.equals(other._categories)
+                and self.ordered == other.ordered
             )
 
     def construct_from_string(self):
