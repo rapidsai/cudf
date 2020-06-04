@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <tests/utilities/type_list_utilities.hpp>
 
@@ -132,6 +133,31 @@ using TimestampTypes =
   cudf::test::Types<timestamp_D, timestamp_s, timestamp_ms, timestamp_us, timestamp_ns>;
 
 /**
+ * @brief Provides a list of all duration types supported in libcudf for use
+ * in a GTest typed test.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all duration types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::DurationTypes);
+ * ```
+ **/
+using DurationTypes =
+  cudf::test::Types<duration_D, duration_s, duration_ms, duration_us, duration_ns>;
+
+/**
+ * @brief Provides a list of all chrono types supported in libcudf for use in a
+ * GTest typed test.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all numeric types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ChronoTypes);
+ * ```
+ */
+using ChronoTypes = Concat<TimestampTypes, DurationTypes>;
+
+/**
  * @brief Provides a list of all string types supported in libcudf for use in a
  * GTest typed test.
  *
@@ -165,7 +191,7 @@ using ListTypes = cudf::test::Types<list_view>;
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypes);
  * ```
  **/
-using FixedWidthTypes = Concat<NumericTypes, TimestampTypes>;
+using FixedWidthTypes = Concat<NumericTypes, ChronoTypes>;
 
 /**
  * @brief Provides a list of sortable types for use in GTest typed tests.
@@ -176,7 +202,7 @@ using FixedWidthTypes = Concat<NumericTypes, TimestampTypes>;
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ComparableTypes);
  * ```
  **/
-using ComparableTypes = Concat<NumericTypes, TimestampTypes, StringTypes>;
+using ComparableTypes = Concat<NumericTypes, ChronoTypes, StringTypes>;
 
 /**
  * @brief Provides a list of all types supported in libcudf for use in a GTest
@@ -191,7 +217,7 @@ using ComparableTypes = Concat<NumericTypes, TimestampTypes, StringTypes>;
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::AllTypes);
  * ```
  **/
-using AllTypes = Concat<NumericTypes, TimestampTypes>;
+using AllTypes = Concat<NumericTypes, ChronoTypes>;
 
 /**
  * @brief `std::array` of all `cudf::type_id`s
@@ -219,18 +245,32 @@ static constexpr std::array<cudf::type_id, 5> timestamp_type_ids{
   detail::types_to_ids<TimestampTypes>()};
 
 /**
+ * @brief `std::array` of all duration `cudf::type_id`s
+ *
+ * This can be used for iterating over `type_id`s for custom testing, or used in
+ * GTest value-parameterized tests.
+ **/
+static constexpr std::array<cudf::type_id, 5> duration_type_ids{
+  detail::types_to_ids<DurationTypes>()};
+
+/**
  * @brief `std::array` of all non-numeric `cudf::type_id`s
  *
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  **/
-static constexpr std::array<cudf::type_id, 7> non_numeric_type_ids{cudf::EMPTY,
-                                                                   cudf::TIMESTAMP_DAYS,
-                                                                   cudf::TIMESTAMP_SECONDS,
-                                                                   cudf::TIMESTAMP_MILLISECONDS,
-                                                                   cudf::TIMESTAMP_MICROSECONDS,
-                                                                   cudf::TIMESTAMP_NANOSECONDS,
-                                                                   cudf::STRING};
+static constexpr std::array<cudf::type_id, 12> non_numeric_type_ids{cudf::EMPTY,
+                                                                    cudf::TIMESTAMP_DAYS,
+                                                                    cudf::TIMESTAMP_SECONDS,
+                                                                    cudf::TIMESTAMP_MILLISECONDS,
+                                                                    cudf::TIMESTAMP_MICROSECONDS,
+                                                                    cudf::TIMESTAMP_NANOSECONDS,
+                                                                    cudf::DURATION_DAYS,
+                                                                    cudf::DURATION_SECONDS,
+                                                                    cudf::DURATION_MILLISECONDS,
+                                                                    cudf::DURATION_MICROSECONDS,
+                                                                    cudf::DURATION_NANOSECONDS,
+                                                                    cudf::STRING};
 
 /**
  * @brief `std::array` of all non-fixed-width `cudf::type_id`s

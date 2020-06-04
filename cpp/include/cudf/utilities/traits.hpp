@@ -252,6 +252,42 @@ constexpr inline bool is_duration(data_type type)
 }
 
 /**
+ * @brief Indicates whether the type `T` is a chrono type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a duration or a timestamp type
+ * @return false  `T` is neither a duration nor a timestamp type
+ **/
+template <typename T>
+constexpr inline bool is_chrono()
+{
+  return is_duration<T>() || is_timestamp<T>();
+}
+
+struct is_chrono_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_chrono<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a chrono `data_type`.
+ *
+ * Chrono types are cudf timestamp or cudf_duration types that represent a point in time
+ * or a time interval since the unix epoch.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a chrono type
+ * @return false `type` is not a chrono type
+ **/
+constexpr inline bool is_chrono(data_type type)
+{
+  return cudf::type_dispatcher(type, is_chrono_impl{});
+}
+
+/**
  * @brief Indicates whether elements of type `T` are fixed-width.
  *
  * Elements of a fixed-width type all have the same size in bytes.
@@ -265,7 +301,7 @@ constexpr inline bool is_fixed_width()
 {
   // TODO Add fixed width wrapper types
   // Is a category fixed width?
-  return cudf::is_numeric<T>() || cudf::is_timestamp<T>() || cudf::is_duration<T>();
+  return cudf::is_numeric<T>() || cudf::is_chrono<T>();
 }
 
 struct is_fixed_width_impl {

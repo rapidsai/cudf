@@ -60,6 +60,8 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
       p_val = cudf::make_numeric_scalar(type);
     } else if (cudf::is_timestamp<T>()) {
       p_val = cudf::make_timestamp_scalar(type);
+    } else if (cudf::is_duration<T>()) {
+      p_val = cudf::make_duration_scalar(type);
     } else {
       EXPECT_TRUE(false);  // should not be reached
     }

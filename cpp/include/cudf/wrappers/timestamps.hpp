@@ -37,15 +37,25 @@ using time_point = simt::std::chrono::time_point<simt::std::chrono::system_clock
 template <class Duration>
 struct timestamp : time_point<Duration> {
   constexpr timestamp() : time_point<Duration>(Duration()){};
-  constexpr timestamp(Duration d) : time_point<Duration>(d){};
+
+  // Implicitly convert a Duration to a timestamp
+  constexpr timestamp(Duration const& d) : time_point<Duration>(d){};
+
+  // Implicitly convert a tick count into a timestamp
+  // TODO: is this still needed and is this operation even meaningful? The duration units
+  // cannot be inferred from this
   constexpr timestamp(typename Duration::rep r) : time_point<Duration>(Duration(r)){};
+
   /**
    * @brief Constructs a new timestamp by copying the contents of another
    * `time_point` and converting its duration value if necessary.
    *
+   * This is required as a higher resolution duration period cannot be assigned to
+   * a lower resolution duration period naturally. Such truncations may result in loss
+   * of time precision.
+   *
    * @param other The `timestamp` to copy
    */
-  // TODO: This explict truncation is intended?
   template <class FromDuration>
   inline constexpr explicit timestamp(time_point<FromDuration> const& other)
     : time_point<Duration>(simt::std::chrono::duration_cast<Duration>(other.time_since_epoch())){};

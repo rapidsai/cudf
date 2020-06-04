@@ -167,6 +167,15 @@ struct ClampTestNumeric : public cudf::test::BaseFixture {
         cudf::make_timestamp_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
       hi_replace_scalar =
         cudf::make_timestamp_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
+    } else if (cudf::is_duration<T>()) {
+      lo_scalar =
+        cudf::make_duration_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
+      hi_scalar =
+        cudf::make_duration_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
+      lo_replace_scalar =
+        cudf::make_duration_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
+      hi_replace_scalar =
+        cudf::make_duration_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
     }
 
     static_cast<ScalarType*>(lo_scalar.get())->set_value(lo);

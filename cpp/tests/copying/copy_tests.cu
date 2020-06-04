@@ -356,11 +356,32 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarScalar)
 }
 
 template <typename T>
-struct CopyTestTimestamp : public cudf::test::BaseFixture {
-};
-TYPED_TEST_CASE(CopyTestTimestamp, cudf::test::TimestampTypes);
+struct create_chrono_scalar {
+  template <typename ChronoT = T, typename... Args>
+  typename std::enable_if_t<
+    std::is_same<typename cudf::is_timestamp_t<ChronoT>::type, std::true_type>::value,
+    cudf::timestamp_scalar<ChronoT>>
+  operator()(Args&&... args) const
+  {
+    return cudf::timestamp_scalar<T>(std::forward<Args>(args)...);
+  }
 
-TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarColumn)
+  template <typename ChronoT = T, typename... Args>
+  typename std::enable_if_t<
+    std::is_same<typename cudf::is_duration_t<ChronoT>::type, std::true_type>::value,
+    cudf::duration_scalar<ChronoT>>
+  operator()(Args&&... args) const
+  {
+    return cudf::duration_scalar<T>(std::forward<Args>(args)...);
+  }
+};
+
+template <typename T>
+struct CopyTestChrono : public cudf::test::BaseFixture {
+};
+TYPED_TEST_CASE(CopyTestChrono, cudf::test::ChronoTypes);
+
+TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarColumn)
 {
   using T = TypeParam;
 
@@ -369,7 +390,7 @@ TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarColumn)
   bool mask[] = {1, 0, 0, 1};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els);
 
-  cudf::timestamp_scalar<T> lhs_w(5);
+  auto lhs_w = create_chrono_scalar<T>{}(5);
 
   T rhs[]      = {6, 6, 6, 6};
   bool rhs_v[] = {1, 0, 1, 1};
@@ -382,7 +403,7 @@ TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarColumn)
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTestTimestamp, CopyIfElseTestColumnScalar)
+TYPED_TEST(CopyTestChrono, CopyIfElseTestColumnScalar)
 {
   using T = TypeParam;
 
@@ -395,7 +416,7 @@ TYPED_TEST(CopyTestTimestamp, CopyIfElseTestColumnScalar)
   bool lhs_v[] = {0, 1, 1, 1};
   wrapper<T> lhs_w(lhs, lhs + num_els, lhs_v);
 
-  cudf::timestamp_scalar<T> rhs_w(6);
+  auto rhs_w = create_chrono_scalar<T>{}(6);
 
   T expected[] = {5, 6, 6, 5};
   wrapper<T> expected_w(expected, expected + num_els, lhs_v);
@@ -404,7 +425,7 @@ TYPED_TEST(CopyTestTimestamp, CopyIfElseTestColumnScalar)
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarScalar)
+TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarScalar)
 {
   using T = TypeParam;
 
@@ -413,8 +434,8 @@ TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarScalar)
   bool mask[] = {1, 0, 0, 1};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els);
 
-  cudf::timestamp_scalar<T> lhs_w(5);
-  cudf::timestamp_scalar<T> rhs_w(6, false);
+  auto lhs_w = create_chrono_scalar<T>{}(5);
+  auto rhs_w = create_chrono_scalar<T>{}(6, false);
 
   T expected[] = {5, 6, 6, 5};
   wrapper<T> expected_w(expected, expected + num_els, mask);

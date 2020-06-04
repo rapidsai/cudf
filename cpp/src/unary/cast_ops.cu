@@ -25,47 +25,104 @@
 
 namespace cudf {
 namespace detail {
-template <typename _T, typename _R>
+template <typename _TargetT>
 struct unary_cast {
-  template <typename T                                                                   = _T,
-            typename R                                                                   = _R,
-            typename std::enable_if_t<(cudf::is_numeric<T>() && cudf::is_numeric<R>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE R operator()(T const element)
+  template <typename SourceT,
+            typename TargetT                                          = _TargetT,
+            typename std::enable_if_t<(cudf::is_numeric<SourceT>() &&
+                                       cudf::is_numeric<TargetT>())>* = nullptr>
+  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
-    return static_cast<R>(element);
+    return static_cast<TargetT>(element);
   }
-  template <
-    typename T                                                                       = _T,
-    typename R                                                                       = _R,
-    typename std::enable_if_t<(cudf::is_timestamp<T>() && cudf::is_timestamp<R>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE R operator()(T const element)
+
+  template <typename SourceT,
+            typename TargetT                                            = _TargetT,
+            typename std::enable_if_t<(cudf::is_timestamp<SourceT>() &&
+                                       cudf::is_timestamp<TargetT>())>* = nullptr>
+  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
-    return static_cast<R>(simt::std::chrono::floor<R::duration>(element));
+    // Convert source tick counts into target tick counts without blindly truncating them
+    // by dividing the respective duration time periods (which may not work for time before
+    // UNIX epoch)
+    return TargetT{simt::std::chrono::floor<TargetT::duration>(element)};
   }
-  template <typename T                                                                   = _T,
-            typename R                                                                   = _R,
-            typename std::enable_if_t<cudf::is_numeric<T>() && cudf::is_timestamp<R>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE R operator()(T const element)
+
+  template <typename SourceT,
+            typename TargetT                                           = _TargetT,
+            typename std::enable_if_t<(cudf::is_duration<SourceT>() &&
+                                       cudf::is_duration<TargetT>())>* = nullptr>
+  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
-    return static_cast<R>(static_cast<typename R::rep>(element));
+    return TargetT{simt::std::chrono::floor<TargetT::ChronoDurationT>(element)};
   }
-  template <typename T                                                                   = _T,
-            typename R                                                                   = _R,
-            typename std::enable_if_t<cudf::is_timestamp<T>() && cudf::is_numeric<R>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE R operator()(T const element)
+
+  // TODO: Should this be allowed? timestamps should be constructed from duration or another
+  // timestamp. Will this break existing code that rely on this functionality?
+  template <typename SourceT,
+            typename TargetT                                          = _TargetT,
+            typename std::enable_if_t<cudf::is_numeric<SourceT>() &&
+                                      cudf::is_timestamp<TargetT>()>* = nullptr>
+  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
-    return static_cast<R>(element.time_since_epoch().count());
+    return TargetT{static_cast<typename TargetT::rep>(element)};
+  }
+
+  template <typename SourceT,
+            typename TargetT                                         = _TargetT,
+            typename std::enable_if_t<cudf::is_numeric<SourceT>() &&
+                                      cudf::is_duration<TargetT>()>* = nullptr>
+  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  {
+    return TargetT{static_cast<typename TargetT::rep>(element)};
+  }
+
+  // TODO: Should this be allowed? timestamps should be covertible to duration or another timestamp.
+  // Will this break existing code that rely on this functionality?
+  template <typename SourceT,
+            typename TargetT                                        = _TargetT,
+            typename std::enable_if_t<cudf::is_timestamp<SourceT>() &&
+                                      cudf::is_numeric<TargetT>()>* = nullptr>
+  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  {
+    return static_cast<TargetT>(element.time_since_epoch().count());
+  }
+
+  template <typename SourceT,
+            typename TargetT                                           = _TargetT,
+            typename std::enable_if_t<(cudf::is_timestamp<SourceT>() &&
+                                       cudf::is_duration<TargetT>())>* = nullptr>
+  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  {
+    return TargetT{simt::std::chrono::floor<TargetT::ChronoDurationT>(element.time_since_epoch())};
+  }
+
+  template <typename SourceT,
+            typename TargetT                                        = _TargetT,
+            typename std::enable_if_t<cudf::is_duration<SourceT>() &&
+                                      cudf::is_numeric<TargetT>()>* = nullptr>
+  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  {
+    return static_cast<TargetT>(element.count());
+  }
+
+  template <typename SourceT,
+            typename TargetT                                            = _TargetT,
+            typename std::enable_if_t<(cudf::is_duration<SourceT>() &&
+                                       cudf::is_timestamp<TargetT>())>* = nullptr>
+  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  {
+    return TargetT{simt::std::chrono::floor<TargetT::duration>(element)};
   }
 };
 
-template <typename T>
+template <typename SourceT>
 struct dispatch_unary_cast_to {
   column_view input;
 
   dispatch_unary_cast_to(column_view inp) : input(inp) {}
 
-  template <typename R,
-            typename std::enable_if_t<cudf::is_numeric<R>() || cudf::is_timestamp<R>()>* = nullptr>
+  template <typename TargetT, typename std::enable_if_t<cudf::is_fixed_width<TargetT>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
@@ -80,22 +137,21 @@ struct dispatch_unary_cast_to {
     mutable_column_view output_mutable = *output;
 
     thrust::transform(rmm::exec_policy(stream)->on(stream),
-                      input.begin<T>(),
-                      input.end<T>(),
-                      output_mutable.begin<R>(),
-                      unary_cast<T, R>{});
+                      input.begin<SourceT>(),
+                      input.end<SourceT>(),
+                      output_mutable.begin<TargetT>(),
+                      unary_cast<TargetT>{});
 
     return output;
   }
 
-  template <
-    typename R,
-    typename std::enable_if_t<!cudf::is_numeric<R>() && !cudf::is_timestamp<R>()>* = nullptr>
+  template <typename TargetT,
+            typename std::enable_if_t<!cudf::is_fixed_width<TargetT>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    CUDF_FAIL("Column type must be numeric or timestamp");
+    CUDF_FAIL("Column type must be numeric or chrono");
   }
 };
 
@@ -104,8 +160,7 @@ struct dispatch_unary_cast_from {
 
   dispatch_unary_cast_from(column_view inp) : input(inp) {}
 
-  template <typename T,
-            typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
@@ -113,14 +168,12 @@ struct dispatch_unary_cast_from {
     return type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, mr, stream);
   }
 
-  template <
-    typename T,
-    typename std::enable_if_t<!cudf::is_timestamp<T>() && !cudf::is_numeric<T>()>* = nullptr>
+  template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    CUDF_FAIL("Column type must be numeric or timestamp");
+    CUDF_FAIL("Column type must be numeric or chrono");
   }
 };
 

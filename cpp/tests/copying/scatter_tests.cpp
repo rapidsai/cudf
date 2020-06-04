@@ -256,7 +256,7 @@ class ScatterInvalidIndexTypeTests : public cudf::test::BaseFixture {
 
 // NOTE string types hit static assert in fixed_width_column_wrapper
 using InvalidIndexTypes =
-  cudf::test::Concat<cudf::test::Types<float, double, bool>, cudf::test::TimestampTypes>;
+  cudf::test::Concat<cudf::test::Types<float, double, bool>, cudf::test::ChronoTypes>;
 TYPED_TEST_CASE(ScatterInvalidIndexTypeTests, InvalidIndexTypes);
 
 // Throw logic error if scatter map column has invalid data type
@@ -784,6 +784,8 @@ struct BooleanMaskScalarScatter : public cudf::test::BaseFixture {
       scalar = cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
     } else if (cudf::is_timestamp<T>()) {
       scalar = cudf::make_timestamp_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
+    } else if (cudf::is_duration<T>()) {
+      scalar = cudf::make_duration_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
     }
 
     static_cast<ScalarType*>(scalar.get())->set_value(value);
