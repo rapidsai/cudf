@@ -2762,8 +2762,8 @@ class DataFrame(Frame, Serializable):
 
         DataFrame.rename supports two calling conventions
 
-        `(index=index_mapper, columns=columns_mapper, ...)`
-        `(mapper, axis={0/'index' or 1/'column'}, ...)`
+        ``(index=index_mapper, columns=columns_mapper, ...)``
+        ``(mapper, axis={0/'index' or 1/'column'}, ...)``
 
         We highly recommend using keyword arguments to clarify your intent.
 
