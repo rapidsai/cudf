@@ -1,6 +1,5 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
-import functools
 import pickle
 import warnings
 from codecs import decode
@@ -110,7 +109,7 @@ from cudf._lib.strings.substring import (
 from cudf._lib.strings.translate import translate as cpp_translate
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
-from cudf.core.column import column, column_empty, datetime
+from cudf.core.column import column, datetime
 from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like, is_scalar
 
@@ -159,33 +158,6 @@ class StringMethods(object):
         """
         self._column = column
         self._parent = parent
-
-    def __getattr__(self, attr, *args, **kwargs):
-        from cudf.core.series import Series
-
-        # TODO: Remove when all needed string compute APIs are ported
-        if hasattr(self._column.nvstrings, attr):
-            passed_attr = getattr(self._column.nvstrings, attr)
-            if callable(passed_attr):
-
-                @functools.wraps(passed_attr)
-                def wrapper(*args, **kwargs):
-                    import nvstrings
-
-                    ret = passed_attr(*args, **kwargs)
-                    if isinstance(ret, nvstrings.nvstrings):
-                        ret = Series(
-                            column.as_column(ret),
-                            index=self._parent.index,
-                            name=self._parent.name,
-                        )
-                    return ret
-
-                return wrapper
-            else:
-                return passed_attr
-        else:
-            raise AttributeError(attr)
 
     def htoi(self):
         """
@@ -296,11 +268,6 @@ class StringMethods(object):
                     return new_col
                 else:
                     return self._parent._mimic_inplace(new_col, inplace=False)
-
-    def __dir__(self):
-        keys = dir(type(self))
-        # TODO: Remove along with `__getattr__` above when all is ported
-        return set(keys + dir(self._column.nvstrings))
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -3611,11 +3578,6 @@ class StringColumn(column.ColumnBase):
             children=children,
         )
 
-        # TODO: Remove these once NVStrings is fully deprecated / removed
-        self._nvstrings = None
-        self._nvcategory = None
-        self._indices = None
-
     @property
     def base_size(self):
         if len(self.base_children) == 0:
@@ -3638,19 +3600,9 @@ class StringColumn(column.ColumnBase):
     def set_base_mask(self, value):
         super().set_base_mask(value)
 
-        # TODO: Remove these once NVStrings is fully deprecated / removed
-        self._indices = None
-        self._nvcategory = None
-        self._nvstrings = None
-
     def set_base_children(self, value):
         # TODO: Implement dtype validation of the children here somehow
         super().set_base_children(value)
-
-        # TODO: Remove these once NVStrings is fully deprecated / removed
-        self._indices = None
-        self._nvcategory = None
-        self._nvstrings = None
 
     @property
     def children(self):
@@ -3726,61 +3678,8 @@ class StringColumn(column.ColumnBase):
     def __len__(self):
         return self.size
 
-    # TODO: Remove this once NVStrings is fully deprecated / removed
-    @property
-    def nvstrings(self):
-        if self._nvstrings is None:
-            if self.nullable:
-                mask_ptr = self.mask_ptr
-            else:
-                mask_ptr = None
-
-            import nvstrings
-
-            if self.size == 0:
-                self._nvstrings = nvstrings.to_device([])
-            else:
-                self._nvstrings = nvstrings.from_offsets(
-                    self.children[1].data_ptr,
-                    self.children[0].data_ptr,
-                    self.size,
-                    mask_ptr,
-                    ncount=self.null_count,
-                    bdevmem=True,
-                )
-        return self._nvstrings
-
-    # TODO: Remove these once NVStrings is fully deprecated / removed
-    @property
-    def nvcategory(self):
-        if self._nvcategory is None:
-            import nvcategory as nvc
-
-            self._nvcategory = nvc.from_strings(self.nvstrings)
-        return self._nvcategory
-
-    # TODO: Remove these once NVStrings is fully deprecated / removed
-    @nvcategory.setter
-    def nvcategory(self, nvc):
-        self._nvcategory = nvc
-
     def _set_mask(self, value):
-        # TODO: Remove these once NVStrings is fully deprecated / removed
-        self._nvstrings = None
-        self._nvcategory = None
-        self._indices = None
-
         super()._set_mask(value)
-
-    # TODO: Remove these once NVStrings is fully deprecated / removed
-    @property
-    def indices(self):
-        if self._indices is None:
-            out_col = column_empty(self.nvcategory.size(), dtype="int32")
-            ptr = out_col.data_ptr
-            self.nvcategory.values(devptr=ptr)
-            self._indices = out_col.data_array_view
-        return self._indices
 
     @property
     def _nbytes(self):
@@ -4014,12 +3913,6 @@ class StringColumn(column.ColumnBase):
 
     def _mimic_inplace(self, other_col, inplace=False):
         out = super()._mimic_inplace(other_col, inplace=inplace)
-        if inplace:
-            # TODO: Remove these once NVStrings is fully deprecated / removed
-            self._nvstrings = other_col._nvstrings
-            self._nvcategory = other_col._nvcategory
-            self._indices = other_col._indices
-
         return out
 
 

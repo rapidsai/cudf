@@ -1,6 +1,7 @@
 /*
  * Copyright 2019 BlazingDB, Inc.
  *     Copyright 2019 Eyal Rozenberg <eyalroz@blazingdb.com>
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -123,6 +124,41 @@ constexpr inline bool is_a_power_of_two(I val) noexcept
 {
   static_assert(std::is_integral<I>::value, "This function only applies to integral types");
   return ((val - 1) & val) == 0;
+}
+
+/**
+ * @brief Return the absolute value of a number.
+ *
+ * This calls `std::abs()` which performs equivalent: `(value < 0) ? -value : value`.
+ *
+ * This was created to prevent compile errors calling `std::abs()` with unsigned integers.
+ * An example compile error appears as follows:
+ * @code{.pseudo}
+ * error: more than one instance of overloaded function "std::abs" matches the argument list:
+ *          function "abs(int)"
+ *          function "std::abs(long)"
+ *          function "std::abs(long long)"
+ *          function "std::abs(double)"
+ *          function "std::abs(float)"
+ *          function "std::abs(long double)"
+ *          argument types are: (uint64_t)
+ * @endcode
+ *
+ * Not all cases could be if-ed out using `std::is_signed<T>::value` and satisfy the compiler.
+ *
+ * @param value Numeric value can be either integer or float type.
+ * @return Absolute value if value type is signed.
+ */
+template <typename T>
+std::enable_if_t<std::is_signed<T>::value, T> constexpr inline absolute_value(T value)
+{
+  return std::abs(value);
+}
+// Unsigned type just returns itself.
+template <typename T>
+std::enable_if_t<!std::is_signed<T>::value, T> constexpr inline absolute_value(T value)
+{
+  return value;
 }
 
 }  // namespace util
