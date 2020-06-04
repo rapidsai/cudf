@@ -413,7 +413,99 @@ class fixed_point {
   template <typename Rep1, Radix Rad1>
   CUDA_HOST_DEVICE_CALLABLE friend bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                                                    fixed_point<Rep1, Rad1> const& rhs);
-};
+
+  /**
+   * @brief operator != (for comparing two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are compared <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are compared
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return true if `lhs` and `rhs` are not equal, false if not
+   */
+  template <typename Rep1, Radix Rad1>
+  CUDA_HOST_DEVICE_CALLABLE friend bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
+                                                   fixed_point<Rep1, Rad1> const& rhs);
+
+  /**
+   * @brief operator <= (for comparing two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are compared <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are compared
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return true if `lhs` less than or equal to `rhs`, false if not
+   */
+  template <typename Rep1, Radix Rad1>
+  CUDA_HOST_DEVICE_CALLABLE friend bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
+                                                   fixed_point<Rep1, Rad1> const& rhs);
+
+  /**
+   * @brief operator >= (for comparing two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are compared <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are compared
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return true if `lhs` greater than or equal to `rhs`, false if not
+   */
+  template <typename Rep1, Radix Rad1>
+  CUDA_HOST_DEVICE_CALLABLE friend bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
+                                                   fixed_point<Rep1, Rad1> const& rhs);
+
+  /**
+   * @brief operator < (for comparing two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are compared <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are compared
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return true if `lhs` less than `rhs`, false if not
+   */
+  template <typename Rep1, Radix Rad1>
+  CUDA_HOST_DEVICE_CALLABLE friend bool operator<(fixed_point<Rep1, Rad1> const& lhs,
+                                                  fixed_point<Rep1, Rad1> const& rhs);
+
+  /**
+   * @brief operator > (for comparing two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are compared <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are compared
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return true if `lhs` greater than `rhs`, false if not
+   */
+  template <typename Rep1, Radix Rad1>
+  CUDA_HOST_DEVICE_CALLABLE friend bool operator>(fixed_point<Rep1, Rad1> const& lhs,
+                                                  fixed_point<Rep1, Rad1> const& rhs);
+
+  /**
+   * @brief Method for creating a `fixed_point` number with a new `scale`
+   *
+   * The `fixed_point` number returned will have the same value, underlying representation and
+   * radix as `this`, the only thing changed is the scale
+   *
+   * @param scale The `scale` of the returned `fixed_point` number
+   * @return `fixed_point` number with a new `scale`
+   */
+  CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep, Rad> rescaled(scale_type scale) const
+  {
+    if (scale == _scale) return *this;
+    Rep const value =
+      detail::shift_with_precise_round<Rep, Rad>(_value, scale_type{scale - _scale});
+    return fixed_point<Rep, Rad>{scaled_integer<Rep>{value, scale}};
+  }
+};  // namespace numeric
 
 /** @brief Function that converts Rep to `std::string`
  *
@@ -501,22 +593,17 @@ template <typename Rep1, Radix Rad1>
 CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
                                                             fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const rhsv = lhs._scale > rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(
-                                                rhs._value, scale_type{lhs._scale - rhs._scale})
-                                            : rhs._value;
-  auto const lhsv = lhs._scale < rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(
-                                                lhs._value, scale_type{rhs._scale - lhs._scale})
-                                            : lhs._value;
-  auto const scale = lhs._scale > rhs._scale ? lhs._scale : rhs._scale;
+  auto const scale = std::min(lhs._scale, rhs._scale);
+  auto const sum   = lhs.rescaled(scale)._value + rhs.rescaled(scale)._value;
 
 #if defined(__CUDACC_DEBUG__)
 
   assert(("fixed_point overflow of underlying representation type " + print_rep<Rep1>(),
-          !addition_overflow<Rep1>(lhsv, rhsv)));
+          !addition_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value)));
 
 #endif
 
-  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhsv + rhsv, scale)};
+  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{sum, scale}};
 }
 
 // MINUS Operation
@@ -524,22 +611,17 @@ template <typename Rep1, Radix Rad1>
 CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
                                                             fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const rhsv = lhs._scale > rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(
-                                                rhs._value, scale_type{lhs._scale - rhs._scale})
-                                            : rhs._value;
-  auto const lhsv = lhs._scale < rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(
-                                                lhs._value, scale_type{rhs._scale - lhs._scale})
-                                            : lhs._value;
-  auto const scale = lhs._scale > rhs._scale ? lhs._scale : rhs._scale;
+  auto const scale = std::min(lhs._scale, rhs._scale);
+  auto const diff  = lhs.rescaled(scale)._value - rhs.rescaled(scale)._value;
 
 #if defined(__CUDACC_DEBUG__)
 
   assert(("fixed_point overflow of underlying representation type " + print_rep<Rep1>(),
-          !subtraction_overflow<Rep1>(lhsv, rhsv)));
+          !subtraction_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value)));
 
 #endif
 
-  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhsv - rhsv, scale)};
+  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{diff, scale}};
 }
 
 // MULTIPLIES Operation
@@ -579,13 +661,53 @@ template <typename Rep1, Radix Rad1>
 CUDA_HOST_DEVICE_CALLABLE bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                                           fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const rhsv = lhs._scale > rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(
-                                                rhs._value, scale_type{lhs._scale - rhs._scale})
-                                            : rhs._value;
-  auto const lhsv = lhs._scale < rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(
-                                                lhs._value, scale_type{rhs._scale - lhs._scale})
-                                            : lhs._value;
-  return rhsv == lhsv;
+  auto const scale = std::min(lhs._scale, rhs._scale);
+  return lhs.rescaled(scale)._value == rhs.rescaled(scale)._value;
+}
+
+// EQUALITY NOT COMPARISON Operation
+template <typename Rep1, Radix Rad1>
+CUDA_HOST_DEVICE_CALLABLE bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
+                                          fixed_point<Rep1, Rad1> const& rhs)
+{
+  auto const scale = std::min(lhs._scale, rhs._scale);
+  return lhs.rescaled(scale)._value != rhs.rescaled(scale)._value;
+}
+
+// LESS THAN OR EQUAL TO Operation
+template <typename Rep1, Radix Rad1>
+CUDA_HOST_DEVICE_CALLABLE bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
+                                          fixed_point<Rep1, Rad1> const& rhs)
+{
+  auto const scale = std::min(lhs._scale, rhs._scale);
+  return lhs.rescaled(scale)._value <= rhs.rescaled(scale)._value;
+}
+
+// GREATER THAN OR EQUAL TO Operation
+template <typename Rep1, Radix Rad1>
+CUDA_HOST_DEVICE_CALLABLE bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
+                                          fixed_point<Rep1, Rad1> const& rhs)
+{
+  auto const scale = std::min(lhs._scale, rhs._scale);
+  return lhs.rescaled(scale)._value >= rhs.rescaled(scale)._value;
+}
+
+// LESS THAN Operation
+template <typename Rep1, Radix Rad1>
+CUDA_HOST_DEVICE_CALLABLE bool operator<(fixed_point<Rep1, Rad1> const& lhs,
+                                         fixed_point<Rep1, Rad1> const& rhs)
+{
+  auto const scale = std::min(lhs._scale, rhs._scale);
+  return lhs.rescaled(scale)._value < rhs.rescaled(scale)._value;
+}
+
+// GREATER THAN Operation
+template <typename Rep1, Radix Rad1>
+CUDA_HOST_DEVICE_CALLABLE bool operator>(fixed_point<Rep1, Rad1> const& lhs,
+                                         fixed_point<Rep1, Rad1> const& rhs)
+{
+  auto const scale = std::min(lhs._scale, rhs._scale);
+  return lhs.rescaled(scale)._value > rhs.rescaled(scale)._value;
 }
 
 /**

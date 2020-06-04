@@ -416,6 +416,7 @@ add_library(cudf
             src/merge/merge.cu
             src/partitioning/round_robin.cu
             src/join/join.cu
+            src/join/cross_join.cu
             src/join/semi_join.cu
             src/sort/is_sorted.cu
             src/binaryop/binaryop.cpp
