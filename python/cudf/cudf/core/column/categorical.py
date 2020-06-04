@@ -616,15 +616,22 @@ class CategoricalAccessor(object):
         return self._return_or_inplace(out_col, **kwargs)
 
     def _categories_equal(self, new_categories, **kwargs):
-        if self.ordered is not kwargs['ordered']:
-            return False
+
         cur_categories = self._column.categories
         if len(new_categories) != len(cur_categories):
             return False
         # if order doesn't matter, sort before the equals call below
         if not kwargs.get("ordered", self.ordered):
-            cur_categories = cudf.Series(cur_categories).sort_values()
-            new_categories = cudf.Series(new_categories).sort_values()
+            cur_categories = (
+                cudf.Series(cur_categories)
+                .sort_values()
+                .reset_index(drop=True)
+            )
+            new_categories = (
+                cudf.Series(new_categories)
+                .sort_values()
+                .reset_index(drop=True)
+            )
         return cur_categories.equals(new_categories)
 
     def _set_categories(self, current_categories, new_categories, **kwargs):
