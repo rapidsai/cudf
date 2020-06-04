@@ -1073,14 +1073,36 @@ def test_from_records(dtypes):
     gdf = gd.DataFrame.from_records(rec_ary, columns=["a", "b", "c", "d"])
     df = pd.DataFrame.from_records(rec_ary, columns=["a", "b", "c", "d"])
     assert isinstance(gdf, gd.DataFrame)
-
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+    assert_eq(df, gdf)
 
     gdf = gd.DataFrame.from_records(rec_ary)
     df = pd.DataFrame.from_records(rec_ary)
     assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
 
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+@pytest.mark.parametrize("columns", [None, ["first", "second", "third"]])
+@pytest.mark.parametrize(
+    "index",
+    [
+        None,
+        ["first", "second"],
+        "name",
+        "age",
+        "weight",
+        [10, 11],
+        ["abc", "xyz"],
+    ],
+)
+def test_from_records_index(columns, index):
+    rec_ary = np.array(
+        [("Rex", 9, 81.0), ("Fido", 3, 27.0)],
+        dtype=[("name", "U10"), ("age", "i4"), ("weight", "f4")],
+    )
+    gdf = gd.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    df = pd.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    assert isinstance(gdf, gd.DataFrame)
+    assert_eq(df, gdf)
 
 
 def test_from_gpu_matrix():
@@ -4297,10 +4319,10 @@ def test_df_astype_to_categorical_ordered(ordered):
         ("category", {}),
         ("category", {"ordered": True}),
         ("category", {"ordered": False}),
-        ("datetime64[s]", {"format": "%Y-%m-%d"}),
-        ("datetime64[ms]", {"format": "%Y-%m-%d"}),
-        ("datetime64[us]", {"format": "%Y-%m-%d"}),
-        ("datetime64[ns]", {"format": "%Y-%m-%d"}),
+        ("datetime64[s]", {}),
+        ("datetime64[ms]", {}),
+        ("datetime64[us]", {}),
+        ("datetime64[ns]", {}),
         ("str", {}),
     ],
 )
@@ -4414,7 +4436,15 @@ def test_rowwise_ops(data, op):
     assert_eq(expected, got, check_less_precise=7)
 
 
-@pytest.mark.parametrize("data", [[5.0, 6.0, 7.0], "single value"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [5.0, 6.0, 7.0],
+        "single value",
+        np.array(1, dtype="int64"),
+        np.array(0.6273643, dtype="float64"),
+    ],
+)
 def test_insert(data):
     pdf = pd.DataFrame.from_dict({"A": [1, 2, 3], "B": ["a", "b", "c"]})
     gdf = DataFrame.from_pandas(pdf)
@@ -5440,3 +5470,154 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     actual[0] = 3
     expected[0] = 3
     assert_eq(gsr, psr)
+
+
+@pytest.mark.parametrize(
+    "data,cols,index",
+    [
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            ["a", "b", "c", "d"],
+        ),
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            [0, 20, 30, 10],
+        ),
+        (
+            np.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "b"],
+            [0, 1, 2, 3],
+        ),
+        (np.array([11, 123, -2342, 232]), ["a"], [1, 2, 11, 12]),
+        (np.array([11, 123, -2342, 232]), ["a"], ["khsdjk", "a", "z", "kk"]),
+        (
+            cupy.ndarray(shape=(4, 2), dtype=float, order="F"),
+            ["a", "z"],
+            ["a", "z", "a", "z"],
+        ),
+        (cupy.array([11, 123, -2342, 232]), ["z"], [0, 1, 1, 0]),
+        (cupy.array([11, 123, -2342, 232]), ["z"], [1, 2, 3, 4]),
+        (cupy.array([11, 123, -2342, 232]), ["z"], ["a", "z", "d", "e"]),
+        (np.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
+        (np.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
+        (cupy.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
+        (cupy.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
+    ],
+)
+def test_dataframe_init_from_arrays_cols(data, cols, index):
+    # verify with columns & index
+    pdf = pd.DataFrame(data, columns=cols, index=index)
+    gdf = DataFrame(data, columns=cols, index=index)
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+    # verify with columns
+    pdf = pd.DataFrame(data, columns=cols)
+    gdf = DataFrame(data, columns=cols)
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+    pdf = pd.DataFrame(data)
+    gdf = DataFrame(data)
+
+    assert_eq(pdf, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "col_data",
+    [
+        range(5),
+        ["a", "b", "x", "y", "z"],
+        [1.0, 0.213, 0.34332],
+        ["a"],
+        [1],
+        [0.2323],
+        [],
+    ],
+)
+@pytest.mark.parametrize(
+    "assign_val",
+    [
+        1,
+        2,
+        np.array(2),
+        cupy.array(2),
+        0.32324,
+        np.array(0.34248),
+        cupy.array(0.34248),
+        "abc",
+        np.array("abc", dtype="object"),
+        np.array("abc", dtype="str"),
+        np.array("abc"),
+        None,
+    ],
+)
+def test_dataframe_assign_scalar(col_data, assign_val):
+    pdf = pd.DataFrame({"a": col_data})
+    gdf = DataFrame({"a": col_data})
+
+    pdf["b"] = (
+        cupy.asnumpy(assign_val)
+        if isinstance(assign_val, cupy.ndarray)
+        else assign_val
+    )
+    gdf["b"] = assign_val
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "col_data",
+    [
+        1,
+        2,
+        np.array(2),
+        cupy.array(2),
+        0.32324,
+        np.array(0.34248),
+        cupy.array(0.34248),
+        "abc",
+        np.array("abc", dtype="object"),
+        np.array("abc", dtype="str"),
+        np.array("abc"),
+        None,
+    ],
+)
+@pytest.mark.parametrize(
+    "assign_val",
+    [
+        1,
+        2,
+        np.array(2),
+        cupy.array(2),
+        0.32324,
+        np.array(0.34248),
+        cupy.array(0.34248),
+        "abc",
+        np.array("abc", dtype="object"),
+        np.array("abc", dtype="str"),
+        np.array("abc"),
+        None,
+    ],
+)
+def test_dataframe_assign_scalar_with_scalar_cols(col_data, assign_val):
+    pdf = pd.DataFrame(
+        {
+            "a": cupy.asnumpy(col_data)
+            if isinstance(col_data, cupy.ndarray)
+            else col_data
+        },
+        index=["dummy_mandatory_index"],
+    )
+    gdf = DataFrame({"a": col_data}, index=["dummy_mandatory_index"])
+
+    pdf["b"] = (
+        cupy.asnumpy(assign_val)
+        if isinstance(assign_val, cupy.ndarray)
+        else assign_val
+    )
+    gdf["b"] = assign_val
+
+    assert_eq(pdf, gdf)

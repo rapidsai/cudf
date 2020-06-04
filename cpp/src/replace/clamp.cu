@@ -294,7 +294,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::list_view>(
                                       scalar const& hi_replace,
                                       rmm::mr::device_memory_resource* mr);
  *
- * @param[in] stream Optional stream on which to issue all memory allocations
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& lo,
