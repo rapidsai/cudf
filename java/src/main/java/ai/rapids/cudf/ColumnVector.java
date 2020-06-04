@@ -1861,6 +1861,21 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Add '0' as padding to the left of each string.
+   *
+   * If the string is already width or more characters, no padding is performed.
+   * No strings are truncated.
+   *
+   * Null string entries result in null entries in the output column.
+   *
+   * @param width The minimum number of characters for each string.
+   * @return New column of strings.
+   */
+  public ColumnVector zfill(int width) {
+    return new ColumnVector(zfill(getNativeView(), width));
+  }
+
+  /**
    * Checks if each string in a column starts with a specified comparison string, resulting in a
    * parallel column of the boolean results.
    * @param pattern scalar containing the string being searched for at the beginning of the column's strings.
@@ -2355,6 +2370,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *         by the stringConcatenate method.
    */
   private static native long stringConcatenation(long[] columnViews, long separator, long narep);
+
+  /**
+   * Native method to add zeros as padding to the left of each string.
+   */
+  private static native long zfill(long nativeHandle, int width);
 
   private static native long binaryOpVS(long lhs, long rhs, int op, int dtype);
 
