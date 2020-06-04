@@ -12,8 +12,8 @@
 - PR #5303 Add slice_strings functionality using delimiter string
 
 ## Improvements
-- PR #5245 Add column reduction benchmark
 
+- PR #5245 Add column reduction benchmark
 - PR #5315 Use CMake `FetchContent` to obtain latest release of `cub` and `thrust`
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
