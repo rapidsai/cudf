@@ -1121,12 +1121,43 @@ def test_from_gpu_matrix():
 
     pd.testing.assert_frame_equal(df, gdf.to_pandas())
 
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=["a", "b"])
+    df = pd.DataFrame(h_ary, index=["a", "b"])
+    assert isinstance(gdf, gd.DataFrame)
 
-@pytest.mark.xfail(reason="matrix dimension is not 2")
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=0)
+    df = pd.DataFrame(h_ary, index=cupy.asnumpy(d_ary[:, 0]))
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=1)
+    df = pd.DataFrame(h_ary, index=cupy.asnumpy(d_ary[:, 1]))
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+
 def test_from_gpu_matrix_wrong_dimensions():
     d_ary = cupy.empty((2, 3, 4), dtype=np.int32)
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary)
-    assert gdf is not None
+    with pytest.raises(
+        ValueError, match="matrix dimension expected 2 but found 3"
+    ):
+        gd.DataFrame.from_gpu_matrix(d_ary)
+
+
+def test_from_gpu_matrix_wrong_index():
+    d_ary = cupy.empty((2, 3), dtype=np.int32)
+
+    with pytest.raises(
+        ValueError, match="index length expected 2 but found 1"
+    ):
+        gd.DataFrame.from_gpu_matrix(d_ary, index=["a"])
+
+    with pytest.raises(KeyError):
+        gd.DataFrame.from_gpu_matrix(d_ary, index="a")
 
 
 @pytest.mark.xfail(reason="constructor does not coerce index inputs")
