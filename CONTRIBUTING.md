@@ -199,20 +199,13 @@ $ ./build.sh                                                              # To b
 ```
 - To build only the C++ component with the script
 ```bash
-$ ./build.sh libnvstrings libcudf                                         # Build only the cuDF C++ components and install them to $INSTALL_PREFIX if set, otherwise $CONDA_PREFIX
+$ ./build.sh libcudf                                                      # Build only the cuDF C++ components and install them to $INSTALL_PREFIX if set, otherwise $CONDA_PREFIX
 ```
 
 - To run tests (Optional):
 ```bash
 $ make test
 ```
-
-- Build the `nvstrings` python packages, in the `python/nvstrings` folder:
-```bash
-$ cd $CUDF_HOME/python/nvstrings
-$ python setup.py install
-```
-
 - Build the `cudf` python package, in the `python/cudf` folder:
 ```bash
 $ cd $CUDF_HOME/python/cudf

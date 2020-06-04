@@ -2,7 +2,6 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set py_version=environ.get('CONDA_PY', 36) %}
 
 package:
@@ -10,11 +9,11 @@ package:
   version: {{ version }}
 
 source:
-  path: ../../..
+  git_url: ../../..
 
 build:
-  number: {{ git_revision_count }}
-  string: py{{ py_version }}_{{ git_revision_count }}
+  number: {{ GIT_DESCRIBE_NUMBER }}
+  string: py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - VERSION_SUFFIX
 
@@ -33,10 +32,10 @@ requirements:
     - pandas >=0.25,<0.26
     - cupy >=6.6.0,<8.0.0a0,!=7.1.0
     - numba >=0.49.0
+    - numpy
     - pyarrow 0.15.0.*
     - fastavro >=0.22.0
     - rmm {{ minor_version }}.*
-    - nvstrings {{ minor_version }}.*
     - dlpack
     - fsspec>=0.6.0
 

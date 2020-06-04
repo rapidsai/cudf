@@ -2,15 +2,12 @@
 
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
-from unittest.mock import patch
 
 import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-import nvstrings
 
 from cudf import concat
 from cudf.core import DataFrame, Series
@@ -53,21 +50,6 @@ def ps_gs(data, index):
     ps = pd.Series(data, index=index, dtype="str", name="nice name")
     gs = Series(data, index=index, dtype="str", name="nice name")
     return (ps, gs)
-
-
-# TODO: Remove this once NVStrings is fully removed / deprecated
-@pytest.mark.parametrize("nbytes", [0, 2 ** 10, 2 ** 31 - 1, 2 ** 31, 2 ** 32])
-@patch.object(nvstrings.nvstrings, "byte_count")
-def test_from_nvstrings_nbytes(mock_byte_count, nbytes):
-    import cudf._lib as libcudf
-
-    mock_byte_count.return_value = nbytes
-    expectation = raise_builder(
-        [nbytes > libcudf.MAX_STRING_COLUMN_BYTES], MemoryError
-    )
-
-    with expectation:
-        Series(nvstrings.to_device([""]))
 
 
 @pytest.mark.parametrize("construct", [list, np.array, pd.Series, pa.array])
@@ -567,10 +549,8 @@ def test_string_split(data, pat, n, expand, expand_raise):
     ],
 )
 @pytest.mark.parametrize("num_keys", [1, 2, 3])
-@pytest.mark.parametrize(
-    "how,how_raise", [("left", 0), ("right", 1), ("inner", 0), ("outer", 0)]
-)
-def test_string_join_key(str_data, str_data_raise, num_keys, how, how_raise):
+@pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
+def test_string_join_key(str_data, str_data_raise, num_keys, how):
     other_data = [1, 2, 3, 4, 5][: len(str_data)]
 
     pdf = pd.DataFrame()
@@ -585,7 +565,7 @@ def test_string_join_key(str_data, str_data_raise, num_keys, how, how_raise):
     gdf2 = gdf.copy()
 
     expectation = raise_builder(
-        [how_raise, str_data_raise], (NotImplementedError, AssertionError)
+        [0 if how == "right" else str_data_raise], (AssertionError)
     )
 
     with expectation:
@@ -646,10 +626,8 @@ def test_string_join_key_nulls(str_data_nulls):
     "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
 )
 @pytest.mark.parametrize("num_cols", [1, 2, 3])
-@pytest.mark.parametrize(
-    "how,how_raise", [("left", 0), ("right", 1), ("inner", 0), ("outer", 0)]
-)
-def test_string_join_non_key(str_data, num_cols, how, how_raise):
+@pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
+def test_string_join_non_key(str_data, num_cols, how):
     other_data = [1, 2, 3, 4, 5][: len(str_data)]
 
     pdf = pd.DataFrame()
@@ -663,17 +641,14 @@ def test_string_join_non_key(str_data, num_cols, how, how_raise):
     pdf2 = pdf.copy()
     gdf2 = gdf.copy()
 
-    expectation = raise_builder([how_raise], NotImplementedError)
+    expect = pdf.merge(pdf2, on=["a"], how=how)
+    got = gdf.merge(gdf2, on=["a"], how=how)
 
-    with expectation:
-        expect = pdf.merge(pdf2, on=["a"], how=how)
-        got = gdf.merge(gdf2, on=["a"], how=how)
+    if len(expect) == 0 and len(got) == 0:
+        expect = expect.reset_index(drop=True)
+        got = got[expect.columns]
 
-        if len(expect) == 0 and len(got) == 0:
-            expect = expect.reset_index(drop=True)
-            got = got[expect.columns]
-
-        assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -878,7 +853,7 @@ def test_string_unique(item):
     gs = Series(item)
     # Pandas `unique` returns a numpy array
     pres = pd.Series(ps.unique())
-    # Nvstrings returns sorted unique with `None` placed before other strings
+    # cudf returns sorted unique with `None` placed before other strings
     pres = pres.sort_values(na_position="first").reset_index(drop=True)
     gres = gs.unique()
     assert_eq(pres, gres)
@@ -2032,3 +2007,39 @@ def test_string_int_to_ipv4_dtype_fail(dtype):
     gsr = Series([1, 2, 3, 4, 5]).astype(dtype)
     with pytest.raises(TypeError):
         gsr._column.int2ip()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "pqr", "tuv"],
+        ["aaaaaaaaaaaa"],
+        ["aaaaaaaaaaaa", "bdfeqwert", "poiuytre"],
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        0,
+        1,
+        2,
+        slice(0, 1, 2),
+        slice(0, 5, 2),
+        slice(-1, -2, 1),
+        slice(-1, -2, -1),
+        slice(-2, -1, -1),
+        slice(-2, -1, 1),
+        slice(0),
+        slice(None),
+    ],
+)
+def test_string_str_subscriptable(data, index):
+    psr = pd.Series(data)
+    gsr = Series(data)
+
+    assert_eq(psr.str[index], gsr.str[index])
+
+    psi = pd.Index(data)
+    gsi = StringIndex(data)
+
+    assert_eq(psi.str[index], gsi.str[index])

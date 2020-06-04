@@ -3,6 +3,7 @@
 import pickle
 import warnings
 from numbers import Number
+from types import SimpleNamespace
 
 import cupy
 import numpy as np
@@ -133,6 +134,13 @@ class ColumnBase(Column, Serializable):
             sr[~mask_bytes] = None
         return sr
 
+    def clip(self, lo, hi):
+        if is_categorical_dtype(self):
+            input_col = self.astype(self.categories.dtype)
+            return libcudf.replace.clip(input_col, lo, hi).astype(self.dtype)
+        else:
+            return libcudf.replace.clip(self, lo, hi)
+
     def equals(self, other):
         if self is other:
             return True
@@ -220,7 +228,10 @@ class ColumnBase(Column, Serializable):
                 ._column
             )
             objs = [
-                o.cat()._set_categories(cats, is_unique=True) for o in objs
+                o.cat()._set_categories(
+                    o.cat().categories, cats, is_unique=True
+                )
+                for o in objs
             ]
             # Map `objs` into a list of the codes until we port Categorical to
             # use the libcudf++ Category data type.
@@ -891,7 +902,6 @@ class ColumnBase(Column, Serializable):
         }
 
         if self.nullable and self.has_nulls:
-            from types import SimpleNamespace
 
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
@@ -1193,12 +1203,30 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         current_dtype = np.dtype(desc["typestr"])
 
         arb_dtype = check_cast_unsupported_dtype(current_dtype)
+
+        if desc.get("mask", None) is not None:
+            # Extract and remove the mask from arbitrary before
+            # passing to cupy.asarray
+            mask = _mask_from_cuda_array_interface_desc(arbitrary)
+            arbitrary = SimpleNamespace(__cuda_array_interface__=desc.copy())
+            arbitrary.__cuda_array_interface__["mask"] = None
+            desc = arbitrary.__cuda_array_interface__
+        else:
+            mask = None
+
+        arbitrary = cupy.asarray(arbitrary)
+
         if arb_dtype != current_dtype:
-            arbitrary = cupy.asarray(arbitrary).astype(arb_dtype)
+            arbitrary = arbitrary.astype(arb_dtype)
             current_dtype = arb_dtype
 
+        if (
+            desc["strides"] is not None
+            and not (arbitrary.itemsize,) == arbitrary.strides
+        ):
+            arbitrary = cupy.ascontiguousarray(arbitrary)
+
         data = _data_from_cuda_array_interface_desc(arbitrary)
-        mask = _mask_from_cuda_array_interface_desc(arbitrary)
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
@@ -1214,37 +1242,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             if nan_as_null or (mask is None and nan_as_null is None):
                 col = utils.time_col_replace_nulls(col)
         return col
-
-    # TODO: Remove nvstrings here when nvstrings is fully removed
-    elif type(arbitrary).__name__ == "nvstrings":
-        byte_count = arbitrary.byte_count()
-        if byte_count > libcudf.MAX_STRING_COLUMN_BYTES:
-            raise MemoryError(
-                "Cannot construct string columns "
-                "containing > {} bytes. "
-                "Consider using dask_cudf to partition "
-                "your data.".format(libcudf.MAX_STRING_COLUMN_BYTES_STR)
-            )
-        sbuf = Buffer.empty(arbitrary.byte_count())
-        obuf = Buffer.empty(
-            (arbitrary.size() + 1) * np.dtype("int32").itemsize
-        )
-
-        nbuf = None
-        if arbitrary.null_count() > 0:
-            nbuf = create_null_mask(
-                arbitrary.size(), state=MaskState.UNINITIALIZED
-            )
-            arbitrary.set_null_bitmask(nbuf.ptr, bdevmem=True)
-        arbitrary.to_offsets(sbuf.ptr, obuf.ptr, None, bdevmem=True)
-        children = (
-            build_column(obuf, dtype="int32"),
-            build_column(sbuf, dtype="int8"),
-        )
-        data = build_column(
-            data=None, dtype="object", mask=nbuf, children=children
-        )
-        data._nvstrings = arbitrary
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):

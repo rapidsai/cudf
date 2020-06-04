@@ -38,6 +38,28 @@ def indices_from_labels(obj, labels):
     return lhs.join(rhs).sort_values("__")["_"]
 
 
+def get_label_range_or_mask(index, start, stop, step):
+    if (
+        not (start is None and stop is None)
+        and type(index) is cudf.core.index.DatetimeIndex
+        and index.is_monotonic is False
+    ):
+        start = pd.to_datetime(start)
+        stop = pd.to_datetime(stop)
+        if start is not None and stop is not None:
+            if start > stop:
+                return slice(0, 0, None)
+            boolean_mask = (index >= start) and (index <= stop)
+        elif start is not None:
+            boolean_mask = index >= start
+        else:
+            boolean_mask = index <= stop
+        return boolean_mask
+    else:
+        start, stop = index.find_label_range(start, stop)
+        return slice(start, stop, step)
+
+
 class _SeriesIlocIndexer(object):
     """
     For integer-location based selection.
@@ -115,11 +137,9 @@ class _SeriesLocIndexer(object):
                 raise IndexError("label scalar is out of bound")
 
         elif isinstance(arg, slice):
-            start_index, stop_index = self._sr.index.find_label_range(
-                arg.start, arg.stop
+            return get_label_range_or_mask(
+                self._sr.index, arg.start, arg.stop, arg.step
             )
-            return slice(start_index, stop_index, arg.step)
-
         elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
                 arg = cudf.MultiIndex.from_pandas(arg)
@@ -176,6 +196,10 @@ class _DataFrameIndexer(object):
             if type(arg[0]) is slice:
                 if not is_scalar(arg[1]):
                     return False
+            elif pd.api.types.is_list_like(arg[0]) and (
+                pd.api.types.is_list_like(arg[1]) or type(arg[1]) is slice
+            ):
+                return False
             else:
                 if pd.api.types.is_bool_dtype(
                     as_column(arg[0]).dtype
@@ -268,12 +292,13 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 return columns_df.index._get_row_major(columns_df, arg[0])
         else:
             if isinstance(arg[0], slice):
-                start_index, stop_index = columns_df.index.find_label_range(
-                    arg[0].start, arg[0].stop
+                out = get_label_range_or_mask(
+                    columns_df.index, arg[0].start, arg[0].stop, arg[0].step
                 )
-
-                pos_slice = slice(start_index, stop_index, arg[0].step)
-                df = columns_df._slice(pos_slice)
+                if isinstance(out, slice):
+                    df = columns_df._slice(out)
+                else:
+                    df = columns_df._apply_boolean_mask(out)
             else:
                 tmp_arg = arg
                 if is_scalar(arg[0]):

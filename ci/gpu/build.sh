@@ -86,18 +86,18 @@ $CXX --version
 conda list
 
 ################################################################################
-# BUILD - Build libnvstrings, nvstrings, libcudf, cuDF and dask_cudf from source
+# BUILD - Build libcudf, cuDF and dask_cudf from source
 ################################################################################
 
 logger "Build libcudf..."
 if [[ ${BUILD_MODE} == "pull-request" ]]; then
-    $WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests
+    $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests
 else
-    $WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -l
+    $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests -l
 fi
 
 ################################################################################
-# TEST - Run GoogleTest and py.tests for libnvstrings, nvstrings, libcudf, and
+# TEST - Run GoogleTest and py.tests for libcudf, and
 # cuDF
 ################################################################################
 
@@ -124,10 +124,6 @@ else
         logger "export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1"
         export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
     fi
-
-    cd $WORKSPACE/python/nvstrings
-    logger "Python py.test for nvstrings..."
-    py.test --cache-clear --junitxml=${WORKSPACE}/junit-nvstrings.xml -v --cov-config=.coveragerc --cov=nvstrings --cov-report=xml:${WORKSPACE}/python/nvstrings/nvstrings-coverage.xml --cov-report term
 
     cd $WORKSPACE/python/cudf
     logger "Python py.test for cuDF..."
