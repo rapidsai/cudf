@@ -4396,7 +4396,11 @@ class DataFrame(Frame, Serializable):
                 raise ValueError(msg.format(data.shape[1], len(columns)))
             names = columns
 
-        if index is not None and len(index) != data.shape[0]:
+        if (
+            index is not None
+            and not isinstance(index, (str, int))
+            and len(index) != data.shape[0]
+        ):
             msg = "index length expected {!r} but found {!r}"
             raise ValueError(msg.format(data.shape[0], len(index)))
 
@@ -4406,11 +4410,12 @@ class DataFrame(Frame, Serializable):
             df[k] = Series(data[:, i], nan_as_null=nan_as_null)
 
         if index is not None:
-            if isinstance(index, cudf.Index):
-                indices = index
+            if isinstance(index, (str, int)):
+                indices = df[index]
+                indices.name = None
             else:
-                indices = data[index]
-            return df.set_index(indices.astype(np.int64))
+                indices = as_index(index)
+            return df.set_index(indices)
 
         return df
 
