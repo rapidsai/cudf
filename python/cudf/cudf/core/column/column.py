@@ -1419,7 +1419,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
-            data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype,)
+            data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
         elif arbitrary.dtype.kind in ("f"):
             arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
             data = as_column(
@@ -1481,7 +1481,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
         if dtype is not None:
             arbitrary = arbitrary.astype(dtype)
-        elif shape and shape[0] and hasattr(arbitrary[0], "__cuda_array_interface__"):
+        elif (
+            shape
+            and shape[0]
+            and hasattr(arbitrary[0], "__cuda_array_interface__")
+        ):
             arbitrary = arbitrary.astype(arbitrary[0].dtype)
 
         if arb_dtype.kind == "M":
@@ -1522,7 +1526,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 nan_as_null=nan_as_null,
             )
         else:
-            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null,)
+            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pd.core.arrays.numpy_.PandasArray):
         if is_categorical_dtype(arbitrary.dtype):
