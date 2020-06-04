@@ -23,6 +23,9 @@ def test_cdt_eq(data, ordered):
     assert dt == dt
     assert dt == cudf.CategoricalDtype(categories=None, ordered=ordered)
     assert dt == cudf.CategoricalDtype(categories=data, ordered=ordered)
+    assert not dt == cudf.CategoricalDtype(
+        categories=data, ordered=not ordered
+    )
 
 
 @pytest.mark.parametrize(
