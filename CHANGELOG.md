@@ -39,8 +39,6 @@
 - PR #5334 Fix pickling sizeof test
 - PR #5337 Fix broken alias from DataFrame.{at,iat} to {loc, iloc}
 - PR #5347 Fix APPLY_BOOLEAN_MASK_BENCH segfault 
-- PR #5382 Fix CategoricalDtype equality comparisons
-- PR #5347 Fix APPLY_BOOLEAN_MASK_BENCH segfault
 - PR #5368 Fix loc indexing issue with `datetime` type index 
 - PR #5367 Fix API for `cudf::repeat` in `cudf::cross_join`
 - PR #5382 Fix CategoricalDtype equality comparisons
