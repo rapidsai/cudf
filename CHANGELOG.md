@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #5292 Add unsigned int type columns to libcudf
 - PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
 - PR #5327 Add `cudf::cross_join` feature
@@ -26,6 +27,7 @@
 - PR #5354 Split Dask deserialization methods by dask/cuda
 - PR #5363 Handle `0-dim` inputs while broadcasting to a column
 - PR #5374 Port nvtext character_tokenize API to libcudf
+- PR #5379 Avoid chaining `Buffer`s
 
 ## Bug Fixes
 
