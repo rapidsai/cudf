@@ -702,3 +702,5 @@ def test_categorical_equal_compare():
     # Categories are the same and same dtype, but ordered is different
     d1 = CategoricalDtype(categories=[1, 2, 3], ordered=True)
     d2 = CategoricalDtype(categories=[1, 2, 3], ordered=False)
+
+    assert not d1 == d2
