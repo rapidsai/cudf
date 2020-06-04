@@ -2771,7 +2771,7 @@ class DataFrame(Frame, Serializable):
         ----------
         mapper : dict-like or function, default None
             optional dict-like or functions transformations to apply to
-            the index/column values depending on selected `axis`.
+            the index/column values depending on selected ``axis``.
         index : dict-like, default None
             Optional dict-like transformations to apply to the index axis'
             values. Does not support functions for axis 0 yet.
