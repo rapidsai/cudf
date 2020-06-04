@@ -4385,15 +4385,17 @@ class DataFrame(Frame, Serializable):
 
         if data.ndim != 2:
             raise ValueError(
-                "matrix dimension expected 2 but found {!r}".format(data.ndim)
+                f"matrix dimension expected 2 but found {data.ndim}"
             )
 
         if columns is None:
             names = [i for i in range(data.shape[1])]
         else:
             if len(columns) != data.shape[1]:
-                msg = "columns length expected {!r} but found {!r}"
-                raise ValueError(msg.format(data.shape[1], len(columns)))
+                raise ValueError(
+                    f"columns length expected {data.shape[1]} but \
+                        found {len(columns)}"
+                )
             names = columns
 
         if (
@@ -4401,8 +4403,9 @@ class DataFrame(Frame, Serializable):
             and not isinstance(index, (str, int))
             and len(index) != data.shape[0]
         ):
-            msg = "index length expected {!r} but found {!r}"
-            raise ValueError(msg.format(data.shape[0], len(index)))
+            raise ValueError(
+                f"index length expected {data.shape[0]} but found {len(index)}"
+            )
 
         df = DataFrame()
         data = cupy.asfortranarray(cupy.asarray(data))
