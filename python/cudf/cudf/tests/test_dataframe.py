@@ -5473,6 +5473,31 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
 
 
 @pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 100, 112, 35464],
+        range(100),
+        [],
+        (-10, 21, 32, 32, 1, 2, 3),
+        (),
+        [[1, 2, 3], [1, 2, 3]],
+        [range(100), range(100)],
+        ((1, 2, 3), (1, 2, 3)),
+        [[1, 2, 3]],
+        [range(100)],
+        ((1, 2, 3),),
+    ],
+)
+def test_dataframe_init_1d_list(data):
+    expect = pd.DataFrame(data)
+    actual = DataFrame(data)
+
+    assert_eq(
+        expect, actual, check_index_type=False if len(data) == 0 else True
+    )
+
+
+@pytest.mark.parametrize(
     "data,cols,index",
     [
         (
