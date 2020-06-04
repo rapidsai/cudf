@@ -532,7 +532,7 @@ size_type count_descendants(column_view parent);
 /**
  * @brief Zero-copy cast between binary compatible types
  *
- * Can be used to cast timestamp columns to their underlying integer representation
+ * Can be used to cast timestamp columns to their underlying integer representation.
  *
  * @throws cudf::logic_error if the specified type is not compatible
  *
