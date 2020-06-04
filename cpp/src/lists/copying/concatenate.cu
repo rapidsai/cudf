@@ -51,13 +51,13 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
   auto merged_offsets = cudf::make_fixed_width_column(
     data_type{INT32}, total_list_count + 1, mask_state::UNALLOCATED, stream, mr);
   mutable_column_device_view d_merged_offsets(*merged_offsets, 0, 0);
-  
+
   // merge offsets
   // TODO : this could probably be done as a single gpu operation if done as a kernel.
   size_type shift = 0;
   size_type count = 0;
   std::for_each(columns.begin(), columns.end(), [&](lists_column_view const& c) {
-    if(c.size() > 0){
+    if (c.size() > 0) {
       column_device_view offsets(c.offsets(), 0, 0);
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         offsets.begin<size_type>(),
@@ -94,13 +94,16 @@ std::unique_ptr<column> concatenate(
   std::vector<column_view> children;
   children.reserve(columns.size());
   size_type total_list_count = 0;
-  std::transform(lists_columns.begin(), lists_columns.end(), std::back_inserter(children), [&total_list_count, &children](lists_column_view const& l){
-    // count total # of lists
-    total_list_count += l.size();    
-    // child column. could be a leaf type (string, float, int, etc) or more nested
-    // lists
-    return l.child();
-  }); 
+  std::transform(lists_columns.begin(),
+                 lists_columns.end(),
+                 std::back_inserter(children),
+                 [&total_list_count, &children](lists_column_view const& l) {
+                   // count total # of lists
+                   total_list_count += l.size();
+                   // child column. could be a leaf type (string, float, int, etc) or more nested
+                   // lists
+                   return l.child();
+                 });
   auto data = cudf::detail::concatenate(children, mr, stream);
 
   // merge offsets

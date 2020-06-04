@@ -482,11 +482,10 @@ class strings_column_wrapper : public detail::column_wrapper {
   }
 };
 
-
 /**
  * @brief `column_wrapper` derived class for wrapping columns of lists.
  */
-template<typename T>
+template <typename T>
 class lists_column_wrapper : public detail::column_wrapper {
  public:
   /**
@@ -548,7 +547,9 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @param elements The list of elements
    * @param v The validity iterator
    */
-  template <typename Element = T, typename ValidityIterator, std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
+  template <typename Element = T,
+            typename ValidityIterator,
+            std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
   lists_column_wrapper(std::initializer_list<T> elements, ValidityIterator v) : column_wrapper{}
   {
     build_from_non_nested(
@@ -579,9 +580,8 @@ class lists_column_wrapper : public detail::column_wrapper {
   lists_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    build_from_non_nested(std::move(
-      cudf::test::fixed_width_column_wrapper<T>(begin, end, v)
-        .release()));
+    build_from_non_nested(
+      std::move(cudf::test::fixed_width_column_wrapper<T>(begin, end, v).release()));
   }
 
   /**
@@ -597,7 +597,8 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    */
-  template <typename Element = T, std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
+  template <typename Element                                                   = T,
+            std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
   lists_column_wrapper(std::initializer_list<std::string> elements) : column_wrapper{}
   {
     build_from_non_nested(
@@ -622,7 +623,8 @@ class lists_column_wrapper : public detail::column_wrapper {
   template <typename Element = T,
             typename ValidityIterator,
             std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
-  lists_column_wrapper(std::initializer_list<std::string> elements, ValidityIterator v) : column_wrapper{}
+  lists_column_wrapper(std::initializer_list<std::string> elements, ValidityIterator v)
+    : column_wrapper{}
   {
     build_from_non_nested(
       std::move(cudf::test::strings_column_wrapper(elements.begin(), elements.end(), v).release()));
@@ -654,7 +656,6 @@ class lists_column_wrapper : public detail::column_wrapper {
     std::vector<bool> valids;
     build_from_nested(elements, valids);
   }
-      
 
   /**
    * @brief Construct am empty lists column
@@ -670,8 +671,8 @@ class lists_column_wrapper : public detail::column_wrapper {
   lists_column_wrapper() : column_wrapper{}
   {
     build_from_non_nested(make_empty_column(cudf::data_type{cudf::type_to_id<T>()}));
-  } 
-  
+  }
+
   /**
    * @brief Construct a lists column of nested lists from an initializer list of values
    * and a validity iterator.
@@ -714,8 +715,8 @@ class lists_column_wrapper : public detail::column_wrapper {
   /**
    * @brief Initialize as a nested list column composed of other list columns.
    *
-   * This function handles a special case.  For convenience of declaration, we want to treat these two
-   * cases as equivalent
+   * This function handles a special case.  For convenience of declaration, we want to treat these
+   * two cases as equivalent
    *
    * List<int>      = { 0, 1 }
    * List<int>      = { {0, 1} }
@@ -727,7 +728,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    */
   void build_from_nested(std::initializer_list<lists_column_wrapper<T>> elements,
-                                              std::vector<bool> const& v)
+                         std::vector<bool> const& v)
   {
     auto valids = cudf::test::make_counting_transform_iterator(
       0, [&v](auto i) { return v.empty() ? true : v[i]; });
@@ -738,38 +739,38 @@ class lists_column_wrapper : public detail::column_wrapper {
     std::vector<column_view> cols;
     type_id child_id = EMPTY;
     std::transform(elements.begin(),
-                  elements.end(),
-                  std::back_inserter(cols),
-                  [&child_id](lists_column_wrapper const& l) {                    
-                    // potentially unwrap
-                    cudf::column_view col =
-                      l.root ? lists_column_view(*l.wrapped).child() : *l.wrapped;
+                   elements.end(),
+                   std::back_inserter(cols),
+                   [&child_id](lists_column_wrapper const& l) {
+                     // potentially unwrap
+                     cudf::column_view col =
+                       l.root ? lists_column_view(*l.wrapped).child() : *l.wrapped;
 
-                    // verify all children are of the same type (C++ allows you to use initializer
-                    // lists that could construct an invalid list column type)
-                    if (child_id == EMPTY) {
-                      child_id = col.type().id();
-                    } else {
-                      CUDF_EXPECTS(child_id == col.type().id(), "Mismatched list types");
-                    }
+                     // verify all children are of the same type (C++ allows you to use initializer
+                     // lists that could construct an invalid list column type)
+                     if (child_id == EMPTY) {
+                       child_id = col.type().id();
+                     } else {
+                       CUDF_EXPECTS(child_id == col.type().id(), "Mismatched list types");
+                     }
 
-                    return col;
-                  });
+                     return col;
+                   });
 
     // generate offsets column and do some type checking to make sure the user hasn't passed an
     // invalid initializer list
     size_type count = 0;
     std::vector<size_type> offsetv;
     std::transform(cols.begin(),
-                  cols.end(),
-                  valids,
-                  std::back_inserter(offsetv),
-                  [&](cudf::column_view const& col, bool valid) {
-                    // nulls are represented as a repeated offset
-                    size_type ret = count;
-                    if (valid) { count += col.size(); }
-                    return ret;
-                  });
+                   cols.end(),
+                   valids,
+                   std::back_inserter(offsetv),
+                   [&](cudf::column_view const& col, bool valid) {
+                     // nulls are represented as a repeated offset
+                     size_type ret = count;
+                     if (valid) { count += col.size(); }
+                     return ret;
+                   });
     // add the final offset
     offsetv.push_back(count);
     auto offsets =
@@ -801,23 +802,21 @@ class lists_column_wrapper : public detail::column_wrapper {
   void build_from_non_nested(std::unique_ptr<column> c)
   {
     CUDF_EXPECTS(!cudf::is_nested(c->type()), "Unexpected nested type");
-        
+
     std::vector<size_type> offsetv;
     offsetv.push_back(0);
-    if(c->size() > 0){   
-      offsetv.push_back(c->size());      
-    }    
+    if (c->size() > 0) { offsetv.push_back(c->size()); }
     auto offsets =
       cudf::test::fixed_width_column_wrapper<size_type>(offsetv.begin(), offsetv.end()).release();
 
     // construct the list column. mark this as a root
     root    = true;
-    wrapped = make_lists_column(offsetv.size()-1, std::move(offsets), std::move(c), 0, rmm::device_buffer{0});            
+    wrapped = make_lists_column(
+      offsetv.size() - 1, std::move(offsets), std::move(c), 0, rmm::device_buffer{0});
   }
-  
+
   bool root = false;
 };
-
 
 }  // namespace test
 }  // namespace cudf

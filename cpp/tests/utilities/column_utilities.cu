@@ -379,7 +379,8 @@ std::string get_nested_type_str(cudf::column_view const& view)
 {
   if (view.type().id() == cudf::LIST) {
     lists_column_view lcv(view);
-    return cudf::jit::get_type_name(view.type()) + "<" + (lcv.size() > 0 ? get_nested_type_str(lcv.child()) : "") + ">";
+    return cudf::jit::get_type_name(view.type()) + "<" +
+           (lcv.size() > 0 ? get_nested_type_str(lcv.child()) : "") + ">";
   }
   return cudf::jit::get_type_name(view.type());
 }
@@ -421,9 +422,7 @@ struct column_view_printer {
     //  call string version
     //
     auto col_as_strings = cudf::strings::from_timestamps(col);
-    if(col_as_strings->size() == 0){
-      return;
-    }
+    if (col_as_strings->size() == 0) { return; }
 
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent);
   }
@@ -480,14 +479,15 @@ struct column_view_printer {
                   std::string const& indent)
   {
     lists_column_view lcv(col);
-    
+
     std::string tmp =
       get_nested_type_str(col) + ":\n" + indent + "Length : " + std::to_string(lcv.size()) + "\n" +
       indent + "Offsets : " + (lcv.size() > 0 ? to_string(lcv.offsets(), ", ") : "") + "\n" +
       (lcv.has_nulls() ? indent + "Null count: " + std::to_string(lcv.null_count()) + "\n" +
                            detail::to_string(bitmask_to_host(col), col.size(), indent) + "\n"
-                       : "") +      
-      indent + "Children :\n" + (lcv.size() > 0 ? detail::to_string(lcv.child(), ", ", indent + "   ") : "") + "\n";
+                       : "") +
+      indent + "Children :\n" +
+      (lcv.size() > 0 ? detail::to_string(lcv.child(), ", ", indent + "   ") : "") + "\n";
 
     out.push_back(tmp);
   }
