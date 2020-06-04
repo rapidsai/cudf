@@ -4410,15 +4410,16 @@ class DataFrame(Frame, Serializable):
         df = DataFrame()
         data = cupy.asfortranarray(cupy.asarray(data))
         for i, k in enumerate(names):
-            df[k] = Series(data[:, i], nan_as_null=nan_as_null)
+            df._data[k] = as_column(data[:, i], nan_as_null=nan_as_null)
 
         if index is not None:
             if isinstance(index, (str, int)):
-                indices = df[index]
-                indices.name = None
+                index = as_index(df[index], name=None)
             else:
-                indices = as_index(index)
-            return df.set_index(indices)
+                index = as_index(index)
+        else:
+            index = RangeIndex(start=0, stop=len(data))
+        df._index = index
 
         return df
 
