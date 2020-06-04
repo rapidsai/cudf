@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #5292 Add unsigned int type columns to libcudf
 - PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
 - PR #5327 Add `cudf::cross_join` feature
