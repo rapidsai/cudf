@@ -4078,13 +4078,12 @@ def test_isin_dataframe(data, values):
             expected = pdf.isin(values)
             if isinstance(values, (pd.DataFrame, pd.Series)):
                 values = gd.from_pandas(values)
-            got = gdf.isin(values)
         except ValueError as e:
             if str(e) == "Lengths must match.":
                 pytest.xfail(
                     reason="xref https://github.com/pandas-dev/pandas/issues/34256"
                 )
-
+        got = gdf.isin(values)
         assert_eq(got, expected)
 
 
