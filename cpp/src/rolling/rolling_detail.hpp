@@ -31,6 +31,7 @@ template <typename ColumnType, class AggOp, aggregation::Kind op>
 static constexpr bool is_rolling_supported()
 {
   if (!cudf::detail::is_valid_aggregation<ColumnType, op>()) { return false; }
+  else
 
   if (cudf::is_numeric<ColumnType>()) {
     constexpr bool is_comparable_countable_op = std::is_same<AggOp, DeviceMin>::value or
@@ -60,7 +61,7 @@ static constexpr bool is_rolling_supported()
   } else if (std::is_same<ColumnType, cudf::list_view>()) {
     return (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
            (op == aggregation::ROW_NUMBER);
-  }
+  } else
 
   return false;
 }
