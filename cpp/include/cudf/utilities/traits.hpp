@@ -69,12 +69,14 @@ using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>
                                               std::is_same<cudf::timestamp_ms, T>,
                                               std::is_same<cudf::timestamp_us, T>,
                                               std::is_same<cudf::timestamp_ns, T>>;
+
 template <typename T>
 using is_duration_t = simt::std::disjunction<std::is_same<cudf::duration_D, T>,
                                              std::is_same<cudf::duration_s, T>,
                                              std::is_same<cudf::duration_ms, T>,
                                              std::is_same<cudf::duration_us, T>,
                                              std::is_same<cudf::duration_ns, T>>;
+
 /**
  * @brief Indicates whether objects of types `L` and `R` can be relationally
  *compared.
@@ -240,7 +242,7 @@ struct is_duration_impl {
 /**
  * @brief Indicates whether `type` is a duration `data_type`.
  *
- * "duration" types are int32_t or int64_t durations.
+ * "Duration" types are int32_t or int64_t tick counts representing a time interval.
  *
  * @param type The `data_type` to verify
  * @return true `type` is a duration
@@ -249,6 +251,19 @@ struct is_duration_impl {
 constexpr inline bool is_duration(data_type type)
 {
   return cudf::type_dispatcher(type, is_duration_impl{});
+}
+
+/**
+ * @brief Indicates whether the type `T` is a cudf chrono type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a chrono type
+ * @return false  `T` is not a chrono type
+ **/
+template <typename T>
+constexpr inline bool is_chrono()
+{
+  return cudf::is_timestamp<T>() || cudf::is_duration<T>();
 }
 
 /**
@@ -265,7 +280,7 @@ constexpr inline bool is_fixed_width()
 {
   // TODO Add fixed width wrapper types
   // Is a category fixed width?
-  return cudf::is_numeric<T>() || cudf::is_timestamp<T>() || cudf::is_duration<T>();
+  return cudf::is_numeric<T>() || cudf::is_chrono<T>();
 }
 
 struct is_fixed_width_impl {

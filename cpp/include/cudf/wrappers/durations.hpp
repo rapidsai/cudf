@@ -52,7 +52,6 @@ struct duration : Duration {
  * @addtogroup duration_classes Duration
  * @{
  */
-
 /**
  * @brief Type alias representing an int32_t duration of days.
  **/

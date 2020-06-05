@@ -199,6 +199,7 @@ MAP_TIMESTAMP_SCALAR(timestamp_ns)
     using ScalarDeviceType = cudf::duration_scalar_device_view<Type>; \
   };
 #endif
+
 MAP_DURATION_SCALAR(duration_D)
 MAP_DURATION_SCALAR(duration_s)
 MAP_DURATION_SCALAR(duration_ms)
