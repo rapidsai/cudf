@@ -3501,8 +3501,7 @@ def test_series_astype_null_cases():
         "2001-03-01 00:00:00.000000",
     ]
     assert_eq(
-        gd.from_pandas(pd.Series(data)),
-        gd.from_pandas(pd.Series(data, dtype="datetime64[ns]")).astype("str"),
+        Series(data), Series(data, dtype="datetime64[us]").astype("str"),
     )
 
     assert_eq(
@@ -5583,7 +5582,7 @@ def test_dataframe_init_1d_list(data):
 def test_dataframe_init_from_arrays_cols(data, cols, index):
     # verify with columns & index
     pdf = pd.DataFrame(data, columns=cols, index=index)
-    gdf = DataFrame(data, columns=cols, index=index)
+    gdf = DataFrame(da_seta, columns=cols, index=index)
 
     assert_eq(pdf, gdf, check_dtype=False)
 
