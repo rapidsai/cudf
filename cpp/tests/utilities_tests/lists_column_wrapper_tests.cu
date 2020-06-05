@@ -457,7 +457,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   using T = TypeParam;
 
   // to disambiguiate between {} == 0 and {} == List{0}
-  using L = test::lists_column_wrapper<T>;
+  using LCW = test::lists_column_wrapper<T>;
 
   // List<T>, empty
   //
@@ -481,7 +481,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   // Children :
   {
     // equivalent to  {}
-    test::lists_column_wrapper<T> list{L{}};
+    test::lists_column_wrapper<T> list{LCW{}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
@@ -500,7 +500,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   // Children :
   {
     // equivalent to  {}
-    test::lists_column_wrapper<T> list{L{}, L{}};
+    test::lists_column_wrapper<T> list{LCW{}, LCW{}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);
@@ -521,7 +521,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   {
     // equivalent to  {{1, 2}, {}, {3, 4}}
 
-    test::lists_column_wrapper<T> list{{1, 2}, L{}, {3, 4}};
+    test::lists_column_wrapper<T> list{{1, 2}, LCW{}, {3, 4}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
@@ -550,7 +550,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   //     1, 2, 3, 4, 5, 6, 7, 8
   {
     // equivalent to  { {{}}, {{1, 2}, {}, {3, 4}}, {{}, {5, 6, 7, 8}, {}} }
-    test::lists_column_wrapper<T> list{{L{}}, {{1, 2}, L{}, {3, 4}}, {L{}, {5, 6, 7, 8}, L{}}};
+    test::lists_column_wrapper<T> list{
+      {LCW{}}, {{1, 2}, LCW{}, {3, 4}}, {LCW{}, {5, 6, 7, 8}, LCW{}}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
@@ -582,7 +583,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   using T = TypeParam;
 
   // to disambiguiate between {} == 0 and {} == List{0}
-  using L = test::lists_column_wrapper<T>;
+  using LCW = test::lists_column_wrapper<T>;
 
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
@@ -597,7 +598,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   // Children :
   {
     // equivalent to  {{}, NULL}
-    test::lists_column_wrapper<T> list{{L{}, L{}}, valids};
+    test::lists_column_wrapper<T> list{{LCW{}, LCW{}}, valids};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);
@@ -619,7 +620,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   // Children :
   {
     // equivalent to  {{}, NULL, {}}
-    test::lists_column_wrapper<T> list{{L{}, {1, 2, 3}, L{}}, valids};
+    test::lists_column_wrapper<T> list{{LCW{}, {1, 2, 3}, LCW{}}, valids};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
@@ -642,7 +643,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   //   1, 2, 3
   {
     // equivalent to  {{}, NULL, {1, 2, 3}}
-    test::lists_column_wrapper<T> list{{L{}, L{}, {1, 2, 3}}, valids};
+    test::lists_column_wrapper<T> list{{LCW{}, LCW{}, {1, 2, 3}}, valids};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
@@ -669,8 +670,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   //     5, 6, 7, 8
   {
     // equivalent to  { {{}}, NULL, {{}, {5, 6, 7, 8}, {}} }
-    test::lists_column_wrapper<T> list{{{L{}}, {{1, 2}, L{}, {3, 4}}, {L{}, {5, 6, 7, 8}, L{}}},
-                                       valids};
+    test::lists_column_wrapper<T> list{
+      {{LCW{}}, {{1, 2}, LCW{}, {3, 4}}, {LCW{}, {5, 6, 7, 8}, LCW{}}}, valids};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);

@@ -325,7 +325,7 @@ TEST_F(ListsColumnTest, ConcatenateLists)
 TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 {
   // to disambiguiate between {} == 0 and {} == List{0}
-  using L = cudf::test::lists_column_wrapper<int>;
+  using LCW = cudf::test::lists_column_wrapper<int>;
 
   {
     cudf::test::lists_column_wrapper<int> a{};
@@ -348,7 +348,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
   }
 
   {
-    cudf::test::lists_column_wrapper<int> a{L{}};
+    cudf::test::lists_column_wrapper<int> a{LCW{}};
     cudf::test::lists_column_wrapper<int> b{4, 5, 6, 7};
     cudf::test::lists_column_wrapper<int> expected{{}, {4, 5, 6, 7}};
 
@@ -358,7 +358,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
   }
 
   {
-    cudf::test::lists_column_wrapper<int> a{L{}}, b{L{}}, c{L{}};
+    cudf::test::lists_column_wrapper<int> a{LCW{}}, b{LCW{}}, c{LCW{}};
     cudf::test::lists_column_wrapper<int> d{4, 5, 6, 7};
     cudf::test::lists_column_wrapper<int> expected{{}, {}, {}, {4, 5, 6, 7}};
 
@@ -369,7 +369,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 
   {
     cudf::test::lists_column_wrapper<int> a{1, 2};
-    cudf::test::lists_column_wrapper<int> b{L{}}, c{L{}};
+    cudf::test::lists_column_wrapper<int> b{LCW{}}, c{LCW{}};
     cudf::test::lists_column_wrapper<int> d{4, 5, 6, 7};
     cudf::test::lists_column_wrapper<int> expected{{1, 2}, {}, {}, {4, 5, 6, 7}};
 
@@ -436,15 +436,15 @@ TEST_F(ListsColumnTest, ConcatenateNestedLists)
 
 TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
 {
-  // to disambiguiate between {} == 0 and {} == List{0}
   using T = int;
-  using L = cudf::test::lists_column_wrapper<T>;
+  // to disambiguiate between {} == 0 and {} == List{0}
+  using LCW = cudf::test::lists_column_wrapper<T>;
 
   {
-    cudf::test::lists_column_wrapper<T> a{{{L{}}}, {{0, 1}, {2, 3}}};
-    cudf::test::lists_column_wrapper<int> b{{{6, 7}}, {L{}, {11, 12}}};
+    cudf::test::lists_column_wrapper<T> a{{{LCW{}}}, {{0, 1}, {2, 3}}};
+    cudf::test::lists_column_wrapper<int> b{{{6, 7}}, {LCW{}, {11, 12}}};
     cudf::test::lists_column_wrapper<int> expected{
-      {{L{}}}, {{0, 1}, {2, 3}}, {{6, 7}}, {L{}, {11, 12}}};
+      {{LCW{}}}, {{0, 1}, {2, 3}}, {{6, 7}}, {LCW{}, {11, 12}}};
 
     auto result = cudf::concatenate({a, b});
 
@@ -453,24 +453,24 @@ TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
 
   {
     cudf::test::lists_column_wrapper<int> a{
-      {{{0, 1, 2}, L{}}, {{5}, {6, 7}}, {{8, 9}}},
-      {{{L{}}}, {{17, 18}, {19, 20}}},
-      {{{L{}}}},
+      {{{0, 1, 2}, LCW{}}, {{5}, {6, 7}}, {{8, 9}}},
+      {{{LCW{}}}, {{17, 18}, {19, 20}}},
+      {{{LCW{}}}},
       {{{50}, {51, 52}}, {{53, 54}, {55, 16, 17}}, {{59, 60}}}};
 
     cudf::test::lists_column_wrapper<int> b{
-      {{{21, 22}, {23, 24}}, {L{}, {26, 27}}, {{28, 29, 30}}},
+      {{{21, 22}, {23, 24}}, {LCW{}, {26, 27}}, {{28, 29, 30}}},
       {{{31, 32}, {33, 34}}, {{35, 36}, {37, 38}, {1, 2}}, {{39, 40}}},
-      {{{L{}}}}};
+      {{{LCW{}}}}};
 
     cudf::test::lists_column_wrapper<int> expected{
-      {{{0, 1, 2}, L{}}, {{5}, {6, 7}}, {{8, 9}}},
-      {{{L{}}}, {{17, 18}, {19, 20}}},
-      {{{L{}}}},
+      {{{0, 1, 2}, LCW{}}, {{5}, {6, 7}}, {{8, 9}}},
+      {{{LCW{}}}, {{17, 18}, {19, 20}}},
+      {{{LCW{}}}},
       {{{50}, {51, 52}}, {{53, 54}, {55, 16, 17}}, {{59, 60}}},
-      {{{21, 22}, {23, 24}}, {L{}, {26, 27}}, {{28, 29, 30}}},
+      {{{21, 22}, {23, 24}}, {LCW{}, {26, 27}}, {{28, 29, 30}}},
       {{{31, 32}, {33, 34}}, {{35, 36}, {37, 38}, {1, 2}}, {{39, 40}}},
-      {{{L{}}}}};
+      {{{LCW{}}}}};
 
     auto result = cudf::concatenate({a, b});
 
