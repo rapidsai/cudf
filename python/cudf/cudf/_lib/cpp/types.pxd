@@ -47,22 +47,27 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         UNEQUAL "cudf::null_equality::UNEQUAL"
 
     cdef enum type_id:
-        EMPTY = 0
-        INT8 = 1
-        INT16 = 2
-        INT32 = 3
-        INT64 = 4
-        FLOAT32 = 5
-        FLOAT64 = 6
-        BOOL8 = 7
-        TIMESTAMP_DAYS = 8
-        TIMESTAMP_SECONDS = 9
-        TIMESTAMP_MILLISECONDS = 10
-        TIMESTAMP_MICROSECONDS = 11
-        TIMESTAMP_NANOSECONDS = 12
-        DICTIONARY32 = 13
-        STRING = 14
-        NUM_TYPE_IDS = 15
+        EMPTY "cudf::type_id::EMPTY"
+        INT8  "cudf::type_id::INT8"
+        INT16 "cudf::type_id::INT16"
+        INT32 "cudf::type_id::INT32"
+        INT64 "cudf::type_id::INT64"
+        UINT8 "cudf::type_id::UINT8"
+        UINT16 "cudf::type_id::UINT16"
+        UINT32 "cudf::type_id::UINT32"
+        UINT64 "cudf::type_id::UINT64"
+        FLOAT32 "cudf::type_id::FLOAT32"
+        FLOAT64 "cudf::type_id::FLOAT64"
+        BOOL8 "cudf::type_id::BOOL8"
+        TIMESTAMP_DAYS "cudf::type_id::TIMESTAMP_DAYS"
+        TIMESTAMP_SECONDS "cudf::type_id::TIMESTAMP_SECONDS"
+        TIMESTAMP_MILLISECONDS "cudf::type_id::TIMESTAMP_MILLISECONDS"
+        TIMESTAMP_MICROSECONDS "cudf::type_id::TIMESTAMP_MICROSECONDS"
+        TIMESTAMP_NANOSECONDS "cudf::type_id::TIMESTAMP_NANOSECONDS"
+        DICTIONARY32 "cudf::type_id::DICTIONARY32"
+        STRING "cudf::type_id::STRING"
+        LIST "cudf::type_id::LIST"
+        NUM_TYPE_IDS "cudf::type_id::NUM_TYPE_IDS"
 
     cdef cppclass data_type:
         data_type() except +

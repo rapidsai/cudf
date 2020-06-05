@@ -30,7 +30,8 @@ class PartitionTest : public cudf::test::BaseFixture {
   using map_type   = cudf::test::GetType<T, 1>;
 };
 
-using types = cudf::test::CrossProduct<cudf::test::FixedWidthTypes, cudf::test::IntegralTypes>;
+using types =
+  cudf::test::CrossProduct<cudf::test::FixedWidthTypes, cudf::test::IntegralTypesNotBool>;
 
 // using types = cudf::test::Types<cudf::test::Types<int32_t, int32_t> >;
 

@@ -2,15 +2,20 @@
 
 ## New Features
 
+- PR #5292 Add unsigned int type columns to libcudf
 - PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
 - PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
+- PR #5303 Add slice_strings functionality using delimiter string
+- PR #5301 Add Java bindings for `zfill`
 
 ## Improvements
+
 - PR #5245 Add column reduction benchmark
+- PR #5315 Use CMake `FetchContent` to obtain latest release of `cub` and `thrust`
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
@@ -19,10 +24,18 @@
 - PR #5309 Handle host frames in serialization
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
+- PR #5386 Remove `cub` from `include_dirs` in `setup.py`
+- PR #5373 Remove legacy nvstrings/nvcategory/nvtext
+- PR #5362 Remove dependency on `rmm._DevicePointer`
+- PR #5302 Add missing comparison operators to `fixed_point` type
 - PR #5354 Split Dask deserialization methods by dask/cuda
+- PR #5363 Handle `0-dim` inputs while broadcasting to a column
+- PR #5389 Expose typed accessors for Java HostMemoryBuffer
+- PR #5379 Avoid chaining `Buffer`s
 
 ## Bug Fixes
 
+- PR #5336 Initialize conversion tables on a per-context basis
 - PR #5283 Fix strings::ipv4_to_integers overflow to negative
 - PR #5269 Explicitly require NumPy
 - PR #5271 Fix issue when different dtype values are passed to `.cat.add_categories`
@@ -31,8 +44,16 @@
 - PR #5300 Add support to ignore `None` in `cudf.concat` input
 - PR #5334 Fix pickling sizeof test
 - PR #5337 Fix broken alias from DataFrame.{at,iat} to {loc, iloc}
-- PR #5347 Fix APPLY_BOOLEAN_MASK_BENCH segfault 
+- PR #5347 Fix APPLY_BOOLEAN_MASK_BENCH segfault
+- PR #5368 Fix loc indexing issue with `datetime` type index 
 - PR #5367 Fix API for `cudf::repeat` in `cudf::cross_join`
+- PR #5377 Handle array of cupy scalars in to_column
+- PR #5326 Fix `DataFrame.__init__` for list of scalar inputs and related dask issue
+- PR #5383 Fix cython `type_id` enum mismatch
+- PR #5382 Fix CategoricalDtype equality comparisons
+- PR #5385 Fix index issues in `DataFrame.from_gpu_matrix`
+- PR #5390 Fix Java data type IDs and string interleave test
+
 
 # cuDF 0.14.0 (Date TBD)
 
