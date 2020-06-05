@@ -201,8 +201,11 @@ message(STATUS "ARROW: ARROW_LIBRARY set to ${ARROW_LIBRARY}")
 message(STATUS "ARROW: ARROW_CUDA_LIBRARY set to ${ARROW_CUDA_LIBRARY}")
 
 add_library(arrow SHARED IMPORTED ${ARROW_LIBRARY})
+add_library(arrow_cuda SHARED IMPORTED ${ARROW_CUDA_LIBRARY})
+
 if(ARROW_INCLUDE AND ARROW_LIBRARY AND ARROW_CUDA_LIBRARY)
     set_target_properties(arrow PROPERTIES IMPORTED_LOCATION ${ARROW_LIBRARY})
+    set_target_properties(arrow_cuda PROPERTIES IMPORTED_LOCATION ${ARROW_CUDA_LIBRARY})
 endif(ARROW_INCLUDE AND ARROW_LIBRARY AND ARROW_CUDA_LIBRARY)
 
 ###################################################################################################
@@ -704,12 +707,8 @@ endif(HT_DEFAULT_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-# Get all the symbols from the Arrow CUDA Library for Cython
-# set(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
-
 # link targets for cuDF
-target_link_libraries(cudf rmm arrow ${ARROW_CUDA_LIBRARY} nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
-# target_link_libraries(cudf rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
