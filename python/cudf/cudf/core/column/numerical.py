@@ -74,6 +74,10 @@ class NumericalColumn(column.ColumnBase):
             np.dtype("int16"),
             np.dtype("int32"),
             np.dtype("int64"),
+            np.dtype("uint8"),
+            np.dtype("uint16"),
+            np.dtype("uint32"),
+            np.dtype("uint64"),
         ]
         tmp = rhs
         if reflect:
@@ -101,13 +105,15 @@ class NumericalColumn(column.ColumnBase):
     def normalize_binop_value(self, other):
         if other is None:
             return other
+        #breakpoint()
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in "biuf":
             other_dtype = np.promote_types(self.dtype, other_dtype)
             if other_dtype == np.dtype("float16"):
                 other = np.dtype("float32").type(other)
                 other_dtype = other.dtype
-            if other_dtype.kind in "u":
+            #breakpoint()
+            if self.dtype.kind in "b":
                 other_dtype = min_signed_type(other)
             if np.isscalar(other):
                 other = np.dtype(other_dtype).type(other)
@@ -249,8 +255,10 @@ class NumericalColumn(column.ColumnBase):
         dkind = self.dtype.kind
         if dkind == "f":
             return self.dtype.type(np.nan)
-        elif dkind in "iu":
+        elif dkind == "i":
             return -1
+        elif dkind == "u":
+            return 0
         elif dkind == "b":
             return False
         else:

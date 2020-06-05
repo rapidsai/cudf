@@ -19,6 +19,10 @@ _np_pa_dtypes = {
     np.int16: pa.int16(),
     np.int8: pa.int8(),
     np.bool_: pa.int8(),
+    np.uint64 : pa.uint64(),
+    np.uint32 : pa.uint32(),
+    np.uint16 : pa.uint16(),
+    np.uint8 : pa.uint8(),
     np.datetime64: pa.date64(),
     np.object_: pa.string(),
     np.str_: pa.string(),
@@ -272,14 +276,22 @@ def check_cast_unsupported_dtype(dtype):
 
     if dtype in np_to_cudf_types:
         return dtype
+    
+    if dtype == np.dtype('float16'):
+        return np.dtype('float32')
 
-    # A mapping of un-supported types to next capable supported dtype.
+    raise NotImplementedError(
+        "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)
+    )
+
+def up_cast_unsigned_dtype(dtype):
+    from cudf._lib.types import np_to_cudf_types
+    import warnings
     cast_types_map = {
         np.dtype("uint8"): np.dtype("int16"),
         np.dtype("uint16"): np.dtype("int32"),
         np.dtype("uint32"): np.dtype("int64"),
         np.dtype("uint64"): np.dtype("int64"),
-        np.dtype("float16"): np.dtype("float32"),
     }
 
     if dtype in cast_types_map:
@@ -291,7 +303,6 @@ def check_cast_unsupported_dtype(dtype):
             )
 
         return cast_types_map[dtype]
+    else:
+        return dtype
 
-    raise NotImplementedError(
-        "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)
-    )

@@ -321,8 +321,8 @@ def get_dummies(
         raise NotImplementedError("drop_first is not supported yet")
 
     # TODO: This has to go away once we start supporting uint8.
-    if dtype == np.uint8:
-        dtype = "int8"
+    #if dtype == np.uint8:
+    #    dtype = "int8"
 
     encode_fallback_dtypes = ["object", "category"]
 

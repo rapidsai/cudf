@@ -553,6 +553,7 @@ def test_categorical_set_categories_categoricals(data, new_categories):
         pd.Series(["a", "1", "22", "1", "aa"]),
         pd.Series(["a", "1", "22", "1", "aa"], dtype="category"),
         pd.Series([1, 2, 3, 4], dtype="int64"),
+        pd.Series([1, 2, 3, 4], dtype="uint64"),
         pd.Series([1, 2.3, 3, 4], dtype="float"),
         [None, 1, None, 2, None],
         [],
@@ -608,6 +609,10 @@ def test_categorical_dtype(categories, ordered):
         (gd.Series(list(range(np.iinfo(np.int8).max)) + [None]), np.int8),
         (gd.Series(list(range(np.iinfo(np.int16).max))), np.int16),
         (gd.Series(list(range(np.iinfo(np.int16).max)) + [None]), np.int16),
+        (gd.Series(list(range(np.iinfo(np.uint8).max))), np.uint8),
+        (gd.Series(list(range(np.iinfo(np.uint8).max)) + [None]), np.uint8),
+        (gd.Series(list(range(np.iinfo(np.uint16).max))), np.uint16),
+        (gd.Series(list(range(np.iinfo(np.uint16).max)) + [None]), np.uint16),
     ],
 )
 def test_astype_dtype(data, expected):

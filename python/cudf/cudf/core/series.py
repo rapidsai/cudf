@@ -37,6 +37,7 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     min_scalar_type,
+    up_cast_unsigned_dtype
 )
 
 
@@ -3849,6 +3850,9 @@ truediv_int_dtype_corrections = {
     "int16": "float32",
     "int32": "float32",
     "int64": "float64",
+    "uint16": "float32",
+    "uint32": "float64",
+    "uint64": "float64",
     "bool": "float32",
     "int": "float",
 }

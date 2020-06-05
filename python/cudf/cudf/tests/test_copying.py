@@ -11,7 +11,7 @@ from cudf.tests.utils import assert_eq
 
 @pytest.mark.parametrize(
     "dtype",
-    ["bool", "int8", "int16", "int32", "int64", "float32", "float64", "str"],
+    ["bool", "int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64", "str"],
 )
 def test_repeat(dtype):
     arr = np.random.rand(10) * 10
@@ -42,7 +42,7 @@ def test_repeat_dataframe():
 
 
 @pytest.mark.parametrize(
-    "dtype", ["bool", "int8", "int16", "int32", "int64", "float32", "float64"]
+    "dtype", ["bool", "int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64"]
 )
 def test_repeat_scalar(dtype):
     arr = np.random.rand(10) * 10

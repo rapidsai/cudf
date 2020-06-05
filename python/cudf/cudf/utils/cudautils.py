@@ -104,12 +104,12 @@ def gpu_diff(in_col, out_col, N):
         if i < in_col.size:
             out_col[i] = in_col[i] - in_col[i - N]
         if i < N:
-            out_col[i] = -1
+            out_col[i] = 0
     else:
         if i <= (in_col.size + N):
             out_col[i] = in_col[i] - in_col[i - N]
         if i >= (in_col.size + N) and i < in_col.size:
-            out_col[i] = -1
+            out_col[i] = 0
 
 
 @cuda.jit

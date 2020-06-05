@@ -88,7 +88,7 @@ def test_series_binop_scalar(nelem, binop, obj_class):
 _bitwise_binops = [operator.and_, operator.or_, operator.xor]
 
 
-_int_types = ["int8", "int16", "int32", "int64", "longlong"]
+_int_types = ["int8", "int16", "int32", "int64", "longlong", "uint8", "uint16", "uint32"]
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -214,6 +214,10 @@ def test_string_series_compare(obj, cmpop, cmp_obj):
         "int16",
         "int32",
         "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
         "float32",
         "float64",
         "datetime64[ms]",
@@ -292,7 +296,7 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
     np.testing.assert_array_equal(expect, got)
 
 
-_dtypes = [np.int16, np.int32, np.int64, np.float32, np.float64]
+_dtypes = [np.int16, np.int32, np.int64, np.float32, np.float64, np.uint16, np.uint32, np.uint64,]
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])

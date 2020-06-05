@@ -247,7 +247,7 @@ def test_issue_165():
 
 @pytest.mark.parametrize("data", [data1(), data2()])
 @pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+    "dtype", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64"]
 )
 def test_typecast_from_datetime(data, dtype):
     pd_data = pd.Series(data.copy())
@@ -309,7 +309,7 @@ def test_string_timstamp_typecast_to_different_datetime_resolutions(
 
 @pytest.mark.parametrize("data", [numerical_data()])
 @pytest.mark.parametrize(
-    "from_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+    "from_dtype", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64"]
 )
 @pytest.mark.parametrize(
     "to_dtype",
@@ -327,7 +327,7 @@ def test_typecast_to_datetime(data, from_dtype, to_dtype):
 
 @pytest.mark.parametrize("data", [numerical_data()])
 @pytest.mark.parametrize(
-    "from_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+    "from_dtype", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64"]
 )
 @pytest.mark.parametrize(
     "to_dtype",
