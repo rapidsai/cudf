@@ -65,6 +65,19 @@ TEST_F(TextReplaceTest, ReplaceTokens)
   cudf::test::expect_columns_equal(*results, expected);
 }
 
+TEST_F(TextReplaceTest, ReplaceTokensSingleRepl)
+{
+  cudf::test::strings_column_wrapper strings({"this\t is that", "is then \tis", "us them is us"});
+  cudf::test::strings_column_wrapper targets({"is", "us"});
+  cudf::test::strings_column_wrapper repls({"_"});
+  cudf::test::strings_column_wrapper expected({"this\t _ that", "_ then \t_", "_ them _ _"});
+
+  auto results = nvtext::replace_tokens(cudf::strings_column_view(strings),
+                                        cudf::strings_column_view(targets),
+                                        cudf::strings_column_view(repls));
+  cudf::test::expect_columns_equal(*results, expected);
+}
+
 TEST_F(TextReplaceTest, ReplaceTokensEmptyTest)
 {
   auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});

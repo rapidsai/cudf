@@ -103,7 +103,9 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
 {
   CUDF_EXPECTS(!targets.has_nulls(), "Parameter targets must not have nulls");
   CUDF_EXPECTS(!repls.has_nulls(), "Parameter repls must not have nulls");
-  CUDF_EXPECTS(repls.size() == targets.size(), "Parameter targets and repls must be the same size");
+  if (repls.size() != 1)
+    CUDF_EXPECTS(repls.size() == targets.size(),
+                 "Parameter targets and repls must be the same size");
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
 
   cudf::size_type strings_count = strings.size();

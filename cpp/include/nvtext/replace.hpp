@@ -66,12 +66,16 @@ namespace nvtext {
  *
  * Note the first string in `result` still retains the space delimiters.
  *
- * @throw cudf::logic_error if `targets.size() != repls.size()`
+ * The `repls.size() == targets.size()` except of the `repls.size()==1`.
+ * In this case, all matching `targets` strings will be replaced with the
+ * single `repls` string.
+ *
+ * @throw cudf::logic_error if `targets.size() != repls.size()` && if `repls.size() != 1`
  * @throw cudf::logic_error if targets or repls contain nulls
  * @throw cudf::logic_error if delimiter is invalid
  *
  * @param strings Strings column to replace.
- * @param targets Strings to compare against tokens.
+ * @param targets Strings to compare against tokens found in `strings`
  * @param repls Replacement strings for each string in `targets`
  * @param delimiter Characters used to separate each string into tokens.
  *                  The default of empty string will identify tokens using whitespace.
