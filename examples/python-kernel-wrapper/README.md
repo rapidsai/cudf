@@ -1,17 +1,15 @@
 # Python Kernel Wrapper
 
 ## Overview
-This examples aims to demonstrate how its possible to share cudf dataframes between Python and CUDA Kernels. This is useful if either an existing CUDA codebase is present to solve business logic or if teams would like the ability to handle certain tasks in Python and others in CUDA.
+This example demonstrates how to share cudf dataframes between Python and custom CUDA kernels. This is useful for performing custom CUDA-accelerated business logic on cuDF dataframes and handling certain tasks in Python and others in CUDA.
 
-Since cudf uses libcudf, dataframes that are created in Python are already present on the GPU memory and available to the C++ codebase. This makes it fairly straightforward to write a CUDA kernel for working with a dataframe column. In fact this is how libcudf processes dataframes in CUDA kernels within cudf itself, the only difference in this example is we are writing CUDA kernels that are not in the cudf codebase. The term User Defined Function (UDF) could be loosely used to describe what this example is demonstrating.
+Dataframes that are created in Python cuDF are already present in GPU memory and accessible to CUDA code. This makes it straightforward to write a CUDA kernel to work with a dataframe columns. In fact this is how libcudf processes dataframes in CUDA kernels; the only difference in this example is that we invoke CUDA kernels that exist outside the cuDF code base. The term User Defined Function (UDF) could be loosely used to describe what this example is demonstrating.
 
-A cython ```kernel_wrapper``` implementation has been created in this example to further make sharing the dataframes between Python and your CUDA kernel "UDF" easier. This wrapper allows for Python users to seamless invoke those "UDF" CUDA kernels with a single function call and also provides a clear place for implementing the C++ "glue code".
+This example provides a Cython `kernel_wrapper` implementation to make sharing the dataframes between Python and our custom CUDA kernel easier. This wrapper allows Python users to seamlessly invoke those CUDA kernels with a single function call and also provides a clear place to implement the C++ "glue code".
 
-Now that we understand the motivation and how it will work lets define the problem for this example.
+The example CUDA kernel accepts a data column (PRCP) containing rainfall values stored as 1/10th of a mm and converts those values to inches. The dataframe is read from a local CSV file using Python. Python then invokes the CUDA mm->inches conversion kernel via the Cython `kernel_wrapper`, passing it the dataframe object. The converted data can then be accessed from Python, e.g. using `df.head()`.
 
-The goal is to write a CUDA kernel that accepts a rainfall (PRCP) data column and convert those values to inches. The original data is stored as 1/10th of a mm so the kernel must convert those values to inches. The dataframe will be read from a local csv file and created using Python. Python will then invoke the CUDA kernel doing the mm->inches conversion with the ```kernel_wrapper``` and the dataframe object. Once the kernel has finished its execution the dataframe values will be changed on the Python side as well so those can be seen by simple output with ```df.head()```.
-
-This is similar to what is being done in an existing [weather notebook](https://github.com/rapidsai/notebooks-contrib/blob/branch-0.14/intermediate_notebooks/examples/weather.ipynb) so if any confusion arises that is a good place to reference for general understanding. 
+This is similar to an existing [weather notebook](https://github.com/rapidsai/notebooks-contrib/blob/branch-0.14/intermediate_notebooks/examples/weather.ipynb), which provides a reference for understanding the implementation. 
 
 ## Building
 

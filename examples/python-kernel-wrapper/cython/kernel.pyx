@@ -3,7 +3,7 @@ from cudf._lib.cpp.table.table_view cimport mutable_table_view
 from cudf._lib.table cimport Table
 from libcpp.string cimport string
 
-cdef extern from "src/kernel_wrapper.hh":
+cdef extern from "src/kernel_wrapper.hpp":
     cdef cppclass C_CudfWrapper "CudfWrapper":
         C_CudfWrapper(mutable_table_view tbl)
         void tenth_mm_to_inches(int column_index)

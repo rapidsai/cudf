@@ -1,5 +1,5 @@
 # cuDF Examples
-This directory contains examples of cuDF usage. Some examples are simple while others are more involved. Each example is held within a subdirectory. Each example will have its own README to explain intended use, assist with building, and running.
+This directory contains examples of cuDF usage.
 
 ## Examples List
 | Example | Description                                                        |
