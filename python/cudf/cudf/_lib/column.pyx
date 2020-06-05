@@ -9,6 +9,7 @@ from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype
 import cudf._lib as libcudfxx
 
+from numba import cuda
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
 from libcpp.pair cimport pair
@@ -196,7 +197,7 @@ cdef class Column:
             if value.__cuda_array_interface__['typestr'] != '|u1':
                 if isinstance(value, Column):
                     value = value.data_array_view
-                value = value.view('|u1')
+                value = cuda.as_cuda_array(value).view('|u1')
             mask = Buffer(value)
             if mask.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
