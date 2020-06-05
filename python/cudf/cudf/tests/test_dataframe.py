@@ -5580,20 +5580,28 @@ def test_dataframe_init_1d_list(data):
     ],
 )
 def test_dataframe_init_from_arrays_cols(data, cols, index):
+
+    gd_data = data
+    if isinstance(data, cupy.core.ndarray):
+        # pandas can't handle cupy arrays in general
+        pd_data = data.get()
+    else:
+        pd_data = data
+
     # verify with columns & index
-    pdf = pd.DataFrame(data, columns=cols, index=index)
-    gdf = DataFrame(da_seta, columns=cols, index=index)
+    pdf = pd.DataFrame(pd_data, columns=cols, index=index)
+    gdf = DataFrame(gd_data, columns=cols, index=index)
 
     assert_eq(pdf, gdf, check_dtype=False)
 
     # verify with columns
-    pdf = pd.DataFrame(data, columns=cols)
-    gdf = DataFrame(data, columns=cols)
+    pdf = pd.DataFrame(pd_data, columns=cols)
+    gdf = DataFrame(gd_data, columns=cols)
 
     assert_eq(pdf, gdf, check_dtype=False)
 
-    pdf = pd.DataFrame(data)
-    gdf = DataFrame(data)
+    pdf = pd.DataFrame(pd_data)
+    gdf = DataFrame(gd_data)
 
     assert_eq(pdf, gdf, check_dtype=False)
 
