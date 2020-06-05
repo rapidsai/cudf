@@ -345,17 +345,16 @@ class string_scalar : public scalar {
 };
 
 /**
- * @brief An owning class to represent a chrono type value in device memory
+ * @brief An owning class to represent a timestamp/duration value in device memory
  *
  * @ingroup scalar_classes
  *
- * @tparam T the data type of the timestamp or duration value
- * @see cudf/wrappers/timestamps.hpp and cudf/wrappers/durations.hpp for a list of allowed types
+ * @tparam T the data type of the timestamp/duration value
+ * @see cudf/wrappers/timestamps.hpp, cudf/wrappers/durations.hpp for a list of allowed types
  */
-template <typename T, typename CheckT>
+template <typename T>
 class chrono_scalar : public detail::fixed_width_scalar<T> {
-  static_assert(std::is_same<typename CheckT::type, std::true_type>::value,
-                "Unexpected chrono type");
+  static_assert(is_chrono<T>(), "Unexpected non-chrono type");
 
  public:
   chrono_scalar()                           = default;
@@ -393,12 +392,12 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
                 bool is_valid,
                 cudaStream_t stream                 = 0,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
+    : detail::fixed_width_scalar<T>(T{value}, is_valid, stream, mr)
   {
   }
 
   /**
-   * @brief Construct a new timestamp scalar object from existing device memory.
+   * @brief Construct a new chrono scalar object from existing device memory.
    *
    * @param[in] data The scalar's data in device memory
    * @param[in] is_valid Whether the value held by the scalar is valid
@@ -410,37 +409,28 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
     : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
   {
   }
+};
+
+template <typename T>
+struct timestamp_scalar : chrono_scalar<T> {
+  static_assert(is_timestamp<T>(), "Unexpected non-timestamp type");
+  using chrono_scalar<T>::chrono_scalar;
 
   /**
    * @brief Return the duration in number of ticks since the UNIX epoch.
    */
-  template <typename ChronoT = T>
-  typename std::enable_if_t<
-    std::is_same<typename cudf::is_timestamp_t<ChronoT>::type, std::true_type>::value,
-    typename ChronoT::rep>
-  ticks_since_epoch()
-  {
-    return this->value().time_since_epoch().count();
-  }
-
-  template <typename ChronoT = T>
-  typename std::enable_if_t<
-    std::is_same<typename cudf::is_duration_t<ChronoT>::type, std::true_type>::value,
-    typename ChronoT::rep>
-  ticks_since_epoch()
-  {
-    return this->value().count();
-  }
+  typename T::rep ticks_since_epoch() { return this->value().time_since_epoch().count(); }
 };
 
 template <typename T>
-struct timestamp_scalar : chrono_scalar<T, cudf::is_timestamp_t<T>> {
-  using chrono_scalar<T, cudf::is_timestamp_t<T>>::chrono_scalar;
-};
+struct duration_scalar : chrono_scalar<T> {
+  static_assert(is_duration<T>(), "Unexpected non-duration type");
+  using chrono_scalar<T>::chrono_scalar;
 
-template <typename T>
-struct duration_scalar : chrono_scalar<T, cudf::is_duration_t<T>> {
-  using chrono_scalar<T, cudf::is_duration_t<T>>::chrono_scalar;
+  /**
+   * @brief Return the duration in number of ticks.
+   */
+  typename T::rep count() { return this->value().count(); }
 };
 
 }  // namespace cudf

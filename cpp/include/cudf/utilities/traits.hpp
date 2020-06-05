@@ -69,12 +69,14 @@ using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>
                                               std::is_same<cudf::timestamp_ms, T>,
                                               std::is_same<cudf::timestamp_us, T>,
                                               std::is_same<cudf::timestamp_ns, T>>;
+
 template <typename T>
 using is_duration_t = simt::std::disjunction<std::is_same<cudf::duration_D, T>,
                                              std::is_same<cudf::duration_s, T>,
                                              std::is_same<cudf::duration_ms, T>,
                                              std::is_same<cudf::duration_us, T>,
                                              std::is_same<cudf::duration_ns, T>>;
+
 /**
  * @brief Indicates whether objects of types `L` and `R` can be relationally
  *compared.
@@ -240,7 +242,7 @@ struct is_duration_impl {
 /**
  * @brief Indicates whether `type` is a duration `data_type`.
  *
- * "duration" types are int32_t or int64_t durations.
+ * "Duration" types are int32_t or int64_t tick counts representing a time interval.
  *
  * @param type The `data_type` to verify
  * @return true `type` is a duration

@@ -254,7 +254,7 @@ struct target_type_impl<Source, aggregation::ALL> {
 
 // Always use `double` for MEAN
 // Except for chrono types where result is chrono. (Use FloorDiv)
-// TODO: disable this for timestamp types
+// TODO: MEAN should be only be enabled for duration types - not for timestamps
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source,
                         k,
@@ -293,8 +293,8 @@ struct target_type_impl<
   using type = Source;
 };
 
-// Summing/Multiplying chronos, use same type accumulator
-// TODO: disable for timestamps later
+// Summing/Multiplying chrono types, use same type accumulator
+// TODO: Sum/Product should only be enabled for duration types - not for timestamps
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source, k, std::enable_if_t<is_chrono<Source>() && is_sum_product_agg(k)>> {
   using type = Source;
