@@ -38,7 +38,9 @@
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
+#include <cudf/strings/padding.hpp>
 #include <cudf/strings/replace.hpp>
+#include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/substring.hpp>
@@ -916,6 +918,50 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplace(JNIEnv *e
     cudf::string_scalar *ss_replace = reinterpret_cast<cudf::string_scalar *>(replace);
 
     std::unique_ptr<cudf::column> result = cudf::strings::replace(scv, *ss_target, *ss_replace);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplaceWithBackrefs(
+    JNIEnv *env,
+    jclass,
+    jlong column_view,
+    jstring patternObj,
+    jstring replaceObj) {
+
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, patternObj, "pattern string is null", 0);
+  JNI_NULL_CHECK(env, replaceObj, "replace string is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::jni::native_jstring ss_pattern(env, patternObj);
+    cudf::jni::native_jstring ss_replace(env, replaceObj);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::replace_with_backrefs(
+        scv, ss_pattern.get(), ss_replace.get());
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_zfill(
+    JNIEnv *env,
+    jclass,
+    jlong column_view,
+    jint j_width) {
+
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, j_width, "width is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::size_type width = reinterpret_cast<cudf::size_type>(j_width);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::zfill(scv, width);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

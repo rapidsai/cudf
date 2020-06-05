@@ -79,7 +79,9 @@ struct gather_bitmask_functor {
     auto col     = input.column(mask_idx);
 
     if (Op != gather_bitmask_op::DONT_CHECK) {
-      if (row_idx < 0 || row_idx >= col.size()) {
+      bool out_of_range = is_signed_iterator<MapIterator>() ? (row_idx < 0 || row_idx >= col.size())
+                                                            : row_idx >= col.size();
+      if (out_of_range) {
         if (Op == gather_bitmask_op::PASSTHROUGH) {
           return bit_is_set(masks[mask_idx], bit_idx);
         } else if (Op == gather_bitmask_op::NULLIFY) {
@@ -111,8 +113,8 @@ struct column_gatherer_impl {
    *map
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
-   * @param mr Memory resource to use for all allocations
-   * @param stream CUDA stream on which to execute kernels
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::unique_ptr<column> operator()(column_view const& source_column,
                                      MapIterator gather_map_begin,
@@ -169,8 +171,8 @@ struct column_gatherer_impl<string_view, MapItType> {
    *map
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
-   * @param mr Memory resource to use for all allocations
-   * @param stream CUDA stream on which to execute kernels
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::unique_ptr<column> operator()(column_view const& source_column,
                                      MapItType gather_map_begin,
@@ -203,8 +205,8 @@ struct column_gatherer_impl<dictionary32, MapItType> {
    * map
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
-   * @param mr Memory resource to use for all allocations
-   * @param stream CUDA stream on which to execute kernels
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return New dictionary column with gathered rows.
    */
   std::unique_ptr<column> operator()(column_view const& source_column,
@@ -270,8 +272,8 @@ struct column_gatherer {
    * map
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
-   * @param mr Memory resource to use for all allocations
-   * @param stream CUDA stream on which to execute kernels
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   template <typename Element, typename MapIterator>
   std::unique_ptr<column> operator()(column_view const& source_column,
@@ -419,8 +421,8 @@ void gather_bitmask(table_view const& source,
  * @param[in] gather_map_end End of iterator range of integer indices that map the rows in the
  * source columns to rows in the destination columns
  * @param[in] nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds.
- * @param[in] mr The resource to use for all allocations
- * @param[in] stream The CUDA stream on which to execute kernels
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @return cudf::table Result of the gather
  */
 template <typename MapIterator>

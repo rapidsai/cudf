@@ -1846,6 +1846,36 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * For each string, replaces any character sequence matching the given pattern
+   * using the replace template for back-references.
+   *
+   * Any null string entries return corresponding null output column entries.
+   *
+   * @param pattern The regular expression patterns to search within each string.
+   * @param replace The replacement template for creating the output string.
+   * @return A new java column vector containing the string results.
+   */
+  public ColumnVector stringReplaceWithBackrefs(String pattern, String replace) {
+    return new ColumnVector(stringReplaceWithBackrefs(getNativeView(), pattern,
+        replace));
+  }
+
+  /**
+   * Add '0' as padding to the left of each string.
+   *
+   * If the string is already width or more characters, no padding is performed.
+   * No strings are truncated.
+   *
+   * Null string entries result in null entries in the output column.
+   *
+   * @param width The minimum number of characters for each string.
+   * @return New column of strings.
+   */
+  public ColumnVector zfill(int width) {
+    return new ColumnVector(zfill(getNativeView(), width));
+  }
+
+  /**
    * Checks if each string in a column starts with a specified comparison string, resulting in a
    * parallel column of the boolean results.
    * @param pattern scalar containing the string being searched for at the beginning of the column's strings.
@@ -2056,7 +2086,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * ```
    * Any null string entries return corresponding null output column entries.
    * For supported regex patterns refer to:
-   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
    *
    * @param pattern Regex pattern to match to each string.
    * @return New ColumnVector of boolean results for each string.
@@ -2079,7 +2109,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * ```
    * Any null string entries return corresponding null output column entries.
    * For supported regex patterns refer to:
-   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
    *
    * @param pattern Regex pattern to match to each string.
    * @return New ColumnVector of boolean results for each string.
@@ -2097,7 +2127,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * does not match. Any null inputs also result in null output entries.
    *
    * For supported regex patterns refer to:
-   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
    * @param pattern the pattern to use
    * @return the table of extracted matches
    * @throws CudfException if any error happens including if the RE does
@@ -2263,6 +2293,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long stringReplace(long columnView, long target, long repl) throws CudfException;
 
   /**
+   * Native method for replacing any character sequence matching the given pattern
+   * using the replace template for back-references.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param pattern The regular expression patterns to search within each string.
+   * @param repl The replacement template for creating the output string.
+   * @return native handle of the resulting cudf column containing the string results.
+   */
+  private static native long stringReplaceWithBackrefs(long columnView, String pattern,
+      String replace) throws CudfException;
+
+  /**
    * Native method for checking if strings in a column starts with a specified comparison string.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
    * @param compString handle of scalar containing the string being searched for at the beginning
@@ -2329,6 +2370,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *         by the stringConcatenate method.
    */
   private static native long stringConcatenation(long[] columnViews, long separator, long narep);
+
+  /**
+   * Native method to add zeros as padding to the left of each string.
+   */
+  private static native long zfill(long nativeHandle, int width);
 
   private static native long binaryOpVS(long lhs, long rhs, int op, int dtype);
 

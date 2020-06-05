@@ -1,5 +1,4 @@
 import functools
-import itertools
 import warnings
 from collections import OrderedDict
 
@@ -11,15 +10,11 @@ from pandas.api.types import is_dtype_equal
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
-from cudf._lib.scalar import as_scalar
-from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
     is_categorical_dtype,
-    is_datetime_dtype,
     is_numerical_dtype,
     is_scalar,
-    is_string_dtype,
     min_scalar_type,
 )
 
@@ -131,7 +126,9 @@ class Frame(libcudf.table.Table):
                                 cols[idx]
                                 .cat()
                                 ._set_categories(
-                                    categories[idx], is_unique=True
+                                    cols[idx].cat().categories,
+                                    categories[idx],
+                                    is_unique=True,
                                 )
                                 .codes
                             )
@@ -356,6 +353,132 @@ class Frame(libcudf.table.Table):
                     result.index = self.index[start:stop]
                 result.columns = self.columns
                 return result
+
+    def clip(self, lower=None, upper=None, inplace=False, axis=1):
+        """
+        Trim values at input threshold(s).
+
+        Assigns values outside boundary to boundary values.
+        Thresholds can be singular values or array like,
+        and in the latter case the clipping is performed
+        element-wise in the specified axis. Currently only
+        `axis=1` is supported.
+
+        Parameters
+        ----------
+        lower : scalar or array_like, default None
+            Minimum threshold value. All values below this
+            threshold will be set to it. If it is None,
+            there will be no clipping based on lower.
+            In case of Series/Index, lower is expected to be
+            a scalar or an array of size 1.
+        upper : scalar or array_like, default None
+            Maximum threshold value. All values below this
+            threshold will be set to it. If it is None,
+            there will be no clipping based on upper.
+            In case of Series, upper is expected to be
+            a scalar or an array of size 1.
+        inplace : bool, default False
+
+        Returns
+        -------
+        Clipped DataFrame/Series/Index/MultiIndex
+
+        Examples
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3, 4], "b":['a', 'b', 'c', 'd']})
+        >>> df.clip(lower=[2, 'b'], upper=[3, 'c'])
+           a  b
+        0  2  b
+        1  2  b
+        2  3  c
+        3  3  c
+
+        >>> df.clip(lower=None, upper=[3, 'c'])
+           a  b
+        0  1  a
+        1  2  b
+        2  3  c
+        3  3  c
+
+        >>> df.clip(lower=[2, 'b'], upper=None)
+           a  b
+        0  2  b
+        1  2  b
+        2  3  c
+        3  4  d
+
+        >>> df.clip(lower=2, upper=3, inplace=True)
+        >>> df
+           a  b
+        0  2  2
+        1  2  3
+        2  3  3
+        3  3  3
+
+        >>> import cudf
+        >>> sr = cudf.Series([1, 2, 3, 4])
+        >>> sr.clip(lower=2, upper=3)
+        0    2
+        1    2
+        2    3
+        3    3
+        dtype: int64
+
+        >>> sr.clip(lower=None, upper=3)
+        0    1
+        1    2
+        2    3
+        3    3
+        dtype: int64
+
+        >>> sr.clip(lower=2, upper=None, inplace=True)
+        >>> sr
+        0    2
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        """
+
+        if axis != 1:
+            raise NotImplementedError("`axis is not yet supported in clip`")
+
+        if lower is None and upper is None:
+            return None if inplace is True else self.copy(deep=True)
+
+        if is_scalar(lower):
+            lower = np.full(self._num_columns, lower)
+        if is_scalar(upper):
+            upper = np.full(self._num_columns, upper)
+
+        if len(lower) != len(upper):
+            raise ValueError("Length of lower and upper should be equal")
+
+        if len(lower) != self._num_columns:
+            raise ValueError(
+                """Length of lower/upper should be
+                equal to number of columns in
+                DataFrame/Series/Index/MultiIndex"""
+            )
+
+        output = self.copy(deep=False)
+        if output.ndim == 1:
+            # In case of series and Index,
+            # swap lower and upper if lower > upper
+            if (
+                lower[0] is not None
+                and upper[0] is not None
+                and (lower[0] > upper[0])
+            ):
+                lower[0], upper[0] = upper[0], lower[0]
+
+        for i, name in enumerate(self._data):
+            output._data[name] = self._data[name].clip(lower[i], upper[i])
+
+        output._copy_categories(self, include_index=False)
+
+        return self._mimic_inplace(output, inplace=inplace)
 
     def _normalize_scalars(self, other):
         """
@@ -1016,9 +1139,7 @@ class Frame(libcudf.table.Table):
         return self._repeat(repeats)
 
     def _repeat(self, count):
-        if is_scalar(count):
-            count = as_scalar(count)
-        else:
+        if not is_scalar(count):
             count = as_column(count)
 
         result = self.__class__._from_table(
@@ -1470,149 +1591,59 @@ class Frame(libcudf.table.Table):
     def _merge(
         self,
         right,
-        on,
-        left_on,
-        right_on,
-        left_index,
-        right_index,
-        lsuffix,
-        rsuffix,
-        how,
-        method,
+        on=None,
+        left_on=None,
+        right_on=None,
+        left_index=False,
+        right_index=False,
+        how="inner",
         sort=False,
+        lsuffix=None,
+        rsuffix=None,
+        method="hash",
+        indicator=False,
+        suffixes=("_x", "_y"),
     ):
+        # Merge doesn't support right, so just swap
+        if how == "right":
+            return right._merge(
+                self,
+                on=on,
+                left_on=right_on,
+                right_on=left_on,
+                left_index=right_index,
+                right_index=left_index,
+                how="left",
+                sort=sort,
+                lsuffix=rsuffix,
+                rsuffix=lsuffix,
+                method=method,
+                indicator=indicator,
+                suffixes=suffixes,
+            )
 
         lhs = self
         rhs = right
 
-        if left_on is None:
-            left_on = []
-        if right_on is None:
-            right_on = []
+        from cudf.core.join import Merge
 
-        # Making sure that the "on" arguments are list of column names
-        if on:
-            on = [on] if isinstance(on, str) else list(on)
-        if left_on:
-            left_on = [left_on] if isinstance(left_on, str) else list(left_on)
-        if right_on:
-            right_on = (
-                [right_on] if isinstance(right_on, str) else list(right_on)
-            )
-
-        self._validate_merge_cfg(
-            self,
-            right,
-            left_on,
-            right_on,
-            on,
-            how,
-            left_index=left_index,
-            right_index=right_index,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
-        )
-
-        if on:
-            left_on = right_on = on
-
-        same_named_columns = set(lhs._data.keys()) & set(rhs._data.keys())
-        if not (left_on or right_on) and not (left_index and right_index):
-            left_on = right_on = list(same_named_columns)
-
-        no_suffix_cols = []
-        for name in same_named_columns:
-            if left_on is not None and right_on is not None:
-                if name in left_on and name in right_on:
-                    if left_on.index(name) == right_on.index(name):
-                        no_suffix_cols.append(name)
-
-        for name in same_named_columns:
-            if name not in no_suffix_cols:
-                lhs.rename({name: "%s%s" % (name, lsuffix)}, inplace=True)
-                rhs.rename({name: "%s%s" % (name, rsuffix)}, inplace=True)
-                if name in left_on:
-                    left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
-                if name in right_on:
-                    right_on[right_on.index(name)] = "%s%s" % (name, rsuffix)
-
-        categorical_dtypes = {}
-        for name, col in itertools.chain(lhs._data.items(), rhs._data.items()):
-            if is_categorical_dtype(col):
-                categorical_dtypes[name] = col.dtype
-
-        # Save the order of the original column names for preservation later
-        org_names = list(itertools.chain(lhs._data.keys(), rhs._data.keys()))
-
-        # If neither left_index or right_index specified, that data won't
-        # be carried through the join. We'll get a new RangeIndex afterwards
-        lhs_full_view = False
-        rhs_full_view = False
-        if left_index:
-            lhs_full_view = True
-        if right_index:
-            rhs_full_view = True
-
-        # potentially do an implicit typecast
-        (lhs, rhs, to_categorical) = self._typecast_before_merge(
-            lhs, rhs, left_on, right_on, left_index, right_index, how
-        )
-
-        gdf_result = libcudf.join.join(
+        mergeop = Merge(
             lhs,
             rhs,
+            on,
             left_on,
             right_on,
+            left_index,
+            right_index,
             how,
+            sort,
+            lsuffix,
+            rsuffix,
             method,
-            left_index=lhs_full_view,
-            right_index=rhs_full_view,
+            indicator,
+            suffixes,
         )
-
-        gdf_data = list(gdf_result._data.items())
-
-        result = []
-        cat_codes = []
-        for org_name in org_names:
-            for i in range(len(gdf_data)):
-                if gdf_data[i][0] == org_name:
-                    result.append(gdf_data.pop(i))
-                    break
-        for cat_name in to_categorical:
-            for i in range(len(gdf_data)):
-                if gdf_data[i][0] == cat_name + "_codes":
-                    cat_codes.append(gdf_data.pop(i))
-        assert len(gdf_data) == 0
-        cat_codes = dict(cat_codes)
-
-        # Build a new data frame based on the merged columns from GDF
-        to_frame_data = cudf.core.column_accessor.ColumnAccessor()
-        for name, col in result:
-            if is_string_dtype(col):
-                to_frame_data[name] = col
-            elif is_categorical_dtype(categorical_dtypes.get(name, col.dtype)):
-
-                dtype = categorical_dtypes.get(name, col.dtype)
-                to_frame_data[name] = column.build_categorical_column(
-                    categories=dtype.categories,
-                    codes=cat_codes.get(str(name) + "_codes", col),
-                    mask=col.base_mask,
-                    size=col.size,
-                    offset=col.offset,
-                    ordered=dtype.ordered,
-                )
-            else:
-
-                to_frame_data[name] = column.build_column(
-                    col.base_data,
-                    dtype=categorical_dtypes.get(name, col.dtype),
-                    mask=col.base_mask,
-                    offset=col.offset,
-                    size=col.size,
-                )
-        gdf_result._data = to_frame_data
-
-        to_return = self.__class__._from_table(gdf_result)
+        to_return = mergeop.perform_merge()
 
         # If sort=True, Pandas would sort on the key columns in the
         # same order as given in 'on'. If the indices are used as
@@ -1620,145 +1651,31 @@ class Frame(libcudf.table.Table):
         # the key column on the other side will be used to sort.
         # If no index is specified, return a new RangeIndex
         if sort:
-            to_sort = self.__class__()
+            to_sort = cudf.DataFrame()
             if left_index and right_index:
                 by = list(to_return._index._data.columns)
                 if left_on and right_on:
-                    by += list(to_return[left_on]._data.columns)
+                    by.extend(to_return[mergeop.left_on]._data.columns)
             elif left_index:
-                by = list(to_return[right_on]._data.columns)
+                by = list(to_return[mergeop.right_on]._data.columns)
             elif right_index:
-                by = list(to_return[left_on]._data.columns)
+                by = list(to_return[mergeop.left_on]._data.columns)
             else:
                 # left_on == right_on, or different names but same columns
                 # in both cases we can sort by either
-                by = list(to_return[left_on]._data.columns)
+                by = [to_return._data[name] for name in mergeop.left_on]
             for i, col in enumerate(by):
                 to_sort[i] = col
             inds = to_sort.argsort()
-            to_return = to_return.take(
-                inds, keep_index=(left_index or right_index)
-            )
+            if isinstance(to_return, cudf.Index):
+                to_return = to_return.take(inds)
+            else:
+                to_return = to_return.take(
+                    inds, keep_index=(left_index or right_index)
+                )
             return to_return
         else:
             return to_return
-
-    def _typecast_before_merge(
-        self, lhs, rhs, left_on, right_on, left_index, right_index, how
-    ):
-        def casting_rules(lhs, rhs, dtype_l, dtype_r, how):
-            cast_warn = "can't safely cast column {} from {} with type \
-                         {} to {}, upcasting to {}"
-            ctgry_err = "can't implicitly cast column {0} to categories \
-                         from {1} during {1} join"
-
-            rtn = None
-            if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-                rtn = dtype_l
-            elif is_categorical_dtype(dtype_l) and is_categorical_dtype(
-                dtype_r
-            ):
-                raise TypeError("Left and right categories must be the same.")
-            elif how == "left":
-
-                check_col = rhs._data[rcol].fillna(0)
-                if not check_col.can_cast_safely(dtype_l):
-                    rtn = casting_rules(lhs, rhs, dtype_l, dtype_r, "inner")
-                    warnings.warn(
-                        cast_warn.format(rcol, "right", dtype_r, dtype_l, rtn)
-                    )
-                else:
-                    rtn = dtype_l
-            elif how == "right":
-                check_col = lhs._data[lcol].fillna(0)
-                if not check_col.can_cast_safely(dtype_r):
-                    rtn = casting_rules(lhs, rhs, dtype_l, dtype_r, "inner")
-                    warnings.warn(
-                        cast_warn.format(lcol, "left", dtype_l, dtype_r, rtn)
-                    )
-                else:
-                    rtn = dtype_r
-
-            elif is_categorical_dtype(dtype_l):
-                if how == "right":
-                    raise ValueError(ctgry_err.format(rcol, "right"))
-
-                rtn = lhs[lcol].cat.categories.dtype
-                to_categorical.append(lcol)
-                lhs[lcol + "_codes"] = lhs[lcol].cat.codes
-            elif is_categorical_dtype(dtype_r):
-                if how == "left":
-                    raise ValueError(ctgry_err.format(lcol, "left"))
-                rtn = rhs[rcol].cat.categories.dtype
-                to_categorical.append(rcol)
-                rhs[rcol + "_codes"] = rhs[rcol].cat.codes
-            elif how in ["inner", "outer"]:
-                if (np.issubdtype(dtype_l, np.number)) and (
-                    np.issubdtype(dtype_r, np.number)
-                ):
-                    if dtype_l.kind == dtype_r.kind:
-                        # both ints or both floats
-                        rtn = max(dtype_l, dtype_r)
-                    else:
-                        rtn = np.find_common_type([], [dtype_l, dtype_r])
-                elif is_datetime_dtype(dtype_l) and is_datetime_dtype(dtype_r):
-                    rtn = max(dtype_l, dtype_r)
-            return rtn
-
-        if left_index or right_index:
-            if isinstance(
-                lhs.index, cudf.core.multiindex.MultiIndex
-            ) or isinstance(rhs.index, cudf.core.multiindex.MultiIndex):
-                if left_index and right_index:
-                    compare_cols_l = lhs._index._data.columns
-                    compare_cols_r = rhs._index._data.columns
-                elif left_index:
-                    compare_cols_l = lhs._index._data.columns
-                    compare_cols_r = rhs[right_on]._data.columns
-                elif right_index:
-                    compare_cols_l = lhs[left_on]._data.columns
-                    compare_cols_r = rhs._index._data.columns
-                for left, right in compare_cols_l, compare_cols_r:
-                    if not pd.api.types.is_dtype_equal(
-                        left.dtype, right.dtype
-                    ):
-                        raise NotImplementedError(
-                            "Typecasting not yet supported for MultiIndicies"
-                        )
-
-                return lhs, rhs, []
-            if left_index and right_index:
-                to_dtype = casting_rules(
-                    lhs.index, rhs.index, lhs.index.dtype, rhs.index.dtype, how
-                )
-            elif left_index:
-                to_dtype = lhs.index.dtype
-            elif right_index:
-                to_dtype = rhs.index.dtype
-            lhs.index = lhs.index.astype(to_dtype)
-            rhs.index = rhs.index.astype(to_dtype)
-            return lhs, rhs, []
-
-        left_on = sorted(left_on)
-        right_on = sorted(right_on)
-        to_categorical = []
-        for lcol, rcol in zip(left_on, right_on):
-            if (lcol not in lhs._data) or (rcol not in rhs._data):
-                # probably wrong columns specified, let libcudf error
-                continue
-
-            dtype_l = lhs._data[lcol].dtype
-            dtype_r = rhs._data[rcol].dtype
-            if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-                continue
-
-            to_dtype = casting_rules(lhs, rhs, dtype_l, dtype_r, how)
-
-            if to_dtype is not None:
-                lhs[lcol] = lhs[lcol].astype(to_dtype)
-                rhs[rcol] = rhs[rcol].astype(to_dtype)
-
-        return lhs, rhs, to_categorical
 
     def _is_sorted(self, ascending=None, null_position=None):
         """

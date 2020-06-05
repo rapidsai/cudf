@@ -20,10 +20,6 @@ export HOME=$WORKSPACE
 # Switch to project root; also root of repo checkout
 cd $WORKSPACE
 
-# Get latest tag and number of commits since tag
-export GIT_DESCRIBE_TAG=`git describe --abbrev=0 --tags`
-export GIT_DESCRIBE_NUMBER=`git rev-list ${GIT_DESCRIBE_TAG}..HEAD --count`
-
 # If nightly build, append current YYMMDD to version
 if [[ "$BUILD_MODE" = "branch" && "$SOURCE_BRANCH" = branch-* ]] ; then
   export VERSION_SUFFIX=`date +%y%m%d`
@@ -51,12 +47,6 @@ conda config --set ssl_verify False
 ################################################################################
 # BUILD - Conda package builds (conda deps: libcudf <- libcudf_cffi <- cudf)
 ################################################################################
-
-logger "Build conda pkg for libNVStrings..."
-source ci/cpu/libnvstrings/build_libnvstrings.sh
-
-logger "Build conda pkg for nvstrings..."
-source ci/cpu/nvstrings/build_nvstrings.sh
 
 logger "Build conda pkg for libcudf..."
 source ci/cpu/libcudf/build_libcudf.sh

@@ -46,7 +46,7 @@ namespace strings {
  * Any null entries will result in corresponding null entries in the output column.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT64 column converted from strings.
  */
 std::unique_ptr<column> ipv4_to_integers(
@@ -69,7 +69,7 @@ std::unique_ptr<column> ipv4_to_integers(
  * @throw cudf::logic_error if the input column is not INT64 type.
  *
  * @param integers Integer (INT64) column to convert.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> integers_to_ipv4(

@@ -21,6 +21,7 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -280,6 +281,10 @@ TEST_F(CsvReaderTest, MultiColumn)
   auto int16_values       = random_values<int16_t>(num_rows);
   auto int32_values       = random_values<int32_t>(num_rows);
   auto int64_values       = random_values<int64_t>(num_rows);
+  auto uint8_values       = random_values<uint8_t>(num_rows);
+  auto uint16_values      = random_values<uint16_t>(num_rows);
+  auto uint32_values      = random_values<uint32_t>(num_rows);
+  auto uint64_values      = random_values<uint64_t>(num_rows);
   auto float32_values     = random_values<float>(num_rows);
   auto float64_values     = random_values<double>(num_rows);
 
@@ -289,8 +294,9 @@ TEST_F(CsvReaderTest, MultiColumn)
     for (int i = 0; i < num_rows; ++i) {
       line << std::to_string(int8_values[i]) << "," << int16_values[i] << "," << int16_values[i]
            << "," << int32_values[i] << "," << int32_values[i] << "," << int64_values[i] << ","
-           << int64_values[i] << "," << float32_values[i] << "," << float32_values[i] << ","
-           << float64_values[i] << "," << float64_values[i] << "\n";
+           << int64_values[i] << "," << std::to_string(uint8_values[i]) << "," << uint16_values[i]
+           << "," << uint32_values[i] << "," << uint64_values[i] << "," << float32_values[i] << ","
+           << float32_values[i] << "," << float64_values[i] << "," << float64_values[i] << "\n";
     }
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << line.str();
@@ -304,6 +310,10 @@ TEST_F(CsvReaderTest, MultiColumn)
                    "int32",
                    "long",
                    "int64",
+                   "uint8",
+                   "uint16",
+                   "uint32",
+                   "uint64",
                    "float",
                    "float32",
                    "double",
@@ -319,10 +329,14 @@ TEST_F(CsvReaderTest, MultiColumn)
   expect_column_data_equal(int32_values, view.column(4));
   expect_column_data_equal(int64_values, view.column(5));
   expect_column_data_equal(int64_values, view.column(6));
-  expect_column_data_equal(float32_values, view.column(7));
-  expect_column_data_equal(float32_values, view.column(8));
-  expect_column_data_equal(float64_values, view.column(9));
-  expect_column_data_equal(float64_values, view.column(10));
+  expect_column_data_equal(uint8_values, view.column(7));
+  expect_column_data_equal(uint16_values, view.column(8));
+  expect_column_data_equal(uint32_values, view.column(9));
+  expect_column_data_equal(uint64_values, view.column(10));
+  expect_column_data_equal(float32_values, view.column(11));
+  expect_column_data_equal(float32_values, view.column(12));
+  expect_column_data_equal(float64_values, view.column(13));
+  expect_column_data_equal(float64_values, view.column(14));
 }
 
 TEST_F(CsvReaderTest, Booleans)
@@ -908,6 +922,22 @@ TEST_F(CsvReaderTest, MultiColumnWithWriter)
     auto values = random_values<int64_t>(num_rows);
     return column_wrapper<int64_t>(values.begin(), values.end());
   }();
+  auto uint8_column = []() {
+    auto values = random_values<uint8_t>(num_rows);
+    return column_wrapper<uint8_t>(values.begin(), values.end());
+  }();
+  auto uint16_column = []() {
+    auto values = random_values<uint16_t>(num_rows);
+    return column_wrapper<uint16_t>(values.begin(), values.end());
+  }();
+  auto uint32_column = []() {
+    auto values = random_values<uint32_t>(num_rows);
+    return column_wrapper<uint32_t>(values.begin(), values.end());
+  }();
+  auto uint64_column = []() {
+    auto values = random_values<uint64_t>(num_rows);
+    return column_wrapper<uint64_t>(values.begin(), values.end());
+  }();
   auto float32_column = []() {
     auto values = random_values<float>(num_rows);
     return column_wrapper<float>(values.begin(), values.end());
@@ -924,6 +954,10 @@ TEST_F(CsvReaderTest, MultiColumnWithWriter)
                                                int32_column,
                                                int64_column,
                                                int64_column,
+                                               uint8_column,
+                                               uint16_column,
+                                               uint32_column,
+                                               uint64_column,
                                                float32_column,
                                                float32_column,
                                                float64_column,
@@ -942,6 +976,10 @@ TEST_F(CsvReaderTest, MultiColumnWithWriter)
                    "int32",
                    "long",
                    "int64",
+                   "uint8",
+                   "uint16",
+                   "uint32",
+                   "uint64",
                    "float",
                    "float32",
                    "double",
@@ -951,15 +989,19 @@ TEST_F(CsvReaderTest, MultiColumnWithWriter)
 
   const auto result_table = result.tbl->view();
 
-  std::vector<cudf::size_type> non_float64s{0, 1, 2, 3, 4, 5, 6, 7, 8};
+  std::vector<cudf::size_type> non_float64s{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
   const auto input_sliced_view  = input_table.select(non_float64s);
   const auto result_sliced_view = result_table.select(non_float64s);
   cudf::test::expect_tables_equivalent(input_sliced_view, result_sliced_view);
 
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
   double tol{1.0e-6};
-  check_float_column(input_table.column(9), result_table.column(9), tol, validity);
-  check_float_column(input_table.column(10), result_table.column(10), tol, validity);
+  auto float64_col_idx = non_float64s.size();
+  check_float_column(
+    input_table.column(float64_col_idx), result_table.column(float64_col_idx), tol, validity);
+  ++float64_col_idx;
+  check_float_column(
+    input_table.column(float64_col_idx), result_table.column(float64_col_idx), tol, validity);
 }
 
 TEST_F(CsvReaderTest, DatesWithWriter)
@@ -1072,6 +1114,62 @@ TEST_F(CsvReaderTest, EmptyFileWithWriter)
 
   // TODO is it ok for write_csv to throw instead of just writing an empty file?
   EXPECT_THROW(write_csv_helper(filepath, empty_table, false), cudf::logic_error);
+}
+
+class TestSource : public cudf::io::datasource {
+  class TestBuffer : public buffer {
+    uint8_t* const _data;
+    size_t const _size;
+
+   public:
+    TestBuffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
+
+    virtual size_t size() const override { return _size; }
+    virtual const uint8_t* data() const override { return _data; }
+  };
+
+ public:
+  std::string const str;
+
+  TestSource(std::string s) : str(std::move(s)) {}
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    size = min(size, str.size() - offset);
+    return std::make_unique<TestBuffer>((uint8_t*)str.data() + offset, size);
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    auto const read_size = min(size, str.size() - offset);
+    memcpy(dst, str.data() + offset, size);
+    return read_size;
+  }
+
+  size_t size() const override { return str.size(); }
+};
+
+TEST_F(CsvReaderTest, UserImplementedSource)
+{
+  constexpr auto num_rows = 10;
+  auto int8_values        = random_values<int8_t>(num_rows);
+  auto int16_values       = random_values<int16_t>(num_rows);
+  auto int32_values       = random_values<int32_t>(num_rows);
+
+  std::ostringstream csv_data;
+  for (int i = 0; i < num_rows; ++i) {
+    csv_data << std::to_string(int8_values[i]) << "," << int16_values[i] << "," << int32_values[i]
+             << "\n";
+  }
+  TestSource source{csv_data.str()};
+  cudf_io::read_csv_args in_args{cudf_io::source_info{&source}};
+  in_args.dtype  = {"int8", "int16", "int32"};
+  in_args.header = -1;
+  auto result    = cudf_io::read_csv(in_args);
+
+  auto const view = result.tbl->view();
+  expect_column_data_equal(int8_values, view.column(0));
+  expect_column_data_equal(int16_values, view.column(1));
+  expect_column_data_equal(int32_values, view.column(2));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
