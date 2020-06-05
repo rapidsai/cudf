@@ -239,8 +239,16 @@ class DataFrame(Frame, Serializable):
         else:
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
-                    data = [data]
-                self._init_from_list_like(data, index=index, columns=columns)
+                    new_df = self._from_columns(
+                        [data], index=index, columns=columns
+                    )
+                    self._data = new_df._data
+                    self._index = new_df._index
+                    self.columns = new_df.columns
+                else:
+                    self._init_from_list_like(
+                        data, index=index, columns=columns
+                    )
 
             else:
                 if not is_dict_like(data):
@@ -4377,32 +4385,41 @@ class DataFrame(Frame, Serializable):
 
         if data.ndim != 2:
             raise ValueError(
-                "matrix dimension expected 2 but found {!r}".format(data.ndim)
+                f"matrix dimension expected 2 but found {data.ndim}"
             )
 
         if columns is None:
             names = [i for i in range(data.shape[1])]
         else:
             if len(columns) != data.shape[1]:
-                msg = "columns length expected {!r} but found {!r}"
-                raise ValueError(msg.format(data.shape[1], len(columns)))
+                raise ValueError(
+                    f"columns length expected {data.shape[1]} but \
+                        found {len(columns)}"
+                )
             names = columns
 
-        if index is not None and len(index) != data.shape[0]:
-            msg = "index length expected {!r} but found {!r}"
-            raise ValueError(msg.format(data.shape[0], len(index)))
+        if (
+            index is not None
+            and not isinstance(index, (str, int))
+            and len(index) != data.shape[0]
+        ):
+            raise ValueError(
+                f"index length expected {data.shape[0]} but found {len(index)}"
+            )
 
         df = DataFrame()
         data = cupy.asfortranarray(cupy.asarray(data))
         for i, k in enumerate(names):
-            df[k] = Series(data[:, i], nan_as_null=nan_as_null)
+            df._data[k] = as_column(data[:, i], nan_as_null=nan_as_null)
 
         if index is not None:
-            if isinstance(index, cudf.Index):
-                indices = index
+            if isinstance(index, (str, int)):
+                index = as_index(df[index])
             else:
-                indices = data[index]
-            return df.set_index(indices.astype(np.int64))
+                index = as_index(index)
+        else:
+            index = RangeIndex(start=0, stop=len(data))
+        df._index = index
 
         return df
 
@@ -4427,10 +4444,11 @@ class DataFrame(Frame, Serializable):
         """
         Construct a DataFrame from a list of Columns
         """
-        df = cls(dict(zip(range(len(cols)), cols)), index=index)
-        if columns is not None:
-            df.columns = columns
-        return df
+        return cls(
+            data=dict(zip(range(len(cols)), cols)),
+            index=index,
+            columns=columns,
+        )
 
     def quantile(
         self,
