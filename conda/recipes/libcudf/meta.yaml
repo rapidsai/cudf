@@ -30,6 +30,7 @@ requirements:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp 0.17.1.*
+    - arrow-cpp-proc * {{ build_ext }}
     - double-conversion
     - rapidjson
     - flatbuffers
@@ -40,7 +41,7 @@ requirements:
     - arrow-cpp 0.17.1.*
     - dlpack
   run_constrained:
-    - arrow-cpp-proc * 0.17.1.*
+    - arrow-cpp-proc * {{ build_ext }}
 
 test:
   commands:
