@@ -138,7 +138,7 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
-option(BUILD_CUDATASOURCE "Configure CMake to build cuDatasource" OFF)
+option(BUILD_CUDF_KAFKA "Configure CMake to build cudf_kafka" OFF)
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
@@ -845,22 +845,22 @@ add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
 
 ####################################################################################################
 # - cuDatasource - OFF by default due to increased number of dependencies
-if(BUILD_CUDATASOURCE)
+if(BUILD_CUDF_KAFKA)
 
-    # cuDatasource library
-    add_library(libcudatasource
-        cudatasource/kafka/src/kafka_consumer.cpp
+    # cudf_kafka library
+    add_library(libcudf_kafka
+        libcudf_kafka/kafka/src/kafka_consumer.cpp
     )
 
     # Include paths
-    include_directories("${CMAKE_SOURCE_DIR}/cudatasource/kafka/include")
+    include_directories("${CMAKE_SOURCE_DIR}/libcudf_kafka/kafka/include")
     
     # Rename installation to proper name for later finding
-    set_target_properties(libcudatasource PROPERTIES OUTPUT_NAME "cuDatasource")
-    set_target_properties(libcudatasource PROPERTIES BUILD_RPATH "\$ORIGIN")
+    set_target_properties(libcudf_kafka PROPERTIES OUTPUT_NAME "cudf_kafka")
+    set_target_properties(libcudf_kafka PROPERTIES BUILD_RPATH "\$ORIGIN")
 
     ###################################################################################################
-    # cuDatasource - Kafka ------------------------------------------------------------------------------------
+    # cudf_kafka - librdkafka -------------------------------------------------------------------------
 
     find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
     find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
@@ -868,52 +868,52 @@ if(BUILD_CUDATASOURCE)
     message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
     message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
 
-    target_link_libraries(libcudatasource ${RDKAFKA++_LIBRARY})
+    target_link_libraries(libcudf_kafka ${RDKAFKA++_LIBRARY})
 
     ###################################################################################################
-    # - cuDatasource Install ----------------------------------------------------------------------------------
-    target_link_libraries(cudf libcudatasource)
+    # - cudf_kafka Install ----------------------------------------------------------------------------
+    target_link_libraries(cudf libcudf_kafka)
 
-    install(TARGETS libcudatasource
+    install(TARGETS libcudf_kafka
             DESTINATION lib
-            COMPONENT libcudatasource)
+            COMPONENT libcudf_kafka)
 
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cudatasource/kafka/include
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/kafka/include
             DESTINATION include
-            COMPONENT libcudatasource)
+            COMPONENT libcudf_kafka)
 
-    add_custom_target(install_cudatasource
-            COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=libcudatsource -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
-            DEPENDS libcudatasource)
+    add_custom_target(install_libcudf_kafka
+            COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=libcudf_kafka -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+            DEPENDS libcudf_kafka)
 
     ####################################################################################################
-    # - cuDatasource Tests
+    # - cudf_kafka Tests
     if(BUILD_TESTS)
         if(GTEST_FOUND)
             message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
             include_directories(${GTEST_INCLUDE_DIR})
-            add_subdirectory(${CMAKE_SOURCE_DIR}/cudatasource/kafka/tests)
+            add_subdirectory(${CMAKE_SOURCE_DIR}/libcudf_kafka/kafka/tests)
         else()
             message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
         endif(GTEST_FOUND)
     endif(BUILD_TESTS)
         
-    message(STATUS "CUDATASOURCE_TEST_LIST set to: ${CUDATASOURCE_TEST_LIST}")
+    message(STATUS "CUDF_KAFKA_TEST_LIST set to: ${CUDF_KAFKA_TEST_LIST}")
 
-    add_custom_target(build_tests_cudatasource
-                      DEPENDS ${CUDATASOURCE_TEST_LIST})
+    add_custom_target(build_tests_libcudf_kafka
+                      DEPENDS ${CUDF_KAFKA_TEST_LIST})
 
-    add_custom_target(test_cudatasource
-                      COMMAND ctest -E "CUDATASOURCE"
-                      DEPENDS build_tests_cudatasource)
+    add_custom_target(test_libcudf_kafka
+                      COMMAND ctest
+                      DEPENDS build_tests_libcudf_kafka)
 
     ####################################################################################################
-    # - cuDatasource documentation
-    add_custom_command(OUTPUT CUDATASOURCE_DOXYGEN
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cudatasource/doxygen
+    # - cudf_kafka documentation
+    add_custom_command(OUTPUT CUDF_KAFKA_DOXYGEN
+                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/doxygen
                    COMMAND doxygen Doxyfile
                    VERBATIM)
 
-    add_custom_target(docs_cudatasource DEPENDS CUDATASOURCE_DOXYGEN)
+    add_custom_target(docs_libcudf_kafka DEPENDS CUDF_KAFKA_DOXYGEN)
 
-endif(BUILD_CUDATASOURCE)
+endif(BUILD_CUDF_KAFKA)

@@ -24,7 +24,7 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
-set(CUDATASOURCE_TEST_LIST CACHE INTERNAL "CUDATASOURCE_TEST_LIST")
+set(CUDF_KAFKA_TEST_LIST CACHE INTERNAL "CUDF_KAFKA_TEST_LIST")
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME}
@@ -34,7 +34,7 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
-    set(CUDATASOURCE_TEST_LIST ${CUDATASOURCE_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUDATASOURCE_TEST_LIST")
+    set(CUDF_KAFKA_TEST_LIST ${CUDF_KAFKA_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUDF_KAFKA_TEST_LIST")
 endfunction(ConfigureTest)
 
 ###################################################################################################
@@ -76,6 +76,6 @@ endif(CONDA_LINK_DIRS)
 ###################################################################################################
 # - create tests ----------------------------------------------------------------------------------
 
-ConfigureTest(CUDATASOURCE_KAFKA_HOST_READ   "${CMAKE_CURRENT_SOURCE_DIR}/kafka_consumer_tests.cpp")
+ConfigureTest(CUDF_KAFKA_HOST_READ   "${CMAKE_CURRENT_SOURCE_DIR}/kafka_consumer_tests.cpp")
 
 enable_testing()
