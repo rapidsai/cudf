@@ -160,7 +160,7 @@ std::unique_ptr<cudf::column> count_tokens(
  *
  * @code{.pseudo}
  * Example:
- * s = ["hello world","goodbye"]
+ * s = ["hello world", null, "goodbye"]
  * t = character_tokenize(s)
  * t is now ["h","e","l","l","o"," ","w","o","r","l","d","g","o","o","d","b","y","e"]
  * @endcode
