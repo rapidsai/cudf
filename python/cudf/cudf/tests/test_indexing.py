@@ -1080,3 +1080,35 @@ def test_iloc_categorical_index(index):
     expect = pdf.iloc[:, 0]
     got = gdf.iloc[:, 0]
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "sli",
+    [
+        slice("2001", "2020"),
+        slice("2001", "2002"),
+        slice("2002", "2001"),
+        slice(None, "2020"),
+        slice("2020", None),
+    ],
+)
+@pytest.mark.parametrize("is_dataframe", [True, False])
+def test_loc_datetime_index(sli, is_dataframe):
+
+    if is_dataframe is True:
+        pd_data = pd.DataFrame(
+            {"a": [1, 2, 3]},
+            index=pd.Series(["2001", "2009", "2002"], dtype="datetime64[ns]"),
+        )
+    else:
+        pd_data = pd.Series(
+            [1, 2, 3],
+            pd.Series(["2001", "2009", "2002"], dtype="datetime64[ns]"),
+        )
+
+    gd_data = cudf.from_pandas(pd_data)
+
+    expect = pd_data.loc[sli]
+    got = gd_data.loc[sli]
+
+    assert_eq(expect, got)
