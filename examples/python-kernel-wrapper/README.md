@@ -19,8 +19,8 @@ This is similar to an existing [weather notebook](https://github.com/rapidsai/no
 
 ## Build Steps
 1. Clone the cudf repo if you haven't already ```git clone https://github.com/rapidsai/cudf.git && cd cudf/examples/python-kernel-wrapper```
-2. Create the ```cudf_ex``` conda environment. ```conda env create -f ./conda/cudf_ex.yml --name cudf_ex```
-3. Activate the ```cudf_ex``` sconda environment ```conda activate cudf_ex```
-3. Build the cython "kernel_wrapper" code. ```cd cython && python setup.py build install``` Notice the custom Kernel definitions are in ```cython/src/kernel.cu```. This is just for example and the build can be altered as needed.
+2. Create the `cudf_ex` conda environment. ```conda env create -f ./conda/cudf_ex.yml --name cudf_ex```
+3. Activate the `cudf_ex` sconda environment ```conda activate cudf_ex```
+3. Build the cython 1kernel_wrapper` code. ```cd cython && python setup.py build install``` Notice the custom Kernel definitions are in `cython/src/kernel.cu`. This is just for example and the build can be altered as needed.
 4. Download weather data. A convenience Python script has been provided here to make that easier for you. By default it will download years 2010-2020 weather data. That data is about 300MB per file so if you need to download less files you can change that in the script. The data will be downloaded to ./data/weather. ```python ./data/download_data.py```
 5. Run the Python example script. It expects an input of a single Weather year file. EX: ```python ./01_python_kernel_wrapper.py ./data/weather/2010.csv.gz```
