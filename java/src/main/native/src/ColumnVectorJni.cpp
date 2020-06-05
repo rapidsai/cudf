@@ -38,6 +38,7 @@
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
+#include <cudf/strings/padding.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/split/split.hpp>
@@ -941,6 +942,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplaceWithBackre
 
     std::unique_ptr<cudf::column> result = cudf::strings::replace_with_backrefs(
         scv, ss_pattern.get(), ss_replace.get());
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_zfill(
+    JNIEnv *env,
+    jclass,
+    jlong column_view,
+    jint j_width) {
+
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, j_width, "width is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::size_type width = reinterpret_cast<cudf::size_type>(j_width);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::zfill(scv, width);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
