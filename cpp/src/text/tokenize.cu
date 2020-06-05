@@ -175,7 +175,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   auto strings_view = cudf::column_device_view::create(strings_column.parent(), stream);
   cudf::size_type num_characters = thrust::count_if(
     execpol->on(stream), d_chars, d_chars + chars_bytes, [] __device__(uint8_t byte) {
-      return is_begin_utf8_char(byte);
+      return cudf::strings::detail::is_begin_utf8_char(byte);
     });
 
   // no characters check -- this could happen in all-empty or all-null strings column
@@ -187,14 +187,15 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   auto offsets_column = cudf::make_numeric_column(
     cudf::data_type{cudf::INT32}, num_characters + 1, cudf::mask_state::UNALLOCATED, stream, mr);
   auto d_new_offsets = offsets_column->mutable_view().begin<int32_t>();
-  thrust::copy_if(execpol->on(stream),
-                  thrust::make_counting_iterator<int32_t>(0),
-                  thrust::make_counting_iterator<int32_t>(chars_bytes + 1),
-                  d_new_offsets,
-                  [d_chars, chars_bytes] __device__(auto idx) {
-                    // this will also set the final value to the size chars_bytes
-                    return idx < chars_bytes ? is_begin_utf8_char(d_chars[idx]) : true;
-                  });
+  thrust::copy_if(
+    execpol->on(stream),
+    thrust::make_counting_iterator<int32_t>(0),
+    thrust::make_counting_iterator<int32_t>(chars_bytes + 1),
+    d_new_offsets,
+    [d_chars, chars_bytes] __device__(auto idx) {
+      // this will also set the final value to the size chars_bytes
+      return idx < chars_bytes ? cudf::strings::detail::is_begin_utf8_char(d_chars[idx]) : true;
+    });
 
   // create the output chars column
   // -- just a copy of the input's chars column
