@@ -32,6 +32,7 @@
 - PR #5363 Handle `0-dim` inputs while broadcasting to a column
 - PR #5389 Expose typed accessors for Java HostMemoryBuffer
 - PR #5379 Avoid chaining `Buffer`s
+- PR #5408 Update pyrrow and arrow-cpp to 0.17.1
 
 ## Bug Fixes
 
