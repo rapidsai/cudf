@@ -3,10 +3,10 @@
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
-import pyarrow as pa
 from cudf.core.column.column import as_column
 from cudf.tests.utils import assert_eq
 
@@ -48,7 +48,7 @@ def test_column_offset_and_size(pandas_input, offset, size):
     elif pd.api.types.is_string_dtype(col.dtype):
         assert col.size == (col.children[0].size - 1)
         assert col.size == (
-                (col.children[0].data.size / col.children[0].dtype.itemsize) - 1
+            (col.children[0].data.size / col.children[0].dtype.itemsize) - 1
         )
     else:
         assert col.size == (col.data.size / col.dtype.itemsize)
@@ -137,8 +137,8 @@ def test_column_chunked_array_creation():
     pyarrow_array = pa.array([1, 2, 3] * 1000)
     chunked_array = pa.chunked_array(pyarrow_array)
 
-    actual_column = cudf.core.column.as_column(chunked_array, dtype='float')
-    expected_column = cudf.core.column.as_column(pyarrow_array, dtype='float')
+    actual_column = cudf.core.column.as_column(chunked_array, dtype="float")
+    expected_column = cudf.core.column.as_column(pyarrow_array, dtype="float")
 
     assert_eq(cudf.Series(actual_column), cudf.Series(expected_column))
 
