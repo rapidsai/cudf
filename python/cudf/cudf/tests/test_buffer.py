@@ -1,8 +1,7 @@
-from cudf.core.buffer import Buffer
 import cupy as cp
-import numba
-
 import pytest
+
+from cudf.core.buffer import Buffer
 
 arr_len = 10
 
@@ -21,10 +20,10 @@ arr_len = 10
 def test_buffer_from_cuda_iface_contiguous(data):
     data, expect_success = data
     if expect_success:
-        buf = Buffer(data=data.view("|u1"), size=data.size)
+        buf = Buffer(data=data.view("|u1"), size=data.size)  # noqa: F841
     else:
         with pytest.raises(ValueError):
-            buf = Buffer(data=data.view("|u1"), size=data.size)
+            buf = Buffer(data=data.view("|u1"), size=data.size)  # noqa: F841
 
 
 @pytest.mark.parametrize(
@@ -44,4 +43,4 @@ def test_buffer_from_cuda_iface_dtype(data, dtype):
         with pytest.raises(
             TypeError, match="Buffer data must be of uint8 type"
         ):
-            bug = Buffer(data=data, size=data.size)
+            buf = Buffer(data=data, size=data.size)  # noqa: F841

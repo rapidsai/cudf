@@ -55,7 +55,7 @@ class Buffer(Serializable):
                 data = memoryview(data)
             except TypeError:
                 raise TypeError("data must be Buffer, array-like or integer")
-            self._init_from_array_like(np.asarray(data).view('|u1'), owner)
+            self._init_from_array_like(np.asarray(data).view("|u1"), owner)
 
     def __len__(self):
         return self.size
