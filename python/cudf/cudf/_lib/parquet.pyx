@@ -20,7 +20,6 @@ from libcpp.map cimport map
 from libcpp.vector cimport vector
 from libcpp cimport bool
 
-
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.table cimport Table
 from cudf._lib.cpp.table.table cimport table
@@ -340,10 +339,11 @@ cdef class ParquetWriter:
             return None
 
         # Update metadata-collection options
-        return_meta = False
         if metadata_file_path is not None:
             metadata_out_file_path = str.encode(metadata_file_path)
             return_meta = True
+        else:
+            return_meta = False
 
         with nogil:
             out_metadata_c = move(

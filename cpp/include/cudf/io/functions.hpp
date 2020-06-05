@@ -692,10 +692,6 @@ struct write_parquet_chunked_args {
   statistics_freq stats_level = statistics_freq::STATISTICS_ROWGROUP;
   /// Optional associated metadata.
   const table_metadata_with_nullability* metadata;
-  /// Optionally return the raw parquet file metadata output
-  bool return_filemetadata = false;
-  /// Column chunks file path to be set in the raw output metadata
-  std::string metadata_out_file_path;
 
   write_parquet_chunked_args() = default;
 
@@ -773,14 +769,16 @@ void write_parquet_chunked(table_view const& table,
  *
  * @param[in] state Opaque state information about the writer process. Must be the same pointer
  * returned from write_parquet_chunked_begin()
+ * @param[in] return_filemetadata If true, return the raw file metadata
+ * @param[in] metadata_out_file_path Column chunks file path to be set in the raw output metadata
  *
  * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
  *         requested in write_parquet_args (empty blob otherwise)
  */
 std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
   std::shared_ptr<detail::parquet::pq_chunked_state>& state,
-  bool return_filemetadata,
-  const std::string& metadata_out_file_path);
+  bool return_filemetadata                  = false,
+  const std::string& metadata_out_file_path = "");
 
 }  // namespace io
 }  // namespace cudf
