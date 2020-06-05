@@ -28,25 +28,6 @@
  * @brief Concrete type definitions for int32_t and int64_t durations in varying resolutions.
  **/
 namespace cudf {
-namespace detail {
-
-template <class Duration>
-struct duration : Duration {
-  // TODO explicit constructor from timestamp?
-  constexpr duration() : Duration(Duration()){};
-  constexpr duration(Duration d) : Duration(d){};
-  constexpr duration(typename Duration::rep r) : Duration(Duration(r)){};
-  /**
-   * @brief Constructs a new duration by copying the contents of another `duration` and converting
-   * its duration value if necessary.
-   *
-   * @param other The `duration` to copy
-   */
-  template <class FromDuration>
-  inline constexpr explicit duration(duration<FromDuration> const& other)
-    : duration<Duration>(simt::std::chrono::duration_cast<Duration>(other)){};
-};
-}  // namespace detail
 
 /**
  * @addtogroup duration_classes Duration
@@ -55,23 +36,23 @@ struct duration : Duration {
 /**
  * @brief Type alias representing an int32_t duration of days.
  **/
-using duration_D = detail::duration<simt::std::chrono::duration<int32_t, simt::std::ratio<86400>>>;
+using duration_D = simt::std::chrono::duration<int32_t, simt::std::chrono::days::period>;
 /**
  * @brief Type alias representing an int64_t duration of seconds.
  **/
-using duration_s = detail::duration<simt::std::chrono::duration<int64_t, simt::std::ratio<1>>>;
+using duration_s = simt::std::chrono::duration<int64_t, simt::std::chrono::seconds::period>;
 /**
  * @brief Type alias representing an int64_t duration of milliseconds.
  **/
-using duration_ms = detail::duration<simt::std::chrono::duration<int64_t, simt::std::milli>>;
+using duration_ms = simt::std::chrono::duration<int64_t, simt::std::chrono::milliseconds::period>;
 /**
  * @brief Type alias representing an int64_t duration of microseconds.
  **/
-using duration_us = detail::duration<simt::std::chrono::duration<int64_t, simt::std::micro>>;
+using duration_us = simt::std::chrono::duration<int64_t, simt::std::chrono::microseconds::period>;
 /**
  * @brief Type alias representing an int64_t duration of nanoseconds.
  **/
-using duration_ns = detail::duration<simt::std::chrono::duration<int64_t, simt::std::nano>>;
+using duration_ns = simt::std::chrono::duration<int64_t, simt::std::chrono::nanoseconds::period>;
 
 static_assert(sizeof(duration_D) == sizeof(typename duration_D::rep), "");
 static_assert(sizeof(duration_s) == sizeof(typename duration_s::rep), "");
@@ -88,21 +69,21 @@ namespace std {
  *
  * Pass through to return the limits of the underlying numeric representation.
  **/
-#define DURATION_LIMITS(TypeName)                                   \
-  template <>                                                       \
-  struct numeric_limits<TypeName> {                                 \
-    static constexpr TypeName max() noexcept                        \
-    {                                                               \
-      return std::numeric_limits<typename TypeName::rep>::max();    \
-    }                                                               \
-    static constexpr TypeName lowest() noexcept                     \
-    {                                                               \
-      return std::numeric_limits<typename TypeName::rep>::lowest(); \
-    }                                                               \
-    static constexpr TypeName min() noexcept                        \
-    {                                                               \
-      return std::numeric_limits<typename TypeName::rep>::min();    \
-    }                                                               \
+#define DURATION_LIMITS(TypeName)                                             \
+  template <>                                                                 \
+  struct numeric_limits<TypeName> {                                           \
+    static constexpr TypeName max() noexcept                                  \
+    {                                                                         \
+      return TypeName(std::numeric_limits<typename TypeName::rep>::max());    \
+    }                                                                         \
+    static constexpr TypeName lowest() noexcept                               \
+    {                                                                         \
+      return TypeName(std::numeric_limits<typename TypeName::rep>::lowest()); \
+    }                                                                         \
+    static constexpr TypeName min() noexcept                                  \
+    {                                                                         \
+      return TypeName(std::numeric_limits<typename TypeName::rep>::min());    \
+    }                                                                         \
   }
 
 DURATION_LIMITS(cudf::duration_D);
