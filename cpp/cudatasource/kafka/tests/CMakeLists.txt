@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUIO_TESTS LANGUAGES C CXX CUDA)
+project(KAFKA_TESTS LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -24,7 +24,7 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
-set(CUIO_TEST_LIST CACHE INTERNAL "CUIO_TEST_LIST")
+set(CUDATASOURCE_TEST_LIST CACHE INTERNAL "CUDATASOURCE_TEST_LIST")
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME}
@@ -34,7 +34,7 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
-    set(CUIO_TEST_LIST ${CUIO_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUIO_TEST_LIST")
+    set(CUDATASOURCE_TEST_LIST ${CUDATASOURCE_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUDATASOURCE_TEST_LIST")
 endfunction(ConfigureTest)
 
 ###################################################################################################
@@ -76,6 +76,6 @@ endif(CONDA_LINK_DIRS)
 ###################################################################################################
 # - create tests ----------------------------------------------------------------------------------
 
-ConfigureTest(KAFKA_DATASOURCE_HOST_READ   "${CMAKE_CURRENT_SOURCE_DIR}/kafka_consumer_tests.cpp")
+ConfigureTest(CUDATASOURCE_KAFKA_HOST_READ   "${CMAKE_CURRENT_SOURCE_DIR}/kafka_consumer_tests.cpp")
 
 enable_testing()

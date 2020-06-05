@@ -39,9 +39,9 @@ class kafka_consumer : public cudf::io::datasource {
    public:
     message_buffer(uint8_t *data, size_t size) : _data(data), _size(size) {}
 
-    size_t size() const { return _size; }
+    size_t size() const override { return _size; }
 
-    const uint8_t *data() const { return _data; }
+    const uint8_t *data() const override { return _data; }
 
    private:
     uint8_t *const _data;
@@ -70,84 +70,41 @@ class kafka_consumer : public cudf::io::datasource {
                  int batch_timeout,
                  std::string delimiter);
 
-  std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size);
+  std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size) override;
 
-  size_t size() const;
+  size_t size() const override;
 
-  size_t host_read(size_t offset, size_t size, uint8_t *dst);
+  size_t host_read(size_t offset, size_t size, uint8_t *dst) override;
 
   /**
    * @brief Base class destructor
    **/
   virtual ~kafka_consumer(){};
 
- protected:
-  std::unique_ptr<RdKafka::Conf> kafka_conf_;  // RDKafka configuration object
-  std::unique_ptr<RdKafka::KafkaConsumer> consumer_ = NULL;
+ private:
+  std::unique_ptr<RdKafka::Conf> kafka_conf;  // RDKafka configuration object
+  std::unique_ptr<RdKafka::KafkaConsumer> consumer;
 
-  RdKafka::Conf::ConfResult conf_res_;  // Result from configuration update operation
-  std::string errstr_;                  // Textual representation of Error
-  std::string conf_val;                 // String value of a RDKafka configuration request
+  std::string topic_name;
+  int partition;
+  int64_t start_offset;
+  int64_t end_offset;
+  int batch_timeout;
+  std::string delimiter;
 
-  std::string topic_name_;
-  int partition_;
-  int64_t start_offset_;
-  int64_t end_offset_;
-  int batch_timeout_;
-  std::string delimiter_;
-
-  std::string buffer_;
+  std::string buffer;
 
  private:
-  /**
-   * Change the TOPPAR assignment for this consumer instance
-   **/
-  RdKafka::ErrorCode update_consumer_toppar_assignment(std::string topic,
+  RdKafka::ErrorCode update_consumer_toppar_assignment(std::string const &topic,
                                                        int partition,
-                                                       int64_t offset)
-  {
-    std::vector<RdKafka::TopicPartition *> _toppars;
-    _toppars.push_back(RdKafka::TopicPartition::create(topic, partition, offset));
-    return consumer_.get()->assign(_toppars);
-  }
+                                                       int64_t offset);
 
   /**
    * Convenience method for getting "now()" in Kafka's standard format
    **/
-  int64_t now()
-  {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return ((int64_t)tv.tv_sec * 1000) + (tv.tv_usec / 1000);
-  }
+  int64_t now();
 
-  void consume_to_buffer()
-  {
-    int64_t messages_read = 0;
-    int64_t batch_size    = end_offset_ - start_offset_;
-    int64_t end           = now() + batch_timeout_;
-    int remaining_timeout = batch_timeout_;
-
-    update_consumer_toppar_assignment(topic_name_, partition_, start_offset_);
-
-    while (messages_read < batch_size) {
-      RdKafka::Message *msg = consumer_->consume(remaining_timeout);
-
-      if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
-        buffer_.append(static_cast<char *>(msg->payload()));
-        buffer_.append(delimiter_);
-        messages_read++;
-      }
-
-      remaining_timeout = end - now();
-      if (remaining_timeout < 0) {
-        delete msg;
-        break;
-      }
-
-      delete msg;
-    }
-  }
+  void consume_to_buffer();
 };
 
 }  // namespace kafka

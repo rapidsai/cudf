@@ -7,7 +7,6 @@
 # This script is used to build the component(s) in this repo from
 # source, and can be called with various options to customize the
 # build as needed (see the help output for details)
-
 # Abort script on first error
 set -e
 
@@ -18,8 +17,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -v -g -n -l -libcuio --allgpuarch --disable_nvtx --show_depr_warn -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n] [-h] [-l] [-libcuio]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -v -g -n -l -libcudatasource --allgpuarch --disable_nvtx --show_depr_warn -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n] [-h] [-l] [-libcudatasource]
    clean                - remove all existing build artifacts and configuration (start
                           over)
    libnvstrings         - build the nvstrings C++ code only
@@ -33,7 +32,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n
    -g                   - build for debug
    -n                   - no install step
    -l                   - build legacy tests
-   -libcuio             - build the cuio C++ code only
+   -libcudatasource     - build the cudatasource C++ code only
    --allgpuarch         - build for all supported GPU architectures
    --disable_nvtx       - disable inserting NVTX profiling ranges
    --show_depr_warn     - show cmake deprecation warnings
@@ -58,7 +57,7 @@ BUILD_NVTX=ON
 BUILD_TESTS=OFF
 BUILD_LEGACY_TESTS=OFF
 BUILD_DISABLE_DEPRECATION_WARNING=ON
-BUILD_CUIO=OFF
+BUILD_CUDATASOURCE=OFF
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -119,8 +118,8 @@ fi
 if hasArg --show_depr_warn; then
     BUILD_DISABLE_DEPRECATION_WARNING=OFF
 fi
-if hasArg -libcuio; then
-    BUILD_CUIO=ON
+if hasArg -libcudatasource; then
+    BUILD_CUDATASOURCE=ON
 fi
 
 # If clean given, run it prior to any other steps
@@ -148,7 +147,7 @@ fi
 ################################################################################
 # Configure, build, and install libnvstrings
 
-if buildAll || hasArg libnvstrings || hasArg libcudf || hasArg -libcuio; then
+if buildAll || hasArg libnvstrings || hasArg libcudf || hasArg -libcudatasource; then
 
     mkdir -p ${LIB_BUILD_DIR}
     cd ${LIB_BUILD_DIR}
@@ -160,7 +159,7 @@ if buildAll || hasArg libnvstrings || hasArg libcudf || hasArg -libcuio; then
           -DBUILD_LEGACY_TESTS=${BUILD_LEGACY_TESTS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-          -DBUILD_CUIO=${BUILD_CUIO} ..
+          -DBUILD_CUDATASOURCE=${BUILD_CUDATASOURCE} ..
 fi
 
 if buildAll || hasArg libnvstrings; then
@@ -231,17 +230,17 @@ if buildAll || hasArg dask_cudf; then
     fi
 fi
 
-# Do not build cuio with 'buildAll'
-if hasArg -libcuio; then
+# Do not build cudatasource with 'buildAll'
+if hasArg -libcudatasource; then
 
     cd ${LIB_BUILD_DIR}
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        make -j${PARALLEL_LEVEL} install_cuio VERBOSE=${VERBOSE}
+        make -j${PARALLEL_LEVEL} install_cudatasource VERBOSE=${VERBOSE}
     else
-        make -j${PARALLEL_LEVEL} cuio VERBOSE=${VERBOSE}
+        make -j${PARALLEL_LEVEL} cudatasource VERBOSE=${VERBOSE}
     fi
 
     if [[ ${BUILD_TESTS} == "ON" ]]; then
-        make -j${PARALLEL_LEVEL} build_tests_cuio VERBOSE=${VERBOSE}
+        make -j${PARALLEL_LEVEL} build_tests_cudatasource VERBOSE=${VERBOSE}
     fi
 fi
