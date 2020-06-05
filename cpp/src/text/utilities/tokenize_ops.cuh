@@ -241,5 +241,17 @@ struct multi_delimiter_strings_tokenizer {
   }
 };
 
+/**
+ * @brief This will return true if passed the first byte of a UTF-8 character.
+ *
+ * @param byte Any byte from a valid UTF-8 character
+ * @return true if this the first byte of the character
+ */
+constexpr bool is_begin_utf8_char(uint8_t byte)
+{
+  // The (0xC0 & 0x80) bit pattern identifies a continuation byte of a character.
+  return (byte & 0xC0) != 0x80;
+}
+
 }  // namespace detail
 }  // namespace nvtext
