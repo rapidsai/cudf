@@ -148,35 +148,6 @@ if (RMM_INCLUDE AND RMM_LIBRARY)
 endif (RMM_INCLUDE AND RMM_LIBRARY)
 
 ###################################################################################################
-# - NVStrings -------------------------------------------------------------------------------------
-
-# NVSTRING_INCLUDE is the same as CUDF_INCLUDE
-
-find_library(NVSTRINGS_LIBRARY "NVStrings"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib"
-                   "../../../../cpp/build")
-
-find_library(NVCATEGORY_LIBRARY "NVCategory"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib"
-                   "../../../../cpp/build")
-
-message(STATUS "NVSTRINGS: NVSTRINGS_LIBRARY set to ${NVSTRINGS_LIBRARY}")
-message(STATUS "NVSTRINGS: NVCATEGORY_LIBRARY set to ${NVCATEGORY_LIBRARY}")
-
-add_library(NVStrings SHARED IMPORTED ${NVSTRINGS_LIBRARY})
-if (NVSTRINGS_LIBRARY)
-    set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY})
-endif (NVSTRINGS_LIBRARY)
-
-add_library(NVCategory SHARED IMPORTED ${NVCATEGORY_LIBRARY})
-if (NVCATEGORY_LIBRARY)
-    set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVCATEGORY_LIBRARY})
-endif (NVCATEGORY_LIBRARY)
-
-
-###################################################################################################
 # - find JNI -------------------------------------------------------------------------------------
 find_package(JNI REQUIRED)
 if(JNI_FOUND)
@@ -202,9 +173,8 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${RMM_LIBRARY}"
-                 "${CUDF_LIBRARY}"
-                 "${NVSTRINGS_LIBRARY}"
-                 "${NVCATEGORY_LIBRARY}")
+                 "${CUDF_LIBRARY}")
+
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------

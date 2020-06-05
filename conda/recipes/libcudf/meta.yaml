@@ -25,10 +25,9 @@ build:
 
 requirements:
   build:
-    - cmake >=3.12.4
+    - cmake >=3.14.0
   host:
     - librmm {{ minor_version }}.*
-    - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp 0.15.0.*
     - double-conversion

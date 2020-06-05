@@ -1,3 +1,4 @@
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -652,3 +653,23 @@ def test_dataframe_series_replace(data):
     ddf = dgd.from_cudf(gdf, npartitions=5)
 
     dd.assert_eq(ddf.replace(1, 2), pdf.replace(1, 2))
+
+
+def test_dataframe_assign_col():
+    df = cudf.DataFrame(list(range(100)))
+    pdf = pd.DataFrame(list(range(100)))
+
+    ddf = dgd.from_cudf(df, npartitions=4)
+    ddf["fold"] = 0
+    ddf["fold"] = ddf["fold"].map_partitions(
+        lambda cudf_df: cp.random.randint(0, 4, len(cudf_df))
+    )
+
+    pddf = dd.from_pandas(pdf, npartitions=4)
+    pddf["fold"] = 0
+    pddf["fold"] = pddf["fold"].map_partitions(
+        lambda p_df: np.random.randint(0, 4, len(p_df))
+    )
+
+    dd.assert_eq(ddf[0], pddf[0])
+    dd.assert_eq(len(ddf["fold"]), len(pddf["fold"]))

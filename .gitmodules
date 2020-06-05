@@ -1,7 +1,3 @@
-[submodule "thirdparty/cub"]
-	path = thirdparty/cub
-	url = https://github.com/rapidsai/thirdparty-cub.git
-	branch = cudf-cub
 [submodule "thirdparty/jitify"]
 	path = thirdparty/jitify
 	url = https://github.com/rapidsai/jitify.git
