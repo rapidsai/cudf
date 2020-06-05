@@ -67,7 +67,7 @@ fi
 conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "dask>=2.15.0" "distributed>=2.15.0" "numpy>=1.16" "double-conversion" \
               "rapidjson" "flatbuffers" "boost-cpp" "fsspec>=0.6.0" "dlpack" \
-              "feather-format" "cupy>=6.6.0,<8.0.0a0,!=7.1.0" "arrow-cpp=0.15.0" "pyarrow=0.15.0" \
+              "feather-format" "cupy>=6.6.0,<8.0.0a0,!=7.1.0" "arrow-cpp=0.17.1" "arrow-cpp-proc=*=cuda" "pyarrow=0.17.1" \
               "fastavro>=0.22.0" "pandas>=0.25,<0.26" "hypothesis" "s3fs" "gcsfs" \
               "boto3" "moto" "httpretty" "streamz" "ipython=7.3*" "jupyterlab"
 
