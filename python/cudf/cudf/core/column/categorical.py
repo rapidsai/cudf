@@ -527,7 +527,9 @@ class CategoricalAccessor(object):
                         categories=new_categories, ordered=ordered
                     ),
                 )
-            elif not self._categories_equal(new_categories, **kwargs):
+            elif not self._categories_equal(
+                new_categories, **kwargs
+            ) or not self.ordered == kwargs.get("ordered"):
                 out_col = self._set_categories(
                     self._column.categories, new_categories, **kwargs
                 )
