@@ -10,9 +10,13 @@
 - PR #5342 Add support for `StringMethods.__getitem__`
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5303 Add slice_strings functionality using delimiter string
+- PR #5301 Add Java bindings for `zfill`
 
 ## Improvements
+
+- PR #5403 Update required CMake version to 3.14 in contribution guide
 - PR #5245 Add column reduction benchmark
+- PR #5315 Use CMake `FetchContent` to obtain latest release of `cub` and `thrust`
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
@@ -49,6 +53,7 @@
 - PR #5326 Fix `DataFrame.__init__` for list of scalar inputs and related dask issue
 - PR #5383 Fix cython `type_id` enum mismatch
 - PR #5382 Fix CategoricalDtype equality comparisons
+- PR #5385 Fix index issues in `DataFrame.from_gpu_matrix`
 - PR #5390 Fix Java data type IDs and string interleave test
 
 
