@@ -16,9 +16,11 @@
 
 #pragma once
 
+#include <cudf/io/types.hpp>
+
 // used to make CUIO_BENCH_ALL_TYPES calls more readable
-#define UNCOMPRESSED 0
-#define USE_SNAPPY 1
+constexpr int UNCOMPRESSED = (int)cudf::io::compression_type::NONE;
+constexpr int USE_SNAPPY   = (int)cudf::io::compression_type::SNAPPY;
 
 #define CUIO_BENCH_ALL_TYPES(benchmark_define, compression)                         \
   benchmark_define(Boolean##_##compression, bool, compression);                     \

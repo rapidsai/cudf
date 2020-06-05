@@ -29,37 +29,11 @@ struct is_timestamp<cudf::detail::timestamp<T>> {
 };
 
 // nanoseconds in the type's unit
-template <typename Ts>
-constexpr int64_t nanoseconds();
-
-template <>
-constexpr int64_t nanoseconds<cudf::timestamp_ns>()
+template <typename T>
+constexpr int64_t nanoseconds()
 {
-  return 1;
-}
-
-template <>
-constexpr int64_t nanoseconds<cudf::timestamp_us>()
-{
-  return 1000l;
-}
-
-template <>
-constexpr int64_t nanoseconds<cudf::timestamp_ms>()
-{
-  return 1000l * 1000;
-}
-
-template <>
-constexpr int64_t nanoseconds<cudf::timestamp_s>()
-{
-  return 1000l * 1000 * 1000;
-}
-
-template <>
-constexpr int64_t nanoseconds<cudf::timestamp_D>()
-{
-  return 24l * 60 * 60 * nanoseconds<cudf::timestamp_s>();
+  using ratio = std::ratio_divide<typename T::period, typename cudf::timestamp_ns::period>;
+  return ratio::num / ratio::den;
 }
 
 auto& deterministic_engine()
@@ -151,10 +125,14 @@ std::unique_ptr<cudf::column> create_random_column<std::string>(cudf::size_type 
   for (int i = 1; i < num_rows; ++i) {
     offsets.push_back(offsets.back() + dist(deterministic_engine()));
   }
+  auto const char_cnt = offsets.back() + 1;
   std::vector<char> chars;
-  chars.reserve(offsets.back() + 1);
+  chars.reserve(char_cnt);
   // Use a pattern so there can be more unique strings in the column
-  for (int i = 0; i <= offsets.back(); ++i) { chars.push_back('a' + i % 26); }
+  std::generate_n(std::back_inserter(chars), char_cnt, []() {
+    static size_t i = 0;
+    return 'a' + i++ % 26;
+  });
 
   return cudf::make_strings_column(chars, offsets);
 }
