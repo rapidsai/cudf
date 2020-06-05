@@ -395,7 +395,7 @@ class NumericalColumn(column.ColumnBase):
                     return False
 
         # want to cast int to float
-        elif to_dtype.kind == "f" and self.dtype.kind == "i":
+        elif to_dtype.kind == "f" and self.dtype.kind in "iu":
             info = np.finfo(to_dtype)
             biggest_exact_int = 2 ** (info.nmant + 1)
             if (self.min() >= -biggest_exact_int) and (
@@ -414,7 +414,7 @@ class NumericalColumn(column.ColumnBase):
                     return False
 
         # want to cast float to int:
-        elif to_dtype.kind == "i" and self.dtype.kind == "f":
+        elif to_dtype.kind in "iu" and self.dtype.kind == "f":
             info = np.iinfo(to_dtype)
             min_, max_ = info.min, info.max
             # best we can do is hope to catch it here and avoid compare
