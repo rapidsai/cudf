@@ -9,6 +9,7 @@ from string import ascii_letters
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
 import cudf
@@ -667,3 +668,21 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
     )
     with pytest.raises(ValueError):
         gdf.to_parquet(dir1, partition_cols=cols)
+
+
+def test_parquet_writer_chunked_metadata(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    test_path = "test/path"
+
+    writer = ParquetWriter(gdf_fname)
+    writer.write_table(simple_gdf)
+    writer.write_table(simple_gdf)
+    meta_byte_array = writer.close(metadata_file_path=test_path)
+    fmd = pq.ParquetFile(BytesIO(meta_byte_array)).metadata
+
+    assert fmd.num_rows == 2 * len(simple_gdf)
+    assert fmd.num_row_groups == 2
+
+    for r in range(fmd.num_row_groups):
+        for c in range(fmd.num_columns):
+            assert fmd.row_group(r).column(c).file_path == test_path

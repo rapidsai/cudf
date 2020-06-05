@@ -209,8 +209,13 @@ class writer {
    *
    * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
    * boundaries.
+   * @param[in] return_filemetadata If true, return the raw file metadata
+   * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
-  void write_chunked_end(struct pq_chunked_state& state);
+  std::unique_ptr<std::vector<uint8_t>> write_chunked_end(
+    struct pq_chunked_state& state,
+    bool return_filemetadata,
+    const std::string& metadata_out_file_path);
 
   /**
    * @brief Merges multiple metadata blobs returned by write_all into a single metadata blob

@@ -18,6 +18,8 @@ from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
+from libcpp cimport bool
+
 
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.table cimport Table
@@ -309,17 +311,11 @@ cdef class ParquetWriter:
     cdef object index
 
     def __cinit__(self, object path, object index=None,
-                  object compression=None, str statistics="ROWGROUP",
-                  object metadata_file_path=None):
+                  object compression=None, str statistics="ROWGROUP"):
         self.sink = make_sink_info(path, &self._data_sink)
         self.stat_freq = _get_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
-        self.metadata_out_file_path = metadata_out_file_path
-        if metadata_file_path is not None:
-            self.return_filemetadata = True
-        else:
-            self.return_filemetadata = False
 
     def write_table(self, Table table):
         """ Writes a single table to the file """
@@ -335,11 +331,34 @@ cdef class ParquetWriter:
         with nogil:
             write_parquet_chunked(tv, self.state)
 
-    def close(self):
-        if self.state:
-            with nogil:
-                write_parquet_chunked_end(self.state)
-                self.state.reset()
+    def close(self, object metadata_file_path=None):
+        cdef unique_ptr[vector[uint8_t]] out_metadata_c
+        cdef bool return_meta
+        cdef string metadata_out_file_path
+
+        if not self.state:
+            return None
+
+        # Update metadata-collection options
+        return_meta = False
+        if metadata_file_path is not None:
+            metadata_out_file_path = str.encode(metadata_file_path)
+            return_meta = True
+
+        with nogil:
+            out_metadata_c = move(
+                write_parquet_chunked_end(
+                    self.state, return_meta, metadata_out_file_path
+                )
+            )
+            self.state.reset()
+
+        if metadata_file_path is not None:
+            out_metadata_py = BufferArrayFromVector.from_unique_ptr(
+                move(out_metadata_c)
+            )
+            return np.asarray(out_metadata_py)
+        return None
 
     def __dealloc__(self):
         self.close()
@@ -362,13 +381,6 @@ cdef class ParquetWriter:
             args = write_parquet_chunked_args(self.sink,
                                               tbl_meta.get(),
                                               self.comp_type, self.stat_freq)
-
-        # Update metadata-collection options
-        if self.metadata_file_path is not None:
-            args.metadata_out_file_path = str.encode(metadata_file_path)
-            args.return_filemetadata = True
-
-        with nogil:
             self.state = write_parquet_chunked_begin(args)
 
 

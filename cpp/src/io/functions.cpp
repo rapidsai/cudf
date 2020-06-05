@@ -328,11 +328,15 @@ void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_s
  * @copydoc cudf::io::write_parquet_chunked_end
  *
  **/
-void write_parquet_chunked_end(std::shared_ptr<pq_chunked_state>& state)
+std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
+  std::shared_ptr<pq_chunked_state>& state,
+  bool return_filemetadata,
+  const std::string& metadata_out_file_path)
 {
   CUDF_FUNC_RANGE();
-  state->wp->write_chunked_end(*state);
+  auto meta = state->wp->write_chunked_end(*state, return_filemetadata, metadata_out_file_path);
   state.reset();
+  return meta;
 }
 
 }  // namespace io
