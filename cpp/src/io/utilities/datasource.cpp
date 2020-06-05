@@ -54,9 +54,9 @@ class arrow_io_source : public datasource {
 
   size_t host_read(size_t offset, size_t size, uint8_t *dst) override
   {
-    int64_t bytes_out = 0;
-    CUDF_EXPECTS(arrow_file->ReadAt(offset, size, &bytes_out, dst).ok(), "Cannot read file data");
-    return bytes_out;
+    arrow::Result<int64_t> result = arrow_file->ReadAt(offset, size, dst);
+    CUDF_EXPECTS(result.ok(), "Cannot read file data");
+    return result.ValueOrDie();
   }
 
   size_t size() const override
