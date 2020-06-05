@@ -27,7 +27,7 @@ namespace nvtext {
  */
 
 /**
- * @brief Replaces tokens specified with corresponding replacement strings.
+ * @brief Replaces specified tokens with corresponding replacement strings.
  *
  * Tokens are identified in each string and if any match the specified `targets`
  * strings, they are replaced with corresponding `repls` string.

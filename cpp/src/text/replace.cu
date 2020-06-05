@@ -52,11 +52,11 @@ struct replace_tokens_fn {
   __device__ cudf::size_type operator()(cudf::size_type idx)
   {
     if (d_strings.is_null(idx)) return 0;
-    cudf::string_view const d_str = d_strings.element<cudf::string_view>(idx);
-    cudf::size_type nbytes        = d_str.size_bytes();
-    auto in_ptr                   = d_str.data();
-    char* out_ptr                 = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    cudf::size_type last_pos      = 0;
+    auto const d_str = d_strings.element<cudf::string_view>(idx);
+    auto nbytes      = d_str.size_bytes();
+    auto in_ptr      = d_str.data();
+    auto out_ptr     = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    auto last_pos    = cudf::size_type{0};
     characters_tokenizer tokenizer(d_str, d_delimiter);
     while (tokenizer.next_token()) {
       auto token_pos = tokenizer.token_byte_positions();
@@ -108,7 +108,7 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
                  "Parameter targets and repls must be the same size");
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
 
-  cudf::size_type strings_count = strings.size();
+  cudf::size_type const strings_count = strings.size();
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::STRING});
 
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
@@ -128,8 +128,8 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
   replacer.d_offsets = offsets_column->view().data<int32_t>();
 
   // build the chars column
-  cudf::size_type bytes = thrust::device_pointer_cast(replacer.d_offsets)[strings_count];
-  auto chars_column     = cudf::strings::detail::create_chars_child_column(
+  cudf::size_type const bytes = thrust::device_pointer_cast(replacer.d_offsets)[strings_count];
+  auto chars_column           = cudf::strings::detail::create_chars_child_column(
     strings_count, strings.null_count(), bytes, mr, stream);
   replacer.d_chars = chars_column->mutable_view().data<char>();
 
@@ -139,7 +139,8 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
                      strings_count,
                      replacer);
   chars_column->set_null_count(0);  // reset null count for child column
-  //
+
+  // return new strings column
   return cudf::make_strings_column(strings_count,
                                    std::move(offsets_column),
                                    std::move(chars_column),
