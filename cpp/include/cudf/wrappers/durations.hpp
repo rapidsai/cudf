@@ -72,18 +72,12 @@ namespace std {
 #define DURATION_LIMITS(TypeName)                                             \
   template <>                                                                 \
   struct numeric_limits<TypeName> {                                           \
-    static constexpr TypeName max() noexcept                                  \
-    {                                                                         \
-      return TypeName(std::numeric_limits<typename TypeName::rep>::max());    \
-    }                                                                         \
+    static constexpr TypeName max() noexcept { return TypeName::max(); }      \
     static constexpr TypeName lowest() noexcept                               \
     {                                                                         \
       return TypeName(std::numeric_limits<typename TypeName::rep>::lowest()); \
     }                                                                         \
-    static constexpr TypeName min() noexcept                                  \
-    {                                                                         \
-      return TypeName(std::numeric_limits<typename TypeName::rep>::min());    \
-    }                                                                         \
+    static constexpr TypeName min() noexcept { return TypeName::min(); }      \
   }
 
 DURATION_LIMITS(cudf::duration_D);
