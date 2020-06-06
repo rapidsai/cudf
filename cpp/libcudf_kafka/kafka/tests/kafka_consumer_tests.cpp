@@ -22,14 +22,13 @@
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/functions.hpp>
-#include <cudf/tests/utilities/base_fixture.hpp>
 
-// #define CUDF_DATASOURCE_TEST_PROGRAM_MAIN() \
-//   int main(int argc, char** argv)           \
-//   {                                         \
-//     ::testing::InitGoogleTest(&argc, argv); \
-//     return RUN_ALL_TESTS();                 \
-//   }
+#define CUDF_DATASOURCE_TEST_PROGRAM_MAIN() \
+  int main(int argc, char** argv)           \
+  {                                         \
+    ::testing::InitGoogleTest(&argc, argv); \
+    return RUN_ALL_TESTS();                 \
+  }
 
 namespace kafka = cudf::io::external::kafka;
 
