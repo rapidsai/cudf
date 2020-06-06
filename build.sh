@@ -28,7 +28,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafk
    dask_cudf            - build the dask_cudf Python package
    benchmarks           - build benchmarks
    tests                - build tests
-   libcudf_kafka        - build the cudatasource C++ code only
+   libcudf_kafka        - build the libcudf_kafka C++ code only
    -v                   - verbose build mode
    -g                   - build for debug
    -n                   - no install step
@@ -230,7 +230,7 @@ if buildAll || hasArg dask_cudf; then
     fi
 fi
 
-# Do not build cudatasource with 'buildAll'
+# Do not build libcudf_kafka with 'buildAll'
 if hasArg libcudf_kafka; then
 
     echo "invoking this"
