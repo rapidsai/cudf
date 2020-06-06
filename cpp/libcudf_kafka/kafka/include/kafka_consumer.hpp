@@ -32,22 +32,6 @@ namespace kafka {
  * @brief libcudf external datasource for Apache Kafka
  **/
 class kafka_consumer : public cudf::io::datasource {
-  /**
-   * @brief Implementation for holding kafka messages
-   **/
-  class message_buffer : public buffer {
-   public:
-    message_buffer(uint8_t *data, size_t size) : _data(data), _size(size) {}
-
-    size_t size() const override { return _size; }
-
-    const uint8_t *data() const override { return _data; }
-
-   private:
-    uint8_t *const _data;
-    size_t const _size;
-  };
-
  public:
   /**
    * @brief Instantiate a Kafka consumer object

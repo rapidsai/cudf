@@ -23,13 +23,6 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/functions.hpp>
 
-#define CUDF_DATASOURCE_TEST_PROGRAM_MAIN() \
-  int main(int argc, char** argv)           \
-  {                                         \
-    ::testing::InitGoogleTest(&argc, argv); \
-    return RUN_ALL_TESTS();                 \
-  }
-
 namespace kafka = cudf::io::external::kafka;
 
 struct KafkaDatasourceTest : public ::testing::Test {
@@ -61,5 +54,3 @@ TEST_F(KafkaDatasourceTest, InvalidConfigValues)
   EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
                cudf::logic_error);
 }
-
-CUDF_DATASOURCE_TEST_PROGRAM_MAIN()
