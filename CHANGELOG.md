@@ -14,6 +14,7 @@
 
 ## Improvements
 
+- PR #5403 Update required CMake version to 3.14 in contribution guide
 - PR #5245 Add column reduction benchmark
 - PR #5315 Use CMake `FetchContent` to obtain latest release of `cub` and `thrust`
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
@@ -31,8 +32,10 @@
 - PR #5354 Split Dask deserialization methods by dask/cuda
 - PR #5363 Handle `0-dim` inputs while broadcasting to a column
 - PR #5396 Remove legacy tests env variable from build.sh
+- PR #5374 Port nvtext character_tokenize API to libcudf
 - PR #5389 Expose typed accessors for Java HostMemoryBuffer
 - PR #5379 Avoid chaining `Buffer`s
+- PR #5405 Add Error message to `StringColumn.unary_operator`
 
 ## Bug Fixes
 
@@ -54,6 +57,7 @@
 - PR #5382 Fix CategoricalDtype equality comparisons
 - PR #5385 Fix index issues in `DataFrame.from_gpu_matrix`
 - PR #5390 Fix Java data type IDs and string interleave test
+- PR #5404 Fix issue with column creation when chunked arrays are passed
 
 
 # cuDF 0.14.0 (Date TBD)

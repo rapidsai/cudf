@@ -36,6 +36,7 @@ from cudf.utils.dtypes import (
     is_datetime_dtype,
     is_list_like,
     is_scalar,
+    is_string_dtype,
     min_scalar_type,
 )
 
@@ -2298,6 +2299,14 @@ class Series(Frame, Serializable):
         4    105
         dtype: int64
         """
+        if is_string_dtype(self._column.dtype) or is_categorical_dtype(
+            self._column.dtype
+        ):
+            raise TypeError(
+                "User defined functions are currently not "
+                "supported on Series with dtypes `str` and `category`."
+            )
+
         if callable(udf):
             res_col = self._unaryop(udf)
         else:
