@@ -105,13 +105,22 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
 ###################################################################################################
+# - Thrust/CUB ------------------------------------------------------------------------------------
+
+find_path(THRUST_INCLUDE "thrust"
+    HINTS "${PROJECT_SOURCE_DIR}/../../../../cpp/build/_deps/thrust-src"
+          "$ENV{CONDA_PREFIX}/include")
+
+find_path(CUB_INCLUDE "cub"
+    HINTS "${PROJECT_SOURCE_DIR}/../../../../cpp/build/_deps/cub-src"
+          "$ENV{CONDA_PREFIX}/include")
+
+###################################################################################################
 # - CUDF ------------------------------------------------------------------------------------------
 
 set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
                  "${PROJECT_SOURCE_DIR}/../../../../cpp/src/"
-                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/cub"
                  "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/libcudacxx/include")
-                 
 
 find_library(CUDF_LIBRARY "cudf"
     HINTS "$ENV{CUDF_ROOT}/lib"
@@ -159,7 +168,9 @@ endif(JNI_FOUND)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+include_directories("${THRUST_INCLUDE}"
+                    "${CUB_INCLUDE}"
+                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
