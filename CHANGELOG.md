@@ -34,6 +34,7 @@
 - PR #5374 Port nvtext character_tokenize API to libcudf
 - PR #5389 Expose typed accessors for Java HostMemoryBuffer
 - PR #5379 Avoid chaining `Buffer`s
+- PR #5405 Add Error message to `StringColumn.unary_operator`
 
 ## Bug Fixes
 
