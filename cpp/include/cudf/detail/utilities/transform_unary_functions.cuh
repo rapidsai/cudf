@@ -30,6 +30,21 @@
 #include <thrust/pair.h>
 
 namespace cudf {
+
+/**
+ * @brief Functor to static_cast convertible types.
+ *
+ * @tparam result_type Target type to be typecasted to.
+ */
+template <typename ResultType>
+struct typecaster {
+  template <typename ElementType>
+  CUDA_HOST_DEVICE_CALLABLE const ResultType operator()(const ElementType &x) const
+  {
+    return static_cast<ResultType>(x);
+  }
+};
+
 /** -------------------------------------------------------------------------*
  * @brief intermediate struct to calculate mean and variance
  * This is an example case to output a struct from column input.
