@@ -3675,6 +3675,12 @@ class StringColumn(column.ColumnBase):
         else:
             return self.str().size() * self.dtype.itemsize
 
+    def unary_operator(self, unaryop):
+        raise TypeError(
+            f"Series of dtype `str` cannot perform the operation: "
+            f"{unaryop}"
+        )
+
     def __len__(self):
         return self.size
 
