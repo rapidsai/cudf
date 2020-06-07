@@ -23,34 +23,38 @@ public enum DType {
   INT16(2, 2, "short"),
   INT32(4, 3, "int"),
   INT64(8, 4, "long"),
-  FLOAT32(4, 5, "float"),
-  FLOAT64(8, 6, "double"),
+  // UINT8(1, 5, "byte"),
+  // UINT16(2, 6, "short"),
+  // UINT32(4, 7, "int"),
+  // UINT64(8, 8, "long"),
+  FLOAT32(4, 9, "float"),
+  FLOAT64(8, 10, "double"),
   /**
    * Byte wise true non-0/false 0.  In general true will be 1.
    */
-  BOOL8(1, 7, "bool"),
+  BOOL8(1, 11, "bool"),
   /**
    * Days since the UNIX epoch
    */
-  TIMESTAMP_DAYS(4, 8, "date32"),
+  TIMESTAMP_DAYS(4, 12, "date32"),
   /**
    * s since the UNIX epoch
    */
-  TIMESTAMP_SECONDS(8, 9, "timestamp[s]"),
+  TIMESTAMP_SECONDS(8, 13, "timestamp[s]"),
   /**
    * ms since the UNIX epoch
    */
-  TIMESTAMP_MILLISECONDS(8, 10, "timestamp[ms]"),
+  TIMESTAMP_MILLISECONDS(8, 14, "timestamp[ms]"),
   /**
    * microseconds since the UNIX epoch
    */
-  TIMESTAMP_MICROSECONDS(8, 11, "timestamp[us]"),
+  TIMESTAMP_MICROSECONDS(8, 15, "timestamp[us]"),
   /**
    * ns since the UNIX epoch
    */
-  TIMESTAMP_NANOSECONDS(8, 12, "timestamp[ns]"),
-  //DICTIONARY32(4, 13, "NO IDEA"),
-  STRING(0, 14, "str");
+  TIMESTAMP_NANOSECONDS(8, 16, "timestamp[ns]"),
+  //DICTIONARY32(4, 17, "NO IDEA"),
+  STRING(0, 18, "str");
 
   private static final DType[] D_TYPES = DType.values();
   final int sizeInBytes;

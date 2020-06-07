@@ -10,7 +10,6 @@ from pandas.api.types import is_dtype_equal
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
-from cudf._lib.scalar import as_scalar
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
     is_categorical_dtype,
@@ -1140,9 +1139,7 @@ class Frame(libcudf.table.Table):
         return self._repeat(repeats)
 
     def _repeat(self, count):
-        if is_scalar(count):
-            count = as_scalar(count)
-        else:
+        if not is_scalar(count):
             count = as_column(count)
 
         result = self.__class__._from_table(

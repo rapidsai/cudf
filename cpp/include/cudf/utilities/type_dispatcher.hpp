@@ -113,6 +113,10 @@ CUDF_TYPE_MAPPING(int8_t, type_id::INT8);
 CUDF_TYPE_MAPPING(int16_t, type_id::INT16);
 CUDF_TYPE_MAPPING(int32_t, type_id::INT32);
 CUDF_TYPE_MAPPING(int64_t, type_id::INT64);
+CUDF_TYPE_MAPPING(uint8_t, type_id::UINT8);
+CUDF_TYPE_MAPPING(uint16_t, type_id::UINT16);
+CUDF_TYPE_MAPPING(uint32_t, type_id::UINT32);
+CUDF_TYPE_MAPPING(uint64_t, type_id::UINT64);
 CUDF_TYPE_MAPPING(float, type_id::FLOAT32);
 CUDF_TYPE_MAPPING(double, type_id::FLOAT64);
 CUDF_TYPE_MAPPING(cudf::string_view, type_id::STRING);
@@ -147,6 +151,10 @@ MAP_NUMERIC_SCALAR(int8_t)
 MAP_NUMERIC_SCALAR(int16_t)
 MAP_NUMERIC_SCALAR(int32_t)
 MAP_NUMERIC_SCALAR(int64_t)
+MAP_NUMERIC_SCALAR(uint8_t)
+MAP_NUMERIC_SCALAR(uint16_t)
+MAP_NUMERIC_SCALAR(uint32_t)
+MAP_NUMERIC_SCALAR(uint64_t)
 MAP_NUMERIC_SCALAR(float)
 MAP_NUMERIC_SCALAR(double)
 MAP_NUMERIC_SCALAR(bool);
@@ -330,6 +338,14 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
       return f.template operator()<typename IdTypeMap<INT32>::type>(std::forward<Ts>(args)...);
     case INT64:
       return f.template operator()<typename IdTypeMap<INT64>::type>(std::forward<Ts>(args)...);
+    case UINT8:
+      return f.template operator()<typename IdTypeMap<UINT8>::type>(std::forward<Ts>(args)...);
+    case UINT16:
+      return f.template operator()<typename IdTypeMap<UINT16>::type>(std::forward<Ts>(args)...);
+    case UINT32:
+      return f.template operator()<typename IdTypeMap<UINT32>::type>(std::forward<Ts>(args)...);
+    case UINT64:
+      return f.template operator()<typename IdTypeMap<UINT64>::type>(std::forward<Ts>(args)...);
     case FLOAT32:
       return f.template operator()<typename IdTypeMap<FLOAT32>::type>(std::forward<Ts>(args)...);
     case FLOAT64:
