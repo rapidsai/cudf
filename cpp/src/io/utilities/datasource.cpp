@@ -61,7 +61,7 @@ class arrow_io_source : public datasource {
 
   size_t size() const override
   {
-    auto size = arrow_file->GetSize();
+    arrow::Result<int64_t> size = arrow_file->GetSize();
     CUDF_EXPECTS(size.ok(), "Cannot get file size");
     return size.ValueOrDie();
   }
