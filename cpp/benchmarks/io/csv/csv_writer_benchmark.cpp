@@ -16,17 +16,16 @@
 
 #include <benchmark/benchmark.h>
 
-#include "../cuio_benchmarks_common.hpp"
-#include "../cuio_generate_benchmark_input.hpp"
-
+#include <benchmarks/common/generate_benchmark_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/io/cuio_benchmarks_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/io/functions.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-constexpr int64_t data_size = 512 << 20;  // 512 MB
+constexpr int64_t data_size = 512 << 19;  // 512 MB
 
 namespace cudf_io = cudf::io;
 
