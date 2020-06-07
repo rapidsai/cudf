@@ -578,7 +578,7 @@ TYPED_TEST(RollingTest, ZeroWindow)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, 1);
+  std::vector<TypeParam> col_data(num_rows, TypeParam(1));
   std::vector<bool> col_mask(num_rows, 1);
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -593,7 +593,7 @@ TYPED_TEST(RollingTest, ZeroPeriods)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, 1);
+  std::vector<TypeParam> col_data(num_rows, TypeParam(1));
   std::vector<bool> col_mask(num_rows, 1);
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -611,7 +611,7 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, 1);
+  std::vector<TypeParam> col_data(num_rows, TypeParam(1));
   std::vector<bool> col_mask(num_rows, 1);
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
