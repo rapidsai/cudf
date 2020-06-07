@@ -167,6 +167,15 @@ struct ClampTestNumeric : public cudf::test::BaseFixture {
         cudf::make_timestamp_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
       hi_replace_scalar =
         cudf::make_timestamp_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
+    } else if (cudf::is_duration<T>()) {
+      lo_scalar =
+        cudf::make_duration_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
+      hi_scalar =
+        cudf::make_duration_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
+      lo_replace_scalar =
+        cudf::make_duration_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
+      hi_replace_scalar =
+        cudf::make_duration_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
     }
 
     static_cast<ScalarType*>(lo_scalar.get())->set_value(lo);
@@ -199,8 +208,8 @@ TYPED_TEST(ClampTestNumeric, WithNoNull)
 {
   using T = TypeParam;
 
-  T lo       = 2;
-  T hi       = 8;
+  T lo       = T(2);
+  T hi       = T(8);
   auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
   auto got = this->run_clamp(input, {}, lo, true, hi, true, lo, true, hi, true);
@@ -214,8 +223,8 @@ TYPED_TEST(ClampTestNumeric, LowerNull)
 {
   using T = TypeParam;
 
-  T lo       = 2;
-  T hi       = 8;
+  T lo       = T(2);
+  T hi       = T(8);
   auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
   auto got = this->run_clamp(input, {}, lo, false, hi, true, lo, false, hi, true);
@@ -229,8 +238,8 @@ TYPED_TEST(ClampTestNumeric, UpperNull)
 {
   using T = TypeParam;
 
-  T lo       = 2;
-  T hi       = 8;
+  T lo       = T(2);
+  T hi       = T(8);
   auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
   auto got = this->run_clamp(input, {}, lo, true, hi, false, lo, true, hi, false);
@@ -244,8 +253,8 @@ TYPED_TEST(ClampTestNumeric, InputNull)
 {
   using T = TypeParam;
 
-  T lo       = 2;
-  T hi       = 8;
+  T lo       = T(2);
+  T hi       = T(8);
   auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
   std::vector<cudf::size_type> input_validity({0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
@@ -261,10 +270,10 @@ TYPED_TEST(ClampTestNumeric, InputNulliWithReplace)
 {
   using T = TypeParam;
 
-  T lo         = 2;
-  T hi         = 8;
-  T lo_replace = 16;
-  T hi_replace = 32;
+  T lo         = T(2);
+  T hi         = T(8);
+  T lo_replace = T(16);
+  T hi_replace = T(32);
   auto input   = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
   std::vector<cudf::size_type> input_validity({0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
