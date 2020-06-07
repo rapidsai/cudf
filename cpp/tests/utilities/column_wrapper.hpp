@@ -18,6 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/transform_unary_functions.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -112,7 +113,10 @@ template <typename Element, typename InputIterator>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<Element>(), "Unexpected non-fixed width type.");
-  thrust::host_vector<Element> elements(begin, end);
+  auto begin_t =
+    thrust::make_transform_iterator(begin, cudf::typecaster<Element>{});  // explicit typecast
+  auto end_t = begin_t + std::distance(begin, end);
+  thrust::host_vector<Element> elements(begin_t, end_t);
   return rmm::device_buffer{elements.data(), elements.size() * sizeof(Element)};
 }
 
