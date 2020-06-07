@@ -76,7 +76,8 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
   constexpr cudf::size_type num_values{10};
 
   std::vector<T> inputs(num_values);
-  std::iota(inputs.begin(), inputs.end(), 0);
+  // explicit typecast needed for duration types
+  std::generate_n(inputs.begin(), num_values, [n = 0]() mutable { return static_cast<T>(n++); });
 
   std::vector<cudf::size_type> counts(num_values);
   std::transform(counts.begin(), counts.end(), counts.begin(), [&](cudf::size_type count) {
@@ -111,7 +112,9 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
   constexpr cudf::size_type num_values{10};
 
   std::vector<T> input_values(num_values);
-  std::iota(input_values.begin(), input_values.end(), 0);
+  // explicit typecast needed for duration types
+  std::generate_n(
+    input_values.begin(), num_values, [n = 0]() mutable { return static_cast<T>(n++); });
   std::vector<bool> input_valids(num_values);
   for (size_t i{0}; i < input_valids.size(); i++) { input_valids[i] = (i % 2) == 0 ? true : false; }
 
