@@ -25,9 +25,13 @@ constexpr int USE_SNAPPY   = (int)cudf::io::compression_type::SNAPPY;
 #define CUIO_BENCH_ALL_TYPES(benchmark_define, compression)                         \
   benchmark_define(Boolean##_##compression, bool, compression);                     \
   benchmark_define(Byte##_##compression, int8_t, compression);                      \
+  benchmark_define(Ubyte##_##compression, uint8_t, compression);                    \
   benchmark_define(Short##_##compression, int16_t, compression);                    \
+  benchmark_define(Ushort##_##compression, uint16_t, compression);                  \
   benchmark_define(Int##_##compression, int32_t, compression);                      \
+  benchmark_define(Uint##_##compression, uint32_t, compression);                    \
   benchmark_define(Long##_##compression, int64_t, compression);                     \
+  benchmark_define(Ulong##_##compression, uint64_t, compression);                   \
   benchmark_define(Float##_##compression, float, compression);                      \
   benchmark_define(Double##_##compression, double, compression);                    \
   benchmark_define(String##_##compression, std::string, compression);               \
