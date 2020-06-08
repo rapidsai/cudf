@@ -3399,10 +3399,14 @@ class Series(Frame, Serializable):
         dtype: int32
         """
 
-        if normalize != False:
-            raise NotImplementedError("Only normalize == False is currently supported")
-        if dropna != True:
-            raise NotImplementedError("Only dropna ==True is currently supported")
+        if normalize is not False:
+            raise NotImplementedError(
+                "Only normalize == False is currently supported"
+            )
+        if dropna is not True:
+            raise NotImplementedError(
+                "Only dropna ==True is currently supported"
+            )
         if bins is not None:
             raise NotImplementedError("bins is not yet supported")
 
