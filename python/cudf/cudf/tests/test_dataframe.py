@@ -3,6 +3,7 @@
 import array as arr
 import operator
 import random
+import textwrap
 
 import cupy
 import numpy as np
@@ -5695,24 +5696,27 @@ def test_dataframe_info():
     import io
 
     buffer = io.StringIO()
-    str_cmp = """<class 'cudf.core.dataframe.DataFrame'>
-StringIndex: 10 entries, a to 1111
-Data columns (total 10 columns):
- #   Column  Non-Null Count  Dtype  
----  ------  --------------  -----  
- 0   0       10 non-null     float64
- 1   1       10 non-null     float64
- 2   2       10 non-null     float64
- 3   3       10 non-null     float64
- 4   4       10 non-null     float64
- 5   5       10 non-null     float64
- 6   6       10 non-null     float64
- 7   7       10 non-null     float64
- 8   8       10 non-null     float64
- 9   9       10 non-null     float64
-dtypes: float64(10)
-memory usage: 859.0+ bytes
-"""
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    StringIndex: 10 entries, a to 1111
+    Data columns (total 10 columns):
+     #   Column  Non-Null Count  Dtype  
+    ---  ------  --------------  -----  
+     0   0       10 non-null     float64
+     1   1       10 non-null     float64
+     2   2       10 non-null     float64
+     3   3       10 non-null     float64
+     4   4       10 non-null     float64
+     5   5       10 non-null     float64
+     6   6       10 non-null     float64
+     7   7       10 non-null     float64
+     8   8       10 non-null     float64
+     9   9       10 non-null     float64
+    dtypes: float64(10)
+    memory usage: 859.0+ bytes
+    """
+    )
     df = pd.DataFrame(
         np.random.randn(10, 10),
         index=["a", "2", "3", "4", "5", "6", "7", "8", "100", "1111"],
@@ -5725,16 +5729,19 @@ memory usage: 859.0+ bytes
     buffer.seek(0)
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": ["safdas", "assa", "asdasd"]})
-    str_cmp = """<class 'cudf.core.dataframe.DataFrame'>
-RangeIndex: 3 entries, 0 to 2
-Data columns (total 2 columns):
- #   Column  Non-Null Count  Dtype 
----  ------  --------------  ----- 
- 0   a       3 non-null      int64 
- 1   b       3 non-null      object
-dtypes: int64(1), object(1)
-memory usage: 56.0+ bytes
-"""
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    RangeIndex: 3 entries, 0 to 2
+    Data columns (total 2 columns):
+     #   Column  Non-Null Count  Dtype 
+    ---  ------  --------------  ----- 
+     0   a       3 non-null      int64 
+     1   b       3 non-null      object
+    dtypes: int64(1), object(1)
+    memory usage: 56.0+ bytes
+    """
+    )
     gd.from_pandas(df).info(buf=buffer, verbose=True)
     s = buffer.getvalue()
     assert str_cmp == s
@@ -5742,12 +5749,15 @@ memory usage: 56.0+ bytes
     buffer.truncate(0)
     buffer.seek(0)
 
-    str_cmp = """<class 'cudf.core.dataframe.DataFrame'>
-RangeIndex: 3 entries, 0 to 2
-Columns: 2 entries, a to b
-dtypes: int64(1), object(1)
-memory usage: 56.0+ bytes
-"""
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    RangeIndex: 3 entries, 0 to 2
+    Columns: 2 entries, a to b
+    dtypes: int64(1), object(1)
+    memory usage: 56.0+ bytes
+    """
+    )
     gd.from_pandas(df).info(buf=buffer, verbose=False)
     s = buffer.getvalue()
     assert str_cmp == s
@@ -5759,16 +5769,19 @@ memory usage: 56.0+ bytes
         {"a": [1, 2, 3], "b": ["safdas", "assa", "asdasd"]},
         index=["sdfdsf", "sdfsdfds", "dsfdf"],
     )
-    str_cmp = """<class 'cudf.core.dataframe.DataFrame'>
-StringIndex: 3 entries, sdfdsf to dsfdf
-Data columns (total 2 columns):
- #   Column  Non-Null Count  Dtype 
----  ------  --------------  ----- 
- 0   a       3 non-null      int64 
- 1   b       3 non-null      object
-dtypes: int64(1), object(1)
-memory usage: 91.0 bytes
-"""
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    StringIndex: 3 entries, sdfdsf to dsfdf
+    Data columns (total 2 columns):
+     #   Column  Non-Null Count  Dtype 
+    ---  ------  --------------  ----- 
+     0   a       3 non-null      int64 
+     1   b       3 non-null      object
+    dtypes: int64(1), object(1)
+    memory usage: 91.0 bytes
+    """
+    )
     gd.from_pandas(df).info(buf=buffer, verbose=True, memory_usage="deep")
     s = buffer.getvalue()
     assert str_cmp == s
@@ -5787,17 +5800,20 @@ memory usage: 91.0 bytes
             "float_col": float_values,
         }
     )
-    str_cmp = """<class 'cudf.core.dataframe.DataFrame'>
-RangeIndex: 5 entries, 0 to 4
-Data columns (total 3 columns):
- #   Column     Non-Null Count  Dtype  
----  ------     --------------  -----  
- 0   int_col    5 non-null      int64  
- 1   text_col   5 non-null      object 
- 2   float_col  5 non-null      float64
-dtypes: float64(1), int64(1), object(1)
-memory usage: 130.0 bytes
-"""
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    RangeIndex: 5 entries, 0 to 4
+    Data columns (total 3 columns):
+     #   Column     Non-Null Count  Dtype  
+    ---  ------     --------------  -----  
+     0   int_col    5 non-null      int64  
+     1   text_col   5 non-null      object 
+     2   float_col  5 non-null      float64
+    dtypes: float64(1), int64(1), object(1)
+    memory usage: 130.0 bytes
+    """
+    )
     df.info(buf=buffer, verbose=True, memory_usage="deep")
     actual_string = buffer.getvalue()
     assert str_cmp == actual_string
@@ -5805,17 +5821,20 @@ memory usage: 130.0 bytes
     buffer.truncate(0)
     buffer.seek(0)
 
-    str_cmp = """<class 'cudf.core.dataframe.DataFrame'>
-RangeIndex: 5 entries, 0 to 4
-Data columns (total 3 columns):
- #   Column     Dtype  
----  ------     -----  
- 0   int_col    int64  
- 1   text_col   object 
- 2   float_col  float64
-dtypes: float64(1), int64(1), object(1)
-memory usage: 130.0+ bytes
-"""
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    RangeIndex: 5 entries, 0 to 4
+    Data columns (total 3 columns):
+     #   Column     Dtype  
+    ---  ------     -----  
+     0   int_col    int64  
+     1   text_col   object 
+     2   float_col  float64
+    dtypes: float64(1), int64(1), object(1)
+    memory usage: 130.0+ bytes
+    """
+    )
     df.info(buf=buffer, verbose=True, null_counts=False)
     actual_string = buffer.getvalue()
     assert str_cmp == actual_string
@@ -5832,9 +5851,12 @@ memory usage: 130.0+ bytes
 
     df = DataFrame()
 
-    str_cmp = """<class 'cudf.core.dataframe.DataFrame'>
-RangeIndex: 0 entries
-Empty DataFrame"""
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    RangeIndex: 0 entries
+    Empty DataFrame"""
+    )
     df.info(buf=buffer, verbose=True)
     actual_string = buffer.getvalue()
     assert str_cmp == actual_string
