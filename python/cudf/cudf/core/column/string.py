@@ -3394,6 +3394,52 @@ class StringMethods(object):
         )
 
     def character_tokenize(self, **kwargs):
+        """
+        Each string is split into individual characters.
+        The sequence returned contains each character as an individual string.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> data = ["hello world", None, "goodbye, thank you."]
+        >>> ser = cudf.Series(data)
+        >>> ser.str.character_tokenize()
+        0     h
+        1     e
+        2     l
+        3     l
+        4     o
+        5
+        6     w
+        7     o
+        8     r
+        9     l
+        10    d
+        11    g
+        12    o
+        13    o
+        14    d
+        15    b
+        16    y
+        17    e
+        18    ,
+        19
+        20    t
+        21    h
+        22    a
+        23    n
+        24    k
+        25
+        26    y
+        27    o
+        28    u
+        29    .
+        dtype: object
+        """
         from cudf.core.series import Series, Index
         from cudf.core.index import as_index
 
