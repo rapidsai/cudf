@@ -37,6 +37,7 @@
 - PR #5389 Expose typed accessors for Java HostMemoryBuffer
 - PR #5379 Avoid chaining `Buffer`s
 - PR #5405 Add Error message to `StringColumn.unary_operator`
+- PR #5420 Aligning signature of `Series.value_counts` to Pandas
 
 ## Bug Fixes
 
