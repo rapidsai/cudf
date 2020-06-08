@@ -56,14 +56,8 @@ def fill(Column destination, int begin, int end, Scalar value):
 def repeat(Table inp, object count, bool check_count=False):
     if isinstance(count, Column):
         return _repeat_via_column(inp, count, check_count)
-
-    if isinstance(count, Scalar):
-        return _repeat_via_scalar(inp, count)
-
-    raise TypeError(
-        "Expected `count` to be Column or Scalar but got {}"
-        .format(type(count))
-    )
+    else:
+        return _repeat_via_size_type(inp, count)
 
 
 def _repeat_via_column(Table inp, Column count, bool check_count):
@@ -86,15 +80,14 @@ def _repeat_via_column(Table inp, Column count, bool check_count):
     )
 
 
-def _repeat_via_scalar(Table inp, Scalar count):
+def _repeat_via_size_type(Table inp, size_type count):
     cdef table_view c_inp = inp.view()
-    cdef scalar* c_count = count.c_value.get()
     cdef unique_ptr[table] c_result
 
     with nogil:
         c_result = move(cpp_filling.repeat(
             c_inp,
-            c_count[0]
+            count
         ))
 
     return Table.from_unique_ptr(

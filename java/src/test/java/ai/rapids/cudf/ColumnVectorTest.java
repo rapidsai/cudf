@@ -2117,6 +2117,20 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testZfill() {
+    try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+         ColumnVector expected = ColumnVector.fromStrings("01", "23", "45678", null);
+         ColumnVector actual = v.zfill(2)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+    try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+         ColumnVector expected = ColumnVector.fromStrings("0001", "0023", "45678", null);
+         ColumnVector actual = v.zfill(4)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
   void testStringTitlize() {
     try (ColumnVector cv = ColumnVector.fromStrings("sPark", "sqL", "lowercase", null, "", "UPPERCASE");
          ColumnVector result = cv.toTitle();
