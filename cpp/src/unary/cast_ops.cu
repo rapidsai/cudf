@@ -54,7 +54,7 @@ struct unary_cast {
                                        cudf::is_duration<TargetT>())>* = nullptr>
   CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
-    return TargetT{simt::std::chrono::floor<TargetT::ChronoDurationT>(element)};
+    return TargetT{simt::std::chrono::floor<TargetT>(element)};
   }
 
   // TODO: Should this be allowed? timestamps should be constructed from duration or another
@@ -94,7 +94,7 @@ struct unary_cast {
                                        cudf::is_duration<TargetT>())>* = nullptr>
   CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
-    return TargetT{simt::std::chrono::floor<TargetT::ChronoDurationT>(element.time_since_epoch())};
+    return TargetT{simt::std::chrono::floor<TargetT>(element.time_since_epoch())};
   }
 
   template <typename SourceT,

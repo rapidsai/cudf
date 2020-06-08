@@ -501,8 +501,8 @@ static const auto test_timestamps_ns = std::vector<int64_t>{
 
 static const auto test_durations_D  = test_timestamps_D;
 static const auto test_durations_s  = test_timestamps_s;
-static const auto test_durations_us = test_timestamps_us;
 static const auto test_durations_ms = test_timestamps_ms;
+static const auto test_durations_us = test_timestamps_us;
 static const auto test_durations_ns = test_timestamps_ns;
 
 template <typename T>

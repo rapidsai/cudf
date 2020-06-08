@@ -101,6 +101,8 @@ class column_wrapper {
  * @brief Creates a `device_buffer` containing the elements in the range
  * `[begin,end)`.
  *
+ * This is applicable for fixed width types that allows implicit construction of `Element` from the
+ * items returned by the `InputIterator`.
  *
  * @tparam InputIterator Iterator type for `begin` and `end`
  * @param begin Begining of the sequence of elements
@@ -109,10 +111,65 @@ class column_wrapper {
  *`[begin,end)`
  **/
 template <typename Element, typename InputIterator>
-rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
+rmm::device_buffer make_elements(
+  InputIterator begin,
+  InputIterator end,
+  typename std::enable_if<
+    std::is_convertible<typename std::iterator_traits<InputIterator>::value_type,
+                        Element>::value>::type* = nullptr)
 {
   static_assert(cudf::is_fixed_width<Element>(), "Unexpected non-fixed width type.");
   thrust::host_vector<Element> elements(begin, end);
+  return rmm::device_buffer{elements.data(), elements.size() * sizeof(Element)};
+}
+
+// This type trait can be specialized for different `From` and/or `To` types, or the conditional
+// within it can be nested for future types. This is used in the context of `make_elements`
+// when `Element` cannot be implicitly constructed from the items returned by the `InputIterator`.
+template <typename From, typename To>
+struct argument_type_for_explicit_construction {
+  using argument_type = typename std::conditional<
+    cudf::is_duration_t<To>::value,
+    typename std::
+      conditional<std::is_convertible<From, typename To::rep>::value, typename To::rep, void>::type,
+    From>::type;
+};
+
+/**
+ * @brief Creates a `device_buffer` containing the elements in the range
+ * `[begin,end)`.
+ *
+ * This is applicable for types that do not allow implicit construction of `Element` from the
+ * arithmetic items returned by the `InputIterator`. The items returned by the iterator
+ * may have to be casted to integral types if the `Element` is a duration type. This behavior
+ * can be specialized thusly.
+ * The `argument_type_for_explicit_construction` type trait can either be specialized
+ * for different Element types or the conditional within it nested for future types to define
+ * the appropriate type to which the elements returned by the `InputIterator` have to be casted
+ * to construct an `Element`.
+ *
+ * @tparam InputIterator Iterator type for `begin` and `end`
+ * @param begin Begining of the sequence of elements
+ * @param end End of the sequence of elements
+ * @return rmm::device_buffer Buffer containing all elements in the range
+ *`[begin,end)`
+ **/
+template <typename Element, typename InputIterator>
+rmm::device_buffer make_elements(
+  InputIterator begin,
+  InputIterator end,
+  typename std::enable_if<
+    !std::is_convertible<typename std::iterator_traits<InputIterator>::value_type,
+                         Element>::value>::type* = nullptr)
+{
+  static_assert(cudf::is_fixed_width<Element>(), "Unexpected non-fixed width type.");
+  cudf::size_type size = std::distance(begin, end);
+  thrust::host_vector<Element> elements(size);
+  std::transform(begin, end, elements.begin(), [](auto elem) {
+    return Element(static_cast<typename argument_type_for_explicit_construction<
+                     typename std::iterator_traits<InputIterator>::value_type,
+                     Element>::argument_type>(elem));
+  });
   return rmm::device_buffer{elements.data(), elements.size() * sizeof(Element)};
 }
 

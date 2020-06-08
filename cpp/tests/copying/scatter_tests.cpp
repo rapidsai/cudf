@@ -191,7 +191,7 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarOutOfBounds)
 
   // Initializers lists can't take move-only types
   scalar_vector source_vector;
-  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100, true));
   source_vector.push_back(std::move(source));
 
   fixed_width_column_wrapper<TypeParam> target({10, 20, 30, 40, 50, 60, 70, 80});
@@ -235,7 +235,7 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarIndexType)
 
   // Initializers lists can't take move-only types
   scalar_vector source_vector;
-  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100, true));
   source_vector.push_back(std::move(source));
 
   fixed_width_column_wrapper<TypeParam> target({10, 20, 30, 40, 50, 60, 70, 80});
@@ -333,7 +333,7 @@ TYPED_TEST(ScatterDataTypeTests, EmptyScalarScatterMap)
 
   // Initializers lists can't take move-only types
   scalar_vector source_vector;
-  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100, true));
   source_vector.push_back(std::move(source));
 
   fixed_width_column_wrapper<TypeParam> target({10, 20, 30, 40, 50, 60, 70, 80});
@@ -438,7 +438,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarNoNulls)
 
   // Initializers lists can't take move-only types
   scalar_vector source_vector;
-  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100, true));
   source_vector.push_back(std::move(source));
 
   fixed_width_column_wrapper<TypeParam> target({10, 20, 30, 40, 50, 60, 70, 80});
@@ -463,7 +463,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarTargetNulls)
 
   // Initializers lists can't take move-only types
   scalar_vector source_vector;
-  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100, true));
   source_vector.push_back(std::move(source));
 
   fixed_width_column_wrapper<TypeParam> target({10, 20, 30, 40, 50, 60, 70, 80},
@@ -490,8 +490,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarSourceNulls)
 
   // Initializers lists can't take move-only types
   scalar_vector source_vector;
-  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
-  source->set_valid(false);
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100, false));
   source_vector.push_back(std::move(source));
 
   fixed_width_column_wrapper<TypeParam> target({10, 20, 30, 40, 50, 60, 70, 80});
@@ -517,8 +516,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
 
   // Initializers lists can't take move-only types
   scalar_vector source_vector;
-  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
-  source->set_valid(false);
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100, false));
   source_vector.push_back(std::move(source));
 
   fixed_width_column_wrapper<TypeParam> target({10, 20, 30, 40, 50, 60, 70, 80},
@@ -799,8 +797,8 @@ TYPED_TEST_CASE(BooleanMaskScalarScatter, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(BooleanMaskScalarScatter, WithNoNullElementsInTarget)
 {
-  using T       = TypeParam;
-  T source      = 11;
+  using T = TypeParam;
+  T source(11);
   bool validity = true;
   auto scalar   = this->form_scalar(source, validity);
   std::vector<std::reference_wrapper<cudf::scalar>> scalar_vect;
@@ -820,8 +818,8 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNoNullElementsInTarget)
 
 TYPED_TEST(BooleanMaskScalarScatter, WithNull)
 {
-  using T       = TypeParam;
-  T source      = 11;
+  using T = TypeParam;
+  T source(11);
   bool validity = false;
   auto scalar_1 = this->form_scalar(source, validity);
   auto scalar_2 = cudf::make_string_scalar("cudf");

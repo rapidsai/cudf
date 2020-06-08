@@ -58,7 +58,7 @@ struct timestamp : time_point<Duration> {
    */
   template <class FromDuration>
   inline constexpr explicit timestamp(time_point<FromDuration> const& other)
-    : time_point<Duration>(simt::std::chrono::duration_cast<Duration>(other.time_since_epoch())){};
+    : time_point<Duration>(simt::std::chrono::floor<Duration>(other.time_since_epoch())){};
 };
 }  // namespace detail
 
