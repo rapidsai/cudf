@@ -3401,8 +3401,8 @@ class Series(Frame, Serializable):
 
         if normalize != False:
             raise NotImplementedError("Only normalize == False is currently supported")
-        if dropna is False:
-            raise NotImplementedError("dropna == False is not supported")
+        if dropna != True:
+            raise NotImplementedError("Only dropna ==True is currently supported")
         if bins is not None:
             raise NotImplementedError("bins is not supported")
 
