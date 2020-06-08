@@ -8,8 +8,10 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import cudf
 import cudf._lib as libcudf
 import cudf._lib.string_casting as str_cast
+from cudf._lib.column import Column
 from cudf._lib.nvtext.generate_ngrams import (
     generate_ngrams as cpp_generate_ngrams,
 )
@@ -23,6 +25,7 @@ from cudf._lib.nvtext.tokenize import (
     tokenize as cpp_tokenize,
 )
 from cudf._lib.nvtx import annotate
+from cudf._lib.scalar import Scalar, as_scalar
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
     count_characters as cpp_count_characters,
@@ -112,7 +115,7 @@ from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.utils import utils
-from cudf.utils.dtypes import is_list_like, is_scalar
+from cudf.utils.dtypes import is_list_like, is_scalar, is_string_dtype
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -221,8 +224,6 @@ class StringMethods(object):
         Returns an object of the type of the column owner or updates the column
         of the owner (Series or Index) to mimic an inplace operation
         """
-        from cudf import Series, DataFrame, MultiIndex
-        from cudf.core.index import Index, as_index
 
         inplace = kwargs.get("inplace", False)
 
@@ -230,14 +231,16 @@ class StringMethods(object):
             self._parent._mimic_inplace(new_col, inplace=True)
         else:
             expand = kwargs.get("expand", False)
-            if expand or isinstance(self._parent, (DataFrame, MultiIndex)):
+            if expand or isinstance(
+                self._parent, (cudf.DataFrame, cudf.MultiIndex)
+            ):
                 # This branch indicates the passed as new_col
                 # is actually a table-like data
                 table = new_col
                 from cudf._lib.table import Table
 
                 if isinstance(table, Table):
-                    if isinstance(self._parent, Index):
+                    if isinstance(self._parent, cudf.Index):
                         idx = self._parent._constructor_expanddim._from_table(
                             table=table
                         )
@@ -252,18 +255,20 @@ class StringMethods(object):
                         {index: value for index, value in enumerate(table)},
                         index=self._parent.index,
                     )
-            elif isinstance(self._parent, Series):
+            elif isinstance(self._parent, cudf.Series):
                 retain_index = kwargs.get("retain_index", True)
                 if retain_index:
-                    return Series(
+                    return cudf.Series(
                         new_col,
                         name=self._parent.name,
                         index=self._parent.index,
                     )
                 else:
-                    return Series(new_col, name=self._parent.name)
-            elif isinstance(self._parent, Index):
-                return as_index(new_col, name=self._parent.name)
+                    return cudf.Series(new_col, name=self._parent.name)
+            elif isinstance(self._parent, cudf.Index):
+                return cudf.core.index.as_index(
+                    new_col, name=self._parent.name
+                )
             else:
                 if self._parent is None:
                     return new_col
@@ -384,12 +389,9 @@ class StringMethods(object):
         3    dD
         dtype: object
         """
-        from cudf.core import DataFrame
 
         if sep is None:
             sep = ""
-
-        from cudf._lib.scalar import as_scalar
 
         if others is None:
             data = cpp_join(
@@ -399,7 +401,7 @@ class StringMethods(object):
             other_cols = _get_cols_list(others)
             all_cols = [self._column] + other_cols
             data = cpp_concatenate(
-                DataFrame(
+                cudf.DataFrame(
                     {index: value for index, value in enumerate(all_cols)}
                 ),
                 as_scalar(sep),
@@ -588,8 +590,6 @@ class StringMethods(object):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        from cudf._lib.scalar import as_scalar
-
         return self._return_or_inplace(
             cpp_contains_re(self._column, pat)
             if regex is True
@@ -667,14 +667,13 @@ class StringMethods(object):
             raise NotImplementedError("`case` parameter is not yet supported")
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
-        from cudf.core import Series, Index
 
         if (
             is_list_like(pat)
-            or isinstance(pat, (Series, Index, pd.Series, pd.Index))
+            or isinstance(pat, (cudf.Series, cudf.Index, pd.Series, pd.Index))
         ) and (
             is_list_like(repl)
-            or isinstance(repl, (Series, Index, pd.Series, pd.Index))
+            or isinstance(repl, (cudf.Series, cudf.Index, pd.Series, pd.Index))
         ):
             warnings.warn(
                 "`n` parameter is not supported when \
@@ -696,7 +695,6 @@ class StringMethods(object):
         # Pandas treats 0 as all
         if n == 0:
             n = -1
-        from cudf._lib.scalar import as_scalar
 
         # Pandas forces non-regex replace when pat is a single-character
         return self._return_or_inplace(
@@ -1529,8 +1527,6 @@ class StringMethods(object):
         if repl is None:
             repl = ""
 
-        from cudf._lib.scalar import as_scalar
-
         return self._return_or_inplace(
             cpp_slice_replace(self._column, start, stop, as_scalar(repl)),
             **kwargs,
@@ -1581,8 +1577,6 @@ class StringMethods(object):
         """
         if repl is None:
             repl = ""
-
-        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
             cpp_string_insert(self._column, start, as_scalar(repl)), **kwargs
@@ -1723,8 +1717,6 @@ class StringMethods(object):
         if pat is None:
             pat = ""
 
-        from cudf._lib.scalar import as_scalar
-
         result_table = cpp_split(self._column, as_scalar(pat, "str"), n)
         if len(result_table._data) == 1:
             if result_table._data[0].null_count == len(self._column):
@@ -1813,8 +1805,6 @@ class StringMethods(object):
         kwargs.setdefault("expand", expand)
         if pat is None:
             pat = ""
-
-        from cudf._lib.scalar import as_scalar
 
         result_table = cpp_rsplit(self._column, as_scalar(pat), n)
         if len(result_table._data) == 1:
@@ -1908,8 +1898,6 @@ class StringMethods(object):
         if sep is None:
             sep = " "
 
-        from cudf._lib.scalar import as_scalar
-
         return self._return_or_inplace(
             cpp_partition(self._column, as_scalar(sep)), **kwargs
         )
@@ -1980,8 +1968,6 @@ class StringMethods(object):
         kwargs.setdefault("expand", expand)
         if sep is None:
             sep = " "
-
-        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
             cpp_rpartition(self._column, as_scalar(sep)), **kwargs
@@ -2382,8 +2368,6 @@ class StringMethods(object):
         if to_strip is None:
             to_strip = ""
 
-        from cudf._lib.scalar import as_scalar
-
         return self._return_or_inplace(
             cpp_strip(self._column, as_scalar(to_strip)), **kwargs
         )
@@ -2430,8 +2414,6 @@ class StringMethods(object):
         """
         if to_strip is None:
             to_strip = ""
-
-        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
             cpp_lstrip(self._column, as_scalar(to_strip)), **kwargs
@@ -2487,8 +2469,6 @@ class StringMethods(object):
         """
         if to_strip is None:
             to_strip = ""
-
-        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
             cpp_rstrip(self._column, as_scalar(to_strip)), **kwargs
@@ -2842,8 +2822,6 @@ class StringMethods(object):
                 len(self._column), dtype="bool", masked=True
             )
         else:
-            from cudf._lib.scalar import as_scalar
-
             result_col = cpp_endswith(self._column, as_scalar(pat, "str"))
 
         return self._return_or_inplace(result_col, **kwargs)
@@ -2901,8 +2879,6 @@ class StringMethods(object):
                 len(self._column), dtype="bool", masked=True
             )
         else:
-            from cudf._lib.scalar import as_scalar
-
             result_col = cpp_startswith(self._column, as_scalar(pat, "str"))
 
         return self._return_or_inplace(result_col, **kwargs)
@@ -2951,8 +2927,6 @@ class StringMethods(object):
         if not isinstance(sub, str):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
-
-        from cudf._lib.scalar import as_scalar
 
         if end is None:
             end = -1
@@ -3010,8 +2984,6 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._lib.scalar import as_scalar
-
         if end is None:
             end = -1
 
@@ -3063,8 +3035,6 @@ class StringMethods(object):
         if not isinstance(sub, str):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
-
-        from cudf._lib.scalar import as_scalar
 
         if end is None:
             end = -1
@@ -3122,8 +3092,6 @@ class StringMethods(object):
         if not isinstance(sub, str):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
-
-        from cudf._lib.scalar import as_scalar
 
         if end is None:
             end = -1
@@ -3280,16 +3248,14 @@ class StringMethods(object):
         2    99
         dtype: int32
         """
-        from cudf.core.series import Series, Index
-        from cudf.core.index import as_index
 
         new_col = cpp_code_points(self._column)
         if self._parent is None:
             return new_col
-        elif isinstance(self._parent, Series):
-            return Series(new_col, name=self._parent.name)
-        elif isinstance(self._parent, Index):
-            return as_index(new_col, name=self._parent.name)
+        elif isinstance(self._parent, cudf.Series):
+            return cudf.Series(new_col, name=self._parent.name)
+        elif isinstance(self._parent, cudf.Index):
+            return cudf.core.index.as_index(new_col, name=self._parent.name)
 
     def translate(self, table, **kwargs):
         """
@@ -3440,16 +3406,14 @@ class StringMethods(object):
         29    .
         dtype: object
         """
-        from cudf.core.series import Series, Index
-        from cudf.core.index import as_index
 
         result_col = cpp_character_tokenize(self._column)
         if self._parent is None:
             return result_col
-        elif isinstance(self._parent, Series):
-            return Series(result_col, name=self._parent.name)
-        elif isinstance(self._parent, Index):
-            return as_index(result_col, name=self._parent.name)
+        elif isinstance(self._parent, cudf.Series):
+            return cudf.Series(result_col, name=self._parent.name)
+        elif isinstance(self._parent, cudf.Index):
+            return cudf.core.index.as_index(result_col, name=self._parent.name)
 
     def token_count(self, delimiter=" ", **kwargs):
         """
@@ -3559,10 +3523,6 @@ class StringMethods(object):
 
 
 def _massage_string_arg(value, name, allow_col=False):
-    from cudf._lib.scalar import as_scalar, Scalar
-    from cudf._lib.column import Column
-    from cudf.utils.dtypes import is_string_dtype
-
     if isinstance(value, str):
         return as_scalar(value, dtype="str")
 
@@ -3989,25 +3949,25 @@ def _string_column_binop(lhs, rhs, op, out_dtype):
 
 
 def _get_cols_list(others):
-    from cudf.core import Series, Index
-    from cudf.core.column import as_column
 
     if (
         is_list_like(others)
         and len(others) > 0
         and (
             is_list_like(others[0])
-            or isinstance(others[0], (Series, Index, pd.Series, pd.Index))
+            or isinstance(
+                others[0], (cudf.Series, cudf.Index, pd.Series, pd.Index)
+            )
         )
     ):
         """
         If others is a list-like object (in our case lists & tuples)
         just another Series/Index, great go ahead with concatenation.
         """
-        cols_list = [as_column(frame, dtype="str") for frame in others]
+        cols_list = [column.as_column(frame, dtype="str") for frame in others]
         return cols_list
     elif others is not None:
-        return [as_column(others, dtype="str")]
+        return [column.as_column(others, dtype="str")]
     else:
         raise TypeError(
             "others must be Series, Index, DataFrame, np.ndarrary "
