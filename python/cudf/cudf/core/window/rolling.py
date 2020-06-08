@@ -331,10 +331,14 @@ class Rolling:
             if self.min_periods is None:
                 min_periods = 1
 
-        self.window = self._window_sizes_from_window(window)
+        self.window = self._window_to_window_sizes(window)
         self.min_periods = min_periods
 
-    def _window_sizes_from_window(self, window):
+    def _window_to_window_sizes(self, window):
+        """
+        For non-fixed width windows,
+        convert the window argument into window sizes.
+        """
         if pd.api.types.is_integer(window):
             return window
         else:
@@ -359,13 +363,14 @@ class RollingGroupby(Rolling):
         """
         sort_order = groupby.grouping.keys.argsort()
         self._group_keys = groupby.grouping.keys.take(sort_order)
+        # TODO: figure out a better way to generate these!
         self._group_starts = (
             groupby.size().cumsum().shift(1).fillna(0).loc[self._group_keys]
         )
         obj = groupby.obj.take(sort_order)
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
-    def _window_sizes_from_window(self, window):
+    def _window_to_window_sizes(self, window):
         if pd.api.types.is_integer(window):
             return cudautils.grouped_window_sizes_from_offset(
                 cp.arange(len(self.obj)), self._group_starts, window
