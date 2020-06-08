@@ -3,6 +3,7 @@
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -130,3 +131,18 @@ def test_column_zero_length_slice():
     got = cuda.as_cuda_array(the_column.data).copy_to_host()
 
     np.testing.assert_array_equal(expect, got)
+
+
+def test_column_chunked_array_creation():
+    pyarrow_array = pa.array([1, 2, 3] * 1000)
+    chunked_array = pa.chunked_array(pyarrow_array)
+
+    actual_column = cudf.core.column.as_column(chunked_array, dtype="float")
+    expected_column = cudf.core.column.as_column(pyarrow_array, dtype="float")
+
+    assert_eq(cudf.Series(actual_column), cudf.Series(expected_column))
+
+    actual_column = cudf.core.column.as_column(chunked_array)
+    expected_column = cudf.core.column.as_column(pyarrow_array)
+
+    assert_eq(cudf.Series(actual_column), cudf.Series(expected_column))
