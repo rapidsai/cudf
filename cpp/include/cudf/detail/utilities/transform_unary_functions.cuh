@@ -30,6 +30,35 @@
 #include <thrust/pair.h>
 
 namespace cudf {
+/**
+ * @brief Transforms non-null input using `Functor`, and for null, returns `null_replacement`.
+ *
+ * This functor argument is considered null if second value of functor argument pair is false.
+ *
+ * @tparam ResultType Output type of `Functor` and null replacement type.
+ * @tparam Functor functor to transform first value of argument pair to ResultType.
+ */
+template <typename ResultType, typename Functor>
+struct null_replacing_transformer {
+  typedef ResultType type;
+  Functor f;
+  ResultType replacement;
+  CUDA_HOST_DEVICE_CALLABLE
+  null_replacing_transformer(ResultType null_replacement, Functor transformer)
+    : f(transformer), replacement(null_replacement)
+  {
+  }
+
+  template <typename ElementType>
+  CUDA_HOST_DEVICE_CALLABLE ResultType operator()(thrust::pair<ElementType, bool> const &pair_value)
+  {
+    if (pair_value.second)
+      return f(pair_value.first);
+    else
+      return replacement;
+  }
+};
+
 /** -------------------------------------------------------------------------*
  * @brief intermediate struct to calculate mean and variance
  * This is an example case to output a struct from column input.
