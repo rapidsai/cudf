@@ -3405,7 +3405,7 @@ class Series(Frame, Serializable):
             )
         if dropna is not True:
             raise NotImplementedError(
-                "Only dropna ==True is currently supported"
+                "Only dropna == True is currently supported"
             )
         if bins is not None:
             raise NotImplementedError("bins is not yet supported")
