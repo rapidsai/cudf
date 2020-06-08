@@ -12,6 +12,7 @@
 - PR #5303 Add slice_strings functionality using delimiter string
 - PR #5394 Add duration types (builds on PR 5359)
 - PR #5301 Add Java bindings for `zfill`
+- PR #5359 Add duration types 
 
 ## Improvements
 
