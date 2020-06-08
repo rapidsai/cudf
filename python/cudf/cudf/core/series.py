@@ -3404,7 +3404,7 @@ class Series(Frame, Serializable):
         if dropna != True:
             raise NotImplementedError("Only dropna ==True is currently supported")
         if bins is not None:
-            raise NotImplementedError("bins is not supported")
+            raise NotImplementedError("bins is not yet supported")
 
         if self.null_count == len(self):
             return Series(np.array([], dtype=np.int32), name=self.name)
