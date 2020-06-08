@@ -18,6 +18,7 @@ from cudf._lib.nvtext.ngrams_tokenize import (
 )
 from cudf._lib.nvtext.normalize import normalize_spaces as cpp_normalize_spaces
 from cudf._lib.nvtext.tokenize import (
+    character_tokenize as cpp_character_tokenize,
     count_tokens as cpp_count_tokens,
     tokenize as cpp_tokenize,
 )
@@ -3389,6 +3390,11 @@ class StringMethods(object):
         kwargs.setdefault("retain_index", False)
         return self._return_or_inplace(
             cpp_tokenize(self._column, delimiter), **kwargs
+        )
+
+    def character_tokenize(self, **kwargs):
+        return self._return_or_inplace(
+            cpp_character_tokenize(self._column), **kwargs
         )
 
     def token_count(self, delimiter=" ", **kwargs):
