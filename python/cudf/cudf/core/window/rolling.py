@@ -363,10 +363,12 @@ class RollingGroupby(Rolling):
         """
         sort_order = groupby.grouping.keys.argsort()
         self._group_keys = groupby.grouping.keys.take(sort_order)
-        # TODO: figure out a better way to generate these!
+
+        gb_size = groupby.size()
         self._group_starts = (
-            groupby.size().cumsum().shift(1).fillna(0).loc[self._group_keys]
+            gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
         )
+
         obj = groupby.obj.take(sort_order)
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
