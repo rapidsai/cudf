@@ -174,7 +174,14 @@ def test_ngrams_tokenize(n, separator, expected_values):
 
 
 def test_character_tokenize_series():
-    sr = cudf.Series(["hello world", "sdf", None, "goodbye"])
+    sr = cudf.Series(
+        [
+            "hello world",
+            "sdf",
+            None,
+            "goodbye, one-two:three~four+five_six@seven#eight^nine",
+        ]
+    )
     expected = cudf.Series(
         [
             "h",
@@ -198,6 +205,52 @@ def test_character_tokenize_series():
             "b",
             "y",
             "e",
+            ",",
+            " ",
+            "o",
+            "n",
+            "e",
+            "-",
+            "t",
+            "w",
+            "o",
+            ":",
+            "t",
+            "h",
+            "r",
+            "e",
+            "e",
+            "~",
+            "f",
+            "o",
+            "u",
+            "r",
+            "+",
+            "f",
+            "i",
+            "v",
+            "e",
+            "_",
+            "s",
+            "i",
+            "x",
+            "@",
+            "s",
+            "e",
+            "v",
+            "e",
+            "n",
+            "#",
+            "e",
+            "i",
+            "g",
+            "h",
+            "t",
+            "^",
+            "n",
+            "i",
+            "n",
+            "e",
         ]
     )
 
@@ -218,7 +271,14 @@ def test_character_tokenize_series():
 
 
 def test_character_tokenize_index():
-    sr = cudf.core.index.as_index(["hello world", "sdf", None, "goodbye"])
+    sr = cudf.core.index.as_index(
+        [
+            "hello world",
+            "sdf",
+            None,
+            "goodbye, one-two:three~four+five_six@seven#eight^nine",
+        ]
+    )
     expected = cudf.core.index.as_index(
         [
             "h",
@@ -241,6 +301,52 @@ def test_character_tokenize_index():
             "d",
             "b",
             "y",
+            "e",
+            ",",
+            " ",
+            "o",
+            "n",
+            "e",
+            "-",
+            "t",
+            "w",
+            "o",
+            ":",
+            "t",
+            "h",
+            "r",
+            "e",
+            "e",
+            "~",
+            "f",
+            "o",
+            "u",
+            "r",
+            "+",
+            "f",
+            "i",
+            "v",
+            "e",
+            "_",
+            "s",
+            "i",
+            "x",
+            "@",
+            "s",
+            "e",
+            "v",
+            "e",
+            "n",
+            "#",
+            "e",
+            "i",
+            "g",
+            "h",
+            "t",
+            "^",
+            "n",
+            "i",
+            "n",
             "e",
         ]
     )
