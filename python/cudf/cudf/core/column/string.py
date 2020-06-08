@@ -3281,6 +3281,7 @@ class StringMethods(object):
         dtype: int32
         """
         from cudf.core.series import Series, Index
+        from cudf.core.index import as_index
 
         new_col = cpp_code_points(self._column)
         if self._parent is None:
@@ -3288,7 +3289,7 @@ class StringMethods(object):
         elif isinstance(self._parent, Series):
             return Series(new_col, name=self._parent.name)
         elif isinstance(self._parent, Index):
-            return column.as_index(new_col, name=self._parent.name)
+            return as_index(new_col, name=self._parent.name)
 
     def translate(self, table, **kwargs):
         """
@@ -3393,9 +3394,16 @@ class StringMethods(object):
         )
 
     def character_tokenize(self, **kwargs):
-        return self._return_or_inplace(
-            cpp_character_tokenize(self._column), **kwargs
-        )
+        from cudf.core.series import Series, Index
+        from cudf.core.index import as_index
+
+        result_col = cpp_character_tokenize(self._column)
+        if self._parent is None:
+            return result_col
+        elif isinstance(self._parent, Series):
+            return Series(result_col, name=self._parent.name)
+        elif isinstance(self._parent, Index):
+            return as_index(result_col, name=self._parent.name)
 
     def token_count(self, delimiter=" ", **kwargs):
         """
