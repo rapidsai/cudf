@@ -1393,6 +1393,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Cast to unsigned Byte - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to byte
+   * When casting from a Date, Timestamp, or Boolean to a byte type the underlying numerical
+   * representation of the data will be used for the cast.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asUnsignedBytes() {
+    return castTo(DType.UINT8);
+  }
+
+  /**
    * Cast to Short - ColumnVector
    * This method takes the value provided by the ColumnVector and casts to short
    * When casting from a Date, Timestamp, or Boolean to a short type the underlying numerical
@@ -1401,6 +1412,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector asShorts() {
     return castTo(DType.INT16);
+  }
+
+  /**
+   * Cast to unsigned Short - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to short
+   * When casting from a Date, Timestamp, or Boolean to a short type the underlying numerical
+   * representation of the data will be used for the cast.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asUnsignedShorts() {
+    return castTo(DType.UINT16);
   }
 
   /**
@@ -1415,6 +1437,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Cast to unsigned Int - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to int
+   * When casting from a Date, Timestamp, or Boolean to a int type the underlying numerical
+   * representation of the data will be used for the cast.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asUnsignedInts() {
+    return castTo(DType.UINT32);
+  }
+
+  /**
    * Cast to Long - ColumnVector
    * This method takes the value provided by the ColumnVector and casts to long
    * When casting from a Date, Timestamp, or Boolean to a long type the underlying numerical
@@ -1423,6 +1456,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector asLongs() {
     return castTo(DType.INT64);
+  }
+
+  /**
+   * Cast to unsigned Long - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to long
+   * When casting from a Date, Timestamp, or Boolean to a long type the underlying numerical
+   * representation of the data will be used for the cast.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asUnsignedLongs() {
+    return castTo(DType.UINT64);
   }
 
   /**
@@ -2810,8 +2854,22 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new vector from the given values.
    */
+  public static ColumnVector fromUnsignedBytes(byte... values) {
+    return build(DType.UINT8, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
   public static ColumnVector fromShorts(short... values) {
     return build(DType.INT16, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static ColumnVector fromUnsignedShorts(short... values) {
+    return build(DType.UINT16, values.length, (b) -> b.appendArray(values));
   }
 
   /**
@@ -2824,8 +2882,22 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new vector from the given values.
    */
+  public static ColumnVector fromUnsignedInts(int... values) {
+    return build(DType.UINT32, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
   public static ColumnVector fromLongs(long... values) {
     return build(DType.INT64, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static ColumnVector fromUnsignedLongs(long... values) {
+    return build(DType.UINT64, values.length, (b) -> b.appendArray(values));
   }
 
   /**
@@ -2911,8 +2983,26 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    */
+  public static ColumnVector fromBoxedUnsignedBytes(Byte... values) {
+    return build(DType.UINT8, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
   public static ColumnVector fromBoxedShorts(Short... values) {
     return build(DType.INT16, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static ColumnVector fromBoxedUnsignedShorts(Short... values) {
+    return build(DType.UINT16, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -2929,8 +3019,26 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    */
+  public static ColumnVector fromBoxedUnsignedInts(Integer... values) {
+    return build(DType.UINT32, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
   public static ColumnVector fromBoxedLongs(Long... values) {
     return build(DType.INT64, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static ColumnVector fromBoxedUnsignedLongs(Long... values) {
+    return build(DType.UINT64, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
