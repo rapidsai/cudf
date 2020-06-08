@@ -31,23 +31,26 @@ namespace nvtext {
 namespace detail {
 namespace {
 
+using strings_iterator = cudf::column_device_view::const_iterator<cudf::string_view>;
+
 /**
  * @brief Functor to replace tokens in each string.
  *
  * This tokenizes a string using the given d_delimiter and replaces any tokens that match
- * a string in d_targets with those from the d_repls column. Strings with no matching tokens
- * are left unchanged.
+ * a string in d_targets_begin/end with those from the d_repls column.
+ * Strings with no matching tokens are left unchanged.
  *
  * This should be called first to compute the size of each output string and then a second
  * time to fill in the allocated output buffer for each string.
  */
 struct replace_tokens_fn {
   cudf::column_device_view const d_strings;  ///< strings to tokenize
-  cudf::column_device_view const d_targets;  ///< strings to replace
-  cudf::column_device_view const d_repls;    ///< replacement strings
-  cudf::string_view const d_delimiter;       ///< delimiter characters for tokenizing
-  const int32_t* d_offsets{};
-  char* d_chars{};
+  strings_iterator d_targets_begin;          ///< strings to search for
+  strings_iterator d_targets_end;
+  cudf::column_device_view const d_repls;  ///< replacement strings
+  cudf::string_view const d_delimiter;     ///< delimiter characters for tokenizing
+  const int32_t* d_offsets{};              ///< for locating output string in d_chars
+  char* d_chars{};                         ///< output buffer
 
   __device__ cudf::size_type operator()(cudf::size_type idx)
   {
@@ -62,24 +65,22 @@ struct replace_tokens_fn {
       auto token_pos = tokenizer.token_byte_positions();
       cudf::string_view token{d_str.data() + token_pos.first, (token_pos.second - token_pos.first)};
       // check if the token matches any of the targets
-      for (auto tidx = 0; tidx < d_targets.size(); ++tidx) {
-        cudf::string_view d_target = d_targets.element<cudf::string_view>(tidx);
-        if (token.compare(d_target) == 0) {
-          // match found
-          // retrieve the corresponding replacement string or
-          // if only one repl string, use that one for all targets
-          cudf::string_view d_repl = d_repls.size() == 1 ? d_repls.element<cudf::string_view>(0)
-                                                         : d_repls.element<cudf::string_view>(tidx);
-          nbytes += d_repl.size_bytes() - token.size_bytes();  // total output bytes
-          if (out_ptr) {
-            // copy over string upto the token location
-            out_ptr = cudf::strings::detail::copy_and_increment(
-              out_ptr, in_ptr + last_pos, token_pos.first - last_pos);
-            // copy over replacement string
-            out_ptr  = cudf::strings::detail::copy_string(out_ptr, d_repl);
-            last_pos = token_pos.second;  // update last byte position for this string
-          }
-          break;
+      strings_iterator found_itr = thrust::find(thrust::seq, d_targets_begin, d_targets_end, token);
+      if (found_itr != d_targets_end) {  // match found
+        // retrieve the corresponding replacement string or
+        // if only one repl string, use that one for all targets
+        cudf::size_type repl_idx = thrust::distance(d_targets_begin, found_itr);
+        cudf::string_view d_repl = d_repls.size() == 1
+                                     ? d_repls.element<cudf::string_view>(0)
+                                     : d_repls.element<cudf::string_view>(repl_idx);
+        nbytes += d_repl.size_bytes() - token.size_bytes();  // total output bytes
+        if (out_ptr) {
+          // copy over string up to the token location
+          out_ptr = cudf::strings::detail::copy_and_increment(
+            out_ptr, in_ptr + last_pos, token_pos.first - last_pos);
+          // copy over replacement string
+          out_ptr  = cudf::strings::detail::copy_string(out_ptr, d_repl);
+          last_pos = token_pos.second;  // update last byte position for this string
         }
       }
     }
@@ -115,7 +116,11 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
   auto targets_column = cudf::column_device_view::create(targets.parent(), stream);
   auto repls_column   = cudf::column_device_view::create(repls.parent(), stream);
   cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
-  replace_tokens_fn replacer{*strings_column, *targets_column, *repls_column, d_delimiter};
+  replace_tokens_fn replacer{*strings_column,
+                             targets_column->begin<cudf::string_view>(),
+                             targets_column->end<cudf::string_view>(),
+                             *repls_column,
+                             d_delimiter};
 
   // copy null mask from input column
   rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
