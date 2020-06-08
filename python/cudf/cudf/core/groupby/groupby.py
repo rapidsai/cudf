@@ -10,6 +10,7 @@ import cudf
 import cudf._lib.groupby as libgroupby
 from cudf._lib.nvtx import annotate
 from cudf.core.abc import Serializable
+from cudf.utils.utils import cached_property
 
 
 class GroupBy(Serializable):
@@ -54,8 +55,6 @@ class GroupBy(Serializable):
         else:
             self.grouping = _Grouping(obj, by, level)
 
-        self._groupby = libgroupby.GroupBy(self.grouping.keys, dropna=dropna)
-
     def __getattr__(self, key):
         if key != "_agg_func_name_with_args":
             if key in libgroupby._GROUPBY_AGGS:
@@ -82,6 +81,10 @@ class GroupBy(Serializable):
             .groupby(self.grouping)
             .agg("size")
         )
+
+    @cached_property
+    def _groupby(self):
+        return libgroupby.GroupBy(self.grouping.keys, dropna=self._dropna)
 
     @annotate("GROUPBY_AGG", domain="cudf_python")
     def agg(self, func):
