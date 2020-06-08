@@ -526,6 +526,7 @@ class Merge(object):
                 categories=dtype.categories,
                 codes=col.set_mask(None),
                 mask=col.base_mask,
+                ordered=dtype.ordered,
             )
         else:
             outcol = col.astype(dtype)

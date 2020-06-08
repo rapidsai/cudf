@@ -31,7 +31,7 @@ class Buffer(Serializable):
         if isinstance(data, Buffer):
             self.ptr = data.ptr
             self.size = data.size
-            self._owner = owner or data
+            self._owner = owner or data._owner
         elif hasattr(data, "__array_interface__") or hasattr(
             data, "__cuda_array_interface__"
         ):

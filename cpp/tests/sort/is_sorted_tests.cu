@@ -38,29 +38,42 @@ namespace testdata {
 template <typename T>
 auto ascending()
 {
-  return fixed_width_column_wrapper<T>({std::numeric_limits<T>::lowest(),
-                                        T(-100),
-                                        T(-10),
-                                        T(-1),
-                                        T(0),
-                                        T(1),
-                                        T(10),
-                                        T(100),
-                                        std::numeric_limits<T>::max()});
+  return std::is_signed<T>::value ? fixed_width_column_wrapper<T>({std::numeric_limits<T>::lowest(),
+                                                                   T(-100),
+                                                                   T(-10),
+                                                                   T(-1),
+                                                                   T(0),
+                                                                   T(1),
+                                                                   T(10),
+                                                                   T(100),
+                                                                   std::numeric_limits<T>::max()})
+                                  : fixed_width_column_wrapper<T>({std::numeric_limits<T>::lowest(),
+                                                                   T(0),
+                                                                   T(1),
+                                                                   T(10),
+                                                                   T(100),
+                                                                   std::numeric_limits<T>::max()});
 }
 
 template <typename T>
 auto descending()
 {
-  return fixed_width_column_wrapper<T>({std::numeric_limits<T>::max(),
-                                        T(100),
-                                        T(10),
-                                        T(1),
-                                        T(0),
-                                        T(-1),
-                                        T(-10),
-                                        T(-100),
-                                        std::numeric_limits<T>::lowest()});
+  return std::is_signed<T>::value
+           ? fixed_width_column_wrapper<T>({std::numeric_limits<T>::max(),
+                                            T(100),
+                                            T(10),
+                                            T(1),
+                                            T(0),
+                                            T(-1),
+                                            T(-10),
+                                            T(-100),
+                                            std::numeric_limits<T>::lowest()})
+           : fixed_width_column_wrapper<T>({std::numeric_limits<T>::max(),
+                                            T(100),
+                                            T(10),
+                                            T(1),
+                                            T(0),
+                                            std::numeric_limits<T>::lowest()});
 }
 
 template <typename T>
