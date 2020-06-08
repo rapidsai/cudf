@@ -328,15 +328,19 @@ class Rolling:
                 raise ValueError(
                     "window must be integer or " "convertible to a timedelta"
                 ) from e
-
-            window = cudautils.window_sizes_from_offset(
-                self.obj.index._values.data_array_view, window
-            )
             if self.min_periods is None:
                 min_periods = 1
 
-        self.window = window
+        self.window = self._window_sizes_from_window(window)
         self.min_periods = min_periods
+
+    def _window_sizes_from_window(self, window):
+        if pd.api.types.is_integer(window):
+            return window
+        else:
+            return cudautils.window_sizes_from_offset(
+                self.obj.index._values.data_array_view, window
+            )
 
     def __repr__(self):
         return "{} [window={},min_periods={},center={}]".format(
@@ -361,60 +365,17 @@ class RollingGroupby(Rolling):
         obj = groupby.obj.take(sort_order)
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
-    def _normalize(self):
-        """
-        Normalize the *window* and *min_periods* args
-
-        *window* can be:
-
-        * An integer, in which case it is the window size.
-          If *min_periods* is unspecified, it is set to be equal to
-          the window size.
-
-        * A timedelta offset, in which case it is used to generate
-          a column of window sizes to use for each element.
-          If *min_periods* is unspecified, it is set to 1.
-          Only valid for datetime index.
-        """
-        window, min_periods = self.window, self.min_periods
-
-        if pd.api.types.is_number(window):
-            # only allow integers
-            if not pd.api.types.is_integer(window):
-                raise ValueError("window must be an integer")
-            if window <= 0:
-                raise ValueError("window cannot be zero or negative")
-            if self.min_periods is None:
-                min_periods = window
-
-        if isinstance(self.obj.index, cudf.core.index.DatetimeIndex):
-            self._time_window = True
-
-            try:
-                window = pd.to_timedelta(window)
-                # to_timedelta will also convert np.arrays etc.,
-                if not isinstance(window, pd.Timedelta):
-                    raise ValueError
-                window = window.to_timedelta64()
-            except ValueError as e:
-                raise ValueError(
-                    "window must be integer or " "convertible to a timedelta"
-                ) from e
-
-            window = cudautils.grouped_window_sizes_from_offset(
+    def _window_sizes_from_window(self, window):
+        if pd.api.types.is_integer(window):
+            return cudautils.grouped_window_sizes_from_offset(
+                cp.arange(len(self.obj)), self._group_starts, window
+            )
+        else:
+            return cudautils.grouped_window_sizes_from_offset(
                 self.obj.index._values.data_array_view,
                 self._group_starts,
                 window,
             )
-            if self.min_periods is None:
-                min_periods = 1
-        else:
-            window = cudautils.grouped_window_sizes_from_offset(
-                cp.arange(len(self.obj)), self._group_starts, window
-            )
-
-        self.window = window
-        self.min_periods = min_periods
 
     def _apply_agg(self, agg_name):
         result = super()._apply_agg(agg_name).set_index(self._group_keys)
