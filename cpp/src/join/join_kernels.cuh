@@ -245,7 +245,7 @@ __device__ void flush_output_cache(const unsigned int activemask,
 
   if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }
 
-  output_offset = cub::ShuffleIndex(output_offset, 0, detail::warp_size, activemask);
+  output_offset = cub::ShuffleIndex<detail::warp_size>(output_offset, 0, activemask);
 
   for (int shared_out_idx = lane_id; shared_out_idx < current_idx_shared[warp_id];
        shared_out_idx += num_threads) {

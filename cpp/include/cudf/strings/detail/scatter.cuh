@@ -61,7 +61,7 @@ std::unique_ptr<column> scatter(
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
   // create null mask -- caller must update this
-  rmm::device_buffer null_mask;
+  rmm::device_buffer null_mask{0, stream, mr};
   if (target.has_nulls()) null_mask = copy_bitmask(target.parent(), stream, mr);
 
   // create string vectors

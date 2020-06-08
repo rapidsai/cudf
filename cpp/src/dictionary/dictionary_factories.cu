@@ -36,7 +36,7 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
                            0,
                            indices_column.offset()};
   auto indices_copy = std::make_unique<column>(indices_view, stream, mr);
-  rmm::device_buffer null_mask;
+  rmm::device_buffer null_mask{0, stream, mr};
   auto null_count = indices_column.null_count();
   if (null_count) null_mask = copy_bitmask(indices_column, stream, mr);
 

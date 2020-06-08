@@ -1080,9 +1080,10 @@ public class TableTest extends CudfTestBase {
     try (Table t = new Table.TestBuilder()
         .column("a", "b", "c")
         .column("d", "e", "f")
-        .build()) {
-      assertThrows(CudfException.class, () -> t.interleaveColumns(),
-          "Only fixed-width types are supported in interleave_columns");
+        .build();
+         ColumnVector expected = ColumnVector.fromStrings("a", "d", "b", "e", "c", "f");
+         ColumnVector actual = t.interleaveColumns()) {
+      assertColumnsAreEqual(expected, actual);
     }
   }
 
