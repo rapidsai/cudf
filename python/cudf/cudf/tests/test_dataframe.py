@@ -3761,6 +3761,17 @@ def test_series_value_counts():
         assert_eq(expect, got, check_dtype=False)
 
 
+@pytest.mark.parametrize("ascending", [True, False])
+def test_series_value_counts_optional_arguments(ascending):
+    psr = pd.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
+    gsr = Series.from_pandas(psr)
+
+    expect = psr.value_counts(ascending=ascending)
+    got = gsr.value_counts(ascending=ascending)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
 @pytest.mark.parametrize(
     "data",
     [
