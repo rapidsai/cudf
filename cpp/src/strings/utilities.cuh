@@ -16,9 +16,10 @@
 #pragma once
 
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 
-#include <rmm/device_buffer.hpp>
+//#include <rmm/device_buffer.hpp>
 
 #include <cstring>
 
@@ -77,20 +78,28 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                            cudaStream_t stream                 = 0)
 {
-  auto transformer =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), size_and_exec_fn);
   auto offsets_column =
-    make_offsets_child_column(transformer, transformer + strings_count, mr, stream);
-  auto d_offsets    = offsets_column->view().template data<int32_t>();
-  auto chars_column = create_chars_child_column(
-    strings_count, null_count, thrust::device_pointer_cast(d_offsets)[strings_count], mr, stream);
-  size_and_exec_fn.d_offsets = d_offsets;  // set the offsets
-  size_and_exec_fn.d_chars =
-    chars_column->mutable_view().template data<char>();  // fill in the chars
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     strings_count,
-                     size_and_exec_fn);
+    make_numeric_column(data_type{INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_view          = offsets_column->mutable_view();
+  auto d_offsets             = offsets_view.template data<int32_t>();
+  size_and_exec_fn.d_offsets = d_offsets;
+
+  std::unique_ptr<column> chars_column = nullptr;
+  while (true) {
+    // this is called twice -- once for offsets and once for chars;
+    // reducing the number of places size_and_exec_fn is called speeds up compile time
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       strings_count,
+                       size_and_exec_fn);
+    if (chars_column) break;  // stop when chars column is created
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream)->on(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+    // setup for building the chars column
+    chars_column = create_chars_child_column(
+      strings_count, null_count, thrust::device_pointer_cast(d_offsets)[strings_count], mr, stream);
+    size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
+  }
   return std::make_pair(std::move(offsets_column), std::move(chars_column));
 }
 
