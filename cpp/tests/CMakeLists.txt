@@ -421,6 +421,7 @@ ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
 set(STREAM_COMPACTION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_nulls_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_nans_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_duplicates_tests.cu")
 
 ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
