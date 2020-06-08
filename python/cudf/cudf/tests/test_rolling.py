@@ -283,7 +283,6 @@ def test_rolling_groupby_multi(agg):
         got = getattr(
             gdf.groupby(["a", "b"]).rolling(window_size), agg
         )().fillna(-1)
-        breakpoint()
         assert_eq(expect, got, check_dtype=False)
 
 
