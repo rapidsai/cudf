@@ -121,16 +121,13 @@ get_base_nested_loop_join_indices(table_view const& left,
                                   bool flip_join_indices,
                                   cudaStream_t stream)
 {
-  std::cout << "Starting get_base_nested_loop_join_indices." << std::endl;
   // The `right` table is always used for the inner loop. We want to use the smaller table
   // for the inner loop. Thus, if `left` is smaller than `right`, swap `left/right`.
   if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
-    std::cout << "INNER, right > left" << std::endl;
     return get_base_nested_loop_join_indices<JoinKind>(right, left, true, stream);
   }
   // Trivial left join case - exit early
   if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
-    std::cout << "Trivial!" << std::endl;
     return get_trivial_left_join_indices(left, stream);
   }
 
@@ -139,11 +136,9 @@ get_base_nested_loop_join_indices(table_view const& left,
 
   size_type estimated_size =
     estimate_nested_loop_join_output_size<JoinKind>(*left_table, *right_table, stream);
-  std::cout << "Estimated size: " << estimated_size << std::endl;
 
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
-    std::cout << "Size 0!" << std::endl;
     return std::make_pair(rmm::device_vector<size_type>{}, rmm::device_vector<size_type>{});
   }
 
@@ -166,7 +161,6 @@ get_base_nested_loop_join_indices(table_view const& left,
     write_index.set_value(0);
 
     row_equality equality{*left_table, *right_table};
-    std::cout << "Performing join... with est. size " << estimated_size << std::endl;
     nested_loop_join<JoinKind, block_size, DEFAULT_JOIN_CACHE_SIZE>
       <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(*left_table,
                                                                        *right_table,
@@ -188,7 +182,6 @@ get_base_nested_loop_join_indices(table_view const& left,
 
   left_indices.resize(join_size);
   right_indices.resize(join_size);
-  std::cout << "Join size: " << join_size << std::endl;
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 
