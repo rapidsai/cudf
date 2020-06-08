@@ -7,8 +7,9 @@ import itertools
 import logging
 import numbers
 import pickle
+import sys
 import warnings
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from collections.abc import Mapping, Sequence
 from types import GeneratorType
 
@@ -3794,6 +3795,186 @@ class DataFrame(Frame, Serializable):
         outdf = super().replace(to_replace=to_replace, replacement=value)
 
         return self._mimic_inplace(outdf, inplace=inplace)
+
+    def info(
+        self,
+        verbose=None,
+        buf=None,
+        max_cols=None,
+        memory_usage=None,
+        null_counts=None,
+    ):
+        if buf is None:
+            buf = sys.stdout
+
+        lines = [str(type(self))]
+
+        index_name = type(self._index).__name__
+        if len(self._index) > 0:
+            entries_summary = f", {self._index[0]} to {self._index[-1]}"
+        else:
+            entries_summary = ""
+        index_summary = (
+            f"{index_name}: {len(self._index)} entries{entries_summary}"
+        )
+        lines.append(index_summary)
+
+        if len(self.columns) == 0:
+            lines.append(f"Empty {type(self).__name__}")
+            cudf.utils.ioutils.buffer_write_lines(buf, lines)
+            return
+
+        cols = self.columns
+        col_count = len(self.columns)
+
+        if max_cols is None:
+            max_cols = 100
+
+        max_rows = pd.options.display.max_info_rows
+
+        if null_counts is None:
+            show_counts = (col_count <= max_cols) and (len(self) < max_rows)
+        else:
+            show_counts = null_counts
+
+        exceeds_info_cols = col_count > max_cols
+
+        def _put_str(s, space):
+            return str(s)[:space].ljust(space)
+
+        def _verbose_repr():
+            from pandas.io.formats.printing import pprint_thing
+
+            lines.append(f"Data columns (total {len(self.columns)} columns):")
+
+            id_head = " # "
+            column_head = "Column"
+            col_space = 2
+
+            max_col = max(len(pprint_thing(k)) for k in cols)
+            len_column = len(pprint_thing(column_head))
+            space = max(max_col, len_column) + col_space
+
+            max_id = len(pprint_thing(col_count))
+            len_id = len(pprint_thing(id_head))
+            space_num = max(max_id, len_id) + col_space
+            counts = None
+
+            header = _put_str(id_head, space_num) + _put_str(
+                column_head, space
+            )
+            if show_counts:
+                counts = self.count()
+                if len(cols) != len(counts):  # pragma: no cover
+                    raise AssertionError(
+                        f"Columns must equal "
+                        f"counts ({len(cols)} != {len(counts)})"
+                    )
+                count_header = "Non-Null Count"
+                len_count = len(count_header)
+                non_null = " non-null"
+                all_counts = []
+                for idx in range(len(counts)):
+                    all_counts.append(counts.iloc[idx])
+                max_count = max(
+                    len(pprint_thing(k)) for k in all_counts
+                ) + len(non_null)
+                space_count = max(len_count, max_count) + col_space
+                count_temp = "{count}" + non_null
+            else:
+                count_header = ""
+                space_count = len(count_header)
+                len_count = space_count
+                count_temp = "{count}"
+
+            dtype_header = "Dtype"
+            len_dtype = len(dtype_header)
+            max_dtypes = max(len(pprint_thing(k)) for k in self.dtypes)
+            space_dtype = max(len_dtype, max_dtypes)
+            header += _put_str(count_header, space_count) + _put_str(
+                dtype_header, space_dtype
+            )
+
+            lines.append(header)
+            lines.append(
+                _put_str("-" * len_id, space_num)
+                + _put_str("-" * len_column, space)
+                + _put_str("-" * len_count, space_count)
+                + _put_str("-" * len_dtype, space_dtype)
+            )
+
+            for i, col in enumerate(self.columns):
+                dtype = self.dtypes.iloc[i]
+                col = pprint_thing(col)
+
+                line_no = _put_str(" {num}".format(num=i), space_num)
+                count = ""
+                if show_counts:
+                    count = counts.iloc[i]
+
+                lines.append(
+                    line_no
+                    + _put_str(col, space)
+                    + _put_str(count_temp.format(count=count), space_count)
+                    + _put_str(dtype, space_dtype)
+                )
+
+        def _non_verbose_repr():
+            if len(self.columns) > 0:
+                entries_summary = f", {self.columns[0]} to {self.columns[-1]}"
+            else:
+                entries_summary = ""
+            columns_summary = (
+                f"Columns: {len(self.columns)} entries{entries_summary}"
+            )
+            lines.append(columns_summary)
+
+        def _sizeof_fmt(num, size_qualifier):
+            # returns size in human readable format
+            for x in ["bytes", "KB", "MB", "GB", "TB"]:
+                if num < 1024.0:
+                    return f"{num:3.1f}{size_qualifier} {x}"
+                num /= 1024.0
+            return f"{num:3.1f}{size_qualifier} PB"
+
+        if verbose:
+            _verbose_repr()
+        elif verbose is False:  # specifically set to False, not nesc None
+            _non_verbose_repr()
+        else:
+            if exceeds_info_cols:
+                _non_verbose_repr()
+            else:
+                _verbose_repr()
+
+        dtype_counts = defaultdict(int)
+        for col in self._data:
+            dtype_counts[self._data[col].dtype.name] += 1
+
+        dtypes = [f"{k[0]}({k[1]:d})" for k in sorted(dtype_counts.items())]
+        lines.append(f"dtypes: {', '.join(dtypes)}")
+
+        if memory_usage is None:
+            memory_usage = pd.options.display.memory_usage
+
+        if memory_usage:
+            # append memory usage of df to display
+            size_qualifier = ""
+            if memory_usage == "deep":
+                deep = True
+            else:
+                # size_qualifier is just a best effort; not guaranteed to catch
+                # all cases (e.g., it misses categorical data even with object
+                # categories)
+                deep = False
+                if "object" in dtype_counts or self.index.dtype == "object":
+                    size_qualifier = "+"
+            mem_usage = self.memory_usage(index=True, deep=deep).sum()
+            lines.append(
+                f"memory usage: {_sizeof_fmt(mem_usage, size_qualifier)}\n"
+            )
+
+        cudf.utils.ioutils.buffer_write_lines(buf, lines)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
