@@ -3673,7 +3673,7 @@ class StringColumn(column.ColumnBase):
         if deep:
             return self.__sizeof__()
         else:
-            return self.str().size() * self.dtype.itemsize
+            return len(self) * self.dtype.itemsize
 
     def unary_operator(self, unaryop):
         raise TypeError(
