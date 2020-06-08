@@ -3929,7 +3929,6 @@ class DataFrame(Frame, Serializable):
          2   column_3  1000000 non-null  object
         dtypes: object(3)
         memory usage: 14.3 MB
-
         """
         if buf is None:
             buf = sys.stdout
