@@ -1,3 +1,6 @@
+import itertools
+
+import cupy as cp
 import numba
 import pandas as pd
 
@@ -149,6 +152,8 @@ class Rolling:
     dtype: float64
     """
 
+    _time_window = False
+
     def __init__(
         self,
         obj,
@@ -228,6 +233,8 @@ class Rolling:
         return result_df
 
     def _apply_agg(self, agg_name):
+        if agg_name == "count" and not self._time_window:
+            self.min_periods = 0
         if isinstance(self.obj, cudf.Series):
             return self._apply_agg_series(self.obj, agg_name)
         else:
@@ -309,6 +316,8 @@ class Rolling:
                     "window must be an integer for " "non datetime index"
                 )
 
+            self._time_window = True
+
             try:
                 window = pd.to_timedelta(window)
                 # to_timedelta will also convert np.arrays etc.,
@@ -333,3 +342,91 @@ class Rolling:
         return "{} [window={},min_periods={},center={}]".format(
             self.__class__.__name__, self.window, self.min_periods, self.center
         )
+
+
+class RollingGroupby(Rolling):
+    def __init__(self, groupby, window, min_periods=None, center=False):
+        """
+        Grouped rolling window calculation.
+
+        See also
+        --------
+        cudf.core.window.Rolling
+        """
+        sort_order = groupby.grouping.keys.argsort()
+        self._group_keys = groupby.grouping.keys.take(sort_order)
+        self._group_starts = (
+            groupby.size().cumsum().shift(1).fillna(0).loc[self._group_keys]
+        )
+        obj = groupby.obj.take(sort_order)
+        super().__init__(obj, window, min_periods=min_periods, center=center)
+
+    def _normalize(self):
+        """
+        Normalize the *window* and *min_periods* args
+
+        *window* can be:
+
+        * An integer, in which case it is the window size.
+          If *min_periods* is unspecified, it is set to be equal to
+          the window size.
+
+        * A timedelta offset, in which case it is used to generate
+          a column of window sizes to use for each element.
+          If *min_periods* is unspecified, it is set to 1.
+          Only valid for datetime index.
+        """
+        window, min_periods = self.window, self.min_periods
+
+        if pd.api.types.is_number(window):
+            # only allow integers
+            if not pd.api.types.is_integer(window):
+                raise ValueError("window must be an integer")
+            if window <= 0:
+                raise ValueError("window cannot be zero or negative")
+            if self.min_periods is None:
+                min_periods = window
+
+        if isinstance(self.obj.index, cudf.core.index.DatetimeIndex):
+            self._time_window = True
+
+            try:
+                window = pd.to_timedelta(window)
+                # to_timedelta will also convert np.arrays etc.,
+                if not isinstance(window, pd.Timedelta):
+                    raise ValueError
+                window = window.to_timedelta64()
+            except ValueError as e:
+                raise ValueError(
+                    "window must be integer or " "convertible to a timedelta"
+                ) from e
+
+            window = cudautils.grouped_window_sizes_from_offset(
+                self.obj.index._values.data_array_view,
+                self._group_starts,
+                window,
+            )
+            if self.min_periods is None:
+                min_periods = 1
+        else:
+            window = cudautils.grouped_window_sizes_from_offset(
+                cp.arange(len(self.obj)), self._group_starts, window
+            )
+
+        self.window = window
+        self.min_periods = min_periods
+
+    def _apply_agg(self, agg_name):
+        result = super()._apply_agg(agg_name).set_index(self._group_keys)
+        result.index = cudf.MultiIndex.from_frame(
+            cudf.DataFrame(
+                {
+                    key: value
+                    for key, value in itertools.chain(
+                        result.index._data.items(),
+                        self.obj.index._data.items(),
+                    )
+                }
+            )
+        )
+        return result

@@ -474,6 +474,19 @@ class GroupBy(Serializable):
         kwargs.update({"chunks": offsets})
         return grouped_values.apply_chunks(function, **kwargs)
 
+    def rolling(self, *args, **kwargs):
+        """
+        Returns a `RollingGroupby` object that enables rolling window
+        calculations on the groups.
+
+        See also
+        --------
+        cudf.core.window.Rolling
+        """
+        from cudf.core.window.rolling import RollingGroupby
+
+        return RollingGroupby(self, *args, **kwargs)
+
 
 class DataFrameGroupBy(GroupBy):
     def __init__(
@@ -685,7 +698,9 @@ class _Grouping(Serializable):
         # Need to keep track of named key columns
         # to support `as_index=False` correctly
         self._named_columns = []
+        self._handle_by_or_level(by, level)
 
+    def _handle_by_or_level(self, by=None, level=None):
         if level is not None:
             if by is not None:
                 raise ValueError("Cannot specify both by and level")
