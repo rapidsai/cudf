@@ -142,6 +142,35 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
     col_nulls, expected_max_null_result, result_error, cudf::make_max_aggregation());
 }
 
+template <typename T>
+struct SumReductionTest : public ReductionTest<T> {
+};
+using SumTypes = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::DurationTypes>;
+TYPED_TEST_CASE(SumReductionTest, SumTypes);
+
+TYPED_TEST(SumReductionTest, Sum)
+{
+  using T = TypeParam;
+  std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
+  std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
+  std::vector<T> v = convert_values<T>(int_values);
+
+  // test without nulls
+  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+  T expected_value = std::accumulate(v.begin(), v.end(), T{0});
+  this->reduction_test(col, expected_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
+
+  // test with nulls
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+  cudf::size_type valid_count =
+    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
+  auto r                = replace_nulls(v, host_bools, T{0});
+  T expected_null_value = std::accumulate(r.begin(), r.end(), T{0});
+
+  this->reduction_test(
+    col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
+}
+
 TYPED_TEST_CASE(ReductionTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionTest, Product)
@@ -173,29 +202,6 @@ TYPED_TEST(ReductionTest, Product)
 
   this->reduction_test(
     col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_product_aggregation());
-}
-
-TYPED_TEST(ReductionTest, Sum)
-{
-  using T = TypeParam;
-  std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
-  std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
-  std::vector<T> v = convert_values<T>(int_values);
-
-  // test without nulls
-  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  T expected_value = std::accumulate(v.begin(), v.end(), T{0});
-  this->reduction_test(col, expected_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
-
-  // test with nulls
-  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type valid_count =
-    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
-  auto r                = replace_nulls(v, host_bools, T{0});
-  T expected_null_value = std::accumulate(r.begin(), r.end(), T{0});
-
-  this->reduction_test(
-    col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
 }
 
 TYPED_TEST(ReductionTest, SumOfSquare)
