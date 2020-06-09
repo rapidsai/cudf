@@ -160,14 +160,18 @@ get_base_nested_loop_join_indices(table_view const& left,
     write_index.set_value(0);
 
     row_equality equality{*left_table, *right_table};
+    const auto& join_output_l =
+      flip_join_indices ? right_indices.data().get() : left_indices.data().get();
+    const auto& join_output_r =
+      flip_join_indices ? left_indices.data().get() : right_indices.data().get();
     nested_loop_join<JoinKind, block_size, DEFAULT_JOIN_CACHE_SIZE>
       <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(*left_table,
                                                                        *right_table,
                                                                        equality,
                                                                        left_table->num_rows(),
                                                                        right_table->num_rows(),
-                                                                       left_indices.data().get(),
-                                                                       right_indices.data().get(),
+                                                                       join_output_l,
+                                                                       join_output_r,
                                                                        write_index.data(),
                                                                        estimated_size,
                                                                        flip_join_indices);

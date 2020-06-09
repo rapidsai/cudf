@@ -266,17 +266,20 @@ get_base_hash_join_indices(table_view const& left,
 
     row_hash hash_probe{*probe_table};
     row_equality equality{*probe_table, *build_table};
-    probe_hash_table<JoinKind, multimap_type, hash_value_type, block_size, DEFAULT_JOIN_CACHE_SIZE>
+    const auto& join_output_l =
+      flip_join_indices ? right_indices.data().get() : left_indices.data().get();
+    const auto& join_output_r =
+      flip_join_indices ? left_indices.data().get() : right_indices.data().get();
+    probe_hash_table<JoinKind, multimap_type, block_size, DEFAULT_JOIN_CACHE_SIZE>
       <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(*hash_table,
                                                                        *build_table,
                                                                        *probe_table,
                                                                        hash_probe,
                                                                        equality,
-                                                                       left_indices.data().get(),
-                                                                       right_indices.data().get(),
+                                                                       join_output_l,
+                                                                       join_output_r,
                                                                        write_index.data(),
-                                                                       estimated_size,
-                                                                       flip_join_indices);
+                                                                       estimated_size);
 
     CHECK_CUDA(stream);
 

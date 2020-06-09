@@ -232,8 +232,8 @@ __device__ void flush_output_cache(const unsigned int activemask,
                                    cudf::size_type current_idx_shared[num_warps],
                                    size_type join_shared_l[num_warps][output_cache_size],
                                    size_type join_shared_r[num_warps][output_cache_size],
-                                   size_type* output_l,
-                                   size_type* output_r)
+                                   size_type* join_output_l,
+                                   size_type* join_output_r)
 {
   // count how many active threads participating here which could be less than warp_size
   int num_threads               = __popc(activemask);
@@ -247,8 +247,8 @@ __device__ void flush_output_cache(const unsigned int activemask,
        shared_out_idx += num_threads) {
     cudf::size_type thread_offset = output_offset + shared_out_idx;
     if (thread_offset < max_size) {
-      output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
-      output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
+      join_output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
+      join_output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
     }
   }
 }
@@ -259,7 +259,6 @@ __device__ void flush_output_cache(const unsigned int activemask,
  *
  * @tparam JoinKind The type of join to be performed
  * @tparam multimap_type The type of the hash table
- * @tparam key_type Unused parameter
  * @tparam block_size The number of threads per block for this kernel
  * @tparam output_cache_size The side of the shared memory buffer to cache join output results
  *
@@ -273,12 +272,9 @@ __device__ void flush_output_cache(const unsigned int activemask,
  * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global
  output
  * @param[in] max_size The maximum size of the output
- * @param[in] flip_results Flag that indicates whether the left and right
- * tables have been flipped, meaning the output indices should also be flipped.
  */
 template <join_kind JoinKind,
           typename multimap_type,
-          typename key_type,
           cudf::size_type block_size,
           cudf::size_type output_cache_size>
 __global__ void probe_hash_table(multimap_type multi_map,
@@ -289,16 +285,12 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                  size_type* join_output_l,
                                  size_type* join_output_r,
                                  cudf::size_type* current_idx,
-                                 const cudf::size_type max_size,
-                                 bool flip_results)
+                                 const cudf::size_type max_size)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ size_type current_idx_shared[num_warps];
   __shared__ size_type join_shared_l[num_warps][output_cache_size];
   __shared__ size_type join_shared_r[num_warps][output_cache_size];
-
-  const auto& output_l = flip_results ? join_output_r : join_output_l;
-  const auto& output_r = flip_results ? join_output_l : join_output_r;
 
   const int warp_id                          = threadIdx.x / detail::warp_size;
   const int lane_id                          = threadIdx.x % detail::warp_size;
@@ -391,8 +383,8 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                                          current_idx_shared,
                                                          join_shared_l,
                                                          join_shared_r,
-                                                         output_l,
-                                                         output_r);
+                                                         join_output_l,
+                                                         join_output_r);
         __syncwarp(activemask);
         if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
         __syncwarp(activemask);
@@ -409,8 +401,8 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                                        current_idx_shared,
                                                        join_shared_l,
                                                        join_shared_r,
-                                                       output_l,
-                                                       output_r);
+                                                       join_output_l,
+                                                       join_output_r);
     }
   }
 }
@@ -433,8 +425,6 @@ __global__ void probe_hash_table(multimap_type multi_map,
  * @param[in,out] current_idx A global counter used by threads to coordinate
  * writes to the global output
  * @param[in] max_size The maximum size of the output
- * @param[in] flip_results Flag that indicates whether the left and right
- * tables have been flipped, meaning the output indices should also be flipped.
  */
 template <join_kind JoinKind, cudf::size_type block_size, cudf::size_type output_cache_size>
 __global__ void nested_loop_join(table_device_view left_table,
@@ -443,15 +433,12 @@ __global__ void nested_loop_join(table_device_view left_table,
                                  cudf::size_type* join_output_l,
                                  cudf::size_type* join_output_r,
                                  cudf::size_type* current_idx,
-                                 const cudf::size_type max_size,
-                                 bool flip_results)
+                                 const cudf::size_type max_size)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];
   __shared__ cudf::size_type join_shared_l[num_warps][output_cache_size];
   __shared__ cudf::size_type join_shared_r[num_warps][output_cache_size];
-  const auto& output_l = flip_results ? join_output_r : join_output_l;
-  const auto& output_r = flip_results ? join_output_l : join_output_r;
 
   const int warp_id                    = threadIdx.x / detail::warp_size;
   const int lane_id                    = threadIdx.x % detail::warp_size;
@@ -490,8 +477,8 @@ __global__ void nested_loop_join(table_device_view left_table,
                                                          current_idx_shared,
                                                          join_shared_l,
                                                          join_shared_r,
-                                                         output_l,
-                                                         output_r);
+                                                         join_output_l,
+                                                         join_output_r);
         __syncwarp(activemask);
         if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
         __syncwarp(activemask);
@@ -518,8 +505,8 @@ __global__ void nested_loop_join(table_device_view left_table,
                                                        current_idx_shared,
                                                        join_shared_l,
                                                        join_shared_r,
-                                                       output_l,
-                                                       output_r);
+                                                       join_output_l,
+                                                       join_output_r);
     }
   }
 }
