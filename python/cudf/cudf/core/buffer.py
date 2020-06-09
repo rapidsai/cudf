@@ -149,9 +149,8 @@ def confirm_1d_contiguous(array_interface):
     typestr = array_interface["typestr"]
     if typestr != "|u1":
         raise TypeError("Buffer data must be of uint8 type")
-    if strides is not None:
-        if not get_c_contiguity(shape, strides, itemsize):
-            raise ValueError("Buffer data must be 1D C-contiguous")
+    if not get_c_contiguity(shape, strides, itemsize):
+        raise ValueError("Buffer data must be 1D C-contiguous")
 
 
 def get_c_contiguity(shape, strides, itemsize):
