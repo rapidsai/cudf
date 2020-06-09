@@ -31,6 +31,8 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
+CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
+
 try:
     nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
 except Exception:
@@ -43,10 +45,8 @@ extensions = [
         include_dirs=[
             "../../cpp/include/cudf",
             "../../cpp/include",
-            "../../cpp/build/include",
-            "../../cpp/build/_deps/cub-src",
-            "../../cpp/build/_deps/thrust-src",
-            "../../thirdparty/libcudacxx/include",
+            os.path.join(CUDF_ROOT, "include"),
+            os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
             cuda_include_dir,

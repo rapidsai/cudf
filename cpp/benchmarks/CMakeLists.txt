@@ -25,13 +25,17 @@ endfunction(ConfigureBench)
 include_directories("${CUB_INCLUDE_DIR}"
                     "${THRUST_INCLUDE_DIR}"
                     "${JITIFY_INCLUDE_DIR}"
-                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
-                    "${CMAKE_BINARY_DIR}/include"
+                    "${LIBCUDACXX_INCLUDE_DIR}")
+
+if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+    include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+                  
+include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
-                    "${LIBCUDACXX_INCLUDE_DIR}"
                     "${GTEST_INCLUDE_DIR}"
                     "${GBENCH_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"

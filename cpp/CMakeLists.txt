@@ -328,7 +328,8 @@ message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 
 include_directories("${CUB_INCLUDE_DIR}"
                     "${THRUST_INCLUDE_DIR}"
-                    "${JITIFY_INCLUDE_DIR}")
+                    "${JITIFY_INCLUDE_DIR}"
+                    "${LIBCUDACXX_INCLUDE_DIR}")
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
@@ -338,7 +339,6 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_BINARY_DIR}/include/jit"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
-                    "${LIBCUDACXX_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
