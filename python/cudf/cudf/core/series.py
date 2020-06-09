@@ -1942,7 +1942,9 @@ class Series(Frame, Serializable):
         inds = self.index.argsort(ascending=ascending)
         return self.take(inds)
 
-    def sort_values(self, ascending=True, na_position="last"):
+    def sort_values(
+        self, ascending=True, na_position="last", ignore_index=False
+    ):
         """
         Sort by the values.
 
@@ -1954,6 +1956,8 @@ class Series(Frame, Serializable):
             If True, sort values in ascending order, otherwise descending.
         na_position : {‘first’, ‘last’}, default ‘last’
             'first' puts nulls at the beginning, 'last' puts nulls at the end.
+        ignore_index : bool, default False
+            If True, index will not be sorted.
 
         Returns
         -------
@@ -1978,7 +1982,10 @@ class Series(Frame, Serializable):
         if len(self) == 0:
             return self
         vals, inds = self._sort(ascending=ascending, na_position=na_position)
-        index = self.index.take(inds)
+        if not ignore_index:
+            index = self.index.take(inds)
+        else:
+            index = self.index
         return vals.set_index(index)
 
     def _n_largest_or_smallest(self, largest, n, keep):
