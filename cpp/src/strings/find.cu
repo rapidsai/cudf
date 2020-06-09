@@ -258,16 +258,21 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
-                    d_results,
-                    [d_strings, pfn, d_targets] __device__(size_type idx) {
-                      if (!d_strings.is_null(idx))
-                        return static_cast<bool>(pfn(d_strings.element<string_view>(idx),
-                                                     d_targets.element<string_view>(idx)));
-                      return false;
-                    });
+  thrust::transform(
+    rmm::exec_policy(stream)->on(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(strings_count),
+    d_results,
+    [d_strings, pfn, d_targets] __device__(size_type idx) {
+      if (d_targets.is_valid(idx) && d_targets.element<string_view>(idx).length() == 0) {
+        return true;
+      } else if (!d_strings.is_null(idx) && !d_targets.is_null(idx)) {
+        return static_cast<bool>(
+          pfn(d_strings.element<string_view>(idx), d_targets.element<string_view>(idx)));
+      } else {
+        return false;
+      }
+    });
   results->set_null_count(strings.null_count());
   return results;
 }
