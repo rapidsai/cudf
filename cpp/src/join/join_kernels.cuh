@@ -302,12 +302,9 @@ __global__ void probe_hash_table(multimap_type multi_map,
   __shared__ size_type current_idx_shared[num_warps];
   __shared__ size_type join_shared_l[num_warps][output_cache_size];
   __shared__ size_type join_shared_r[num_warps][output_cache_size];
-  size_type *output_l = join_output_l, *output_r = join_output_r;
 
-  if (flip_results) {
-    output_l = join_output_r;
-    output_r = join_output_l;
-  }
+  const auto& output_l = flip_results ? join_output_r : join_output_l;
+  const auto& output_r = flip_results ? join_output_l : join_output_r;
 
   const int warp_id = threadIdx.x / detail::warp_size;
   const int lane_id = threadIdx.x % detail::warp_size;
@@ -468,11 +465,6 @@ __global__ void nested_loop_join(table_device_view left_table,
   __shared__ cudf::size_type join_shared_r[num_warps][output_cache_size];
   const auto& output_l = flip_results ? join_output_r : join_output_l;
   const auto& output_r = flip_results ? join_output_l : join_output_r;
-
-  if (flip_results) {
-    output_l = join_output_r;
-    output_r = join_output_l;
-  }
 
   const int warp_id = threadIdx.x / detail::warp_size;
   const int lane_id = threadIdx.x % detail::warp_size;
