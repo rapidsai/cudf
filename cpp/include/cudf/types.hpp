@@ -66,12 +66,16 @@ class numeric_scalar;
 class string_scalar;
 template <typename T>
 class timestamp_scalar;
+template <typename T>
+class duration_scalar;
 
 template <typename T>
 class numeric_scalar_device_view;
 class string_scalar_device_view;
 template <typename T>
 class timestamp_scalar_device_view;
+template <typename T>
+class duration_scalar_device_view;
 
 class list_scalar;
 
@@ -183,14 +187,23 @@ enum type_id {
   INT16,                   ///< 2 byte signed integer
   INT32,                   ///< 4 byte signed integer
   INT64,                   ///< 8 byte signed integer
+  UINT8,                   ///< 1 byte unsigned integer
+  UINT16,                  ///< 2 byte unsigned integer
+  UINT32,                  ///< 4 byte unsigned integer
+  UINT64,                  ///< 8 byte unsigned integer
   FLOAT32,                 ///< 4 byte floating point
   FLOAT64,                 ///< 8 byte floating point
   BOOL8,                   ///< Boolean using one byte per value, 0 == false, else true
-  TIMESTAMP_DAYS,          ///< days since Unix Epoch in int32
-  TIMESTAMP_SECONDS,       ///< duration of seconds since Unix Epoch in int64
-  TIMESTAMP_MILLISECONDS,  ///< duration of milliseconds since Unix Epoch in int64
-  TIMESTAMP_MICROSECONDS,  ///< duration of microseconds since Unix Epoch in int64
-  TIMESTAMP_NANOSECONDS,   ///< duration of nanoseconds since Unix Epoch in int64
+  TIMESTAMP_DAYS,          ///< point in time in days since Unix Epoch in int32
+  TIMESTAMP_SECONDS,       ///< point in time in seconds since Unix Epoch in int64
+  TIMESTAMP_MILLISECONDS,  ///< point in time in milliseconds since Unix Epoch in int64
+  TIMESTAMP_MICROSECONDS,  ///< point in time in microseconds since Unix Epoch in int64
+  TIMESTAMP_NANOSECONDS,   ///< point in time in nanoseconds since Unix Epoch in int64
+  DURATION_DAYS,           ///< time interval of days in int32
+  DURATION_SECONDS,        ///< time interval of seconds in int64
+  DURATION_MILLISECONDS,   ///< time interval of milliseconds in int64
+  DURATION_MICROSECONDS,   ///< time interval of microseconds in int64
+  DURATION_NANOSECONDS,    ///< time interval of nanoseconds in int64
   DICTIONARY32,            ///< Dictionary type using int32 indices
   STRING,                  ///< String elements
   LIST,                    ///< List elements

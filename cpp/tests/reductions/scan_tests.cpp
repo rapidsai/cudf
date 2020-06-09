@@ -209,8 +209,12 @@ TYPED_TEST(ScanTest, Product)
 
 TYPED_TEST(ScanTest, Sum)
 {
-  auto const v =
-    cudf::test::make_type_param_vector<TypeParam>({-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
+  auto const v = [] {
+    if (std::is_signed<TypeParam>::value)
+      return cudf::test::make_type_param_vector<TypeParam>(
+        {-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
+    return cudf::test::make_type_param_vector<TypeParam>({12, 5, 6, 13, 11, 14, 3, 9, 34, 16});
+  }();
   auto const b = std::vector<bool>{1, 0, 1, 1, 0, 0, 1, 1, 1, 1};
   std::vector<TypeParam> exact(v.size());
 
