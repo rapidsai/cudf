@@ -240,7 +240,7 @@ def test_string_empty_astype(dtype):
         "float32",
         "float64",
         "bool",
-        "datetime64[ms]",
+        "datetime64[ns]",
     ],
 )
 def test_string_numeric_astype(dtype):
@@ -251,21 +251,13 @@ def test_string_numeric_astype(dtype):
     elif dtype.startswith("float"):
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
     elif dtype.startswith("datetime64"):
-        data = [1000000000, 2000000000, 3000000000, 4000000000, 5000000000]
-    if dtype.startswith("datetime64"):
-        ps = pd.Series(data, dtype="datetime64[ns]")
-        gs = Series.from_pandas(ps)
-    else:
-        ps = pd.Series(data, dtype=dtype)
-        gs = Series(data, dtype=dtype)
+        # pandas rounds the output format based on the data
+        data = [1000000001, 2000000001, 3000000001, 4000000001, 5000000001]
 
-    # Pandas datetime64 --> str typecasting returns arbitrary format depending
-    # on the data, so making it consistent unless we choose to match the
-    # behavior
-    if dtype.startswith("datetime64"):
-        expect = ps.dt.strftime("%Y-%m-%d %H:%M:%S.%f")
-    else:
-        expect = ps.astype("str")
+    ps = pd.Series(data, dtype=dtype)
+    gs = Series(data, dtype=dtype)
+
+    expect = ps.astype("str")
     got = gs.astype("str")
 
     assert_eq(expect, got)
@@ -347,7 +339,9 @@ def test_string_len(ps_gs):
         # xref pandas-dev/#33436
         pytest.param(
             pd.Index(["f", "g", "h", "i", "j"]),
-            marks=pytest.mark.xfail(reason="https://github.com/pandas-dev/pandas/pull/33436"),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/pull/33436"
+            ),
         ),
         (
             np.array(["f", "g", "h", "i", "j"]),
@@ -384,7 +378,9 @@ def test_string_len(ps_gs):
                 np.array(["f", "a", "b", "f", "a"]),
                 pd.Index(["f", "g", "h", "i", "j"]),
             ),
-            marks=pytest.mark.xfail(reason="https://github.com/pandas-dev/pandas/pull/33436"),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/pull/33436"
+            ),
         ),
         pytest.param(
             [
@@ -397,7 +393,9 @@ def test_string_len(ps_gs):
                 np.array(["f", "a", "b", "f", "a"]),
                 pd.Index(["f", "g", "h", "i", "j"]),
             ],
-            marks=pytest.mark.xfail(reason="https://github.com/pandas-dev/pandas/pull/33436"),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/pull/33436"
+            ),
         ),
     ],
 )
