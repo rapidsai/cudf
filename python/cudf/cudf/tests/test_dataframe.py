@@ -139,6 +139,15 @@ def test_series_basic():
     np.testing.assert_equal(series.to_array(), np.hstack([a1]))
 
 
+def test_series_from_cupy_scalars():
+    data = [0.1, 0.2, 0.3]
+    data_np = np.array(data)
+    data_cp = cupy.array(data)
+    s_np = Series([data_np[0], data_np[2]])
+    s_cp = Series([data_cp[0], data_cp[2]])
+    assert_eq(s_np, s_cp)
+
+
 @pytest.mark.parametrize("a", [[1, 2, 3], [1, 10, 30]])
 @pytest.mark.parametrize("b", [[4, 5, 6], [-11, -100, 30]])
 def test_append_index(a, b):
@@ -1121,12 +1130,45 @@ def test_from_gpu_matrix():
 
     pd.testing.assert_frame_equal(df, gdf.to_pandas())
 
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=["a", "b"])
+    df = pd.DataFrame(h_ary, index=["a", "b"])
+    assert isinstance(gdf, gd.DataFrame)
 
-@pytest.mark.xfail(reason="matrix dimension is not 2")
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=0)
+    df = pd.DataFrame(h_ary)
+    df = df.set_index(keys=0, drop=False)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=1)
+    df = pd.DataFrame(h_ary)
+    df = df.set_index(keys=1, drop=False)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+
 def test_from_gpu_matrix_wrong_dimensions():
     d_ary = cupy.empty((2, 3, 4), dtype=np.int32)
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary)
-    assert gdf is not None
+    with pytest.raises(
+        ValueError, match="matrix dimension expected 2 but found 3"
+    ):
+        gd.DataFrame.from_gpu_matrix(d_ary)
+
+
+def test_from_gpu_matrix_wrong_index():
+    d_ary = cupy.empty((2, 3), dtype=np.int32)
+
+    with pytest.raises(
+        ValueError, match="index length expected 2 but found 1"
+    ):
+        gd.DataFrame.from_gpu_matrix(d_ary, index=["a"])
+
+    with pytest.raises(KeyError):
+        gd.DataFrame.from_gpu_matrix(d_ary, index="a")
 
 
 @pytest.mark.xfail(reason="constructor does not coerce index inputs")
@@ -3719,6 +3761,17 @@ def test_series_value_counts():
         assert_eq(expect, got, check_dtype=False)
 
 
+@pytest.mark.parametrize("ascending", [True, False])
+def test_series_value_counts_optional_arguments(ascending):
+    psr = pd.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
+    gsr = Series.from_pandas(psr)
+
+    expect = psr.value_counts(ascending=ascending)
+    got = gsr.value_counts(ascending=ascending)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -4436,7 +4489,15 @@ def test_rowwise_ops(data, op):
     assert_eq(expected, got, check_less_precise=7)
 
 
-@pytest.mark.parametrize("data", [[5.0, 6.0, 7.0], "single value"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [5.0, 6.0, 7.0],
+        "single value",
+        np.array(1, dtype="int64"),
+        np.array(0.6273643, dtype="float64"),
+    ],
+)
 def test_insert(data):
     pdf = pd.DataFrame.from_dict({"A": [1, 2, 3], "B": ["a", "b", "c"]})
     gdf = DataFrame.from_pandas(pdf)
@@ -5465,6 +5526,31 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
 
 
 @pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 100, 112, 35464],
+        range(100),
+        [],
+        (-10, 21, 32, 32, 1, 2, 3),
+        (),
+        [[1, 2, 3], [1, 2, 3]],
+        [range(100), range(100)],
+        ((1, 2, 3), (1, 2, 3)),
+        [[1, 2, 3]],
+        [range(100)],
+        ((1, 2, 3),),
+    ],
+)
+def test_dataframe_init_1d_list(data):
+    expect = pd.DataFrame(data)
+    actual = DataFrame(data)
+
+    assert_eq(
+        expect, actual, check_index_type=False if len(data) == 0 else True
+    )
+
+
+@pytest.mark.parametrize(
     "data,cols,index",
     [
         (
@@ -5515,3 +5601,101 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
     gdf = DataFrame(data)
 
     assert_eq(pdf, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "col_data",
+    [
+        range(5),
+        ["a", "b", "x", "y", "z"],
+        [1.0, 0.213, 0.34332],
+        ["a"],
+        [1],
+        [0.2323],
+        [],
+    ],
+)
+@pytest.mark.parametrize(
+    "assign_val",
+    [
+        1,
+        2,
+        np.array(2),
+        cupy.array(2),
+        0.32324,
+        np.array(0.34248),
+        cupy.array(0.34248),
+        "abc",
+        np.array("abc", dtype="object"),
+        np.array("abc", dtype="str"),
+        np.array("abc"),
+        None,
+    ],
+)
+def test_dataframe_assign_scalar(col_data, assign_val):
+    pdf = pd.DataFrame({"a": col_data})
+    gdf = DataFrame({"a": col_data})
+
+    pdf["b"] = (
+        cupy.asnumpy(assign_val)
+        if isinstance(assign_val, cupy.ndarray)
+        else assign_val
+    )
+    gdf["b"] = assign_val
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "col_data",
+    [
+        1,
+        2,
+        np.array(2),
+        cupy.array(2),
+        0.32324,
+        np.array(0.34248),
+        cupy.array(0.34248),
+        "abc",
+        np.array("abc", dtype="object"),
+        np.array("abc", dtype="str"),
+        np.array("abc"),
+        None,
+    ],
+)
+@pytest.mark.parametrize(
+    "assign_val",
+    [
+        1,
+        2,
+        np.array(2),
+        cupy.array(2),
+        0.32324,
+        np.array(0.34248),
+        cupy.array(0.34248),
+        "abc",
+        np.array("abc", dtype="object"),
+        np.array("abc", dtype="str"),
+        np.array("abc"),
+        None,
+    ],
+)
+def test_dataframe_assign_scalar_with_scalar_cols(col_data, assign_val):
+    pdf = pd.DataFrame(
+        {
+            "a": cupy.asnumpy(col_data)
+            if isinstance(col_data, cupy.ndarray)
+            else col_data
+        },
+        index=["dummy_mandatory_index"],
+    )
+    gdf = DataFrame({"a": col_data}, index=["dummy_mandatory_index"])
+
+    pdf["b"] = (
+        cupy.asnumpy(assign_val)
+        if isinstance(assign_val, cupy.ndarray)
+        else assign_val
+    )
+    gdf["b"] = assign_val
+
+    assert_eq(pdf, gdf)

@@ -4,6 +4,7 @@ import pytest
 from pandas.util.testing import assert_series_equal
 
 import cudf
+from cudf.tests.utils import assert_eq
 
 
 def test_tokenize():
@@ -170,3 +171,233 @@ def test_ngrams_tokenize(n, separator, expected_values):
 
     assert type(expected) == type(actual)
     assert_series_equal(expected.to_pandas(), actual.to_pandas())
+
+
+def test_character_tokenize_series():
+    sr = cudf.Series(
+        [
+            "hello world",
+            "sdf",
+            None,
+            "goodbye, one-two:three~four+five_six@sev"
+            "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ",
+        ]
+    )
+    expected = cudf.Series(
+        [
+            "h",
+            "e",
+            "l",
+            "l",
+            "o",
+            " ",
+            "w",
+            "o",
+            "r",
+            "l",
+            "d",
+            "s",
+            "d",
+            "f",
+            "g",
+            "o",
+            "o",
+            "d",
+            "b",
+            "y",
+            "e",
+            ",",
+            " ",
+            "o",
+            "n",
+            "e",
+            "-",
+            "t",
+            "w",
+            "o",
+            ":",
+            "t",
+            "h",
+            "r",
+            "e",
+            "e",
+            "~",
+            "f",
+            "o",
+            "u",
+            "r",
+            "+",
+            "f",
+            "i",
+            "v",
+            "e",
+            "_",
+            "s",
+            "i",
+            "x",
+            "@",
+            "s",
+            "e",
+            "v",
+            "e",
+            "n",
+            "#",
+            "e",
+            "i",
+            "g",
+            "h",
+            "t",
+            "^",
+            "n",
+            "i",
+            "n",
+            "e",
+            " ",
+            "h",
+            "e",
+            "Œ",
+            "Ž",
+            "‘",
+            "•",
+            "™",
+            "œ",
+            "$",
+            "µ",
+            "¾",
+            "Ť",
+            "Ơ",
+            "é",
+            " ",
+            "Ǆ",
+        ]
+    )
+
+    actual = sr.str.character_tokenize()
+    assert_eq(expected, actual)
+
+    sr = cudf.Series([""])
+    expected = cudf.Series([], dtype="object")
+
+    actual = sr.str.character_tokenize()
+    assert_eq(expected, actual)
+
+    sr = cudf.Series(["a"])
+    expected = cudf.Series(["a"])
+
+    actual = sr.str.character_tokenize()
+    assert_eq(expected, actual)
+
+
+def test_character_tokenize_index():
+    sr = cudf.core.index.as_index(
+        [
+            "hello world",
+            "sdf",
+            None,
+            "goodbye, one-two:three~four+five_six@sev"
+            "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ",
+        ]
+    )
+    expected = cudf.core.index.as_index(
+        [
+            "h",
+            "e",
+            "l",
+            "l",
+            "o",
+            " ",
+            "w",
+            "o",
+            "r",
+            "l",
+            "d",
+            "s",
+            "d",
+            "f",
+            "g",
+            "o",
+            "o",
+            "d",
+            "b",
+            "y",
+            "e",
+            ",",
+            " ",
+            "o",
+            "n",
+            "e",
+            "-",
+            "t",
+            "w",
+            "o",
+            ":",
+            "t",
+            "h",
+            "r",
+            "e",
+            "e",
+            "~",
+            "f",
+            "o",
+            "u",
+            "r",
+            "+",
+            "f",
+            "i",
+            "v",
+            "e",
+            "_",
+            "s",
+            "i",
+            "x",
+            "@",
+            "s",
+            "e",
+            "v",
+            "e",
+            "n",
+            "#",
+            "e",
+            "i",
+            "g",
+            "h",
+            "t",
+            "^",
+            "n",
+            "i",
+            "n",
+            "e",
+            " ",
+            "h",
+            "e",
+            "Œ",
+            "Ž",
+            "‘",
+            "•",
+            "™",
+            "œ",
+            "$",
+            "µ",
+            "¾",
+            "Ť",
+            "Ơ",
+            "é",
+            " ",
+            "Ǆ",
+        ]
+    )
+
+    actual = sr.str.character_tokenize()
+    assert_eq(expected, actual)
+
+    sr = cudf.core.index.as_index([""])
+    expected = cudf.core.index.StringIndex([], dtype="object")
+
+    actual = sr.str.character_tokenize()
+    assert_eq(expected, actual)
+
+    sr = cudf.core.index.as_index(["a"])
+    expected = cudf.core.index.as_index(["a"])
+
+    actual = sr.str.character_tokenize()
+    assert_eq(expected, actual)

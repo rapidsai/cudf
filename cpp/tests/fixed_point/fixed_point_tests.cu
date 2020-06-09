@@ -162,6 +162,31 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXMath)
   EXPECT_EQ(THREE - TWO, ONE);
   EXPECT_EQ(TWO / ONE, TWO);
   EXPECT_EQ(SIX / TWO, THREE);
+
+  decimalXX a{1.23, scale_type{-2}};
+  decimalXX b{0, scale_type{0}};
+
+  EXPECT_EQ(a + b, a);
+  EXPECT_EQ(a - b, a);
+}
+
+TYPED_TEST(FixedPointTestBothReps, ComparisonOperators)
+{
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  decimalXX ONE{1, scale_type{-1}};
+  decimalXX TWO{2, scale_type{-2}};
+  decimalXX THREE{3, scale_type{-3}};
+  decimalXX SIX{6, scale_type{-4}};
+
+  EXPECT_TRUE(ONE + ONE >= TWO);
+
+  EXPECT_TRUE(ONE + ONE <= TWO);
+  EXPECT_TRUE(ONE * TWO < THREE);
+  EXPECT_TRUE(THREE * TWO > THREE);
+  EXPECT_TRUE(THREE - TWO >= ONE);
+  EXPECT_TRUE(TWO / ONE < THREE);
+  EXPECT_TRUE(SIX / TWO >= ONE);
 }
 
 TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision)
@@ -198,15 +223,88 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXRounding)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  decimalXX ZERO_FROM_FOUR_0{4, scale_type{0}};
-  decimalXX ZERO_FROM_FOUR_1{4, scale_type{1}};
-  decimalXX TEN_FROM_FIVE_0{5, scale_type{0}};
-  decimalXX TEN_FROM_FIVE_1{5, scale_type{1}};
+  decimalXX ZERO_0{0, scale_type{0}};
+  decimalXX ZERO_1{4, scale_type{1}};
+  decimalXX THREE_0{3, scale_type{0}};
+  decimalXX FOUR_0{4, scale_type{0}};
+  decimalXX FIVE_0{5, scale_type{0}};
+  decimalXX TEN_0{10, scale_type{0}};
+  decimalXX TEN_1{5, scale_type{1}};
 
-  EXPECT_EQ(ZERO_FROM_FOUR_1 + TEN_FROM_FIVE_1, TEN_FROM_FIVE_1);
-  EXPECT_EQ(ZERO_FROM_FOUR_0 + TEN_FROM_FIVE_1, TEN_FROM_FIVE_1);
-  EXPECT_TRUE(ZERO_FROM_FOUR_1 == ZERO_FROM_FOUR_1);
-  EXPECT_TRUE(TEN_FROM_FIVE_0 == TEN_FROM_FIVE_1);
+  decimalXX FOURTEEN_0{14, scale_type{0}};
+  decimalXX FIFTEEN_0{15, scale_type{0}};
+
+  EXPECT_EQ(ZERO_0, ZERO_1);
+  EXPECT_EQ(TEN_0, TEN_1);
+
+  EXPECT_EQ(ZERO_1 + TEN_1, TEN_1);
+  EXPECT_EQ(FOUR_0 + TEN_1, FOURTEEN_0);
+  EXPECT_TRUE(ZERO_0 == ZERO_1);
+  EXPECT_TRUE(FIVE_0 != TEN_1);
+  EXPECT_TRUE(FIVE_0 + FIVE_0 + FIVE_0 == FIFTEEN_0);
+  EXPECT_TRUE(FIVE_0 + FIVE_0 + FIVE_0 != TEN_1);
+  EXPECT_TRUE(FIVE_0 * THREE_0 == FIFTEEN_0);
+  EXPECT_TRUE(FIVE_0 * THREE_0 != TEN_1);
+}
+
+TYPED_TEST(FixedPointTestBothReps, ArithmeticWithDifferentScales)
+{
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  decimalXX a{1, scale_type{0}};
+  decimalXX b{1.2, scale_type{-1}};
+  decimalXX c{1.23, scale_type{-2}};
+  decimalXX d{1.111, scale_type{-3}};
+
+  decimalXX x{2.2, scale_type{-1}};
+  decimalXX y{3.43, scale_type{-2}};
+  decimalXX z{4.541, scale_type{-3}};
+
+  decimalXX xx{0.2, scale_type{-1}};
+  decimalXX yy{0.03, scale_type{-2}};
+  decimalXX zz{0.119, scale_type{-3}};
+
+  EXPECT_EQ(a + b, x);
+  EXPECT_EQ(a + b + c, y);
+  EXPECT_EQ(a + b + c + d, z);
+  EXPECT_EQ(b - a, xx);
+  EXPECT_EQ(c - b, yy);
+  EXPECT_EQ(c - d, zz);
+}
+
+TYPED_TEST(FixedPointTestBothReps, RescaledTest)
+{
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  decimalXX num0{1, scale_type{0}};
+  decimalXX num1{1.2, scale_type{-1}};
+  decimalXX num2{1.23, scale_type{-2}};
+  decimalXX num3{1.235, scale_type{-3}};
+  decimalXX num4{1.2346, scale_type{-4}};
+  decimalXX num5{1.23457, scale_type{-5}};
+  decimalXX num6{1.234567, scale_type{-6}};
+
+  EXPECT_EQ(num0, num6.rescaled(scale_type{0}));
+  EXPECT_EQ(num1, num6.rescaled(scale_type{-1}));
+  EXPECT_EQ(num2, num6.rescaled(scale_type{-2}));
+  EXPECT_EQ(num3, num6.rescaled(scale_type{-3}));
+  EXPECT_EQ(num4, num6.rescaled(scale_type{-4}));
+  EXPECT_EQ(num5, num6.rescaled(scale_type{-5}));
+}
+
+TYPED_TEST(FixedPointTestBothReps, RescaledRounding)
+{
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  decimalXX num0{1500, scale_type{0}};
+  decimalXX num1{1499, scale_type{0}};
+  decimalXX num2{-1499, scale_type{0}};
+  decimalXX num3{-1500, scale_type{0}};
+
+  EXPECT_EQ(2000, static_cast<TypeParam>(num0.rescaled(scale_type{3})));
+  EXPECT_EQ(1000, static_cast<TypeParam>(num1.rescaled(scale_type{3})));
+  EXPECT_EQ(-1000, static_cast<TypeParam>(num2.rescaled(scale_type{3})));
+  EXPECT_EQ(-2000, static_cast<TypeParam>(num3.rescaled(scale_type{3})));
 }
 
 TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust)
