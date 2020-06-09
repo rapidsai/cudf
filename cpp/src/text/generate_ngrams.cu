@@ -27,6 +27,8 @@
 #include <nvtext/generate_ngrams.hpp>
 #include <strings/utilities.cuh>
 
+#include <thrust/transform_scan.h>
+
 namespace nvtext {
 namespace detail {
 namespace {
@@ -162,6 +164,52 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
 {
   CUDF_FUNC_RANGE();
   return detail::generate_ngrams(strings, ngrams, separator, mr);
+}
+
+namespace detail {
+
+std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_view const& strings,
+                                                        cudf::size_type ngrams,
+                                                        cudaStream_t stream,
+                                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(ngrams > 1, "Parameter ngrams should be an integer value of 2 or greater");
+
+  auto strings_count = strings.size();
+  if (strings_count == 0)  // if no strings, return an empty column
+    return cudf::make_empty_column(cudf::data_type{cudf::STRING});
+
+  auto execpol        = rmm::exec_policy(stream);
+  auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
+  auto d_strings      = *strings_column;
+
+  rmm::device_vector<cudf::size_type> ngram_offsets(strings_count + 1);
+  thrust::transform_exclusive_scan(
+    execpol->on(stream),
+    thrust::make_counting_iterator<cudf::size_type>(0),
+    thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
+    ngram_offsets.begin(),
+    [d_strings, strings_count] __device__(auto idx) {
+      if (d_strings.is_null(idx) || (idx == strings_count)) return 0;
+      auto length = d_strings.element<cudf::string_view>(idx).length();
+      return (length < ngrams) ? 0 : (length + 1 - ngrams);
+    },
+    0,
+    thrust::plus<cudf::size_type>());
+  auto d_ngram_offset          = ngram_offsets.data().get();
+  cudf::size_type total_ngrams = thrust::device_pointer_cast(d_ngram_offset)[strings_count];
+  CUDF_EXPECTS(total_ngrams > 0,
+               "Insufficient number of characters in each string to generate ngrams");
+}
+
+}  // namespace detail
+
+std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_view const& strings,
+                                                        cudf::size_type ngrams,
+                                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::generate_character_ngrams(strings, ngrams, 0, mr);
 }
 
 }  // namespace nvtext
