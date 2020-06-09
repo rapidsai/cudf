@@ -2870,9 +2870,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new vector from the given values.
    * <p>
-   * Java does not have an unsigned byte type, so properly decoding these values
-   * will require extra steps on the part of the application.  See
-   * {@link Byte#toUnsignedInt(byte)}.
+   * Java does not have an unsigned byte type, so the values will be
+   * treated as if the bits represent an unsigned value.
    */
   public static ColumnVector fromUnsignedBytes(byte... values) {
     return build(DType.UINT8, values.length, (b) -> b.appendArray(values));
@@ -2888,9 +2887,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new vector from the given values.
    * <p>
-   * Java does not have an unsigned short type, so properly decoding these values
-   * will require extra steps on the part of the application.  See
-   * {@link Short#toUnsignedInt(short)}.
+   * Java does not have an unsigned short type, so the values will be
+   * treated as if the bits represent an unsigned value.
    */
   public static ColumnVector fromUnsignedShorts(short... values) {
     return build(DType.UINT16, values.length, (b) -> b.appendArray(values));
@@ -2906,9 +2904,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new vector from the given values.
    * <p>
-   * Java does not have an unsigned int type, so properly decoding these values
-   * will require extra steps on the part of the application.  See
-   * {@link Integer#toUnsignedLong(int)}.
+   * Java does not have an unsigned int type, so the values will be
+   * treated as if the bits represent an unsigned value.
    */
   public static ColumnVector fromUnsignedInts(int... values) {
     return build(DType.UINT32, values.length, (b) -> b.appendArray(values));
@@ -2924,9 +2921,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new vector from the given values.
    * <p>
-   * Java does not have an unsigned long type, so properly decoding these values
-   * will require extra steps on the part of the application.  See
-   * {@link Long#toUnsignedString(long)}.
+   * Java does not have an unsigned long type, so the values will be
+   * treated as if the bits represent an unsigned value.
    */
   public static ColumnVector fromUnsignedLongs(long... values) {
     return build(DType.UINT64, values.length, (b) -> b.appendArray(values));
@@ -3015,9 +3011,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    * <p>
-   * Java does not have an unsigned byte type, so properly decoding these values
-   * will require extra steps on the part of the application.  See
-   * {@link Byte#toUnsignedInt(byte)}.
+   * Java does not have an unsigned byte type, so the values will be
+   * treated as if the bits represent an unsigned value.
    */
   public static ColumnVector fromBoxedUnsignedBytes(Byte... values) {
     return build(DType.UINT8, values.length, (b) -> b.appendBoxed(values));
@@ -3037,9 +3032,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    * <p>
-   * Java does not have an unsigned short type, so properly decoding these values
-   * will require extra steps on the part of the application.  See
-   * {@link Short#toUnsignedShort(short)}.
+   * Java does not have an unsigned short type, so the values will be
+   * treated as if the bits represent an unsigned value.
    */
   public static ColumnVector fromBoxedUnsignedShorts(Short... values) {
     return build(DType.UINT16, values.length, (b) -> b.appendBoxed(values));
@@ -3059,9 +3053,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    * <p>
-   * Java does not have an unsigned int type, so properly decoding these values
-   * will require extra steps on the part of the application.  See
-   * {@link Integer#toUnsignedLong(int)}.
+   * Java does not have an unsigned int type, so the values will be
+   * treated as if the bits represent an unsigned value.
    */
   public static ColumnVector fromBoxedUnsignedInts(Integer... values) {
     return build(DType.UINT32, values.length, (b) -> b.appendBoxed(values));
@@ -3081,9 +3074,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    * <p>
-   * Java does not have an unsigned long type, so properly decoding these values
-   * will require extra steps on the part of the application.  See
-   * {@link Long#toUnsignedString(long)}.
+   * Java does not have an unsigned long type, so the values will be
+   * treated as if the bits represent an unsigned value.
    */
   public static ColumnVector fromBoxedUnsignedLongs(Long... values) {
     return build(DType.UINT64, values.length, (b) -> b.appendBoxed(values));
