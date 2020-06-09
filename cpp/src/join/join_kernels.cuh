@@ -275,7 +275,6 @@ __device__ void flush_output_cache(const unsigned int activemask,
  * @param[in] max_size The maximum size of the output
  * @param[in] flip_results Flag that indicates whether the left and right
  * tables have been flipped, meaning the output indices should also be flipped.
- * @param[in] offset An optional offset for the left table indices
  */
 template <join_kind JoinKind,
           typename multimap_type,
@@ -291,8 +290,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                  size_type* join_output_r,
                                  cudf::size_type* current_idx,
                                  const cudf::size_type max_size,
-                                 bool flip_results,
-                                 const size_type offset = 0)
+                                 bool flip_results)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ size_type current_idx_shared[num_warps];
@@ -349,8 +347,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
           if (check_row_equality(probe_row_index, found->second)) {
             // If the rows are equal, then we have found a true match
             found_match = true;
-            const size_type probe_index{offset + probe_row_index};
-            add_pair_to_cache(probe_index,
+            add_pair_to_cache(probe_row_index,
                               found->second,
                               current_idx_shared,
                               warp_id,
@@ -374,8 +371,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
 
         // If performing a LEFT join and no match was found, insert a Null into the output
         if ((JoinKind == join_kind::LEFT_JOIN) && (!running) && (!found_match)) {
-          const size_type probe_index{offset + probe_row_index};
-          add_pair_to_cache(probe_index,
+          add_pair_to_cache(probe_row_index,
                             static_cast<size_type>(JoinNoneValue),
                             current_idx_shared,
                             warp_id,
@@ -439,7 +435,6 @@ __global__ void probe_hash_table(multimap_type multi_map,
  * @param[in] max_size The maximum size of the output
  * @param[in] flip_results Flag that indicates whether the left and right
  * tables have been flipped, meaning the output indices should also be flipped.
- * @param[in] offset An optional offset for the left table indices
  */
 template <join_kind JoinKind, cudf::size_type block_size, cudf::size_type output_cache_size>
 __global__ void nested_loop_join(table_device_view left_table,
@@ -449,8 +444,7 @@ __global__ void nested_loop_join(table_device_view left_table,
                                  cudf::size_type* join_output_r,
                                  cudf::size_type* current_idx,
                                  const cudf::size_type max_size,
-                                 bool flip_results,
-                                 const cudf::size_type offset = 0)
+                                 bool flip_results)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];
@@ -477,8 +471,7 @@ __global__ void nested_loop_join(table_device_view left_table,
       if (check_row_equality(left_row_index, right_row_index)) {
         // If the rows are equal, then we have found a true match
         found_match = true;
-        const cudf::size_type left_offset_index{offset + left_row_index};
-        add_pair_to_cache(left_offset_index,
+        add_pair_to_cache(left_row_index,
                           right_row_index,
                           current_idx_shared,
                           warp_id,
@@ -507,8 +500,7 @@ __global__ void nested_loop_join(table_device_view left_table,
 
     // If performing a LEFT join and no match was found, insert a Null into the output
     if ((JoinKind == join_kind::LEFT_JOIN) && (!found_match)) {
-      const cudf::size_type left_offset_index{offset + left_row_index};
-      add_pair_to_cache(left_offset_index,
+      add_pair_to_cache(left_row_index,
                         static_cast<cudf::size_type>(JoinNoneValue),
                         current_idx_shared,
                         warp_id,
