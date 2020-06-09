@@ -486,9 +486,7 @@ class GroupBy(Serializable):
         --------
         cudf.core.window.Rolling
         """
-        from cudf.core.window.rolling import RollingGroupby
-
-        return RollingGroupby(self, *args, **kwargs)
+        return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
 
 class DataFrameGroupBy(GroupBy):
