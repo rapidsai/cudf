@@ -2772,8 +2772,8 @@ class DataFrame(Frame, Serializable):
 
         DataFrame.rename supports two calling conventions
 
-        `(index=index_mapper, columns=columns_mapper, ...)`
-        `(mapper, axis={0/'index' or 1/'column'}, ...)`
+        ``(index=index_mapper, columns=columns_mapper, ...)``
+        ``(mapper, axis={0/'index' or 1/'column'}, ...)``
 
         We highly recommend using keyword arguments to clarify your intent.
 
@@ -2781,7 +2781,7 @@ class DataFrame(Frame, Serializable):
         ----------
         mapper : dict-like or function, default None
             optional dict-like or functions transformations to apply to
-            the index/column values depending on selected `axis`.
+            the index/column values depending on selected ``axis``.
         index : dict-like, default None
             Optional dict-like transformations to apply to the index axis'
             values. Does not support functions for axis 0 yet.
@@ -2835,7 +2835,7 @@ class DataFrame(Frame, Serializable):
             postfix = 1
             if isinstance(columns, Mapping):
                 # It is possible for DataFrames with a MultiIndex columns
-                # object to have columns with the same name. The followig
+                # object to have columns with the same name. The following
                 # use of _cols.items and ("_1", "_2"... allows the use of
                 # rename in this case
                 for key, col in self._data.items():
