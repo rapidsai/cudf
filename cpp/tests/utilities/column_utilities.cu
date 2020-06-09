@@ -258,6 +258,41 @@ static auto numeric_to_string_precise(T value)
   return o.str();
 }
 
+template <typename T,
+          typename std::enable_if_t<std::is_same<T, cudf::duration_D>::value>* = nullptr>
+static auto duration_suffix(T)
+{
+  return " days";
+}
+
+template <typename T,
+          typename std::enable_if_t<std::is_same<T, cudf::duration_s>::value>* = nullptr>
+static auto duration_suffix(T)
+{
+  return " seconds";
+}
+
+template <typename T,
+          typename std::enable_if_t<std::is_same<T, cudf::duration_ms>::value>* = nullptr>
+static auto duration_suffix(T)
+{
+  return " milliseconds";
+}
+
+template <typename T,
+          typename std::enable_if_t<std::is_same<T, cudf::duration_us>::value>* = nullptr>
+static auto duration_suffix(T)
+{
+  return " microseconds";
+}
+
+template <typename T,
+          typename std::enable_if_t<std::is_same<T, cudf::duration_ns>::value>* = nullptr>
+static auto duration_suffix(T)
+{
+  return " nanoseconds";
+}
+
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out)
@@ -336,10 +371,30 @@ struct column_view_printer {
     }
   }
 
+  // Print the tick counts with the units
   template <typename Element, typename std::enable_if_t<is_duration<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out)
   {
-    CUDF_FAIL("duration printing not supported yet");
+    auto h_data = cudf::test::to_host<Element>(col);
+
+    out.resize(col.size());
+
+    if (col.nullable()) {
+      std::transform(thrust::make_counting_iterator(size_type{0}),
+                     thrust::make_counting_iterator(col.size()),
+                     out.begin(),
+                     [&h_data](auto idx) {
+                       return bit_is_set(h_data.second.data(), idx)
+                                ? numeric_to_string_precise(h_data.first[idx].count()) +
+                                    duration_suffix(h_data.first[idx])
+                                : std::string("NULL");
+                     });
+
+    } else {
+      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
+        return numeric_to_string_precise(el.count()) + duration_suffix(el);
+      });
+    }
   }
 
   template <typename Element,
