@@ -90,8 +90,7 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
   compute_nested_loop_join_output_size<JoinKind, block_size>
-    <<<numBlocks * num_sms, block_size, 0, stream>>>(
-      left, right, equality, left_num_rows, right_num_rows, size_estimate.data());
+    <<<numBlocks * num_sms, block_size, 0, stream>>>(left, right, equality, size_estimate.data());
   CHECK_CUDA(stream);
 
   h_size_estimate = size_estimate.value();

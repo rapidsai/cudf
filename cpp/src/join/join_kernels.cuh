@@ -174,7 +174,7 @@ __global__ void compute_join_output_size(multimap_type multi_map,
     }
   }
 
-  typedef cub::BlockReduce<cudf::size_type, block_size> BlockReduce;
+  using BlockReduce = cub::BlockReduce<cudf::size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
   cudf::size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
 
@@ -194,21 +194,19 @@ __global__ void compute_join_output_size(multimap_type multi_map,
  * @param[in] left_table The left table
  * @param[in] right_table The right table
  * @param[in] check_row_equality The row equality comparator
- * @param[in] left_num_rows The number of rows in the left table
- * @param[in] right_num_rows The number of rows in the right table
  * @param[out] output_size The resulting output size
  */
 template <join_kind JoinKind, int block_size>
 __global__ void compute_nested_loop_join_output_size(table_device_view left_table,
                                                      table_device_view right_table,
                                                      row_equality check_row_equality,
-                                                     cudf::size_type left_num_rows,
-                                                     cudf::size_type right_num_rows,
                                                      cudf::size_type* output_size)
 {
   cudf::size_type thread_counter(0);
   const cudf::size_type left_start_idx = threadIdx.x + blockIdx.x * blockDim.x;
   const cudf::size_type left_stride    = blockDim.x * gridDim.x;
+  const cudf::size_type left_num_rows  = left_table.num_rows();
+  const cudf::size_type right_num_rows = right_table.num_rows();
 
   for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
        left_row_index += left_stride) {
@@ -217,7 +215,7 @@ __global__ void compute_nested_loop_join_output_size(table_device_view left_tabl
     }
   }
 
-  typedef cub::BlockReduce<cudf::size_type, block_size> BlockReduce;
+  using BlockReduce = cub::BlockReduce<cudf::size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
   cudf::size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
 
@@ -270,7 +268,6 @@ __device__ void flush_output_cache(const unsigned int activemask,
  * @param[in] probe_table The probe table
  * @param[in] hash_probe Row hasher for the probe table
  * @param[in] check_row_equality The row equality comparator
- * @param[in] probe_table_num_rows The number of rows in the probe table
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
  * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global
@@ -290,7 +287,6 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                  table_device_view probe_table,
                                  row_hash hash_probe,
                                  row_equality check_row_equality,
-                                 const cudf::size_type probe_table_num_rows,
                                  size_type* join_output_l,
                                  size_type* join_output_r,
                                  cudf::size_type* current_idx,
@@ -306,8 +302,9 @@ __global__ void probe_hash_table(multimap_type multi_map,
   const auto& output_l = flip_results ? join_output_r : join_output_l;
   const auto& output_r = flip_results ? join_output_l : join_output_r;
 
-  const int warp_id = threadIdx.x / detail::warp_size;
-  const int lane_id = threadIdx.x % detail::warp_size;
+  const int warp_id                          = threadIdx.x / detail::warp_size;
+  const int lane_id                          = threadIdx.x % detail::warp_size;
+  const cudf::size_type probe_table_num_rows = probe_table.num_rows();
 
   if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
 
@@ -435,8 +432,6 @@ __global__ void probe_hash_table(multimap_type multi_map,
  * @param[in] left_table The left table
  * @param[in] right_table The right table
  * @param[in] check_row_equality The row equality comparator
- * @param[in] left_num_rows The number of rows in the left table
- * @param[in] right_num_rows The number of rows in the right table
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
  * @param[in,out] current_idx A global counter used by threads to coordinate
@@ -450,8 +445,6 @@ template <join_kind JoinKind, cudf::size_type block_size, cudf::size_type output
 __global__ void nested_loop_join(table_device_view left_table,
                                  table_device_view right_table,
                                  row_equality check_row_equality,
-                                 const cudf::size_type left_num_rows,
-                                 const cudf::size_type right_num_rows,
                                  cudf::size_type* join_output_l,
                                  cudf::size_type* join_output_r,
                                  cudf::size_type* current_idx,
@@ -466,8 +459,10 @@ __global__ void nested_loop_join(table_device_view left_table,
   const auto& output_l = flip_results ? join_output_r : join_output_l;
   const auto& output_r = flip_results ? join_output_l : join_output_r;
 
-  const int warp_id = threadIdx.x / detail::warp_size;
-  const int lane_id = threadIdx.x % detail::warp_size;
+  const int warp_id                    = threadIdx.x / detail::warp_size;
+  const int lane_id                    = threadIdx.x % detail::warp_size;
+  const cudf::size_type left_num_rows  = left_table.num_rows();
+  const cudf::size_type right_num_rows = right_table.num_rows();
 
   if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
 
