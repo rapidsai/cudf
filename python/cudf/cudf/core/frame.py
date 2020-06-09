@@ -1231,7 +1231,7 @@ class Frame(libcudf.table.Table):
         result._copy_categories(self)
         return result
 
-    def replace(self, to_replace, replacement, index=False):
+    def replace(self, to_replace, replacement):
         copy_data = self._data.copy()
 
         for name, col in copy_data.items():
