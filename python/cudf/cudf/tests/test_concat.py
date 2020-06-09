@@ -299,14 +299,17 @@ def test_pandas_concat_compatibility_axis1_overlap(index, names, data):
 
 @pytest.mark.xfail(raises=ValueError)
 def test_pandas_concat_compatibility_axis1_eq_index():
-    s1 = gd.Series(["a", "b", "c"], index=[0, 1, 2])
-    s2 = gd.Series(["a", "b", "c"], index=[1, 1, 1])
-    ps1 = s1.to_pandas()
-    ps2 = s2.to_pandas()
-    got = gd.concat([s1, s2], axis=1)
-    expect = pd.concat([ps1, ps2], axis=1)
+    with pytest.raises(
+        ValueError, match=r"cannot reindex from a duplicate axis"
+    ):
+        s1 = gd.Series(["a", "b", "c"], index=[0, 1, 2])
+        s2 = gd.Series(["a", "b", "c"], index=[1, 1, 1])
+        ps1 = s1.to_pandas()
+        ps2 = s2.to_pandas()
+        got = gd.concat([s1, s2], axis=1)
+        expect = pd.concat([ps1, ps2], axis=1)
 
-    assert_eq(got, expect)
+        assert_eq(got, expect)
 
 
 def test_concat_duplicate_columns():
