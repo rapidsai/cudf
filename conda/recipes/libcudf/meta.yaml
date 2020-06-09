@@ -39,7 +39,6 @@ requirements:
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - dlpack
-  run_constrained:
     - arrow-cpp-proc * cuda
 
 test:
