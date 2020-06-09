@@ -298,6 +298,18 @@ std::unique_ptr<column> starts_with(
   return contains_fn(strings, target, pfn, mr, stream);
 }
 
+std::unique_ptr<column> starts_with(
+  strings_column_view const& strings,
+  strings_column_view const& targets,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0)
+{
+  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+    return d_string.find(d_target) == 0;
+  };
+  return contains_fn(strings, targets, pfn, mr, stream);
+}
+
 std::unique_ptr<column> ends_with(
   strings_column_view const& strings,
   string_scalar const& target,
@@ -348,6 +360,14 @@ std::unique_ptr<column> starts_with(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::starts_with(strings, target, mr);
+}
+
+std::unique_ptr<column> starts_with(strings_column_view const& strings,
+                                    strings_column_view const& targets,
+                                    rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::starts_with(strings, targets, mr);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
