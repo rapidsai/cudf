@@ -10,7 +10,16 @@ from cudf import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq
 
-index_dtypes = [np.int64, np.int32, np.int16, np.int8, np.uint64, np.uint32, np.uint16, np.uint8]
+index_dtypes = [
+    np.int64,
+    np.int32,
+    np.int16,
+    np.int8,
+    np.uint64,
+    np.uint32,
+    np.uint16,
+    np.uint8,
+]
 
 
 @pytest.fixture

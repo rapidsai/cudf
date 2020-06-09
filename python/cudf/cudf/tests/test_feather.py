@@ -24,7 +24,19 @@ if LooseVersion(pd.__version__) < LooseVersion("0.24"):
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = ["bool", "int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64"]
+    types = [
+        "bool",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float32",
+        "float64",
+    ]
     renamer = {
         "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
     }

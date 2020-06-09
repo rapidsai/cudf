@@ -121,7 +121,7 @@ def gen_rand(dtype, size, **kwargs):
         low = kwargs.get("low", 0)
         high = kwargs.get("high", 32)
         return np.random.randint(low=low, high=high, size=size).astype(dtype)
-    elif dtype.kind == 'u':
+    elif dtype.kind == "u":
         low = kwargs.get("low", 0)
         high = kwargs.get("high", 128)
         return np.random.randint(low=low, high=high, size=size).astype(dtype)

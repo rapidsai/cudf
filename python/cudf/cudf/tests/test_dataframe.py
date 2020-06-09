@@ -16,7 +16,6 @@ from cudf.core.column import column
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, does_not_raise, gen_rand
-from cudf.utils.dtypes import up_cast_unsigned_dtype
 
 
 def test_init_via_list_of_tuples():
@@ -824,7 +823,7 @@ def test_dataframe_hash_partition_masked_value(nrows):
         df = p.to_pandas()
         for row in df.itertuples():
             valid = bool(bytemask[row.key])
-            expected_value = row.key + 100 if valid else -1
+            expected_value = row.key + 100 if valid else 0
             got_value = row.val
             assert expected_value == got_value
 
@@ -844,7 +843,7 @@ def test_dataframe_hash_partition_masked_keys(nrows):
         for row in df.itertuples():
             valid = bool(bytemask[row.val - 100])
             # val is key + 100
-            expected_value = row.val - 100 if valid else -1
+            expected_value = row.val - 100 if valid else 0
             got_value = row.key
             assert expected_value == got_value
 
@@ -941,7 +940,7 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
     )
 
     # numerical columns are upcasted to float in cudf.DataFrame.to_pandas()
-    # casts nan to -1 in non-float numerical columns
+    # casts nan to 0 in non-float numerical columns
 
     numeric_cols = got.dtypes[got.dtypes != "object"].index
     for col in numeric_cols:
@@ -1779,7 +1778,7 @@ def test_series_hash_encode(nrows):
 
 
 @pytest.mark.parametrize(
-    "dtype", 
+    "dtype",
     [
         "bool",
         "int8",
@@ -1986,7 +1985,7 @@ def test_arrow_handle_no_index_name(pdf, gdf):
 @pytest.mark.parametrize("num_bins", [1, 2, 4, 20])
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize(
-    "dtype", 
+    "dtype",
     [
         "bool",
         "int8",
@@ -1999,7 +1998,7 @@ def test_arrow_handle_no_index_name(pdf, gdf):
         "uint64",
         "float32",
         "float64",
-    ]
+    ],
 )
 def test_series_digitize(num_rows, num_bins, right, dtype):
     data = np.random.randint(0, 100, num_rows).astype(dtype)
@@ -3431,7 +3430,7 @@ def test_series_astype_numeric_to_numeric(dtype, as_dtype):
     ],
 )
 @pytest.mark.parametrize(
-    "as_dtype", 
+    "as_dtype",
     [
         "int8",
         "int16",
@@ -4322,7 +4321,6 @@ def test_tolist_mixed_nulls():
         "float32",
         "float64",
     ],
-
 )
 @pytest.mark.parametrize(
     "as_dtype",
@@ -4346,9 +4344,9 @@ def test_tolist_mixed_nulls():
     ],
 )
 def test_df_astype_numeric_to_all(dtype, as_dtype):
-    if not "uint" in dtype and "uint" in as_dtype:
-        # can't convert int to unisgned 
-        return 
+    if "uint" not in dtype and "uint" in as_dtype:
+        # can't convert int to unisgned
+        return
     if "uint" in dtype:
         data = [1, 2, None, 4, 7]
     elif "int" in dtype:

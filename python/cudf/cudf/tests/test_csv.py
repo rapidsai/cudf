@@ -509,10 +509,18 @@ def test_csv_reader_NaN_values():
 def test_csv_reader_thousands(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file13.csv")
 
-    names = dtypes = ["float32", "float64", "int32", "int64", "uint32", "uint64"]
+    names = dtypes = [
+        "float32",
+        "float64",
+        "int32",
+        "int64",
+        "uint32",
+        "uint64",
+    ]
     lines = [
         ",".join(names),
-        "1'234.5, 1'234.567, 1'234'567, 1'234'567'890, 1'234'567, 1'234'567'890",
+        "1'234.5, 1'234.567, 1'234'567, 1'234'567'890,\
+                1'234'567, 1'234'567'890",
         "12'345.6, 123'456.7, 12'345, 123'456'789, 12'345, 123'456'789",
     ]
 

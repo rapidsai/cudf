@@ -41,7 +41,7 @@ from cudf._lib.scalar import Scalar
         np.iinfo(np.uint32).max,
         np.uint64(42),
         np.iinfo(np.uint64).min,
-        np.dtype('uint64').type(np.iinfo(np.uint64).max),
+        np.dtype("uint64").type(np.iinfo(np.uint64).max),
         np.float32(1),
         np.float32(-1),
         np.finfo(np.float32).min,

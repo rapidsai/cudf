@@ -651,7 +651,7 @@ def test_string_join_key_nulls(str_data_nulls):
         expect = expect.reset_index(drop=True)
         got = got[expect.columns]
 
-    expect["vals_y"] = expect["vals_y"].fillna(-1).astype("int64")
+    expect["vals_y"] = expect["vals_y"].fillna(0).astype("int64")
 
     assert_eq(expect, got)
 
@@ -1637,38 +1637,38 @@ def test_string_find(data, sub):
     ps = pd.Series(data)
     gs = Series(data)
 
-    assert_eq(ps.str.find(sub).fillna(-1), gs.str.find(sub), check_dtype=False)
+    assert_eq(ps.str.find(sub).fillna(0), gs.str.find(sub), check_dtype=False)
     assert_eq(
-        ps.str.find(sub, start=1).fillna(-1),
+        ps.str.find(sub, start=1).fillna(0),
         gs.str.find(sub, start=1),
         check_dtype=False,
     )
     assert_eq(
-        ps.str.find(sub, end=10).fillna(-1),
+        ps.str.find(sub, end=10).fillna(0),
         gs.str.find(sub, end=10),
         check_dtype=False,
     )
     assert_eq(
-        ps.str.find(sub, start=2, end=10).fillna(-1),
+        ps.str.find(sub, start=2, end=10).fillna(0),
         gs.str.find(sub, start=2, end=10),
         check_dtype=False,
     )
 
     assert_eq(
-        ps.str.rfind(sub).fillna(-1), gs.str.rfind(sub), check_dtype=False
+        ps.str.rfind(sub).fillna(0), gs.str.rfind(sub), check_dtype=False
     )
     assert_eq(
-        ps.str.rfind(sub, start=1).fillna(-1),
+        ps.str.rfind(sub, start=1).fillna(0),
         gs.str.rfind(sub, start=1),
         check_dtype=False,
     )
     assert_eq(
-        ps.str.rfind(sub, end=10).fillna(-1),
+        ps.str.rfind(sub, end=10).fillna(0),
         gs.str.rfind(sub, end=10),
         check_dtype=False,
     )
     assert_eq(
-        ps.str.rfind(sub, start=2, end=10).fillna(-1),
+        ps.str.rfind(sub, start=2, end=10).fillna(0),
         gs.str.rfind(sub, start=2, end=10),
         check_dtype=False,
     )

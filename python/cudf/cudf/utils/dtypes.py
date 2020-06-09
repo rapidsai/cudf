@@ -19,10 +19,10 @@ _np_pa_dtypes = {
     np.int16: pa.int16(),
     np.int8: pa.int8(),
     np.bool_: pa.int8(),
-    np.uint64 : pa.uint64(),
-    np.uint32 : pa.uint32(),
-    np.uint16 : pa.uint16(),
-    np.uint8 : pa.uint8(),
+    np.uint64: pa.uint64(),
+    np.uint32: pa.uint32(),
+    np.uint16: pa.uint16(),
+    np.uint8: pa.uint8(),
     np.datetime64: pa.date64(),
     np.object_: pa.string(),
     np.str_: pa.string(),
@@ -270,13 +270,13 @@ def min_numeric_column_type(x, expected_type):
 
     # Get min unsigned dtype
     if np.issubdtype(expected_type, np.signedinteger):
-        #get signed bound dtypes
+        # get signed bound dtypes
         max_bound_dtype = np.dtype(min_signed_type(x.max()))
         min_bound_dtype = np.dtype(min_signed_type(x.min()))
         return np.promote_types(max_bound_dtype, min_bound_dtype)
 
     if np.issubdtype(expected_type, np.unsignedinteger):
-        #get unsigned bound dtypes
+        # get unsigned bound dtypes
         max_bound_dtype = np.dtype(min_unsigned_type(x.max()))
         min_bound_dtype = np.dtype(min_unsigned_type(x.min()))
         return np.promote_types(max_bound_dtype, min_bound_dtype)
@@ -298,9 +298,9 @@ def check_cast_unsupported_dtype(dtype):
 
     if dtype in np_to_cudf_types:
         return dtype
-    
-    if dtype == np.dtype('float16'):
-        return np.dtype('float32')
+
+    if dtype == np.dtype("float16"):
+        return np.dtype("float32")
 
     raise NotImplementedError(
         "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)

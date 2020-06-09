@@ -50,7 +50,7 @@ def test_categorical_integer():
     pdsr = pd.Series(cat)
     sr = Series(cat)
     np.testing.assert_array_equal(
-        cat.codes, sr.cat.codes.to_array(fillna="pandas")
+        cat.codes, sr.cat.codes.fillna(-1).to_array()
     )
     assert sr.null_count == 2
 

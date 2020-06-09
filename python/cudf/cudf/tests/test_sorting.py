@@ -11,7 +11,14 @@ from cudf.core.column import NumericalColumn
 from cudf.tests.utils import assert_eq
 
 sort_nelem_args = [2, 257]
-sort_dtype_args = [np.int32, np.int64, np.uint32, np.uint64, np.float32, np.float64]
+sort_dtype_args = [
+    np.int32,
+    np.int64,
+    np.uint32,
+    np.uint64,
+    np.float32,
+    np.float64,
+]
 sort_slice_args = [slice(1, None), slice(None, -1), slice(1, -1)]
 
 

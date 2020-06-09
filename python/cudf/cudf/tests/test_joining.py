@@ -250,7 +250,7 @@ def test_dataframe_join_mismatch_cats(how):
     join_pdf = pdf1.join(pdf2, how=how)
 
     got = join_gdf.to_pandas()
-    expect = join_pdf.fillna(-1)  # note: cudf join doesn't mask NA
+    expect = join_pdf.fillna(0)  # note: cudf join doesn't mask NA
 
     # We yield a categorical here whereas pandas gives Object.
     expect.index = expect.index.astype("category")
@@ -963,8 +963,14 @@ def test_merge_multi(kwargs):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype_l", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"])
-@pytest.mark.parametrize("dtype_r", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"])
+@pytest.mark.parametrize(
+    "dtype_l",
+    ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"],
+)
+@pytest.mark.parametrize(
+    "dtype_r",
+    ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"],
+)
 def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     other_data = ["a", "b", "c"]
 
@@ -1029,10 +1035,34 @@ def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
 
 
 @pytest.mark.parametrize(
-    "dtype_l", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64"]
+    "dtype_l",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float32",
+        "float64",
+    ],
 )
 @pytest.mark.parametrize(
-    "dtype_r", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64"]
+    "dtype_r",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float32",
+        "float64",
+    ],
 )
 def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
     if ("int" in dtype_l and "int" in dtype_r) or (

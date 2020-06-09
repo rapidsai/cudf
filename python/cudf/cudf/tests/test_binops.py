@@ -88,7 +88,16 @@ def test_series_binop_scalar(nelem, binop, obj_class):
 _bitwise_binops = [operator.and_, operator.or_, operator.xor]
 
 
-_int_types = ["int8", "int16", "int32", "int64", "longlong", "uint8", "uint16", "uint32"]
+_int_types = [
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "longlong",
+    "uint8",
+    "uint16",
+    "uint32",
+]
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -296,7 +305,16 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
     np.testing.assert_array_equal(expect, got)
 
 
-_dtypes = [np.int16, np.int32, np.int64, np.float32, np.float64, np.uint16, np.uint32, np.uint64,]
+_dtypes = [
+    np.int16,
+    np.int32,
+    np.int64,
+    np.float32,
+    np.float64,
+    np.uint16,
+    np.uint32,
+    np.uint64,
+]
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -726,4 +744,4 @@ def test_ufunc_ops(lhs, rhs, ops):
 
     expect = np_op(lhs, rhs)
     got = cu_op(culhs, curhs)
-    utils.assert_eq(expect.fillna(-1), got, check_dtype=False)
+    utils.assert_eq(expect.fillna(0), got, check_dtype=False)

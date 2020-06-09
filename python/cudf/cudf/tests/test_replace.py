@@ -155,10 +155,34 @@ def test_replace_strings():
 
 
 @pytest.mark.parametrize(
-    "data_dtype", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64"]
+    "data_dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float32",
+        "float64",
+    ],
 )
 @pytest.mark.parametrize(
-    "fill_dtype", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64"]
+    "fill_dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float32",
+        "float64",
+    ],
 )
 @pytest.mark.parametrize("fill_type", ["scalar", "series"])
 @pytest.mark.parametrize("null_value", [None, np.nan])
@@ -299,7 +323,10 @@ def test_fillna_string(fill_type, inplace):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("data_dtype", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"])
+@pytest.mark.parametrize(
+    "data_dtype",
+    ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"],
+)
 def test_series_fillna_invalid_dtype(data_dtype):
     gdf = Series([1, 2, None, 3], dtype=data_dtype)
     fill_value = 2.5
@@ -313,7 +340,19 @@ def test_series_fillna_invalid_dtype(data_dtype):
 
 
 @pytest.mark.parametrize(
-    "data_dtype", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64"]
+    "data_dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float32",
+        "float64",
+    ],
 )
 @pytest.mark.parametrize("fill_value", [100, 100.0, 128.5])
 def test_series_where(data_dtype, fill_value):
@@ -455,7 +494,19 @@ def test_series_multiple_times_with_nulls():
 
 
 @pytest.mark.parametrize(
-    "series_dtype", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "float32", "float64"]
+    "series_dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float32",
+        "float64",
+    ],
 )
 @pytest.mark.parametrize(
     "replacement", [128, 128.0, 128.5, 32769, 32769.0, 32769.5]
@@ -492,7 +543,8 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
 
     # Both lists of equal length
     if (np.dtype(type(replacement)).kind == "f" and sr.dtype.kind in "iu") or (
-        sr.dtype.type(replacement) != replacement):
+        sr.dtype.type(replacement) != replacement
+    ):
         with pytest.raises(TypeError):
             sr.replace([2, 3], [replacement, replacement])
     else:

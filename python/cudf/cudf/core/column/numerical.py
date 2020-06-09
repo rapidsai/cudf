@@ -165,7 +165,7 @@ class NumericalColumn(column.ColumnBase):
         if self.has_nulls and self.dtype == np.bool:
             # Boolean series in Pandas that contains None/NaN is of dtype
             # `np.object`, which is not natively supported in GDF.
-            ret = self.astype(np.int8).to_array(fillna=-1)
+            ret = self.astype(np.int8).fillna(-1).to_array()
             ret = pd.Series(ret, index=index)
             ret = ret.where(ret >= 0, other=None)
             ret.replace(to_replace=1, value=True, inplace=True)
@@ -254,7 +254,7 @@ class NumericalColumn(column.ColumnBase):
         if dkind == "f":
             return self.dtype.type(np.nan)
         elif dkind == "i":
-            return -1
+            return 0
         elif dkind == "u":
             return 0
         elif dkind == "b":
@@ -480,7 +480,9 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
     )
     col_to_normalize_dtype = normalized_column.dtype
     if isinstance(col_to_normalize, list):
-        col_to_normalize_dtype = min_numeric_column_type(normalized_column, input_column_dtype)
+        col_to_normalize_dtype = min_numeric_column_type(
+            normalized_column, input_column_dtype
+        )
         # Scalar case
         if len(col_to_normalize) == 1:
             col_to_normalize_casted = input_column_dtype.type(

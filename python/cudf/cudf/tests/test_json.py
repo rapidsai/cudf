@@ -312,4 +312,4 @@ def test_json_null_literal(buffer):
     np.testing.assert_array_equal(
         df["0"].to_array(fillna=np.nan), [np.nan, 1.0]
     )
-    np.testing.assert_array_equal(df["1"].to_array(fillna=np.nan), [-1, -1])
+    np.testing.assert_array_equal(df["1"].to_array(fillna=np.nan), [0, 0])
