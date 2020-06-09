@@ -286,7 +286,6 @@ def min_numeric_column_type(x, expected_type):
 
 def check_cast_unsupported_dtype(dtype):
     from cudf._lib.types import np_to_cudf_types
-    import warnings
 
     if is_categorical_dtype(dtype):
         return dtype

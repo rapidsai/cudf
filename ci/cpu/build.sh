@@ -48,12 +48,6 @@ conda config --set ssl_verify False
 # BUILD - Conda package builds (conda deps: libcudf <- libcudf_cffi <- cudf)
 ################################################################################
 
-logger "Build conda pkg for libNVStrings..."
-source ci/cpu/libnvstrings/build_libnvstrings.sh
-
-logger "Build conda pkg for nvstrings..."
-source ci/cpu/nvstrings/build_nvstrings.sh
-
 logger "Build conda pkg for libcudf..."
 source ci/cpu/libcudf/build_libcudf.sh
 

@@ -41,6 +41,7 @@ from cudf.utils.dtypes import (
     is_datetime_dtype,
     is_list_like,
     is_scalar,
+    is_string_dtype,
 )
 from cudf.utils.utils import OrderedColumnDict
 
@@ -3584,6 +3585,15 @@ class DataFrame(Frame, Serializable):
         1    1    1    1  1.0 -2.0
         2    2    2    2  2.0 -4.0
         """
+        for col in incols:
+            current_col_dtype = self._data[col].dtype
+            if is_string_dtype(current_col_dtype) or is_categorical_dtype(
+                current_col_dtype
+            ):
+                raise TypeError(
+                    "User defined functions are currently not "
+                    "supported on Series with dtypes `str` and `category`."
+                )
         return applyutils.apply_rows(
             self,
             func,
@@ -4385,32 +4395,41 @@ class DataFrame(Frame, Serializable):
 
         if data.ndim != 2:
             raise ValueError(
-                "matrix dimension expected 2 but found {!r}".format(data.ndim)
+                f"matrix dimension expected 2 but found {data.ndim}"
             )
 
         if columns is None:
             names = [i for i in range(data.shape[1])]
         else:
             if len(columns) != data.shape[1]:
-                msg = "columns length expected {!r} but found {!r}"
-                raise ValueError(msg.format(data.shape[1], len(columns)))
+                raise ValueError(
+                    f"columns length expected {data.shape[1]} but \
+                        found {len(columns)}"
+                )
             names = columns
 
-        if index is not None and len(index) != data.shape[0]:
-            msg = "index length expected {!r} but found {!r}"
-            raise ValueError(msg.format(data.shape[0], len(index)))
+        if (
+            index is not None
+            and not isinstance(index, (str, int))
+            and len(index) != data.shape[0]
+        ):
+            raise ValueError(
+                f"index length expected {data.shape[0]} but found {len(index)}"
+            )
 
         df = DataFrame()
         data = cupy.asfortranarray(cupy.asarray(data))
         for i, k in enumerate(names):
-            df[k] = Series(data[:, i], nan_as_null=nan_as_null)
+            df._data[k] = as_column(data[:, i], nan_as_null=nan_as_null)
 
         if index is not None:
-            if isinstance(index, cudf.Index):
-                indices = index
+            if isinstance(index, (str, int)):
+                index = as_index(df[index])
             else:
-                indices = data[index]
-            return df.set_index(indices.astype(np.int64))
+                index = as_index(index)
+        else:
+            index = RangeIndex(start=0, stop=len(data))
+        df._index = index
 
         return df
 

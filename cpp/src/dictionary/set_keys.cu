@@ -85,7 +85,6 @@ struct dispatch_compute_indices {
              cudaStream_t stream)
   {
     CUDF_FAIL("list_view dictionary set_keys not supported yet");
-    return nullptr;
   }
 };
 
