@@ -94,6 +94,25 @@ def startswith(Column source_strings, Scalar target):
     return Column.from_unique_ptr(move(c_result))
 
 
+def startswith_multiple(Column source_strings, Column target_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that contain strings that begin with corresponding location
+    in `target_strings`.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+    cdef column_view target_view = target_strings.view()
+
+    with nogil:
+        c_result = move(cpp_starts_with(
+            source_view,
+            target_view
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
 def find(Column source_strings,
          Scalar target,
          size_type start,
