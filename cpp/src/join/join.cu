@@ -23,9 +23,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <join/hash_join.cuh>
-#include <join/join_common_utils.hpp>
-#include <join/nested_loop_join.cuh>
+#include "hash_join.cuh"
+#include "join_common_utils.hpp"
+#include "nested_loop_join.cuh"
 
 namespace cudf {
 namespace detail {
