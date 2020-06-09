@@ -390,6 +390,7 @@ add_library(cudf
             src/transform/bools_to_mask.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
+            src/stream_compaction/drop_nans.cu
             src/stream_compaction/drop_duplicates.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu

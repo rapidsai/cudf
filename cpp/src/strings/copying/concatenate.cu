@@ -246,7 +246,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
   auto d_new_offsets = offsets_column->mutable_view().data<int32_t>();
   offsets_column->set_null_count(0);
 
-  rmm::device_buffer null_mask;
+  rmm::device_buffer null_mask{0, stream, mr};
   size_type null_count{};
   if (has_nulls) {
     null_mask = create_null_mask(strings_count, mask_state::UNINITIALIZED, stream, mr);
