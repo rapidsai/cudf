@@ -174,7 +174,7 @@ constexpr inline bool is_numeric(data_type type)
 /**
  * @brief Indicates whether `type` is a unsigned numeric `data_type`.
  *
- * "Unsigned umeric" types are fundamental integral types such as `UINT*`.
+ * "Unsigned Numeric" types are fundamental integral types such as `UINT*`.
  *
  * @param type The `data_type` to verify
  * @return true `type` is unsigned numeric

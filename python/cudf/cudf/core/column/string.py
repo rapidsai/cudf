@@ -3864,7 +3864,7 @@ class StringColumn(column.ColumnBase):
 
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in ("i") and not cpp_is_integer(self).all():
+        elif to_dtype.kind in ("ui") and not cpp_is_integer(self).all():
             return False
         elif to_dtype.kind in ("f") and not cpp_is_float(self).all():
             return False

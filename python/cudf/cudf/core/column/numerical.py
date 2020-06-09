@@ -253,9 +253,7 @@ class NumericalColumn(column.ColumnBase):
         dkind = self.dtype.kind
         if dkind == "f":
             return self.dtype.type(np.nan)
-        elif dkind == "i":
-            return 0
-        elif dkind == "u":
+        elif dkind in "ui":
             return 0
         elif dkind == "b":
             return False
