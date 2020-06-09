@@ -838,9 +838,7 @@ class Index(Frame, Serializable):
         ):
 
             str_normalize_dt = (
-                lambda x: x
-                if is_string_dtype(x)
-                else x.astype('str')
+                lambda x: x if is_string_dtype(x) else x.astype("str")
             )
 
             return as_index(

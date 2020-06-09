@@ -3817,41 +3817,6 @@ class DataFrame(Frame, Serializable):
 
         Returns
         -------
-        result : DataFrame
-            DataFrame after replacement.
-Replace values given in *to_replace* with *replacement*.
-
-        Parameters
-        ----------
-        to_replace : numeric, str, list-like or dict
-            Value(s) to replace.
-
-            * numeric or str:
-
-                - values equal to *to_replace* will be replaced
-                  with *replacement*
-
-            * list of numeric or str:
-
-                - If *replacement* is also list-like,
-                  *to_replace* and *replacement* must be of same length.
-
-            * dict:
-
-                - Dicts can be used to replace different values in different
-                  columns. For example, `{'a': 1, 'z': 2}` specifies that the
-                  value 1 in column `a` and the value 2 in column `z` should be
-                  replaced with replacement*.
-        value : numeric, str, list-like, or dict
-            Value(s) to replace `to_replace` with. If a dict is provided, then
-            its keys must match the keys in *to_replace*, and corresponding
-            values must be compatible (e.g., if they are lists, then they must
-            match in length).
-        inplace : bool, default False
-            If True, in place.
-
-        Returns
-        -------
         Examples
         --------
         >>> import cudf
