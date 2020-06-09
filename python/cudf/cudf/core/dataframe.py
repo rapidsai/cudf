@@ -41,6 +41,7 @@ from cudf.utils.dtypes import (
     is_datetime_dtype,
     is_list_like,
     is_scalar,
+    is_string_dtype,
 )
 from cudf.utils.utils import OrderedColumnDict
 
@@ -3584,6 +3585,15 @@ class DataFrame(Frame, Serializable):
         1    1    1    1  1.0 -2.0
         2    2    2    2  2.0 -4.0
         """
+        for col in incols:
+            current_col_dtype = self._data[col].dtype
+            if is_string_dtype(current_col_dtype) or is_categorical_dtype(
+                current_col_dtype
+            ):
+                raise TypeError(
+                    "User defined functions are currently not "
+                    "supported on Series with dtypes `str` and `category`."
+                )
         return applyutils.apply_rows(
             self,
             func,

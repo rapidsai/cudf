@@ -5,6 +5,7 @@
 - PR #5292 Add unsigned int type columns to libcudf
 - PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #5331 Add `cudf::drop_nans`
 - PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
@@ -25,15 +26,22 @@
 - PR #5309 Handle host frames in serialization
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
+- PR #5349 Improve libcudf documentation CSS style
+- PR #5317 Optimize fixed_point rounding shift for integers
 - PR #5386 Remove `cub` from `include_dirs` in `setup.py`
 - PR #5373 Remove legacy nvstrings/nvcategory/nvtext
 - PR #5362 Remove dependency on `rmm._DevicePointer`
 - PR #5302 Add missing comparison operators to `fixed_point` type
 - PR #5354 Split Dask deserialization methods by dask/cuda
 - PR #5363 Handle `0-dim` inputs while broadcasting to a column
+- PR #5396 Remove legacy tests env variable from build.sh
 - PR #5374 Port nvtext character_tokenize API to libcudf
 - PR #5389 Expose typed accessors for Java HostMemoryBuffer
 - PR #5379 Avoid chaining `Buffer`s
+- PR #5366 Add benchmarks for cuIO writers
+- PR #5405 Add Error message to `StringColumn.unary_operator`
+- PR #5424 Add python plumbing for `.str.character_tokenize`
+- PR #5420 Aligning signature of `Series.value_counts` to Pandas
 
 ## Bug Fixes
 
@@ -56,6 +64,7 @@
 - PR #5385 Fix index issues in `DataFrame.from_gpu_matrix`
 - PR #5390 Fix Java data type IDs and string interleave test
 - PR #5404 Fix issue with column creation when chunked arrays are passed
+- PR #5409 Use the correct memory resource when creating empty null masks
 - PR #5399 Fix cpp compiler warnings of unreachable code
 
 
