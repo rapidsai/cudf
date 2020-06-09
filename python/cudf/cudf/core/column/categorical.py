@@ -978,16 +978,31 @@ class CategoricalColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *replacement*.
         """
-        replaced = column.as_column(self.cat().codes)
 
-        to_replace_col, replacement_col = [], []
-        new_cats = cudf.Series(self.dtype.categories)
-        for old_val, new_val in zip(to_replace, replacement):
-            if new_val not in self.dtype.categories:
-                new_cats = new_cats.replace(old_val, new_val)
+        replaced = column.as_column(self.cat().codes)
+        replacement_dict = dict(zip(to_replace, replacement))
+
+        new_cats = []
+        cur_cats = list(self.dtype.categories)
+        for i, cat in enumerate(cur_cats):
+            print(cat)
+            if replacement_dict.get(cat, False):
+                replacement = replacement_dict[cat]
+                if replacement in cur_cats:
+                    pass
+                else:
+                    new_cats.append(replacement)
             else:
-                to_replace_col.append(self._encode(old_val))
-                replacement_col.append(self._encode(new_val))
+                new_cats.append(cat)
+
+        # find out what the
+        to_replace_col = range(len(self.dtype.categories))
+        replacement_col = [None] * len(to_replace_col)
+        for i, old_cat in enumerate(self.dtype.categories):
+            if old_cat in new_cats:
+                replacement_col[i] = new_cats.index(old_cat)
+            else:
+                replacement_col[i] = new_cats.index(replacement_dict[old_cat])
 
         to_replace_col = column.as_column(
             np.array(to_replace_col, dtype=replaced.dtype)
