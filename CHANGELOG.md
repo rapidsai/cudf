@@ -15,6 +15,7 @@
 
 ## Improvements
 
+- PR #5428 Exposing stream arguments for joins
 - PR #5403 Update required CMake version to 3.14 in contribution guide
 - PR #5245 Add column reduction benchmark
 - PR #5315 Use CMake `FetchContent` to obtain latest release of `cub` and `thrust`
