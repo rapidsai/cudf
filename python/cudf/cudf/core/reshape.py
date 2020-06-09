@@ -112,7 +112,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
                 objs[idx] = o.to_frame(name=name)
 
         if not match_index:
-            objs = align_objs(objs)
+            objs = _align_objs(objs)
 
         for idx, o in enumerate(objs):
             if not ignore_index and idx == 0:
