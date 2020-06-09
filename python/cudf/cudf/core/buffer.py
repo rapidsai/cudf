@@ -161,7 +161,7 @@ def get_c_contiguity(shape, strides, itemsize):
     """
     ndim = len(shape)
 
-    if ndim == 0 or (ndim == 1 and strides[0] == itemsize):
+    if ndim == 0 or strides is None or (ndim == 1 and strides[0] == itemsize):
         return True
 
     # any dimension zero, trivial case
