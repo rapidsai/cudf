@@ -637,7 +637,7 @@ rmm::device_buffer copy_bitmask(column_view const &view,
                                 cudaStream_t stream,
                                 rmm::mr::device_memory_resource *mr)
 {
-  rmm::device_buffer null_mask{};
+  rmm::device_buffer null_mask{0, stream, mr};
   if (view.nullable()) {
     null_mask =
       copy_bitmask(view.null_mask(), view.offset(), view.offset() + view.size(), stream, mr);
@@ -651,7 +651,7 @@ rmm::device_buffer bitmask_and(table_view const &view,
                                cudaStream_t stream)
 {
   CUDF_FUNC_RANGE();
-  rmm::device_buffer null_mask{};
+  rmm::device_buffer null_mask{0, stream, mr};
   if (view.num_rows() == 0 or view.num_columns() == 0) { return null_mask; }
 
   std::vector<bitmask_type const *> masks;

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/cxxopts.hpp>
@@ -70,8 +71,8 @@ struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_boolean<T>()>> {
 };
 
 template <typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
-  using type = std::uniform_int_distribution<typename T::duration::rep>;
+struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_chrono<T>()>> {
+  using type = std::uniform_int_distribution<typename T::rep>;
 };
 
 template <typename T>
@@ -162,6 +163,34 @@ class UniformRandomGenerator {
   Engine rng;                   ///< Random generator
 };
 
+class temp_directory {
+  std::string _path;
+
+ public:
+  temp_directory(const std::string &base_name)
+  {
+    std::string dir_template("/tmp");
+    if (const char *env_p = std::getenv("WORKSPACE")) dir_template = env_p;
+    dir_template += "/" + base_name + ".XXXXXX";
+    auto const tmpdirptr = mkdtemp(const_cast<char *>(dir_template.data()));
+    if (tmpdirptr == nullptr) CUDF_FAIL("Temporary directory creation failure: " + dir_template);
+    _path = dir_template + "/";
+  }
+
+  static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
+  {
+    return remove(pathname);
+  }
+
+  ~temp_directory()
+  {
+    // TODO: should use std::filesystem instead, once C++17 support added
+    nftw(_path.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
+  }
+
+  const std::string &path() const { return _path; }
+};
+
 /**
  * @brief Provides temporary directory for temporary test files.
  *
@@ -172,44 +201,22 @@ class UniformRandomGenerator {
  * ```
  **/
 class TempDirTestEnvironment : public ::testing::Environment {
+  temp_directory const tmpdir{"gtest"};
+
  public:
-  std::string tmpdir;
-
-  void SetUp()
-  {
-    std::string tmp("/tmp");
-    if (const char *env_p = std::getenv("WORKSPACE")) tmp = env_p;
-    tmp += "/gtest.XXXXXX";
-    auto tmpdirptr = mkdtemp(const_cast<char *>(tmp.data()));
-    if (tmpdirptr == nullptr) CUDF_FAIL("Temporary directory creation failure: " + tmp);
-    tmpdir = tmpdirptr;
-    tmpdir += "/";
-  }
-
-  void TearDown()
-  {
-    // TODO: should use std::filesystem instead, once C++17 support added
-    nftw(tmpdir.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
-  }
-
-  static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
-  {
-    return remove(pathname);
-  }
-
   /**
    * @brief Get directory path to use for temporary files
    *
    * @return std::string The temporary directory path
    */
-  std::string get_temp_dir() { return tmpdir; }
+  std::string get_temp_dir() { return tmpdir.path(); }
 
   /**
    * @brief Get a temporary filepath to use for the specified filename
    *
    * @return std::string The temporary filepath
    */
-  std::string get_temp_filepath(std::string filename) { return tmpdir + filename; }
+  std::string get_temp_filepath(std::string filename) { return tmpdir.path() + filename; }
 };
 
 /**
