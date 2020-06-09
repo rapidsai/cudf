@@ -38,8 +38,7 @@ template <class Duration>
 struct timestamp : time_point<Duration> {
   constexpr timestamp() : time_point<Duration>(Duration()){};
 
-  // Implicitly convert a Duration to a timestamp
-  constexpr timestamp(Duration const& d) : time_point<Duration>(d){};
+  constexpr explicit timestamp(Duration const& d) : time_point<Duration>(d){};
 
   // Implicitly convert a tick count into a timestamp
   // TODO: is this still needed and is this operation even meaningful? The duration units
