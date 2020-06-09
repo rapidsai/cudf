@@ -19,8 +19,6 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 
-//#include <rmm/device_buffer.hpp>
-
 #include <cstring>
 
 namespace cudf {
