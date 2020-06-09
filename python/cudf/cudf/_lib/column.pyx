@@ -26,8 +26,7 @@ from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_view cimport column_view
 cimport cudf._lib.cpp.types as libcudf_types
 
-from numba import cuda
-
+import cupy as cp
 
 cdef class Column:
     """
@@ -198,7 +197,7 @@ cdef class Column:
             if value.__cuda_array_interface__['typestr'] != '|u1':
                 if isinstance(value, Column):
                     value = value.data_array_view
-                value = cuda.as_cuda_array(value).view('|u1')
+                value = cp.asarray(value).view('|u1')
             mask = Buffer(value)
             if mask.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
