@@ -64,10 +64,24 @@ const char* operation =
     };
 
     struct Mul {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(!is_duration_v<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
             return static_cast<TypeOut>(static_cast<TypeCommon>(x) * static_cast<TypeCommon>(y));
+        }
+
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(is_duration_v<TypeOut>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return DurationProduct<TypeOut>(x, y);
+        }
+
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(is_duration_v<TypeLhs> && is_integral_v<TypeRhs>) ||
+                              (is_integral_v<TypeLhs> && is_duration_v<TypeRhs>)>* = nullptr>
+        static TypeOut DurationProduct(TypeLhs x, TypeRhs y) {
+            return x * y;
         }
     };
 

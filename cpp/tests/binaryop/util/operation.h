@@ -60,10 +60,31 @@ struct Sub {
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Mul {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  template <typename OutT                                                           = TypeOut,
+            typename std::enable_if<!cudf::is_duration_t<OutT>::value, void>::type* = nullptr>
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) const
   {
     using TypeCommon = typename std::common_type<TypeOut, TypeLhs, TypeRhs>::type;
     return static_cast<TypeOut>(static_cast<TypeCommon>(lhs) * static_cast<TypeCommon>(rhs));
+  }
+
+  template <typename OutT                                                          = TypeOut,
+            typename std::enable_if<cudf::is_duration_t<OutT>::value, void>::type* = nullptr>
+  TypeOut operator()(TypeLhs x, TypeRhs y) const
+  {
+    return DurationProduct<TypeOut>(x, y);
+  }
+
+  template <
+    typename OutT,
+    typename LhsT,
+    typename RhsT,
+    typename std::enable_if<(cudf::is_duration_t<LhsT>::value && std::is_integral<RhsT>::value) ||
+                              (cudf::is_duration_t<RhsT>::value && std::is_integral<LhsT>::value),
+                            void>::type* = nullptr>
+  OutT DurationProduct(LhsT x, RhsT y) const
+  {
+    return x * y;
   }
 };
 

@@ -49,6 +49,17 @@ const char* traits =
         simt::std::is_same<cudf::timestamp_us, T>::value ||
         simt::std::is_same<cudf::timestamp_ns, T>::value;
 
+    template <typename T>
+    constexpr bool is_duration_v =
+        simt::std::is_same<cudf::duration_D, T>::value ||
+        simt::std::is_same<cudf::duration_s, T>::value ||
+        simt::std::is_same<cudf::duration_ms, T>::value ||
+        simt::std::is_same<cudf::duration_us, T>::value ||
+        simt::std::is_same<cudf::duration_ns, T>::value;
+
+    template <typename T>
+    constexpr bool is_chrono_v = is_timestamp_v<T> || is_duration_v<T>;
+
     template <>
     constexpr bool isFloat<float> = true;
 

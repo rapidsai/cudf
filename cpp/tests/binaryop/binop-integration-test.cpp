@@ -176,6 +176,40 @@ TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64_FP32_FP32)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
 }
 
+TEST_F(BinaryOperationIntegrationTest, Mul_Scalar_Vector_SI32_DurationD)
+{
+  // Double the duration of days and convert the time interval to ms
+  using TypeOut = cudf::duration_ms;
+  using TypeLhs = int32_t;
+  using TypeRhs = cudf::duration_D;
+
+  using MUL = cudf::library::operation::Mul<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::scalar_type_t<TypeLhs>(2);
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_DurationS_SI32_DurationNS)
+{
+  // Multiple each duration with some random value and promote the result
+  using TypeOut = cudf::duration_ns;
+  using TypeLhs = cudf::duration_s;
+  using TypeRhs = int32_t;
+
+  using MUL = cudf::library::operation::Mul<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
+}
+
 TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64)
 {
   using TypeOut = int64_t;
