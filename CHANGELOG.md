@@ -66,6 +66,7 @@
 - PR #5390 Fix Java data type IDs and string interleave test
 - PR #5404 Fix issue with column creation when chunked arrays are passed
 - PR #5409 Use the correct memory resource when creating empty null masks
+- PR #5399 Fix cpp compiler warnings of unreachable code
 
 
 # cuDF 0.14.0 (Date TBD)
