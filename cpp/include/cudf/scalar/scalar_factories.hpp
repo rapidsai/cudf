@@ -60,6 +60,22 @@ std::unique_ptr<scalar> make_timestamp_scalar(
 
 /**
  * @brief Construct scalar with uninitialized storage to hold a value of the
+ * specified duration `data_type`.
+ *
+ * @throws std::bad_alloc if device memory allocation fails
+ * @throws cudf::logic_error if `type` is not a duration type
+ *
+ * @param type The desired duration element type
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
+ */
+std::unique_ptr<scalar> make_duration_scalar(
+  data_type type,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Construct scalar with uninitialized storage to hold a value of the
  * specified fixed-width `data_type`.
  *
  * @throws std::bad_alloc if device memory allocation fails

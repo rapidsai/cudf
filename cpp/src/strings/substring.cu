@@ -215,7 +215,7 @@ struct compute_substrings_from_fn {
     auto strings_count = d_column.size();
 
     // Copy the null mask
-    rmm::device_buffer null_mask;
+    rmm::device_buffer null_mask{0, stream, mr};
     if (d_column.nullable())
       null_mask = rmm::device_buffer(
         d_column.null_mask(), cudf::bitmask_allocation_size_bytes(strings_count), stream, mr);
