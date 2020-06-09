@@ -12,7 +12,7 @@ from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
-def align_objs(objs, how="outer"):
+def _align_objs(objs, how="outer"):
     """Align a set of Series or Dataframe objects.
 
     Parameters
