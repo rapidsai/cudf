@@ -1584,6 +1584,56 @@ def test_string_starts_ends(data, pat):
 
 
 @pytest.mark.parametrize(
+    "data,pat",
+    [
+        (
+            ["abc", "xyz", "a", "ab", "123", "097"],
+            ["abc", "x", "a", "b", "3", "7"],
+        ),
+        (["A B", "1.5", "3,000"], ["A ", ".", ","]),
+        (["23", "³", "⅕", ""], ["23", "³", "⅕", ""]),
+        ([" ", "\t\r\n ", ""], ["d", "\n ", ""]),
+        (
+            ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+            ["$", "$", "a", "<", "(", "#"],
+        ),
+        (
+            ["line to be wrapped", "another line to be wrapped"],
+            ["another", "wrapped"],
+        ),
+        (
+            ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+            ["hsdjfk", None, "ll", "+", "-", "w", "-", "én"],
+        ),
+        (
+            ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+            ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+        ),
+    ],
+)
+def test_string_starts_ends_list_like_pat(data, pat):
+    gs = Series(data)
+
+    starts_expected = []
+    ends_expected = []
+    for i in range(len(pat)):
+        if data[i] is None:
+            starts_expected.append(None)
+            ends_expected.append(None)
+        else:
+            if pat[i] is None:
+                starts_expected.append(False)
+                ends_expected.append(False)
+            else:
+                starts_expected.append(data[i].startswith(pat[i]))
+                ends_expected.append(data[i].endswith(pat[i]))
+    starts_expected = pd.Series(starts_expected)
+    ends_expected = pd.Series(ends_expected)
+    assert_eq(starts_expected, gs.str.startswith(pat), check_dtype=False)
+    assert_eq(ends_expected, gs.str.endswith(pat), check_dtype=False)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         ["abc", "xyz", "a", "ab", "123", "097"],
