@@ -5,18 +5,21 @@
 - PR #5292 Add unsigned int type columns to libcudf
 - PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #5331 Add `cudf::drop_nans`
 - PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5303 Add slice_strings functionality using delimiter string
 - PR #5301 Add Java bindings for `zfill`
+- PR #5359 Add duration types 
 
 ## Improvements
 
 - PR #5403 Update required CMake version to 3.14 in contribution guide
 - PR #5245 Add column reduction benchmark
-- PR #5315 Use CMake `FetchContent` to obtain latest release of `cub` and `thrust`
+- PR #5315 Use CMake `FetchContent` to obtain `cub` and `thrust`
+- PR #5398 Use CMake `FetchContent` to obtain `jitify` and `libcudacxx`
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
@@ -25,6 +28,7 @@
 - PR #5309 Handle host frames in serialization
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
+- PR #5349 Improve libcudf documentation CSS style
 - PR #5317 Optimize fixed_point rounding shift for integers
 - PR #5386 Remove `cub` from `include_dirs` in `setup.py`
 - PR #5373 Remove legacy nvstrings/nvcategory/nvtext
@@ -37,7 +41,9 @@
 - PR #5389 Expose typed accessors for Java HostMemoryBuffer
 - PR #5379 Avoid chaining `Buffer`s
 - PR #5408 Update pyrrow and arrow-cpp to 0.17.1
+- PR #5366 Add benchmarks for cuIO writers
 - PR #5405 Add Error message to `StringColumn.unary_operator`
+- PR #5424 Add python plumbing for `.str.character_tokenize`
 - PR #5420 Aligning signature of `Series.value_counts` to Pandas
 
 ## Bug Fixes
@@ -62,6 +68,7 @@
 - PR #5390 Fix Java data type IDs and string interleave test
 - PR #5404 Fix issue with column creation when chunked arrays are passed
 - PR #5409 Use the correct memory resource when creating empty null masks
+- PR #5399 Fix cpp compiler warnings of unreachable code
 
 
 # cuDF 0.14.0 (Date TBD)
