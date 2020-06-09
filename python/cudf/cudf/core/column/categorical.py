@@ -626,13 +626,11 @@ class CategoricalAccessor(object):
         if not kwargs.get("ordered", self.ordered):
             cur_categories = (
                 cudf.Series(cur_categories)
-                .sort_values()
-                .reset_index(drop=True)
+                .sort_values(ignore_index=True)
             )
             new_categories = (
                 cudf.Series(new_categories)
-                .sort_values()
-                .reset_index(drop=True)
+                .sort_values(ignore_index=True)
             )
         return cur_categories.equals(new_categories)
 
