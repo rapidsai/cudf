@@ -24,6 +24,7 @@
 #include <cudf/partitioning.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/types.hpp>
 
 #include <thrust/tabulate.h>
 
@@ -634,9 +635,27 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 }
 
 std::unique_ptr<column> hash(table_view const& input,
+                             hash_id hash_function,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr,
                              cudaStream_t stream)
+{
+  switch(hash_function) {
+    // case(hash_id::HASH_IDENTITY) :
+    //   return identity_hash(input);
+    case(hash_id::HASH_MURMUR3) :
+      return murmur_hash3_32(input, initial_hash, mr, stream);
+    // case(hash_id::HASH_MD5) :
+    //   return md5_hash(input, mr, stream);
+    default :
+      return NULL; 
+  }
+}
+
+std::unique_ptr<column> murmur_hash3_32(table_view const& input,
+  std::vector<uint32_t> const& initial_hash,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
 {
   // TODO this should be UINT32
   auto output = make_numeric_column(
@@ -688,11 +707,12 @@ std::unique_ptr<column> hash(table_view const& input,
 }  // namespace detail
 
 std::unique_ptr<column> hash(table_view const& input,
+                             hash_id hash_function,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash(input, initial_hash, mr);
+  return detail::hash(input, hash_function, initial_hash, mr);
 }
 
 }  // namespace cudf

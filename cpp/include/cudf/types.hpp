@@ -269,5 +269,14 @@ inline bool operator==(data_type const& lhs, data_type const& rhs) { return lhs.
  */
 std::size_t size_of(data_type t);
 
+/**
+ *  @brief Identifies the hash function to be used
+ */
+enum class hash_id {
+  HASH_IDENTITY = 0,    ///< Identity hash function that simply returns the key to be hashed
+  HASH_MURMUR3,  ///< Murmur3 hash function
+  HASH_MD5 ///< MD5 hash function
+};
+
 /** @} */
 }  // namespace cudf
