@@ -387,16 +387,17 @@ class RollingGroupby(Rolling):
             )
 
     def _apply_agg(self, agg_name):
-        result = super()._apply_agg(agg_name).set_index(self._group_keys)
-        result.index = cudf.MultiIndex.from_frame(
+        index = cudf.MultiIndex.from_frame(
             cudf.DataFrame(
                 {
                     key: value
                     for key, value in itertools.chain(
-                        result.index._data.items(),
+                        self._group_keys._data.items(),
                         self.obj.index._data.items(),
                     )
                 }
             )
         )
+
+        result = super()._apply_agg(agg_name).set_index(index)
         return result
