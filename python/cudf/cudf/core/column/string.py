@@ -68,9 +68,11 @@ from cudf._lib.strings.extract import extract as cpp_extract
 from cudf._lib.strings.find import (
     contains as cpp_contains,
     endswith as cpp_endswith,
+    endswith_multiple as cpp_endswith_multiple,
     find as cpp_find,
     rfind as cpp_rfind,
     startswith as cpp_startswith,
+    startswith_multiple as cpp_startswith_multiple,
 )
 from cudf._lib.strings.findall import findall as cpp_findall
 from cudf._lib.strings.padding import (
@@ -2780,8 +2782,12 @@ class StringMethods(object):
 
         Parameters
         ----------
-        pat : str
-            Character sequence. Regular expressions are not accepted.
+        pat : str or list-like
+            If `str` is an `str`, evaluates whether each string of
+            series ends with `pat`.
+            If `pat` is a list-like, evaluates whether `self[i]`
+            ends with `pat[i]`.
+            Regular expressions are not accepted.
 
         Returns
         -------
@@ -2821,6 +2827,12 @@ class StringMethods(object):
             result_col = column.column_empty(
                 len(self._column), dtype="bool", masked=True
             )
+        elif is_list_like(pat) or isinstance(
+            pat, (cudf.Series, cudf.Index, pd.Series, pd.Index)
+        ):
+            result_col = cpp_endswith_multiple(
+                self._column, column.as_column(pat, dtype="str")
+            )
         else:
             result_col = cpp_endswith(self._column, as_scalar(pat, "str"))
 
@@ -2835,8 +2847,12 @@ class StringMethods(object):
 
         Parameters
         ----------
-        pat : str
-            Character sequence. Regular expressions are not accepted.
+        pat : str or list-like
+            If `str` is an `str`, evaluates whether each string of
+            series starts with `pat`.
+            If `pat` is a list-like, evaluates whether `self[i]`
+            starts with `pat[i]`.
+            Regular expressions are not accepted.
 
         Returns
         -------
@@ -2877,6 +2893,12 @@ class StringMethods(object):
         if pat is None:
             result_col = column.column_empty(
                 len(self._column), dtype="bool", masked=True
+            )
+        elif is_list_like(pat) or isinstance(
+            pat, (cudf.Series, cudf.Index, pd.Series, pd.Index)
+        ):
+            result_col = cpp_startswith_multiple(
+                self._column, column.as_column(pat, dtype="str")
             )
         else:
             result_col = cpp_startswith(self._column, as_scalar(pat, "str"))
