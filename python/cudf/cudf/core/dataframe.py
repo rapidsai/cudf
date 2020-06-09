@@ -2753,6 +2753,7 @@ class DataFrame(Frame, Serializable):
         axis=0,
         copy=True,
         inplace=False,
+        limit=False,
     ):
         """Alter column and index labels.
 
@@ -2799,6 +2800,11 @@ class DataFrame(Frame, Serializable):
         Rename will not overwite column names. If a list with duplicates is
         passed, column names will be postfixed with a number.
         """
+        if limit:
+            raise NotImplementedError(
+                "Only limit=False is currently supported"
+            )
+
         if mapper is None and index is None and columns is None:
             return self.copy(deep=copy)
 
@@ -2809,7 +2815,9 @@ class DataFrame(Frame, Serializable):
 
         if index:
             out = DataFrame(
-                index=list(map(lambda x: index.get(x, x), self.index))
+                index=self.index.replace(
+                    list(index.keys()), list(index.values())
+                )
             )
         else:
             out = DataFrame(index=self.index)
@@ -3776,7 +3784,39 @@ class DataFrame(Frame, Serializable):
         -------
         result : DataFrame
             DataFrame after replacement.
+Replace values given in *to_replace* with *replacement*.
 
+        Parameters
+        ----------
+        to_replace : numeric, str, list-like or dict
+            Value(s) to replace.
+
+            * numeric or str:
+
+                - values equal to *to_replace* will be replaced
+                  with *replacement*
+
+            * list of numeric or str:
+
+                - If *replacement* is also list-like,
+                  *to_replace* and *replacement* must be of same length.
+
+            * dict:
+
+                - Dicts can be used to replace different values in different
+                  columns. For example, `{'a': 1, 'z': 2}` specifies that the
+                  value 1 in column `a` and the value 2 in column `z` should be
+                  replaced with replacement*.
+        value : numeric, str, list-like, or dict
+            Value(s) to replace `to_replace` with. If a dict is provided, then
+            its keys must match the keys in *to_replace*, and corresponding
+            values must be compatible (e.g., if they are lists, then they must
+            match in length).
+        inplace : bool, default False
+            If True, in place.
+
+        Returns
+        -------
         Examples
         --------
         >>> import cudf
