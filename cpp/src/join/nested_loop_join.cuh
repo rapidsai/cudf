@@ -29,19 +29,20 @@
 
 namespace cudf {
 namespace detail {
-/* --------------------------------------------------------------------------*/
 /**
- * @brief  Gives an estimate of the size of the join output produced when
+ * @brief Gives an estimate of the size of the join output produced when
  * joining two tables together.
  *
  * @throw cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
  *
+ * @tparam JoinKind The type of join to be performed
+ *
  * @param left The left hand table
  * @param right The right hand table
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
- * @returns An estimate of the size of the output of the join operation
+ * @return An estimate of the size of the output of the join operation
  */
-/* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
 size_type estimate_nested_loop_join_output_size(table_device_view left,
                                                 table_device_view right,
@@ -98,21 +99,20 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
   return h_size_estimate;
 }
 
-/* --------------------------------------------------------------------------*/
 /**
- * @brief  Computes the join operation between two tables and returns the
+ * @brief Computes the join operation between two tables and returns the
  * output indices of left and right table as a combined table
+ *
+ * @tparam JoinKind The type of join to be performed
  *
  * @param left  Table of left columns to join
  * @param right Table of right  columns to join
  * @param flip_join_indices Flag that indicates whether the left and right
- * tables have been flipped, meaning the output indices should also be flipped.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @tparam join_kind The type of join to be performed
+ * tables have been flipped, meaning the output indices should also be flipped
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
- * @returns Join output indices vector pair
+ * @return Join output indices vector pair
  */
-/* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
 std::enable_if_t<(JoinKind != join_kind::FULL_JOIN),
                  std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>>

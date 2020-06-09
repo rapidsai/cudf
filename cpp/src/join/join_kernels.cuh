@@ -24,20 +24,17 @@
 
 namespace cudf {
 namespace detail {
-/* --------------------------------------------------------------------------*/
 /**
-* @brief  Adds a pair of indices to the shared memory cache
-*
-* @param[in] first The first index in the pair
-* @param[in] second The second index in the pair
-* @param[in,out] current_idx_shared Pointer to shared index that determines where in the shared
-memory cache the pair will be written
-* @param[in] warp_id The ID of the warp of the calling the thread
-* @param[out] joined_shared_l Pointer to the shared memory cache for left indices
-* @param[out] joined_shared_r Pointer to the shared memory cache for right indices
-*
-*/
-/* ----------------------------------------------------------------------------*/
+ * @brief Adds a pair of indices to the shared memory cache
+ *
+ * @param[in] first The first index in the pair
+ * @param[in] second The second index in the pair
+ * @param[in,out] current_idx_shared Pointer to shared index that determines
+ * where in the shared memory cache the pair will be written
+ * @param[in] warp_id The ID of the warp of the calling the thread
+ * @param[out] joined_shared_l Pointer to the shared memory cache for left indices
+ * @param[out] joined_shared_r Pointer to the shared memory cache for right indices
+ */
 __inline__ __device__ void add_pair_to_cache(const size_type first,
                                              const size_type second,
                                              size_type* current_idx_shared,
@@ -52,18 +49,17 @@ __inline__ __device__ void add_pair_to_cache(const size_type first,
   joined_shared_r[my_current_idx] = second;
 }
 
-/* --------------------------------------------------------------------------*/
 /**
- * @brief  Builds a hash table from a row hasher that maps the hash
+ * @brief Builds a hash table from a row hasher that maps the hash
  * values of each row to its respective row index.
+ *
+ * @tparam multimap_type The type of the hash table
  *
  * @param[in,out] multi_map The hash table to be built to insert rows into
  * @param[in] hash_build Row hasher for the build table
  * @param[in] build_table_num_rows The number of rows in the build table
- * @tparam multimap_type The type of the hash table
- *
+ * @param[out] error Pointer used to set an error code if the insert fails
  */
-/* ----------------------------------------------------------------------------*/
 template <typename multimap_type>
 __global__ void build_hash_table(multimap_type multi_map,
                                  row_hash hash_build,
@@ -88,21 +84,22 @@ __global__ void build_hash_table(multimap_type multi_map,
   }
 }
 
-/* --------------------------------------------------------------------------*/
 /**
-* @brief  Computes the output size of joining the probe table to the build table
-  by probing the hash map with the probe table and counting the number of matches.
-*
-* @param[in] multi_map The hash table built on the build table
-* @param[in] build_table The build table
-* @param[in] probe_table The probe table
-* @param[in] probe_table_num_rows The number of rows in the probe table
-* @param[out] output_size The resulting output size
-  @tparam JoinKind The type of join to be performed
-  @tparam multimap_type The datatype of the hash table
-*
-*/
-/* ----------------------------------------------------------------------------*/
+ * @brief Computes the output size of joining the probe table to the build table
+ * by probing the hash map with the probe table and counting the number of matches.
+ *
+ * @tparam JoinKind The type of join to be performed
+ * @tparam multimap_type The datatype of the hash table
+ * @tparam block_size The number of threads per block for this kernel
+ *
+ * @param[in] multi_map The hash table built on the build table
+ * @param[in] build_table The build table
+ * @param[in] probe_table The probe table
+ * @param[in] hash_probe Row hasher for the probe table
+ * @param[in] check_row_equality The row equality comparator
+ * @param[in] probe_table_num_rows The number of rows in the probe table
+ * @param[out] output_size The resulting output size
+ */
 template <join_kind JoinKind, typename multimap_type, int block_size>
 __global__ void compute_join_output_size(multimap_type multi_map,
                                          table_device_view build_table,
@@ -185,21 +182,22 @@ __global__ void compute_join_output_size(multimap_type multi_map,
   if (threadIdx.x == 0) atomicAdd(output_size, block_counter);
 }
 
-/* --------------------------------------------------------------------------*/
 /**
-* @brief  Computes the output size of joining the left table to the right table
-  by iterating over both and counting the number of matches.
-*
-* @param[in] left The left table
-* @param[in] right The right table
-* @param[in] check_row_equality The row equality comparator
-* @param[in] left_num_rows The number of rows in the left table
-* @param[in] right_num_rows The number of rows in the right table
-* @param[out] output_size The resulting output size
-  @tparam JoinKind The type of join to be performed
-*
-*/
-/* ----------------------------------------------------------------------------*/
+ * @brief Computes the output size of joining the left table to the right table.
+ *
+ * This method uses a nested loop to iterate over the left and right tables and count the number of
+ * matches.
+ *
+ * @tparam JoinKind The type of join to be performed
+ * @tparam block_size The number of threads per block for this kernel
+ *
+ * @param[in] left_table The left table
+ * @param[in] right_table The right table
+ * @param[in] check_row_equality The row equality comparator
+ * @param[in] left_num_rows The number of rows in the left table
+ * @param[in] right_num_rows The number of rows in the right table
+ * @param[out] output_size The resulting output size
+ */
 template <join_kind JoinKind, int block_size>
 __global__ void compute_nested_loop_join_output_size(table_device_view left_table,
                                                      table_device_view right_table,
@@ -257,28 +255,31 @@ __device__ void flush_output_cache(const unsigned int activemask,
   }
 }
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Probes the hash map with the probe table to find all matching rows
  between the probe and hash table and generate the output for the desired Join operation.
  *
+ * @tparam JoinKind The type of join to be performed
+ * @tparam multimap_type The type of the hash table
+ * @tparam key_type Unused parameter
+ * @tparam block_size The number of threads per block for this kernel
+ * @tparam output_cache_size The side of the shared memory buffer to cache join output results
+ *
  * @param[in] multi_map The hash table built from the build table
  * @param[in] build_table The build table
  * @param[in] probe_table The probe table
- * @param[in] probe_table_num_rows The length of the columns in the probe table
+ * @param[in] hash_probe Row hasher for the probe table
+ * @param[in] check_row_equality The row equality comparator
+ * @param[in] probe_table_num_rows The number of rows in the probe table
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
  * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global
  output
  * @param[in] max_size The maximum size of the output
- * @param[in] offset An optional offset
- * @tparam JoinKind The type of join to be performed
- * @tparam multimap_type The type of the hash table
- * @tparam block_size The number of threads per block for this kernel
- * @tparam output_cache_size The side of the shared memory buffer to cache join output results
- *
+ * @param[in] flip_results Flag that indicates whether the left and right
+ * tables have been flipped, meaning the output indices should also be flipped.
+ * @param[in] offset An optional offset for the left table indices
  */
-/* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind,
           typename multimap_type,
           typename key_type,
@@ -424,11 +425,16 @@ __global__ void probe_hash_table(multimap_type multi_map,
   }
 }
 
-/* --------------------------------------------------------------------------*/
 /**
- * @brief  Performs a nested loop join to find all matching rows
- between the left and right tables and generate the output for the desired Join operation.
+ * @brief Performs a nested loop join to find all matching rows between the
+ * left and right tables and generate the output for the desired Join
+ * operation.
  *
+ * @tparam JoinKind The type of join to be performed
+ * @tparam block_size The number of threads per block for this kernel
+ * @tparam output_cache_size The side of the shared memory buffer to cache join
+ * output results
+
  * @param[in] left_table The left table
  * @param[in] right_table The right table
  * @param[in] check_row_equality The row equality comparator
@@ -436,17 +442,13 @@ __global__ void probe_hash_table(multimap_type multi_map,
  * @param[in] right_num_rows The number of rows in the right table
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
- * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global
- output
+ * @param[in,out] current_idx A global counter used by threads to coordinate
+ * writes to the global output
  * @param[in] max_size The maximum size of the output
- * @param[in] flip_results Whether to flip left and right outputs
- * @param[in] offset An optional offset
- * @tparam JoinKind The type of join to be performed
- * @tparam block_size The number of threads per block for this kernel
- * @tparam output_cache_size The side of the shared memory buffer to cache join output results
- *
+ * @param[in] flip_results Flag that indicates whether the left and right
+ * tables have been flipped, meaning the output indices should also be flipped.
+ * @param[in] offset An optional offset for the left table indices
  */
-/* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind, cudf::size_type block_size, cudf::size_type output_cache_size>
 __global__ void nested_loop_join(table_device_view left_table,
                                  table_device_view right_table,
