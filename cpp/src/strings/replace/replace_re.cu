@@ -57,7 +57,10 @@ struct replace_regex_fn {
 
   __device__ void operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) return;
+    if (d_strings.is_null(idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
+    }
     u_char data1[stack_size];
     u_char data2[stack_size];
     prog.set_stack_mem(data1, data2);
