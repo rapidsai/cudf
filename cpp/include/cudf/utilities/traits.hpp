@@ -151,6 +151,41 @@ constexpr inline bool is_numeric(data_type type)
 }
 
 /**
+ * @brief Indicates whether the type `T` is a floating point type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is floating point
+ * @return false  `T` is not floating point
+ **/
+template <typename T>
+constexpr inline bool is_floating_point()
+{
+  return std::is_floating_point<T>::value;
+}
+
+struct is_floating_point_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_floating_point<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a floating point `data_type`.
+ *
+ * "Floating point" types are fundamental floating point types such as `FLOAT*`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is floating point
+ * @return false `type` is not floating point
+ **/
+constexpr inline bool is_floating_point(data_type type)
+{
+  return cudf::type_dispatcher(type, is_floating_point_impl{});
+}
+
+/**
  * @brief Indicates whether `T` is a Boolean type.
  *
  * @param type The `data_type` to verify

@@ -75,7 +75,7 @@ std::unique_ptr<column> make_strings_column(
     stream,
     mr);
   auto null_count = new_nulls.second;
-  rmm::device_buffer null_mask;
+  rmm::device_buffer null_mask{0, stream, mr};
   if (null_count > 0) null_mask = std::move(new_nulls.first);
 
   // build chars column
