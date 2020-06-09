@@ -3814,7 +3814,7 @@ class StringColumn(column.ColumnBase):
                 raise ValueError("Could not convert `None` value to datetime")
 
             boolean_match = self.binary_operator("eq", "NaT")
-        elif out_dtype.kind in ("i"):
+        elif out_dtype.kind in ("ui"):
             if not cpp_is_integer(self).all():
                 raise ValueError(
                     "Could not convert strings to integer \

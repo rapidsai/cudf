@@ -9,7 +9,7 @@ from cudf.core import Series
 from cudf.tests import utils
 
 
-@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32, np.float64])
+@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.uint32, np.uint64, np.float32, np.float64])
 def test_series_abs(dtype):
     arr = (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
@@ -17,7 +17,7 @@ def test_series_abs(dtype):
     np.testing.assert_equal(abs(sr).to_array(), abs(arr))
 
 
-@pytest.mark.parametrize("dtype", [np.int8, np.int16, np.int32, np.int64])
+@pytest.mark.parametrize("dtype", [np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64])
 def test_series_invert(dtype):
     arr = (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
@@ -26,7 +26,7 @@ def test_series_invert(dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype", [np.int8, np.int16, np.int32, np.int64, np.bool_]
+    "dtype", [np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64, np.bool_]
 )
 def test_series_not(dtype):
     import pandas as pd

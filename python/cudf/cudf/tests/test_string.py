@@ -186,6 +186,10 @@ def test_string_repr(ps_gs, item):
         "int16",
         "int32",
         "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
         "float32",
         "float64",
         "bool",
@@ -193,7 +197,7 @@ def test_string_repr(ps_gs, item):
     ],
 )
 def test_string_astype(dtype):
-    if dtype.startswith("int"):
+    if dtype.startswith("int") or dtype.startswith("uint"):
         data = ["1", "2", "3", "4", "5"]
     elif dtype.startswith("float"):
         data = ["1.0", "2.0", "3.0", "4.0", "5.0"]
@@ -225,12 +229,16 @@ def test_string_astype(dtype):
 @pytest.mark.parametrize(
     "dtype",
     [
-        "int8",
         "str",
         "object",
+        "int8",
         "int16",
         "int32",
         "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
         "float32",
         "float64",
         "bool",
@@ -255,6 +263,10 @@ def test_string_empty_astype(dtype):
         "int16",
         "int32",
         "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
         "float32",
         "float64",
         "bool",
@@ -264,7 +276,7 @@ def test_string_empty_astype(dtype):
 def test_string_numeric_astype(dtype):
     if dtype.startswith("bool"):
         data = [1, 0, 1, 0, 1]
-    elif dtype.startswith("int"):
+    elif dtype.startswith("int") or dtype.startswith("uint"):
         data = [1, 2, 3, 4, 5]
     elif dtype.startswith("float"):
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
@@ -296,6 +308,10 @@ def test_string_numeric_astype(dtype):
         "int16",
         "int32",
         "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
         "float32",
         "float64",
         "bool",
@@ -1920,6 +1936,7 @@ def test_string_str_decode_url(data):
         (["-0.1", "10.2", "+10.876"], "float"),
         (["1", "10.2", "10.876"], "float32"),
         (["+123", "6344556789", "0"], "int"),
+        (["+123", "6344556789", "0"], "uint64"),
         (["+123", "6344556789", "0"], "float"),
         (["0.1", "-10.2", "10.876", None], "float"),
     ],
@@ -1940,18 +1957,27 @@ def test_string_typecast(data, obj_type, dtype):
         (["0.1", "10.2", "10.876"], "int"),
         (["1", "10.2", "+10.876"], "int"),
         (["abc", "1", "2", " "], "int"),
+        (["0.1", "10.2", "10.876"], "uint64"),
+        (["1", "10.2", "+10.876"], "uint64"),
+        (["abc", "1", "2", " "], "uint64"),
         ([" ", "0.1", "2"], "float"),
         ([""], "int"),
+        ([""], "uint64"),
         ([" "], "float"),
         (["\n"], "int"),
+        (["\n"], "uint64"),
         (["0.1", "-10.2", "10.876", None], "int"),
+        (["0.1", "-10.2", "10.876", None], "uint64"),
         (["0.1", "-10.2", "10.876", None, "ab"], "float"),
         (["+", "-"], "float"),
         (["+", "-"], "int"),
+        (["+", "-"], "uint64"),
         (["1++++", "--2"], "float"),
         (["1++++", "--2"], "int"),
+        (["1++++", "--2"], "uint64"),
         (["++++1", "--2"], "float"),
         (["++++1", "--2"], "int"),
+        (["++++1", "--2"], "uint64"),
     ],
 )
 @pytest.mark.parametrize("obj_type", [None, "str", "category"])
@@ -2017,6 +2043,9 @@ def test_string_int_to_ipv4():
         np.dtype("int8"),
         np.dtype("int16"),
         np.dtype("int32"),
+        np.dtype("uint8"),
+        np.dtype("uint16"),
+        np.dtype("uint32"),
         np.dtype("float32"),
         np.dtype("float64"),
     ],

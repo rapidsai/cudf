@@ -11,7 +11,7 @@ from cudf.core.column import NumericalColumn
 from cudf.tests.utils import assert_eq
 
 sort_nelem_args = [2, 257]
-sort_dtype_args = [np.int32, np.int64, np.float32, np.float64]
+sort_dtype_args = [np.int32, np.int64, np.uint32, np.uint64, np.float32, np.float64]
 sort_slice_args = [slice(1, None), slice(None, -1), slice(1, -1)]
 
 
@@ -57,7 +57,7 @@ def test_series_argsort(nelem, dtype, asc):
     if asc:
         expected = np.argsort(sr.to_array(), kind="mergesort")
     else:
-        expected = np.argsort(-sr.to_array(), kind="mergesort")
+        expected = np.argsort(sr.to_array() * -1, kind="mergesort")
     np.testing.assert_array_equal(expected, res.to_array())
 
 
@@ -176,6 +176,10 @@ def test_dataframe_nsmallest_sliced(counts, sliceobj):
         "int16",
         "int32",
         "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
         "float32",
         "float64",
         "datetime64[ms]",

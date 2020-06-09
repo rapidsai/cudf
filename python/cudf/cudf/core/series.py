@@ -2132,6 +2132,7 @@ class Series(Frame, Serializable):
         """
         from cudf import DataFrame
 
+        breakpoint()
         if dtype is None:
             dtype = min_scalar_type(len(cats), 8)
 

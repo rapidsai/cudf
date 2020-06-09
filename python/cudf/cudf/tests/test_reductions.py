@@ -10,7 +10,7 @@ from cudf.core import Series
 from cudf.tests import utils
 from cudf.tests.utils import gen_rand
 
-params_dtype = [np.float64, np.float32, np.int64, np.int32, np.int16, np.int8]
+params_dtype = [np.float64, np.float32, np.int64, np.int32, np.int16, np.int8, np.uint64, np.uint32, np.uint16, np.uint8]
 
 params_sizes = [1, 2, 3, 127, 128, 129, 200, 10000]
 
@@ -22,6 +22,7 @@ def test_sum(dtype, nelem):
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 
+    #got = dtype(sr.sum())
     got = sr.sum()
     expect = dtype(data.sum())
 
@@ -47,7 +48,7 @@ def test_sum_string():
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_product(dtype, nelem):
-    if np.dtype(dtype).kind == "i":
+    if np.dtype(dtype).kind in "ui":
         data = np.ones(nelem, dtype=dtype)
         # Set at most 30 items to [0..2) to keep the value within 2^32
         for _ in range(30):
@@ -73,9 +74,10 @@ def test_sum_of_squares(dtype, nelem):
     sr = Series(data)
 
     got = sr.sum_of_squares()
+    #got = dtype(got)
     expect = (data ** 2).sum()
 
-    if np.dtype(dtype).kind == "i":
+    if np.dtype(dtype).kind in "ui":
         if 0 <= expect <= np.iinfo(dtype).max:
             np.testing.assert_array_almost_equal(expect, got)
         else:

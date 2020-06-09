@@ -482,7 +482,7 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
     )
     col_to_normalize_dtype = normalized_column.dtype
     if isinstance(col_to_normalize, list):
-        col_to_normalize_dtype = min_numeric_column_type(normalized_column)
+        col_to_normalize_dtype = min_numeric_column_type(normalized_column, input_column_dtype)
         # Scalar case
         if len(col_to_normalize) == 1:
             col_to_normalize_casted = input_column_dtype.type(
@@ -504,7 +504,7 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
         raise TypeError(f"Type {type(col_to_normalize)} not supported")
 
     if (
-        col_to_normalize_dtype.kind == "f" and input_column_dtype.kind == "i"
+        col_to_normalize_dtype.kind == "f" and input_column_dtype.kind in "ui"
     ) or (col_to_normalize_dtype > input_column_dtype):
         raise TypeError(
             f"Potentially unsafe cast for non-equivalent "

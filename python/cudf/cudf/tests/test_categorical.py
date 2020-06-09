@@ -609,10 +609,6 @@ def test_categorical_dtype(categories, ordered):
         (gd.Series(list(range(np.iinfo(np.int8).max)) + [None]), np.int8),
         (gd.Series(list(range(np.iinfo(np.int16).max))), np.int16),
         (gd.Series(list(range(np.iinfo(np.int16).max)) + [None]), np.int16),
-        (gd.Series(list(range(np.iinfo(np.uint8).max))), np.uint8),
-        (gd.Series(list(range(np.iinfo(np.uint8).max)) + [None]), np.uint8),
-        (gd.Series(list(range(np.iinfo(np.uint16).max))), np.uint16),
-        (gd.Series(list(range(np.iinfo(np.uint16).max)) + [None]), np.uint16),
     ],
 )
 def test_astype_dtype(data, expected):

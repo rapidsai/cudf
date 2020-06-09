@@ -18,7 +18,7 @@ except ImportError:
     from numba import numpy_support
 
 
-supported_types = ["int16", "int32", "int64", "float32", "float64"]
+supported_types = ["int16", "int32", "int64", "int16", "int32", "int64", "float32", "float64"]
 
 
 @pytest.mark.skipif(
