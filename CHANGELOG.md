@@ -19,7 +19,8 @@
 
 - PR #5403 Update required CMake version to 3.14 in contribution guide
 - PR #5245 Add column reduction benchmark
-- PR #5315 Use CMake `FetchContent` to obtain latest release of `cub` and `thrust`
+- PR #5315 Use CMake `FetchContent` to obtain `cub` and `thrust`
+- PR #5398 Use CMake `FetchContent` to obtain `jitify` and `libcudacxx`
 - PR #5268 Rely on NumPy arrays for out-of-band pickling
 - PR #5288 Drop `auto_pickle` decorator #5288
 - PR #5231 Type `Buffer` as `uint8`
