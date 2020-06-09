@@ -169,7 +169,7 @@ def get_c_contiguity(shape, strides, itemsize):
         if dim == 0:
             return True
 
-    for this_dim, this_str in zip(shape, strides):
-        if this_str != this_dim * itemsize:
+    for this_dim, this_stride in zip(shape, strides):
+        if this_stride != this_dim * itemsize:
             return False
     return True
