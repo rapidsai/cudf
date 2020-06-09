@@ -164,15 +164,13 @@ constexpr inline bool is_numeric(data_type type)
 }
 
 /**
- * @brief Indicates whether `type` is a numeric `data_type`.
+ * @brief Indicates whether `type` is a unsigned numeric `data_type`.
  *
- * "Numeric" types are fundamental integral/floating point types such as `INT*`
- * or `FLOAT*`. Types that wrap a numeric type are not considered numeric, e.g.,
- *`TIMESTAMP`.
+ * "Unsigned umeric" types are fundamental integral types such as `UINT*`.
  *
  * @param type The `data_type` to verify
- * @return true `type` is numeric
- * @return false `type` is not numeric
+ * @return true `type` is unsigned numeric
+ * @return false `type` is signed numeric
  **/
 constexpr inline bool is_unsigned_numeric(data_type type)
 {

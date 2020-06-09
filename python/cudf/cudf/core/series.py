@@ -37,7 +37,6 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     min_scalar_type,
-    up_cast_unsigned_dtype
 )
 
 
@@ -2132,7 +2131,6 @@ class Series(Frame, Serializable):
         """
         from cudf import DataFrame
 
-        breakpoint()
         if dtype is None:
             dtype = min_scalar_type(len(cats), 8)
 

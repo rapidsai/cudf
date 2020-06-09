@@ -305,26 +305,3 @@ def check_cast_unsupported_dtype(dtype):
     raise NotImplementedError(
         "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)
     )
-
-def up_cast_unsigned_dtype(dtype):
-    from cudf._lib.types import np_to_cudf_types
-    import warnings
-    cast_types_map = {
-        np.dtype("uint8"): np.dtype("int16"),
-        np.dtype("uint16"): np.dtype("int32"),
-        np.dtype("uint32"): np.dtype("int64"),
-        np.dtype("uint64"): np.dtype("int64"),
-    }
-
-    if dtype in cast_types_map:
-
-        if dtype == np.dtype("uint64"):
-            warnings.warn(
-                "Downcasting from uint64 to int64, potential data \
-                    overflow can occur."
-            )
-
-        return cast_types_map[dtype]
-    else:
-        return dtype
-

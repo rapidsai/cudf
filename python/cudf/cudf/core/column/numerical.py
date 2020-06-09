@@ -105,14 +105,12 @@ class NumericalColumn(column.ColumnBase):
     def normalize_binop_value(self, other):
         if other is None:
             return other
-        #breakpoint()
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in "biuf":
             other_dtype = np.promote_types(self.dtype, other_dtype)
             if other_dtype == np.dtype("float16"):
                 other = np.dtype("float32").type(other)
                 other_dtype = other.dtype
-            #breakpoint()
             if self.dtype.kind in "b":
                 other_dtype = min_signed_type(other)
             if np.isscalar(other):

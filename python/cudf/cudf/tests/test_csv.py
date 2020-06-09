@@ -151,7 +151,6 @@ def path_or_buf(tmpdir):
 
 
 dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint64, np.uint32]
-#dtypes_dict = {"1": np.float64, "2": np.float32, "3": np.int64, "4": np.int32, "5": np.uint64, "6":np.uint32}
 dtypes_dict = {"1": np.float64, "2": np.float32, "3": np.int64, "4": np.int32}
 nelem = [5, 25, 100]
 
