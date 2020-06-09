@@ -448,11 +448,12 @@ std::unique_ptr<table> inner_join(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
-  rmm::mr::device_memory_resource* mr)
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
 {
   CUDF_FUNC_RANGE();
   return detail::join_call_compute_df<::cudf::detail::join_kind::INNER_JOIN>(
-    left, right, left_on, right_on, columns_in_common, mr);
+    left, right, left_on, right_on, columns_in_common, mr, stream);
 }
 
 std::unique_ptr<table> left_join(
@@ -461,11 +462,12 @@ std::unique_ptr<table> left_join(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
-  rmm::mr::device_memory_resource* mr)
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
 {
   CUDF_FUNC_RANGE();
   return detail::join_call_compute_df<::cudf::detail::join_kind::LEFT_JOIN>(
-    left, right, left_on, right_on, columns_in_common, mr);
+    left, right, left_on, right_on, columns_in_common, mr, stream);
 }
 
 std::unique_ptr<table> full_join(
@@ -474,11 +476,12 @@ std::unique_ptr<table> full_join(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
-  rmm::mr::device_memory_resource* mr)
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
 {
   CUDF_FUNC_RANGE();
   return detail::join_call_compute_df<::cudf::detail::join_kind::FULL_JOIN>(
-    left, right, left_on, right_on, columns_in_common, mr);
+    left, right, left_on, right_on, columns_in_common, mr, stream);
 }
 
 }  // namespace cudf

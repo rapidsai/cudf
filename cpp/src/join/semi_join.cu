@@ -152,11 +152,12 @@ std::unique_ptr<cudf::table> left_semi_join(cudf::table_view const& left,
                                             std::vector<cudf::size_type> const& left_on,
                                             std::vector<cudf::size_type> const& right_on,
                                             std::vector<cudf::size_type> const& return_columns,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::mr::device_memory_resource* mr,
+                                            cudaStream_t stream)
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_SEMI_JOIN>(
-    left, right, left_on, right_on, return_columns, mr, 0);
+    left, right, left_on, right_on, return_columns, mr, stream);
 }
 
 std::unique_ptr<cudf::table> left_anti_join(cudf::table_view const& left,
@@ -164,11 +165,12 @@ std::unique_ptr<cudf::table> left_anti_join(cudf::table_view const& left,
                                             std::vector<cudf::size_type> const& left_on,
                                             std::vector<cudf::size_type> const& right_on,
                                             std::vector<cudf::size_type> const& return_columns,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::mr::device_memory_resource* mr,
+                                            cudaStream_t stream)
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_ANTI_JOIN>(
-    left, right, left_on, right_on, return_columns, mr, 0);
+    left, right, left_on, right_on, return_columns, mr, stream);
 }
 
 }  // namespace cudf
