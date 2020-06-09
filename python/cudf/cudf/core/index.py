@@ -828,17 +828,19 @@ class Index(Frame, Serializable):
         If any item from source or dest is a string, normalize all items
         to be strings.
         """
+        to_replace = as_column(to_replace)
+        replacement = as_column(replacement)
         if any(
             map(
-                lambda x: is_string_dtype(as_column(x)),
+                lambda x: is_string_dtype(x),
                 [self._values, to_replace, replacement],
             )
         ):
 
             str_normalize_dt = (
-                lambda x: as_column(x)
-                if is_string_dtype(as_column(x))
-                else as_column(list(map(str, x)))
+                lambda x: x
+                if is_string_dtype(x)
+                else x.astype('str')
             )
 
             return as_index(
