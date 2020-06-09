@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  *
  * @param size_and_exec_fn This is called twice. Once for the output size of each string.
  *        After that, the d_offsets and d_chars are set and this is called again to fill in the
- * chars memory.
+ *        chars memory.
  * @param strings_count Number of strings.
  * @param null_count Number of nulls in the strings column.
  * @param mr Device memory resource used to allocate the returned columns' device memory.
