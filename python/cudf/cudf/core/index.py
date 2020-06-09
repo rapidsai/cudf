@@ -808,14 +808,15 @@ class Index(Frame, Serializable):
         Returns
         -------
         result : Index, StringIndex
-            Index after replacement. Replace values given in *to_replace* with 
+            Index after replacement. Replace values given in *to_replace* with
             *replacement*.
 
         Examples
         --------
         >>> import cudf
         >>> idx = cudf.core.index.StringIndex(["a","b","c"])
-        >>> idx_replaced = idx.replace(to_replace=["a", "b"], replacement=[1, 2])
+        >>> idx_replaced = idx.replace(to_replace=["a", "b"],
+                                        replacement=[1, 2])
         >>> idx_replaced
         StringIndex(['1' '2' 'c'], dtype='object')
 
@@ -823,8 +824,8 @@ class Index(Frame, Serializable):
         -----
         Parameters that are currently not supported are: `limit`, `regex`,
         `method`
-        
-        If any item from source or dest is a string, normalize all items 
+
+        If any item from source or dest is a string, normalize all items
         to be strings.
         """
         if any(

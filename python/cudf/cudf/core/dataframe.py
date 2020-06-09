@@ -2762,7 +2762,8 @@ class DataFrame(Frame, Serializable):
         axis=0,
         copy=True,
         inplace=False,
-        limit=False,
+        limit=None,
+        errors="ignore",
     ):
         """Alter column and index labels.
 
@@ -2796,6 +2797,17 @@ class DataFrame(Frame, Serializable):
             Also copy underlying data
         inplace: boolean, default False
             Return new DataFrame.  If True, assign columns without copy
+        limit: None
+            Limit not yet implimented
+        errors : {'raise', 'ignore', 'warn'}, default 'ignore'
+            *Only 'ignore' supported*
+            Control raising of exceptions on invalid data for provided dtype.
+
+            -   ``raise`` : allow exceptions to be raised
+            -   ``ignore`` : suppress exceptions. On error return original
+                object.
+            -   ``warn`` : prints last exceptions as warnings and
+                return original object.
 
         Returns
         -------
@@ -2809,6 +2821,11 @@ class DataFrame(Frame, Serializable):
         Rename will not overwite column names. If a list with duplicates is
         passed, column names will be postfixed with a number.
         """
+        if errors != "ignore":
+            raise NotImplementedError(
+                "Only errors='ignore' is currently supported"
+            )
+
         if limit:
             raise NotImplementedError(
                 "Only limit=False is currently supported"
