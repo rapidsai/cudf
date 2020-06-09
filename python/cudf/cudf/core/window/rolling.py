@@ -364,6 +364,10 @@ class RollingGroupby(Rolling):
         cudf.core.window.Rolling
         """
         sort_order = groupby.grouping.keys.argsort()
+
+        # TODO: there may be overlap between the columns
+        # of `groupby.grouping.keys` and `groupby.obj`.
+        # As an optimization, avoid gathering those twice.
         self._group_keys = groupby.grouping.keys.take(sort_order)
         obj = groupby.obj.take(sort_order)
 
