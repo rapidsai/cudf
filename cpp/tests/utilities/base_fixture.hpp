@@ -71,8 +71,8 @@ struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_boolean<T>()>> {
 };
 
 template <typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
-  using type = std::uniform_int_distribution<typename T::duration::rep>;
+struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_chrono<T>()>> {
+  using type = std::uniform_int_distribution<typename T::rep>;
 };
 
 template <typename T>
