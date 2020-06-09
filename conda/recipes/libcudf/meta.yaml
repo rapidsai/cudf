@@ -34,7 +34,7 @@ requirements:
     - double-conversion
     - rapidjson
     - flatbuffers
-    - boost-cpp
+    - boost-cpp >=1.72.0
     - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
