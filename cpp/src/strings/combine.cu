@@ -208,7 +208,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
   // build null mask
   // only one entry so it is either all valid or all null
   size_type null_count = 0;
-  rmm::device_buffer null_mask;  // init to null null-mask
+  rmm::device_buffer null_mask{0, stream, mr};  // init to null null-mask
   if (strings.null_count() == strings_count && !narep.is_valid()) {
     null_mask  = create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr);
     null_count = 1;
