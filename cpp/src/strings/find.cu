@@ -178,7 +178,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     cudaStream_t stream)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_numeric_column(data_type{BOOL8}, 0);
+  if (strings_count == 0) return make_empty_column(data_type{BOOL8});
 
   CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
   if (target.size() == 0)  // empty target string returns true
@@ -202,16 +202,15 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
-  thrust::transform(
-    rmm::exec_policy(stream)->on(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings_count),
-    d_results,
-    [d_strings, pfn, d_target] __device__(size_type idx) {
-      if (!d_strings.is_null(idx))
-        return static_cast<bool>(pfn(d_strings.element<string_view>(idx), d_target));
-      return false;
-    });
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(strings_count),
+                    d_results,
+                    [d_strings, pfn, d_target] __device__(size_type idx) {
+                      if (!d_strings.is_null(idx))
+                        return bool{pfn(d_strings.element<string_view>(idx), d_target)};
+                      return false;
+                    });
   results->set_null_count(strings.null_count());
   return results;
 }
@@ -268,8 +267,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
       if (d_targets.is_valid(idx) && d_targets.element<string_view>(idx).length() == 0) {
         return true;
       } else if (!d_strings.is_null(idx) && !d_targets.is_null(idx)) {
-        return static_cast<bool>(
-          pfn(d_strings.element<string_view>(idx), d_targets.element<string_view>(idx)));
+        return bool{pfn(d_strings.element<string_view>(idx), d_targets.element<string_view>(idx))};
       } else {
         return false;
       }
