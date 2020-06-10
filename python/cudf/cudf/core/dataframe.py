@@ -19,6 +19,7 @@ import pandas as pd
 import pyarrow as pa
 from numba import cuda
 from pandas.api.types import is_dict_like
+from pandas.io.formats.printing import pprint_thing
 
 import cudf
 import cudf._lib as libcudf
@@ -3969,8 +3970,6 @@ class DataFrame(Frame, Serializable):
             return str(s)[:space].ljust(space)
 
         def _verbose_repr():
-            from pandas.io.formats.printing import pprint_thing
-
             lines.append(f"Data columns (total {len(self.columns)} columns):")
 
             id_head = " # "
@@ -3990,8 +3989,8 @@ class DataFrame(Frame, Serializable):
                 column_head, space
             )
             if show_counts:
-                counts = self.count()
-                if len(cols) != len(counts):  # pragma: no cover
+                counts = self.count().tolist()
+                if len(cols) != len(counts):
                     raise AssertionError(
                         f"Columns must equal "
                         f"counts ({len(cols)} != {len(counts)})"
@@ -3999,12 +3998,9 @@ class DataFrame(Frame, Serializable):
                 count_header = "Non-Null Count"
                 len_count = len(count_header)
                 non_null = " non-null"
-                all_counts = []
-                for idx in range(len(counts)):
-                    all_counts.append(counts.iloc[idx])
-                max_count = max(
-                    len(pprint_thing(k)) for k in all_counts
-                ) + len(non_null)
+                max_count = max(len(pprint_thing(k)) for k in counts) + len(
+                    non_null
+                )
                 space_count = max(len_count, max_count) + col_space
                 count_temp = "{count}" + non_null
             else:
@@ -4017,8 +4013,9 @@ class DataFrame(Frame, Serializable):
             len_dtype = len(dtype_header)
             max_dtypes = max(len(pprint_thing(k)) for k in self.dtypes)
             space_dtype = max(len_dtype, max_dtypes)
-            header += _put_str(count_header, space_count) + _put_str(
-                dtype_header, space_dtype
+            header += (
+                _put_str(count_header, space_count)
+                + _put_str(dtype_header, space_dtype).rstrip()
             )
 
             lines.append(header)
@@ -4026,7 +4023,7 @@ class DataFrame(Frame, Serializable):
                 _put_str("-" * len_id, space_num)
                 + _put_str("-" * len_column, space)
                 + _put_str("-" * len_count, space_count)
-                + _put_str("-" * len_dtype, space_dtype)
+                + _put_str("-" * len_dtype, space_dtype).rstrip()
             )
 
             for i, col in enumerate(self.columns):
@@ -4036,13 +4033,13 @@ class DataFrame(Frame, Serializable):
                 line_no = _put_str(" {num}".format(num=i), space_num)
                 count = ""
                 if show_counts:
-                    count = counts.iloc[i]
+                    count = counts[i]
 
                 lines.append(
                     line_no
                     + _put_str(col, space)
                     + _put_str(count_temp.format(count=count), space_count)
-                    + _put_str(dtype, space_dtype)
+                    + _put_str(dtype, space_dtype).rstrip()
                 )
 
         def _non_verbose_repr():
