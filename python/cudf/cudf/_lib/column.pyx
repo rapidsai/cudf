@@ -28,6 +28,7 @@ cimport cudf._lib.cpp.types as libcudf_types
 
 import cupy as cp
 
+
 cdef class Column:
     """
     A Column stores columnar data in device memory.

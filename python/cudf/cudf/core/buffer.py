@@ -54,7 +54,7 @@ class Buffer(Serializable):
                 data = memoryview(data)
             except TypeError:
                 raise TypeError("data must be Buffer, array-like or integer")
-            self._init_from_array_like(np.asarray(data).view("|u1"), owner)
+            self._init_from_array_like(np.asarray(data), owner)
 
     def __len__(self):
         return self.size
@@ -159,7 +159,7 @@ def get_c_contiguity(shape, strides, itemsize):
     c-contiguous array.
     """
     ndim = len(shape)
-    assert ndim == len(strides)
+    assert strides is None or ndim == len(strides)
 
     if ndim == 0 or strides is None or (ndim == 1 and strides[0] == itemsize):
         return True
