@@ -4024,3 +4024,127 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     ]
 
     return result
+
+
+def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False, fillna=None):
+    """Returns a boolean array where two arrays are equal within a tolerance.
+
+    Two values in ``a`` and ``b`` are  considiered equal when the following
+    equation is satisfied.
+
+    .. math::
+       |a - b| \\le \\mathrm{atol} + \\mathrm{rtol} |b|
+
+    Parameters
+    ----------
+        a : array-like
+            Input array to compare.
+        b : array-like
+            Input array to compare.
+        rtol : float
+            The relative tolerance.
+        atol : float
+            The absolute tolerance.
+        equal_nan : bool
+            If ``True``, null's in ``a`` will be considered equal
+            to null's in ``b``.
+        fillna : None, default.
+            When ``None``, If either of ``a`` or ``b``
+            contains ``null`` the result will contain ``null``.
+            If ``True``, If either of ``a`` or ``b``
+            contains ``null`` the result will contain ``True``.
+            If ``False``, If either of ``a`` or ``b``
+            contains ``null`` the result will contain ``False``.
+
+    Returns
+    -------
+    Series
+
+    See Also
+    --------
+        np.isclose : Returns a boolean array where two arrays are element-wise
+            equal within a tolerance.
+
+    Examples
+    --------
+    >>> s1 = cudf.Series([1.9876543,   2.9876654,   3.9876543, None, 9.9, 1.0])
+    >>> s2 = cudf.Series([1.987654321, 2.987654321, 3.987654321, None, 19.9,
+    ... None])
+    >>> s1
+    0    1.9876543
+    1    2.9876654
+    2    3.9876543
+    3         null
+    4          9.9
+    5          1.0
+    dtype: float64
+    >>> s2
+    0    1.987654321
+    1    2.987654321
+    2    3.987654321
+    3           null
+    4           19.9
+    5           null
+    dtype: float64
+    >>> cudf.isclose(s1, s2)
+    0     True
+    1     True
+    2     True
+    3     null
+    4    False
+    5     null
+    dtype: bool
+    >>> cudf.isclose(s1, s2, equal_nan=True)
+    0     True
+    1     True
+    2     True
+    3     True
+    4    False
+    5     null
+    dtype: bool
+    >>> cudf.isclose(s1, s2, equal_nan=True, fillna=True)
+    0     True
+    1     True
+    2     True
+    3     True
+    4    False
+    5     True
+    dtype: bool
+    >>> cudf.isclose(s1, s2, equal_nan=True, fillna=False)
+    0     True
+    1     True
+    2     True
+    3     True
+    4    False
+    5    False
+    dtype: bool
+    """
+
+    a_col = column.as_column(a)
+    a_array = a_col.to_array(fillna=-1 if a_col.null_count else None)
+
+    b_col = column.as_column(b)
+    b_array = b_col.to_array(fillna=-1 if b_col.null_count else None)
+
+    result = cupy.isclose(a=a_array, b=b_array, rtol=rtol, atol=atol)
+    result_col = column.as_column(result)
+
+    if a_col.null_count and b_col.null_count:
+        a_nulls = Series(a_col.isna())
+        b_nulls = Series(b_col.isna())
+        null_values = a_nulls | b_nulls
+
+        if equal_nan is True:
+            equal_nulls = a_nulls & b_nulls
+    elif a_col.null_count:
+        null_values = Series(a_col.isna())
+    elif b_col.null_count:
+        null_values = Series(b_col.isna())
+    else:
+        return Series(result_col)
+
+    result_col[null_values] = None if fillna in (None,) else bool(fillna)
+    if equal_nan is True and a_col.null_count and b_col.null_count:
+        result_col[equal_nulls] = True
+
+    return Series(result_col)
