@@ -670,13 +670,7 @@ class StringMethods(object):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        if (
-            is_list_like(pat)
-            or isinstance(pat, (cudf.Series, cudf.Index, pd.Series, pd.Index))
-        ) and (
-            is_list_like(repl)
-            or isinstance(repl, (cudf.Series, cudf.Index, pd.Series, pd.Index))
-        ):
+        if is_list_like(pat) and is_list_like(repl):
             warnings.warn(
                 "`n` parameter is not supported when \
                 `pat` and `repl` are list-like inputs"
@@ -2827,9 +2821,7 @@ class StringMethods(object):
             result_col = column.column_empty(
                 len(self._column), dtype="bool", masked=True
             )
-        elif is_list_like(pat) or isinstance(
-            pat, (cudf.Series, cudf.Index, pd.Series, pd.Index)
-        ):
+        elif is_list_like(pat):
             result_col = cpp_endswith_multiple(
                 self._column, column.as_column(pat, dtype="str")
             )
@@ -2894,9 +2886,7 @@ class StringMethods(object):
             result_col = column.column_empty(
                 len(self._column), dtype="bool", masked=True
             )
-        elif is_list_like(pat) or isinstance(
-            pat, (cudf.Series, cudf.Index, pd.Series, pd.Index)
-        ):
+        elif is_list_like(pat):
             result_col = cpp_startswith_multiple(
                 self._column, column.as_column(pat, dtype="str")
             )
@@ -3969,16 +3959,7 @@ def _string_column_binop(lhs, rhs, op, out_dtype):
 
 def _get_cols_list(others):
 
-    if (
-        is_list_like(others)
-        and len(others) > 0
-        and (
-            is_list_like(others[0])
-            or isinstance(
-                others[0], (cudf.Series, cudf.Index, pd.Series, pd.Index)
-            )
-        )
-    ):
+    if is_list_like(others) and len(others) > 0 and (is_list_like(others[0])):
         """
         If others is a list-like object (in our case lists & tuples)
         just another Series/Index, great go ahead with concatenation.

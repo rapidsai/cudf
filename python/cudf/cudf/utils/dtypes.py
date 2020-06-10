@@ -1,5 +1,6 @@
 import numbers
 from collections import namedtuple
+from collections.abc import Sequence
 
 import cupy as cp
 import numpy as np
@@ -203,9 +204,17 @@ def is_list_like(obj):
     Boolean: True or False depending on whether the
     input `obj` is like-like or not.
     """
-    from collections.abc import Sequence
-
-    if isinstance(obj, (Sequence,)) and not isinstance(obj, (str, bytes)):
+    if isinstance(
+        obj,
+        (
+            Sequence,
+            cudf.Index,
+            cudf.Series,
+            cudf.core.column.ColumnBase,
+            pd.Series,
+            pd.Index,
+        ),
+    ) and not isinstance(obj, (str, bytes)):
         return True
     else:
         return False
