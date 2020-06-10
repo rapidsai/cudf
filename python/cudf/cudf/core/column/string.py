@@ -117,7 +117,7 @@ from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.utils import utils
-from cudf.utils.dtypes import is_list_like, is_scalar, is_string_dtype
+from cudf.utils.dtypes import can_convert_to_column, is_scalar, is_string_dtype
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -670,7 +670,7 @@ class StringMethods(object):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        if is_list_like(pat) and is_list_like(repl):
+        if can_convert_to_column(pat) and can_convert_to_column(repl):
             warnings.warn(
                 "`n` parameter is not supported when \
                 `pat` and `repl` are list-like inputs"
@@ -2821,12 +2821,12 @@ class StringMethods(object):
             result_col = column.column_empty(
                 len(self._column), dtype="bool", masked=True
             )
-        elif is_list_like(pat):
+        elif is_scalar(pat):
+            result_col = cpp_endswith(self._column, as_scalar(pat, "str"))
+        else:
             result_col = cpp_endswith_multiple(
                 self._column, column.as_column(pat, dtype="str")
             )
-        else:
-            result_col = cpp_endswith(self._column, as_scalar(pat, "str"))
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -2886,12 +2886,12 @@ class StringMethods(object):
             result_col = column.column_empty(
                 len(self._column), dtype="bool", masked=True
             )
-        elif is_list_like(pat):
+        elif is_scalar(pat):
+            result_col = cpp_startswith(self._column, as_scalar(pat, "str"))
+        else:
             result_col = cpp_startswith_multiple(
                 self._column, column.as_column(pat, dtype="str")
             )
-        else:
-            result_col = cpp_startswith(self._column, as_scalar(pat, "str"))
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -3959,7 +3959,11 @@ def _string_column_binop(lhs, rhs, op, out_dtype):
 
 def _get_cols_list(others):
 
-    if is_list_like(others) and len(others) > 0 and (is_list_like(others[0])):
+    if (
+        can_convert_to_column(others)
+        and len(others) > 0
+        and (can_convert_to_column(others[0]))
+    ):
         """
         If others is a list-like object (in our case lists & tuples)
         just another Series/Index, great go ahead with concatenation.
