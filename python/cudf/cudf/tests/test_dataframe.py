@@ -5941,3 +5941,168 @@ def test_dataframe_info_null_counts():
     df.info(buf=buffer, null_counts=True)
     actual_string = buffer.getvalue()
     assert str_cmp == actual_string
+
+
+@pytest.mark.parametrize(
+    "data1",
+    [
+        [1, 2, 3, 4, 5, 6, 7],
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+        [
+            1.9876543,
+            2.9876654,
+            3.9876543,
+            4.1234587,
+            5.23,
+            6.88918237,
+            7.00001,
+        ],
+        [
+            -1.9876543,
+            -2.9876654,
+            -3.9876543,
+            -4.1234587,
+            -5.23,
+            -6.88918237,
+            -7.00001,
+        ],
+        [
+            1.987654321,
+            2.987654321,
+            3.987654321,
+            0.1221,
+            2.1221,
+            0.112121,
+            -21.1212,
+        ],
+        [
+            -1.987654321,
+            -2.987654321,
+            -3.987654321,
+            -0.1221,
+            -2.1221,
+            -0.112121,
+            21.1212,
+        ],
+    ],
+)
+@pytest.mark.parametrize(
+    "data2",
+    [
+        [1, 2, 3, 4, 5, 6, 7],
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+        [
+            1.9876543,
+            2.9876654,
+            3.9876543,
+            4.1234587,
+            5.23,
+            6.88918237,
+            7.00001,
+        ],
+        [
+            -1.9876543,
+            -2.9876654,
+            -3.9876543,
+            -4.1234587,
+            -5.23,
+            -6.88918237,
+            -7.00001,
+        ],
+        [
+            1.987654321,
+            2.987654321,
+            3.987654321,
+            0.1221,
+            2.1221,
+            0.112121,
+            -21.1212,
+        ],
+        [
+            -1.987654321,
+            -2.987654321,
+            -3.987654321,
+            -0.1221,
+            -2.1221,
+            -0.112121,
+            21.1212,
+        ],
+    ],
+)
+@pytest.mark.parametrize("rtol", [0, 0.01, 1e-05, 1e-08, 5e-1, 50.12])
+@pytest.mark.parametrize("atol", [0, 0.01, 1e-05, 1e-08, 50.12])
+def test_cudf_isclose(data1, data2, rtol, atol):
+    array1 = cupy.array(data1)
+    array2 = cupy.array(data2)
+
+    expected = gd.Series(cupy.isclose(array1, array2, rtol=rtol, atol=atol))
+
+    actual = gd.isclose(data1, data2, rtol=rtol, atol=atol)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data1",
+    [
+        [
+            -1.9876543,
+            -2.9876654,
+            -3.9876543,
+            -4.1234587,
+            -5.23,
+            -6.88918237,
+            -7.00001,
+        ],
+        [
+            1.987654321,
+            2.987654321,
+            3.987654321,
+            0.1221,
+            2.1221,
+            np.nan,
+            -21.1212,
+        ],
+    ],
+)
+@pytest.mark.parametrize(
+    "data2",
+    [
+        [
+            -1.9876543,
+            -2.9876654,
+            -3.9876543,
+            -4.1234587,
+            -5.23,
+            -6.88918237,
+            -7.00001,
+        ],
+        [
+            1.987654321,
+            2.987654321,
+            3.987654321,
+            0.1221,
+            2.1221,
+            0.112121,
+            -21.1212,
+        ],
+        [
+            -1.987654321,
+            -2.987654321,
+            -3.987654321,
+            -0.1221,
+            -2.1221,
+            -0.112121,
+            21.1212,
+        ],
+    ],
+)
+@pytest.mark.parametrize("equal_nan", [True, False])
+def test_cudf_isclose_nulls(data1, data2, equal_nan):
+    array1 = cupy.array(data1)
+    array2 = cupy.array(data2)
+
+    expected = gd.Series(cupy.isclose(array1, array2, equal_nan=equal_nan))
+
+    actual = gd.isclose(data1, data2, equal_nan=equal_nan)
+    assert_eq(expected, actual, check_dtype=False)

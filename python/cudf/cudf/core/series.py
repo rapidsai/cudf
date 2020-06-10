@@ -4026,7 +4026,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     return result
 
 
-def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False, fillna=None):
+def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     """Returns a boolean array where two arrays are equal within a tolerance.
 
     Two values in ``a`` and ``b`` are  considiered equal when the following
@@ -4048,13 +4048,6 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False, fillna=None):
         equal_nan : bool
             If ``True``, null's in ``a`` will be considered equal
             to null's in ``b``.
-        fillna : None, default.
-            When ``None``, If either of ``a`` or ``b``
-            contains ``null`` the result will contain ``null``.
-            If ``True``, If either of ``a`` or ``b``
-            contains ``null`` the result will contain ``True``.
-            If ``False``, If either of ``a`` or ``b``
-            contains ``null`` the result will contain ``False``.
 
     Returns
     -------
@@ -4067,6 +4060,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False, fillna=None):
 
     Examples
     --------
+    >>> import cudf
     >>> s1 = cudf.Series([1.9876543,   2.9876654,   3.9876543, None, 9.9, 1.0])
     >>> s2 = cudf.Series([1.987654321, 2.987654321, 3.987654321, None, 19.9,
     ... None])
@@ -4090,9 +4084,9 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False, fillna=None):
     0     True
     1     True
     2     True
-    3     null
+    3    False
     4    False
-    5     null
+    5    False
     dtype: bool
     >>> cudf.isclose(s1, s2, equal_nan=True)
     0     True
@@ -4100,21 +4094,13 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False, fillna=None):
     2     True
     3     True
     4    False
-    5     null
+    5    False
     dtype: bool
-    >>> cudf.isclose(s1, s2, equal_nan=True, fillna=True)
+    >>> cudf.isclose(s1, s2, equal_nan=False)
     0     True
     1     True
     2     True
-    3     True
-    4    False
-    5     True
-    dtype: bool
-    >>> cudf.isclose(s1, s2, equal_nan=True, fillna=False)
-    0     True
-    1     True
-    2     True
-    3     True
+    3    False
     4    False
     5    False
     dtype: bool
@@ -4143,7 +4129,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False, fillna=None):
     else:
         return Series(result_col)
 
-    result_col[null_values] = None if fillna in (None,) else bool(fillna)
+    result_col[null_values] = False
     if equal_nan is True and a_col.null_count and b_col.null_count:
         result_col[equal_nulls] = True
 
