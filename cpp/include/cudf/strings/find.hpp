@@ -126,7 +126,7 @@ std::unique_ptr<column> starts_with(
  * corresponding string in target column was found at the beginning of that string in
  * the provided column.
  *
- * If `targets[i]` is not found at the beginning of a string in strings[i], false is set for
+ * If `targets[i]` is not found at the beginning of a string in `strings[i]`, false is set for
  * that row entry in the output column.
  * If `targets[i]` is an empty string, true is returned for corresponding non-null entry in the
  * output column.
