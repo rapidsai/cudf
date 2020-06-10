@@ -225,7 +225,7 @@ def is_column_like(obj):
     Boolean: True or False depending on whether the
     input `obj` is column-like or not.
     """
-    if (
+    return (
         isinstance(
             obj,
             (
@@ -244,10 +244,7 @@ def is_column_like(obj):
             hasattr(obj, "__array_interface__")
             and len(obj.__array_interface__["shape"]) == 1
         )
-    ):
-        return True
-    else:
-        return False
+    )
 
 
 def can_convert_to_column(obj):
