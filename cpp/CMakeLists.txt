@@ -872,13 +872,13 @@ if(BUILD_CUDF_KAFKA)
 
     ###################################################################################################
     # - cudf_kafka Install ----------------------------------------------------------------------------
-    target_link_libraries(cudf libcudf_kafka)
+    target_link_libraries(libcudf_kafka cudf)
 
     install(TARGETS libcudf_kafka
             DESTINATION lib
             COMPONENT libcudf_kafka)
 
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/kafka/include
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/include
             DESTINATION include
             COMPONENT libcudf_kafka)
 
