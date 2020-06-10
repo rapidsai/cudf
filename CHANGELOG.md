@@ -18,6 +18,7 @@
 
 ## Improvements
 
+- PR #5414 Use new release of Thrust/CUB in the JNI build
 - PR #5403 Update required CMake version to 3.14 in contribution guide
 - PR #5245 Add column reduction benchmark
 - PR #5315 Use CMake `FetchContent` to obtain `cub` and `thrust`
@@ -49,6 +50,7 @@
 - PR #5433 Add support for column inputs in `strings::starts_with` and `strings::ends_with`
 - PR #5427 Add Java bindings for unsigned data types
 - PR #5429 Improve text wrapping in libcudf documentation
+- PR #5441 Update Java HostMemoryBuffer to only load native libs when necessary
 
 ## Bug Fixes
 
