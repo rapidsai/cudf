@@ -14,7 +14,8 @@
 - PR #5301 Add Java bindings for `zfill`
 - PR #5418 Add support for `DataFrame.info`
 - PR #5425 Add Python `Groupby.rolling()`
-- PR #5359 Add duration types 
+- PR #5359 Add duration types
+- PR #5442 Add support for `cudf.isclose`
 
 ## Improvements
 
