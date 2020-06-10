@@ -388,6 +388,7 @@ std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   strings_column_view const& targets,
                                   rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::ends_with(strings, targets, mr);
 }
 
