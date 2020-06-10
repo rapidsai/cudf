@@ -1231,8 +1231,11 @@ class Frame(libcudf.table.Table):
         result._copy_categories(self)
         return result
 
-    def replace(self, to_replace, replacement, index=False):
+    def replace(self, to_replace, replacement):
         copy_data = self._data.copy()
+
+        # Checking if Index. Index frame has no index.
+        is_index = not hasattr(self, "index")
 
         for name, col in copy_data.items():
             if not (to_replace is None and replacement is None):
@@ -1248,14 +1251,26 @@ class Frame(libcudf.table.Table):
                         column=col,
                     )
 
-                    copy_data[name] = col.find_and_replace(
-                        col_to_replace, col_replacement, col_all_nan
-                    )
+                    # Index values to be replaced do not store in column
+                    # data but instead *_values*. Column accessor bypassed
+                    # to direct to Index.find_and_replace()
+                    if is_index:
+                        copy_data[name] = self.find_and_replace(
+                            to_replace=to_replace, replacement=replacement,
+                        )
+                    else:
+                        copy_data[name] = col.find_and_replace(
+                            col_to_replace, col_replacement, col_all_nan
+                        )
                 except KeyError:
                     # Do not change the copy_data[name]
                     pass
 
-        result = self._from_table(Frame(copy_data, self.index))
+            if is_index:
+                result = self._from_table(Frame(copy_data))
+            else:
+                result = self._from_table(Frame(copy_data, self.index))
+
         return result
 
     def _copy_categories(self, other, include_index=True):

@@ -774,7 +774,26 @@ class Index(Frame, Serializable):
 
         return result
 
-    def replace(self, to_replace, replacement):
+    def _find_and_replace(self, to_replace, replacement):
+        to_replace = as_column(to_replace)
+        replacement = as_column(replacement)
+
+        if any(map(lambda x: is_string_dtype(x), [to_replace, replacement],)):
+            return as_index(
+                libcudf_replace(
+                    self._values.astype("str", copy=False),
+                    to_replace.astype("str", copy=False),
+                    replacement.astype("str", copy=False),
+                )
+            )
+        else:
+            return as_index(
+                libcudf_replace(
+                    self._values, as_column(to_replace), as_column(replacement)
+                )
+            )
+
+    def find_and_replace(self, to_replace, replacement):
         """
         Replace values given in *to_replace* with *replacement*.
 
@@ -828,31 +847,13 @@ class Index(Frame, Serializable):
         If any item from source or dest is a string, normalize all items
         to be strings.
         """
-        to_replace = as_column(to_replace)
-        replacement = as_column(replacement)
-        if any(
-            map(
-                lambda x: is_string_dtype(x),
-                [self._values, to_replace, replacement],
-            )
-        ):
-
-            str_normalize_dt = (
-                lambda x: x if is_string_dtype(x) else x.astype("str")
-            )
-
-            return as_index(
-                libcudf_replace(
-                    str_normalize_dt(self._values),
-                    str_normalize_dt(to_replace),
-                    str_normalize_dt(replacement),
-                )
+        if isinstance(self, cudf.MultiIndex):
+            raise NotImplementedError(
+                "find_and_replace not availible for MultiIndex"
             )
         else:
-            return as_index(
-                libcudf_replace(
-                    self._values, as_column(to_replace), as_column(replacement)
-                )
+            return self._find_and_replace(
+                to_replace=to_replace, replacement=replacement
             )
 
     def where(self, cond, other=None):

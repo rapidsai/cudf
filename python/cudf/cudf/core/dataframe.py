@@ -2842,7 +2842,8 @@ class DataFrame(Frame, Serializable):
         if index:
             out = DataFrame(
                 index=self.index.replace(
-                    list(index.keys()), list(index.values())
+                    to_replace=list(index.keys()),
+                    replacement=list(index.values()),
                 )
             )
         else:

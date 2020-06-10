@@ -381,6 +381,21 @@ def test_dataframe_index_rename(axis):
     assert_eq([str(item) for item in expect.index], list(got.index))
 
 
+def test_dataframe_MI_rename():
+    gdf = DataFrame(
+        {"a": np.arange(10), "b": np.arange(10), "c": np.arange(10)}
+    )
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["a", "b"]).count()
+    pdg = pdf.groupby(["a", "b"]).count()
+
+    expect = pdg.rename(mapper={1: "x", 2: "y"}, axis=0)
+    with pytest.raises(NotImplementedError):
+        got = gdg.rename(mapper={1: "x", 2: "y"}, axis=0)
+
+        assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("axis", [1, "columns"])
 def test_dataframe_column_rename(axis):
     pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
