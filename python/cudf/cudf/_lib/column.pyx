@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import rmm
@@ -25,8 +26,6 @@ from cudf._lib.move cimport move
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_view cimport column_view
 cimport cudf._lib.cpp.types as libcudf_types
-
-import cupy as cp
 
 
 cdef class Column:
