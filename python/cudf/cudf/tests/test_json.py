@@ -114,15 +114,12 @@ def test_json_reader(json_files):
 
         assert_eq(expect_series, got_series)
 
+
 @pytest.mark.filterwarnings("ignore:Can't infer compression")
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_json_writer(tmpdir, pdf, gdf):
     pdf_df_fname = tmpdir.join("pdf_df.json")
     gdf_df_fname = tmpdir.join("gdf_df.json")
-
-    #xref 'https://github.com/pandas-dev/pandas/pull/33373')
-    pdf = pdf.drop('col_bool', axis=1)
-    gdf = gdf.drop('col_bool', axis=1)
 
     pdf.to_json(pdf_df_fname)
     gdf.to_json(gdf_df_fname)
@@ -145,7 +142,17 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert os.path.exists(pdf_series_fname)
         assert os.path.exists(gdf_series_fname)
 
-        expect_series = pd.read_json(pdf_series_fname, typ="series")
+        try:
+            # xref 'https://github.com/pandas-dev/pandas/pull/33373')
+            expect_series = pd.read_json(pdf_series_fname, typ="series")
+        except TypeError as e:
+            import pdb
+
+            pdb.set_trace()
+            if str(e) == "<class 'bool'> is not convertible to datetime":
+                continue
+            else:
+                raise e
         got_series = pd.read_json(gdf_series_fname, typ="series")
 
         assert_eq(expect_series, got_series)
