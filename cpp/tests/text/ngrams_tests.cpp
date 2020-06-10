@@ -47,6 +47,32 @@ TEST_F(TextGenerateNgramsTest, Ngrams)
     auto const results = nvtext::generate_ngrams(strings_view, 3);
     cudf::test::expect_columns_equal(*results, expected);
   }
+  {
+    cudf::test::strings_column_wrapper expected{"th",
+                                                "he",
+                                                "fo",
+                                                "ox",
+                                                "ju",
+                                                "um",
+                                                "mp",
+                                                "pe",
+                                                "ed",
+                                                "ov",
+                                                "ve",
+                                                "er",
+                                                "th",
+                                                "he",
+                                                "do",
+                                                "og"};
+    auto const results = nvtext::generate_character_ngrams(strings_view, 2);
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+  {
+    cudf::test::strings_column_wrapper expected{
+      "the", "fox", "jum", "ump", "mpe", "ped", "ove", "ver", "the", "dog"};
+    auto const results = nvtext::generate_character_ngrams(strings_view, 3);
+    cudf::test::expect_columns_equal(*results, expected);
+  }
 }
 
 TEST_F(TextGenerateNgramsTest, NgramsWithNulls)
@@ -58,11 +84,18 @@ TEST_F(TextGenerateNgramsTest, NgramsWithNulls)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   cudf::strings_column_view strings_view(strings);
-  auto const results = nvtext::generate_ngrams(strings_view, 3);
-
-  cudf::test::strings_column_wrapper expected{
-    "the_fox_jumped", "fox_jumped_over", "jumped_over_the", "over_the_dog"};
-  cudf::test::expect_columns_equal(*results, expected);
+  {
+    auto const results = nvtext::generate_ngrams(strings_view, 3);
+    cudf::test::strings_column_wrapper expected{
+      "the_fox_jumped", "fox_jumped_over", "jumped_over_the", "over_the_dog"};
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+  {
+    cudf::test::strings_column_wrapper expected{
+      "the", "fox", "jum", "ump", "mpe", "ped", "ove", "ver", "the", "dog"};
+    auto const results = nvtext::generate_character_ngrams(strings_view, 3);
+    cudf::test::expect_columns_equal(*results, expected);
+  }
 }
 
 TEST_F(TextGenerateNgramsTest, Empty)
@@ -70,15 +103,21 @@ TEST_F(TextGenerateNgramsTest, Empty)
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto results = nvtext::generate_ngrams(cudf::strings_column_view(zero_size_strings_column));
   cudf::test::expect_strings_empty(results->view());
+  results = nvtext::generate_character_ngrams(cudf::strings_column_view(zero_size_strings_column));
+  cudf::test::expect_strings_empty(results->view());
 }
 
 TEST_F(TextGenerateNgramsTest, Errors)
 {
-  cudf::test::strings_column_wrapper strings{"this string intentionally left blank"};
+  cudf::test::strings_column_wrapper strings{""};
   // invalid parameter value
   EXPECT_THROW(nvtext::generate_ngrams(cudf::strings_column_view(strings), 1), cudf::logic_error);
+  EXPECT_THROW(nvtext::generate_character_ngrams(cudf::strings_column_view(strings), 1),
+               cudf::logic_error);
   // not enough strings to generate ngrams
   EXPECT_THROW(nvtext::generate_ngrams(cudf::strings_column_view(strings), 3), cudf::logic_error);
+  EXPECT_THROW(nvtext::generate_character_ngrams(cudf::strings_column_view(strings), 3),
+               cudf::logic_error);
 
   std::vector<const char*> h_strings{"", nullptr, "", nullptr};
   cudf::test::strings_column_wrapper strings_no_tokens(
@@ -86,6 +125,8 @@ TEST_F(TextGenerateNgramsTest, Errors)
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   EXPECT_THROW(nvtext::generate_ngrams(cudf::strings_column_view(strings_no_tokens)),
+               cudf::logic_error);
+  EXPECT_THROW(nvtext::generate_character_ngrams(cudf::strings_column_view(strings_no_tokens)),
                cudf::logic_error);
 }
 
