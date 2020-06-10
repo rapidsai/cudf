@@ -20,6 +20,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <type_traits>
@@ -68,6 +69,13 @@ using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>
                                               std::is_same<cudf::timestamp_ms, T>,
                                               std::is_same<cudf::timestamp_us, T>,
                                               std::is_same<cudf::timestamp_ns, T>>;
+
+template <typename T>
+using is_duration_t = simt::std::disjunction<std::is_same<cudf::duration_D, T>,
+                                             std::is_same<cudf::duration_s, T>,
+                                             std::is_same<cudf::duration_ms, T>,
+                                             std::is_same<cudf::duration_us, T>,
+                                             std::is_same<cudf::duration_ns, T>>;
 
 /**
  * @brief Indicates whether objects of types `L` and `R` can be relationally
@@ -143,6 +151,41 @@ constexpr inline bool is_numeric(data_type type)
 }
 
 /**
+ * @brief Indicates whether the type `T` is a floating point type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is floating point
+ * @return false  `T` is not floating point
+ **/
+template <typename T>
+constexpr inline bool is_floating_point()
+{
+  return std::is_floating_point<T>::value;
+}
+
+struct is_floating_point_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_floating_point<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a floating point `data_type`.
+ *
+ * "Floating point" types are fundamental floating point types such as `FLOAT*`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is floating point
+ * @return false `type` is not floating point
+ **/
+constexpr inline bool is_floating_point(data_type type)
+{
+  return cudf::type_dispatcher(type, is_floating_point_impl{});
+}
+
+/**
  * @brief Indicates whether `T` is a Boolean type.
  *
  * @param type The `data_type` to verify
@@ -211,6 +254,54 @@ constexpr inline bool is_timestamp(data_type type)
 }
 
 /**
+ * @brief Indicates whether the type `T` is a duration type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a duration
+ * @return false  `T` is not a duration
+ **/
+template <typename T>
+constexpr inline bool is_duration()
+{
+  return is_duration_t<T>::value;
+}
+
+struct is_duration_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_duration<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a duration `data_type`.
+ *
+ * "Duration" types are int32_t or int64_t tick counts representing a time interval.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a duration
+ * @return false `type` is not a duration
+ **/
+constexpr inline bool is_duration(data_type type)
+{
+  return cudf::type_dispatcher(type, is_duration_impl{});
+}
+
+/**
+ * @brief Indicates whether the type `T` is a cudf chrono type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a chrono type
+ * @return false  `T` is not a chrono type
+ **/
+template <typename T>
+constexpr inline bool is_chrono()
+{
+  return cudf::is_timestamp<T>() || cudf::is_duration<T>();
+}
+
+/**
  * @brief Indicates whether elements of type `T` are fixed-width.
  *
  * Elements of a fixed-width type all have the same size in bytes.
@@ -224,7 +315,7 @@ constexpr inline bool is_fixed_width()
 {
   // TODO Add fixed width wrapper types
   // Is a category fixed width?
-  return cudf::is_numeric<T>() || cudf::is_timestamp<T>();
+  return cudf::is_numeric<T>() || cudf::is_chrono<T>();
 }
 
 struct is_fixed_width_impl {
