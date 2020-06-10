@@ -12,8 +12,6 @@ class CudaMessageReader : arrow::ipc::MessageReader {
 
   arrow::Result<std::unique_ptr<arrow::ipc::Message>> ReadNextMessage() override;
 
-  arrow::Status ReadNextMessage(std::unique_ptr<arrow::ipc::Message>* message);
-
  private:
   arrow::cuda::CudaBufferReader* stream_;
   arrow::io::BufferReader* host_schema_reader_ = nullptr;
