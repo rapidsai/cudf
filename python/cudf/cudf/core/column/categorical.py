@@ -974,8 +974,7 @@ class CategoricalColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *replacement*.
         """
-        # import pdb
-        # pdb.set_trace()
+
         old_cats = cudf.DataFrame()
         old_cats["cats"] = column.as_column(self.dtype.categories)
         new_cats = old_cats.copy(deep=True)
