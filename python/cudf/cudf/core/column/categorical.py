@@ -624,13 +624,11 @@ class CategoricalAccessor(object):
             return False
         # if order doesn't matter, sort before the equals call below
         if not kwargs.get("ordered", self.ordered):
-            cur_categories = (
-                cudf.Series(cur_categories)
-                .sort_values(ignore_index=True)
+            cur_categories = cudf.Series(cur_categories).sort_values(
+                ignore_index=True
             )
-            new_categories = (
-                cudf.Series(new_categories)
-                .sort_values(ignore_index=True)
+            new_categories = cudf.Series(new_categories).sort_values(
+                ignore_index=True
             )
         return cur_categories.equals(new_categories)
 
@@ -976,45 +974,45 @@ class CategoricalColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *replacement*.
         """
+        # import pdb
+        # pdb.set_trace()
+        old_cats = cudf.DataFrame()
+        old_cats["cats"] = column.as_column(self.dtype.categories)
+        new_cats = old_cats.copy(deep=True)
+
+        old_cats["cats_replace"] = old_cats["cats"].replace(
+            to_replace, replacement
+        )
+
+        for incat, outcat in zip(to_replace, replacement):
+            if outcat in old_cats["cats"]._column:
+                set_value = None
+            else:
+                set_value = outcat
+            new_cats[new_cats["cats"] == incat] = set_value
+        new_cats = (
+            new_cats[new_cats["cats"].notna()]
+            .reset_index(drop=True)
+            .reset_index()
+        )
+        catmap = old_cats.merge(
+            new_cats, left_on="cats_replace", right_on="cats", how="inner"
+        )
+
+        to_replace_col = column.as_column(catmap.index).astype(
+            self.cat().codes.dtype
+        )
+        replacement_col = catmap["index"]._column.astype(
+            self.cat().codes.dtype
+        )
 
         replaced = column.as_column(self.cat().codes)
-        replacement_dict = dict(zip(to_replace, replacement))
-
-        new_cats = []
-        cur_cats = list(self.dtype.categories)
-        for i, cat in enumerate(cur_cats):
-            print(cat)
-            if replacement_dict.get(cat, False):
-                replacement = replacement_dict[cat]
-                if replacement in cur_cats:
-                    pass
-                else:
-                    new_cats.append(replacement)
-            else:
-                new_cats.append(cat)
-
-        # find out what the
-        to_replace_col = range(len(self.dtype.categories))
-        replacement_col = [None] * len(to_replace_col)
-        for i, old_cat in enumerate(self.dtype.categories):
-            if old_cat in new_cats:
-                replacement_col[i] = new_cats.index(old_cat)
-            else:
-                replacement_col[i] = new_cats.index(replacement_dict[old_cat])
-
-        to_replace_col = column.as_column(
-            np.array(to_replace_col, dtype=replaced.dtype)
-        )
-        replacement_col = column.as_column(
-            np.array(replacement_col, dtype=replaced.dtype)
-        )
-
         output = libcudf.replace.replace(
             replaced, to_replace_col, replacement_col
         )
 
         return column.build_categorical_column(
-            categories=new_cats,
+            categories=new_cats["cats"],
             codes=column.as_column(output.base_data, dtype=output.dtype),
             mask=output.base_mask,
             offset=output.offset,
