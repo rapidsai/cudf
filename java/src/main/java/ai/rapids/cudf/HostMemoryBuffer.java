@@ -44,10 +44,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
   private static final boolean defaultPreferPinned;
   private static final Logger log = LoggerFactory.getLogger(HostMemoryBuffer.class);
 
-  // Make sure we loaded the native dependencies so we have a way to create a ByteBuffer
   static {
-    NativeDepsLoader.loadNativeDeps();
-
     boolean preferPinned = true;
     String propString = System.getProperty("ai.rapids.cudf.prefer-pinned");
     if (propString != null) {
@@ -55,16 +52,6 @@ public class HostMemoryBuffer extends MemoryBuffer {
     }
     defaultPreferPinned = preferPinned;
   }
-
-  /**
-   * This will turn an address into a ByteBuffer.  The buffer will NOT own the memory
-   * so closing it has no impact on the underlying memory. It should never
-   * be used if the corresponding HostMemoryBuffer is closed.
-   */
-  private static native ByteBuffer wrapRangeInBuffer(long address, long len);
-
-  private static native long mmap(String file, int mode, long offset, long len) throws IOException;
-  private static native void munmap(long address, long length);
 
   private static final class HostBufferCleaner extends MemoryBufferCleaner {
     private long address;
@@ -117,7 +104,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
       boolean neededCleanup = false;
       if (address != 0) {
         try {
-          munmap(address, length);
+          HostMemoryBufferNativeUtils.munmap(address, length);
         } finally {
           // Always mark the resource as freed even if an exception is thrown.
           // We cannot know how far it progressed before the exception, and
@@ -182,7 +169,8 @@ public class HostMemoryBuffer extends MemoryBuffer {
     long offsetDelta = offset & (UnsafeMemoryAccessor.pageSize() - 1);
     long address;
     try {
-      address = mmap(path.getPath(), modeAsInt(mode), offset - offsetDelta, length + offsetDelta);
+      address = HostMemoryBufferNativeUtils.mmap(path.getPath(),
+          modeAsInt(mode), offset - offsetDelta, length + offsetDelta);
     } catch (IOException e) {
       throw new IOException("Error creating memory map for " + path, e);
     }
@@ -233,7 +221,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    */
   public final ByteBuffer asByteBuffer(long offset, int length) {
     addressOutOfBoundsCheck(address + offset, length, "asByteBuffer");
-    return wrapRangeInBuffer(address + offset, length)
+    return HostMemoryBufferNativeUtils.wrapRangeInBuffer(address + offset, length)
         .order(ByteOrder.nativeOrder());
   }
 
