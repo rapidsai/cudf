@@ -8,7 +8,7 @@ import pytest
 
 from cudf.core import DataFrame, Series
 from cudf.core.column import NumericalColumn
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 sort_nelem_args = [2, 257]
 sort_dtype_args = [
@@ -176,22 +176,7 @@ def test_dataframe_nsmallest_sliced(counts, sliceobj):
 
 @pytest.mark.parametrize("num_cols", [1, 2, 3, 5])
 @pytest.mark.parametrize("num_rows", [0, 1, 2, 1000])
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-    ],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
 def test_dataframe_multi_column(

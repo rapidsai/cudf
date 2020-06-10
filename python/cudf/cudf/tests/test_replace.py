@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import NUMERIC_TYPES, assert_eq
 
 
 def test_series_replace():
@@ -154,36 +154,8 @@ def test_replace_strings():
     assert_eq(pdf.replace("a", "e"), gdf.replace("a", "e"))
 
 
-@pytest.mark.parametrize(
-    "data_dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-    ],
-)
-@pytest.mark.parametrize(
-    "fill_dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-    ],
-)
+@pytest.mark.parametrize("data_dtype", NUMERIC_TYPES)
+@pytest.mark.parametrize("fill_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("fill_type", ["scalar", "series"])
 @pytest.mark.parametrize("null_value", [None, np.nan])
 @pytest.mark.parametrize("inplace", [True, False])
@@ -339,21 +311,7 @@ def test_series_fillna_invalid_dtype(data_dtype):
     )
 
 
-@pytest.mark.parametrize(
-    "data_dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-    ],
-)
+@pytest.mark.parametrize("data_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("fill_value", [100, 100.0, 128.5])
 def test_series_where(data_dtype, fill_value):
     psr = pd.Series(list(range(10)), dtype=data_dtype)
@@ -493,21 +451,7 @@ def test_series_multiple_times_with_nulls():
         Series([1, 1, 1, None])
 
 
-@pytest.mark.parametrize(
-    "series_dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-    ],
-)
+@pytest.mark.parametrize("series_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize(
     "replacement", [128, 128.0, 128.5, 32769, 32769.0, 32769.5]
 )

@@ -8,19 +8,9 @@ import pytest
 from packaging.version import Version
 
 from cudf.core import Series
+from cudf.tests.utils import NUMERIC_TYPES
 
-supported_types = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "uint8",
-    "uint16",
-    "uint32",
-    "uint64",
-    "float32",
-    "float64",
-]
+supported_types = NUMERIC_TYPES
 
 
 @pytest.mark.skipif(

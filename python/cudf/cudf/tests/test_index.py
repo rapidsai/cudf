@@ -16,7 +16,7 @@ from cudf.core.index import (
     RangeIndex,
     as_index,
 )
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
 
 
 def test_df_set_index_from_series():
@@ -141,7 +141,7 @@ def test_categorical_index():
 def test_pandas_as_index():
     # Define Pandas Indexes
     pdf_int_index = pd.Int64Index([1, 2, 3, 4, 5])
-    pdf_uint_index = pd.UInt64Index([1, 2, 3, 4, 5], dtype="uint64")
+    pdf_uint_index = pd.UInt64Index([1, 2, 3, 4, 5])
     pdf_float_index = pd.Float64Index([1.0, 2.0, 3.0, 4.0, 5.0])
     pdf_datetime_index = pd.DatetimeIndex(
         [1000000, 2000000, 3000000, 4000000, 5000000]
@@ -495,23 +495,7 @@ def test_index_where(data, condition, other, error):
             gs.where(gs_condition, other=gs_other)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "str",
-        "category",
-    ],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
 @pytest.mark.parametrize("copy", [True, False])
 def test_index_astype(dtype, copy):
     pdi = pd.Index([1, 2, 3])

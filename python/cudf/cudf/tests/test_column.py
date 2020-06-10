@@ -8,23 +8,11 @@ import pytest
 
 import cudf
 from cudf.core.column.column import as_column
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import ALL_TYPES, assert_eq
 
-dtypes = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "uint8",
-    "uint16",
-    "uint32",
-    "uint64",
-    "float32",
-    "float64",
-    "datetime64[ns]",
-    "str",
-    "category",
-]
+dtypes = list(
+    set(ALL_TYPES) - set(["datetime64[s]", "datetime64[ms]", "datetime64[us]"])
+)
 
 
 @pytest.fixture(params=dtypes, ids=dtypes)

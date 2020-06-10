@@ -9,17 +9,7 @@ from hypothesis import given, settings
 import cudf
 from cudf.tests import utils
 
-repr_categories = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "float32",
-    "float64",
-    "datetime64[ns]",
-    "str",
-    "category",
-]
+repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -35,7 +25,11 @@ def test_null_series(nrows, dtype):
     psrepr = ps.__repr__()
     psrepr = psrepr.replace("NaN", "null")
     psrepr = psrepr.replace("NaT", "null")
-    if dtype.startswith("int") or dtype.startswith("uint"):
+    if (
+        dtype.startswith("int")
+        or dtype.startswith("uint")
+        or dtype.startswith("long")
+    ):
         psrepr = psrepr.replace("0\n", "null\n")
 
     print(psrepr)
@@ -67,7 +61,6 @@ def test_null_dataframe(ncols):
     pdfrepr = pdf.__repr__()
     pdfrepr = pdfrepr.replace("NaN", "null")
     pdfrepr = pdfrepr.replace("NaT", "null")
-    # pdfrepr = pdfrepr.replace("-1", "null")
     print(pdf)
     print(gdf)
     assert pdfrepr.split() == gdf.__repr__().split()
@@ -233,21 +226,7 @@ def test_groupby_MI(nrows, ncols):
     assert gdg.T.__repr__() == pdg.T.__repr__()
 
 
-numerical_categories = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "uint8",
-    "uint16",
-    "uint32",
-    "uint64",
-    "float32",
-    "float64",
-]
-
-
-@pytest.mark.parametrize("dtype", numerical_categories)
+@pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES)
 @pytest.mark.parametrize("length", [0, 1, 10, 100, 1000])
 def test_generic_index(length, dtype):
     psr = pd.Series(

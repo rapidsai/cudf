@@ -142,16 +142,16 @@ struct is_numeric_impl {
  * @return false  `T` is signed numeric
  **/
 template <typename T>
-constexpr inline bool is_unsigned_numeric()
+constexpr inline bool is_unsigned()
 {
   return std::is_unsigned<T>::value;
 }
 
-struct is_unsigned_numeric_impl {
+struct is_unsigned_impl {
   template <typename T>
   bool operator()()
   {
-    return is_unsigned_numeric<T>();
+    return is_unsigned<T>();
   }
 };
 
@@ -180,9 +180,9 @@ constexpr inline bool is_numeric(data_type type)
  * @return true `type` is unsigned numeric
  * @return false `type` is signed numeric
  **/
-constexpr inline bool is_unsigned_numeric(data_type type)
+constexpr inline bool is_unsigned(data_type type)
 {
-  return cudf::type_dispatcher(type, is_unsigned_numeric_impl{});
+  return cudf::type_dispatcher(type, is_unsigned_impl{});
 }
 
 /**

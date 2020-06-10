@@ -8,18 +8,9 @@ import pytest
 import cudf
 from cudf import DataFrame, Series
 from cudf.tests import utils
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import INT_TYPES, assert_eq
 
-index_dtypes = [
-    np.int64,
-    np.int32,
-    np.int16,
-    np.int8,
-    np.uint64,
-    np.uint32,
-    np.uint16,
-    np.uint8,
-]
+index_dtypes = INT_TYPES
 
 
 @pytest.fixture
@@ -99,7 +90,7 @@ def pdf_gdf_multi():
             "list[bool]",
             "numpy.array[bool]",
         ]
-        + ["numpy.array[%s]" % t.__name__ for t in index_dtypes]
+        + ["numpy.array[%s]" % np.dtype(t).type.__name__ for t in index_dtypes]
     ),
 )
 def test_series_indexing(i1, i2, i3):

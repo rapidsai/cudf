@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import INT_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def make_params():
@@ -963,14 +963,8 @@ def test_merge_multi(kwargs):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "dtype_l",
-    ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"],
-)
-@pytest.mark.parametrize(
-    "dtype_r",
-    ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"],
-)
+@pytest.mark.parametrize("dtype_l", INT_TYPES)
+@pytest.mark.parametrize("dtype_r", INT_TYPES)
 def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     other_data = ["a", "b", "c"]
 
@@ -1034,40 +1028,13 @@ def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "dtype_l",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-    ],
-)
-@pytest.mark.parametrize(
-    "dtype_r",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-    ],
-)
+@pytest.mark.parametrize("dtype_l", NUMERIC_TYPES)
+@pytest.mark.parametrize("dtype_r", NUMERIC_TYPES)
 def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
-    if ("int" in dtype_l and "int" in dtype_r) or (
-        "float" in dtype_l and "float" in dtype_r
-    ):
+    if (
+        ("int" in dtype_l or "long" in dtype_l)
+        and ("int" in dtype_r or "long" in dtype_r)
+    ) or ("float" in dtype_l and "float" in dtype_r):
         pytest.skip("like types not tested in this function")
 
     other_data = ["a", "b", "c", "d", "e", "f"]

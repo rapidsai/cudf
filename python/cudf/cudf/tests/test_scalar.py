@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from cudf._lib.scalar import Scalar
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES
 
 
 @pytest.mark.parametrize(
@@ -87,26 +88,7 @@ def test_round_trip_scalar(value):
     np.testing.assert_equal(s.value, value)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "datetime64[s]",
-        "datetime64[ms]",
-        "datetime64[us]",
-        "datetime64[ns]",
-        "object",
-    ],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["object"])
 def test_null_scalar(dtype):
     s = Scalar(None, dtype=dtype)
     assert s.value is None

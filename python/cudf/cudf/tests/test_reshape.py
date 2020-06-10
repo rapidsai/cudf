@@ -5,28 +5,18 @@ import pytest
 import cudf
 from cudf import melt as cudf_melt
 from cudf.core import DataFrame
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import (
+    ALL_TYPES,
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+)
 
 
 @pytest.mark.parametrize("num_id_vars", [0, 1, 2, 10])
 @pytest.mark.parametrize("num_value_vars", [0, 1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 1000])
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-    ],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     if dtype not in ["float32", "float64"] and nulls in ["some", "all"]:
@@ -80,20 +70,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
 @pytest.mark.parametrize("num_rows", [1, 2, 1000])
 @pytest.mark.parametrize(
     "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-        pytest.param("str", marks=pytest.mark.xfail()),
-    ],
+    NUMERIC_TYPES
+    + DATETIME_TYPES
+    + [pytest.param("str", marks=pytest.mark.xfail())],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_df_stack(nulls, num_cols, num_rows, dtype):
@@ -128,21 +107,7 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
 @pytest.mark.parametrize("num_rows", [1, 2, 10, 1000])
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-        "category",
-    ],
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["category"]
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_interleave_columns(nulls, num_cols, num_rows, dtype):
@@ -180,24 +145,7 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 1000])
 @pytest.mark.parametrize("count", [1, 2, 10])
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-        "str",
-        "category",
-    ],
-)
+@pytest.mark.parametrize("dtype", ALL_TYPES)
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_tile(nulls, num_cols, num_rows, dtype, count):
 

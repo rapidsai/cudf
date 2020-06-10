@@ -241,7 +241,7 @@ def min_unsigned_type(x, min_size=8):
         if (np.dtype(int_dtype).itemsize * 8) >= min_size:
             if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
                 return int_dtype
-    # resort to using `int64` and let numpy raise appropriate exception:
+    # resort to using `uint64` and let numpy raise appropriate exception:
     return np.uint64(x).dtype
 
 

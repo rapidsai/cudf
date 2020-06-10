@@ -216,23 +216,7 @@ def test_string_series_compare(obj, cmpop, cmp_obj):
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem", [1, 2, 100])
 @pytest.mark.parametrize("cmpop", _cmpops)
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-        "longlong",
-    ],
-)
+@pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES + ["datetime64[ms]"])
 def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
     arr1 = np.random.randint(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)

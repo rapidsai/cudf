@@ -13,7 +13,7 @@ from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 data_list = [
     ["AbC", "de", "FGHI", "j", "kLm"],
@@ -160,26 +160,14 @@ def test_string_repr(ps_gs, item):
 
 
 @pytest.mark.parametrize(
-    "dtype",
-    [
-        "str",
-        "object",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "bool",
-        "datetime64[ms]",
-    ],
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool", "object", "str"]
 )
 def test_string_astype(dtype):
-    if dtype.startswith("int") or dtype.startswith("uint"):
+    if (
+        dtype.startswith("int")
+        or dtype.startswith("uint")
+        or dtype.startswith("long")
+    ):
         data = ["1", "2", "3", "4", "5"]
     elif dtype.startswith("float"):
         data = ["1.0", "2.0", "3.0", "4.0", "5.0"]
@@ -209,23 +197,7 @@ def test_string_astype(dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype",
-    [
-        "str",
-        "object",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "bool",
-        "datetime64[ms]",
-    ],
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool", "object", "str"]
 )
 def test_string_empty_astype(dtype):
     data = []
@@ -238,27 +210,15 @@ def test_string_empty_astype(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "bool",
-        "datetime64[ms]",
-    ],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool"])
 def test_string_numeric_astype(dtype):
     if dtype.startswith("bool"):
         data = [1, 0, 1, 0, 1]
-    elif dtype.startswith("int") or dtype.startswith("uint"):
+    elif (
+        dtype.startswith("int")
+        or dtype.startswith("uint")
+        or dtype.startswith("long")
+    ):
         data = [1, 2, 3, 4, 5]
     elif dtype.startswith("float"):
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
@@ -283,23 +243,7 @@ def test_string_numeric_astype(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float32",
-        "float64",
-        "bool",
-        "datetime64[ms]",
-    ],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool"])
 def test_string_empty_numeric_astype(dtype):
     data = []
 

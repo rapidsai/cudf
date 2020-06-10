@@ -8,20 +8,9 @@ import pytest
 
 from cudf.core import Series
 from cudf.tests import utils
-from cudf.tests.utils import gen_rand
+from cudf.tests.utils import NUMERIC_TYPES, gen_rand
 
-params_dtype = [
-    np.float64,
-    np.float32,
-    np.int64,
-    np.int32,
-    np.int16,
-    np.int8,
-    np.uint64,
-    np.uint32,
-    np.uint16,
-    np.uint8,
-]
+params_dtype = NUMERIC_TYPES
 
 params_sizes = [1, 2, 3, 127, 128, 129, 200, 10000]
 
@@ -30,6 +19,7 @@ params = list(product(params_dtype, params_sizes))
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_sum(dtype, nelem):
+    dtype = np.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 
@@ -59,6 +49,7 @@ def test_sum_string():
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_product(dtype, nelem):
+    dtype = np.dtype(dtype).type
     if np.dtype(dtype).kind in "ui":
         data = np.ones(nelem, dtype=dtype)
         # Set at most 30 items to [0..2) to keep the value within 2^32
@@ -81,6 +72,7 @@ accuracy_for_dtype = {np.float64: 6, np.float32: 5}
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_sum_of_squares(dtype, nelem):
+    dtype = np.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 
@@ -101,6 +93,7 @@ def test_sum_of_squares(dtype, nelem):
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_min(dtype, nelem):
+    dtype = np.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 
@@ -112,6 +105,7 @@ def test_min(dtype, nelem):
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_max(dtype, nelem):
+    dtype = np.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 
