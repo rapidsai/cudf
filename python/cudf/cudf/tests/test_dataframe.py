@@ -5702,7 +5702,6 @@ def test_dataframe_assign_scalar_with_scalar_cols(col_data, assign_val):
     assert_eq(pdf, gdf)
 
 
-# flake8: noqa : W291
 def test_dataframe_info():
     import io
 
@@ -5712,8 +5711,8 @@ def test_dataframe_info():
     <class 'cudf.core.dataframe.DataFrame'>
     StringIndex: 10 entries, a to 1111
     Data columns (total 10 columns):
-     #   Column  Non-Null Count  Dtype  
-    ---  ------  --------------  -----  
+     #   Column  Non-Null Count  Dtype
+    ---  ------  --------------  -----
      0   0       10 non-null     float64
      1   1       10 non-null     float64
      2   2       10 non-null     float64
@@ -5745,9 +5744,9 @@ def test_dataframe_info():
     <class 'cudf.core.dataframe.DataFrame'>
     RangeIndex: 3 entries, 0 to 2
     Data columns (total 2 columns):
-     #   Column  Non-Null Count  Dtype 
-    ---  ------  --------------  ----- 
-     0   a       3 non-null      int64 
+     #   Column  Non-Null Count  Dtype
+    ---  ------  --------------  -----
+     0   a       3 non-null      int64
      1   b       3 non-null      object
     dtypes: int64(1), object(1)
     memory usage: 56.0+ bytes
@@ -5785,9 +5784,9 @@ def test_dataframe_info():
     <class 'cudf.core.dataframe.DataFrame'>
     StringIndex: 3 entries, sdfdsf to dsfdf
     Data columns (total 2 columns):
-     #   Column  Non-Null Count  Dtype 
-    ---  ------  --------------  ----- 
-     0   a       3 non-null      int64 
+     #   Column  Non-Null Count  Dtype
+    ---  ------  --------------  -----
+     0   a       3 non-null      int64
      1   b       3 non-null      object
     dtypes: int64(1), object(1)
     memory usage: 91.0 bytes
@@ -5816,10 +5815,10 @@ def test_dataframe_info():
     <class 'cudf.core.dataframe.DataFrame'>
     RangeIndex: 5 entries, 0 to 4
     Data columns (total 3 columns):
-     #   Column     Non-Null Count  Dtype  
-    ---  ------     --------------  -----  
-     0   int_col    5 non-null      int64  
-     1   text_col   5 non-null      object 
+     #   Column     Non-Null Count  Dtype
+    ---  ------     --------------  -----
+     0   int_col    5 non-null      int64
+     1   text_col   5 non-null      object
      2   float_col  5 non-null      float64
     dtypes: float64(1), int64(1), object(1)
     memory usage: 130.0 bytes
@@ -5837,10 +5836,10 @@ def test_dataframe_info():
     <class 'cudf.core.dataframe.DataFrame'>
     RangeIndex: 5 entries, 0 to 4
     Data columns (total 3 columns):
-     #   Column     Dtype  
-    ---  ------     -----  
-     0   int_col    int64  
-     1   text_col   object 
+     #   Column     Dtype
+    ---  ------     -----
+     0   int_col    int64
+     1   text_col   object
      2   float_col  float64
     dtypes: float64(1), int64(1), object(1)
     memory usage: 130.0+ bytes
