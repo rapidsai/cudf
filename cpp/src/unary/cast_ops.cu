@@ -45,7 +45,7 @@ struct unary_cast {
     // Convert source tick counts into target tick counts without blindly truncating them
     // by dividing the respective duration time periods (which may not work for time before
     // UNIX epoch)
-    return TargetT{element};
+    return TargetT{simt::std::chrono::floor<TargetT::duration>(element.time_since_epoch())};
   }
 
   template <typename SourceT,

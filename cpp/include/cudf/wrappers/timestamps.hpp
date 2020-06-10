@@ -36,28 +36,18 @@ using time_point = simt::std::chrono::time_point<simt::std::chrono::system_clock
 
 template <class Duration>
 struct timestamp : time_point<Duration> {
-  constexpr timestamp() : time_point<Duration>(Duration()){};
+  // Bring over base class constructors and make them visible here
+  using time_point<Duration>::time_point;
 
-  constexpr explicit timestamp(Duration const& d) : time_point<Duration>(d){};
+  // This is needed as __shared__ objects of this type can't be assigned in device code
+  // when the initializer list constructs subobjects with values, which is what std::time_point
+  // does.
+  constexpr timestamp() : time_point<Duration>(Duration()){};
 
   // Implicitly convert a tick count into a timestamp
   // TODO: is this still needed and is this operation even meaningful? The duration units
   // cannot be inferred from this
   constexpr timestamp(typename Duration::rep r) : time_point<Duration>(Duration(r)){};
-
-  /**
-   * @brief Constructs a new timestamp by copying the contents of another
-   * `time_point` and converting its duration value if necessary.
-   *
-   * This is required as a higher resolution duration period cannot be assigned to
-   * a lower resolution duration period naturally. Such truncations may result in loss
-   * of time precision.
-   *
-   * @param other The `timestamp` to copy
-   */
-  template <class FromDuration>
-  inline constexpr explicit timestamp(time_point<FromDuration> const& other)
-    : time_point<Duration>(simt::std::chrono::floor<Duration>(other.time_since_epoch())){};
 };
 }  // namespace detail
 
@@ -103,6 +93,17 @@ static_assert(sizeof(timestamp_ns) == sizeof(typename timestamp_ns::rep), "");
 }  // namespace cudf
 
 namespace std {
+// These specializations are needed due to nvcc bugs. Some of them work in later CUDA releases.
+template <typename Duration>
+struct is_trivially_copyable<cudf::detail::timestamp<Duration>>
+  : std::is_trivially_copyable<cudf::detail::time_point<Duration>> {
+};
+
+template <typename Duration1, typename Duration2>
+struct is_convertible<cudf::detail::timestamp<Duration1>, cudf::detail::timestamp<Duration2>>
+  : std::is_convertible<cudf::detail::time_point<Duration1>, cudf::detail::time_point<Duration2>> {
+};
+
 /**
  * @brief Specialization of std::numeric_limits for cudf::detail::timestamp
  *
