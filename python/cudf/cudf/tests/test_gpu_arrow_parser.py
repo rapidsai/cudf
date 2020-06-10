@@ -327,4 +327,4 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("cudf.gpuarrow").setLevel(logging.DEBUG)
 
-    test_gpu_parse_arrow_data()
+    test_gpu_parse_arrow_data_cpu_schema()
