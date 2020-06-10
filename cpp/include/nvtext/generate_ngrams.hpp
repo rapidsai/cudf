@@ -42,6 +42,10 @@ namespace nvtext {
  *
  * All null row entries are ignored and the output contains all valid rows.
  *
+ * @throw cudf::logic_error if `ngrams < 2`
+ * @throw cudf::logic_error if `separator` is invalid
+ * @throw cudf::logic_error if there are not enough strings to generate any ngrams
+ *
  * @param strings Strings column to tokenize and produce ngrams from.
  * @param ngrams The ngram number to generate.
  *               Default is 2 = bigram.
@@ -59,7 +63,8 @@ std::unique_ptr<cudf::column> generate_ngrams(
 /**
  * @brief Generates ngrams of characters within each string.
  *
- * Each character of a string used to build ngrams. Ngrams are not created across strings.
+ * Each character of a string used to build ngrams.
+ * Ngrams are not created across strings.
  *
  * ```
  * ["ab", "cde", "fgh"] would generate bigrams as ["ab", "cd", "de", "fg", "gh"]
@@ -69,6 +74,9 @@ std::unique_ptr<cudf::column> generate_ngrams(
  * the input strings column.
  *
  * All null row entries are ignored and the output contains all valid rows.
+ *
+ * @throw cudf::logic_error if `ngrams < 2`
+ * @throw cudf::logic_error if there are not enough characters to generate any ngrams
  *
  * @param strings Strings column to produce ngrams from.
  * @param ngrams The ngram number to generate.
