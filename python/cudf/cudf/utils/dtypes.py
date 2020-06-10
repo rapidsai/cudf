@@ -204,10 +204,7 @@ def is_list_like(obj):
     Boolean: True or False depending on whether the
     input `obj` is like-like or not.
     """
-    if isinstance(obj, (Sequence,),) and not isinstance(obj, (str, bytes)):
-        return True
-    else:
-        return False
+    return isinstance(obj, (Sequence,),) and not isinstance(obj, (str, bytes))
 
 
 def is_column_like(obj):
