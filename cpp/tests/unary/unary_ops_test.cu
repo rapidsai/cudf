@@ -774,7 +774,7 @@ template <typename T>
 struct CastToTimestamps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CastToTimestamps, cudf::test::NumericTypes);
+TYPED_TEST_CASE(CastToTimestamps, cudf::test::IntegralTypes);
 
 TYPED_TEST(CastToTimestamps, AllValid)
 {
@@ -870,7 +870,7 @@ template <typename T>
 struct CastToDurations : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CastToDurations, cudf::test::NumericTypes);
+TYPED_TEST_CASE(CastToDurations, cudf::test::IntegralTypes);
 
 TYPED_TEST(CastToDurations, AllValid)
 {

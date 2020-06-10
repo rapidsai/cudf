@@ -48,6 +48,10 @@ struct timestamp : time_point<Duration> {
   // TODO: is this still needed and is this operation even meaningful? The duration units
   // cannot be inferred from this
   constexpr timestamp(typename Duration::rep r) : time_point<Duration>(Duration(r)){};
+
+  // The inherited copy constructor will hide the auto generated copy constructor;
+  // hence, explicitly define and delegate
+  constexpr timestamp(const time_point<Duration>& other) : time_point<Duration>(other) {}
 };
 }  // namespace detail
 
@@ -93,17 +97,6 @@ static_assert(sizeof(timestamp_ns) == sizeof(typename timestamp_ns::rep), "");
 }  // namespace cudf
 
 namespace std {
-// These specializations are needed due to nvcc bugs. Some of them work in later CUDA releases.
-template <typename Duration>
-struct is_trivially_copyable<cudf::detail::timestamp<Duration>>
-  : std::is_trivially_copyable<cudf::detail::time_point<Duration>> {
-};
-
-template <typename Duration1, typename Duration2>
-struct is_convertible<cudf::detail::timestamp<Duration1>, cudf::detail::timestamp<Duration2>>
-  : std::is_convertible<cudf::detail::time_point<Duration1>, cudf::detail::time_point<Duration2>> {
-};
-
 /**
  * @brief Specialization of std::numeric_limits for cudf::detail::timestamp
  *

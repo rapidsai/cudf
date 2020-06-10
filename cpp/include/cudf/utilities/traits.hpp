@@ -486,3 +486,18 @@ constexpr inline bool is_nested(data_type type)
 
 /** @} */
 }  // namespace cudf
+
+namespace std {
+// These specializations are needed due to nvcc bugs. The first one can work in 10.2
+template <typename Duration>
+struct is_trivially_copyable<cudf::detail::timestamp<Duration>>
+  : std::is_trivially_copyable<cudf::detail::time_point<Duration>> {
+};
+
+// This will ensure that timestamps can be promoted to a higher precision. Presently, they can't
+// do that
+template <typename Duration1, typename Duration2>
+struct is_convertible<cudf::detail::timestamp<Duration1>, cudf::detail::timestamp<Duration2>>
+  : std::is_convertible<cudf::detail::time_point<Duration1>, cudf::detail::time_point<Duration2>> {
+};
+}  // namespace std
