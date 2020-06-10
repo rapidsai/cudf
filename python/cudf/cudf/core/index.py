@@ -836,18 +836,11 @@ class Index(Frame, Serializable):
                 [self._values, to_replace, replacement],
             )
         ):
-
-            str_normalize_dt = (
-                lambda x: x
-                if is_string_dtype(x)
-                else x.astype('str')
-            )
-
             return as_index(
                 libcudf_replace(
-                    str_normalize_dt(self._values),
-                    str_normalize_dt(to_replace),
-                    str_normalize_dt(replacement),
+                    self._values.astype('str', copy=False),
+                    to_replace.astype('str', copy=False),
+                    replacement.astype('str', copy=False),
                 )
             )
         else:
