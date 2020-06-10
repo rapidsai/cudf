@@ -225,18 +225,25 @@ def is_column_like(obj):
     Boolean: True or False depending on whether the
     input `obj` is column-like or not.
     """
-    if isinstance(
-        obj,
-        (
-            cudf.core.column.ColumnBase,
-            cudf.Series,
-            cudf.Index,
-            pd.Series,
-            pd.Index,
-        ),
-    ) or (
-        hasattr(obj, "__cuda_array_interface__")
-        and len(obj.__cuda_array_interface__["shape"]) == 1
+    if (
+        isinstance(
+            obj,
+            (
+                cudf.core.column.ColumnBase,
+                cudf.Series,
+                cudf.Index,
+                pd.Series,
+                pd.Index,
+            ),
+        )
+        or (
+            hasattr(obj, "__cuda_array_interface__")
+            and len(obj.__cuda_array_interface__["shape"]) == 1
+        )
+        or (
+            hasattr(obj, "__array_interface__")
+            and len(obj.__array_interface__["shape"]) == 1
+        )
     ):
         return True
     else:
