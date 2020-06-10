@@ -186,6 +186,8 @@ class datasource {
    **/
   class non_owning_buffer : public buffer {
    public:
+    non_owning_buffer() : _data(0), _size(0) {}
+
     non_owning_buffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
 
     size_t size() const override { return _size; }

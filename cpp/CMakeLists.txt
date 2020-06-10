@@ -753,11 +753,11 @@ if(BUILD_CUDF_KAFKA)
 
     # cudf_kafka library
     add_library(libcudf_kafka
-        libcudf_kafka/kafka/src/kafka_consumer.cpp
+        libcudf_kafka/src/kafka_consumer.cpp
     )
 
     # Include paths
-    include_directories("${CMAKE_SOURCE_DIR}/libcudf_kafka/kafka/include")
+    include_directories("${CMAKE_SOURCE_DIR}/libcudf_kafka/include")
     
     # Rename installation to proper name for later finding
     set_target_properties(libcudf_kafka PROPERTIES OUTPUT_NAME "cudf_kafka")
@@ -796,7 +796,7 @@ if(BUILD_CUDF_KAFKA)
         if(GTEST_FOUND)
             message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
             include_directories(${GTEST_INCLUDE_DIR})
-            add_subdirectory(${CMAKE_SOURCE_DIR}/libcudf_kafka/kafka/tests)
+            add_subdirectory(${CMAKE_SOURCE_DIR}/libcudf_kafka/tests)
         else()
             message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
         endif(GTEST_FOUND)
