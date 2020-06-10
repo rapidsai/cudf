@@ -5934,3 +5934,10 @@ def test_dataframe_info_null_counts():
     df.info(buf=buffer, max_cols=2, null_counts=None)
     actual_string = buffer.getvalue()
     assert str_cmp == actual_string
+
+    buffer.truncate(0)
+    buffer.seek(0)
+
+    df.info(buf=buffer, null_counts=True)
+    actual_string = buffer.getvalue()
+    assert str_cmp == actual_string
