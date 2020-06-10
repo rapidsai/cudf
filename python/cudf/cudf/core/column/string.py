@@ -3697,11 +3697,8 @@ class StringColumn(column.ColumnBase):
             n += self.base_mask.size
         return n
 
-    def _memory_usage(self, deep=False):
-        if deep:
-            return self.__sizeof__()
-        else:
-            return self.str().size() * self.dtype.itemsize
+    def _memory_usage(self, **kwargs):
+        return self.__sizeof__()
 
     def unary_operator(self, unaryop):
         raise TypeError(
