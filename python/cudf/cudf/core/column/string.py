@@ -13,6 +13,7 @@ import cudf._lib as libcudf
 import cudf._lib.string_casting as str_cast
 from cudf._lib.column import Column
 from cudf._lib.nvtext.generate_ngrams import (
+    generate_character_ngrams as cpp_generate_character_ngrams,
     generate_ngrams as cpp_generate_ngrams,
 )
 from cudf._lib.nvtext.ngrams_tokenize import (
@@ -3482,6 +3483,43 @@ class StringMethods(object):
         kwargs.setdefault("retain_index", False)
         return self._return_or_inplace(
             cpp_generate_ngrams(self._column, n, separator), **kwargs
+        )
+
+    def character_ngrams(self, n=2, **kwargs):
+        """
+        Generate the n-grams from characters in a column of strings.
+
+        Parameters
+        ----------
+        n : int
+            The degree of the n-gram (number of consecutive characters).
+            Default of 2 for bigrams.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> str_series = cudf.Series(['abcd','efgh','xyz'])
+        >>> str_series.str.character_ngrams(2)
+        0    ab
+        1    bc
+        2    cd
+        3    ef
+        4    fg
+        5    gh
+        6    xy
+        7    yz
+        dtype: object
+        >>> str_series.str.character_ngrams(3)
+        0    abc
+        1    bcd
+        2    efg
+        3    fgh
+        4    xyz
+        dtype: object
+        """
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_generate_character_ngrams(self._column, n), **kwargs
         )
 
     def ngrams_tokenize(self, n=2, delimiter=" ", separator="_", **kwargs):
