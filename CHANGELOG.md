@@ -14,6 +14,7 @@
 - PR #5301 Add Java bindings for `zfill`
 - PR #5425 Add Python `Groupby.rolling()`
 - PR #5359 Add duration types 
+- PR #5434 Add nvtext function generate_character_grams
 
 ## Improvements
 
