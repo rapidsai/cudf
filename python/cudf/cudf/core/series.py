@@ -1943,7 +1943,13 @@ class Series(Frame, Serializable):
         return self.take(inds)
 
     def sort_values(
-        self, ascending=True, na_position="last", ignore_index=False
+        self,
+        axis=0,
+        ascending=True,
+        inplace=False,
+        kind="quicksort",
+        na_position="last",
+        ignore_index=False,
     ):
         """
         Sort by the values.
@@ -1979,6 +1985,14 @@ class Series(Frame, Serializable):
         3    4
         1    5
         """
+
+        if inplace:
+            raise NotImplementedError("`inplace` not currently implemented.")
+        if kind != "quicksort":
+            raise NotImplementedError("`kind` not currently implemented.")
+        if axis != 0:
+            raise NotImplementedError("`axis` not currently implemented.")
+
         if len(self) == 0:
             return self
         vals, inds = self._sort(ascending=ascending, na_position=na_position)
