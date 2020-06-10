@@ -264,10 +264,7 @@ def can_convert_to_column(obj):
     Boolean: True or False depending on whether the
     input `obj` is column-compatible or not.
     """
-    if is_column_like(obj) or is_list_like(obj):
-        return True
-    else:
-        return False
+    return is_column_like(obj) or is_list_like(obj)
 
 
 def min_scalar_type(a, min_size=8):
