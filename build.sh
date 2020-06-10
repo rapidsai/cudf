@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n] [-h] [-l]
+VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests -v -g -n --allgpuarch --disable_nvtx --show_depr_warn -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n] [-h]
    clean            - remove all existing build artifacts and configuration (start
                       over)
    libcudf          - build the cudf C++ code only
@@ -30,7 +30,6 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n
    -v               - verbose build mode
    -g               - build for debug
    -n               - no install step
-   -l               - build legacy tests
    --allgpuarch     - build for all supported GPU architectures
    --disable_nvtx   - disable inserting NVTX profiling ranges
    --show_depr_warn - show cmake deprecation warnings
@@ -52,7 +51,6 @@ BUILD_BENCHMARKS=OFF
 BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
 BUILD_TESTS=OFF
-BUILD_LEGACY_TESTS=OFF
 BUILD_DISABLE_DEPRECATION_WARNING=ON
 
 # Set defaults for vars that may not have been defined externally
@@ -94,9 +92,6 @@ fi
 if hasArg -n; then
     INSTALL_TARGET=""
     LIBCUDF_BUILD_DIR=${LIB_BUILD_DIR}
-fi
-if hasArg -l; then
-    BUILD_LEGACY_TESTS=ON
 fi
 if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
@@ -148,7 +143,6 @@ if buildAll || hasArg libcudf; then
           ${GPU_ARCH} \
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
-          -DBUILD_LEGACY_TESTS=${BUILD_LEGACY_TESTS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 fi

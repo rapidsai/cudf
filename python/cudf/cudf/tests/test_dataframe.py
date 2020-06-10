@@ -1,8 +1,10 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import array as arr
+import io
 import operator
 import random
+import textwrap
 
 import cupy
 import numpy as np
@@ -137,6 +139,15 @@ def test_series_basic():
     series = Series(a1)
     assert len(series) == 10
     np.testing.assert_equal(series.to_array(), np.hstack([a1]))
+
+
+def test_series_from_cupy_scalars():
+    data = [0.1, 0.2, 0.3]
+    data_np = np.array(data)
+    data_cp = cupy.array(data)
+    s_np = Series([data_np[0], data_np[2]])
+    s_cp = Series([data_cp[0], data_cp[2]])
+    assert_eq(s_np, s_cp)
 
 
 @pytest.mark.parametrize("a", [[1, 2, 3], [1, 10, 30]])
@@ -1121,12 +1132,45 @@ def test_from_gpu_matrix():
 
     pd.testing.assert_frame_equal(df, gdf.to_pandas())
 
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=["a", "b"])
+    df = pd.DataFrame(h_ary, index=["a", "b"])
+    assert isinstance(gdf, gd.DataFrame)
 
-@pytest.mark.xfail(reason="matrix dimension is not 2")
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=0)
+    df = pd.DataFrame(h_ary)
+    df = df.set_index(keys=0, drop=False)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=1)
+    df = pd.DataFrame(h_ary)
+    df = df.set_index(keys=1, drop=False)
+    assert isinstance(gdf, gd.DataFrame)
+
+    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+
+
 def test_from_gpu_matrix_wrong_dimensions():
     d_ary = cupy.empty((2, 3, 4), dtype=np.int32)
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary)
-    assert gdf is not None
+    with pytest.raises(
+        ValueError, match="matrix dimension expected 2 but found 3"
+    ):
+        gd.DataFrame.from_gpu_matrix(d_ary)
+
+
+def test_from_gpu_matrix_wrong_index():
+    d_ary = cupy.empty((2, 3), dtype=np.int32)
+
+    with pytest.raises(
+        ValueError, match="index length expected 2 but found 1"
+    ):
+        gd.DataFrame.from_gpu_matrix(d_ary, index=["a"])
+
+    with pytest.raises(KeyError):
+        gd.DataFrame.from_gpu_matrix(d_ary, index="a")
 
 
 @pytest.mark.xfail(reason="constructor does not coerce index inputs")
@@ -3719,6 +3763,17 @@ def test_series_value_counts():
         assert_eq(expect, got, check_dtype=False)
 
 
+@pytest.mark.parametrize("ascending", [True, False])
+def test_series_value_counts_optional_arguments(ascending):
+    psr = pd.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
+    gsr = Series.from_pandas(psr)
+
+    expect = psr.value_counts(ascending=ascending)
+    got = gsr.value_counts(ascending=ascending)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -5646,3 +5701,243 @@ def test_dataframe_assign_scalar_with_scalar_cols(col_data, assign_val):
     gdf["b"] = assign_val
 
     assert_eq(pdf, gdf)
+
+
+def test_dataframe_info_basic():
+
+    buffer = io.StringIO()
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    StringIndex: 10 entries, a to 1111
+    Data columns (total 10 columns):
+     #   Column  Non-Null Count  Dtype
+    ---  ------  --------------  -----
+     0   0       10 non-null     float64
+     1   1       10 non-null     float64
+     2   2       10 non-null     float64
+     3   3       10 non-null     float64
+     4   4       10 non-null     float64
+     5   5       10 non-null     float64
+     6   6       10 non-null     float64
+     7   7       10 non-null     float64
+     8   8       10 non-null     float64
+     9   9       10 non-null     float64
+    dtypes: float64(10)
+    memory usage: 859.0+ bytes
+    """
+    )
+    df = pd.DataFrame(
+        np.random.randn(10, 10),
+        index=["a", "2", "3", "4", "5", "6", "7", "8", "100", "1111"],
+    )
+    gd.from_pandas(df).info(buf=buffer, verbose=True)
+    s = buffer.getvalue()
+    assert str_cmp == s
+
+
+def test_dataframe_info_verbose_mem_usage():
+    buffer = io.StringIO()
+    df = pd.DataFrame({"a": [1, 2, 3], "b": ["safdas", "assa", "asdasd"]})
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    RangeIndex: 3 entries, 0 to 2
+    Data columns (total 2 columns):
+     #   Column  Non-Null Count  Dtype
+    ---  ------  --------------  -----
+     0   a       3 non-null      int64
+     1   b       3 non-null      object
+    dtypes: int64(1), object(1)
+    memory usage: 56.0+ bytes
+    """
+    )
+    gd.from_pandas(df).info(buf=buffer, verbose=True)
+    s = buffer.getvalue()
+    assert str_cmp == s
+
+    buffer.truncate(0)
+    buffer.seek(0)
+
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    RangeIndex: 3 entries, 0 to 2
+    Columns: 2 entries, a to b
+    dtypes: int64(1), object(1)
+    memory usage: 56.0+ bytes
+    """
+    )
+    gd.from_pandas(df).info(buf=buffer, verbose=False)
+    s = buffer.getvalue()
+    assert str_cmp == s
+
+    buffer.truncate(0)
+    buffer.seek(0)
+
+    df = pd.DataFrame(
+        {"a": [1, 2, 3], "b": ["safdas", "assa", "asdasd"]},
+        index=["sdfdsf", "sdfsdfds", "dsfdf"],
+    )
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    StringIndex: 3 entries, sdfdsf to dsfdf
+    Data columns (total 2 columns):
+     #   Column  Non-Null Count  Dtype
+    ---  ------  --------------  -----
+     0   a       3 non-null      int64
+     1   b       3 non-null      object
+    dtypes: int64(1), object(1)
+    memory usage: 91.0 bytes
+    """
+    )
+    gd.from_pandas(df).info(buf=buffer, verbose=True, memory_usage="deep")
+    s = buffer.getvalue()
+    assert str_cmp == s
+
+    buffer.truncate(0)
+    buffer.seek(0)
+
+    int_values = [1, 2, 3, 4, 5]
+    text_values = ["alpha", "beta", "gamma", "delta", "epsilon"]
+    float_values = [0.0, 0.25, 0.5, 0.75, 1.0]
+
+    df = gd.DataFrame(
+        {
+            "int_col": int_values,
+            "text_col": text_values,
+            "float_col": float_values,
+        }
+    )
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    RangeIndex: 5 entries, 0 to 4
+    Data columns (total 3 columns):
+     #   Column     Non-Null Count  Dtype
+    ---  ------     --------------  -----
+     0   int_col    5 non-null      int64
+     1   text_col   5 non-null      object
+     2   float_col  5 non-null      float64
+    dtypes: float64(1), int64(1), object(1)
+    memory usage: 130.0 bytes
+    """
+    )
+    df.info(buf=buffer, verbose=True, memory_usage="deep")
+    actual_string = buffer.getvalue()
+    assert str_cmp == actual_string
+
+    buffer.truncate(0)
+    buffer.seek(0)
+
+
+def test_dataframe_info_null_counts():
+    int_values = [1, 2, 3, 4, 5]
+    text_values = ["alpha", "beta", "gamma", "delta", "epsilon"]
+    float_values = [0.0, 0.25, 0.5, 0.75, 1.0]
+
+    df = gd.DataFrame(
+        {
+            "int_col": int_values,
+            "text_col": text_values,
+            "float_col": float_values,
+        }
+    )
+    buffer = io.StringIO()
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    RangeIndex: 5 entries, 0 to 4
+    Data columns (total 3 columns):
+     #   Column     Dtype
+    ---  ------     -----
+     0   int_col    int64
+     1   text_col   object
+     2   float_col  float64
+    dtypes: float64(1), int64(1), object(1)
+    memory usage: 130.0+ bytes
+    """
+    )
+    df.info(buf=buffer, verbose=True, null_counts=False)
+    actual_string = buffer.getvalue()
+    assert str_cmp == actual_string
+
+    buffer.truncate(0)
+    buffer.seek(0)
+
+    df.info(buf=buffer, verbose=True, max_cols=0)
+    actual_string = buffer.getvalue()
+    assert str_cmp == actual_string
+
+    buffer.truncate(0)
+    buffer.seek(0)
+
+    df = DataFrame()
+
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    RangeIndex: 0 entries
+    Empty DataFrame"""
+    )
+    df.info(buf=buffer, verbose=True)
+    actual_string = buffer.getvalue()
+    assert str_cmp == actual_string
+
+    buffer.truncate(0)
+    buffer.seek(0)
+
+    df = gd.DataFrame(
+        {
+            "a": [1, 2, 3, None, 10, 11, 12, None],
+            "b": ["a", "b", "c", "sd", "sdf", "sd", None, None],
+        }
+    )
+
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    RangeIndex: 8 entries, 0 to 7
+    Data columns (total 2 columns):
+     #   Column  Dtype
+    ---  ------  -----
+     0   a       int64
+     1   b       object
+    dtypes: int64(1), object(1)
+    memory usage: 238.0+ bytes
+    """
+    )
+    pd.options.display.max_info_rows = 2
+    df.info(buf=buffer, max_cols=2, null_counts=None)
+    pd.reset_option("display.max_info_rows")
+    actual_string = buffer.getvalue()
+    assert str_cmp == actual_string
+
+    buffer.truncate(0)
+    buffer.seek(0)
+
+    str_cmp = textwrap.dedent(
+        """\
+    <class 'cudf.core.dataframe.DataFrame'>
+    RangeIndex: 8 entries, 0 to 7
+    Data columns (total 2 columns):
+     #   Column  Non-Null Count  Dtype
+    ---  ------  --------------  -----
+     0   a       6 non-null      int64
+     1   b       6 non-null      object
+    dtypes: int64(1), object(1)
+    memory usage: 238.0+ bytes
+    """
+    )
+
+    df.info(buf=buffer, max_cols=2, null_counts=None)
+    actual_string = buffer.getvalue()
+    assert str_cmp == actual_string
+
+    buffer.truncate(0)
+    buffer.seek(0)
+
+    df.info(buf=buffer, null_counts=True)
+    actual_string = buffer.getvalue()
+    assert str_cmp == actual_string

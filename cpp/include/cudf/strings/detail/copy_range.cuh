@@ -141,7 +141,7 @@ std::unique_ptr<column> copy_range(
     }
 
     auto null_count = valid_mask.second;
-    rmm::device_buffer null_mask{};
+    rmm::device_buffer null_mask{0, stream, mr};
     if (target.parent().nullable() || null_count > 0) { null_mask = std::move(valid_mask.first); }
 
     // build offsets column

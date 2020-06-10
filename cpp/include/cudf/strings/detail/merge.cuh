@@ -59,7 +59,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
   auto d_rhs      = *rhs_column;
 
   // caller will set the null mask
-  rmm::device_buffer null_mask;
+  rmm::device_buffer null_mask{0, stream, mr};
   size_type null_count = lhs.null_count() + rhs.null_count();
   if (null_count > 0)
     null_mask = create_null_mask(strings_count, mask_state::ALL_VALID, stream, mr);
