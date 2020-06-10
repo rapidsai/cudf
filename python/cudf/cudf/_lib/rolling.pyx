@@ -40,7 +40,6 @@ def rolling(Column source_column, Column pre_column_window,
     -------
     A Column with rolling calculations
     """
-
     cdef size_type c_min_periods = min_periods
     cdef size_type c_window = 0
     cdef size_type c_forward_window = 0

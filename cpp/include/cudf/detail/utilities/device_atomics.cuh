@@ -22,8 +22,9 @@
  *
  * Provides the overloads for all of possible cudf's data types,
  * where cudf's data types are, int8_t, int16_t, int32_t, int64_t, float, double,
- * cudf::detail::timestamp_D, cudf::detail::timestamp_s, cudf::detail::timestamp_ms
- * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and bool
+ * cudf::timestamp_D, cudf::timestamp_s, cudf::timestamp_ms, cudf::timestamp_us,
+ * cudf::timestamp_ns, cudf::duration_D, cudf::duration_s, cudf::duration_ms,
+ * cudf::duration_us, cudf::duration_ns and bool
  * where CUDA atomic operations are, `atomicAdd`, `atomicMin`, `atomicMax`,
  * `atomicCAS`.
  * `atomicAnd`, `atomicOr`, `atomicXor` are also supported for integer data types.
@@ -35,6 +36,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <type_traits>
 
@@ -447,6 +449,19 @@ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
   return T(fun(reinterpret_cast<R*>(address), update_value_rep, op));
 }
 
+// specialization for cudf::detail::duration types
+template <typename T, typename BinaryOp>
+typename std::enable_if_t<cudf::is_duration<T>(), T> __forceinline__ __device__
+genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
+{
+  using R = typename T::rep;
+  // Unwrap the input duration to its underlying duration value representation.
+  // Use the underlying representation's type to apply operation for the cudf::detail::duration
+  auto update_value_rep = update_value.count();
+  auto fun              = cudf::detail::genericAtomicOperationImpl<R, BinaryOp>{};
+  return T(fun(reinterpret_cast<R*>(address), update_value_rep, op));
+}
+
 // specialization for bool types
 template <typename BinaryOp>
 __forceinline__ __device__ bool genericAtomicOperation(bool* address,
@@ -469,8 +484,9 @@ __forceinline__ __device__ bool genericAtomicOperation(bool* address,
  *
  * The supported cudf types for `atomicAdd` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
- * cudf::detail::timestamp_D, cudf::detail::timestamp_s, cudf::detail::timestamp_ms
- * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and bool
+ * cudf::timestamp_D, cudf::timestamp_s, cudf::timestamp_ms cudf::timestamp_us,
+ * cudf::timestamp_ns, cudf::duration_D, cudf::duration_s, cudf::duration_ms,
+ * cudf::duration_us, cudf::duration_ns and bool
  *
  * Cuda natively supports `sint32`, `uint32`, `uint64`, `float`, `double.
  * (`double` is supported after Pascal).
@@ -496,8 +512,9 @@ __forceinline__ __device__ T atomicAdd(T* address, T val)
  *
  * The supported cudf types for `atomicMin` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
- * cudf::detail::timestamp_D, cudf::detail::timestamp_s, cudf::detail::timestamp_ms
- * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and bool
+ * cudf::timestamp_D, cudf::timestamp_s, cudf::timestamp_ms, cudf::timestamp_us,
+ * cudf::timestamp_ns, cudf::duration_D, cudf::duration_s, cudf::duration_ms,
+ * cudf::duration_us, cudf::duration_ns and bool
  * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
  * Other types are implemented by `atomicCAS`.
  *
@@ -521,8 +538,9 @@ __forceinline__ __device__ T atomicMin(T* address, T val)
  *
  * The supported cudf types for `atomicMax` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
- * cudf::detail::timestamp_D, cudf::detail::timestamp_s, cudf::detail::timestamp_ms
- * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and bool
+ * cudf::timestamp_D, cudf::timestamp_s, cudf::timestamp_ms, cudf::timestamp_us,
+ * cudf::timestamp_ns, cudf::duration_D, cudf::duration_s, cudf::duration_ms,
+ * cudf::duration_us, cudf::duration_ns and bool
  * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
  * Other types are implemented by `atomicCAS`.
  *
@@ -546,8 +564,9 @@ __forceinline__ __device__ T atomicMax(T* address, T val)
  *
  * The supported cudf types for `atomicCAS` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
- * cudf::detail::timestamp_D, cudf::detail::timestamp_s, cudf::detail::timestamp_ms
- * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and bool
+ * cudf::timestamp_D, cudf::timestamp_s, cudf::timestamp_ms, cudf::timestamp_us,
+ * cudf::timestamp_ns, cudf::duration_D, cudf::duration_s, cudf::duration_ms,
+ * cudf::duration_us, cudf::duration_ns and bool
  * Cuda natively supports `sint32`, `uint32`, `uint64`.
  * Other types are implemented by `atomicCAS`.
  *

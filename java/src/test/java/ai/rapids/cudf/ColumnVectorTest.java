@@ -564,14 +564,26 @@ public class ColumnVectorTest extends CudfTestBase {
         case INT8:
           s = Scalar.fromByte((byte) 5);
           break;
+        case UINT8:
+          s = Scalar.fromUnsignedByte((byte) 254);
+          break;
         case INT16:
           s = Scalar.fromShort((short) 12345);
+          break;
+        case UINT16:
+          s = Scalar.fromUnsignedShort((short) 65432);
           break;
         case INT32:
           s = Scalar.fromInt(123456789);
           break;
+        case UINT32:
+          s = Scalar.fromUnsignedInt(0xfedcba98);
+          break;
         case INT64:
           s = Scalar.fromLong(1234567890123456789L);
+          break;
+        case UINT64:
+          s = Scalar.fromUnsignedLong(0xfedcba9876543210L);
           break;
         case FLOAT32:
           s = Scalar.fromFloat(1.2345f);
@@ -637,10 +649,22 @@ public class ColumnVectorTest extends CudfTestBase {
           expected = ColumnVector.fromBoxedBytes(v, v, v, v);
           break;
         }
+        case UINT8: {
+          byte v = (byte) 254;
+          s = Scalar.fromUnsignedByte(v);
+          expected = ColumnVector.fromBoxedUnsignedBytes(v, v, v, v);
+          break;
+        }
         case INT16: {
           short v = (short) 12345;
           s = Scalar.fromShort(v);
-          expected = ColumnVector.fromBoxedShorts((short) 12345, (short) 12345, (short) 12345, (short) 12345);
+          expected = ColumnVector.fromBoxedShorts(v, v, v, v);
+          break;
+        }
+        case UINT16: {
+          short v = (short) 0x89ab;
+          s = Scalar.fromUnsignedShort(v);
+          expected = ColumnVector.fromBoxedUnsignedShorts(v, v, v, v);
           break;
         }
         case INT32: {
@@ -649,10 +673,22 @@ public class ColumnVectorTest extends CudfTestBase {
           expected = ColumnVector.fromBoxedInts(v, v, v, v);
           break;
         }
+        case UINT32: {
+          int v = 0x89abcdef;
+          s = Scalar.fromUnsignedInt(v);
+          expected = ColumnVector.fromBoxedUnsignedInts(v, v, v, v);
+          break;
+        }
         case INT64: {
           long v = 1234567890123456789L;
           s = Scalar.fromLong(v);
           expected = ColumnVector.fromBoxedLongs(v, v, v, v);
+          break;
+        }
+        case UINT64: {
+          long v = 0xfedcba9876543210L;
+          s = Scalar.fromUnsignedLong(v);
+          expected = ColumnVector.fromBoxedUnsignedLongs(v, v, v, v);
           break;
         }
         case FLOAT32: {
@@ -1504,16 +1540,24 @@ public class ColumnVectorTest extends CudfTestBase {
     });
 
     try (ColumnVector cv = ColumnVector.fromInts(values);
+         ColumnVector expectedUnsignedInts = ColumnVector.fromUnsignedInts(values);
+         ColumnVector unsignedInts = cv.asUnsignedInts();
          ColumnVector expectedBytes = ColumnVector.fromBytes(byteValues);
          ColumnVector bytes = cv.asBytes();
+         ColumnVector expectedUnsignedBytes = ColumnVector.fromUnsignedBytes(byteValues);
+         ColumnVector unsignedBytes = cv.asUnsignedBytes();
          ColumnVector expectedFloats = ColumnVector.fromFloats(floatValues);
          ColumnVector floats = cv.asFloats();
          ColumnVector expectedDoubles = ColumnVector.fromDoubles(doubleValues);
          ColumnVector doubles = cv.asDoubles();
          ColumnVector expectedLongs = ColumnVector.fromLongs(longValues);
          ColumnVector longs = cv.asLongs();
+         ColumnVector expectedUnsignedLongs = ColumnVector.fromUnsignedLongs(longValues);
+         ColumnVector unsignedLongs = cv.asUnsignedLongs();
          ColumnVector expectedShorts = ColumnVector.fromShorts(shortValues);
          ColumnVector shorts = cv.asShorts();
+         ColumnVector expectedUnsignedShorts = ColumnVector.fromUnsignedShorts(shortValues);
+         ColumnVector unsignedShorts = cv.asUnsignedShorts();
          ColumnVector expectedDays = ColumnVector.daysFromInts(values);
          ColumnVector days = cv.asTimestampDays();
          ColumnVector expectedUs = ColumnVector.timestampMicroSecondsFromLongs(longValues);
@@ -1524,9 +1568,13 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector ms = cv.asTimestampMilliseconds();
          ColumnVector expectedS = ColumnVector.timestampSecondsFromLongs(longValues);
          ColumnVector s = cv.asTimestampSeconds();) {
+      assertColumnsAreEqual(expectedUnsignedInts, unsignedInts);
       assertColumnsAreEqual(expectedBytes, bytes);
+      assertColumnsAreEqual(expectedUnsignedBytes, unsignedBytes);
       assertColumnsAreEqual(expectedShorts, shorts);
+      assertColumnsAreEqual(expectedUnsignedShorts, unsignedShorts);
       assertColumnsAreEqual(expectedLongs, longs);
+      assertColumnsAreEqual(expectedUnsignedLongs, unsignedLongs);
       assertColumnsAreEqual(expectedDoubles, doubles);
       assertColumnsAreEqual(expectedFloats, floats);
       assertColumnsAreEqual(expectedDays, days);
@@ -2114,6 +2162,20 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, actual);
     }
 
+  }
+
+  @Test
+  void testZfill() {
+    try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+         ColumnVector expected = ColumnVector.fromStrings("01", "23", "45678", null);
+         ColumnVector actual = v.zfill(2)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+    try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+         ColumnVector expected = ColumnVector.fromStrings("0001", "0023", "45678", null);
+         ColumnVector actual = v.zfill(4)) {
+      assertColumnsAreEqual(expected, actual);
+    }
   }
 
   @Test

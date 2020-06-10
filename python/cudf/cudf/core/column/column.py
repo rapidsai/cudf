@@ -1375,7 +1375,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             as_column(chunk, dtype=dtype) for chunk in arbitrary.chunks
         ]
 
-        if dtype and dtype != "empty":
+        if dtype:
             new_dtype = dtype
         else:
             pa_type = arbitrary.type
