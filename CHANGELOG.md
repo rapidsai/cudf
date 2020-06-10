@@ -12,6 +12,7 @@
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5303 Add slice_strings functionality using delimiter string
 - PR #5301 Add Java bindings for `zfill`
+- PR #5425 Add Python `Groupby.rolling()`
 - PR #5359 Add duration types 
 
 ## Improvements
@@ -66,6 +67,7 @@
 - PR #5382 Fix CategoricalDtype equality comparisons
 - PR #5385 Fix index issues in `DataFrame.from_gpu_matrix`
 - PR #5390 Fix Java data type IDs and string interleave test
+- PR #5410 Fix compile warning by disallowing bool column type for slice_strings
 - PR #5404 Fix issue with column creation when chunked arrays are passed
 - PR #5409 Use the correct memory resource when creating empty null masks
 - PR #5399 Fix cpp compiler warnings of unreachable code
