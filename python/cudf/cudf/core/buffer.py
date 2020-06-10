@@ -147,7 +147,7 @@ def confirm_1d_contiguous(array_interface):
     shape = array_interface["shape"]
     itemsize = np.dtype(array_interface["typestr"]).itemsize
     typestr = array_interface["typestr"]
-    if typestr != "|u1":
+    if typestr not in ("|i1", "|u1"):
         raise TypeError("Buffer data must be of uint8 type")
     if not get_c_contiguity(shape, strides, itemsize):
         raise ValueError("Buffer data must be 1D C-contiguous")

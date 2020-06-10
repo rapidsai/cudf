@@ -194,7 +194,7 @@ cdef class Column:
         if value is None:
             mask = None
         elif hasattr(value, "__cuda_array_interface__"):
-            if value.__cuda_array_interface__['typestr'] != '|u1':
+            if value.__cuda_array_interface__["typestr"] not in ("|i1", "|u1"):
                 if isinstance(value, Column):
                     value = value.data_array_view
                 value = cp.asarray(value).view('|u1')

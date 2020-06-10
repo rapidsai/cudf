@@ -168,7 +168,7 @@ def pyarrow_buffer_to_cudf_buffer(arrow_buf, mask_size=0):
             dbuf = rmm.DeviceBuffer(size=mask_size)
             dbuf.copy_from_host(np.asarray(arrow_buf).view("u1"))
             return Buffer(dbuf)
-        return Buffer(np.asarray(arrow_buf).view("|u1"))
+        return Buffer(arrow_buf)
 
 
 def get_result_name(left, right):
