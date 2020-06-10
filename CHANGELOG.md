@@ -13,6 +13,7 @@
 - PR #5303 Add slice_strings functionality using delimiter string
 - PR #5301 Add Java bindings for `zfill`
 - PR #5411 Enable metadata collection for chunked parquet writer
+- PR #5418 Add support for `DataFrame.info`
 - PR #5425 Add Python `Groupby.rolling()`
 - PR #5359 Add duration types 
 
@@ -46,6 +47,7 @@
 - PR #5405 Add Error message to `StringColumn.unary_operator`
 - PR #5424 Add python plumbing for `.str.character_tokenize`
 - PR #5420 Aligning signature of `Series.value_counts` to Pandas
+- PR #5429 Improve text wrapping in libcudf documentation
 
 ## Bug Fixes
 
