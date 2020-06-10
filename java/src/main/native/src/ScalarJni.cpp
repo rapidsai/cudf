@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -155,6 +155,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt8Scalar(JNIEnv *env, j
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint8Scalar(JNIEnv *env, jclass, jbyte value,
+                                                                   jboolean is_valid) {
+  try {
+    cudf::jni::auto_set_device(env);
+    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::UINT8));
+    s->set_valid(is_valid);
+    if (is_valid) {
+      using ScalarType = cudf::scalar_type_t<uint8_t>;
+      static_cast<ScalarType *>(s.get())->set_value(static_cast<uint8_t>(value));
+    }
+    return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt16Scalar(JNIEnv *env, jclass,
                                                                    jshort value,
                                                                    jboolean is_valid) {
@@ -165,6 +180,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt16Scalar(JNIEnv *env, 
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<int16_t>;
       static_cast<ScalarType *>(s.get())->set_value(static_cast<int16_t>(value));
+    }
+    return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint16Scalar(JNIEnv *env, jclass,
+                                                                    jshort value,
+                                                                    jboolean is_valid) {
+  try {
+    cudf::jni::auto_set_device(env);
+    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::UINT16));
+    s->set_valid(is_valid);
+    if (is_valid) {
+      using ScalarType = cudf::scalar_type_t<uint16_t>;
+      static_cast<ScalarType *>(s.get())->set_value(static_cast<uint16_t>(value));
     }
     return reinterpret_cast<jlong>(s.release());
   }
@@ -186,6 +217,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt32Scalar(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint32Scalar(JNIEnv *env, jclass, jint value,
+                                                                    jboolean is_valid) {
+  try {
+    cudf::jni::auto_set_device(env);
+    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::UINT32));
+    s->set_valid(is_valid);
+    if (is_valid) {
+      using ScalarType = cudf::scalar_type_t<uint32_t>;
+      static_cast<ScalarType *>(s.get())->set_value(static_cast<uint32_t>(value));
+    }
+    return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt64Scalar(JNIEnv *env, jclass, jlong value,
                                                                    jboolean is_valid) {
   try {
@@ -195,6 +241,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt64Scalar(JNIEnv *env, 
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<int64_t>;
       static_cast<ScalarType *>(s.get())->set_value(static_cast<int64_t>(value));
+    }
+    return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint64Scalar(JNIEnv *env, jclass,
+                                                                    jlong value,
+                                                                    jboolean is_valid) {
+  try {
+    cudf::jni::auto_set_device(env);
+    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::UINT64));
+    s->set_valid(is_valid);
+    if (is_valid) {
+      using ScalarType = cudf::scalar_type_t<uint64_t>;
+      static_cast<ScalarType *>(s.get())->set_value(static_cast<uint64_t>(value));
     }
     return reinterpret_cast<jlong>(s.release());
   }
