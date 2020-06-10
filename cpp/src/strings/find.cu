@@ -239,7 +239,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     cudaStream_t stream)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_numeric_column(data_type{BOOL8}, 0);
+  if (strings_count == 0) return make_empty_column(data_type{BOOL8});
 
   auto targets_count = targets.size();
   CUDF_EXPECTS(targets_count > 0, "Must include at least one search target");
