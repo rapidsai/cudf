@@ -146,26 +146,24 @@ def test_ngrams(n, separator, expected_values):
         (
             2,
             [
-                "th", "hi", "is",
-                "is", "my",
-                "bo", "oo", "ok",
-                "he", "er", "re",
+                "th",
+                "hi",
+                "is",
+                "is",
+                "my",
+                "bo",
+                "oo",
+                "ok",
+                "he",
+                "er",
+                "re",
             ],
         ),
-        (
-            3,
-            [
-                "thi", "his",
-                "boo", "ook",
-                "her", "ere",
-            ],
-        ),
+        (3, ["thi", "his", "boo", "ook", "her", "ere",],),
     ],
 )
 def test_character_ngrams(n, expected_values):
-    strings = cudf.Series(
-        ["this", "is", "my", "book", "here", ""]
-    )
+    strings = cudf.Series(["this", "is", "my", "book", "here", ""])
 
     expected = cudf.Series(expected_values)
 
