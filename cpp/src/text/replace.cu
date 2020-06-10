@@ -55,25 +55,32 @@ struct replace_tokens_fn {
   __device__ cudf::size_type operator()(cudf::size_type idx)
   {
     if (d_strings.is_null(idx)) return 0;
-    auto const d_str = d_strings.element<cudf::string_view>(idx);
-    auto nbytes      = d_str.size_bytes();
-    auto in_ptr      = d_str.data();
-    auto out_ptr     = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    auto last_pos    = cudf::size_type{0};
-    characters_tokenizer tokenizer(d_str, d_delimiter);
+
+    auto const d_str  = d_strings.element<cudf::string_view>(idx);
+    auto const in_ptr = d_str.data();
+    auto out_ptr      = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    auto nbytes       = d_str.size_bytes();
+    auto last_pos     = cudf::size_type{0};
+    auto tokenizer    = characters_tokenizer{d_str, d_delimiter};
+
     while (tokenizer.next_token()) {
-      auto token_pos = tokenizer.token_byte_positions();
-      cudf::string_view token{d_str.data() + token_pos.first, (token_pos.second - token_pos.first)};
+      auto const token_pos = tokenizer.token_byte_positions();
+      auto const token =
+        cudf::string_view{d_str.data() + token_pos.first, token_pos.second - token_pos.first};
+
       // check if the token matches any of the targets
-      strings_iterator found_itr = thrust::find(thrust::seq, d_targets_begin, d_targets_end, token);
+      auto const found_itr = thrust::find(thrust::seq, d_targets_begin, d_targets_end, token);
       if (found_itr != d_targets_end) {  // match found
         // retrieve the corresponding replacement string or
         // if only one repl string, use that one for all targets
-        cudf::size_type repl_idx = thrust::distance(d_targets_begin, found_itr);
-        cudf::string_view d_repl = d_repls.size() == 1
-                                     ? d_repls.element<cudf::string_view>(0)
+        auto const d_repl = [&] {
+          auto const repl_idx = thrust::distance(d_targets_begin, found_itr);
+          return d_repls.size() == 1 ? d_repls.element<cudf::string_view>(0)
                                      : d_repls.element<cudf::string_view>(repl_idx);
+        }();
+
         nbytes += d_repl.size_bytes() - token.size_bytes();  // total output bytes
+
         if (out_ptr) {
           // copy over string up to the token location
           out_ptr = cudf::strings::detail::copy_and_increment(
@@ -84,6 +91,7 @@ struct replace_tokens_fn {
         }
       }
     }
+
     // copy the remainder of the string bytes to the output buffer
     if (out_ptr) memcpy(out_ptr, in_ptr + last_pos, d_str.size_bytes() - last_pos);
     return nbytes;
