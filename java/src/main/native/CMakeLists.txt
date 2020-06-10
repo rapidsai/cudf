@@ -105,13 +105,27 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
 ###################################################################################################
+# - Thrust/CUB/libcudacxx ------------------------------------------------------------------------------------
+
+find_path(THRUST_INCLUDE "thrust"
+    HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src"
+          "${PROJECT_SOURCE_DIR}/../../../../cpp/build/_deps/thrust-src"
+          "$ENV{CONDA_PREFIX}/include")
+
+find_path(CUB_INCLUDE "cub"
+    HINTS "$ENV{CUDF_ROOT}/_deps/cub-src"
+          "${PROJECT_SOURCE_DIR}/../../../../cpp/build/_deps/cub-src"
+          "$ENV{CONDA_PREFIX}/include")
+
+find_path(LIBCUDACXX_INCLUDE "simt"
+    HINTS "$ENV{CUDF_ROOT}/_deps/libcudacxx-src/include"
+          "${PROJECT_SOURCE_DIR}/../../../../cpp/build/_deps/libcudacxx-src/include")
+
+###################################################################################################
 # - CUDF ------------------------------------------------------------------------------------------
 
 set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
-                 "${PROJECT_SOURCE_DIR}/../../../../cpp/src/"
-                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/cub"
-                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/libcudacxx/include")
-                 
+                 "${PROJECT_SOURCE_DIR}/../../../../cpp/src/")
 
 find_library(CUDF_LIBRARY "cudf"
     HINTS "$ENV{CUDF_ROOT}/lib"
@@ -159,7 +173,10 @@ endif(JNI_FOUND)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+include_directories("${THRUST_INCLUDE}"
+                    "${CUB_INCLUDE}"
+                    "${LIBCUDACXX_INCLUDE}"
+                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
@@ -180,10 +197,10 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 # - library targets -------------------------------------------------------------------------------
 
 set(SOURCE_FILES
-    "src/HostMemoryBufferJni.cpp"
     "src/CudfJni.cpp"
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
+    "src/HostMemoryBufferNativeUtilsJni.cpp"
     "src/NvtxRangeJni.cpp"
     "src/RmmJni.cpp"
     "src/ScalarJni.cpp"
