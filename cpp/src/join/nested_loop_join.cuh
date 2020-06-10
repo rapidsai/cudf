@@ -35,17 +35,16 @@ namespace detail {
  *
  * @throw cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
  *
- * @tparam JoinKind The type of join to be performed
- *
  * @param left The left hand table
  * @param right The right hand table
+ * @param JoinKind The type of join to be performed
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return An estimate of the size of the output of the join operation
  */
-template <join_kind JoinKind>
 size_type estimate_nested_loop_join_output_size(table_device_view left,
                                                 table_device_view right,
+                                                join_kind JoinKind,
                                                 cudaStream_t stream)
 {
   const size_type left_num_rows{left.num_rows()};
@@ -76,7 +75,7 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
   int numBlocks{-1};
 
   CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &numBlocks, compute_nested_loop_join_output_size<JoinKind, block_size>, block_size, 0));
+    &numBlocks, compute_nested_loop_join_output_size<block_size>, block_size, 0));
 
   int dev_id{-1};
   CUDA_TRY(cudaGetDevice(&dev_id));
@@ -89,8 +88,8 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
   row_equality equality{left, right};
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
-  compute_nested_loop_join_output_size<JoinKind, block_size>
-    <<<numBlocks * num_sms, block_size, 0, stream>>>(left, right, equality, size_estimate.data());
+  compute_nested_loop_join_output_size<block_size><<<numBlocks * num_sms, block_size, 0, stream>>>(
+    left, right, JoinKind, equality, size_estimate.data());
   CHECK_CUDA(stream);
 
   h_size_estimate = size_estimate.value();
@@ -102,28 +101,26 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
  * @brief Computes the join operation between two tables and returns the
  * output indices of left and right table as a combined table
  *
- * @tparam JoinKind The type of join to be performed
- *
  * @param left  Table of left columns to join
  * @param right Table of right  columns to join
  * @param flip_join_indices Flag that indicates whether the left and right
  * tables have been flipped, meaning the output indices should also be flipped
+ * @param JoinKind The type of join to be performed
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return Join output indices vector pair
  */
-template <join_kind JoinKind>
-std::enable_if_t<(JoinKind != join_kind::FULL_JOIN),
-                 std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>>
+std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
 get_base_nested_loop_join_indices(table_view const& left,
                                   table_view const& right,
                                   bool flip_join_indices,
+                                  join_kind JoinKind,
                                   cudaStream_t stream)
 {
   // The `right` table is always used for the inner loop. We want to use the smaller table
   // for the inner loop. Thus, if `left` is smaller than `right`, swap `left/right`.
   if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
-    return get_base_nested_loop_join_indices<JoinKind>(right, left, true, stream);
+    return get_base_nested_loop_join_indices(right, left, true, JoinKind, stream);
   }
   // Trivial left join case - exit early
   if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
@@ -134,7 +131,7 @@ get_base_nested_loop_join_indices(table_view const& left,
   auto right_table = table_device_view::create(right, stream);
 
   size_type estimated_size =
-    estimate_nested_loop_join_output_size<JoinKind>(*left_table, *right_table, stream);
+    estimate_nested_loop_join_output_size(*left_table, *right_table, JoinKind, stream);
 
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
@@ -164,17 +161,15 @@ get_base_nested_loop_join_indices(table_view const& left,
       flip_join_indices ? right_indices.data().get() : left_indices.data().get();
     const auto& join_output_r =
       flip_join_indices ? left_indices.data().get() : right_indices.data().get();
-    nested_loop_join<JoinKind, block_size, DEFAULT_JOIN_CACHE_SIZE>
+    nested_loop_join<block_size, DEFAULT_JOIN_CACHE_SIZE>
       <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(*left_table,
                                                                        *right_table,
+                                                                       JoinKind,
                                                                        equality,
-                                                                       left_table->num_rows(),
-                                                                       right_table->num_rows(),
                                                                        join_output_l,
                                                                        join_output_r,
                                                                        write_index.data(),
-                                                                       estimated_size,
-                                                                       flip_join_indices);
+                                                                       estimated_size);
 
     CHECK_CUDA(stream);
 

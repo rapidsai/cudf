@@ -188,17 +188,18 @@ __global__ void compute_join_output_size(multimap_type multi_map,
  * This method uses a nested loop to iterate over the left and right tables and count the number of
  * matches.
  *
- * @tparam JoinKind The type of join to be performed
  * @tparam block_size The number of threads per block for this kernel
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
+ * @param[in] JoinKind The type of join to be performed
  * @param[in] check_row_equality The row equality comparator
  * @param[out] output_size The resulting output size
  */
-template <join_kind JoinKind, int block_size>
+template <int block_size>
 __global__ void compute_nested_loop_join_output_size(table_device_view left_table,
                                                      table_device_view right_table,
+                                                     join_kind JoinKind,
                                                      row_equality check_row_equality,
                                                      cudf::size_type* output_size)
 {
@@ -210,9 +211,14 @@ __global__ void compute_nested_loop_join_output_size(table_device_view left_tabl
 
   for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
        left_row_index += left_stride) {
+    bool found_match = false;
     for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
-      if (check_row_equality(left_row_index, right_row_index)) { ++thread_counter; }
+      if (check_row_equality(left_row_index, right_row_index)) {
+        ++thread_counter;
+        found_match = true;
+      }
     }
+    if ((JoinKind == join_kind::LEFT_JOIN) && (!found_match)) { ++thread_counter; }
   }
 
   using BlockReduce = cub::BlockReduce<cudf::size_type, block_size>;
@@ -254,8 +260,9 @@ __device__ void flush_output_cache(const unsigned int activemask,
 }
 
 /**
- * @brief  Probes the hash map with the probe table to find all matching rows
- between the probe and hash table and generate the output for the desired Join operation.
+ * @brief Probes the hash map with the probe table to find all matching rows
+ * between the probe and hash table and generate the output for the desired
+ * Join operation.
  *
  * @tparam JoinKind The type of join to be performed
  * @tparam multimap_type The type of the hash table
@@ -325,7 +332,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
         // TODO Simplify this logic...
 
         // Left joins always have an entry in the output
-        if (JoinKind == join_kind::LEFT_JOIN && (end == found)) {
+        if ((JoinKind == join_kind::LEFT_JOIN) && (end == found)) {
           running = false;
         }
         // Stop searching after encountering an empty hash table entry
@@ -412,13 +419,13 @@ __global__ void probe_hash_table(multimap_type multi_map,
  * left and right tables and generate the output for the desired Join
  * operation.
  *
- * @tparam JoinKind The type of join to be performed
  * @tparam block_size The number of threads per block for this kernel
  * @tparam output_cache_size The side of the shared memory buffer to cache join
  * output results
 
  * @param[in] left_table The left table
  * @param[in] right_table The right table
+ * @param[in] JoinKind The type of join to be performed
  * @param[in] check_row_equality The row equality comparator
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
@@ -426,9 +433,10 @@ __global__ void probe_hash_table(multimap_type multi_map,
  * writes to the global output
  * @param[in] max_size The maximum size of the output
  */
-template <join_kind JoinKind, cudf::size_type block_size, cudf::size_type output_cache_size>
+template <cudf::size_type block_size, cudf::size_type output_cache_size>
 __global__ void nested_loop_join(table_device_view left_table,
                                  table_device_view right_table,
+                                 join_kind JoinKind,
                                  row_equality check_row_equality,
                                  cudf::size_type* join_output_l,
                                  cudf::size_type* join_output_r,

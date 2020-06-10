@@ -22,8 +22,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <join/join_common_utils.hpp>
-#include <join/join_kernels.cuh>
+#include "join_common_utils.hpp"
+#include "join_kernels.cuh"
 
 namespace cudf {
 namespace detail {
@@ -194,7 +194,7 @@ get_trivial_left_join_indices(table_view const& left, cudaStream_t stream)
  */
 /* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
-std::enable_if_t<(JoinKind != join_kind::FULL_JOIN),
+std::enable_if_t<(JoinKind == join_kind::INNER_JOIN || JoinKind == join_kind::LEFT_JOIN),
                  std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>>
 get_base_hash_join_indices(table_view const& left,
                            table_view const& right,
