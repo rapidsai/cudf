@@ -1243,37 +1243,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 col = utils.time_col_replace_nulls(col)
         return col
 
-    # TODO: Remove nvstrings here when nvstrings is fully removed
-    elif type(arbitrary).__name__ == "nvstrings":
-        byte_count = arbitrary.byte_count()
-        if byte_count > libcudf.MAX_STRING_COLUMN_BYTES:
-            raise MemoryError(
-                "Cannot construct string columns "
-                "containing > {} bytes. "
-                "Consider using dask_cudf to partition "
-                "your data.".format(libcudf.MAX_STRING_COLUMN_BYTES_STR)
-            )
-        sbuf = Buffer.empty(arbitrary.byte_count())
-        obuf = Buffer.empty(
-            (arbitrary.size() + 1) * np.dtype("int32").itemsize
-        )
-
-        nbuf = None
-        if arbitrary.null_count() > 0:
-            nbuf = create_null_mask(
-                arbitrary.size(), state=MaskState.UNINITIALIZED
-            )
-            arbitrary.set_null_bitmask(nbuf.ptr, bdevmem=True)
-        arbitrary.to_offsets(sbuf.ptr, obuf.ptr, None, bdevmem=True)
-        children = (
-            build_column(obuf, dtype="int32"),
-            build_column(sbuf, dtype="int8"),
-        )
-        data = build_column(
-            data=None, dtype="object", mask=nbuf, children=children
-        )
-        data._nvstrings = arbitrary
-
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
             pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(
@@ -1404,7 +1373,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             as_column(chunk, dtype=dtype) for chunk in arbitrary.chunks
         ]
 
-        if dtype and dtype != "empty":
+        if dtype:
             new_dtype = dtype
         else:
             pa_type = arbitrary.type
@@ -1419,7 +1388,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
-            data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype,)
+            data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
         elif arbitrary.dtype.kind in ("f"):
             arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
             data = as_column(
@@ -1476,6 +1445,20 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             raise ValueError("Data must be 1-dimensional")
 
         arbitrary = np.asarray(arbitrary)
+
+        # Handle case that `arbitary` elements are cupy arrays
+        if (
+            shape
+            and shape[0]
+            and hasattr(arbitrary[0], "__cuda_array_interface__")
+        ):
+            return as_column(
+                cupy.asarray(arbitrary, dtype=arbitrary[0].dtype),
+                nan_as_null=nan_as_null,
+                dtype=dtype,
+                length=length,
+            )
+
         if not arbitrary.flags["C_CONTIGUOUS"]:
             arbitrary = np.ascontiguousarray(arbitrary)
 
@@ -1520,7 +1503,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 nan_as_null=nan_as_null,
             )
         else:
-            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null,)
+            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pd.core.arrays.numpy_.PandasArray):
         if is_categorical_dtype(arbitrary.dtype):

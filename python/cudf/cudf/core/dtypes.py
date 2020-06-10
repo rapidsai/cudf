@@ -70,6 +70,8 @@ class CategoricalDtype(ExtensionDtype):
             return True
         elif not isinstance(other, self.__class__):
             return False
+        elif self.ordered != other.ordered:
+            return False
         elif self._categories is None or other._categories is None:
             return True
         else:
