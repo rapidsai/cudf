@@ -12,6 +12,7 @@
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5303 Add slice_strings functionality using delimiter string
 - PR #5301 Add Java bindings for `zfill`
+- PR #5418 Add support for `DataFrame.info`
 - PR #5425 Add Python `Groupby.rolling()`
 - PR #5359 Add duration types 
 
@@ -46,6 +47,7 @@
 - PR #5424 Add python plumbing for `.str.character_tokenize`
 - PR #5420 Aligning signature of `Series.value_counts` to Pandas
 - PR #5433 Add support for column inputs in `strings::starts_with` and `strings::ends_with`
+- PR #5429 Improve text wrapping in libcudf documentation
 
 ## Bug Fixes
 
