@@ -983,12 +983,14 @@ class CategoricalColumn(column.ColumnBase):
             to_replace, replacement
         )
 
+        dtype_replace = []
         for incat, outcat in zip(to_replace, replacement):
             if outcat in old_cats["cats"]._column:
-                set_value = None
+                dtype_replace.append(None)
             else:
-                set_value = outcat
-            new_cats[new_cats["cats"] == incat] = set_value
+                dtype_replace.append(outcat)
+        new_cats["cats"] = new_cats["cats"].replace(to_replace, dtype_replace)
+
         new_cats = (
             new_cats[new_cats["cats"].notna()]
             .reset_index(drop=True)
