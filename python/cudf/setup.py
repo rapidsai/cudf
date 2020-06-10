@@ -57,8 +57,11 @@ extensions = [
             pa.get_include(),
             cuda_include_dir,
         ],
-        library_dirs=[get_python_lib(), os.path.join(os.sys.prefix, "lib")],
-        libraries=["cudf"],
+        library_dirs=(
+            pa.get_library_dirs()
+            + [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
+        ),
+        libraries=["cudf"] + pa.get_libraries(),
         language="c++",
         extra_compile_args=["-std=c++14"],
     )
