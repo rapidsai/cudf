@@ -12,6 +12,7 @@
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5303 Add slice_strings functionality using delimiter string
 - PR #5301 Add Java bindings for `zfill`
+- PR #5418 Add support for `DataFrame.info`
 - PR #5425 Add Python `Groupby.rolling()`
 - PR #5359 Add duration types 
 
