@@ -50,6 +50,7 @@
 - PR #5405 Add Error message to `StringColumn.unary_operator`
 - PR #5424 Add python plumbing for `.str.character_tokenize`
 - PR #5420 Aligning signature of `Series.value_counts` to Pandas
+- PR #5426 Refactor strings code to minimize calls to regex
 - PR #5433 Add support for column inputs in `strings::starts_with` and `strings::ends_with`
 - PR #5427 Add Java bindings for unsigned data types
 - PR #5429 Improve text wrapping in libcudf documentation
