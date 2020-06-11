@@ -3349,9 +3349,66 @@ class Series(Frame, Serializable):
             return 0
         return self._column.unique_count(method, dropna)
 
-    def value_counts(self, sort=True):
+    def value_counts(
+        self,
+        normalize=False,
+        sort=True,
+        ascending=False,
+        bins=None,
+        dropna=True,
+    ):
         """Return a Series containing counts of unique values.
+
+        The resulting object will be in descending order so that
+        the first element is the most frequently-occurring element.
+        Excludes NA values by default.
+
+        Parameters
+        ----------
+        normalize : bool, default False
+            If True then the object returned will contain the
+            relative frequencies of the unique values. normalize == True
+            is not supported.
+
+        sort : bool, default True
+            Sort by frequencies.
+
+        ascending : bool, default False
+            Sort in ascending order.
+
+        bins : int, optional
+            Rather than count values, group them into half-open bins,
+            works with numeric data. Not yet supported.
+
+        dropna : bool, default True
+            Don’t include counts of NaN and None.
+            dropna == False is not supported
+
+        Returns
+        -------
+        result : Series contanining counts of unique values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
+        >>> sr.value_counts(ascending=True)
+        1.0    1
+        2.0    2
+        3.0    3
+        dtype: int32
         """
+
+        if normalize is not False:
+            raise NotImplementedError(
+                "Only normalize == False is currently supported"
+            )
+        if dropna is not True:
+            raise NotImplementedError(
+                "Only dropna == True is currently supported"
+            )
+        if bins is not None:
+            raise NotImplementedError("bins is not yet supported")
 
         if self.null_count == len(self):
             return Series(np.array([], dtype=np.int32), name=self.name)
@@ -3360,7 +3417,7 @@ class Series(Frame, Serializable):
         res.index.name = None
 
         if sort:
-            return res.sort_values(ascending=False)
+            return res.sort_values(ascending=ascending)
         return res
 
     def scale(self):
