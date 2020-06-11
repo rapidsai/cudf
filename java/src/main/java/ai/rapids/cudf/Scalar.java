@@ -46,10 +46,16 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return new Scalar(type, makeBool8Scalar(false, false));
     case INT8:
       return new Scalar(type, makeInt8Scalar((byte)0, false));
+    case UINT8:
+      return new Scalar(type, makeUint8Scalar((byte)0, false));
     case INT16:
       return new Scalar(type, makeInt16Scalar((short)0, false));
+    case UINT16:
+      return new Scalar(type, makeUint16Scalar((short)0, false));
     case INT32:
       return new Scalar(type, makeInt32Scalar(0, false));
+    case UINT32:
+      return new Scalar(type, makeUint32Scalar(0, false));
     case TIMESTAMP_DAYS:
       return new Scalar(type, makeTimestampDaysScalar(0, false));
     case FLOAT32:
@@ -58,6 +64,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return new Scalar(type, makeFloat64Scalar(0, false));
     case INT64:
       return new Scalar(type, makeInt64Scalar(0, false));
+    case UINT64:
+      return new Scalar(type, makeUint64Scalar(0, false));
     case TIMESTAMP_SECONDS:
     case TIMESTAMP_MILLISECONDS:
     case TIMESTAMP_MICROSECONDS:
@@ -92,6 +100,17 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return Scalar.fromByte(value.byteValue());
   }
 
+  public static Scalar fromUnsignedByte(byte value) {
+    return new Scalar(DType.UINT8, makeUint8Scalar(value, true));
+  }
+
+  public static Scalar fromUnsignedByte(Byte value) {
+    if (value == null) {
+      return Scalar.fromNull(DType.UINT8);
+    }
+    return Scalar.fromUnsignedByte(value.byteValue());
+  }
+
   public static Scalar fromShort(short value) {
     return new Scalar(DType.INT16, makeInt16Scalar(value, true));
   }
@@ -101,6 +120,17 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return Scalar.fromNull(DType.INT16);
     }
     return Scalar.fromShort(value.shortValue());
+  }
+
+  public static Scalar fromUnsignedShort(short value) {
+    return new Scalar(DType.UINT16, makeUint16Scalar(value, true));
+  }
+
+  public static Scalar fromUnsignedShort(Short value) {
+    if (value == null) {
+      return Scalar.fromNull(DType.UINT16);
+    }
+    return Scalar.fromUnsignedShort(value.shortValue());
   }
 
   public static Scalar fromInt(int value) {
@@ -114,6 +144,17 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return Scalar.fromInt(value.intValue());
   }
 
+  public static Scalar fromUnsignedInt(int value) {
+    return new Scalar(DType.UINT32, makeUint32Scalar(value, true));
+  }
+
+  public static Scalar fromUnsignedInt(Integer value) {
+    if (value == null) {
+      return Scalar.fromNull(DType.UINT32);
+    }
+    return Scalar.fromUnsignedInt(value.intValue());
+  }
+
   public static Scalar fromLong(long value) {
     return new Scalar(DType.INT64, makeInt64Scalar(value, true));
   }
@@ -123,6 +164,17 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return Scalar.fromNull(DType.INT64);
     }
     return Scalar.fromLong(value.longValue());
+  }
+
+  public static Scalar fromUnsignedLong(long value) {
+    return new Scalar(DType.UINT64, makeUint64Scalar(value, true));
+  }
+
+  public static Scalar fromUnsignedLong(Long value) {
+    if (value == null) {
+      return Scalar.fromNull(DType.UINT64);
+    }
+    return Scalar.fromUnsignedLong(value.longValue());
   }
 
   public static Scalar fromFloat(float value) {
@@ -199,9 +251,13 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native byte[] getUTF8(long scalarHandle);
   private static native long makeBool8Scalar(boolean isValid, boolean value);
   private static native long makeInt8Scalar(byte value, boolean isValid);
+  private static native long makeUint8Scalar(byte value, boolean isValid);
   private static native long makeInt16Scalar(short value, boolean isValid);
+  private static native long makeUint16Scalar(short value, boolean isValid);
   private static native long makeInt32Scalar(int value, boolean isValid);
+  private static native long makeUint32Scalar(int value, boolean isValid);
   private static native long makeInt64Scalar(long value, boolean isValid);
+  private static native long makeUint64Scalar(long value, boolean isValid);
   private static native long makeFloat32Scalar(float value, boolean isValid);
   private static native long makeFloat64Scalar(double value, boolean isValid);
   private static native long makeStringScalar(byte[] value, boolean isValid);
@@ -352,10 +408,13 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case BOOL8:
       return getBoolean() == other.getBoolean();
     case INT8:
+    case UINT8:
       return getByte() == other.getByte();
     case INT16:
+    case UINT16:
       return getShort() == other.getShort();
     case INT32:
+    case UINT32:
     case TIMESTAMP_DAYS:
       return getInt() == other.getInt();
     case FLOAT32:
@@ -363,6 +422,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case FLOAT64:
       return getDouble() == other.getDouble();
     case INT64:
+    case UINT64:
     case TIMESTAMP_SECONDS:
     case TIMESTAMP_MILLISECONDS:
     case TIMESTAMP_MICROSECONDS:
@@ -387,16 +447,20 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         valueHash = getBoolean() ? 1 : 0;
         break;
       case INT8:
+      case UINT8:
         valueHash = getByte();
         break;
       case INT16:
+      case UINT16:
         valueHash = getShort();
         break;
       case INT32:
+      case UINT32:
       case TIMESTAMP_DAYS:
         valueHash = getInt();
         break;
       case INT64:
+      case UINT64:
       case TIMESTAMP_SECONDS:
       case TIMESTAMP_MILLISECONDS:
       case TIMESTAMP_MICROSECONDS:
@@ -432,12 +496,21 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case INT8:
         sb.append(getByte());
         break;
+      case UINT8:
+        sb.append(Byte.toUnsignedInt(getByte()));
+        break;
       case INT16:
         sb.append(getShort());
+        break;
+      case UINT16:
+        sb.append(Short.toUnsignedInt(getShort()));
         break;
       case INT32:
       case TIMESTAMP_DAYS:
         sb.append(getInt());
+        break;
+      case UINT32:
+        sb.append(Integer.toUnsignedLong(getInt()));
         break;
       case INT64:
       case TIMESTAMP_SECONDS:
@@ -445,6 +518,9 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case TIMESTAMP_MICROSECONDS:
       case TIMESTAMP_NANOSECONDS:
         sb.append(getLong());
+        break;
+      case UINT64:
+        sb.append(Long.toUnsignedString(getLong()));
         break;
       case FLOAT32:
         sb.append(getFloat());

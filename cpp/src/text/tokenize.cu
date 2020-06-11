@@ -201,7 +201,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   // -- just a copy of the input's chars column
   // -- create a view here to account for the column offset
   cudf::column_view chars_view(
-    cudf::data_type{cudf::INT32}, chars_bytes, d_chars, nullptr, 0, offset);
+    cudf::data_type{cudf::INT8}, chars_bytes, d_chars, nullptr, 0, offset);
   auto chars_column = std::make_unique<cudf::column>(chars_view, stream, mr);
 
   // return new strings column
