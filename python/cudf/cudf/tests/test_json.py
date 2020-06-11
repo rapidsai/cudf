@@ -146,9 +146,6 @@ def test_json_writer(tmpdir, pdf, gdf):
             # xref 'https://github.com/pandas-dev/pandas/pull/33373')
             expect_series = pd.read_json(pdf_series_fname, typ="series")
         except TypeError as e:
-            import pdb
-
-            pdb.set_trace()
             if str(e) == "<class 'bool'> is not convertible to datetime":
                 continue
             else:
