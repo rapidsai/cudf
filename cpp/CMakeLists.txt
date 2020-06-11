@@ -785,7 +785,7 @@ if(BUILD_CUDF_KAFKA)
             COMPONENT libcudf_kafka)
 
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/include
-            DESTINATION libcudf_kafka/include
+            DESTINATION include
             COMPONENT libcudf_kafka)
 
     add_custom_target(install_libcudf_kafka
