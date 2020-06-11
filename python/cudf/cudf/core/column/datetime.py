@@ -116,7 +116,9 @@ class DatetimeColumn(column.ColumnBase):
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
-        return column.build_column(data=Buffer(ary), dtype=self.dtype)
+        return column.build_column(
+            data=Buffer(ary.data_array_view.view("|u1")), dtype=self.dtype
+        )
 
     @property
     def as_numerical(self):
