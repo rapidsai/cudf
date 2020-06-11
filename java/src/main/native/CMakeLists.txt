@@ -197,10 +197,10 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 # - library targets -------------------------------------------------------------------------------
 
 set(SOURCE_FILES
-    "src/HostMemoryBufferJni.cpp"
     "src/CudfJni.cpp"
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
+    "src/HostMemoryBufferNativeUtilsJni.cpp"
     "src/NvtxRangeJni.cpp"
     "src/RmmJni.cpp"
     "src/ScalarJni.cpp"

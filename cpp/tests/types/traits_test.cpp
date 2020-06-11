@@ -146,6 +146,6 @@ TYPED_TEST(TypedTraitsTest, NotEqualityComparableWithList)
   EXPECT_FALSE(comparable);
 }
 
-// TODO: Tests for is_compound/is_simple, is_fixed_width
+// TODO: Tests for is_compound, is_fixed_width
 
 CUDF_TEST_PROGRAM_MAIN()
