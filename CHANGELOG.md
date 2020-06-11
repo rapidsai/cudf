@@ -13,6 +13,8 @@
 - PR #5397 Add internal implementation of nested loop equijoins.
 - PR #5303 Add slice_strings functionality using delimiter string
 - PR #5301 Add Java bindings for `zfill`
+- PR #5359 Add duration types
+- PR #5364 Validate array interface during buffer construction
 - PR #5418 Add support for `DataFrame.info`
 - PR #5425 Add Python `Groupby.rolling()`
 - PR #5359 Add duration types 
