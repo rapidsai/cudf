@@ -1263,10 +1263,7 @@ class Frame(libcudf.table.Table):
                     # Do not change the copy_data[name]
                     pass
 
-            if is_index:
-                result = self._from_table(Frame(copy_data))
-            else:
-                result = self._from_table(Frame(copy_data, self.index))
+            result = self._from_table(Frame(copy_data, self._index))
 
         return result
 
