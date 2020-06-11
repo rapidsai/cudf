@@ -393,7 +393,7 @@ def test_dataframe_MI_rename():
     with pytest.raises(NotImplementedError):
         got = gdg.rename(mapper={1: "x", 2: "y"}, axis=0)
 
-        assert_eq(expect, got)
+        assert_eq([str(item) for item in expect.index], list(got.index))
 
 
 @pytest.mark.parametrize("axis", [1, "columns"])

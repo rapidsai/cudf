@@ -10,7 +10,6 @@ import pandas as pd
 
 import cudf
 from cudf._lib.nvtx import annotate
-from cudf._lib.replace import replace as libcudf_replace
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
@@ -18,19 +17,13 @@ from cudf.core.column import (
     DatetimeColumn,
     NumericalColumn,
     StringColumn,
-    as_column,
     column,
 )
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.frame import Frame
 from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_scalar,
-    is_string_dtype,
-    min_signed_type,
-)
+from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
 from cudf.utils.utils import cached_property
 
 
@@ -773,88 +766,6 @@ class Index(Frame, Serializable):
         result = self.to_series().isin(values).values
 
         return result
-
-    def _find_and_replace(self, to_replace, replacement):
-        to_replace = as_column(to_replace)
-        replacement = as_column(replacement)
-
-        if any(map(lambda x: is_string_dtype(x), [to_replace, replacement],)):
-            return as_index(
-                libcudf_replace(
-                    self._values.astype("str", copy=False),
-                    to_replace.astype("str", copy=False),
-                    replacement.astype("str", copy=False),
-                )
-            )
-        else:
-            return as_index(
-                libcudf_replace(
-                    self._values, as_column(to_replace), as_column(replacement)
-                )
-            )
-
-    def find_and_replace(self, to_replace, replacement):
-        """
-        Replace values given in *to_replace* with *replacement*.
-
-        Parameters
-        ----------
-        to_replace : numeric, str, list-like or dict
-            Value(s) to replace.
-
-            * numeric or str:
-
-                - values equal to *to_replace* will be replaced
-                  with *replacement*
-
-            * list of numeric or str:
-
-                - If *replacement* is also list-like,
-                  *to_replace* and *replacement* must be of same length.
-
-            * dict:
-
-                - Dicts can be used to replace different values in different
-                  columns. For example, `{'a': 1, 'z': 2}` specifies that the
-                  value 1 in column `a` and the value 2 in column `z` should be
-                  replaced with replacement*.
-        replacement : numeric, str, list-like, or dict
-            Value(s) to replace `to_replace` with. If a dict is provided, then
-            its keys must match the keys in *to_replace*, and corresponding
-            values must be compatible (e.g., if they are lists, then they must
-            match in length).
-
-        Returns
-        -------
-        result : Index, StringIndex
-            Index after replacement. Replace values given in *to_replace* with
-            *replacement*.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.core.index.StringIndex(["a","b","c"])
-        >>> idx_replaced = idx.replace(to_replace=["a", "b"],
-                                        replacement=[1, 2])
-        >>> idx_replaced
-        StringIndex(['1' '2' 'c'], dtype='object')
-
-        Notes
-        -----
-        Parameters that are currently not supported are: `limit`, `regex`,
-        `method`
-
-        If any item from source or dest is a string, normalize all items
-        to be strings.
-        """
-        if isinstance(self, cudf.MultiIndex):
-            raise NotImplementedError(
-                "find_and_replace not availible for MultiIndex"
-            )
-        else:
-            return self._find_and_replace(
-                to_replace=to_replace, replacement=replacement
-            )
 
     def where(self, cond, other=None):
         """

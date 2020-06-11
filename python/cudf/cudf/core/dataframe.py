@@ -3838,6 +3838,9 @@ class DataFrame(Frame, Serializable):
         -----
         Parameters that are currently not supported are: `limit`, `regex`,
         `method`
+
+        result : DataFrame
+            DataFrame after replacement.
         """
         if limit is not None:
             raise NotImplementedError("limit parameter is not implemented yet")
