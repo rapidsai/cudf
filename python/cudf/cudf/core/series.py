@@ -164,6 +164,16 @@ class Series(Frame, Serializable):
             if dtype is not None:
                 data = data.astype(dtype)
 
+        if isinstance(data, dict):
+            if any(is_list_like(value) for value in data.values()):
+                raise NotImplementedError(
+                    "Nested lists are not yet supported in cudf."
+                )
+            index = data.keys()
+            data = column.as_column(
+                data.values(), nan_as_null=nan_as_null, dtype=dtype
+            )
+
         if data is None:
             data = {}
 
