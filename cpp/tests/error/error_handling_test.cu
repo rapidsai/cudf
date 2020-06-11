@@ -15,7 +15,6 @@
  */
 #include <cudf/utilities/error.hpp>
 
-
 #include <tests/utilities/base_fixture.hpp>
 
 #include <cstring>
