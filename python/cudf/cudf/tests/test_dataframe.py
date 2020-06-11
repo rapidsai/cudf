@@ -6106,3 +6106,41 @@ def test_cudf_isclose_nulls(data1, data2, equal_nan):
 
     actual = gd.isclose(data1, data2, equal_nan=equal_nan)
     assert_eq(expected, actual, check_dtype=False)
+
+
+def test_cudf_isclose_different_index():
+    s1 = gd.Series(
+        [-1.9876543, -2.9876654, -3.9876543, -4.1234587, -5.23, -7.00001],
+        index=[0, 1, 2, 3, 4, 5],
+    )
+    s2 = gd.Series(
+        [-1.9876543, -2.9876654, -7.00001, -4.1234587, -5.23, -3.9876543],
+        index=[0, 1, 5, 3, 4, 2],
+    )
+
+    expected = gd.Series([True] * 6)
+    assert_eq(expected, gd.isclose(s1, s2))
+
+    s1 = gd.Series(
+        [-1.9876543, -2.9876654, -3.9876543, -4.1234587, -5.23, -7.00001],
+        index=[0, 1, 2, 3, 4, 5],
+    )
+    s2 = gd.Series(
+        [-1.9876543, -2.9876654, -7.00001, -4.1234587, -5.23, -3.9876543],
+        index=[0, 1, 5, 10, 4, 2],
+    )
+
+    expected = gd.Series([True, True, True, False, True, True])
+    assert_eq(expected, gd.isclose(s1, s2))
+
+    s1 = gd.Series(
+        [-1.9876543, -2.9876654, -3.9876543, -4.1234587, -5.23, -7.00001],
+        index=[100, 1, 2, 3, 4, 5],
+    )
+    s2 = gd.Series(
+        [-1.9876543, -2.9876654, -7.00001, -4.1234587, -5.23, -3.9876543],
+        index=[0, 1, 100, 10, 4, 2],
+    )
+
+    expected = gd.Series([False, True, True, False, True, False])
+    assert_eq(expected, gd.isclose(s1, s2))

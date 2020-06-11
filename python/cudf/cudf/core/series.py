@@ -4106,26 +4106,31 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     dtype: bool
     """
 
+    if isinstance(a, (cudf.Series, pd.Series)) and isinstance(
+        b, (cudf.Series, pd.Series)
+    ):
+        b = b.reindex(a.index)
+
     a_col = column.as_column(a)
-    a_array = a_col.to_array(fillna=-1 if a_col.null_count else None)
+    a_array = cupy.array(a_col.data_array_view)
 
     b_col = column.as_column(b)
-    b_array = b_col.to_array(fillna=-1 if b_col.null_count else None)
+    b_array = cupy.array(b_col.data_array_view)
 
     result = cupy.isclose(a=a_array, b=b_array, rtol=rtol, atol=atol)
     result_col = column.as_column(result)
 
     if a_col.null_count and b_col.null_count:
-        a_nulls = Series(a_col.isna())
-        b_nulls = Series(b_col.isna())
-        null_values = a_nulls | b_nulls
+        a_nulls = a_col.isna()
+        b_nulls = b_col.isna()
+        null_values = a_nulls.binary_operator("or", b_nulls)
 
         if equal_nan is True:
-            equal_nulls = a_nulls & b_nulls
+            equal_nulls = a_nulls.binary_operator("and", b_nulls)
     elif a_col.null_count:
-        null_values = Series(a_col.isna())
+        null_values = a_col.isna()
     elif b_col.null_count:
-        null_values = Series(b_col.isna())
+        null_values = b_col.isna()
     else:
         return Series(result_col)
 
