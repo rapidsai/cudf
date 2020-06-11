@@ -1234,9 +1234,6 @@ class Frame(libcudf.table.Table):
     def replace(self, to_replace, replacement):
         copy_data = self._data.copy()
 
-        # Checking if Index. Index frame has no index.
-        is_index = not hasattr(self, "index")
-
         for name, col in copy_data.items():
             if not (to_replace is None and replacement is None):
                 try:
