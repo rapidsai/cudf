@@ -734,7 +734,7 @@ std::unique_ptr<scalar> get_element(
  * input = [1, 2, 3, 4, 5, 6]
  * row_indices = [0, 0, 0, 1, 1, 1]
  * column_indices = [0, 1, 2, 0, 1, 2]
- * returns = [[1, 2, 3], [4, 5, 6]]
+ * returns = [[1, 4], [2, 5], [3, 6]]
  * ```
  *
  * @param input Column with elements to scatter
