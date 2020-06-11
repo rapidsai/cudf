@@ -81,6 +81,7 @@
 - PR #5404 Fix issue with column creation when chunked arrays are passed
 - PR #5409 Use the correct memory resource when creating empty null masks
 - PR #5399 Fix cpp compiler warnings of unreachable code
+- PR #5446 Fix compile error caused by out-of-date PR merge (4990)
 
 
 # cuDF 0.14.0 (Date TBD)
