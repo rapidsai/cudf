@@ -188,6 +188,7 @@ def test_string_astype(dtype):
             "2019-06-03T00:00:00Z",
             "2019-05-04T00:00:00Z",
             "2018-06-04T00:00:00Z",
+            "1922-07-21T01:02:03Z",
         ]
     elif dtype == "str" or dtype == "object":
         data = ["ab", "cd", "ef", "gh", "ij"]
@@ -251,7 +252,7 @@ def test_string_numeric_astype(dtype):
     elif dtype.startswith("float"):
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
     elif dtype.startswith("datetime64"):
-        data = [1000000000, 2000000000, 3000000000, 4000000000, 5000000000]
+        data = [1000000000, 2000000000, 3000000000, 4000000000, 5000000000, -2000000000]
     if dtype.startswith("datetime64"):
         ps = pd.Series(data, dtype="datetime64[ns]")
         gs = Series.from_pandas(ps)
