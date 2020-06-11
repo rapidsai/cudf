@@ -717,5 +717,36 @@ std::unique_ptr<scalar> get_element(
   size_type index,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Scatters values from an `input` into a table.
+ *
+ * Given three equal sized columns, `input`, `row_indices` and
+ * `column_indices`, maps each value `input[k]` to the row
+ * `row_indices[k]` and column `column_indices[k]` of the result
+ * table. The value at all other locations of the result table is
+ * null.
+ *
+ * If two different values map to the same location of the result
+ * table, the behaviour is undefined.
+ *
+ * Example:
+ * ```
+ * input = [1, 2, 3, 4, 5, 6]
+ * row_indices = [0, 0, 0, 1, 1, 1]
+ * column_indices = [0, 1, 2, 0, 1, 2]
+ * returns = [[1, 2, 3], [4, 5, 6]]
+ * ```
+ *
+ * @param input Column with elements to scatter
+ * @param row_indices Non-nullable column of integral row indices
+ * @param column_indices Non-nullable column of integral column indices
+ *
+ * @returns table with elements from `input` scattered to positions specified by
+ * `row_indices` and `column_indices`.
+ */
+std::unique_ptr<table> scatter_to_table(column_view const& input,
+                                        column_view const& row_labels,
+                                        column_view const& column_labels);
+
 /** @} */
 }  // namespace cudf
