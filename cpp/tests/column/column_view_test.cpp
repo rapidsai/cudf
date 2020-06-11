@@ -30,14 +30,17 @@
 #include <random>
 
 template <typename T, typename T2 = void>
-struct rep_type_t {
+struct rep_type_impl {
   using type = void;
 };
 
 template <typename T>
-struct rep_type_t<T, typename std::enable_if<cudf::is_timestamp<T>()>::type> {
+struct rep_type_impl<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
   using type = typename T::duration::rep;
 };
+
+template <typename T>
+using rep_type_t = typename rep_type_impl<T>::type;
 
 template <typename T>
 struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {
@@ -52,8 +55,8 @@ void do_logical_cast(cudf::column_view const& input, Iterator begin, Iterator en
     // Cast to same type
     auto output = cudf::logical_cast(input, input.type());
     cudf::test::expect_columns_equal(output, input);
-  } else if (std::is_same<typename rep_type_t<FromType>::type, ToType>::value ||
-             std::is_same<FromType, typename rep_type_t<ToType>::type>::value) {
+  } else if (std::is_same<rep_type_t<FromType>, ToType>::value ||
+             std::is_same<FromType, rep_type_t<ToType>>::value) {
     // Cast integer to timestamp or vice versa
     cudf::data_type type{cudf::type_to_id<ToType>()};
     auto output = cudf::logical_cast(input, type);

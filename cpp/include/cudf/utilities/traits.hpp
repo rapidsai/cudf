@@ -505,10 +505,13 @@ struct is_logically_castable_from_impl {
 };
 
 /**
- * @brief Indicates whether `from` is logically castable to `to`
+ * @brief Indicates whether `from` is logically castable to `to`.
  *
- * Column views that have binary compatible representations (e.g. timestamps and their integer
- * representation) can be logically cast to another type without making a copy.
+ * Data types that have the same size and underlying representation, e.g. INT32 and TIMESTAMP_DAYS
+ * which are both represented as 32-bit integers in memory, are eligible for logical cast.
+ *
+ * See `cudf::logical_cast()` which returns a zero-copy `column_view` when casting between
+ * logically castable types.
  *
  * @param from The `data_type` to convert from
  * @param to The `data_type` to convert to
