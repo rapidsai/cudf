@@ -36,10 +36,10 @@ def test_buffer_from_cuda_iface_contiguous(data):
         (cp.zeros((arr_len, arr_len)).reshape(arr_len * arr_len)),
     ],
 )
-@pytest.mark.parametrize("dtype", ["uint8", "int8", "float32"])
+@pytest.mark.parametrize("dtype", ["uint8", "int8", "float32", "int32"])
 def test_buffer_from_cuda_iface_dtype(data, dtype):
     data = data.astype(dtype)
-    if dtype != "uint8":
+    if dtype not in ("uint8", "int8"):
         with pytest.raises(
             TypeError, match="Buffer data must be of uint8 type"
         ):
