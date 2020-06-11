@@ -373,6 +373,25 @@ class Index(Frame, Serializable):
         result.name = name
         return result
 
+    def append(self, other):
+        if isinstance(other, (list, tuple)):
+            to_concat = [self] + list(other)
+        else:
+            from cudf.core.column import numerical
+            from cudf.utils.dtypes import numeric_normalize_types
+
+            this = self
+            if isinstance(self._values, numerical.NumericalColumn):
+                if self.dtype != other.dtype:
+                    this, other = numeric_normalize_types(self, other)
+            to_concat = [this, other]
+
+        for obj in to_concat:
+            if not isinstance(obj, Index):
+                raise TypeError("all inputs must be Index")
+
+        return self._concat(to_concat)
+
     def _apply_op(self, fn, other=None):
         from cudf.core.series import Series
 
