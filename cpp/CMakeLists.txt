@@ -757,7 +757,8 @@ if(BUILD_CUDF_KAFKA)
     )
 
     # Include paths
-    include_directories("${CMAKE_SOURCE_DIR}/libcudf_kafka/include")
+    include_directories("${CMAKE_SOURCE_DIR}/libcudf_kafka/include"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/include/cudf")
     
     # Rename installation to proper name for later finding
     set_target_properties(libcudf_kafka PROPERTIES OUTPUT_NAME "cudf_kafka")
