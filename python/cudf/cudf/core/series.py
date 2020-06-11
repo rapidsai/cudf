@@ -4129,6 +4129,8 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
         if equal_nan is True:
             equal_nulls = a_nulls.binary_operator("and", b_nulls)
+            
+        del a_nulls, b_nulls
     elif a_col.null_count:
         null_values = a_col.isna()
     elif b_col.null_count:
