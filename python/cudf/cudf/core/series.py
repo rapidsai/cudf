@@ -4106,10 +4106,12 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     dtype: bool
     """
 
+    index = None
     if isinstance(a, (cudf.Series, pd.Series)) and isinstance(
         b, (cudf.Series, pd.Series)
     ):
         b = b.reindex(a.index)
+        index = as_index(a.index)
 
     a_col = column.as_column(a)
     a_array = cupy.array(a_col.data_array_view)
@@ -4132,10 +4134,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     elif b_col.null_count:
         null_values = b_col.isna()
     else:
-        return Series(result_col)
+        return Series(result_col, index=index)
 
     result_col[null_values] = False
     if equal_nan is True and a_col.null_count and b_col.null_count:
         result_col[equal_nulls] = True
 
-    return Series(result_col)
+    return Series(result_col, index=index)

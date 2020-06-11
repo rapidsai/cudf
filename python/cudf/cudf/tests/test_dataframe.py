@@ -6118,7 +6118,7 @@ def test_cudf_isclose_different_index():
         index=[0, 1, 5, 3, 4, 2],
     )
 
-    expected = gd.Series([True] * 6)
+    expected = gd.Series([True] * 6, index=s1.index)
     assert_eq(expected, gd.isclose(s1, s2))
 
     s1 = gd.Series(
@@ -6130,7 +6130,7 @@ def test_cudf_isclose_different_index():
         index=[0, 1, 5, 10, 4, 2],
     )
 
-    expected = gd.Series([True, True, True, False, True, True])
+    expected = gd.Series([True, True, True, False, True, True], index=s1.index)
     assert_eq(expected, gd.isclose(s1, s2))
 
     s1 = gd.Series(
@@ -6142,5 +6142,7 @@ def test_cudf_isclose_different_index():
         index=[0, 1, 100, 10, 4, 2],
     )
 
-    expected = gd.Series([False, True, True, False, True, False])
+    expected = gd.Series(
+        [False, True, True, False, True, False], index=s1.index
+    )
     assert_eq(expected, gd.isclose(s1, s2))
