@@ -23,10 +23,10 @@ public enum DType {
   INT16(2, 2, "short"),
   INT32(4, 3, "int"),
   INT64(8, 4, "long"),
-  // UINT8(1, 5, "byte"),
-  // UINT16(2, 6, "short"),
-  // UINT32(4, 7, "int"),
-  // UINT64(8, 8, "long"),
+  UINT8(1, 5, "uint8"),
+  UINT16(2, 6, "uint16"),
+  UINT32(4, 7, "uint32"),
+  UINT64(8, 8, "uint64"),
   FLOAT32(4, 9, "float"),
   FLOAT64(8, 10, "double"),
   /**
@@ -53,8 +53,15 @@ public enum DType {
    * ns since the UNIX epoch
    */
   TIMESTAMP_NANOSECONDS(8, 16, "timestamp[ns]"),
-  //DICTIONARY32(4, 17, "NO IDEA"),
-  STRING(0, 18, "str");
+
+  //DURATION_DAYS(4, 17, "NO IDEA"),q
+  //DURATION_SECONDS(8, 18, "NO IDEA"),
+  //DURATION_MILLISECONDS(8, 19, "NO IDEA"),
+  //DURATION_MICROSECONDS(8, 20, "NO IDEA"),
+  //DURATION_NANOSECONDS(8, 21, "NO IDEA"),
+  //DICTIONARY32(4, 22, "NO IDEA"),
+
+  STRING(0, 23, "str");
 
   private static final DType[] D_TYPES = DType.values();
   final int sizeInBytes;
