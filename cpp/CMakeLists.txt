@@ -748,7 +748,7 @@ add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
 
 
 ####################################################################################################
-# - cuDatasource - OFF by default due to increased number of dependencies
+# - cudf_kafka - OFF by default due to increased number of dependencies
 if(BUILD_CUDF_KAFKA)
 
     # cudf_kafka library
@@ -773,17 +773,18 @@ if(BUILD_CUDF_KAFKA)
     message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
 
     target_link_libraries(libcudf_kafka ${RDKAFKA++_LIBRARY})
+    include_directories("${RDKAFKA_INCLUDE}")
 
     ###################################################################################################
     # - cudf_kafka Install ----------------------------------------------------------------------------
     target_link_libraries(libcudf_kafka cudf)
 
     install(TARGETS libcudf_kafka
-            DESTINATION lib
+            DESTINATION libcudf_kafka/lib
             COMPONENT libcudf_kafka)
 
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/include
-            DESTINATION include
+            DESTINATION libcudf_kafka/include
             COMPONENT libcudf_kafka)
 
     add_custom_target(install_libcudf_kafka

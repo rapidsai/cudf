@@ -71,7 +71,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
 
 std::unique_ptr<cudf::io::datasource::buffer> kafka_consumer::host_read(size_t offset, size_t size)
 {
-  if (offset > buffer.size()) { return std::make_unique<non_owning_buffer>(); }
+  if (offset > buffer.size()) { return 0; }
   size = std::min(size, buffer.size() - offset);
   return std::make_unique<non_owning_buffer>((uint8_t *)buffer.data() + offset, size);
 }
