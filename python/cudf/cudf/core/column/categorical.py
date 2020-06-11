@@ -981,16 +981,16 @@ class CategoricalColumn(column.ColumnBase):
         old_cats["cats_replace"] = old_cats["cats"].replace(
             to_replace, replacement
         )
-        
+
         dtype_replace = cudf.Series(replacement)
         dtype_replace[dtype_replace.isin(old_cats["cats"])] = None
         new_cats["cats"] = new_cats["cats"].replace(to_replace, dtype_replace)
 
-        new_cats = (
-            new_cats[new_cats["cats"].notna()]
-            .reset_index(drop=True)
-            .reset_index()
-        )
+        bmask = new_cats["cats"]._column.notna()
+        new_cats = cudf.DataFrame(
+            {"cats": new_cats["cats"]._column.apply_boolean_mask(bmask)}
+        ).reset_index()
+
         catmap = old_cats.merge(
             new_cats, left_on="cats_replace", right_on="cats", how="inner"
         )
