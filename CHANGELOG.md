@@ -15,6 +15,7 @@
 - PR #5418 Add support for `DataFrame.info`
 - PR #5425 Add Python `Groupby.rolling()`
 - PR #5359 Add duration types 
+- PR #5444 Remove usage of deprecated RMM APIs and headers.
 
 ## Improvements
 
