@@ -380,7 +380,7 @@ def test_dataframe_index_rename(axis):
     expect = pdf.rename({1: "x", 2: "y"})
     got = gdf.rename({1: "x", 2: "y"})
 
-    assert_eq([str(item) for item in expect.index], list(got.index))
+    assert_eq(expect.index.astype("str"), got.index)
 
 
 def test_dataframe_MI_rename():
