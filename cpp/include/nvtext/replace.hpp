@@ -50,7 +50,7 @@ namespace nvtext {
  * for row `i` in the output column.
  *
  * There is no guaranteed order for replacing the targets. This means if
- * one target string is a substring over another (e.g. "the" is a substring of "theme")
+ * one target string is a substring of another (e.g. "the" is a substring of "theme")
  * there is no guarantee that "the" will be replaced before "theme" or vice versa.
  *
  * An empty string is allowed for a replacement string but the delimiters
@@ -67,7 +67,7 @@ namespace nvtext {
  *
  * Note the first string in `result` still retains the space delimiters.
  *
- * The `replacements.size() == targets.size()` except if the `replacements.size()==1`.
+ * The `replacements.size()` must equal `targets.size()` unless `replacements.size()==1`.
  * In this case, all matching `targets` strings will be replaced with the
  * single `replacements[0]` string.
  *
