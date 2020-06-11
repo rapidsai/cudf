@@ -25,6 +25,7 @@ _np_pa_dtypes = {
     np.str_: pa.string(),
 }
 
+
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype.
     """
@@ -201,9 +202,10 @@ def is_list_like(obj):
     Boolean: True or False depending on whether the
     input `obj` is like-like or not.
     """
-    from collections.abc import Sequence
 
-    if isinstance(obj, (Sequence, np.ndarray)) and not isinstance(obj, (str, bytes)):
+    if isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
+        obj, (str, bytes)
+    ):
         return True
     else:
         return False
