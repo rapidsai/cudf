@@ -4133,7 +4133,9 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     b_col = column.as_column(b)
     b_array = cupy.asarray(b_col.data_array_view)
 
-    result = cupy.isclose(a=a_array, b=b_array, rtol=rtol, atol=atol)
+    result = cupy.isclose(
+        a=a_array, b=b_array, rtol=rtol, atol=atol, equal_nan=equal_nan
+    )
     result_col = column.as_column(result)
 
     if a_col.null_count and b_col.null_count:
