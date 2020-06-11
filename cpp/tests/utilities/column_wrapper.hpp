@@ -31,6 +31,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <iterator>
 #include <memory>
+#include <type_traits>
 
 namespace cudf {
 namespace test {
@@ -289,9 +290,21 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *
    * @param element_list The list of elements
    **/
-  template <typename ElementFrom>
+  template <typename ElementFrom,
+            typename std::enable_if_t<!(is_chrono<ElementTo>() &&
+                                        std::is_same<ElementFrom, int>::value)>* = nullptr>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements)
     : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements))
+  {
+  }
+  // specialization for chrono types: explict conversion from initializer_list<int>
+  template <typename ElementFrom,
+            typename std::enable_if_t<(is_chrono<ElementTo>() &&
+                                       std::is_same<ElementFrom, int>::value)>* = nullptr>
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements)
+    : fixed_width_column_wrapper(
+        thrust::make_transform_iterator(std::cbegin(elements), cudf::typecaster<ElementTo>{}),
+        thrust::make_transform_iterator(std::cend(elements), cudf::typecaster<ElementTo>{}))
   {
   }
 
@@ -312,10 +325,24 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param elements The list of elements
    * @param validity The list of validity indicator booleans
    **/
-  template <typename ElementFrom>
+  template <typename ElementFrom,
+            typename std::enable_if_t<!(is_chrono<ElementTo>() &&
+                                        std::is_same<ElementFrom, int>::value)>* = nullptr>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements,
                              std::initializer_list<bool> validity)
     : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements), std::cbegin(validity))
+  {
+  }
+  // specialication for chrono types: explict conversion from initializer_list<int>
+  template <typename ElementFrom,
+            typename std::enable_if_t<(is_chrono<ElementTo>() &&
+                                       std::is_same<ElementFrom, int>::value)>* = nullptr>
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements,
+                             std::initializer_list<bool> validity)
+    : fixed_width_column_wrapper(
+        thrust::make_transform_iterator(std::cbegin(elements), cudf::typecaster<ElementTo>{}),
+        thrust::make_transform_iterator(std::cend(elements), cudf::typecaster<ElementTo>{}),
+        std::cbegin(validity))
   {
   }
 
@@ -333,12 +360,27 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *
    * @tparam ValidityIterator Dereferencing a ValidityIterator must be
    * convertible to `bool`
-   * @param element_list The list of elements
+   * @param elements The list of elements
    * @param v The beginning of the sequence of validity indicators
    **/
-  template <typename ValidityIterator, typename ElementFrom>
-  fixed_width_column_wrapper(std::initializer_list<ElementFrom> element_list, ValidityIterator v)
-    : fixed_width_column_wrapper(std::cbegin(element_list), std::cend(element_list), v)
+  template <typename ValidityIterator,
+            typename ElementFrom,
+            typename std::enable_if_t<!(is_chrono<ElementTo>() &&
+                                        std::is_same<ElementFrom, int>::value)>* = nullptr>
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements, ValidityIterator v)
+    : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements), v)
+  {
+  }
+  // specialication for chrono types: explict conversion from initializer_list<int>
+  template <typename ValidityIterator,
+            typename ElementFrom,
+            typename std::enable_if_t<(is_chrono<ElementTo>() &&
+                                       std::is_same<ElementFrom, int>::value)>* = nullptr>
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements, ValidityIterator v)
+    : fixed_width_column_wrapper(
+        thrust::make_transform_iterator(std::cbegin(elements), cudf::typecaster<ElementTo>{}),
+        thrust::make_transform_iterator(std::cend(elements), cudf::typecaster<ElementTo>{}),
+        v)
   {
   }
 };
