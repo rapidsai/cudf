@@ -370,7 +370,7 @@ def test_dataframe_index_rename(axis):
     expect = pdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
     got = gdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
 
-    assert_eq([str(item) for item in expect.index], list(got.index))
+    assert_eq(expect.index.astype("str"), got.index)
 
     expect = pdf.rename(index={1: "x", 2: "y"})
     got = gdf.rename(index={1: "x", 2: "y"})
