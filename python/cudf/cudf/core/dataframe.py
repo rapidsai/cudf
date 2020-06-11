@@ -6101,7 +6101,7 @@ class DataFrame(Frame, Serializable):
             try:
                 combined_columns = self.columns.append(idx_diff)
             except TypeError:
-                combined_columns = self.columns.astype(object).append(idx_diff)
+                combined_columns = self.columns.astype("str").append(idx_diff)
             other = (
                 other.reindex(combined_columns, copy=False)
                 .to_frame()
@@ -6113,8 +6113,8 @@ class DataFrame(Frame, Serializable):
         elif isinstance(other, list):
             if not other:
                 pass
-            elif not isinstance(other[0], DataFrame):
-                other = DataFrame(other)
+            elif not isinstance(other[0], cudf.DataFrame):
+                other = cudf.DataFrame(other)
                 if (self.columns.get_indexer(other.columns) >= 0).all():
                     other = other.reindex(columns=self.columns)
 
