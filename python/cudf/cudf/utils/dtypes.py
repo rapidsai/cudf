@@ -232,19 +232,6 @@ def min_signed_type(x, min_size=8):
     return np.int64(x).dtype
 
 
-def min_unsigned_type(x, min_size=8):
-    """
-    Return the smallest *unsigned* integer dtype
-    that can represent the integer ``x``
-    """
-    for int_dtype in np.sctypes["uint"]:
-        if (np.dtype(int_dtype).itemsize * 8) >= min_size:
-            if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
-                return int_dtype
-    # resort to using `uint64` and let numpy raise appropriate exception:
-    return np.uint64(x).dtype
-
-
 def min_numeric_column_type(x, expected_type):
     """
     Return the smallest dtype which can represent all
@@ -268,17 +255,9 @@ def min_numeric_column_type(x, expected_type):
             result_type = np.dtype("float32")
         return result_type
 
-    # Get min unsigned dtype
-    if np.issubdtype(expected_type, np.signedinteger):
-        # get signed bound dtypes
-        max_bound_dtype = np.dtype(min_signed_type(x.max()))
-        min_bound_dtype = np.dtype(min_signed_type(x.min()))
-        return np.promote_types(max_bound_dtype, min_bound_dtype)
-
-    if np.issubdtype(expected_type, np.unsignedinteger):
-        # get unsigned bound dtypes
-        max_bound_dtype = np.dtype(min_unsigned_type(x.max()))
-        min_bound_dtype = np.dtype(min_unsigned_type(x.min()))
+    if np.issubdtype(expected_type, np.integer):
+        max_bound_dtype = np.min_scalar_type(x.max())
+        min_bound_dtype = np.min_scalar_type(x.min())
         return np.promote_types(max_bound_dtype, min_bound_dtype)
 
     return x.dtype

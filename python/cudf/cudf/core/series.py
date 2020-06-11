@@ -3912,9 +3912,11 @@ class Series(Frame, Serializable):
 
 
 truediv_int_dtype_corrections = {
+    "int8": "float32",
     "int16": "float32",
     "int32": "float32",
     "int64": "float64",
+    "uint8": "float32",
     "uint16": "float32",
     "uint32": "float64",
     "uint64": "float64",

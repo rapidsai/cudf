@@ -10,7 +10,7 @@ import cudf
 from cudf.core.column.column import as_column
 from cudf.tests.utils import ALL_TYPES, assert_eq
 
-dtypes = {ALL_TYPES} - {"datetime64[s]", "datetime64[ms]", "datetime64[us]"]}
+dtypes = ALL_TYPES - {"datetime64[s]", "datetime64[ms]", "datetime64[us]"}
 
 
 @pytest.fixture(params=dtypes, ids=dtypes)

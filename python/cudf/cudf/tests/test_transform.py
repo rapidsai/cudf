@@ -2,10 +2,8 @@
 
 from __future__ import division
 
-import numba
 import numpy as np
 import pytest
-from packaging.version import Version
 
 from cudf.core import Series
 from cudf.tests.utils import NUMERIC_TYPES

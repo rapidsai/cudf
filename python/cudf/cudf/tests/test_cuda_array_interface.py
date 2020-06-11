@@ -10,7 +10,7 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.tests.utils import assert_eq, NUMERIC_TYPES, DATETIME_TYPES
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES)
@@ -41,9 +41,7 @@ def test_cuda_array_interface_interop_in(dtype, module):
         assert_eq(pd_data, gdf["test"])
 
 
-@pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES | DATETIME_TYPES | {"str"}
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"str"})
 @pytest.mark.parametrize("module", ["cupy", "numba"])
 def test_cuda_array_interface_interop_out(dtype, module):
     expectation = does_not_raise()

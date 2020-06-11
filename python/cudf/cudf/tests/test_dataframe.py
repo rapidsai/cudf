@@ -2350,7 +2350,7 @@ def test_dataframe_empty_sort_index():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", dtypes + {"category"})
+@pytest.mark.parametrize("dtype", dtypes | {"category"})
 def test_dataframe_0_row_dtype(dtype):
     if dtype == "category":
         data = pd.Series(["a", "b", "c", "d", "e"], dtype="category")
@@ -4067,9 +4067,6 @@ def test_tolist_mixed_nulls():
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("as_dtype", ALL_TYPES)
 def test_df_astype_numeric_to_all(dtype, as_dtype):
-    if "uint" not in dtype and "uint" in as_dtype:
-        # can't convert int to unisgned
-        return
     if "uint" in dtype:
         data = [1, 2, None, 4, 7]
     elif "int" in dtype or "longlong" in dtype:
@@ -4223,26 +4220,8 @@ def test_df_astype_to_categorical_ordered(ordered):
 
 @pytest.mark.parametrize(
     "dtype,args",
-    [
-        ("int8", {}),
-        ("int16", {}),
-        ("int32", {}),
-        ("int64", {}),
-        ("uint8", {}),
-        ("uint16", {}),
-        ("uint32", {}),
-        ("uint64", {}),
-        ("float32", {}),
-        ("float64", {}),
-        ("category", {}),
-        ("category", {"ordered": True}),
-        ("category", {"ordered": False}),
-        ("datetime64[s]", {}),
-        ("datetime64[ms]", {}),
-        ("datetime64[us]", {}),
-        ("datetime64[ns]", {}),
-        ("str", {}),
-    ],
+    [(dtype, {}) for dtype in ALL_TYPES]
+    + [("category", {"ordered": True}), ("category", {"ordered": False})],
 )
 def test_empty_df_astype(dtype, args):
     df = DataFrame()

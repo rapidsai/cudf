@@ -1963,9 +1963,7 @@ def test_string_int_to_ipv4():
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES - {"int64", "uint64"}
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES - {"int64", "uint64"})
 def test_string_int_to_ipv4_dtype_fail(dtype):
     gsr = Series([1, 2, 3, 4, 5]).astype(dtype)
     with pytest.raises(TypeError):

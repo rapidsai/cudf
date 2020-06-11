@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import NUMERIC_TYPES, INTEGER_TYPES, assert_eq
+from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def test_series_replace():
@@ -295,9 +295,7 @@ def test_fillna_string(fill_type, inplace):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "data_dtype", INTEGER_TYPES
-)
+@pytest.mark.parametrize("data_dtype", INTEGER_TYPES)
 def test_series_fillna_invalid_dtype(data_dtype):
     gdf = Series([1, 2, None, 3], dtype=data_dtype)
     fill_value = 2.5
@@ -485,9 +483,9 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
         sr.replace([0, 1], [replacement])
 
     # Both lists of equal length
-    if (np.dtype(type(replacement)).kind == "f" and sr.dtype.kind in {"i", "u"}) or (
-        sr.dtype.type(replacement) != replacement
-    ):
+    if (
+        np.dtype(type(replacement)).kind == "f" and sr.dtype.kind in {"i", "u"}
+    ) or (sr.dtype.type(replacement) != replacement):
         with pytest.raises(TypeError):
             sr.replace([2, 3], [replacement, replacement])
     else:

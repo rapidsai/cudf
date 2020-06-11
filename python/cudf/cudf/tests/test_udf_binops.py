@@ -5,10 +5,10 @@ from __future__ import division
 import numba
 import numpy as np
 import pytest
-from packaging.version import Version
 
 import cudf._lib as libcudf
 from cudf.core import Series
+from cudf.tests.utils import NUMERIC_TYPES
 
 try:
     # Numba >= 0.49
@@ -18,20 +18,7 @@ except ImportError:
     from numba import numpy_support
 
 
-supported_types = [
-    "int16",
-    "int32",
-    "int64",
-    "uint8",
-    "uint16",
-    "uint32",
-    "uint64",
-    "float32",
-    "float64",
-]
-
-
-@pytest.mark.parametrize("dtype", supported_types)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES - {"int8"})
 def test_generic_ptx(dtype):
 
     size = 500
