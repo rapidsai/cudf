@@ -30,7 +30,8 @@ namespace nvtext {
  * @brief Replaces specified tokens with corresponding replacement strings.
  *
  * Tokens are identified in each string and if any match the specified `targets`
- * strings, they are replaced with corresponding `repls` string.
+ * strings, they are replaced with corresponding `replacements` string such that
+ * if `targets[i]` is found, then it is replaced by `replacements[i]`.
  *
  * The `delimiter` may be zero or more characters. If the `delimiter` is empty,
  * whitespace (character code-point <= ' ') is used for identifying tokens.
@@ -49,7 +50,7 @@ namespace nvtext {
  * for row `i` in the output column.
  *
  * There is no guaranteed order for replacing the targets. This means if
- * one target string is a substring over another (e.g. "the" is substring of "theme")
+ * one target string is a substring over another (e.g. "the" is a substring of "theme")
  * there is no guarantee that "the" will be replaced before "theme" or vice versa.
  *
  * An empty string is allowed for a replacement string but the delimiters
@@ -66,17 +67,18 @@ namespace nvtext {
  *
  * Note the first string in `result` still retains the space delimiters.
  *
- * The `repls.size() == targets.size()` except of the `repls.size()==1`.
+ * The `replacements.size() == targets.size()` except if the `replacements.size()==1`.
  * In this case, all matching `targets` strings will be replaced with the
- * single `repls` string.
+ * single `replacements[0]` string.
  *
- * @throw cudf::logic_error if `targets.size() != repls.size()` && if `repls.size() != 1`
- * @throw cudf::logic_error if targets or repls contain nulls
+ * @throw cudf::logic_error if `targets.size() != replacements.size()` and
+ *                          if `replacements.size() != 1`
+ * @throw cudf::logic_error if targets or replacements contain nulls
  * @throw cudf::logic_error if delimiter is invalid
  *
  * @param strings Strings column to replace.
  * @param targets Strings to compare against tokens found in `strings`
- * @param repls Replacement strings for each string in `targets`
+ * @param replacements Replacement strings for each string in `targets`
  * @param delimiter Characters used to separate each string into tokens.
  *                  The default of empty string will identify tokens using whitespace.
  * @param mr Device memory resource used to allocate the returned column's device memory.
@@ -85,7 +87,7 @@ namespace nvtext {
 std::unique_ptr<cudf::column> replace_tokens(
   cudf::strings_column_view const& strings,
   cudf::strings_column_view const& targets,
-  cudf::strings_column_view const& repls,
+  cudf::strings_column_view const& replacements,
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource());
 

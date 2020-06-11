@@ -37,7 +37,7 @@ using strings_iterator = cudf::column_device_view::const_iterator<cudf::string_v
  * @brief Functor to replace tokens in each string.
  *
  * This tokenizes a string using the given d_delimiter and replaces any tokens that match
- * a string in d_targets_begin/end with those from the d_repls column.
+ * a string in d_targets_begin/end with those from the d_replacements column.
  * Strings with no matching tokens are left unchanged.
  *
  * This should be called first to compute the size of each output string and then a second
@@ -47,10 +47,10 @@ struct replace_tokens_fn {
   cudf::column_device_view const d_strings;  ///< strings to tokenize
   strings_iterator d_targets_begin;          ///< strings to search for
   strings_iterator d_targets_end;
-  cudf::column_device_view const d_repls;  ///< replacement strings
-  cudf::string_view const d_delimiter;     ///< delimiter characters for tokenizing
-  const int32_t* d_offsets{};              ///< for locating output string in d_chars
-  char* d_chars{};                         ///< output buffer
+  cudf::column_device_view const d_replacements;  ///< replacement strings
+  cudf::string_view const d_delimiter;            ///< delimiter characters for tokenizing
+  const int32_t* d_offsets{};                     ///< for locating output string in d_chars
+  char* d_chars{};                                ///< output buffer
 
   __device__ cudf::size_type operator()(cudf::size_type idx)
   {
@@ -75,8 +75,8 @@ struct replace_tokens_fn {
         // if only one repl string, use that one for all targets
         auto const d_repl = [&] {
           auto const repl_idx = thrust::distance(d_targets_begin, found_itr);
-          return d_repls.size() == 1 ? d_repls.element<cudf::string_view>(0)
-                                     : d_repls.element<cudf::string_view>(repl_idx);
+          return d_replacements.size() == 1 ? d_replacements.element<cudf::string_view>(0)
+                                            : d_replacements.element<cudf::string_view>(repl_idx);
         }();
 
         nbytes += d_repl.size_bytes() - token.size_bytes();  // total output bytes
@@ -105,29 +105,29 @@ struct replace_tokens_fn {
 // zero or more character tokenizer
 std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& strings,
                                              cudf::strings_column_view const& targets,
-                                             cudf::strings_column_view const& repls,
+                                             cudf::strings_column_view const& replacements,
                                              cudf::string_scalar const& delimiter,
                                              cudaStream_t stream,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(!targets.has_nulls(), "Parameter targets must not have nulls");
-  CUDF_EXPECTS(!repls.has_nulls(), "Parameter repls must not have nulls");
-  if (repls.size() != 1)
-    CUDF_EXPECTS(repls.size() == targets.size(),
-                 "Parameter targets and repls must be the same size");
+  CUDF_EXPECTS(!replacements.has_nulls(), "Parameter replacements must not have nulls");
+  if (replacements.size() != 1)
+    CUDF_EXPECTS(replacements.size() == targets.size(),
+                 "Parameter targets and replacements must be the same size");
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
 
   cudf::size_type const strings_count = strings.size();
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::STRING});
 
-  auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
-  auto targets_column = cudf::column_device_view::create(targets.parent(), stream);
-  auto repls_column   = cudf::column_device_view::create(repls.parent(), stream);
+  auto strings_column      = cudf::column_device_view::create(strings.parent(), stream);
+  auto targets_column      = cudf::column_device_view::create(targets.parent(), stream);
+  auto replacements_column = cudf::column_device_view::create(replacements.parent(), stream);
   cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
   replace_tokens_fn replacer{*strings_column,
                              targets_column->begin<cudf::string_view>(),
                              targets_column->end<cudf::string_view>(),
-                             *repls_column,
+                             *replacements_column,
                              d_delimiter};
 
   // copy null mask from input column
@@ -169,12 +169,12 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
 
 std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& strings,
                                              cudf::strings_column_view const& targets,
-                                             cudf::strings_column_view const& repls,
+                                             cudf::strings_column_view const& replacements,
                                              cudf::string_scalar const& delimiter,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_tokens(strings, targets, repls, delimiter, 0, mr);
+  return detail::replace_tokens(strings, targets, replacements, delimiter, 0, mr);
 }
 
 }  // namespace nvtext
