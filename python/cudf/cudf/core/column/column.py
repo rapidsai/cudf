@@ -1020,7 +1020,9 @@ def column_empty(row_count, dtype="object", masked=False):
         data = None
         children = (
             build_column(
-                data=Buffer(cupy.zeros(row_count + 1, dtype="int32")),
+                data=Buffer(
+                    cupy.zeros(row_count + 1, dtype="int32").view("|u1")
+                ),
                 dtype="int32",
             ),
             build_column(
@@ -1473,7 +1475,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             if cast_dtype:
                 arbitrary = arbitrary.astype(np.dtype("datetime64[s]"))
 
-            buffer = Buffer(arbitrary)
+            buffer = Buffer(arbitrary.view("|u1"))
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = as_column(

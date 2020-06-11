@@ -417,7 +417,11 @@ def time_col_replace_nulls(input_col):
     out_col = cudf._lib.replace.replace(
         input_col,
         column.as_column(
-            Buffer(np.array([np.datetime64("NaT")], dtype=input_col.dtype)),
+            Buffer(
+                np.array([np.datetime64("NaT")], dtype=input_col.dtype).view(
+                    "|u1"
+                )
+            ),
             dtype=input_col.dtype,
         ),
         null,
