@@ -4114,7 +4114,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         index = as_index(a.index)
 
     a_col = column.as_column(a)
-    a_array = cupy.array(a_col.data_array_view)
+    a_array = cupy.asarray(a_col.data_array_view)
 
     b_col = column.as_column(b)
     b_array = cupy.array(b_col.data_array_view)
