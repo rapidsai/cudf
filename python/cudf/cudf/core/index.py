@@ -392,6 +392,44 @@ class Index(Frame, Serializable):
 
         return self._concat(to_concat)
 
+    def difference(self, other):
+        if self.equals(other):
+            if cudf.utils.dtypes.is_string_dtype(self.dtype):
+                return StringIndex([], dtype=self.dtype)
+            else:
+                return self[:0]
+
+                # ret = as_index([], dtype=self.dtype)
+            # return ret
+        lhs = cudf.DataFrame(
+            {"x": self._values, "orig_order": cupy.arange(len(self))}
+        )
+        rhs = cudf.DataFrame(
+            {"x": other._values, "bool": cupy.ones(len(other), "bool")}
+        )
+        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
+        res = res.drop_duplicates(subset="orig_order", ignore_index=True)
+        res = res._data["bool"].fillna(False)
+        if self.dtype != other.dtype and (
+            cudf.utils.dtypes.is_string_dtype(self.dtype)
+            or cudf.utils.dtypes.is_string_dtype(other.dtype)
+        ):
+            return self
+            # return StringIndex([], dtype=self.dtype)
+        drop_mask = ~self.isin(other)
+        return self[drop_mask]
+
+        lhs = cudf.DataFrame(
+            {"x": self._values, "orig_order": cupy.arange(len(self))}
+        )
+        rhs = cudf.DataFrame(
+            {"x": other._values, "bool": cupy.ones(len(other), "bool")}
+        )
+        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
+        res = res.drop_duplicates(subset="orig_order", ignore_index=True)
+        res = res._data["bool"].fillna(False)
+        return None
+
     def _apply_op(self, fn, other=None):
         from cudf.core.series import Series
 
@@ -502,6 +540,17 @@ class Index(Frame, Serializable):
                 return val.all()
             return bool(val)
         else:
+            if self.dtype.kind in ("f") and other.dtype.kind not in ("f"):
+                other = other.astype("float")
+            if other.dtype.kind in ("f") and self.dtype.kind not in ("f"):
+                return as_index(other).equals(self)
+
+            if self.dtype != other.dtype and (
+                cudf.utils.dtypes.is_string_dtype(self.dtype)
+                or cudf.utils.dtypes.is_string_dtype(other.dtype)
+            ):
+                return False
+
             result = self == other
             if isinstance(result, bool):
                 return result
