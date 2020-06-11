@@ -42,7 +42,7 @@ dependencies:
   - streamz
   - dlpack
   - arrow-cpp=0.17.1
-  - arrow-cpp-proc=*=cuda
+  - arrow-cpp-proc * cuda
   - boost-cpp>=1.72.0
   - double-conversion
   - rapidjson

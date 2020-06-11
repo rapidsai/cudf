@@ -1,9 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-from pyarrow.includes.libarrow_cuda cimport (
-    CCudaBufferReader
-)
+from pyarrow.includes.libarrow_cuda cimport CCudaBufferReader
 from pyarrow.includes.libarrow cimport (
     CStatus,
     CMessage,

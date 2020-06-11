@@ -2,12 +2,8 @@
 
 from libcpp.memory cimport unique_ptr
 from cudf._lib.move cimport move
-from pyarrow._cuda cimport (
-    CudaBuffer
-)
-from pyarrow.includes.libarrow_cuda cimport (
-    CCudaBufferReader
-)
+from pyarrow._cuda cimport CudaBuffer
+from pyarrow.includes.libarrow_cuda cimport CCudaBufferReader
 from cudf._lib.cpp.gpuarrow cimport CCudaMessageReader
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from pyarrow.includes.common cimport GetResultValue
