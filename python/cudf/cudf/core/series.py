@@ -4037,10 +4037,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     Parameters
     ----------
-        a : array-like
-            Input array to compare.
-        b : array-like
-            Input array to compare.
+        a : Series
+            Input Series to compare.
+        b : Series
+            Input Series to compare.
         rtol : float
             The relative tolerance.
         atol : float
@@ -4107,11 +4107,25 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     """
 
     index = None
-    if isinstance(a, (cudf.Series, pd.Series)) and isinstance(
-        b, (cudf.Series, pd.Series)
-    ):
+
+    if isinstance(a, pd.Series):
+        a = Series.from_pandas(a)
+    if isinstance(b, pd.Series):
+        b = Series.from_pandas(b)
+
+    if isinstance(a, cudf.Series) and isinstance(b, cudf.Series):
         b = b.reindex(a.index)
         index = as_index(a.index)
+    elif not isinstance(a, cudf.Series):
+        raise TypeError(
+            f"Type of parameter `a` is expected to be a "
+            f"cudf.Series, found:{type(a)}"
+        )
+    elif not isinstance(b, cudf.Series):
+        raise TypeError(
+            f"Type of parameter `b` is expected to be a "
+            f"cudf.Series, found:{type(b)}"
+        )
 
     a_col = column.as_column(a)
     a_array = cupy.asarray(a_col.data_array_view)
@@ -4129,7 +4143,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
         if equal_nan is True:
             equal_nulls = a_nulls.binary_operator("and", b_nulls)
-            
+
         del a_nulls, b_nulls
     elif a_col.null_count:
         null_values = a_col.isna()

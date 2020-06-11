@@ -6037,7 +6037,9 @@ def test_cudf_isclose(data1, data2, rtol, atol):
 
     expected = gd.Series(cupy.isclose(array1, array2, rtol=rtol, atol=atol))
 
-    actual = gd.isclose(data1, data2, rtol=rtol, atol=atol)
+    actual = gd.isclose(
+        gd.Series(data1), gd.Series(data2), rtol=rtol, atol=atol
+    )
 
     assert_eq(expected, actual)
 
@@ -6104,7 +6106,9 @@ def test_cudf_isclose_nulls(data1, data2, equal_nan):
 
     expected = gd.Series(cupy.isclose(array1, array2, equal_nan=equal_nan))
 
-    actual = gd.isclose(data1, data2, equal_nan=equal_nan)
+    actual = gd.isclose(
+        gd.Series(data1), gd.Series(data2), equal_nan=equal_nan
+    )
     assert_eq(expected, actual, check_dtype=False)
 
 
