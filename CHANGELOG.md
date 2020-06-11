@@ -59,6 +59,7 @@
 - PR #5385 Fix index issues in `DataFrame.from_gpu_matrix`
 - PR #5390 Fix Java data type IDs and string interleave test
 - PR #5404 Fix issue with column creation when chunked arrays are passed
+- PR #5423 Fix any() reduction ignore nulls 
 
 
 # cuDF 0.14.0 (Date TBD)
