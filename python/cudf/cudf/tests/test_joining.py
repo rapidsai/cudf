@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import INT_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def make_params():
@@ -963,8 +963,8 @@ def test_merge_multi(kwargs):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype_l", INT_TYPES)
-@pytest.mark.parametrize("dtype_r", INT_TYPES)
+@pytest.mark.parametrize("dtype_l", INTEGER_TYPES)
+@pytest.mark.parametrize("dtype_r", INTEGER_TYPES)
 def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     other_data = ["a", "b", "c"]
 
@@ -1104,7 +1104,7 @@ def test_typecast_on_join_no_float_round():
 )
 def test_typecast_on_join_overflow_unsafe(dtypes):
     dtype_l, dtype_r = dtypes
-    if dtype_l.kind in "iu":
+    if dtype_l.kind in {"i", "u"}:
         dtype_l_max = np.iinfo(dtype_l).max
     elif dtype_l.kind == "f":
         dtype_l_max = np.finfo(dtype_r).max

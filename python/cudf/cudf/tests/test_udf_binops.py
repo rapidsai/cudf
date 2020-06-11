@@ -31,10 +31,6 @@ supported_types = [
 ]
 
 
-@pytest.mark.skipif(
-    Version(numba.__version__) < Version("0.44.0a"),
-    reason="Numba 0.44.0a or newer required",
-)
 @pytest.mark.parametrize("dtype", supported_types)
 def test_generic_ptx(dtype):
 

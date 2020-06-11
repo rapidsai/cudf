@@ -23,7 +23,6 @@ def test_sum(dtype, nelem):
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 
-    # got = dtype(sr.sum())
     got = sr.sum()
     expect = dtype(data.sum())
 
@@ -50,7 +49,7 @@ def test_sum_string():
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_product(dtype, nelem):
     dtype = np.dtype(dtype).type
-    if np.dtype(dtype).kind in "ui":
+    if np.dtype(dtype).kind in {"u", "i"}:
         data = np.ones(nelem, dtype=dtype)
         # Set at most 30 items to [0..2) to keep the value within 2^32
         for _ in range(30):
@@ -80,7 +79,7 @@ def test_sum_of_squares(dtype, nelem):
     # got = dtype(got)
     expect = (data ** 2).sum()
 
-    if np.dtype(dtype).kind in "ui":
+    if np.dtype(dtype).kind in {"u", "i"}:
         if 0 <= expect <= np.iinfo(dtype).max:
             np.testing.assert_array_almost_equal(expect, got)
         else:

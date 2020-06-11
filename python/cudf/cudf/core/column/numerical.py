@@ -106,12 +106,12 @@ class NumericalColumn(column.ColumnBase):
         if other is None:
             return other
         other_dtype = np.min_scalar_type(other)
-        if other_dtype.kind in "biuf":
+        if other_dtype.kind in {"b", "i", "u", "f"}:
             other_dtype = np.promote_types(self.dtype, other_dtype)
             if other_dtype == np.dtype("float16"):
                 other = np.dtype("float32").type(other)
                 other_dtype = other.dtype
-            if self.dtype.kind in "b":
+            if self.dtype.kind == "b":
                 other_dtype = min_signed_type(other)
             if np.isscalar(other):
                 other = np.dtype(other_dtype).type(other)
@@ -253,10 +253,10 @@ class NumericalColumn(column.ColumnBase):
         dkind = self.dtype.kind
         if dkind == "f":
             return self.dtype.type(np.nan)
-        elif dkind in "ui":
-            return 0
+        elif dkind in {"u", "i"}:
+            return self.dtype.type(0)
         elif dkind == "b":
-            return False
+            return self.dtype.type(False)
         else:
             raise TypeError(
                 "numeric column of {} has no NaN value".format(self.dtype)
@@ -391,7 +391,7 @@ class NumericalColumn(column.ColumnBase):
                     return False
 
         # want to cast int to float
-        elif to_dtype.kind == "f" and self.dtype.kind in "iu":
+        elif to_dtype.kind == "f" and self.dtype.kind in {"i", "u"}:
             info = np.finfo(to_dtype)
             biggest_exact_int = 2 ** (info.nmant + 1)
             if (self.min() >= -biggest_exact_int) and (
@@ -410,7 +410,7 @@ class NumericalColumn(column.ColumnBase):
                     return False
 
         # want to cast float to int:
-        elif to_dtype.kind in "iu" and self.dtype.kind == "f":
+        elif to_dtype.kind in {"i", "u"} and self.dtype.kind == "f":
             info = np.iinfo(to_dtype)
             min_, max_ = info.min, info.max
             # best we can do is hope to catch it here and avoid compare
@@ -502,7 +502,7 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
         raise TypeError(f"Type {type(col_to_normalize)} not supported")
 
     if (
-        col_to_normalize_dtype.kind == "f" and input_column_dtype.kind in "ui"
+        col_to_normalize_dtype.kind == "f" and input_column_dtype.kind in {"i", "u"}
     ) or (col_to_normalize_dtype > input_column_dtype):
         raise TypeError(
             f"Potentially unsafe cast for non-equivalent "

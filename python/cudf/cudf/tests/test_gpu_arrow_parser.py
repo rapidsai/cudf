@@ -7,7 +7,7 @@ from numba import cuda
 
 import cudf
 from cudf.comm.gpuarrow import GpuArrowReader
-from cudf.tests.utils import INT_TYPES
+from cudf.tests.utils import INTEGER_TYPES
 
 try:
     import pyarrow as pa
@@ -180,7 +180,7 @@ def test_gpu_parse_arrow_cats():
     arrow_version is None,
     reason="need compatible pyarrow to generate test data",
 )
-@pytest.mark.parametrize("dtype", INT_TYPES)
+@pytest.mark.parametrize("dtype", INTEGER_TYPES)
 def test_gpu_parse_arrow_int(dtype):
 
     depdelay = np.array([0, 0, -3, -2, 11, 6, -7, -4, 4, -3], dtype=dtype)

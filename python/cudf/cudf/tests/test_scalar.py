@@ -30,19 +30,19 @@ from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES
         np.iinfo(np.int64).max,
         np.uint8(0),
         np.uint8(1),
-        np.uint8(-1),
+        np.uint8(255),
         np.iinfo(np.uint8).min,
         np.iinfo(np.uint8).max,
         np.uint16(1),
         np.iinfo(np.uint16).min,
         np.iinfo(np.uint16).max,
         np.uint32(42),
-        np.uint32(-42),
+        np.uint32(4294967254),
         np.iinfo(np.uint32).min,
         np.iinfo(np.uint32).max,
         np.uint64(42),
         np.iinfo(np.uint64).min,
-        np.dtype("uint64").type(np.iinfo(np.uint64).max),
+        np.uint64(np.iinfo(np.uint64).max),
         np.float32(1),
         np.float32(-1),
         np.finfo(np.float32).min,
@@ -88,7 +88,7 @@ def test_round_trip_scalar(value):
     np.testing.assert_equal(s.value, value)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["object"])
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"object"})
 def test_null_scalar(dtype):
     s = Scalar(None, dtype=dtype)
     assert s.value is None

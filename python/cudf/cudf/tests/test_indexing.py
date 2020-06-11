@@ -8,9 +8,9 @@ import pytest
 import cudf
 from cudf import DataFrame, Series
 from cudf.tests import utils
-from cudf.tests.utils import INT_TYPES, assert_eq
+from cudf.tests.utils import INTEGER_TYPES, assert_eq
 
-index_dtypes = INT_TYPES
+index_dtypes = INTEGER_TYPES
 
 
 @pytest.fixture

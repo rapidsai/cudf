@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from cudf.core.dataframe import DataFrame, Series
-from cudf.tests.utils import INT_TYPES, NUMERIC_TYPES, assert_eq, gen_rand
+from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq, gen_rand
 
 params_sizes = [0, 1, 2, 5]
 
@@ -54,7 +54,7 @@ def test_cumsum_masked():
         ps = pd.Series(data).astype(type_)
         assert_eq(gs.cumsum(), ps.cumsum())
 
-    for type_ in INT_TYPES:
+    for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
         expected = pd.Series([1, 3, 0, 7, 12]).astype("int64")
         assert_eq(gs.cumsum(), expected)
@@ -96,7 +96,7 @@ def test_cummin_masked():
         ps = pd.Series(data).astype(type_)
         assert_eq(gs.cummin(), ps.cummin())
 
-    for type_ in INT_TYPES:
+    for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
         expected = pd.Series(
             [1, 1, gs._column.default_na_value(), 1, 1]
@@ -140,7 +140,7 @@ def test_cummax_masked():
         ps = pd.Series(data).astype(type_)
         assert_eq(gs.cummax(), ps.cummax())
 
-    for type_ in INT_TYPES:
+    for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
         expected = pd.Series(
             [1, 2, gs._column.default_na_value(), 4, 5]
@@ -184,7 +184,7 @@ def test_cumprod_masked():
         ps = pd.Series(data).astype(type_)
         assert_eq(gs.cumprod(), ps.cumprod())
 
-    for type_ in INT_TYPES:
+    for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
         expected = pd.Series([1, 2, 0, 8, 40]).astype("int64")
         assert_eq(gs.cumprod(), expected)

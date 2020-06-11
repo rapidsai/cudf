@@ -3739,13 +3739,13 @@ class StringColumn(column.ColumnBase):
                 raise ValueError("Could not convert `None` value to datetime")
 
             boolean_match = self.binary_operator("eq", "NaT")
-        elif out_dtype.kind in ("ui"):
+        elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
                     "Could not convert strings to integer \
                         type due to presence of non-integer values."
                 )
-        elif out_dtype.kind in ("f"):
+        elif out_dtype.kind == "f":
             if not cpp_is_float(self).all():
                 raise ValueError(
                     "Could not convert strings to float \
@@ -3864,9 +3864,9 @@ class StringColumn(column.ColumnBase):
 
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in ("ui") and not cpp_is_integer(self).all():
+        elif to_dtype.kind in {"i", "u"} and not cpp_is_integer(self).all():
             return False
-        elif to_dtype.kind in ("f") and not cpp_is_float(self).all():
+        elif to_dtype.kind == "f" and not cpp_is_float(self).all():
             return False
         else:
             return True

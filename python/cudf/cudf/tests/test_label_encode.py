@@ -19,9 +19,9 @@ def _random_int(nelem, dtype):
 
 def _random(nelem, dtype):
     dtype = np.dtype(dtype)
-    if dtype.kind in "iu":
+    if dtype.kind in {"i", "u"}:
         return _random_int(nelem, dtype)
-    elif dtype.kind in "f":
+    elif dtype.kind == "f":
         return _random_float(nelem, dtype)
 
 
