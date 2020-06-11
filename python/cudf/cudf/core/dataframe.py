@@ -6086,6 +6086,44 @@ class DataFrame(Frame, Serializable):
         df.columns = self.columns
         return df
 
+    def append(self, other, ignore_index=False, sort=False):
+        if isinstance(other, (cudf.Series, dict)):
+            if isinstance(other, dict):
+                other = Series(other)
+            if other.name is None and not ignore_index:
+                raise TypeError(
+                    "Can only append a Series if ignore_index=True "
+                    "or if the Series has a name"
+                )
+
+            index = Index([other.name], name=self.index.name)
+            idx_diff = other.index.difference(self.columns)
+            try:
+                combined_columns = self.columns.append(idx_diff)
+            except TypeError:
+                combined_columns = self.columns.astype(object).append(idx_diff)
+            other = (
+                other.reindex(combined_columns, copy=False)
+                .to_frame()
+                .T.infer_objects()
+                .rename_axis(index.names, copy=False)
+            )
+            if not self.columns.equals(combined_columns):
+                self = self.reindex(columns=combined_columns)
+        elif isinstance(other, list):
+            if not other:
+                pass
+            elif not isinstance(other[0], DataFrame):
+                other = DataFrame(other)
+                if (self.columns.get_indexer(other.columns) >= 0).all():
+                    other = other.reindex(columns=self.columns)
+
+        if isinstance(other, (list, tuple)):
+            to_concat = [self, *other]
+        else:
+            to_concat = [self, other]
+        return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort,)
+
 
 def from_pandas(obj, nan_as_null=None):
     """
