@@ -18,7 +18,7 @@
 #include <map>
 #include <memory>
 #include <string>
-#include "kafka_consumer.hpp"
+#include "cudf_kafka/kafka_consumer.hpp"
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/functions.hpp>
