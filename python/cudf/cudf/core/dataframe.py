@@ -2791,7 +2791,7 @@ class DataFrame(Frame, Serializable):
         columns : dict-like or function, default None
             optional dict-like or functions transformations to apply to
             the columns axis' values.
-        axis: int, default 0
+        axis : int, default 0
             Axis to rename with mapper.
             0 or 'index' for index
             1  or 'columns' for columns
