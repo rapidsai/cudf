@@ -2764,7 +2764,7 @@ class DataFrame(Frame, Serializable):
         axis=0,
         copy=True,
         inplace=False,
-        limit=None,
+        level=None,
         errors="ignore",
     ):
         """Alter column and index labels.
@@ -2797,10 +2797,10 @@ class DataFrame(Frame, Serializable):
             1  or 'columns' for columns
         copy : boolean, default True
             Also copy underlying data
-        inplace: boolean, default False
+        inplace : boolean, default False
             Return new DataFrame.  If True, assign columns without copy
-        limit: None
-            Limit not yet implimented
+        level : int or level name, default None
+            In case of a MultiIndex, only rename labels in the specified level.
         errors : {'raise', 'ignore', 'warn'}, default 'ignore'
             *Only 'ignore' supported*
             Control raising of exceptions on invalid data for provided dtype.
