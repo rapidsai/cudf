@@ -1,5 +1,6 @@
 import numbers
 from collections import namedtuple
+from collections.abc import Sequence
 
 import cupy as cp
 import numpy as np
@@ -203,12 +204,61 @@ def is_list_like(obj):
     Boolean: True or False depending on whether the
     input `obj` is like-like or not.
     """
-    from collections.abc import Sequence
+    return isinstance(obj, (Sequence,),) and not isinstance(obj, (str, bytes))
 
-    if isinstance(obj, (Sequence,)) and not isinstance(obj, (str, bytes)):
-        return True
-    else:
-        return False
+
+def is_column_like(obj):
+    """
+    This function checks if the given `obj`
+    is a column-like (Series, Index...)
+    type or not.
+
+    Parameters
+    ----------
+    obj : object of any type which needs to be validated.
+
+    Returns
+    -------
+    Boolean: True or False depending on whether the
+    input `obj` is column-like or not.
+    """
+    return (
+        isinstance(
+            obj,
+            (
+                cudf.core.column.ColumnBase,
+                cudf.Series,
+                cudf.Index,
+                pd.Series,
+                pd.Index,
+            ),
+        )
+        or (
+            hasattr(obj, "__cuda_array_interface__")
+            and len(obj.__cuda_array_interface__["shape"]) == 1
+        )
+        or (
+            hasattr(obj, "__array_interface__")
+            and len(obj.__array_interface__["shape"]) == 1
+        )
+    )
+
+
+def can_convert_to_column(obj):
+    """
+    This function checks if the given `obj`
+    can be used to create a column or not.
+
+    Parameters
+    ----------
+    obj : object of any type which needs to be validated.
+
+    Returns
+    -------
+    Boolean: True or False depending on whether the
+    input `obj` is column-compatible or not.
+    """
+    return is_column_like(obj) or is_list_like(obj)
 
 
 def min_scalar_type(a, min_size=8):

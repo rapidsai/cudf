@@ -116,20 +116,24 @@ public class TableTest extends CudfTestBase {
       if (!expected.isNull(expectedRow)) {
         switch (type) {
           case BOOL8: // fall through
-          case INT8:
+          case INT8: // fall through
+          case UINT8:
             assertEquals(expected.getByte(expectedRow), cv.getByte(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
-          case INT16:
+          case INT16: // fall through
+          case UINT16:
             assertEquals(expected.getShort(expectedRow), cv.getShort(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
           case INT32: // fall through
+          case UINT32: // fall through
           case TIMESTAMP_DAYS:
             assertEquals(expected.getInt(expectedRow), cv.getInt(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
           case INT64: // fall through
+          case UINT64: // fall through
           case TIMESTAMP_MICROSECONDS: // fall through
           case TIMESTAMP_MILLISECONDS: // fall through
           case TIMESTAMP_NANOSECONDS: // fall through

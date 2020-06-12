@@ -93,3 +93,27 @@
 .navpath li.navelem {
   background-color: #FAF6FF;   /* A nearly white RAPIDS purple background */
 }
+
+/* Add some CSS to make class / function lists nicer in the presence of long templated names */
+
+.directory td.entry {
+  white-space: normal;                /* Allow text wrapping for long class names */
+  min-width:   512px;                 /* But don't wrap them too much. */
+
+  /* This indent and padding causes any long class names that are wrapped to be indented on 
+     wrapped lines */
+  text-indent: -65px;
+  padding-left: 55px;
+}
+
+/* Prevent arrows from being negatively indented */
+.arrow {
+  text-indent: 0px;
+  padding-left: 10px;
+}
+
+/* Prevent icons from being negatively indented */
+.icona {
+  text-indent: 0px;
+  padding-left: 0px;
+}
