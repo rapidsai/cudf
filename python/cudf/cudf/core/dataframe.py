@@ -3841,6 +3841,8 @@ class DataFrame(Frame, Serializable):
         Parameters that are currently not supported are: `limit`, `regex`,
         `method`
 
+        Returns
+        -------
         result : DataFrame
             DataFrame after replacement.
         """
