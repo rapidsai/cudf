@@ -48,23 +48,26 @@ struct backrefs_fn {
   string_view const d_repl;  // string replacement template
   rmm::device_vector<backref_type>::iterator backrefs_begin;
   rmm::device_vector<backref_type>::iterator backrefs_end;
-  const int32_t* d_offsets{};  // these are null when
-  char* d_chars{};             // only computing size
+  int32_t* d_offsets{};
+  char* d_chars{};
 
-  __device__ size_type operator()(size_type idx)
+  __device__ void operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) return 0;
+    if (d_strings.is_null(idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
+    }
     u_char data1[stack_size];
     u_char data2[stack_size];
     prog.set_stack_mem(data1, data2);
-    string_view const d_str = d_strings.element<string_view>(idx);
-    auto const nchars       = d_str.length();      // number of characters in input string
-    auto nbytes             = d_str.size_bytes();  // number of bytes in input string
-    const char* in_ptr      = d_str.data();
-    char* out_ptr           = d_offsets ? (d_chars + d_offsets[idx]) : nullptr;
-    size_type lpos          = 0;       // last byte position processed in d_str
-    size_type begin         = 0;       // first character position matching regex
-    size_type end           = nchars;  // last character position (exclusive)
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();      // number of characters in input string
+    auto nbytes       = d_str.size_bytes();  // number of bytes in input string
+    auto in_ptr       = d_str.data();
+    auto out_ptr      = d_chars ? (d_chars + d_offsets[idx]) : nullptr;
+    size_type lpos    = 0;       // last byte position processed in d_str
+    size_type begin   = 0;       // first character position matching regex
+    size_type end     = nchars;  // last character position (exclusive)
     // copy input to output replacing strings as we go
     while (prog.find(idx, d_str, begin, end) > 0)  // inits the begin/end vars
     {
@@ -103,7 +106,8 @@ struct backrefs_fn {
     }
     if (out_ptr && (lpos < d_str.size_bytes()))  // copy remainder of input string
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
-    return nbytes;
+    else if (!out_ptr)
+      d_offsets[idx] = nbytes;
   }
 };
 
