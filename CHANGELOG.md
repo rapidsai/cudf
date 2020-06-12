@@ -13,9 +13,12 @@
 - PR #5397 Add internal implementation of nested loop equijoins.
 - PR #5303 Add slice_strings functionality using delimiter string
 - PR #5301 Add Java bindings for `zfill`
+- PR #5359 Add duration types
+- PR #5364 Validate array interface during buffer construction
 - PR #5418 Add support for `DataFrame.info`
 - PR #5425 Add Python `Groupby.rolling()`
 - PR #5359 Add duration types 
+- PR #5444 Remove usage of deprecated RMM APIs and headers.
 
 ## Improvements
 
@@ -45,10 +48,12 @@
 - PR #5389 Expose typed accessors for Java HostMemoryBuffer
 - PR #5379 Avoid chaining `Buffer`s
 - PR #5387 Port nvtext replace_tokens API to libcudf
+- PR #5408 Update pyrrow and arrow-cpp to 0.17.1
 - PR #5366 Add benchmarks for cuIO writers
 - PR #5405 Add Error message to `StringColumn.unary_operator`
 - PR #5424 Add python plumbing for `.str.character_tokenize`
 - PR #5420 Aligning signature of `Series.value_counts` to Pandas
+- PR #5426 Refactor strings code to minimize calls to regex
 - PR #5433 Add support for column inputs in `strings::starts_with` and `strings::ends_with`
 - PR #5427 Add Java bindings for unsigned data types
 - PR #5429 Improve text wrapping in libcudf documentation
@@ -75,10 +80,12 @@
 - PR #5382 Fix CategoricalDtype equality comparisons
 - PR #5385 Fix index issues in `DataFrame.from_gpu_matrix`
 - PR #5390 Fix Java data type IDs and string interleave test
+- PR #5392 Fix documentation links
 - PR #5410 Fix compile warning by disallowing bool column type for slice_strings
 - PR #5404 Fix issue with column creation when chunked arrays are passed
 - PR #5409 Use the correct memory resource when creating empty null masks
 - PR #5399 Fix cpp compiler warnings of unreachable code
+- PR #5446 Fix compile error caused by out-of-date PR merge (4990)
 
 
 # cuDF 0.14.0 (Date TBD)
@@ -99,6 +106,7 @@
 - PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
 - PR #4972 Add list_view (cudf::LIST) type
+- PR #4990 Add lists_column_view, list_column_wrapper, lists support for concatenate
 - PR #5004 Added a null considering min/max binary op
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
