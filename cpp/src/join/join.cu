@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <join/hash_join.cuh>
-#include <join/join_common_utils.hpp>
+#include "hash_join.cuh"
+#include "join_common_utils.hpp"
+#include "nested_loop_join.cuh"
 
 namespace cudf {
 namespace detail {
@@ -291,7 +292,7 @@ std::unique_ptr<table> construct_join_output_df(
   left_common_col.reserve(columns_in_common.size());
   std::vector<size_type> right_common_col;
   right_common_col.reserve(columns_in_common.size());
-  for (const auto c : columns_in_common) {
+  for (const auto& c : columns_in_common) {
     left_common_col.push_back(c.first);
     right_common_col.push_back(c.second);
   }
