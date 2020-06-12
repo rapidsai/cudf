@@ -80,7 +80,9 @@ class Buffer(Serializable):
         return data
 
     def _init_from_array_like(self, data, owner):
+
         if hasattr(data, "__cuda_array_interface__"):
+            confirm_1d_contiguous(data.__cuda_array_interface__)
             ptr, size = _buffer_data_from_array_interface(
                 data.__cuda_array_interface__
             )
@@ -88,6 +90,7 @@ class Buffer(Serializable):
             self.size = size
             self._owner = owner or data
         elif hasattr(data, "__array_interface__"):
+            confirm_1d_contiguous(data.__array_interface__)
             ptr, size = _buffer_data_from_array_interface(
                 data.__array_interface__
             )
@@ -137,3 +140,36 @@ def _buffer_data_from_array_interface(array_interface):
     )
     size = functools.reduce(operator.mul, shape)
     return ptr, size * itemsize
+
+
+def confirm_1d_contiguous(array_interface):
+    strides = array_interface["strides"]
+    shape = array_interface["shape"]
+    itemsize = np.dtype(array_interface["typestr"]).itemsize
+    typestr = array_interface["typestr"]
+    if typestr not in ("|i1", "|u1"):
+        raise TypeError("Buffer data must be of uint8 type")
+    if not get_c_contiguity(shape, strides, itemsize):
+        raise ValueError("Buffer data must be 1D C-contiguous")
+
+
+def get_c_contiguity(shape, strides, itemsize):
+    """
+    Determine if combination of array parameters represents a
+    c-contiguous array.
+    """
+    ndim = len(shape)
+    assert strides is None or ndim == len(strides)
+
+    if ndim == 0 or strides is None or (ndim == 1 and strides[0] == itemsize):
+        return True
+
+    # any dimension zero, trivial case
+    for dim in shape:
+        if dim == 0:
+            return True
+
+    for this_dim, this_stride in zip(shape, strides):
+        if this_stride != this_dim * itemsize:
+            return False
+    return True
