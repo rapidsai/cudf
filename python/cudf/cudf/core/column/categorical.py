@@ -620,6 +620,8 @@ class CategoricalAccessor(object):
         cur_categories = self._column.categories
         if len(new_categories) != len(cur_categories):
             return False
+        if new_categories.dtype != cur_categories.dtype:
+            return False
         # if order doesn't matter, sort before the equals call below
         if not kwargs.get("ordered", self.ordered):
             cur_categories = cudf.Series(cur_categories).sort_values()
@@ -873,6 +875,9 @@ class CategoricalColumn(column.ColumnBase):
             f"{unaryop}"
         )
 
+    def __eq__(self, other):
+        return self.binary_operator("eq", other).all()
+
     def binary_operator(self, op, rhs, reflect=False):
 
         if not (self.ordered and rhs.ordered) and op not in ("eq", "ne"):
@@ -1087,7 +1092,7 @@ class CategoricalColumn(column.ColumnBase):
             return _create_empty_categorical_column(self, dtype)
 
         return self.cat().set_categories(
-            new_categories=dtype.categories, ordered=dtype.ordered
+            new_categories=dtype.categories, ordered=dtype.ordered, **kwargs
         )
 
     def as_numerical_column(self, dtype, **kwargs):
