@@ -3820,6 +3820,9 @@ class DataFrame(Frame, Serializable):
 
         Returns
         -------
+        result : DataFrame
+            DataFrame after replacement.
+            
         Examples
         --------
         >>> import cudf
@@ -3840,11 +3843,6 @@ class DataFrame(Frame, Serializable):
         -----
         Parameters that are currently not supported are: `limit`, `regex`,
         `method`
-
-        Returns
-        -------
-        result : DataFrame
-            DataFrame after replacement.
         """
         if limit is not None:
             raise NotImplementedError("limit parameter is not implemented yet")
