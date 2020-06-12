@@ -58,6 +58,8 @@
 - PR #5429 Improve text wrapping in libcudf documentation
 - PR #5443 Remove unused `is_simple` trait
 - PR #5441 Update Java HostMemoryBuffer to only load native libs when necessary
+- PR #5437 Improve libcudf join documentation
+- PR #5458 Install meta packages for dependencies
 
 ## Bug Fixes
 
@@ -84,7 +86,9 @@
 - PR #5404 Fix issue with column creation when chunked arrays are passed
 - PR #5409 Use the correct memory resource when creating empty null masks
 - PR #5399 Fix cpp compiler warnings of unreachable code
+- PR #5439 Fix nvtext ngrams_tokenize performance for multi-byte UTF8
 - PR #5446 Fix compile error caused by out-of-date PR merge (4990)
+- PR #5459 Fix str.translate to convert table characters to UTF-8
 
 
 # cuDF 0.14.0 (Date TBD)

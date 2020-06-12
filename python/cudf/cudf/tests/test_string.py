@@ -1846,6 +1846,10 @@ def test_string_str_translate(data):
             str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})
         ),
     )
+    assert_eq(
+        ps.str.translate(str.maketrans({"é": "É"})),
+        gs.str.translate(str.maketrans({"é": "É"})),
+    )
 
 
 def test_string_str_code_points():
