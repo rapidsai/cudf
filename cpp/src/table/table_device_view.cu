@@ -19,8 +19,6 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/rmm.h>
-
 #include <algorithm>
 #include <numeric>
 #include <vector>
