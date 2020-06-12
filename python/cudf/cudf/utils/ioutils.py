@@ -900,7 +900,7 @@ def _is_local_filesystem(fs):
 
 
 def get_filepath_or_buffer(
-    path_or_data, compression, iotypes=(BytesIO), **kwargs
+    path_or_data, compression, mode="rb", iotypes=(BytesIO), **kwargs
 ):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
@@ -912,6 +912,8 @@ def get_filepath_or_buffer(
         Path to data or the data itself.
     compression : str
         Type of compression algorithm for the content
+    mode : str
+        Mode in which file is opened
     iotypes : (), default (BytesIO)
         Object type to exclude from file-like check
 
@@ -926,8 +928,9 @@ def get_filepath_or_buffer(
         storage_options = kwargs.get("storage_options")
         # fsspec does not expanduser so handle here
         path_or_data = os.path.expanduser(path_or_data)
+
         fs, _, paths = fsspec.get_fs_token_paths(
-            path_or_data, mode="rb", storage_options=storage_options
+            path_or_data, mode=mode, storage_options=storage_options
         )
         if len(paths) == 0:
             raise IOError(f"{path_or_data} could not be resolved to any files")
@@ -953,6 +956,42 @@ def get_filepath_or_buffer(
         path_or_data = BytesIO(path_or_data.read())
 
     return path_or_data, compression
+
+
+def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
+    """
+    Return either a filepath string to data,
+    or a open file object to the output filesystem
+
+    Parameters
+    ----------
+    path_or_data : str, file-like object, bytes, ByteIO
+        Path to data or the data itself.
+    compression : str
+        Type of compression algorithm for the content
+    mode : str
+        Mode in which file is opened
+    Returns
+    -------
+    filepath_or_buffer : str, [TODO]
+        Filepath string or in-memory buffer of data
+    should_close : bool
+        Whether filepath_or_buffer should be closed after IO
+    """
+    if isinstance(path_or_data, str):
+        storage_options = kwargs.get("storage_options", {})
+        path_or_data = os.path.expanduser(path_or_data)
+        fs, _, _ = fsspec.get_fs_token_paths(
+            path_or_data, mode=mode or "w", storage_options=storage_options
+        )
+
+        if not _is_local_filesystem(fs):
+            filepath_or_buffer = fsspec.open(
+                path_or_data, mode=mode or "w", **(storage_options)
+            ).open()
+            return filepath_or_buffer, True
+
+    return path_or_data, False
 
 
 def buffer_write_lines(buf, lines):
