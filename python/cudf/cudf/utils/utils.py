@@ -139,7 +139,7 @@ def pyarrow_buffer_to_cudf_buffer(arrow_buf, mask_size=0):
     Given a PyArrow Buffer backed by either host or device memory, convert it
     to a cuDF Buffer
     """
-    from cudf._lib.arrow._cuda import CudaBuffer as arrowCudaBuffer
+    from pyarrow.cuda import CudaBuffer as arrowCudaBuffer
 
     # Try creating a PyArrow CudaBuffer from the PyArrow Buffer object, it
     # fails with an ArrowTypeError if it's a host based Buffer so we catch and

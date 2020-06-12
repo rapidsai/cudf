@@ -1,17 +1,21 @@
+#include <arrow/result.h>
 #include <cudf/ipc.hpp>
 
 CudaMessageReader::CudaMessageReader(arrow::cuda::CudaBufferReader* stream,
                                      arrow::io::BufferReader* schema)
   : stream_(stream), host_schema_reader_(schema){};
 
-arrow::Status CudaMessageReader::ReadNextMessage(std::unique_ptr<arrow::ipc::Message>* message)
+arrow::Result<std::unique_ptr<arrow::ipc::Message>> CudaMessageReader::ReadNextMessage()
 {
   if (host_schema_reader_ != nullptr) {
-    arrow::Status status(arrow::ipc::ReadMessage(host_schema_reader_, message));
-    if (status.ok() && *message != nullptr) { return status; }
+    auto message        = arrow::ipc::ReadMessage(host_schema_reader_);
     host_schema_reader_ = nullptr;
+    if (message.ok() && *message != nullptr) { return std::move(message); }
   }
-  return arrow::cuda::ReadMessage(stream_, arrow::default_memory_pool(), message);
+  std::unique_ptr<arrow::ipc::Message> message;
+  auto status = arrow::cuda::ReadMessage(stream_, arrow::default_memory_pool(), &message);
+  if (!status.ok()) { return status; }
+  return std::move(message);
 }
 
 std::unique_ptr<arrow::ipc::MessageReader> CudaMessageReader::Open(
