@@ -24,6 +24,8 @@
 #include <cudf/wrappers/timestamps.hpp>
 #include <string>
 
+#include <cudf/fixed_point/fixed_point.hpp>
+
 /**
  * @file type_dispatcher.hpp
  * @brief Defines the mapping between `cudf::type_id` runtime type information
@@ -132,6 +134,7 @@ CUDF_TYPE_MAPPING(cudf::duration_us, type_id::DURATION_MICROSECONDS);
 CUDF_TYPE_MAPPING(cudf::duration_ns, type_id::DURATION_NANOSECONDS);
 CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
 CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
+CUDF_TYPE_MAPPING(numeric::decimal32, type_id::DECIMAL32);
 
 template <typename T>
 struct type_to_scalar_type_impl {
@@ -169,6 +172,12 @@ template <>
 struct type_to_scalar_type_impl<cudf::string_view> {
   using ScalarType       = cudf::string_scalar;
   using ScalarDeviceType = cudf::string_scalar_device_view;
+};
+
+template <>  // TODO: this is a temporary solution for make_pair_iterator
+struct type_to_scalar_type_impl<numeric::decimal32> {
+  using ScalarType       = cudf::numeric_scalar<numeric::decimal32>;
+  using ScalarDeviceType = cudf::numeric_scalar_device_view<numeric::decimal32>;
 };
 
 template <>  // TODO: this is a temporary solution for make_pair_iterator
@@ -387,6 +396,8 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
         std::forward<Ts>(args)...);
     case LIST:
       return f.template operator()<typename IdTypeMap<LIST>::type>(std::forward<Ts>(args)...);
+    case DECIMAL32:
+      return f.template operator()<typename IdTypeMap<DECIMAL32>::type>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported type_id.");

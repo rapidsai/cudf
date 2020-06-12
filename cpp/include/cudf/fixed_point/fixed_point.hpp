@@ -771,5 +771,7 @@ std::ostream& operator<<(std::ostream& os, fixed_point<Rep, Radix> const& fp)
   return os << static_cast<double>(fp);
 }
 
+using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+
 /** @} */  // end of group
 }  // namespace numeric
