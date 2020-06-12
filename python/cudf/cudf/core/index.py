@@ -1086,6 +1086,7 @@ class RangeIndex(Index):
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
 
+    @annotate("RANGE_INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
         if self is other:
             return True
@@ -1556,7 +1557,7 @@ class CategoricalIndex(GenericIndex):
         """
         return self._values.cat().categories
 
-    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
+    @annotate("CATEGORICAL_INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
         """
         Determine if two Index objects contain the same elements.
