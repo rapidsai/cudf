@@ -3822,7 +3822,7 @@ class DataFrame(Frame, Serializable):
         -------
         result : DataFrame
             DataFrame after replacement.
-            
+
         Examples
         --------
         >>> import cudf
