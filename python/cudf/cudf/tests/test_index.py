@@ -574,3 +574,157 @@ def test_index_difference(data, other):
     expected = pd_data.difference(pd_other)
     actual = gd_data.difference(gd_other)
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4, 5, 6],
+        [10, 20, 30, 40, 50, 60],
+        ["1", "2", "3", "4", "5", "6"],
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        ["a"],
+        ["b", "c", "d"],
+        [1],
+        [2, 3, 4],
+        [],
+        [10.0],
+        [1100.112, 2323.2322, 2323.2322],
+        ["abcd", "defgh", "werty", "poiu"],
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [1, 2, 3, 4, 5, 6],
+        [10, 20, 30, 40, 50, 60],
+        ["1", "2", "3", "4", "5", "6"],
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        ["a"],
+        [],
+        ["b", "c", "d"],
+        [1],
+        [2, 3, 4],
+        [10.0],
+        [1100.112, 2323.2322, 2323.2322],
+        ["abcd", "defgh", "werty", "poiu"],
+    ],
+)
+def test_index_equals(data, other):
+    pd_data = pd.Index(data)
+    pd_other = pd.Index(other)
+
+    gd_data = cudf.core.index.as_index(data)
+    gd_other = cudf.core.index.as_index(other)
+
+    expected = pd_data.equals(pd_other)
+    actual = gd_data.equals(gd_other)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4, 5, 6],
+        [10, 20, 30, 40, 50, 60],
+        ["1", "2", "3", "4", "5", "6"],
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        ["a"],
+        ["b", "c", "d"],
+        [1],
+        [2, 3, 4],
+        [],
+        [10.0],
+        [1100.112, 2323.2322, 2323.2322],
+        ["abcd", "defgh", "werty", "poiu"],
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [1, 2, 3, 4, 5, 6],
+        [10, 20, 30, 40, 50, 60],
+        ["1", "2", "3", "4", "5", "6"],
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        ["a"],
+        ["b", "c", "d"],
+        [1],
+        [2, 3, 4],
+        [],
+        [10.0],
+        [1100.112, 2323.2322, 2323.2322],
+        ["abcd", "defgh", "werty", "poiu"],
+    ],
+)
+def test_index_categories_equal(data, other):
+    pd_data = pd.Index(data).astype("category")
+    pd_other = pd.Index(other)
+
+    gd_data = cudf.core.index.as_index(data).astype("category")
+    gd_other = cudf.core.index.as_index(other)
+
+    expected = pd_data.equals(pd_other)
+    actual = gd_data.equals(gd_other)
+    assert_eq(expected, actual)
+
+    expected = pd_other.equals(pd_data)
+    actual = gd_other.equals(gd_data)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4, 5, 6],
+        [10, 20, 30, 40, 50, 60],
+        ["1", "2", "3", "4", "5", "6"],
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        ["a"],
+        ["b", "c", "d"],
+        [1],
+        [2, 3, 4],
+        [],
+        [10.0],
+        [1100.112, 2323.2322, 2323.2322],
+        ["abcd", "defgh", "werty", "poiu"],
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [1, 2, 3, 4, 5, 6],
+        [10, 20, 30, 40, 50, 60],
+        ["1", "2", "3", "4", "5", "6"],
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        ["a"],
+        ["b", "c", "d"],
+        [1],
+        [2, 3, 4],
+        [],
+        [10.0],
+        [1100.112, 2323.2322, 2323.2322],
+        ["abcd", "defgh", "werty", "poiu"],
+    ],
+)
+def test_index_equal_misc(data, other):
+    pd_data = pd.Index(data)
+    pd_other = other
+
+    gd_data = cudf.core.index.as_index(data)
+    gd_other = other
+
+    expected = pd_data.equals(pd_other)
+    actual = gd_data.equals(gd_other)
+    assert_eq(expected, actual)
+
+    expected = pd_data.equals(np.array(pd_other))
+    actual = gd_data.equals(np.array(gd_other))
+    assert_eq(expected, actual)
+
+    expected = pd_data.equals(pd.Series(pd_other))
+    actual = gd_data.equals(cudf.Series(gd_other))
+    assert_eq(expected, actual)
+
+    expected = pd_data.astype("category").equals(pd_other)
+    actual = gd_data.astype("category").equals(gd_other)
+    assert_eq(expected, actual)
