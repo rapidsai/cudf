@@ -531,7 +531,9 @@ class Index(Frame, Serializable):
         """
         if self is other:
             return True
-        if len(self) != len(other):
+        elif not isinstance(other, Index):
+            return False
+        elif len(self) != len(other):
             return False
         elif len(self) == 1:
             val = self[0] == other[0]
@@ -541,7 +543,14 @@ class Index(Frame, Serializable):
             return bool(val)
         else:
             if self.dtype.kind in ("f") and other.dtype.kind not in ("f"):
-                other = other.astype("float")
+                try:
+                    other = other.astype(self.dtype)
+                except (TypeError, ValueError):
+                    return False
+
+            if is_categorical_dtype(other.dtype):
+                return other.equals(self)
+
             if other.dtype.kind in ("f") and self.dtype.kind not in ("f"):
                 return as_index(other).equals(self)
 
@@ -1080,9 +1089,11 @@ class RangeIndex(Index):
     def equals(self, other):
         if self is other:
             return True
-        if len(self) != len(other):
+        elif not isinstance(other, Index):
             return False
-        if isinstance(other, cudf.core.index.RangeIndex):
+        elif len(self) != len(other):
+            return False
+        elif isinstance(other, cudf.core.index.RangeIndex):
             return self._start == other._start and self._stop == other._stop
         else:
             return (self == other)._values.all()
@@ -1544,6 +1555,40 @@ class CategoricalIndex(GenericIndex):
         The categories of this categorical.
         """
         return self._values.cat().categories
+
+    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
+    def equals(self, other):
+        """
+        Determine if two Index objects contain the same elements.
+
+        Returns
+        -------
+        out: bool
+            True if “other” is an Index and it has the same elements
+            as calling index; False otherwise.
+        """
+        if self is other:
+            return True
+        elif not isinstance(other, Index):
+            return False
+        elif len(self) != len(other):
+            return False
+        elif not isinstance(other, Index):
+            return False
+        else:
+            casted_other = other
+            if not is_categorical_dtype(other.dtype):
+                casted_other = other.astype("category")
+                casted_other = casted_other.astype(self.dtype)
+
+            if self.dtype != casted_other.dtype:
+                return False
+
+            result = self._values == casted_other._values
+            if isinstance(result, bool):
+                return result
+            else:
+                return result._values.all()
 
 
 class StringIndex(GenericIndex):
