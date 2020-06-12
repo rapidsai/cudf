@@ -97,11 +97,16 @@ def to_csv(
     index=True,
     line_terminator="\n",
     chunksize=None,
+    **kwargs,
 ):
     """{docstring}"""
 
     if path is None:
         raise ValueError("path/filename not provided")
+
+    path_or_buf, should_close = ioutils.get_writer_filepath_or_buffer(
+        path, mode="w", **kwargs
+    )
 
     if index:
         from cudf import MultiIndex
@@ -124,12 +129,15 @@ def to_csv(
 
     rows_per_chunk = chunksize if chunksize else len(df)
 
-    return libcudf.csv.write_csv(
+    libcudf.csv.write_csv(
         df,
-        path_or_buf=path,
+        path_or_buf=path_or_buf,
         sep=sep,
         na_rep=na_rep,
         header=header,
         line_terminator=line_terminator,
         rows_per_chunk=rows_per_chunk,
     )
+
+    if should_close:
+        path_or_buf.close()
