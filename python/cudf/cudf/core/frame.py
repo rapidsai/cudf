@@ -1232,11 +1232,6 @@ class Frame(libcudf.table.Table):
         return result
 
     def replace(self, to_replace, replacement):
-        if isinstance(self, cudf.MultiIndex):
-            raise NotImplementedError(
-                "MultiIndex not yet supported for replace."
-            )
-
         copy_data = self._data.copy()
 
         for name, col in copy_data.items():

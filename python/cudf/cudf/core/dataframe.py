@@ -2828,9 +2828,9 @@ class DataFrame(Frame, Serializable):
                 "Only errors='ignore' is currently supported"
             )
 
-        if limit:
+        if level:
             raise NotImplementedError(
-                "Only limit=False is currently supported"
+                "Only level=False is currently supported"
             )
 
         if mapper is None and index is None and columns is None:

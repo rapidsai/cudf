@@ -392,10 +392,16 @@ def test_dataframe_MI_rename():
     pdg = pdf.groupby(["a", "b"]).count()
 
     expect = pdg.rename(mapper={1: "x", 2: "y"}, axis=0)
-    with pytest.raises(NotImplementedError):
-        got = gdg.rename(mapper={1: "x", 2: "y"}, axis=0)
+    got = gdg.rename(mapper={1: "x", 2: "y"}, axis=0)
 
-    assert_eq(expect.index.astype("str"), got.index)
+    # pandas MultiIndex has no dtype so it doesn't use
+    # astype. Just for this test to get the values returned
+    # to line up in the right type we loop through
+    # and make all of the values for *expect* string
+    expect_values = list(
+        (str(x[0]), str(x[0])) for x in expect.index._values.tolist()
+    )
+    assert_eq(expect_values, got.index._values)
 
 
 @pytest.mark.parametrize("axis", [1, "columns"])
