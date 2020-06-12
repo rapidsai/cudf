@@ -57,17 +57,6 @@ struct unary_cast {
     return TargetT{simt::std::chrono::floor<TargetT>(element)};
   }
 
-  // TODO: Should this be allowed? timestamps should be constructed from duration or another
-  // timestamp. Will this break existing code that rely on this functionality?
-  template <typename SourceT,
-            typename TargetT                                          = _TargetT,
-            typename std::enable_if_t<cudf::is_numeric<SourceT>() &&
-                                      cudf::is_timestamp<TargetT>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
-  {
-    return TargetT{static_cast<typename TargetT::rep>(element)};
-  }
-
   template <typename SourceT,
             typename TargetT                                         = _TargetT,
             typename std::enable_if_t<cudf::is_numeric<SourceT>() &&
@@ -75,17 +64,6 @@ struct unary_cast {
   CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
     return TargetT{static_cast<typename TargetT::rep>(element)};
-  }
-
-  // TODO: Should this be allowed? timestamps should be covertible to duration or another timestamp.
-  // Will this break existing code that rely on this functionality?
-  template <typename SourceT,
-            typename TargetT                                        = _TargetT,
-            typename std::enable_if_t<cudf::is_timestamp<SourceT>() &&
-                                      cudf::is_numeric<TargetT>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
-  {
-    return static_cast<TargetT>(element.time_since_epoch().count());
   }
 
   template <typename SourceT,
@@ -122,7 +100,12 @@ struct dispatch_unary_cast_to {
 
   dispatch_unary_cast_to(column_view inp) : input(inp) {}
 
-  template <typename TargetT, typename std::enable_if_t<cudf::is_fixed_width<TargetT>()>* = nullptr>
+  // Disallow conversions between timestamps and numeric
+  template <
+    typename TargetT,
+    typename std::enable_if_t<cudf::is_fixed_width<TargetT>() &&
+                              !(cudf::is_timestamp<SourceT>() && is_numeric<TargetT>()) &&
+                              !(cudf::is_timestamp<TargetT>() && is_numeric<SourceT>())>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
@@ -145,13 +128,21 @@ struct dispatch_unary_cast_to {
     return output;
   }
 
-  template <typename TargetT,
-            typename std::enable_if_t<!cudf::is_fixed_width<TargetT>()>* = nullptr>
+  template <
+    typename TargetT,
+    typename std::enable_if_t<!cudf::is_fixed_width<TargetT>() ||
+                              (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>()) ||
+                              (cudf::is_timestamp<TargetT>() && is_numeric<SourceT>())>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    CUDF_FAIL("Column type must be numeric or chrono");
+    if (!cudf::is_fixed_width<TargetT>())
+      CUDF_FAIL("Column type must be numeric or chrono");
+    else if (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>())
+      CUDF_FAIL("Timestamps can be created only from duration");
+    else
+      CUDF_FAIL("Timestamps cannot be converted to numeric without converting it to a duration");
   }
 };
 
