@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "kafka_consumer.hpp"
+#include "cudf_kafka/kafka_consumer.hpp"
 #include <librdkafka/rdkafkacpp.h>
 
 namespace cudf {
