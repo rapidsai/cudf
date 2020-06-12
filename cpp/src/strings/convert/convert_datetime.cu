@@ -489,14 +489,10 @@ struct datetime_formatter {
       days = scale_time(timestamp, 86400000000000L);
     days = days + 719468;  // 719468 is days between 0000-00-00 and 1970-01-01
 
-    constexpr int32_t daysInEra     = 146097;  // (400*365)+97
-    constexpr int32_t daysInCentury = 36524;   // (100*365) + 24;
-    constexpr int32_t daysIn4Years  = 1461;    // (4*365) + 1;
-    constexpr int32_t daysInYear    = 365;
-    // The months are shifted so that March is the starting month and February
-    // (with possible leap day in it) is the last month for the linear calculation.
-    // Day offsets for each month:   Mar Apr May June July  Aug Sep  Oct  Nov  Dec  Jan  Feb
-    const int32_t monthDayOffset[] = {0, 31, 61, 92, 122, 153, 184, 214, 245, 275, 306, 337, 366};
+    int32_t const daysInEra     = 146097;  // (400*365)+97
+    int32_t const daysInCentury = 36524;   // (100*365) + 24;
+    int32_t const daysIn4Years  = 1461;    // (4*365) + 1;
+    int32_t const daysInYear    = 365;
 
     // code logic handles leap years in chunks: 400y,100y,4y,1y
     int32_t year  = 400 * (days / daysInEra);
@@ -518,14 +514,17 @@ struct datetime_formatter {
     }
     year += leapy;
 
-    //
-    int32_t month = 12;
-    for (int32_t idx = 0; idx < month; ++idx) {  // find the month
-      if (days < monthDayOffset[idx + 1]) {
-        month = idx;
-        break;
-      }
-    }
+    // The months are shifted so that March is the starting month and February
+    // (with possible leap day in it) is the last month for the linear calculation.
+    // Day offsets for each month:   Mar Apr May June July Aug Sep  Oct  Nov  Dec  Jan  Feb
+    const int32_t monthDayOffset[] = {0, 31, 61, 92, 122, 153, 184, 214, 245, 275, 306, 337, 366};
+    // find month from days
+    int32_t month = [days, monthDayOffset] {
+      // find first offset that is bigger than days
+      auto itr = thrust::find_if(
+        thrust::seq, monthDayOffset, (monthDayOffset + 13), [days](auto d) { return days < d; });
+      return itr != (monthDayOffset + 13) ? thrust::distance(monthDayOffset, itr - 1) : 12;
+    }();
 
     // compute day of the year and account for calculating with March being the first month
     // for month >= 10, leap-day has been already been included
@@ -534,7 +533,7 @@ struct datetime_formatter {
                                   : days + /*Jan=*/31 + /*Feb=*/28 + 1 +  // 2-month shift
                                       ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
 
-    int32_t day = days - monthDayOffset[month] + 1;  // compute day of month
+    int32_t const day = days - monthDayOffset[month] + 1;  // compute day of month
     if (month >= 10) ++year;
     month = ((month + 2) % 12) + 1;  // adjust Jan-Mar offset
 
@@ -543,8 +542,8 @@ struct datetime_formatter {
     timeparts[TP_DAY]   = day;
     if (units == timestamp_units::days) return;
 
-    // done with date
-    // now work on time
+    // done with date, now work on time
+
     if (units == timestamp_units::hours) {
       timeparts[TP_HOUR] = modulo_time(timestamp, 24);
       return;
@@ -564,12 +563,12 @@ struct datetime_formatter {
       return;
     }
 
-    // common utility for subsecond unit values
-    auto subsecond_fn = [&](int64_t hour, int64_t minute, int64_t second, int64_t factor) {
+    // common utility for setting time from a subsecond unit value
+    auto subsecond_fn = [&](int64_t hour, int64_t minute, int64_t second, int64_t subsecond_base) {
       timeparts[TP_HOUR]      = modulo_time(scale_time(hour, 3600), 24);
       timeparts[TP_MINUTE]    = modulo_time(scale_time(minute, 60), 60);
       timeparts[TP_SECOND]    = modulo_time(second, 60);
-      timeparts[TP_SUBSECOND] = modulo_time(timestamp, factor);
+      timeparts[TP_SUBSECOND] = modulo_time(timestamp, subsecond_base);
     };
 
     auto hour   = timestamp / 1000;
