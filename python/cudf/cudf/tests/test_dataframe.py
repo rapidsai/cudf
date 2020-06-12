@@ -4132,9 +4132,8 @@ def test_isin_dataframe(data, values):
             expected = pdf.isin(values)
         except ValueError as e:
             if str(e) == "Lengths must match.":
-                pytest.xfail(
-                    reason="xref https://github.com/pandas-dev/pandas/issues/34256"
-                )
+                # xref https://github.com/pandas-dev/pandas/issues/34256
+                pytest.xfail()
         if isinstance(values, (pd.DataFrame, pd.Series)):
             values = gd.from_pandas(values)
         got = gdf.isin(values)
@@ -4285,12 +4284,10 @@ def test_df_astype_string_to_other(as_dtype):
         data = ["2001-01-01", "2002-02-02", "2000-01-05", None]
     elif as_dtype == "int32":
         data = [1, 2, 3]
-        kwargs = {}
     elif as_dtype == "category":
         data = ["1", "2", "3", None]
     elif "float" in as_dtype:
         data = [1.0, 2.0, 3.0, np.nan]
-        kwargs = {}
 
     insert_data = Series.from_pandas(pd.Series(data, dtype="str"))
     expect_data = Series(data, dtype=as_dtype)
@@ -4373,7 +4370,6 @@ def test_df_astype_categorical_to_other(as_dtype):
         data = ["2001-01-01", "2002-02-02", "2000-01-05", "2001-01-01"]
     else:
         data = [1, 2, 3, 1]
-        kwargs = {}
     psr = pd.Series(data, dtype="category")
     pdf = pd.DataFrame()
     pdf["foo"] = psr

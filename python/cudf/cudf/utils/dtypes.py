@@ -205,7 +205,9 @@ def is_list_like(obj):
     input `obj` is like-like or not.
     """
 
-    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(obj, (str, bytes))
+    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
+        obj, (str, bytes)
+    )
 
 
 def is_column_like(obj):

@@ -67,13 +67,7 @@ class MultiIndex(Index):
             return
 
         # name setup
-        if isinstance(
-            names,
-            (
-                Sequence,
-                pd.core.indexes.frozen.FrozenList,
-            ),
-        ):
+        if isinstance(names, (Sequence, pd.core.indexes.frozen.FrozenList,),):
             if sum(x is None for x in names) > 1:
                 column_names = list(range(len(codes)))
             else:

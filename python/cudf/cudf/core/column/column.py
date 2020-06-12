@@ -1265,7 +1265,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             else:
                 new_dtype = pd.api.types.pandas_dtype(dtype)
 
-
             if is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
             else:
