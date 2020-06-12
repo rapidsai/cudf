@@ -464,10 +464,10 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, cudaStream_t
 }
 
 // Forward to implementation
-reader::reader(std::string filepath,
+reader::reader(std::vector<std::string> const &filepaths,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(filepath), options, mr))
+  : _impl(std::make_unique<impl>(datasource::create(filepaths[0]), options, mr))
 {
 }
 

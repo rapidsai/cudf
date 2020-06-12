@@ -146,6 +146,13 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
 
 }  // namespace
 
+std::string name_from_path(const std::vector<std::string> &path_in_schema)
+{
+  std::string s = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
+  for (size_t i = 1; i < path_in_schema.size(); i++) { s += "." + path_in_schema[i]; }
+  return s;
+}
+
 /**
  * @brief Class for parsing dataset metadata
  */
@@ -172,23 +179,15 @@ struct metadata : public FileMetaData {
     CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
   }
 
-  inline int64_t get_total_rows() const { return num_rows; }
-  inline int get_num_row_groups() const { return row_groups.size(); }
-  inline int get_num_columns() const { return row_groups[0].columns.size(); }
+  int64_t get_total_rows() const { return num_rows; }
+  int get_num_row_groups() const { return row_groups.size(); }
 
-  std::string get_column_name(const std::vector<std::string> &path_in_schema)
-  {
-    std::string s = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
-    for (size_t i = 1; i < path_in_schema.size(); i++) { s += "." + path_in_schema[i]; }
-    return s;
-  }
-
-  std::vector<std::string> get_column_names()
+  std::vector<std::string> get_column_names()  // move to ctor
   {
     std::vector<std::string> all_names;
     if (row_groups.size() != 0) {
       for (const auto &chunk : row_groups[0].columns) {
-        all_names.emplace_back(get_column_name(chunk.meta_data.path_in_schema));
+        all_names.emplace_back(name_from_path(chunk.meta_data.path_in_schema));
       }
     }
     return all_names;
@@ -203,7 +202,7 @@ struct metadata : public FileMetaData {
    *
    * @return comma-separated index column names in quotes
    */
-  std::string get_pandas_index()
+  std::string get_pandas_index() const
   {
     auto it = std::find_if(key_value_metadata.begin(),
                            key_value_metadata.end(),
@@ -236,7 +235,7 @@ struct metadata : public FileMetaData {
    *
    * @param names List of column names to load, where index column name(s) will be added
    */
-  void add_pandas_index_names(std::vector<std::string> &names)
+  void add_pandas_index_names(std::vector<std::string> &names) const
   {
     auto str = get_pandas_index();
     if (str.length() != 0) {
@@ -539,7 +538,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
                                     hostdevice_vector<gpu::PageInfo> &pages,
                                     size_t min_row,
                                     size_t total_rows,
-                                    const std::vector<int> &chunk_map,
+                                    const std::vector<int> &chunk_col_map,
                                     std::vector<column_buffer> &out_buffers,
                                     cudaStream_t stream)
 {
@@ -566,8 +565,8 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
       chunks[c].str_dict_index = str_dict_index.data().get() + str_ofs;
       str_ofs += pages[page_count].num_values;
     }
-    chunks[c].column_data_base = out_buffers[chunk_map[c]].data();
-    chunks[c].valid_map_base   = out_buffers[chunk_map[c]].null_mask();
+    chunks[c].column_data_base = out_buffers[chunk_col_map[c]].data();
+    chunks[c].valid_map_base   = out_buffers[chunk_col_map[c]].null_mask();
     page_count += chunks[c].max_num_pages;
   }
 
@@ -591,7 +590,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
     if (pages[i].num_rows > 0) {
       const size_t c = pages[i].chunk_idx;
       if (c < chunks.size()) {
-        out_buffers[chunk_map[c]].null_count() += pages[i].num_rows - pages[i].valid_count;
+        out_buffers[chunk_col_map[c]].null_count() += pages[i].num_rows - pages[i].valid_count;
       }
     }
   }
@@ -652,7 +651,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     hostdevice_vector<gpu::ColumnChunkDesc> chunks(0, num_chunks, stream);
 
     // Association between each column chunk and its column
-    std::vector<int> chunk_map(num_chunks);
+    std::vector<int> chunk_col_map(num_chunks);
 
     // Tracker for eventually deallocating compressed and uncompressed data
     std::vector<rmm::device_buffer> page_data(num_chunks);
@@ -676,7 +675,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
         // Spec requires each row group to contain exactly one chunk for every
         // column. If there are too many or too few, continue with best effort
-        if (col.second != _metadata->get_column_name(col_meta.path_in_schema)) {
+        if (col.second != name_from_path(col_meta.path_in_schema)) {
           std::cerr << "Detected mismatched column chunk" << std::endl;
           continue;
         }
@@ -717,7 +716,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                            clock_rate));
 
         // Map each column chunk to its column index
-        chunk_map[chunks.size() - 1] = i;
+        chunk_col_map[chunks.size() - 1] = i;
 
         if (col_meta.codec != Compression::UNCOMPRESSED) {
           total_decompressed_size += col_meta.total_uncompressed_size;
@@ -760,7 +759,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
 
-      decode_page_data(chunks, pages, skip_rows, num_rows, chunk_map, out_buffers, stream);
+      decode_page_data(chunks, pages, skip_rows, num_rows, chunk_col_map, out_buffers, stream);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
         out_columns.emplace_back(
@@ -788,10 +787,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 }
 
 // Forward to implementation
-reader::reader(std::string filepath,
+reader::reader(std::vector<std::string> const &filepaths,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(filepath), options, mr))
+  : _impl(std::make_unique<impl>(datasource::create(filepaths[0]), options, mr))
 {
 }
 

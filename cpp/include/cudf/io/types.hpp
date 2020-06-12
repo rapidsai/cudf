@@ -142,14 +142,19 @@ struct table_with_metadata {
  */
 struct source_info {
   io_type type = io_type::FILEPATH;
-  std::string filepath;
+  std::vector<std::string> filepaths;
   std::pair<const char*, size_t> buffer;
   std::shared_ptr<arrow::io::RandomAccessFile> file;
   cudf::io::datasource* user_source = nullptr;
 
   source_info() = default;
 
-  explicit source_info(const std::string& file_path) : type(io_type::FILEPATH), filepath(file_path)
+  explicit source_info(const std::vector<std::string>& file_paths)
+    : type(io_type::FILEPATH), filepaths(file_paths)
+  {
+  }
+  explicit source_info(std::string const& file_path)
+    : type(io_type::FILEPATH), filepaths({file_path})
   {
   }
 

@@ -33,7 +33,7 @@ std::unique_ptr<reader> make_reader(source_info const& source,
                                     rmm::mr::device_memory_resource* mr)
 {
   if (source.type == io_type::FILEPATH) {
-    return std::make_unique<reader>(source.filepath, options, mr);
+    return std::make_unique<reader>(source.filepaths, options, mr);
   }
   if (source.type == io_type::HOST_BUFFER) {
     return std::make_unique<reader>(
