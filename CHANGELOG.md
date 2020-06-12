@@ -47,6 +47,7 @@
 - PR #5374 Port nvtext character_tokenize API to libcudf
 - PR #5389 Expose typed accessors for Java HostMemoryBuffer
 - PR #5379 Avoid chaining `Buffer`s
+- PR #5408 Update pyrrow and arrow-cpp to 0.17.1
 - PR #5366 Add benchmarks for cuIO writers
 - PR #5405 Add Error message to `StringColumn.unary_operator`
 - PR #5424 Add python plumbing for `.str.character_tokenize`
@@ -57,6 +58,7 @@
 - PR #5429 Improve text wrapping in libcudf documentation
 - PR #5443 Remove unused `is_simple` trait
 - PR #5441 Update Java HostMemoryBuffer to only load native libs when necessary
+- PR #5437 Improve libcudf join documentation
 
 ## Bug Fixes
 
