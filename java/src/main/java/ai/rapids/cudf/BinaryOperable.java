@@ -44,6 +44,9 @@ public interface BinaryOperable {
     if (a == DType.FLOAT32 || b == DType.FLOAT32) {
       return DType.FLOAT32;
     }
+    if (a == DType.UINT64 || b == DType.UINT64) {
+      return DType.UINT64;
+    }
     if (a == DType.INT64 || b == DType.INT64 ||
         a == DType.TIMESTAMP_MILLISECONDS || b == DType.TIMESTAMP_MILLISECONDS ||
         a == DType.TIMESTAMP_MICROSECONDS || b == DType.TIMESTAMP_MICROSECONDS ||
@@ -51,12 +54,21 @@ public interface BinaryOperable {
         a == DType.TIMESTAMP_NANOSECONDS || b == DType.TIMESTAMP_NANOSECONDS) {
       return DType.INT64;
     }
+    if (a == DType.UINT32 || b == DType.UINT32) {
+      return DType.UINT32;
+    }
     if (a == DType.INT32 || b == DType.INT32 ||
         a == DType.TIMESTAMP_DAYS || b == DType.TIMESTAMP_DAYS) {
       return DType.INT32;
     }
+    if (a == DType.UINT16 || b == DType.UINT16) {
+      return DType.UINT16;
+    }
     if (a == DType.INT16 || b == DType.INT16) {
       return DType.INT16;
+    }
+    if (a == DType.UINT8 || b == DType.UINT8) {
+      return DType.UINT8;
     }
     if (a == DType.INT8 || b == DType.INT8) {
       return DType.INT8;
