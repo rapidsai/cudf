@@ -249,8 +249,8 @@ def test_dataframe_join_mismatch_cats(how):
     join_gdf = gdf1.join(gdf2, how=how, sort=True, method="hash")
     join_pdf = pdf1.join(pdf2, how=how)
 
-    got = join_gdf.to_pandas()
-    expect = join_pdf.fillna(0)  # note: cudf join doesn't mask NA
+    got = join_gdf.fillna(-1).to_pandas()
+    expect = join_pdf.fillna(-1)  # note: cudf join doesn't mask NA
 
     # We yield a categorical here whereas pandas gives Object.
     expect.index = expect.index.astype("category")

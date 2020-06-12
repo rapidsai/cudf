@@ -56,7 +56,9 @@ def test_cumsum_masked():
 
     for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
-        expected = pd.Series([1, 3, 0, 7, 12]).astype("int64")
+        expected = pd.Series([1, 3, np.iinfo("int64").max, 7, 12]).astype(
+            "int64"
+        )
         assert_eq(gs.cumsum(), expected)
 
 
@@ -186,7 +188,9 @@ def test_cumprod_masked():
 
     for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
-        expected = pd.Series([1, 2, 0, 8, 40]).astype("int64")
+        expected = pd.Series([1, 2, np.iinfo("int64").max, 8, 40]).astype(
+            "int64"
+        )
         assert_eq(gs.cumprod(), expected)
 
 

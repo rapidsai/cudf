@@ -30,7 +30,9 @@ def test_null_series(nrows, dtype):
         or dtype.startswith("uint")
         or dtype.startswith("long")
     ):
-        psrepr = psrepr.replace("0\n", "null\n")
+        psrepr = psrepr.replace(
+            str(sr._column.default_na_value()) + "\n", "null\n"
+        )
 
     print(psrepr)
     print(sr)

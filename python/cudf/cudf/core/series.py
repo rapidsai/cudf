@@ -11,6 +11,7 @@ from pandas.api.types import is_dict_like
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
+from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     ColumnBase,
@@ -3690,10 +3691,18 @@ class Series(Frame, Serializable):
         # TODO: move this libcudf
         input_col = self._column
         output_col = column_empty_like(input_col)
+        output_mask = column_empty_like(input_col, dtype="bool")
         if output_col.size > 0:
             cudautils.gpu_diff.forall(output_col.size)(
-                input_col, output_col, periods
+                input_col, output_col, output_mask, periods
             )
+
+        output_col = column.build_column(
+            data=output_col.data,
+            dtype=output_col.dtype,
+            mask=bools_to_mask(output_mask),
+        )
+
         return Series(output_col, name=self.name, index=self.index)
 
     @copy_docstring(SeriesGroupBy.__init__)

@@ -482,10 +482,12 @@ def test_index_where(data, condition, other, error):
             assert tuple(expect.categories) == tuple(got.categories)
         else:
             assert_eq(
-                ps.where(ps_condition, other=ps_other).fillna(0).values,
+                ps.where(ps_condition, other=ps_other)
+                .fillna(np.iinfo("int64").max)
+                .values,
                 gs.where(gs_condition, other=gs_other)
                 .to_pandas()
-                .fillna(0)
+                .fillna(np.iinfo("int64").max)
                 .values,
             )
     else:

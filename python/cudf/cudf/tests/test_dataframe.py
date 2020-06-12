@@ -841,7 +841,7 @@ def test_dataframe_hash_partition_masked_value(nrows):
         df = p.to_pandas()
         for row in df.itertuples():
             valid = bool(bytemask[row.key])
-            expected_value = row.key + 100 if valid else 0
+            expected_value = row.key + 100 if valid else np.iinfo("int64").max
             got_value = row.val
             assert expected_value == got_value
 
@@ -861,7 +861,7 @@ def test_dataframe_hash_partition_masked_keys(nrows):
         for row in df.itertuples():
             valid = bool(bytemask[row.val - 100])
             # val is key + 100
-            expected_value = row.val - 100 if valid else 0
+            expected_value = row.val - 100 if valid else np.iinfo("int64").max
             got_value = row.key
             assert expected_value == got_value
 
@@ -2702,7 +2702,7 @@ def test_diff(dtype, period, data_empty):
     gdf = DataFrame({"a": Series(data, dtype=dtype)})
     pdf = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
 
-    expected_outcome = pdf.a.diff(period).fillna(0)
+    expected_outcome = pdf.a.diff(period)
     diffed_outcome = gdf.a.diff(period).astype(expected_outcome.dtype)
 
     if data_empty:

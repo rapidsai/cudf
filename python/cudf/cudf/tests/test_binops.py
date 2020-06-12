@@ -724,4 +724,6 @@ def test_ufunc_ops(lhs, rhs, ops):
 
     expect = np_op(lhs, rhs)
     got = cu_op(culhs, curhs)
-    utils.assert_eq(expect.fillna(0), got, check_dtype=False)
+    utils.assert_eq(
+        expect.fillna(got._column.default_na_value()), got, check_dtype=False
+    )

@@ -572,12 +572,13 @@ def test_string_join_key_nulls(str_data_nulls):
 
     expect = pdf.merge(pdf2, on="key", how="left")
     got = gdf.merge(gdf2, on="key", how="left")
+    got["vals_y"] = got["vals_y"].fillna(-1)
 
     if len(expect) == 0 and len(got) == 0:
         expect = expect.reset_index(drop=True)
         got = got[expect.columns]
 
-    expect["vals_y"] = expect["vals_y"].fillna(0).astype("int64")
+    expect["vals_y"] = expect["vals_y"].fillna(-1).astype("int64")
 
     assert_eq(expect, got)
 
@@ -1563,38 +1564,48 @@ def test_string_find(data, sub):
     ps = pd.Series(data)
     gs = Series(data)
 
-    assert_eq(ps.str.find(sub).fillna(0), gs.str.find(sub), check_dtype=False)
     assert_eq(
-        ps.str.find(sub, start=1).fillna(0),
+        ps.str.find(sub).fillna(np.int8(np.int8(np.iinfo("int64").max))),
+        gs.str.find(sub),
+        check_dtype=False,
+    )
+    assert_eq(
+        ps.str.find(sub, start=1).fillna(np.int8(np.iinfo("int64").max)),
         gs.str.find(sub, start=1),
         check_dtype=False,
     )
     assert_eq(
-        ps.str.find(sub, end=10).fillna(0),
+        ps.str.find(sub, end=10).fillna(np.int8(np.iinfo("int64").max)),
         gs.str.find(sub, end=10),
         check_dtype=False,
     )
     assert_eq(
-        ps.str.find(sub, start=2, end=10).fillna(0),
+        ps.str.find(sub, start=2, end=10).fillna(
+            np.int8(np.iinfo("int64").max)
+        ),
         gs.str.find(sub, start=2, end=10),
         check_dtype=False,
     )
 
     assert_eq(
-        ps.str.rfind(sub).fillna(0), gs.str.rfind(sub), check_dtype=False
+        ps.str.rfind(sub).fillna(np.int8(np.iinfo("int64").max)),
+        gs.str.rfind(sub),
+        check_dtype=False,
     )
     assert_eq(
-        ps.str.rfind(sub, start=1).fillna(0),
+        ps.str.rfind(sub, start=1).fillna(np.int8(np.iinfo("int64").max)),
         gs.str.rfind(sub, start=1),
         check_dtype=False,
     )
     assert_eq(
-        ps.str.rfind(sub, end=10).fillna(0),
+        ps.str.rfind(sub, end=10).fillna(np.int8(np.iinfo("int64").max)),
         gs.str.rfind(sub, end=10),
         check_dtype=False,
     )
     assert_eq(
-        ps.str.rfind(sub, start=2, end=10).fillna(0),
+        ps.str.rfind(sub, start=2, end=10).fillna(
+            np.int8(np.iinfo("int64").max)
+        ),
         gs.str.rfind(sub, start=2, end=10),
         check_dtype=False,
     )

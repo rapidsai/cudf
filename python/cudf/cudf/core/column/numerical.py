@@ -13,7 +13,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
-    min_numeric_column_type,
+    min_column_type,
     min_signed_type,
     np_to_pa_dtype,
     numeric_normalize_types,
@@ -254,7 +254,7 @@ class NumericalColumn(column.ColumnBase):
         if dkind == "f":
             return self.dtype.type(np.nan)
         elif dkind in {"u", "i"}:
-            return self.dtype.type(0)
+            return self.dtype.type(np.iinfo("int64").max)
         elif dkind == "b":
             return self.dtype.type(False)
         else:
@@ -478,7 +478,7 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
     )
     col_to_normalize_dtype = normalized_column.dtype
     if isinstance(col_to_normalize, list):
-        col_to_normalize_dtype = min_numeric_column_type(
+        col_to_normalize_dtype = min_column_type(
             normalized_column, input_column_dtype
         )
         # Scalar case

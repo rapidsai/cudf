@@ -232,7 +232,7 @@ def min_signed_type(x, min_size=8):
     return np.int64(x).dtype
 
 
-def min_numeric_column_type(x, expected_type):
+def min_column_type(x, expected_type):
     """
     Return the smallest dtype which can represent all
     elements of the `NumericalColumn` `x`
