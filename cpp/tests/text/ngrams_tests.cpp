@@ -31,19 +31,19 @@ struct TextGenerateNgramsTest : public cudf::test::BaseFixture {
 
 TEST_F(TextGenerateNgramsTest, Ngrams)
 {
-  cudf::test::strings_column_wrapper strings{"the", "fox", "jumped", "over", "the", "dog"};
+  cudf::test::strings_column_wrapper strings{"the", "fox", "jumped", "over", "thé", "dog"};
   cudf::strings_column_view strings_view(strings);
 
   {
     cudf::test::strings_column_wrapper expected{
-      "the_fox", "fox_jumped", "jumped_over", "over_the", "the_dog"};
+      "the_fox", "fox_jumped", "jumped_over", "over_thé", "thé_dog"};
     auto const results = nvtext::generate_ngrams(strings_view);
     cudf::test::expect_columns_equal(*results, expected);
   }
 
   {
     cudf::test::strings_column_wrapper expected{
-      "the_fox_jumped", "fox_jumped_over", "jumped_over_the", "over_the_dog"};
+      "the_fox_jumped", "fox_jumped_over", "jumped_over_thé", "over_thé_dog"};
     auto const results = nvtext::generate_ngrams(strings_view, 3);
     cudf::test::expect_columns_equal(*results, expected);
   }
@@ -61,7 +61,7 @@ TEST_F(TextGenerateNgramsTest, Ngrams)
                                                 "ve",
                                                 "er",
                                                 "th",
-                                                "he",
+                                                "hé",
                                                 "do",
                                                 "og"};
     auto const results = nvtext::generate_character_ngrams(strings_view, 2);
@@ -69,7 +69,7 @@ TEST_F(TextGenerateNgramsTest, Ngrams)
   }
   {
     cudf::test::strings_column_wrapper expected{
-      "the", "fox", "jum", "ump", "mpe", "ped", "ove", "ver", "the", "dog"};
+      "the", "fox", "jum", "ump", "mpe", "ped", "ove", "ver", "thé", "dog"};
     auto const results = nvtext::generate_character_ngrams(strings_view, 3);
     cudf::test::expect_columns_equal(*results, expected);
   }
