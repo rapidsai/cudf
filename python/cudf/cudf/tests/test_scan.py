@@ -56,10 +56,11 @@ def test_cumsum_masked():
 
     for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
-        expected = pd.Series([1, 3, np.iinfo("int64").max, 7, 12]).astype(
-            "int64"
+        got = gs.cumsum()
+        expected = pd.Series(
+            [1, 3, got._column.default_na_value(), 7, 12], dtype="int64"
         )
-        assert_eq(gs.cumsum(), expected)
+        assert_eq(got, expected)
 
 
 @pytest.mark.parametrize("dtype,nelem", list(_gen_params()))
@@ -188,10 +189,11 @@ def test_cumprod_masked():
 
     for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
-        expected = pd.Series([1, 2, np.iinfo("int64").max, 8, 40]).astype(
-            "int64"
+        got = gs.cumprod()
+        expected = pd.Series(
+            [1, 2, got._column.default_na_value(), 8, 40], dtype="int64"
         )
-        assert_eq(gs.cumprod(), expected)
+        assert_eq(got, expected)
 
 
 def test_scan_boolean_cumsum():

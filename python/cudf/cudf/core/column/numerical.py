@@ -255,8 +255,10 @@ class NumericalColumn(column.ColumnBase):
         dkind = self.dtype.kind
         if dkind == "f":
             return self.dtype.type(np.nan)
-        elif dkind in {"u", "i"}:
-            return self.dtype.type(np.iinfo("int64").max)
+        elif dkind == "i":
+            return np.iinfo(self.dtype).min
+        elif dkind == "u":
+            return np.iinfo(self.dtype).max
         elif dkind == "b":
             return self.dtype.type(False)
         else:

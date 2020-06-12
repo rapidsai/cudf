@@ -1614,50 +1614,56 @@ def test_string_find(data, sub):
     ps = pd.Series(data)
     gs = Series(data)
 
+    got = gs.str.find(sub)
+    expect = ps.str.find(sub).fillna(got._column.default_na_value())
     assert_eq(
-        ps.str.find(sub).fillna(np.int8(np.int8(np.iinfo("int64").max))),
-        gs.str.find(sub),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.find(sub, start=1).fillna(np.int8(np.iinfo("int64").max)),
-        gs.str.find(sub, start=1),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.find(sub, end=10).fillna(np.int8(np.iinfo("int64").max)),
-        gs.str.find(sub, end=10),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.find(sub, start=2, end=10).fillna(
-            np.int8(np.iinfo("int64").max)
-        ),
-        gs.str.find(sub, start=2, end=10),
-        check_dtype=False,
+        expect, got, check_dtype=False,
     )
 
+    got = gs.str.find(sub, start=1)
+    expect = ps.str.find(sub, start=1).fillna(got._column.default_na_value())
     assert_eq(
-        ps.str.rfind(sub).fillna(np.int8(np.iinfo("int64").max)),
-        gs.str.rfind(sub),
-        check_dtype=False,
+        expect, got, check_dtype=False,
+    )
+
+    got = gs.str.find(sub, end=10)
+    expect = ps.str.find(sub, end=10).fillna(got._column.default_na_value())
+    assert_eq(
+        expect, got, check_dtype=False,
+    )
+
+    got = gs.str.find(sub, start=2, end=10)
+    expect = ps.str.find(sub, start=2, end=10).fillna(
+        got._column.default_na_value()
     )
     assert_eq(
-        ps.str.rfind(sub, start=1).fillna(np.int8(np.iinfo("int64").max)),
-        gs.str.rfind(sub, start=1),
-        check_dtype=False,
+        expect, got, check_dtype=False,
+    )
+
+    got = gs.str.rfind(sub)
+    expect = ps.str.rfind(sub).fillna(got._column.default_na_value())
+    assert_eq(
+        expect, got, check_dtype=False,
+    )
+
+    got = gs.str.rfind(sub, start=1)
+    expect = ps.str.rfind(sub, start=1).fillna(got._column.default_na_value())
+    assert_eq(
+        expect, got, check_dtype=False,
+    )
+
+    got = gs.str.rfind(sub, end=10)
+    expect = ps.str.rfind(sub, end=10).fillna(got._column.default_na_value())
+    assert_eq(
+        expect, got, check_dtype=False,
+    )
+
+    got = gs.str.rfind(sub, start=2, end=10)
+    expect = ps.str.rfind(sub, start=2, end=10).fillna(
+        got._column.default_na_value()
     )
     assert_eq(
-        ps.str.rfind(sub, end=10).fillna(np.int8(np.iinfo("int64").max)),
-        gs.str.rfind(sub, end=10),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.rfind(sub, start=2, end=10).fillna(
-            np.int8(np.iinfo("int64").max)
-        ),
-        gs.str.rfind(sub, start=2, end=10),
-        check_dtype=False,
+        expect, got, check_dtype=False,
     )
 
 
