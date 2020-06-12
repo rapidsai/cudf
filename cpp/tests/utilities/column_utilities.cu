@@ -473,7 +473,9 @@ struct column_view_printer {
   }
 
   template <typename Element, typename std::enable_if_t<is_duration<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out)
+  void operator()(cudf::column_view const& col,
+                  std::vector<std::string>& out,
+                  std::string const& indent)
   {
     CUDF_FAIL("duration printing not supported yet");
   }
