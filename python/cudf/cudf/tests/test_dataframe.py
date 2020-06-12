@@ -6042,6 +6042,25 @@ def test_cudf_isclose(data1, data2, rtol, atol):
     )
 
     assert_eq(expected, actual)
+    actual = gd.isclose(data1, data2, rtol=rtol, atol=atol)
+
+    assert_eq(expected, actual)
+
+    actual = gd.isclose(
+        cupy.array(data1), cupy.array(data2), rtol=rtol, atol=atol
+    )
+
+    assert_eq(expected, actual)
+
+    actual = gd.isclose(np.array(data1), np.array(data2), rtol=rtol, atol=atol)
+
+    assert_eq(expected, actual)
+
+    actual = gd.isclose(
+        pd.Series(data1), pd.Series(data2), rtol=rtol, atol=atol
+    )
+
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -6109,6 +6128,8 @@ def test_cudf_isclose_nulls(data1, data2, equal_nan):
     actual = gd.isclose(
         gd.Series(data1), gd.Series(data2), equal_nan=equal_nan
     )
+    assert_eq(expected, actual, check_dtype=False)
+    actual = gd.isclose(data1, data2, equal_nan=equal_nan)
     assert_eq(expected, actual, check_dtype=False)
 
 

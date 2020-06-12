@@ -32,6 +32,7 @@ from cudf.core.window import Rolling
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    can_convert_to_column,
     is_categorical_dtype,
     is_datetime_dtype,
     is_list_like,
@@ -4037,10 +4038,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     Parameters
     ----------
-        a : Series
-            Input Series to compare.
-        b : Series
-            Input Series to compare.
+        a : list-like, array-like or cudf.Series
+            Input sequence to compare.
+        b : list-like, array-like or cudf.Series
+            Input sequence to compare.
         rtol : float
             The relative tolerance.
         atol : float
@@ -4108,6 +4109,17 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     index = None
 
+    if not can_convert_to_column(a):
+        raise TypeError(
+            f"Parameter `a` is expected to be a "
+            f"list-like or Series object, found:{type(a)}"
+        )
+    if not can_convert_to_column(b):
+        raise TypeError(
+            f"Parameter `b` is expected to be a "
+            f"list-like or Series object, found:{type(a)}"
+        )
+
     if isinstance(a, pd.Series):
         a = Series.from_pandas(a)
     if isinstance(b, pd.Series):
@@ -4116,16 +4128,6 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     if isinstance(a, cudf.Series) and isinstance(b, cudf.Series):
         b = b.reindex(a.index)
         index = as_index(a.index)
-    elif not isinstance(a, cudf.Series):
-        raise TypeError(
-            f"Type of parameter `a` is expected to be a "
-            f"cudf.Series, found:{type(a)}"
-        )
-    elif not isinstance(b, cudf.Series):
-        raise TypeError(
-            f"Type of parameter `b` is expected to be a "
-            f"cudf.Series, found:{type(b)}"
-        )
 
     a_col = column.as_column(a)
     a_array = cupy.asarray(a_col.data_array_view)
