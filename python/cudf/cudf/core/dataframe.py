@@ -2797,7 +2797,7 @@ class DataFrame(Frame, Serializable):
             1  or 'columns' for columns
         copy : boolean, default True
             Also copy underlying data
-        inplace: boolean, default False
+        inplace : boolean, default False
             Return new DataFrame.  If True, assign columns without copy
         limit: None
             Limit not yet implimented
