@@ -226,7 +226,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
     [d_strings, strings_count, ngrams] __device__(auto idx) {
       if (d_strings.is_null(idx) || (idx == strings_count)) return 0;
       auto const length = d_strings.element<cudf::string_view>(idx).length();
-      return std::max(0, (length + 1 - ngrams));  //(length < ngrams) ? 0 : (length + 1 - ngrams);
+      return std::max(0, (length + 1 - ngrams));
     },
     cudf::size_type{0},
     thrust::plus<cudf::size_type>());
