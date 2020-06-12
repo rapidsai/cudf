@@ -58,6 +58,7 @@
 - PR #5429 Improve text wrapping in libcudf documentation
 - PR #5443 Remove unused `is_simple` trait
 - PR #5441 Update Java HostMemoryBuffer to only load native libs when necessary
+- PR #5437 Improve libcudf join documentation
 
 ## Bug Fixes
 
