@@ -2799,8 +2799,8 @@ class DataFrame(Frame, Serializable):
             Also copy underlying data
         inplace : boolean, default False
             Return new DataFrame.  If True, assign columns without copy
-        limit: None
-            Limit not yet implimented
+        level : int or level name, default None
+            In case of a MultiIndex, only rename labels in the specified level.
         errors : {'raise', 'ignore', 'warn'}, default 'ignore'
             *Only 'ignore' supported*
             Control raising of exceptions on invalid data for provided dtype.
