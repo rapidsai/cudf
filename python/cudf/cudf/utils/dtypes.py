@@ -194,21 +194,18 @@ def is_list_like(obj):
     This function checks if the given `obj`
     is a list-like (list, tuple, Series...)
     type or not.
+
     Parameters
     ----------
     obj : object of any type which needs to be validated.
+
     Returns
     -------
     Boolean: True or False depending on whether the
     input `obj` is like-like or not.
     """
 
-    if isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
-        obj, (str, bytes)
-    ):
-        return True
-    else:
-        return False
+    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(obj, (str, bytes))
 
 
 def is_column_like(obj):
