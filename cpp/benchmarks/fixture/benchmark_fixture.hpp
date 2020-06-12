@@ -15,8 +15,11 @@
  */
 
 #include <benchmark/benchmark.h>
-#include <rmm/rmm_api.h>
 #include <rmm/thrust_rmm_allocator.h>
+#include <memory>
+#include "rmm/mr/device/cnmem_memory_resource.hpp"
+#include "rmm/mr/device/default_memory_resource.hpp"
+#include "rmm/mr/device/device_memory_resource.hpp"
 
 namespace cudf {
 /**
@@ -51,14 +54,13 @@ namespace cudf {
  * BENCHMARK_REGISTER_F(my_benchmark, my_test_name)->Range(128, 512);
  */
 class benchmark : public ::benchmark::Fixture {
- public:
-  virtual void SetUp(const ::benchmark::State& state)
-  {
-    rmmOptions_t options{PoolAllocation, 0, false};
-    rmmInitialize(&options);
-  }
+  std::unique_ptr<rmm::mr::cnmem_memory_resource> mr{
+    std::make_unique<rmm::mr::cnmem_memory_resource>()};
 
-  virtual void TearDown(const ::benchmark::State& state) { rmmFinalize(); }
+ public:
+  virtual void SetUp(const ::benchmark::State& state) { rmm::mr::set_default_resource(mr.get()); }
+
+  virtual void TearDown(const ::benchmark::State& state) {}
 
   // eliminate partial override warnings (see benchmark/benchmark.h)
   virtual void SetUp(::benchmark::State& st) { SetUp(const_cast<const ::benchmark::State&>(st)); }

@@ -73,8 +73,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${GTEST_INCLUDE_DIR}"
-                    "${ARROW_INCLUDE_DIR}"
-                    "${FLATBUFFERS_INCLUDE_DIR}"
+                    "${ARROW_INCLUDE}"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}")
@@ -85,7 +84,6 @@ include_directories("${CMAKE_BINARY_DIR}/include"
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}")
 
@@ -368,7 +366,8 @@ ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 set(UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_utilities_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/lists_column_wrapper_tests.cu")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 

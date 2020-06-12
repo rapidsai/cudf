@@ -178,7 +178,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     cudaStream_t stream)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_numeric_column(data_type{BOOL8}, 0);
+  if (strings_count == 0) return make_empty_column(data_type{BOOL8});
 
   CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
   if (target.size() == 0)  // empty target string returns true
@@ -202,15 +202,75 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(strings_count),
+                    d_results,
+                    [d_strings, pfn, d_target] __device__(size_type idx) {
+                      if (!d_strings.is_null(idx))
+                        return bool{pfn(d_strings.element<string_view>(idx), d_target)};
+                      return false;
+                    });
+  results->set_null_count(strings.null_count());
+  return results;
+}
+
+/**
+ * @brief Utility to return a bool column indicating the presence of
+ * a string targets[i] in strings[i].
+ *
+ * Null string entries return corresponding null output column entries.
+ *
+ * @tparam BoolFunction Return bool value given two strings.
+ *
+ * @param strings Column of strings to check for `targets[i]`.
+ * @param targets Column of strings to be checked in `strings[i]``.
+ * @param pfn Returns bool value if target is found in the given string.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return New BOOL column.
+ */
+template <typename BoolFunction>
+std::unique_ptr<column> contains_fn(strings_column_view const& strings,
+                                    strings_column_view const& targets,
+                                    BoolFunction pfn,
+                                    rmm::mr::device_memory_resource* mr,
+                                    cudaStream_t stream)
+{
+  auto strings_count = strings.size();
+  if (strings_count == 0) return make_empty_column(data_type{BOOL8});
+
+  auto targets_count = targets.size();
+  CUDF_EXPECTS(targets_count > 0, "Must include at least one search target");
+
+  auto targets_column = column_device_view::create(targets.parent(), stream);
+  auto d_targets      = *targets_column;
+  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto d_strings      = *strings_column;
+  // create output column
+  auto results      = make_numeric_column(data_type{BOOL8},
+                                     strings_count,
+                                     copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
+  auto results_view = results->mutable_view();
+  auto d_results    = results_view.data<bool>();
+  // set the bool values by evaluating the passed function
   thrust::transform(
     rmm::exec_policy(stream)->on(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     d_results,
-    [d_strings, pfn, d_target] __device__(size_type idx) {
-      if (!d_strings.is_null(idx))
-        return static_cast<bool>(pfn(d_strings.element<string_view>(idx), d_target));
-      return false;
+    [d_strings, pfn, d_targets] __device__(size_type idx) {
+      // empty target string returns true
+      if (d_targets.is_valid(idx) && d_targets.element<string_view>(idx).length() == 0) {
+        return true;
+      } else if (!d_strings.is_null(idx) && !d_targets.is_null(idx)) {
+        return bool{pfn(d_strings.element<string_view>(idx), d_targets.element<string_view>(idx))};
+      } else {
+        return false;
+      }
     });
   results->set_null_count(strings.null_count());
   return results;
@@ -242,6 +302,18 @@ std::unique_ptr<column> starts_with(
   return contains_fn(strings, target, pfn, mr, stream);
 }
 
+std::unique_ptr<column> starts_with(
+  strings_column_view const& strings,
+  strings_column_view const& targets,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0)
+{
+  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+    return d_string.find(d_target) == 0;
+  };
+  return contains_fn(strings, targets, pfn, mr, stream);
+}
+
 std::unique_ptr<column> ends_with(
   strings_column_view const& strings,
   string_scalar const& target,
@@ -256,6 +328,22 @@ std::unique_ptr<column> ends_with(
   };
 
   return contains_fn(strings, target, pfn, mr, stream);
+}
+
+std::unique_ptr<column> ends_with(
+  strings_column_view const& strings,
+  strings_column_view const& targets,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0)
+{
+  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+    auto str_length = d_string.length();
+    auto tgt_length = d_target.length();
+    if (str_length < tgt_length) return false;
+    return d_string.find(d_target, str_length - tgt_length) >= 0;
+  };
+
+  return contains_fn(strings, targets, pfn, mr, stream);
 }
 
 }  // namespace detail
@@ -278,12 +366,28 @@ std::unique_ptr<column> starts_with(strings_column_view const& strings,
   return detail::starts_with(strings, target, mr);
 }
 
+std::unique_ptr<column> starts_with(strings_column_view const& strings,
+                                    strings_column_view const& targets,
+                                    rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::starts_with(strings, targets, mr);
+}
+
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   string_scalar const& target,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::ends_with(strings, target, mr);
+}
+
+std::unique_ptr<column> ends_with(strings_column_view const& strings,
+                                  strings_column_view const& targets,
+                                  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::ends_with(strings, targets, mr);
 }
 
 }  // namespace strings
