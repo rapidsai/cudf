@@ -2764,7 +2764,7 @@ class DataFrame(Frame, Serializable):
         axis=0,
         copy=True,
         inplace=False,
-        limit=None,
+        level=None,
         errors="ignore",
     ):
         """Alter column and index labels.
