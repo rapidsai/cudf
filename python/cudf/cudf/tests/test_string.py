@@ -252,7 +252,14 @@ def test_string_numeric_astype(dtype):
     elif dtype.startswith("float"):
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
     elif dtype.startswith("datetime64"):
-        data = [1000000000, 2000000000, 3000000000, 4000000000, 5000000000, -2000000000]
+        data = [
+            1000000000,
+            2000000000,
+            3000000000,
+            4000000000,
+            5000000000,
+            -2000000000,
+        ]
     if dtype.startswith("datetime64"):
         ps = pd.Series(data, dtype="datetime64[ns]")
         gs = Series.from_pandas(ps)
