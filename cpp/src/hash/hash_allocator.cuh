@@ -19,7 +19,6 @@
 
 #include <new>
 
-#include <rmm/rmm.h>
 #include <rmm/mr/device/default_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>

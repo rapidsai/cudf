@@ -19,9 +19,6 @@
 #include <rmm/device_buffer.hpp>
 #include <strings/regex/regex.cuh>
 
-#include <rmm/rmm_api.h>
-#include <rmm/rmm.hpp>
-
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -99,18 +96,6 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   if (insts_count > MAX_STACK_INSTS) {
     auto relist_alloc_size = relist::alloc_size(insts_count);
     rlm_size               = relist_alloc_size * 2L * strings_count;  // reljunk has 2 relist ptrs
-    size_t freeSize        = 0;
-    size_t totalSize       = 0;
-    rmmGetInfo(&freeSize, &totalSize, stream);
-    if (rlm_size + memsize > freeSize)  // do not allocate more than we have
-    {                                   // otherwise, this is unrecoverable
-      std::ostringstream message;
-      message << "cuDF failure at: " __FILE__ ":" << __LINE__ << ": ";
-      message << "number of instructions (" << insts_count << ") ";
-      message << "and number of strings (" << strings_count << ") ";
-      message << "exceeds available memory";
-      throw cudf::logic_error(message.str());
-    }
   }
 
   // allocate memory to store prog data

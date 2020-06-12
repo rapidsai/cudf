@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,14 +22,13 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <join/join_common_utils.hpp>
-#include <join/join_kernels.cuh>
+#include "join_common_utils.hpp"
+#include "join_kernels.cuh"
 
 namespace cudf {
 namespace detail {
-/* --------------------------------------------------------------------------*/
 /**
- * @brief  Gives an estimate of the size of the join output produced when
+ * @brief Gives an estimate of the size of the join output produced when
  * joining two tables together.
  *
  * If the two tables are of relatively equal size, then the returned output
@@ -37,16 +36,19 @@ namespace detail {
  * significantly larger than the build table, then we attempt to estimate the
  * output size by using only a subset of the rows in the probe table.
  *
- * @throws cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
+ * @throw cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
+ *
+ * @tparam JoinKind The type of join to be performed
+ * @tparam multimap_type The type of the hash table
  *
  * @param build_table The right hand table
  * @param probe_table The left hand table
  * @param hash_table A hash table built on the build table that maps the index
  * of every row to the hash value of that row.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
- * @returns An estimate of the size of the output of the join operation
+ * @return An estimate of the size of the output of the join operation
  */
-/* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind, typename multimap_type>
 size_type estimate_join_output_size(table_device_view build_table,
                                     table_device_view probe_table,
@@ -151,19 +153,17 @@ size_type estimate_join_output_size(table_device_view build_table,
   return h_size_estimate;
 }
 
-/* --------------------------------------------------------------------------*/
 /**
- * @brief  Computes the trivial left join operation for the case when the
+ * @brief Computes the trivial left join operation for the case when the
  * right table is empty. In this case all the valid indices of the left table
  * are returned with their corresponding right indices being set to
  * JoinNoneValue, i.e. -1.
  *
  * @param left  Table of left columns to join
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
- * @returns Join output indices vector pair
+ * @return Join output indices vector pair
  */
-/* ----------------------------------------------------------------------------*/
 inline std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
 get_trivial_left_join_indices(table_view const& left, cudaStream_t stream)
 {
@@ -178,23 +178,22 @@ get_trivial_left_join_indices(table_view const& left, cudaStream_t stream)
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 
-/* --------------------------------------------------------------------------*/
 /**
- * @brief  Computes the join operation between two tables and returns the
+ * @brief Computes the join operation between two tables and returns the
  * output indices of left and right table as a combined table
  *
- * @param left  Table of left columns to join
- * @param right Table of right  columns to join
- * @param flip_join_indices Flag that indicates whether the left and right
- * tables have been flipped, meaning the output indices should also be flipped.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @tparam join_kind The type of join to be performed
+ * @tparam JoinKind The type of join to be performed
  *
- * @returns Join output indices vector pair
+ * @param left  Table of left columns to join
+ * @param right Table of right columns to join
+ * @param flip_join_indices Flag that indicates whether the left and right
+ * tables have been flipped, meaning the output indices should also be flipped
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return Join output indices vector pair
  */
-/* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
-std::enable_if_t<(JoinKind != join_kind::FULL_JOIN),
+std::enable_if_t<(JoinKind == join_kind::INNER_JOIN || JoinKind == join_kind::LEFT_JOIN),
                  std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>>
 get_base_hash_join_indices(table_view const& left,
                            table_view const& right,
@@ -266,18 +265,20 @@ get_base_hash_join_indices(table_view const& left,
 
     row_hash hash_probe{*probe_table};
     row_equality equality{*probe_table, *build_table};
-    probe_hash_table<JoinKind, multimap_type, hash_value_type, block_size, DEFAULT_JOIN_CACHE_SIZE>
+    const auto& join_output_l =
+      flip_join_indices ? right_indices.data().get() : left_indices.data().get();
+    const auto& join_output_r =
+      flip_join_indices ? left_indices.data().get() : right_indices.data().get();
+    probe_hash_table<JoinKind, multimap_type, block_size, DEFAULT_JOIN_CACHE_SIZE>
       <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(*hash_table,
                                                                        *build_table,
                                                                        *probe_table,
                                                                        hash_probe,
                                                                        equality,
-                                                                       probe_table->num_rows(),
-                                                                       left_indices.data().get(),
-                                                                       right_indices.data().get(),
+                                                                       join_output_l,
+                                                                       join_output_r,
                                                                        write_index.data(),
-                                                                       estimated_size,
-                                                                       flip_join_indices);
+                                                                       estimated_size);
 
     CHECK_CUDA(stream);
 
