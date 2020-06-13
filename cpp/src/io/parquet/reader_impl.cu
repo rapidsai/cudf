@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <array>
+#include <numeric>
 #include <regex>
 
 namespace cudf {
@@ -179,10 +180,7 @@ struct metadata : public FileMetaData {
     CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
   }
 
-  int64_t get_total_rows() const { return num_rows; }
-  int get_num_row_groups() const { return row_groups.size(); }
-
-  std::vector<std::string> get_column_names()  // move to ctor
+  std::vector<std::string> get_column_names() const  // move to ctor
   {
     std::vector<std::string> all_names;
     if (row_groups.size() != 0) {
@@ -192,6 +190,58 @@ struct metadata : public FileMetaData {
     }
     return all_names;
   }
+};
+
+class aggregate_metadata {
+  std::vector<metadata> per_file_metadata;
+  std::map<std::string, std::string> agg_keyval_map;
+
+ public:
+  aggregate_metadata(std::vector<std::unique_ptr<datasource>> const &sources)
+  {
+    std::transform(sources.cbegin(),
+                   sources.cend(),
+                   std::back_inserter(per_file_metadata),
+                   [](auto const &source) { return metadata(source.get()); });
+
+    // merge key/value maps TODO: warn/throw if there are mismatches?
+    for (auto const &pfm : per_file_metadata) {
+      for (auto const &kv : pfm.key_value_metadata) { agg_keyval_map[kv.key] = kv.value; }
+    }
+  }
+
+  auto const &get_row_group(size_type idx) const
+  {
+    size_t offset = idx;
+    for (auto const &pfm : per_file_metadata) {
+      auto const current_rg_size = pfm.row_groups.size();
+      if (offset < current_rg_size) return pfm.row_groups[offset];
+      offset -= current_rg_size;
+    }
+    CUDF_FAIL("Invalid row group index");
+  }
+
+  int64_t get_num_rows() const
+  {
+    return std::accumulate(
+      per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto &sum, auto &pfm) {
+        return sum + pfm.num_rows;
+      });
+  }
+  int get_num_row_groups() const
+  {
+    return std::accumulate(
+      per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto &sum, auto &pfm) {
+        return sum + pfm.row_groups.size();
+      });
+  }
+  // TODO make sure names match
+  auto get_column_names() const { return per_file_metadata[0].get_column_names(); }
+
+  // TODO make sure schemas match
+  auto const &get_schema() const { return per_file_metadata[0].schema; }
+
+  auto const &get_key_value_metadata() const { return agg_keyval_map; }
 
   /**
    * @brief Extracts the pandas "index_columns" section
@@ -204,10 +254,8 @@ struct metadata : public FileMetaData {
    */
   std::string get_pandas_index() const
   {
-    auto it = std::find_if(key_value_metadata.begin(),
-                           key_value_metadata.end(),
-                           [](const auto &item) { return item.key == "pandas"; });
-    if (it != key_value_metadata.end()) {
+    auto it = agg_keyval_map.find("pandas");
+    if (it != agg_keyval_map.end()) {
       // Captures a list of quoted strings found inside square brackets after `"index_columns":`
       // Inside quotes supports newlines, brackets, escaped quotes, etc.
       // One-liner regex:
@@ -225,7 +273,7 @@ struct metadata : public FileMetaData {
         R"(\])"                           // Match closing square brackets
       };
       std::smatch sm;
-      if (std::regex_search(it->value, sm, index_columns_expr)) { return std::move(sm[1].str()); }
+      if (std::regex_search(it->second, sm, index_columns_expr)) { return std::move(sm[1].str()); }
     }
     return "";
   }
@@ -268,7 +316,7 @@ struct metadata : public FileMetaData {
                          size_type max_rowgroup_count,
                          const size_type *row_group_indices,
                          size_type &row_start,
-                         size_type &row_count)
+                         size_type &row_count) const
   {
     std::vector<std::pair<size_type, size_t>> selection;
 
@@ -279,31 +327,29 @@ struct metadata : public FileMetaData {
         CUDF_EXPECTS(rowgroup_idx >= 0 && rowgroup_idx < get_num_row_groups(),
                      "Invalid rowgroup index");
         selection.emplace_back(rowgroup_idx, row_count);
-        row_count += row_groups[rowgroup_idx].num_rows;
+        row_count += get_row_group(rowgroup_idx).num_rows;
       }
     } else if (row_group != -1) {
       CUDF_EXPECTS(row_group < get_num_row_groups(), "Non-existent row group");
       row_count = 0;
       do {
         selection.emplace_back(row_group, row_start + row_count);
-        row_count += row_groups[row_group].num_rows;
+        row_count += get_row_group(row_group).num_rows;
       } while (--max_rowgroup_count > 0 && ++row_group < get_num_row_groups());
     } else {
       row_start = std::max(row_start, 0);
       if (row_count < 0) {
         row_count = static_cast<size_type>(
-          std::min<int64_t>(get_total_rows(), std::numeric_limits<size_type>::max()));
+          std::min<int64_t>(get_num_rows(), std::numeric_limits<size_type>::max()));
       }
       CUDF_EXPECTS(row_count >= 0, "Invalid row count");
-      CUDF_EXPECTS(row_start <= get_total_rows(), "Invalid row start");
+      CUDF_EXPECTS(row_start <= get_num_rows(), "Invalid row start");
 
-      for (size_t i = 0, count = 0; i < row_groups.size(); ++i) {
+      for (size_type i = 0, count = 0; i < get_num_row_groups(); ++i) {
         size_t chunk_start_row = count;
-        count += row_groups[i].num_rows;
-        if (count > static_cast<size_t>(row_start) || count == 0) {
-          selection.emplace_back(i, chunk_start_row);
-        }
-        if (count >= static_cast<size_t>(row_start) + static_cast<size_t>(row_count)) { break; }
+        count += get_row_group(i).num_rows;
+        if (count > row_start || count == 0) { selection.emplace_back(i, chunk_start_row); }
+        if (count >= row_start + row_count) { break; }
       }
     }
 
@@ -318,7 +364,7 @@ struct metadata : public FileMetaData {
    *
    * @return List of column names
    */
-  auto select_columns(std::vector<std::string> use_names, bool include_index)
+  auto select_columns(std::vector<std::string> use_names, bool include_index) const
   {
     std::vector<std::pair<int, std::string>> selection;
 
@@ -602,7 +648,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> sources,
   : _sources(std::move(sources)), _mr(mr)
 {
   // Open and parse the source dataset metadata
-  _metadata = std::make_unique<metadata>(_sources[0].get());
+  _metadata = std::make_unique<aggregate_metadata>(_sources);
 
   // Select only columns required by the options
   _selected_columns = _metadata->select_columns(options.columns, options.use_pandas_metadata);
@@ -630,14 +676,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
   // Get a list of column data types
   std::vector<data_type> column_types;
-  if (_metadata->row_groups.size() != 0) {
+  if (_metadata->get_num_row_groups() != 0) {
     for (const auto &col : _selected_columns) {
-      auto &col_schema = _metadata->schema[_metadata->row_groups[0].columns[col.first].schema_idx];
-      auto col_type    = to_type_id(col_schema.type,
-                                 col_schema.converted_type,
-                                 _strings_to_categorical,
-                                 _timestamp_type.id(),
-                                 col_schema.decimal_scale);
+      auto const &col_schema =
+        _metadata->get_schema()[_metadata->get_row_group(0).columns[col.first].schema_idx];
+      auto const col_type = to_type_id(col_schema.type,
+                                       col_schema.converted_type,
+                                       _strings_to_categorical,
+                                       _timestamp_type.id(),
+                                       col_schema.decimal_scale);
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       column_types.emplace_back(col_type);
     }
@@ -663,15 +710,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     size_t total_decompressed_size = 0;
     auto remaining_rows            = num_rows;
     for (const auto &rg : selected_row_groups) {
-      const auto &row_group = _metadata->row_groups[rg.first];
-      auto row_group_start  = rg.second;
-      auto row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
-      auto io_chunk_idx     = chunks.size();
+      const auto &row_group      = _metadata->get_row_group(rg.first);
+      auto const row_group_start = rg.second;
+      auto const row_group_rows  = std::min<int>(remaining_rows, row_group.num_rows);
+      auto const io_chunk_idx    = chunks.size();
 
       for (size_t i = 0; i < num_columns; ++i) {
-        auto col         = _selected_columns[i];
-        auto &col_meta   = row_group.columns[col.first].meta_data;
-        auto &col_schema = _metadata->schema[row_group.columns[col.first].schema_idx];
+        auto const col         = _selected_columns[i];
+        auto const &col_meta   = row_group.columns[col.first].meta_data;
+        auto const &col_schema = _metadata->get_schema()[row_group.columns[col.first].schema_idx];
 
         // Spec requires each row group to contain exactly one chunk for every
         // column. If there are too many or too few, continue with best effort
@@ -753,8 +800,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       for (size_t i = 0; i < column_types.size(); ++i) {
         auto col = _selected_columns[i];
         auto &col_schema =
-          _metadata->schema
-            [_metadata->row_groups[selected_row_groups[0].first].columns[col.first].schema_idx];
+          _metadata->get_schema()
+            [_metadata->get_row_group(selected_row_groups[0].first).columns[col.first].schema_idx];
         bool is_nullable = (col_schema.max_definition_level != 0);
         out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
@@ -779,9 +826,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     out_metadata.column_names[i] = _selected_columns[i].second;
   }
   // Return user metadata
-  for (const auto &kv : _metadata->key_value_metadata) {
-    out_metadata.user_data.insert({kv.key, kv.value});
-  }
+  out_metadata.user_data = _metadata->get_key_value_metadata();
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
