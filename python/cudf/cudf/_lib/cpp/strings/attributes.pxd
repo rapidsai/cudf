@@ -10,5 +10,8 @@ cdef extern from "cudf/strings/attributes.hpp" namespace "cudf::strings" nogil:
     cdef unique_ptr[column] count_characters(
         column_view source_strings) except +
 
+    cdef unique_ptr[column] count_bytes(
+        column_view source_strings) except +
+
     cdef unique_ptr[column] code_points(
         column_view source_strings) except +
