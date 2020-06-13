@@ -543,6 +543,14 @@ class Series(Frame, Serializable):
         from cudf.core.column import numerical
         from cudf.utils.dtypes import numeric_normalize_types
 
+        if (this.dtype == "object" and other.dtype != "object") or (
+            other.dtype == "object" and this.dtype != "object"
+        ):
+            raise TypeError(
+                "cudf does not support mixed types, please type-cast "
+                "both series to same dtypes."
+            )
+
         if isinstance(this._column, numerical.NumericalColumn):
             if self.dtype != other.dtype:
                 this, other = numeric_normalize_types(this, other)
