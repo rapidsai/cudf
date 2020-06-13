@@ -31,7 +31,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
     col_dtype = incol.dtype
     if reduction_op in ['sum', 'sum_of_squares', 'product']:
-        col_dtype = np.find_common_type([col_dtype], [np.int64])
+        col_dtype = np.find_common_type([col_dtype], [np.uint64])
     col_dtype = col_dtype if dtype is None else dtype
 
     cdef column_view c_incol_view = incol.view()

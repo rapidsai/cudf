@@ -125,6 +125,10 @@ _str_to_numeric_typecast_functions = {
     np.dtype("int16"): str_cast.stoi16,
     np.dtype("int32"): str_cast.stoi,
     np.dtype("int64"): str_cast.stol,
+    np.dtype("uint8"): str_cast.stoui8,
+    np.dtype("uint16"): str_cast.stoui16,
+    np.dtype("uint32"): str_cast.stoui,
+    np.dtype("uint64"): str_cast.stoul,
     np.dtype("float32"): str_cast.stof,
     np.dtype("float64"): str_cast.stod,
     np.dtype("bool"): str_cast.to_booleans,
@@ -141,6 +145,10 @@ _numeric_to_str_typecast_functions = {
     np.dtype("int16"): str_cast.i16tos,
     np.dtype("int32"): str_cast.itos,
     np.dtype("int64"): str_cast.ltos,
+    np.dtype("uint8"): str_cast.ui8tos,
+    np.dtype("uint16"): str_cast.ui16tos,
+    np.dtype("uint32"): str_cast.uitos,
+    np.dtype("uint64"): str_cast.ultos,
     np.dtype("float32"): str_cast.ftos,
     np.dtype("float64"): str_cast.dtos,
     np.dtype("bool"): str_cast.from_booleans,
@@ -3770,13 +3778,13 @@ class StringColumn(column.ColumnBase):
                 raise ValueError("Could not convert `None` value to datetime")
 
             boolean_match = self.binary_operator("eq", "NaT")
-        elif out_dtype.kind in ("i"):
+        elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
                     "Could not convert strings to integer \
                         type due to presence of non-integer values."
                 )
-        elif out_dtype.kind in ("f"):
+        elif out_dtype.kind == "f":
             if not cpp_is_float(self).all():
                 raise ValueError(
                     "Could not convert strings to float \
@@ -3895,9 +3903,9 @@ class StringColumn(column.ColumnBase):
 
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in ("i") and not cpp_is_integer(self).all():
+        elif to_dtype.kind in {"i", "u"} and not cpp_is_integer(self).all():
             return False
-        elif to_dtype.kind in ("f") and not cpp_is_float(self).all():
+        elif to_dtype.kind == "f" and not cpp_is_float(self).all():
             return False
         else:
             return True

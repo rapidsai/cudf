@@ -17,7 +17,14 @@ import cudf as gd
 from cudf.core.column import column
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
-from cudf.tests.utils import assert_eq, does_not_raise, gen_rand
+from cudf.tests.utils import (
+    ALL_TYPES,
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+    does_not_raise,
+    gen_rand,
+)
 
 
 def test_init_via_list_of_tuples():
@@ -834,7 +841,9 @@ def test_dataframe_hash_partition_masked_value(nrows):
         df = p.to_pandas()
         for row in df.itertuples():
             valid = bool(bytemask[row.key])
-            expected_value = row.key + 100 if valid else -1
+            expected_value = (
+                row.key + 100 if valid else np.iinfo(gdf["val"].dtype).min
+            )
             got_value = row.val
             assert expected_value == got_value
 
@@ -854,7 +863,9 @@ def test_dataframe_hash_partition_masked_keys(nrows):
         for row in df.itertuples():
             valid = bool(bytemask[row.val - 100])
             # val is key + 100
-            expected_value = row.val - 100 if valid else -1
+            expected_value = (
+                row.val - 100 if valid else np.iinfo(gdf["val"].dtype).min
+            )
             got_value = row.key
             assert expected_value == got_value
 
@@ -951,7 +962,7 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
     )
 
     # numerical columns are upcasted to float in cudf.DataFrame.to_pandas()
-    # casts nan to -1 in non-float numerical columns
+    # casts nan to 0 in non-float numerical columns
 
     numeric_cols = got.dtypes[got.dtypes != "object"].index
     for col in numeric_cols:
@@ -1182,23 +1193,11 @@ def test_index_in_dataframe_constructor():
     assert pd.testing.assert_frame_equal(a.loc[4:], b.loc[4:].to_pandas())
 
 
+dtypes = NUMERIC_TYPES | DATETIME_TYPES | {"bool"}
+
+
 @pytest.mark.parametrize("nelem", [0, 2, 3, 100, 1000])
-@pytest.mark.parametrize(
-    "data_type",
-    [
-        "bool",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[s]",
-        "datetime64[ms]",
-        "datetime64[us]",
-        "datetime64[ns]",
-    ],
-)
+@pytest.mark.parametrize("data_type", dtypes)
 def test_from_arrow(nelem, data_type):
     df = pd.DataFrame(
         {
@@ -1224,22 +1223,7 @@ def test_from_arrow(nelem, data_type):
 
 
 @pytest.mark.parametrize("nelem", [0, 2, 3, 100, 1000])
-@pytest.mark.parametrize(
-    "data_type",
-    [
-        "bool",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[s]",
-        "datetime64[ms]",
-        "datetime64[us]",
-        "datetime64[ns]",
-    ],
-)
+@pytest.mark.parametrize("data_type", dtypes)
 def test_to_arrow(nelem, data_type):
     df = pd.DataFrame(
         {
@@ -1271,23 +1255,10 @@ def test_to_arrow(nelem, data_type):
     assert pa.Array.equals(pa_i, pa_gi)
 
 
-@pytest.mark.parametrize(
-    "data_type",
-    [
-        "bool",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[s]",
-        "datetime64[ms]",
-        "datetime64[us]",
-        "datetime64[ns]",
-    ],
-)
+@pytest.mark.parametrize("data_type", dtypes)
 def test_to_from_arrow_nulls(data_type):
+    if data_type == "longlong":
+        data_type = "int64"
     if data_type == "bool":
         s1 = pa.array([True, None, False, None, True], type=data_type)
     else:
@@ -1359,24 +1330,7 @@ def test_to_arrow_missing_categorical():
     assert pa.Array.equals(pa_cat, gd_cat.to_arrow())
 
 
-@pytest.mark.parametrize(
-    "data_type",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "longlong",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-        "datetime64",
-        "datetime64[ns]",
-        "datetime64[D]",
-        "datetime64[s]",
-        "datetime64[M]",
-    ],
-)
+@pytest.mark.parametrize("data_type", dtypes)
 def test_from_scalar_typing(data_type):
     if data_type == "datetime64[ms]":
         scalar = (
@@ -1399,10 +1353,7 @@ def test_from_scalar_typing(data_type):
     assert len(gdf["b"]) == len(gdf["a"])
 
 
-@pytest.mark.parametrize(
-    "data_type",
-    ["int8", "int16", "int32", "int64", "float32", "float64", "longlong"],
-)
+@pytest.mark.parametrize("data_type", NUMERIC_TYPES)
 def test_from_python_array(data_type):
     np_arr = np.random.randint(0, 100, 10).astype(data_type)
     data = memoryview(np_arr)
@@ -1443,21 +1394,7 @@ def test_dataframe_shape_empty():
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 20])
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[s]",
-        "datetime64[ms]",
-        "datetime64[us]",
-        "datetime64[ns]",
-    ],
-)
+@pytest.mark.parametrize("dtype", dtypes)
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
 
@@ -1791,9 +1728,7 @@ def test_series_hash_encode(nrows):
     assert enc_with_name_arr[0] != enc_arr[0]
 
 
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES | {"bool"})
 def test_cuda_array_interface(dtype):
 
     np_data = np.arange(10).astype(dtype)
@@ -1811,22 +1746,7 @@ def test_cuda_array_interface(dtype):
 
 @pytest.mark.parametrize("nelem", [0, 2, 3, 100])
 @pytest.mark.parametrize("nchunks", [1, 2, 5, 10])
-@pytest.mark.parametrize(
-    "data_type",
-    [
-        "bool",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[s]",
-        "datetime64[ms]",
-        "datetime64[us]",
-        "datetime64[ns]",
-    ],
-)
+@pytest.mark.parametrize("data_type", dtypes)
 def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     np_list_data = [
         np.random.randint(0, 100, nelem).astype(data_type)
@@ -1981,9 +1901,7 @@ def test_arrow_handle_no_index_name(pdf, gdf):
 @pytest.mark.parametrize("num_rows", [1, 3, 10, 100])
 @pytest.mark.parametrize("num_bins", [1, 2, 4, 20])
 @pytest.mark.parametrize("right", [True, False])
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES | {"bool"})
 def test_series_digitize(num_rows, num_bins, right, dtype):
     data = np.random.randint(0, 100, num_rows).astype(dtype)
     bins = np.unique(np.sort(np.random.randint(2, 95, num_bins).astype(dtype)))
@@ -2075,22 +1993,7 @@ def test_series_rename():
     assert_eq(pds, gds)
 
 
-@pytest.mark.parametrize(
-    "data_type",
-    [
-        "bool",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[s]",
-        "datetime64[ms]",
-        "datetime64[us]",
-        "datetime64[ns]",
-    ],
-)
+@pytest.mark.parametrize("data_type", dtypes)
 @pytest.mark.parametrize("nelem", [0, 100])
 def test_head_tail(nelem, data_type):
     def check_index_equality(left, right):
@@ -2453,23 +2356,7 @@ def test_dataframe_empty_sort_index():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "bool",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "category",
-        "datetime64[s]",
-        "datetime64[ms]",
-        "datetime64[us]",
-        "datetime64[ns]",
-    ],
-)
+@pytest.mark.parametrize("dtype", dtypes | {"category"})
 def test_dataframe_0_row_dtype(dtype):
     if dtype == "category":
         data = pd.Series(["a", "b", "c", "d", "e"], dtype="category")
@@ -2655,9 +2542,7 @@ def test_series_to_gpu_array(nan_value):
     )
 
 
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 def test_series_describe_numeric(dtype):
     pdf = pd.Series([0, 1, 2, 3])
     gdf = Series.from_pandas(pdf).astype(dtype)
@@ -2779,9 +2664,7 @@ def test_get_numeric_data():
     assert_eq(pdf._get_numeric_data(), gdf._get_numeric_data())
 
 
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
 @pytest.mark.parametrize("data_empty", [False, True])
 def test_shift(dtype, period, data_empty):
@@ -2798,8 +2681,8 @@ def test_shift(dtype, period, data_empty):
     gdf = DataFrame({"a": Series(data, dtype=dtype)})
     pdf = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
 
-    shifted_outcome = gdf.a.shift(period).fillna(-1)
-    expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
+    shifted_outcome = gdf.a.shift(period).fillna(0)
+    expected_outcome = pdf.a.shift(period).fillna(0).astype(dtype)
 
     if data_empty:
         assert_eq(shifted_outcome, expected_outcome, check_index_type=False)
@@ -2807,9 +2690,7 @@ def test_shift(dtype, period, data_empty):
         assert_eq(shifted_outcome, expected_outcome)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
 @pytest.mark.parametrize("data_empty", [False, True])
 def test_diff(dtype, period, data_empty):
@@ -2825,8 +2706,8 @@ def test_diff(dtype, period, data_empty):
     gdf = DataFrame({"a": Series(data, dtype=dtype)})
     pdf = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
 
-    diffed_outcome = gdf.a.diff(period)
-    expected_outcome = pdf.a.diff(period).fillna(-1).astype(dtype)
+    expected_outcome = pdf.a.diff(period)
+    diffed_outcome = gdf.a.diff(period).astype(expected_outcome.dtype)
 
     if data_empty:
         assert_eq(diffed_outcome, expected_outcome, check_index_type=False)
@@ -3319,24 +3200,16 @@ def test_one_row_head():
     assert_eq(head_pdf, head_gdf)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
-@pytest.mark.parametrize(
-    "as_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
+@pytest.mark.parametrize("as_dtype", NUMERIC_TYPES)
 def test_series_astype_numeric_to_numeric(dtype, as_dtype):
     psr = pd.Series([1, 2, 4, 3], dtype=dtype)
     gsr = gd.from_pandas(psr)
     assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
 
 
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
-@pytest.mark.parametrize(
-    "as_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
+@pytest.mark.parametrize("as_dtype", NUMERIC_TYPES)
 def test_series_astype_numeric_to_numeric_nulls(dtype, as_dtype):
     data = [1, 2, None, 3]
     sr = gd.Series(data, dtype=dtype)
@@ -3345,9 +3218,7 @@ def test_series_astype_numeric_to_numeric_nulls(dtype, as_dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize(
     "as_dtype",
     [
@@ -3370,6 +3241,7 @@ def test_series_astype_numeric_to_other(dtype, as_dtype):
     [
         "str",
         "int32",
+        "uint32",
         "float32",
         "category",
         "datetime64[s]",
@@ -3412,6 +3284,7 @@ def test_series_astype_datetime_to_other(as_dtype):
     "as_dtype",
     [
         "int32",
+        "uint32",
         "float32",
         "category",
         "datetime64[s]",
@@ -3456,6 +3329,11 @@ def test_series_astype_null_cases():
     assert_eq(
         gd.Series(data, dtype="float32"),
         gd.Series(data, dtype="int32").astype("float32"),
+    )
+
+    assert_eq(
+        gd.Series(data, dtype="float32"),
+        gd.Series(data, dtype="uint32").astype("float32"),
     )
 
     assert_eq(
@@ -4192,28 +4070,12 @@ def test_tolist_mixed_nulls():
         assert (got == exp) or (pd.isnull(got) and pd.isnull(exp))
 
 
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
-@pytest.mark.parametrize(
-    "as_dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "str",
-        "category",
-        "datetime64[s]",
-        "datetime64[ms]",
-        "datetime64[us]",
-        "datetime64[ns]",
-    ],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
+@pytest.mark.parametrize("as_dtype", ALL_TYPES)
 def test_df_astype_numeric_to_all(dtype, as_dtype):
-    if "int" in dtype:
+    if "uint" in dtype:
+        data = [1, 2, None, 4, 7]
+    elif "int" in dtype or "longlong" in dtype:
         data = [1, 2, None, 4, -7]
     elif "float" in dtype:
         data = [1.0, 2.0, None, 4.0, np.nan, -7.0]
@@ -4223,11 +4085,11 @@ def test_df_astype_numeric_to_all(dtype, as_dtype):
     gdf["foo"] = Series(data, dtype=dtype)
     gdf["bar"] = Series(data, dtype=dtype)
 
-    insert_data = Series(data, dtype=as_dtype)
+    insert_data = Series(data, dtype=dtype)
 
     expect = DataFrame()
-    expect["foo"] = insert_data
-    expect["bar"] = insert_data
+    expect["foo"] = insert_data.astype(as_dtype)
+    expect["bar"] = insert_data.astype(as_dtype)
 
     got = gdf.astype(as_dtype)
 
@@ -4364,22 +4226,8 @@ def test_df_astype_to_categorical_ordered(ordered):
 
 @pytest.mark.parametrize(
     "dtype,args",
-    [
-        ("int8", {}),
-        ("int16", {}),
-        ("int32", {}),
-        ("int64", {}),
-        ("float32", {}),
-        ("float64", {}),
-        ("category", {}),
-        ("category", {"ordered": True}),
-        ("category", {"ordered": False}),
-        ("datetime64[s]", {}),
-        ("datetime64[ms]", {}),
-        ("datetime64[us]", {}),
-        ("datetime64[ns]", {}),
-        ("str", {}),
-    ],
+    [(dtype, {}) for dtype in ALL_TYPES]
+    + [("category", {"ordered": True}), ("category", {"ordered": False})],
 )
 def test_empty_df_astype(dtype, args):
     df = DataFrame()
@@ -4407,23 +4255,7 @@ def test_series_astype_error_handling(errors):
     assert_eq(sr, got)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "str",
-        "category",
-        "datetime64[s]",
-        "datetime64[ms]",
-        "datetime64[us]",
-        "datetime64[ns]",
-    ],
-)
+@pytest.mark.parametrize("dtype", ALL_TYPES)
 def test_df_constructor_dtype(dtype):
     if "datetime" in dtype:
         data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
@@ -4431,6 +4263,8 @@ def test_df_constructor_dtype(dtype):
         data = ["a", "b", "c", None]
     elif "float" in dtype:
         data = [1.0, 0.5, -1.1, np.nan, None]
+    elif "bool" in dtype:
+        data = [True, False, None]
     else:
         data = [1, 2, 3, None]
 
@@ -5303,46 +5137,6 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
     "data,expected_upcast_type,error",
     [
         (
-            pd.Series(
-                [random.choice([0, 1, 255, 250]) for _ in range(10)],
-                dtype="uint8",
-            ),
-            np.dtype("int16"),
-            None,
-        ),
-        (
-            pd.Series(
-                [random.choice([0, 1, 65535, 65534]) for _ in range(10)],
-                dtype="uint16",
-            ),
-            np.dtype("int32"),
-            None,
-        ),
-        (
-            pd.Series(
-                [
-                    random.choice([0, 1, 4294967295, 4294967294])
-                    for _ in range(10)
-                ],
-                dtype="uint32",
-            ),
-            np.dtype("int64"),
-            None,
-        ),
-        (
-            pd.Series(
-                [
-                    random.choice(
-                        [0, 1, 18446744073709551615, 18446744073709551614]
-                    )
-                    for _ in range(10)
-                ],
-                dtype="uint64",
-            ),
-            None,
-            UserWarning,
-        ),
-        (
             pd.Series([random.random() for _ in range(10)], dtype="float32"),
             np.dtype("float32"),
             None,
@@ -5377,18 +5171,6 @@ def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
             df = gd.from_pandas(pdf)
 
         with pytest.raises(error):
-            df = gd.DataFrame(pdf)
-    elif error == UserWarning:
-        with pytest.warns(UserWarning):
-            df = gd.from_pandas(data)
-
-        with pytest.warns(UserWarning):
-            df = gd.Series(data)
-
-        with pytest.warns(UserWarning):
-            df = gd.from_pandas(pdf)
-
-        with pytest.warns(UserWarning):
             df = gd.DataFrame(pdf)
     else:
         df = gd.from_pandas(data)
