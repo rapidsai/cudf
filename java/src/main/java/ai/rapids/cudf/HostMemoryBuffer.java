@@ -44,10 +44,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
   private static final boolean defaultPreferPinned;
   private static final Logger log = LoggerFactory.getLogger(HostMemoryBuffer.class);
 
-  // Make sure we loaded the native dependencies so we have a way to create a ByteBuffer
   static {
-    NativeDepsLoader.loadNativeDeps();
-
     boolean preferPinned = true;
     String propString = System.getProperty("ai.rapids.cudf.prefer-pinned");
     if (propString != null) {
@@ -55,16 +52,6 @@ public class HostMemoryBuffer extends MemoryBuffer {
     }
     defaultPreferPinned = preferPinned;
   }
-
-  /**
-   * This will turn an address into a ByteBuffer.  The buffer will NOT own the memory
-   * so closing it has no impact on the underlying memory. It should never
-   * be used if the corresponding HostMemoryBuffer is closed.
-   */
-  private static native ByteBuffer wrapRangeInBuffer(long address, long len);
-
-  private static native long mmap(String file, int mode, long offset, long len) throws IOException;
-  private static native void munmap(long address, long length);
 
   private static final class HostBufferCleaner extends MemoryBufferCleaner {
     private long address;
@@ -117,7 +104,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
       boolean neededCleanup = false;
       if (address != 0) {
         try {
-          munmap(address, length);
+          HostMemoryBufferNativeUtils.munmap(address, length);
         } finally {
           // Always mark the resource as freed even if an exception is thrown.
           // We cannot know how far it progressed before the exception, and
@@ -182,7 +169,8 @@ public class HostMemoryBuffer extends MemoryBuffer {
     long offsetDelta = offset & (UnsafeMemoryAccessor.pageSize() - 1);
     long address;
     try {
-      address = mmap(path.getPath(), modeAsInt(mode), offset - offsetDelta, length + offsetDelta);
+      address = HostMemoryBufferNativeUtils.mmap(path.getPath(),
+          modeAsInt(mode), offset - offsetDelta, length + offsetDelta);
     } catch (IOException e) {
       throw new IOException("Error creating memory map for " + path, e);
     }
@@ -233,7 +221,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    */
   public final ByteBuffer asByteBuffer(long offset, int length) {
     addressOutOfBoundsCheck(address + offset, length, "asByteBuffer");
-    return wrapRangeInBuffer(address + offset, length)
+    return HostMemoryBufferNativeUtils.wrapRangeInBuffer(address + offset, length)
         .order(ByteOrder.nativeOrder());
   }
 
@@ -329,7 +317,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param offset - offset from the address
    * @return - value
    */
-  final short getShort(long offset) {
+  public final short getShort(long offset) {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 2, "getShort");
     return UnsafeMemoryAccessor.getShort(requestedAddress);
@@ -340,7 +328,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param offset - offset from the address
    * @param value  - value to be set
    */
-  final void setShort(long offset, short value) {
+  public final void setShort(long offset, short value) {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 2, "setShort");
     UnsafeMemoryAccessor.setShort(requestedAddress, value);
@@ -352,7 +340,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param data      the data to be copied.
    * @param srcOffset index in data to start at.
    */
-  final void setShorts(long offset, short[] data, long srcOffset, long len) {
+  public final void setShorts(long offset, short[] data, long srcOffset, long len) {
     assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
@@ -365,7 +353,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param offset - offset from the address
    * @return - value
    */
-  final int getInt(long offset) {
+  public final int getInt(long offset) {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 4, "getInt");
     return UnsafeMemoryAccessor.getInt(requestedAddress);
@@ -376,7 +364,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param offset - offset from the address
    * @param value  - value to be set
    */
-  final void setInt(long offset, int value) {
+  public final void setInt(long offset, int value) {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 4, "setInt");
     UnsafeMemoryAccessor.setInt(requestedAddress, value);
@@ -388,7 +376,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param data      the data to be copied.
    * @param srcOffset index into data to start at
    */
-  final void setInts(long offset, int[] data, long srcOffset, long len) {
+  public final void setInts(long offset, int[] data, long srcOffset, long len) {
     assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
@@ -401,7 +389,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param offset - offset from the address
    * @return - value
    */
-  final long getLong(long offset) {
+  public final long getLong(long offset) {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 8, "setLong");
     return UnsafeMemoryAccessor.getLong(requestedAddress);
@@ -412,7 +400,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param offset - offset from the address
    * @param value  - value to be set
    */
-  final void setLong(long offset, long value) {
+  public final void setLong(long offset, long value) {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 8, "getLong");
     UnsafeMemoryAccessor.setLong(requestedAddress, value);
@@ -424,7 +412,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param data      the data to be copied.
    * @param srcOffset index into data to start at.
    */
-  final void setLongs(long offset, long[] data, long srcOffset, long len) {
+  public final void setLongs(long offset, long[] data, long srcOffset, long len) {
     assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
@@ -437,7 +425,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param offset - offset from the address
    * @return - value
    */
-  final float getFloat(long offset) {
+  public final float getFloat(long offset) {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 4, "getFloat");
     return UnsafeMemoryAccessor.getFloat(requestedAddress);
@@ -448,7 +436,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param offset - offset from the address
    * @param value  - value to be set
    */
-  final void setFloat(long offset, float value) {
+  public final void setFloat(long offset, float value) {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 4, "setFloat");
     UnsafeMemoryAccessor.setFloat(requestedAddress, value);
@@ -460,7 +448,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param data      the data to be copied.
    * @param srcOffset index into data to start at
    */
-  final void setFloats(long offset, float[] data, long srcOffset, long len) {
+  public final void setFloats(long offset, float[] data, long srcOffset, long len) {
     assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
@@ -473,7 +461,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param offset - offset from the address
    * @return - value
    */
-  final double getDouble(long offset) {
+  public final double getDouble(long offset) {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 8, "getDouble");
     return UnsafeMemoryAccessor.getDouble(requestedAddress);
@@ -484,7 +472,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param offset - offset from the address
    * @param value  - value to be set
    */
-  final void setDouble(long offset, double value) {
+  public final void setDouble(long offset, double value) {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 8, "setDouble");
     UnsafeMemoryAccessor.setDouble(requestedAddress, value);
@@ -496,7 +484,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param data      the data to be copied.
    * @param srcOffset index into data to start at
    */
-  final void setDoubles(long offset, double[] data, long srcOffset, long len) {
+  public final void setDoubles(long offset, double[] data, long srcOffset, long len) {
     assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
@@ -509,7 +497,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param offset - offset from the address
    * @return - value
    */
-  final boolean getBoolean(long offset) {
+  public final boolean getBoolean(long offset) {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 1, "getBoolean");
     return UnsafeMemoryAccessor.getBoolean(requestedAddress);
@@ -520,7 +508,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param offset - offset from the address
    * @param value  - value to be set
    */
-  final void setBoolean(long offset, boolean value) {
+  public final void setBoolean(long offset, boolean value) {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 1, "setBoolean");
     UnsafeMemoryAccessor.setBoolean(requestedAddress, value);
@@ -532,7 +520,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param length - number of bytes to set
    * @param value  - value to be set
    */
-  final void setMemory(long offset, long length, byte value) {
+  public final void setMemory(long offset, long length, byte value) {
     addressOutOfBoundsCheck(address + offset, length, "set memory");
     UnsafeMemoryAccessor.setMemory(address + offset, length, value);
   }

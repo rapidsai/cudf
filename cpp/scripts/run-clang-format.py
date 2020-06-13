@@ -28,11 +28,9 @@ VERSION_REGEX = re.compile(r"clang-format version ([0-9.]+)")
 # the cudf repo
 DEFAULT_DIRS = [
     "cpp/benchmarks",
-    "cpp/custrings",
     "cpp/include",
     "cpp/include/cudf",
     "cpp/include/nvtext",
-    "cpp/include/nvstrings",
     "cpp/src",
     "cpp/tests",
 ]

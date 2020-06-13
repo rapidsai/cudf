@@ -29,7 +29,6 @@ python/cudf/*/_lib/.nfs*
 python/cudf/*/_cuda/*\.cpp
 python/cudf/*.ipynb
 python/cudf/.ipynb_checkpoints
-python/nvstrings/nvstrings-coverage.xml
 python/*/record.txt
 .Python
 env/
@@ -58,7 +57,6 @@ htmlcov/
 nosetests.xml
 coverage.xml
 junit-cudf.xml
-junit-nvstrings.xml
 *.cover
 .hypothesis/
 test-results

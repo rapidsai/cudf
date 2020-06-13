@@ -2,7 +2,6 @@
 
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
-from unittest.mock import patch
 
 import cupy
 import numpy as np
@@ -10,13 +9,11 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-import nvstrings
-
 from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 data_list = [
     ["AbC", "de", "FGHI", "j", "kLm"],
@@ -53,21 +50,6 @@ def ps_gs(data, index):
     ps = pd.Series(data, index=index, dtype="str", name="nice name")
     gs = Series(data, index=index, dtype="str", name="nice name")
     return (ps, gs)
-
-
-# TODO: Remove this once NVStrings is fully removed / deprecated
-@pytest.mark.parametrize("nbytes", [0, 2 ** 10, 2 ** 31 - 1, 2 ** 31, 2 ** 32])
-@patch.object(nvstrings.nvstrings, "byte_count")
-def test_from_nvstrings_nbytes(mock_byte_count, nbytes):
-    import cudf._lib as libcudf
-
-    mock_byte_count.return_value = nbytes
-    expectation = raise_builder(
-        [nbytes > libcudf.MAX_STRING_COLUMN_BYTES], MemoryError
-    )
-
-    with expectation:
-        Series(nvstrings.to_device([""]))
 
 
 @pytest.mark.parametrize("construct", [list, np.array, pd.Series, pa.array])
@@ -178,22 +160,14 @@ def test_string_repr(ps_gs, item):
 
 
 @pytest.mark.parametrize(
-    "dtype",
-    [
-        "str",
-        "object",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "bool",
-        "datetime64[ms]",
-    ],
+    "dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool", "object", "str"}
 )
 def test_string_astype(dtype):
-    if dtype.startswith("int"):
+    if (
+        dtype.startswith("int")
+        or dtype.startswith("uint")
+        or dtype.startswith("long")
+    ):
         data = ["1", "2", "3", "4", "5"]
     elif dtype.startswith("float"):
         data = ["1.0", "2.0", "3.0", "4.0", "5.0"]
@@ -223,19 +197,7 @@ def test_string_astype(dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "str",
-        "object",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "bool",
-        "datetime64[ms]",
-    ],
+    "dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool", "object", "str"}
 )
 def test_string_empty_astype(dtype):
     data = []
@@ -248,23 +210,15 @@ def test_string_empty_astype(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "bool",
-        "datetime64[ms]",
-    ],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool"})
 def test_string_numeric_astype(dtype):
     if dtype.startswith("bool"):
         data = [1, 0, 1, 0, 1]
-    elif dtype.startswith("int"):
+    elif (
+        dtype.startswith("int")
+        or dtype.startswith("uint")
+        or dtype.startswith("long")
+    ):
         data = [1, 2, 3, 4, 5]
     elif dtype.startswith("float"):
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
@@ -289,19 +243,7 @@ def test_string_numeric_astype(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "bool",
-        "datetime64[ms]",
-    ],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool"})
 def test_string_empty_numeric_astype(dtype):
     data = []
 
@@ -630,6 +572,7 @@ def test_string_join_key_nulls(str_data_nulls):
 
     expect = pdf.merge(pdf2, on="key", how="left")
     got = gdf.merge(gdf2, on="key", how="left")
+    got["vals_y"] = got["vals_y"].fillna(-1)
 
     if len(expect) == 0 and len(got) == 0:
         expect = expect.reset_index(drop=True)
@@ -871,7 +814,7 @@ def test_string_unique(item):
     gs = Series(item)
     # Pandas `unique` returns a numpy array
     pres = pd.Series(ps.unique())
-    # Nvstrings returns sorted unique with `None` placed before other strings
+    # cudf returns sorted unique with `None` placed before other strings
     pres = pres.sort_values(na_position="first").reset_index(drop=True)
     gres = gs.unique()
     assert_eq(pres, gres)
@@ -1602,6 +1545,56 @@ def test_string_starts_ends(data, pat):
 
 
 @pytest.mark.parametrize(
+    "data,pat",
+    [
+        (
+            ["abc", "xyz", "a", "ab", "123", "097"],
+            ["abc", "x", "a", "b", "3", "7"],
+        ),
+        (["A B", "1.5", "3,000"], ["A ", ".", ","]),
+        (["23", "³", "⅕", ""], ["23", "³", "⅕", ""]),
+        ([" ", "\t\r\n ", ""], ["d", "\n ", ""]),
+        (
+            ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+            ["$", "$", "a", "<", "(", "#"],
+        ),
+        (
+            ["line to be wrapped", "another line to be wrapped"],
+            ["another", "wrapped"],
+        ),
+        (
+            ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+            ["hsdjfk", None, "ll", "+", "-", "w", "-", "én"],
+        ),
+        (
+            ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+            ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+        ),
+    ],
+)
+def test_string_starts_ends_list_like_pat(data, pat):
+    gs = Series(data)
+
+    starts_expected = []
+    ends_expected = []
+    for i in range(len(pat)):
+        if data[i] is None:
+            starts_expected.append(None)
+            ends_expected.append(None)
+        else:
+            if pat[i] is None:
+                starts_expected.append(False)
+                ends_expected.append(False)
+            else:
+                starts_expected.append(data[i].startswith(pat[i]))
+                ends_expected.append(data[i].endswith(pat[i]))
+    starts_expected = pd.Series(starts_expected)
+    ends_expected = pd.Series(ends_expected)
+    assert_eq(starts_expected, gs.str.startswith(pat), check_dtype=False)
+    assert_eq(ends_expected, gs.str.endswith(pat), check_dtype=False)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         ["abc", "xyz", "a", "ab", "123", "097"],
@@ -1621,40 +1614,56 @@ def test_string_find(data, sub):
     ps = pd.Series(data)
     gs = Series(data)
 
-    assert_eq(ps.str.find(sub).fillna(-1), gs.str.find(sub), check_dtype=False)
+    got = gs.str.find(sub)
+    expect = ps.str.find(sub).fillna(got._column.default_na_value())
     assert_eq(
-        ps.str.find(sub, start=1).fillna(-1),
-        gs.str.find(sub, start=1),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.find(sub, end=10).fillna(-1),
-        gs.str.find(sub, end=10),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.find(sub, start=2, end=10).fillna(-1),
-        gs.str.find(sub, start=2, end=10),
-        check_dtype=False,
+        expect, got, check_dtype=False,
     )
 
+    got = gs.str.find(sub, start=1)
+    expect = ps.str.find(sub, start=1).fillna(got._column.default_na_value())
     assert_eq(
-        ps.str.rfind(sub).fillna(-1), gs.str.rfind(sub), check_dtype=False
+        expect, got, check_dtype=False,
+    )
+
+    got = gs.str.find(sub, end=10)
+    expect = ps.str.find(sub, end=10).fillna(got._column.default_na_value())
+    assert_eq(
+        expect, got, check_dtype=False,
+    )
+
+    got = gs.str.find(sub, start=2, end=10)
+    expect = ps.str.find(sub, start=2, end=10).fillna(
+        got._column.default_na_value()
     )
     assert_eq(
-        ps.str.rfind(sub, start=1).fillna(-1),
-        gs.str.rfind(sub, start=1),
-        check_dtype=False,
+        expect, got, check_dtype=False,
+    )
+
+    got = gs.str.rfind(sub)
+    expect = ps.str.rfind(sub).fillna(got._column.default_na_value())
+    assert_eq(
+        expect, got, check_dtype=False,
+    )
+
+    got = gs.str.rfind(sub, start=1)
+    expect = ps.str.rfind(sub, start=1).fillna(got._column.default_na_value())
+    assert_eq(
+        expect, got, check_dtype=False,
+    )
+
+    got = gs.str.rfind(sub, end=10)
+    expect = ps.str.rfind(sub, end=10).fillna(got._column.default_na_value())
+    assert_eq(
+        expect, got, check_dtype=False,
+    )
+
+    got = gs.str.rfind(sub, start=2, end=10)
+    expect = ps.str.rfind(sub, start=2, end=10).fillna(
+        got._column.default_na_value()
     )
     assert_eq(
-        ps.str.rfind(sub, end=10).fillna(-1),
-        gs.str.rfind(sub, end=10),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.rfind(sub, start=2, end=10).fillna(-1),
-        gs.str.rfind(sub, start=2, end=10),
-        check_dtype=False,
+        expect, got, check_dtype=False,
     )
 
 
@@ -1814,6 +1823,10 @@ def test_string_str_translate(data):
             str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})
         ),
     )
+    assert_eq(
+        ps.str.translate(str.maketrans({"é": "É"})),
+        gs.str.translate(str.maketrans({"é": "É"})),
+    )
 
 
 def test_string_str_code_points():
@@ -1920,6 +1933,7 @@ def test_string_str_decode_url(data):
         (["-0.1", "10.2", "+10.876"], "float"),
         (["1", "10.2", "10.876"], "float32"),
         (["+123", "6344556789", "0"], "int"),
+        (["+123", "6344556789", "0"], "uint64"),
         (["+123", "6344556789", "0"], "float"),
         (["0.1", "-10.2", "10.876", None], "float"),
     ],
@@ -1940,18 +1954,27 @@ def test_string_typecast(data, obj_type, dtype):
         (["0.1", "10.2", "10.876"], "int"),
         (["1", "10.2", "+10.876"], "int"),
         (["abc", "1", "2", " "], "int"),
+        (["0.1", "10.2", "10.876"], "uint64"),
+        (["1", "10.2", "+10.876"], "uint64"),
+        (["abc", "1", "2", " "], "uint64"),
         ([" ", "0.1", "2"], "float"),
         ([""], "int"),
+        ([""], "uint64"),
         ([" "], "float"),
         (["\n"], "int"),
+        (["\n"], "uint64"),
         (["0.1", "-10.2", "10.876", None], "int"),
+        (["0.1", "-10.2", "10.876", None], "uint64"),
         (["0.1", "-10.2", "10.876", None, "ab"], "float"),
         (["+", "-"], "float"),
         (["+", "-"], "int"),
+        (["+", "-"], "uint64"),
         (["1++++", "--2"], "float"),
         (["1++++", "--2"], "int"),
+        (["1++++", "--2"], "uint64"),
         (["++++1", "--2"], "float"),
         (["++++1", "--2"], "int"),
+        (["++++1", "--2"], "uint64"),
     ],
 )
 @pytest.mark.parametrize("obj_type", [None, "str", "category"])
@@ -2011,16 +2034,7 @@ def test_string_int_to_ipv4():
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        np.dtype("int8"),
-        np.dtype("int16"),
-        np.dtype("int32"),
-        np.dtype("float32"),
-        np.dtype("float64"),
-    ],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES - {"int64", "uint64"})
 def test_string_int_to_ipv4_dtype_fail(dtype):
     gsr = Series([1, 2, 3, 4, 5]).astype(dtype)
     with pytest.raises(TypeError):
@@ -2061,3 +2075,26 @@ def test_string_str_subscriptable(data, index):
     gsi = StringIndex(data)
 
     assert_eq(psi.str[index], gsi.str[index])
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (["abc", "xyz", "pqr", "tuv"], [3, 3, 3, 3]),
+        (["aaaaaaaaaaaa"], [12]),
+        (["aaaaaaaaaaaa", "bdfeqwert", "poiuytre"], [12, 9, 8]),
+        (["abc", "d", "ef"], [3, 1, 2]),
+        (["Hello", "Bye", "Thanks 😊"], [5, 3, 11]),
+        (["\n\t", "Bye", "Thanks 😊"], [2, 3, 11]),
+    ],
+)
+def test_string_str_byte_count(data, expected):
+    sr = Series(data)
+    expected = Series(expected, dtype="int32")
+    actual = sr.str.byte_count()
+    assert_eq(expected, actual)
+
+    si = as_index(data)
+    expected = as_index(expected, dtype="int32")
+    actual = si.str.byte_count()
+    assert_eq(expected, actual)

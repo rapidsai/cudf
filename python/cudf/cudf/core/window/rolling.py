@@ -1,3 +1,8 @@
+# Copyright (c) 2020, NVIDIA CORPORATION
+
+import itertools
+
+import cupy as cp
 import numba
 import pandas as pd
 
@@ -149,6 +154,8 @@ class Rolling:
     dtype: float64
     """
 
+    _time_window = False
+
     def __init__(
         self,
         obj,
@@ -228,6 +235,8 @@ class Rolling:
         return result_df
 
     def _apply_agg(self, agg_name):
+        if agg_name == "count" and not self._time_window:
+            self.min_periods = 0
         if isinstance(self.obj, cudf.Series):
             return self._apply_agg_series(self.obj, agg_name)
         else:
@@ -309,6 +318,8 @@ class Rolling:
                     "window must be an integer for " "non datetime index"
                 )
 
+            self._time_window = True
+
             try:
                 window = pd.to_timedelta(window)
                 # to_timedelta will also convert np.arrays etc.,
@@ -319,17 +330,78 @@ class Rolling:
                 raise ValueError(
                     "window must be integer or " "convertible to a timedelta"
                 ) from e
-
-            window = cudautils.window_sizes_from_offset(
-                self.obj.index._values.data_array_view, window
-            )
             if self.min_periods is None:
                 min_periods = 1
 
-        self.window = window
+        self.window = self._window_to_window_sizes(window)
         self.min_periods = min_periods
+
+    def _window_to_window_sizes(self, window):
+        """
+        For non-fixed width windows,
+        convert the window argument into window sizes.
+        """
+        if pd.api.types.is_integer(window):
+            return window
+        else:
+            return cudautils.window_sizes_from_offset(
+                self.obj.index._values.data_array_view, window
+            )
 
     def __repr__(self):
         return "{} [window={},min_periods={},center={}]".format(
             self.__class__.__name__, self.window, self.min_periods, self.center
         )
+
+
+class RollingGroupby(Rolling):
+    def __init__(self, groupby, window, min_periods=None, center=False):
+        """
+        Grouped rolling window calculation.
+
+        See also
+        --------
+        cudf.core.window.Rolling
+        """
+        sort_order = groupby.grouping.keys.argsort()
+
+        # TODO: there may be overlap between the columns
+        # of `groupby.grouping.keys` and `groupby.obj`.
+        # As an optimization, avoid gathering those twice.
+        self._group_keys = groupby.grouping.keys.take(sort_order)
+        obj = groupby.obj.take(sort_order)
+
+        gb_size = groupby.size()
+        self._group_starts = (
+            gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
+        )
+
+        super().__init__(obj, window, min_periods=min_periods, center=center)
+
+    def _window_to_window_sizes(self, window):
+        if pd.api.types.is_integer(window):
+            return cudautils.grouped_window_sizes_from_offset(
+                cp.arange(len(self.obj)), self._group_starts, window
+            )
+        else:
+            return cudautils.grouped_window_sizes_from_offset(
+                self.obj.index._values.data_array_view,
+                self._group_starts,
+                window,
+            )
+
+    def _apply_agg(self, agg_name):
+        index = cudf.MultiIndex.from_frame(
+            cudf.DataFrame(
+                {
+                    key: value
+                    for key, value in itertools.chain(
+                        self._group_keys._data.items(),
+                        self.obj.index._data.items(),
+                    )
+                }
+            )
+        )
+
+        result = super()._apply_agg(agg_name).set_index(index)
+        return result

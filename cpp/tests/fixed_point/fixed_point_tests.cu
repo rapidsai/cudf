@@ -292,6 +292,21 @@ TYPED_TEST(FixedPointTestBothReps, RescaledTest)
   EXPECT_EQ(num5, num6.rescaled(scale_type{-5}));
 }
 
+TYPED_TEST(FixedPointTestBothReps, RescaledRounding)
+{
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  decimalXX num0{1500, scale_type{0}};
+  decimalXX num1{1499, scale_type{0}};
+  decimalXX num2{-1499, scale_type{0}};
+  decimalXX num3{-1500, scale_type{0}};
+
+  EXPECT_EQ(2000, static_cast<TypeParam>(num0.rescaled(scale_type{3})));
+  EXPECT_EQ(1000, static_cast<TypeParam>(num1.rescaled(scale_type{3})));
+  EXPECT_EQ(-1000, static_cast<TypeParam>(num2.rescaled(scale_type{3})));
+  EXPECT_EQ(-2000, static_cast<TypeParam>(num3.rescaled(scale_type{3})));
+}
+
 TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
