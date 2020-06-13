@@ -19,6 +19,7 @@
 - PR #5425 Add Python `Groupby.rolling()`
 - PR #5359 Add duration types 
 - PR #5444 Remove usage of deprecated RMM APIs and headers.
+- PR #5463 Add `.str.byte_count` python api and cython(bindings)
 
 ## Improvements
 
