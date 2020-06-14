@@ -83,12 +83,14 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
                       cudaMemcpyDeviceToHost));
 
   // otherwise, just call a regular gather
-  return cudf::detail::gather(column,
-                              child_gather_map,
-                              child_gather_map + child_gather_map_size,
-                              nullify_out_of_bounds,
-                              stream,
-                              mr);
+  return cudf::type_dispatcher(column.type(),
+                               cudf::detail::column_gatherer{},
+                               column,
+                               child_gather_map,
+                               child_gather_map + child_gather_map_size,
+                               nullify_out_of_bounds,
+                               stream,
+                               mr);
 }
 
 /**
@@ -111,7 +113,10 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                       cudaMemcpyDeviceToHost));
 
   // generate gather_data for this level
-  auto offset_result = make_gather_offsets(list, gather_map_begin, gather_map_size, stream, mr);
+  auto offset_result =
+    nullify_out_of_bounds
+      ? make_gather_offsets<true>(list, gather_map_begin, gather_map_size, stream, mr)
+      : make_gather_offsets<false>(list, gather_map_begin, gather_map_size, stream, mr);
   column_view offsets_v(*offset_result.first);
   gather_data gd{offsets_v.data<size_type>(), std::move(offset_result.second)};
 
@@ -124,16 +129,20 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
   // templates, so we can't pass an iterator.  so we will pass the data needed to create
   // the necessary iterator, and the functions will build the iterator themselves.
   if (list.child().type() == cudf::data_type{LIST}) {
-    // gather children
-    auto child = gather_list_nested(list.child(), gd, nullify_out_of_bounds, stream, mr);
+    // gather children.
+    // note : we don't need to bother checking for out-of-bounds here since
+    // our inputs at this stage aren't coming from the user.
+    auto child = gather_list_nested(list.child(), gd, false, stream, mr);
 
-    // return the nested
+    // return the nested column
     return make_lists_column(
       gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
   }
 
   // it's a leaf.  do a regular gather
-  auto child = gather_list_leaf(list.child(), gd, nullify_out_of_bounds, stream, mr);
+  // note : we don't need to bother checking for out-of-bounds here since
+  // our inputs at this stage aren't coming from the user.
+  auto child = gather_list_leaf(list.child(), gd, false, stream, mr);
 
   // assemble final column
   return make_lists_column(

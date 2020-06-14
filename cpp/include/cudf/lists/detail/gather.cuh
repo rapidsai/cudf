@@ -111,7 +111,7 @@ struct gather_data {
  *          column that matches each of those new offsets.
  *
  */
-template <typename MapItType>
+template <bool NullifyOutOfBounds, typename MapItType>
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
   cudf::lists_column_view const& source_column,
   MapItType gather_map,
@@ -125,6 +125,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
 
   // offsets of the source column
   size_type const* src_offsets{source_column.offsets().data<size_type>()};
+  int src_size = source_column.size();
 
   // outgoing offsets.  these will persist as output from the entire gather operation
   auto dst_offsets_c = cudf::make_fixed_width_column(
@@ -140,10 +141,14 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
     count_iter,
     count_iter + offset_count,
     dst_offsets,
-    [gather_map, output_count, src_offsets] __device__(size_type index) -> size_type {
+    [gather_map, output_count, src_offsets, src_size] __device__(size_type index) -> size_type {
       // last offset index is always the previous offset_index + 1, since each entry in the gather
       // map represents a virtual pair of offsets
       size_type offset_index = index < output_count ? gather_map[index] : gather_map[index - 1] + 1;
+
+      // if this is an invalid index, this will be a NULL list
+      if (NullifyOutOfBounds && ((offset_index < 0) || (offset_index >= src_size))) { return 0; }
+
       // the length of this list
       return src_offsets[offset_index + 1] - src_offsets[offset_index];
     },
@@ -164,7 +169,11 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
                     gather_map,
                     gather_map + offset_count,
                     base_offsets_p,
-                    [src_offsets] __device__(size_type index) { return src_offsets[index]; });
+                    [src_offsets, output_count, src_size] __device__(size_type index) {
+                      // if this is an invalid index, this will be a NULL list
+                      if (NullifyOutOfBounds && ((index < 0) || (index >= src_size))) { return 0; }
+                      return src_offsets[index];
+                    });
 
   return {std::move(dst_offsets_c), std::move(base_offsets)};
 }

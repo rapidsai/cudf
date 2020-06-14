@@ -314,8 +314,11 @@ struct column_gatherer_impl<list_view, MapItRoot> {
     if (gather_map_size == 0) { return make_empty_column(data_type{LIST}); }
 
     // generate gather_data for this level
-    auto offset_result =
-      lists::detail::make_gather_offsets(column, gather_map_begin, gather_map_size, stream, mr);
+    auto offset_result = nullify_out_of_bounds
+                           ? lists::detail::make_gather_offsets<true>(
+                               column, gather_map_begin, gather_map_size, stream, mr)
+                           : lists::detail::make_gather_offsets<false>(
+                               column, gather_map_begin, gather_map_size, stream, mr);
     column_view offsets_v(*offset_result.first);
     lists::detail::gather_data gd{offsets_v.data<size_type>(), std::move(offset_result.second)};
 
@@ -487,47 +490,6 @@ void gather_bitmask(table_view const& source,
       target[i]->set_null_count(null_count);
     }
   }
-}
-
-/**
- * @brief Gathers the specified rows of a set of columns according to a gather map.
- *
- * Gathers the rows of the source columns according to `gather_map` such that row "i"
- * in the resulting column will contain row "gather_map[i]" from the source column.
- * The number of rows in the result column will be equal to the number of elements in
- * `gather_map`.
- *
- * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
- * `n` is the number of rows in the `source_column`.
- *
- * tparam MapIterator Iterator type for the gather map
- * @param[in] source_column View into the column whose rows will be gathered
- * @param[in] gather_map_begin Beginning of iterator range of integer indices that map the rows in
- * the source column to rows in the destination columns
- * @param[in] gather_map_end End of iterator range of integer indices that map the rows in the
- * source column to rows in the destination column
- * @param[in] nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @return cudf::columm Result of the gather
- */
-template <typename MapIterator>
-std::unique_ptr<column> gather(
-  column_view const& source_column,
-  MapIterator gather_map_begin,
-  MapIterator gather_map_end,
-  bool nullify_out_of_bounds          = false,
-  cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-{
-  return cudf::type_dispatcher(source_column.type(),
-                               column_gatherer{},
-                               source_column,
-                               gather_map_begin,
-                               gather_map_end,
-                               nullify_out_of_bounds,
-                               stream,
-                               mr);
 }
 
 /**
