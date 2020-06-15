@@ -103,13 +103,12 @@ struct simple_op {
    *
    * @return element transformer functor object
    */
-  template <typename ResultType,
-            typename std::enable_if_t<is_template_of<thrust::pair, ResultType>::value>* = nullptr>
+  template <typename ResultType>
   auto get_null_replacing_element_transformer()
   {
-    using element_transformer = typename Derived::transformer<typename ResultType::first_type>;
-    return null_replacing_transformer<typename ResultType::first_type, element_transformer>{
-      get_identity<typename ResultType::first_type>(), element_transformer{}};
+    using element_transformer = typename Derived::transformer<ResultType>;
+    return null_replacing_transformer<ResultType, element_transformer>{
+      get_identity<ResultType>(), element_transformer{}};
   }
 
   /**
