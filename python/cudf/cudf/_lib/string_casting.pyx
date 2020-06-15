@@ -289,6 +289,134 @@ def stol(Column input_col, **kwargs):
     return string_to_integer(input_col, np.dtype("int64"))
 
 
+def ui8tos(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type uint8 to string column
+
+    Parameters:
+    -----------
+    input_col : input column of type uint8
+
+    Returns
+    -------
+    A Column with uint8 values cast to string
+    """
+
+    return integer_to_string(input_col)
+
+
+def stoui8(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type string to uint8
+
+    Parameters:
+    -----------
+    input_col : input column of type string
+
+    Returns
+    -------
+    A Column with strings cast to uint8
+    """
+
+    return string_to_integer(input_col, np.dtype("uint8"))
+
+
+def ui16tos(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type uint16 to string column
+
+    Parameters:
+    -----------
+    input_col : input column of type uint16
+
+    Returns
+    -------
+    A Column with uint16 values cast to string
+    """
+
+    return integer_to_string(input_col)
+
+
+def stoui16(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type string to uint16
+
+    Parameters:
+    -----------
+    input_col : input column of type string
+
+    Returns
+    -------
+    A Column with strings cast to uint16
+    """
+
+    return string_to_integer(input_col, np.dtype("uint16"))
+
+
+def uitos(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type uint32 to string column
+
+    Parameters:
+    -----------
+    input_col : input column of type uint32
+
+    Returns
+    -------
+    A Column with uint32 values cast to string
+    """
+
+    return integer_to_string(input_col)
+
+
+def stoui(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type string to uint32
+
+    Parameters:
+    -----------
+    input_col : input column of type string
+
+    Returns
+    -------
+    A Column with strings cast to uint32
+    """
+
+    return string_to_integer(input_col, np.dtype("uint32"))
+
+
+def ultos(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type uint64 to string column
+
+    Parameters:
+    -----------
+    input_col : input column of type uint64
+
+    Returns
+    -------
+    A Column with uint64 values cast to string
+    """
+
+    return integer_to_string(input_col)
+
+
+def stoul(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type string to uint64
+
+    Parameters:
+    -----------
+    input_col : input column of type string
+
+    Returns
+    -------
+    A Column with strings cast to uint64
+    """
+
+    return string_to_integer(input_col, np.dtype("uint64"))
+
+
 def _to_booleans(Column input_col, object string_true="True"):
     """
     Converting/Casting input column of type string to boolean column

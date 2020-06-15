@@ -20,6 +20,21 @@ supported_numpy_dtypes = [
     "datetime64[us]",
 ]
 
+SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
+UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
+INTEGER_TYPES = SIGNED_INTEGER_TYPES | UNSIGNED_TYPES
+FLOAT_TYPES = {"float32", "float64"}
+SIGNED_TYPES = SIGNED_INTEGER_TYPES | FLOAT_TYPES
+NUMERIC_TYPES = SIGNED_TYPES | UNSIGNED_TYPES
+DATETIME_TYPES = {
+    "datetime64[s]",
+    "datetime64[ms]",
+    "datetime64[us]",
+    "datetime64[ns]",
+}
+OTHER_TYPES = {"bool", "category", "str"}
+ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | OTHER_TYPES
+
 
 def random_bitmask(size):
     """
@@ -109,13 +124,21 @@ def gen_rand(dtype, size, **kwargs):
             return res
         else:
             return res * 2 - 1
-    elif dtype == np.int8 or np.int16:
+    elif dtype == np.int8 or dtype == np.int16:
         low = kwargs.get("low", -32)
         high = kwargs.get("high", 32)
         return np.random.randint(low=low, high=high, size=size).astype(dtype)
     elif dtype.kind == "i":
         low = kwargs.get("low", -10000)
         high = kwargs.get("high", 10000)
+        return np.random.randint(low=low, high=high, size=size).astype(dtype)
+    elif dtype == np.uint8 or dtype == np.uint16:
+        low = kwargs.get("low", 0)
+        high = kwargs.get("high", 32)
+        return np.random.randint(low=low, high=high, size=size).astype(dtype)
+    elif dtype.kind == "u":
+        low = kwargs.get("low", 0)
+        high = kwargs.get("high", 128)
         return np.random.randint(low=low, high=high, size=size).astype(dtype)
     elif dtype.kind == "b":
         low = kwargs.get("low", 0)
