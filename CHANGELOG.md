@@ -64,6 +64,7 @@
 - PR #5441 Update Java HostMemoryBuffer to only load native libs when necessary
 - PR #5437 Improve libcudf join documentation
 - PR #5458 Install meta packages for dependencies
+- PR #5467 Move doc customization scripts to Jenkins
 
 ## Bug Fixes
 
@@ -93,6 +94,7 @@
 - PR #5439 Fix nvtext ngrams_tokenize performance for multi-byte UTF8
 - PR #5446 Fix compile error caused by out-of-date PR merge (4990)
 - PR #5459 Fix str.translate to convert table characters to UTF-8
+- PR #5465 Fix benchmark out of memory errors due to multiple initialization
 - PR #5319 Disallow SUM and specialize MEAN of timestamp types
 
 
