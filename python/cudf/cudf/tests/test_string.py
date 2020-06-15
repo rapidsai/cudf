@@ -2075,3 +2075,26 @@ def test_string_str_subscriptable(data, index):
     gsi = StringIndex(data)
 
     assert_eq(psi.str[index], gsi.str[index])
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (["abc", "xyz", "pqr", "tuv"], [3, 3, 3, 3]),
+        (["aaaaaaaaaaaa"], [12]),
+        (["aaaaaaaaaaaa", "bdfeqwert", "poiuytre"], [12, 9, 8]),
+        (["abc", "d", "ef"], [3, 1, 2]),
+        (["Hello", "Bye", "Thanks 😊"], [5, 3, 11]),
+        (["\n\t", "Bye", "Thanks 😊"], [2, 3, 11]),
+    ],
+)
+def test_string_str_byte_count(data, expected):
+    sr = Series(data)
+    expected = Series(expected, dtype="int32")
+    actual = sr.str.byte_count()
+    assert_eq(expected, actual)
+
+    si = as_index(data)
+    expected = as_index(expected, dtype="int32")
+    actual = si.str.byte_count()
+    assert_eq(expected, actual)

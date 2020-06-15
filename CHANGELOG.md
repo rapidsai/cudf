@@ -17,8 +17,10 @@
 - PR #5364 Validate array interface during buffer construction
 - PR #5418 Add support for `DataFrame.info`
 - PR #5425 Add Python `Groupby.rolling()`
-- PR #5359 Add duration types 
+- PR #5359 Add duration types
+- PR #5442 Add support for `cudf.isclose`
 - PR #5444 Remove usage of deprecated RMM APIs and headers.
+- PR #5463 Add `.str.byte_count` python api and cython(bindings)
 
 ## Improvements
 
@@ -47,6 +49,7 @@
 - PR #5374 Port nvtext character_tokenize API to libcudf
 - PR #5389 Expose typed accessors for Java HostMemoryBuffer
 - PR #5379 Avoid chaining `Buffer`s
+- PR #5381 Change numpy usages to cupy in `10min.ipynb`
 - PR #5408 Update pyrrow and arrow-cpp to 0.17.1
 - PR #5366 Add benchmarks for cuIO writers
 - PR #5405 Add Error message to `StringColumn.unary_operator`
@@ -60,6 +63,8 @@
 - PR #5443 Remove unused `is_simple` trait
 - PR #5441 Update Java HostMemoryBuffer to only load native libs when necessary
 - PR #5437 Improve libcudf join documentation
+- PR #5458 Install meta packages for dependencies
+- PR #5467 Move doc customization scripts to Jenkins
 
 ## Bug Fixes
 
@@ -89,6 +94,7 @@
 - PR #5439 Fix nvtext ngrams_tokenize performance for multi-byte UTF8
 - PR #5446 Fix compile error caused by out-of-date PR merge (4990)
 - PR #5459 Fix str.translate to convert table characters to UTF-8
+- PR #5465 Fix benchmark out of memory errors due to multiple initialization
 
 
 # cuDF 0.14.0 (Date TBD)

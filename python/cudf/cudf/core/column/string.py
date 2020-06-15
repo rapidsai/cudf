@@ -28,6 +28,7 @@ from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
+    count_bytes as cpp_count_bytes,
     count_characters as cpp_count_characters,
 )
 from cudf._lib.strings.capitalize import (
@@ -313,6 +314,35 @@ class StringMethods(object):
 
         return self._return_or_inplace(
             cpp_count_characters(self._column), **kwargs,
+        )
+
+    def byte_count(self, **kwargs):
+        """
+        Computes the number of bytes of each string in the Series/Index.
+
+        Returns : Series or Index of int
+            A Series or Index of integer values
+            indicating the number of bytes of each strings in the
+            Series or Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["abc","d","ef"])
+        >>> s.str.byte_count()
+        0    3
+        1    1
+        2    2
+        dtype: int32
+        >>> s = cudf.Series(["Hello", "Bye", "Thanks 😊"])
+        >>> s.str.byte_count()
+        0     5
+        1     3
+        2    11
+        dtype: int32
+        """
+        return self._return_or_inplace(
+            cpp_count_bytes(self._column), **kwargs,
         )
 
     def cat(self, others=None, sep=None, na_rep=None, **kwargs):
