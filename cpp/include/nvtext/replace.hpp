@@ -49,10 +49,6 @@ namespace nvtext {
  * A null input element at row `i` produces a corresponding null entry
  * for row `i` in the output column.
  *
- * There is no guaranteed order for replacing the targets. This means if
- * one target string is a substring of another (e.g. "the" is a substring of "theme")
- * there is no guarantee that "the" will be replaced before "theme" or vice versa.
- *
  * An empty string is allowed for a replacement string but the delimiters
  * will not be removed.
  *
