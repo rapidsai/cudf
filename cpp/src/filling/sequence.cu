@@ -55,7 +55,7 @@ struct const_tabulator {
 struct sequence_functor {
   template <
     typename T,
-    typename std::enable_if_t<is_index_type<T>()>* = nullptr>
+    typename std::enable_if_t<cudf::is_numeric<T>() and not cudf::is_boolean<T>()>* = nullptr>
   std::unique_ptr<column> operator()(size_type size,
                                      scalar const& init,
                                      scalar const& step,
@@ -83,7 +83,7 @@ struct sequence_functor {
 
   template <
     typename T,
-    typename std::enable_if_t<not is_index_type<T>()>* = nullptr>
+    typename std::enable_if_t<not cudf::is_numeric<T>() or cudf::is_boolean<T>()>* = nullptr>
   std::unique_ptr<column> operator()(size_type size,
                                      scalar const& init,
                                      scalar const& step,
@@ -95,7 +95,7 @@ struct sequence_functor {
 
   template <
     typename T,
-    typename std::enable_if_t<is_index_type<T>()>* = nullptr>
+    typename std::enable_if_t<cudf::is_numeric<T>() and not cudf::is_boolean<T>()>* = nullptr>
   std::unique_ptr<column> operator()(size_type size,
                                      scalar const& init,
                                      rmm::mr::device_memory_resource* mr,
@@ -120,7 +120,7 @@ struct sequence_functor {
 
   template <
     typename T,
-    typename std::enable_if_t<not is_index_type<T>()>* = nullptr>
+    typename std::enable_if_t<not cudf::is_numeric<T>() or cudf::is_boolean<T>()>* = nullptr>
   std::unique_ptr<column> operator()(size_type size,
                                      scalar const& init,
                                      rmm::mr::device_memory_resource* mr,

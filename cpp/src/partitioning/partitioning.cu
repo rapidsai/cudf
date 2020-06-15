@@ -642,7 +642,7 @@ struct dispatch_map_type {
    *
    */
   template <typename MapType>
-  std::enable_if_t<is_index_type<MapType>()>(),
+  std::enable_if_t<is_index_type<MapType>(),
                    std::pair<std::unique_ptr<table>, std::vector<size_type>>>
   operator()(table_view const& t,
              column_view const& partition_map,
