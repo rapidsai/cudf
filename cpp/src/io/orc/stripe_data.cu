@@ -824,7 +824,7 @@ static __device__ uint32_t Integer_RLEv2(
           bytestream_readbe(bs, pos * 8 + i * w, w, v);
           vals[base + i] = v;
         } else if (mode == 2) {
-          uint32_t ofs   = bytestream_readbits64(bs, pos * 8 + i * w, w);
+          uint64_t ofs   = bytestream_readbits64(bs, pos * 8 + i * w, w);
           vals[base + i] = rle->baseval.u64[r] + ofs;
         } else {
           int64_t delta = rle->delta[r], ofs;
