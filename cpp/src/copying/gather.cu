@@ -17,8 +17,7 @@ namespace cudf {
 namespace detail {
 
 struct dispatch_map_type {
-  template <typename map_type,
-            std::enable_if_t<is_index_type<map_type>()>* = nullptr>
+  template <typename map_type, std::enable_if_t<is_index_type<map_type>()>* = nullptr>
   std::unique_ptr<table> operator()(
     table_view const& source_table,
     column_view const& gather_map,

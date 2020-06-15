@@ -39,8 +39,7 @@ namespace cudf {
 namespace detail {
 namespace {
 struct dispatch_map_type {
-  template <typename MapType,
-            std::enable_if_t<is_index_type<MapType>()>* = nullptr>
+  template <typename MapType, std::enable_if_t<is_index_type<MapType>()>* = nullptr>
   std::unique_ptr<table> operator()(table_view const& source,
                                     column_view const& scatter_map,
                                     table_view const& target,
@@ -57,8 +56,7 @@ struct dispatch_map_type {
                            stream);
   }
 
-  template <typename MapType,
-            std::enable_if_t<not is_index_type<MapType>()>* = nullptr>
+  template <typename MapType, std::enable_if_t<not is_index_type<MapType>()>* = nullptr>
   std::unique_ptr<table> operator()(table_view const& source,
                                     column_view const& scatter_map,
                                     table_view const& target,
