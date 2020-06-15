@@ -201,12 +201,12 @@ class RollingTest : public cudf::test::BaseFixture {
                  cudf::make_count_aggregation(cudf::null_policy::INCLUDE));
     run_test_col(
       input, preceding_window, following_window, min_periods, cudf::make_max_aggregation());
-    run_test_col(
-      input, preceding_window, following_window, min_periods, cudf::make_mean_aggregation());
 
     if (not cudf::is_timestamp(input.type())) {
       run_test_col(
         input, preceding_window, following_window, min_periods, cudf::make_sum_aggregation());
+      run_test_col(
+        input, preceding_window, following_window, min_periods, cudf::make_mean_aggregation());
     }
   }
 
@@ -493,6 +493,33 @@ TEST_F(RollingErrorTest, SumTimestampNotSupported)
   EXPECT_THROW(cudf::rolling_window(input_us, 2, 2, 0, cudf::make_sum_aggregation()),
                cudf::logic_error);
   EXPECT_THROW(cudf::rolling_window(input_ns, 2, 2, 0, cudf::make_sum_aggregation()),
+               cudf::logic_error);
+}
+
+// incorrect type/aggregation combo: mean of timestamps
+TEST_F(RollingErrorTest, MeanTimestampNotSupported)
+{
+  constexpr size_type size{10};
+  fixed_width_column_wrapper<cudf::timestamp_D> input_D(thrust::make_counting_iterator(0),
+                                                        thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_s> input_s(thrust::make_counting_iterator(0),
+                                                        thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ms> input_ms(thrust::make_counting_iterator(0),
+                                                          thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_us> input_us(thrust::make_counting_iterator(0),
+                                                          thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ns> input_ns(thrust::make_counting_iterator(0),
+                                                          thrust::make_counting_iterator(size));
+
+  EXPECT_THROW(cudf::rolling_window(input_D, 2, 2, 0, cudf::make_mean_aggregation()),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::rolling_window(input_s, 2, 2, 0, cudf::make_mean_aggregation()),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::rolling_window(input_ms, 2, 2, 0, cudf::make_mean_aggregation()),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::rolling_window(input_us, 2, 2, 0, cudf::make_mean_aggregation()),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::rolling_window(input_ns, 2, 2, 0, cudf::make_mean_aggregation()),
                cudf::logic_error);
 }
 
