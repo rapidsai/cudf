@@ -64,6 +64,7 @@
 - PR #5441 Update Java HostMemoryBuffer to only load native libs when necessary
 - PR #5437 Improve libcudf join documentation
 - PR #5458 Install meta packages for dependencies
+- PR #5467 Move doc customization scripts to Jenkins
 
 ## Bug Fixes
 
