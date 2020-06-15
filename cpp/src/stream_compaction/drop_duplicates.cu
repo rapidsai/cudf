@@ -145,9 +145,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
   }
 }
 
-cudf::size_type unique_count(table_view const& keys,
-                             null_equality nulls_equal = null_equality::EQUAL,
-                             cudaStream_t stream       = 0)
+cudf::size_type unique_count(table_view const& keys, null_equality nulls_equal, cudaStream_t stream)
 {
   // sort only indices
   auto sorted_indices = sorted_order(
@@ -335,6 +333,13 @@ cudf::size_type unique_count(column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::unique_count(input, null_handling, nan_handling);
+}
+
+cudf::size_type unique_count(table_view const& input,
+                             null_equality nulls_equal)
+{
+  CUDF_FUNC_RANGE();
+  return detail::unique_count(input, nulls_equal);
 }
 
 }  // namespace cudf

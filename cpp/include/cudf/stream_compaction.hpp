@@ -259,5 +259,19 @@ cudf::size_type unique_count(column_view const& input,
                              null_policy null_handling,
                              nan_policy nan_handling);
 
+/**
+ * @brief Count the unique elements in the table_view
+ *
+ * Given an input table_view, number of unique rows in this table_view is returned
+ *
+ * @param[in] input The column_view whose unique elements will be counted.
+ * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL,
+ * nulls are not equal if null_equality::UNEQUAL
+ *
+ * @return number of unique rows in the table
+ */
+cudf::size_type unique_count(table_view const& input,
+                             null_equality nulls_equal = null_equality::EQUAL);
+
 /** @} */
 }  // namespace cudf
