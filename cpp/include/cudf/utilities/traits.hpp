@@ -151,6 +151,21 @@ constexpr inline bool is_numeric(data_type type)
 }
 
 /**
+ * @brief Indicates whether the type `T` is index type.
+ *
+ * index types are integral types such as 'INT*' apart from 'bool'.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is index type
+ * @return false  `T` is not index type
+ **/
+template <typename T>
+constexpr inline bool is_index_type()
+{
+  return std::is_integral<T>::value and not std::is_same<T, bool>::value;
+}
+
+/**
  * @brief Indicates whether the type `T` is a floating point type.
  *
  * @tparam T  The type to verify
