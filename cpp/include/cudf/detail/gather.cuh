@@ -79,7 +79,9 @@ struct gather_bitmask_functor {
     auto col     = input.column(mask_idx);
 
     if (Op != gather_bitmask_op::DONT_CHECK) {
-      if (row_idx < 0 || row_idx >= col.size()) {
+      bool out_of_range = is_signed_iterator<MapIterator>() ? (row_idx < 0 || row_idx >= col.size())
+                                                            : row_idx >= col.size();
+      if (out_of_range) {
         if (Op == gather_bitmask_op::PASSTHROUGH) {
           return bit_is_set(masks[mask_idx], bit_idx);
         } else if (Op == gather_bitmask_op::NULLIFY) {

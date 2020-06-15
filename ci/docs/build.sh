@@ -16,7 +16,7 @@ export HOME=$WORKSPACE
 export PROJECT_WORKSPACE=/rapids/cudf
 export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 export NIGHTLY_VERSION=$(echo $BRANCH_VERSION | awk -F. '{print $2}')
-export PROJECTS=(cudf libcudf libnvstrings nvstrings)
+export PROJECTS=(cudf libcudf)
 
 logger "Check environment..."
 env
@@ -48,16 +48,6 @@ logger "Build cuDF docs..."
 cd $PROJECT_WORKSPACE/docs/cudf
 make html
 
-#libnvstrings Doxygen build
-logger "Build libnvstrings docs..."
-cd $PROJECT_WORKSPACE/cpp/custrings/doxygen
-doxygen Doxyfile
-
-#nvstrings Sphinx Build
-logger "Build nvstrings docs..."
-cd $PROJECT_WORKSPACE/docs/nvstrings
-make html
-
 #Commit to Website
 cd $DOCS_WORKSPACE
 
@@ -71,8 +61,6 @@ done
 
 mv $PROJECT_WORKSPACE/docs/cudf/build/html/* $DOCS_WORKSPACE/api/cudf/$BRANCH_VERSION
 mv $PROJECT_WORKSPACE/cpp/doxygen/html/* $DOCS_WORKSPACE/api/libcudf/$BRANCH_VERSION
-mv $PROJECT_WORKSPACE/docs/nvstrings/build/html/* $DOCS_WORKSPACE/api/nvstrings/$BRANCH_VERSION
-mv $PROJECT_WORKSPACE/cpp/custrings/doxygen/html/* $DOCS_WORKSPACE/api/libnvstrings/$BRANCH_VERSION
 
 # Customize HTML documentation
 ./update_symlinks.sh $NIGHTLY_VERSION

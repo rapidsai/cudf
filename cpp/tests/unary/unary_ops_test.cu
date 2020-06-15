@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -120,14 +121,16 @@ TYPED_TEST(cudf_math_test, ABS)
 {
   using T = TypeParam;
 
-  cudf::size_type const colSize = 1000;
+  cudf::size_type const colSize = 100;
   std::vector<T> h_input_v(colSize);
   std::vector<T> h_expect_v(colSize);
 
-  std::iota(std::begin(h_input_v), std::end(h_input_v), -1 * colSize);
+  std::iota(std::begin(h_input_v),
+            std::end(h_input_v),
+            std::is_unsigned<T>::value ? colSize : -1 * colSize);
 
   std::transform(std::cbegin(h_input_v), std::cend(h_input_v), std::begin(h_expect_v), [](auto e) {
-    return std::abs(e);
+    return cudf::util::absolute_value(e);
   });
 
   cudf::test::fixed_width_column_wrapper<T> const input(std::cbegin(h_input_v),
@@ -169,7 +172,8 @@ TYPED_TEST(cudf_math_test, SQRT)
 
 TYPED_TEST(cudf_math_test, SimpleABS)
 {
-  cudf::test::fixed_width_column_wrapper<TypeParam> input{{-2, -1, 1, 2}};
+  auto const v = cudf::test::make_type_param_vector<TypeParam>({-2, -1, 1, 2});
+  cudf::test::fixed_width_column_wrapper<TypeParam> input(v.begin(), v.end());
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{2, 1, 1, 2}};
   auto output = cudf::unary_operation(input, cudf::unary_op::ABS);
   cudf::test::expect_columns_equal(expected, output->view());

@@ -65,11 +65,12 @@ if [ "$py_ver" == "3.6" ];then
 fi
 
 conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
-              "dask>=2.15.0" "distributed>=2.15.0" "numpy>=1.16" "double-conversion" \
-              "rapidjson" "flatbuffers" "boost-cpp" "fsspec>=0.6.0" "dlpack" \
-              "feather-format" "cupy>=6.6.0,<8.0.0a0,!=7.1.0" "arrow-cpp=0.15.0" "pyarrow=0.15.0" \
-              "fastavro>=0.22.0" "pandas>=0.25,<0.26" "hypothesis" "s3fs" "gcsfs" \
-              "boto3" "moto" "httpretty" "streamz" "ipython=7.3*" "jupyterlab"
+              "rapids-build-env=$MINOR_VERSION.*" \
+              "rapids-notebook-env=$MINOR_VERSION.*"
+
+# https://docs.rapids.ai/maintainers/depmgmt/ 
+# conda remove -f rapids-build-env rapids-notebook-env
+# conda install "your-pkg=1.0.0"
 
 # Install the master version of dask, distributed, and streamz
 logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps"
@@ -86,18 +87,18 @@ $CXX --version
 conda list
 
 ################################################################################
-# BUILD - Build libnvstrings, nvstrings, libcudf, cuDF and dask_cudf from source
+# BUILD - Build libcudf, cuDF and dask_cudf from source
 ################################################################################
 
 logger "Build libcudf..."
 if [[ ${BUILD_MODE} == "pull-request" ]]; then
-    $WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests
+    $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests
 else
-    $WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -l
+    $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests -l
 fi
 
 ################################################################################
-# TEST - Run GoogleTest and py.tests for libnvstrings, nvstrings, libcudf, and
+# TEST - Run GoogleTest and py.tests for libcudf, and
 # cuDF
 ################################################################################
 
@@ -124,10 +125,6 @@ else
         logger "export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1"
         export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
     fi
-
-    cd $WORKSPACE/python/nvstrings
-    logger "Python py.test for nvstrings..."
-    py.test --cache-clear --junitxml=${WORKSPACE}/junit-nvstrings.xml -v --cov-config=.coveragerc --cov=nvstrings --cov-report=xml:${WORKSPACE}/python/nvstrings/nvstrings-coverage.xml --cov-report term
 
     cd $WORKSPACE/python/cudf
     logger "Python py.test for cuDF..."

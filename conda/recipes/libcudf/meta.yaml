@@ -25,21 +25,21 @@ build:
 
 requirements:
   build:
-    - cmake >=3.12.4
+    - cmake >=3.14.0
   host:
     - librmm {{ minor_version }}.*
-    - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 0.15.0.*
+    - arrow-cpp 0.17.1.*
+    - arrow-cpp-proc * cuda
     - double-conversion
     - rapidjson
     - flatbuffers
-    - boost-cpp
+    - boost-cpp >=1.72.0
     - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
-    - arrow-cpp 0.15.0.*
     - dlpack
+    - arrow-cpp-proc * cuda
 
 test:
   commands:
@@ -69,6 +69,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/reduction_functions.hpp
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
+    - test -f $PREFIX/include/cudf/detail/reshape.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/detail/search.hpp
     - test -f $PREFIX/include/cudf/detail/sequence.hpp
@@ -100,6 +101,8 @@ test:
     - test -f $PREFIX/include/cudf/io/writers.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
+    - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
     - test -f $PREFIX/include/cudf/merge.hpp
     - test -f $PREFIX/include/cudf/null_mask.hpp
     - test -f $PREFIX/include/cudf/partitioning.hpp
@@ -159,6 +162,7 @@ test:
     - test -f $PREFIX/include/cudf/utilities/traits.hpp
     - test -f $PREFIX/include/cudf/utilities/type_dispatcher.hpp
     - test -f $PREFIX/include/cudf/wrappers/dictionary.hpp
+    - test -f $PREFIX/include/cudf/wrappers/durations.hpp
     - test -f $PREFIX/include/cudf/wrappers/timestamps.hpp
 
 about:

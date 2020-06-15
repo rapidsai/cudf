@@ -106,14 +106,45 @@ TEST_F(TextTokenizeTest, TokenizeErrorTest)
   }
 }
 
+TEST_F(TextTokenizeTest, CharacterTokenize)
+{
+  std::vector<const char*> h_strings{"the mousé ate the cheese", nullptr, ""};
+  cudf::test::strings_column_wrapper strings(
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+
+  cudf::test::strings_column_wrapper expected{"t", "h", "e", " ", "m", "o", "u", "s",
+                                              "é", " ", "a", "t", "e", " ", "t", "h",
+                                              "e", " ", "c", "h", "e", "e", "s", "e"};
+
+  auto results = nvtext::character_tokenize(cudf::strings_column_view(strings));
+  cudf::test::expect_columns_equal(*results, expected);
+}
+
 TEST_F(TextTokenizeTest, TokenizeEmptyTest)
 {
   auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
-  cudf::strings_column_view strings_view(strings->view());
-  auto results = nvtext::tokenize(strings_view);
+  cudf::test::strings_column_wrapper all_empty({"", "", ""});
+  cudf::test::strings_column_wrapper all_null({"", "", ""}, {0, 0, 0});
+  cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 0, 0});
+
+  auto results = nvtext::tokenize(cudf::strings_column_view(strings->view()));
   EXPECT_EQ(results->size(), 0);
-  EXPECT_EQ(results->has_nulls(), false);
-  results = nvtext::count_tokens(strings_view);
+  results = nvtext::tokenize(cudf::strings_column_view(all_empty));
   EXPECT_EQ(results->size(), 0);
-  EXPECT_EQ(results->has_nulls(), false);
+  results = nvtext::tokenize(cudf::strings_column_view(all_null));
+  EXPECT_EQ(results->size(), 0);
+  results = nvtext::count_tokens(cudf::strings_column_view(strings->view()));
+  EXPECT_EQ(results->size(), 0);
+  results = nvtext::count_tokens(cudf::strings_column_view(all_empty));
+  cudf::test::expect_columns_equal(*results, expected);
+  results = nvtext::count_tokens(cudf::strings_column_view(all_null));
+  cudf::test::expect_columns_equal(*results, expected);
+  results = nvtext::character_tokenize(cudf::strings_column_view(strings->view()));
+  EXPECT_EQ(results->size(), 0);
+  results = nvtext::character_tokenize(cudf::strings_column_view(all_empty));
+  EXPECT_EQ(results->size(), 0);
+  results = nvtext::character_tokenize(cudf::strings_column_view(all_null));
+  EXPECT_EQ(results->size(), 0);
 }

@@ -36,13 +36,13 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::repeat(table_view const&, scalar const&,
+ * @copydoc cudf::repeat(table_view const&, size_type,
  * rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> repeat(table_view const& input_table,
-                              scalar const& count,
+                              size_type count,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream                 = 0);
 

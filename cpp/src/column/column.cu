@@ -224,7 +224,6 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     CUDF_FAIL("list_view not supported yet");
-    return nullptr;
   }
 };
 }  // anonymous namespace
