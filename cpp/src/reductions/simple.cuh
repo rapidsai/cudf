@@ -52,7 +52,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   if (col.has_nulls()) {
     auto it = thrust::make_transform_iterator(
       dcol->pair_begin<ElementType, true>(),
-      simple_op.template get_element_transformer<thrust::pair<ResultType, bool>>());
+      simple_op.template get_null_replacing_element_transformer<thrust::pair<ResultType, bool>>());
     result = detail::reduce(it, col.size(), Op{}, mr, stream);
   } else {
     auto it = thrust::make_transform_iterator(
