@@ -381,10 +381,25 @@ class Index(Frame, Serializable):
             from cudf.utils.dtypes import numeric_normalize_types
 
             this = self
-            if isinstance(self._values, numerical.NumericalColumn):
-                if self.dtype != other.dtype:
-                    this, other = numeric_normalize_types(self, other)
-            to_concat = [this, other]
+            if len(other) == 0:
+                # short-circuit and return a copy
+                to_concat = [self]
+            if len(self) == 0:
+                to_concat = [other]
+
+            if len(self) and len(other):
+                if (this.dtype == "object" and other.dtype != "object") or (
+                    other.dtype == "object" and this.dtype != "object"
+                ):
+                    raise TypeError(
+                        "cudf does not support mixed types, please type-cast "
+                        "both series to same dtypes."
+                    )
+
+                if isinstance(self._values, numerical.NumericalColumn):
+                    if self.dtype != other.dtype:
+                        this, other = numeric_normalize_types(self, other)
+                to_concat = [this, other]
 
         for obj in to_concat:
             if not isinstance(obj, Index):
