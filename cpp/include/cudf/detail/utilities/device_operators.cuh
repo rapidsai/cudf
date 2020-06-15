@@ -139,12 +139,6 @@ struct DeviceMax {
 
 /* @brief binary `product` operator */
 struct DeviceProduct {
-  template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
-  {
-    return T{DeviceProduct{}(lhs.time_since_epoch().count(), rhs.time_since_epoch().count())};
-  }
-
   template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
   {
