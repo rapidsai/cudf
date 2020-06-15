@@ -23,7 +23,7 @@ from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.frame import Frame
 from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
+from cudf.utils.dtypes import is_categorical_dtype, is_scalar
 from cudf.utils.utils import cached_property
 
 
@@ -1001,7 +1001,7 @@ class RangeIndex(Index):
             return index
         else:
             if is_scalar(index):
-                index = min_signed_type(index)(index)
+                index = np.min_scalar_type(index).type(index)
             index = column.as_column(index)
 
         return as_index(self._values[index], name=self.name)
