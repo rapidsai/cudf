@@ -4011,7 +4011,7 @@ def test_isin_dataframe(data, values):
         except ValueError as e:
             if str(e) == "Lengths must match.":
                 # xref https://github.com/pandas-dev/pandas/issues/34256
-                pytest.xfail()
+                pytest.xfail("https://github.com/pandas-dev/pandas/issues/34256")
         if isinstance(values, (pd.DataFrame, pd.Series)):
             values = gd.from_pandas(values)
         got = gdf.isin(values)
