@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def make_params():
@@ -249,7 +249,7 @@ def test_dataframe_join_mismatch_cats(how):
     join_gdf = gdf1.join(gdf2, how=how, sort=True, method="hash")
     join_pdf = pdf1.join(pdf2, how=how)
 
-    got = join_gdf.to_pandas()
+    got = join_gdf.fillna(-1).to_pandas()
     expect = join_pdf.fillna(-1)  # note: cudf join doesn't mask NA
 
     # We yield a categorical here whereas pandas gives Object.
@@ -963,8 +963,8 @@ def test_merge_multi(kwargs):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype_l", ["int8", "int16", "int32", "int64"])
-@pytest.mark.parametrize("dtype_r", ["int8", "int16", "int32", "int64"])
+@pytest.mark.parametrize("dtype_l", INTEGER_TYPES)
+@pytest.mark.parametrize("dtype_r", INTEGER_TYPES)
 def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     other_data = ["a", "b", "c"]
 
@@ -1028,16 +1028,13 @@ def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "dtype_l", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
-@pytest.mark.parametrize(
-    "dtype_r", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype_l", NUMERIC_TYPES)
+@pytest.mark.parametrize("dtype_r", NUMERIC_TYPES)
 def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
-    if ("int" in dtype_l and "int" in dtype_r) or (
-        "float" in dtype_l and "float" in dtype_r
-    ):
+    if (
+        ("int" in dtype_l or "long" in dtype_l)
+        and ("int" in dtype_r or "long" in dtype_r)
+    ) or ("float" in dtype_l and "float" in dtype_r):
         pytest.skip("like types not tested in this function")
 
     other_data = ["a", "b", "c", "d", "e", "f"]
@@ -1097,13 +1094,17 @@ def test_typecast_on_join_no_float_round():
         (np.dtype("int8"), np.dtype("int16")),
         (np.dtype("int16"), np.dtype("int32")),
         (np.dtype("int32"), np.dtype("int64")),
+        (np.dtype("uint8"), np.dtype("uint16")),
+        (np.dtype("uint16"), np.dtype("uint32")),
+        (np.dtype("uint32"), np.dtype("uint64")),
         (np.dtype("float32"), np.dtype("float64")),
         (np.dtype("int32"), np.dtype("float32")),
+        (np.dtype("uint32"), np.dtype("float32")),
     ],
 )
 def test_typecast_on_join_overflow_unsafe(dtypes):
     dtype_l, dtype_r = dtypes
-    if dtype_l.kind == "i":
+    if dtype_l.kind in {"i", "u"}:
         dtype_l_max = np.iinfo(dtype_l).max
     elif dtype_l.kind == "f":
         dtype_l_max = np.finfo(dtype_r).max

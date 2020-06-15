@@ -24,11 +24,24 @@ namespace cudf {
 namespace detail {
 /**
  * @copydoc cudf::drop_nulls(table_view const&, std::vector<size_type> const&,
- *                                         cudf::size_type, rmm::mr::device_memory_resource*)
+ *                           cudf::size_type, rmm::mr::device_memory_resource*)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> drop_nulls(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  cudf::size_type keep_threshold,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @copydoc cudf::drop_nans(table_view const&, std::vector<size_type> const&,
+ *                          cudf::size_type, rmm::mr::device_memory_resource*)
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<table> drop_nans(
   table_view const& input,
   std::vector<size_type> const& keys,
   cudf::size_type keep_threshold,

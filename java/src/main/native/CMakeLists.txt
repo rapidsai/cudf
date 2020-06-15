@@ -105,13 +105,27 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
 ###################################################################################################
+# - Thrust/CUB/libcudacxx ------------------------------------------------------------------------------------
+
+find_path(THRUST_INCLUDE "thrust"
+    HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src"
+          "${PROJECT_SOURCE_DIR}/../../../../cpp/build/_deps/thrust-src"
+          "$ENV{CONDA_PREFIX}/include")
+
+find_path(CUB_INCLUDE "cub"
+    HINTS "$ENV{CUDF_ROOT}/_deps/cub-src"
+          "${PROJECT_SOURCE_DIR}/../../../../cpp/build/_deps/cub-src"
+          "$ENV{CONDA_PREFIX}/include")
+
+find_path(LIBCUDACXX_INCLUDE "simt"
+    HINTS "$ENV{CUDF_ROOT}/_deps/libcudacxx-src/include"
+          "${PROJECT_SOURCE_DIR}/../../../../cpp/build/_deps/libcudacxx-src/include")
+
+###################################################################################################
 # - CUDF ------------------------------------------------------------------------------------------
 
 set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
-                 "${PROJECT_SOURCE_DIR}/../../../../cpp/src/"
-                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/cub"
-                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/libcudacxx/include")
-                 
+                 "${PROJECT_SOURCE_DIR}/../../../../cpp/src/")
 
 find_library(CUDF_LIBRARY "cudf"
     HINTS "$ENV{CUDF_ROOT}/lib"
@@ -148,35 +162,6 @@ if (RMM_INCLUDE AND RMM_LIBRARY)
 endif (RMM_INCLUDE AND RMM_LIBRARY)
 
 ###################################################################################################
-# - NVStrings -------------------------------------------------------------------------------------
-
-# NVSTRING_INCLUDE is the same as CUDF_INCLUDE
-
-find_library(NVSTRINGS_LIBRARY "NVStrings"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib"
-                   "../../../../cpp/build")
-
-find_library(NVCATEGORY_LIBRARY "NVCategory"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib"
-                   "../../../../cpp/build")
-
-message(STATUS "NVSTRINGS: NVSTRINGS_LIBRARY set to ${NVSTRINGS_LIBRARY}")
-message(STATUS "NVSTRINGS: NVCATEGORY_LIBRARY set to ${NVCATEGORY_LIBRARY}")
-
-add_library(NVStrings SHARED IMPORTED ${NVSTRINGS_LIBRARY})
-if (NVSTRINGS_LIBRARY)
-    set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY})
-endif (NVSTRINGS_LIBRARY)
-
-add_library(NVCategory SHARED IMPORTED ${NVCATEGORY_LIBRARY})
-if (NVCATEGORY_LIBRARY)
-    set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVCATEGORY_LIBRARY})
-endif (NVCATEGORY_LIBRARY)
-
-
-###################################################################################################
 # - find JNI -------------------------------------------------------------------------------------
 find_package(JNI REQUIRED)
 if(JNI_FOUND)
@@ -188,7 +173,10 @@ endif(JNI_FOUND)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+include_directories("${THRUST_INCLUDE}"
+                    "${CUB_INCLUDE}"
+                    "${LIBCUDACXX_INCLUDE}"
+                    "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
@@ -202,18 +190,17 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${RMM_LIBRARY}"
-                 "${CUDF_LIBRARY}"
-                 "${NVSTRINGS_LIBRARY}"
-                 "${NVCATEGORY_LIBRARY}")
+                 "${CUDF_LIBRARY}")
+
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
 
 set(SOURCE_FILES
-    "src/HostMemoryBufferJni.cpp"
     "src/CudfJni.cpp"
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
+    "src/HostMemoryBufferNativeUtilsJni.cpp"
     "src/NvtxRangeJni.cpp"
     "src/RmmJni.cpp"
     "src/ScalarJni.cpp"

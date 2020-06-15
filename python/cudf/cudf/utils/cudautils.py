@@ -76,25 +76,7 @@ def expand_mask_bits(size, bits):
 
 
 @cuda.jit
-def gpu_shift(in_col, out_col, N):
-    """Shift value at index i of an input array forward by N positions and
-    store the output in a new array.
-    """
-    i = cuda.grid(1)
-    if N > 0:
-        if i < in_col.size:
-            out_col[i] = in_col[i - N]
-        if i < N:
-            out_col[i] = -1
-    else:
-        if i <= (in_col.size + N):
-            out_col[i] = in_col[i - N]
-        if i >= (in_col.size + N) and i < in_col.size:
-            out_col[i] = -1
-
-
-@cuda.jit
-def gpu_diff(in_col, out_col, N):
+def gpu_diff(in_col, out_col, out_mask, N):
     """Calculate the difference between values at positions i and i - N in an
     array and store the output in a new array.
     """
@@ -103,13 +85,15 @@ def gpu_diff(in_col, out_col, N):
     if N > 0:
         if i < in_col.size:
             out_col[i] = in_col[i] - in_col[i - N]
+            out_mask[i] = True
         if i < N:
-            out_col[i] = -1
+            out_mask[i] = False
     else:
         if i <= (in_col.size + N):
             out_col[i] = in_col[i] - in_col[i - N]
+            out_mask[i] = True
         if i >= (in_col.size + N) and i < in_col.size:
-            out_col[i] = -1
+            out_mask[i] = False
 
 
 @cuda.jit
@@ -258,6 +242,29 @@ def window_sizes_from_offset(arr, offset):
     if arr.size > 0:
         gpu_window_sizes_from_offset.forall(arr.size)(
             arr, window_sizes, offset
+        )
+    return window_sizes
+
+
+@cuda.jit
+def gpu_grouped_window_sizes_from_offset(
+    arr, window_sizes, group_starts, offset
+):
+    i = cuda.grid(1)
+    j = i
+    if i < arr.size:
+        while j > (group_starts[i] - 1):
+            if (arr[i] - arr[j]) >= offset:
+                break
+            j -= 1
+        window_sizes[i] = i - j
+
+
+def grouped_window_sizes_from_offset(arr, group_starts, offset):
+    window_sizes = cuda.device_array(shape=(arr.shape), dtype="int32")
+    if arr.size > 0:
+        gpu_grouped_window_sizes_from_offset.forall(arr.size)(
+            arr, window_sizes, group_starts, offset
         )
     return window_sizes
 
