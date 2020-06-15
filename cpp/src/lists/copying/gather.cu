@@ -1,5 +1,6 @@
 
 #include <thrust/binary_search.h>
+#include <thrust/iterator/iterator_facade.h>
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/detail/gather.cuh>
 
@@ -8,12 +9,7 @@ namespace lists {
 namespace detail {
 
 /**
- * @brief Macro for creating a gather map iterator to gather from level N+1.
- *
- * The iterator for each level is unique and we can't use templates because the
- * operation is recursive.  There is a restriction in nvcc that prevents you
- * from returning a __device__ lambda from a function, so this cannot be implemented
- * as function.
+ * @brief List gatherer function object.
  *
  * The iterator needed for gathering at level N+1 needs to reference the offsets
  * from level N and the "base" offsets used from level N-1.  An example of
@@ -25,10 +21,10 @@ namespace detail {
  * level N offsets                 : [0, 2, 7]
  * "base" offsets from level N-1   : [0, 5]
  *
- * desired output sequence from the level N+1 gather map
+ * desired output sequence for the level N+1 gather map
  * [0, 1, 5, 6, 7, 8, 9]
  *
- * The generation of this sequence in this iterator works as follows
+ * The generation of this sequence in this functor works as follows
  *
  * step 1, generate row index sequence
  * [0, 0, 1, 1, 1, 1, 1]
@@ -37,30 +33,37 @@ namespace detail {
  * step 3, add base offsets to get the final sequence
  * [0, 1, 5, 6, 7, 8, 9]
  *
- * @param __name variable name of the resulting iterator
- * @param gather_data the `gather_data` struct needed to generate the map sequence
- *
- * @returns an iterator that produces the gather map for level N+1
- *
  */
-#define LIST_GATHER_ITERATOR(__name, gather_data)                                                                      \
-  auto __name##span_upper_bound = thrust::make_transform_iterator(                                                     \
-    thrust::make_counting_iterator<size_type>(0),                                                                      \
-    [offsets = gather_data.offsets] __device__(size_type index) { return offsets[index + 1]; });                       \
-  column_view __name##base_offsets_v(*gather_data.base_offsets);                                                       \
-  size_type const* __name##base_offsets = __name##base_offsets_v.data<size_type>();                                    \
-  auto __name                           = thrust::make_transform_iterator(                                             \
-    thrust::make_counting_iterator<size_type>(0),                                            \
-    [span_upper_bound = __name##span_upper_bound,                                            \
-     offset_count     = __name##base_offsets_v.size(),                                       \
-     offsets          = gather_data.offsets,                                                 \
-     base_offsets     = __name##base_offsets] __device__(size_type index) {                      \
-      auto bound = thrust::upper_bound(                                                      \
-        thrust::seq, span_upper_bound, span_upper_bound + offset_count, index);              \
-      size_type offset_index    = thrust::distance(span_upper_bound, bound);                 \
-      size_type offset_subindex = offset_index == 0 ? index : index - offsets[offset_index]; \
-      return offset_subindex + base_offsets[offset_index];                                   \
-    });
+struct list_gatherer {
+  typedef size_type argument_type;
+  typedef size_type result_type;
+
+  size_type offset_count;
+  size_type const* base_offsets;
+  size_type const* offsets;
+
+  list_gatherer(gather_data const& gd)
+  {
+    column_view base_offsets_v(*gd.base_offsets);
+    offset_count = base_offsets_v.size();
+    base_offsets = base_offsets_v.data<size_type>();
+    offsets      = gd.offsets;
+  }
+
+  result_type operator() __device__(argument_type index)
+  {
+    // the "upper bound" of the span for a given offset is always offsets+1;
+    size_type const* upper_bound_start = offsets + 1;
+    // "step 1" from above
+    auto bound =
+      thrust::upper_bound(thrust::seq, upper_bound_start, upper_bound_start + offset_count, index);
+    size_type offset_index = thrust::distance(upper_bound_start, bound);
+    // "step 2" from above
+    size_type offset_subindex = offset_index == 0 ? index : index - offsets[offset_index];
+    // "step 3" from above
+    return offset_subindex + base_offsets[offset_index];
+  }
+};
 
 /**
  * @copydoc cudf::lists::detail::gather_list_leaf
@@ -73,7 +76,8 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
                                          rmm::mr::device_memory_resource* mr)
 {
   // gather map for our child
-  LIST_GATHER_ITERATOR(child_gather_map, gd);
+  auto child_gather_map = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<size_type>(0), list_gatherer{gd});
 
   // size of the child gather map
   size_type child_gather_map_size;
@@ -103,7 +107,8 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                                            cudaStream_t stream,
                                            rmm::mr::device_memory_resource* mr)
 {
-  LIST_GATHER_ITERATOR(gather_map_begin, parent);
+  auto gather_map_begin = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<size_type>(0), list_gatherer{parent});
 
   // size of the child gather map
   size_type gather_map_size = 0;
