@@ -98,11 +98,15 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
+
+  auto index_policy = is_unsigned(gather_map.type()) ? detail::negative_index_policy::NOT_ALLOWED
+                                                     : detail::negative_index_policy::ALLOWED;
+
   return detail::gather(
     source_table,
     gather_map,
     check_bounds ? detail::out_of_bounds_policy::FAIL : detail::out_of_bounds_policy::NULLIFY,
-    detail::negative_index_policy::ALLOWED,
+    index_policy,
     mr);
 }
 

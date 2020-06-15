@@ -19,7 +19,10 @@
 - PR #5425 Add Python `Groupby.rolling()`
 - PR #5359 Add duration types 
 - PR #5434 Add nvtext function generate_character_grams
+- PR #5359 Add duration types
+- PR #5442 Add support for `cudf.isclose`
 - PR #5444 Remove usage of deprecated RMM APIs and headers.
+- PR #5463 Add `.str.byte_count` python api and cython(bindings)
 
 ## Improvements
 
@@ -48,17 +51,21 @@
 - PR #5374 Port nvtext character_tokenize API to libcudf
 - PR #5389 Expose typed accessors for Java HostMemoryBuffer
 - PR #5379 Avoid chaining `Buffer`s
+- PR #5381 Change numpy usages to cupy in `10min.ipynb`
 - PR #5408 Update pyrrow and arrow-cpp to 0.17.1
 - PR #5366 Add benchmarks for cuIO writers
 - PR #5405 Add Error message to `StringColumn.unary_operator`
 - PR #5424 Add python plumbing for `.str.character_tokenize`
 - PR #5420 Aligning signature of `Series.value_counts` to Pandas
+- PR #5431 Adding support for unsigned int
 - PR #5426 Refactor strings code to minimize calls to regex
 - PR #5433 Add support for column inputs in `strings::starts_with` and `strings::ends_with`
 - PR #5427 Add Java bindings for unsigned data types
 - PR #5429 Improve text wrapping in libcudf documentation
 - PR #5443 Remove unused `is_simple` trait
 - PR #5441 Update Java HostMemoryBuffer to only load native libs when necessary
+- PR #5437 Improve libcudf join documentation
+- PR #5458 Install meta packages for dependencies
 
 ## Bug Fixes
 
@@ -85,7 +92,9 @@
 - PR #5404 Fix issue with column creation when chunked arrays are passed
 - PR #5409 Use the correct memory resource when creating empty null masks
 - PR #5399 Fix cpp compiler warnings of unreachable code
+- PR #5439 Fix nvtext ngrams_tokenize performance for multi-byte UTF8
 - PR #5446 Fix compile error caused by out-of-date PR merge (4990)
+- PR #5459 Fix str.translate to convert table characters to UTF-8
 
 
 # cuDF 0.14.0 (Date TBD)
