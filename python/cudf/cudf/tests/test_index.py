@@ -728,3 +728,96 @@ def test_index_equal_misc(data, other):
     expected = pd_data.astype("category").equals(pd_other)
     actual = gd_data.astype("category").equals(gd_other)
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4, 5, 6],
+        [10, 20, 30, 40, 50, 60],
+        ["1", "2", "3", "4", "5", "6"],
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        ["a"],
+        ["b", "c", "d"],
+        [1],
+        [2, 3, 4],
+        [],
+        [10.0],
+        [1100.112, 2323.2322, 2323.2322],
+        ["abcd", "defgh", "werty", "poiu"],
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [1, 2, 3, 4, 5, 6],
+        [10, 20, 30, 40, 50, 60],
+        ["1", "2", "3", "4", "5", "6"],
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        ["a"],
+        ["b", "c", "d"],
+        [1],
+        [2, 3, 4],
+        [],
+        [10.0],
+        [1100.112, 2323.2322, 2323.2322],
+        ["abcd", "defgh", "werty", "poiu"],
+    ],
+)
+def test_index_append(data, other):
+    pd_data = pd.Index(data)
+    pd_other = pd.Index(other)
+
+    gd_data = cudf.core.index.as_index(data)
+    gd_other = cudf.core.index.as_index(other)
+
+    if (gd_data.dtype == "object" and gd_other.dtype != "object") or (
+        gd_other.dtype == "object" and gd_data.dtype != "object"
+    ):
+        gd_data = gd_data.astype("str")
+        gd_other = gd_other.astype("str")
+
+    expected = pd_data.append(pd_other)
+
+    actual = gd_data.append(gd_other)
+    if len(data) == 0 and len(other) == 0:
+        # Pandas default dtype to "object" for empty list
+        # cudf default dtype to "float" for empty list
+        assert_eq(expected, actual.astype("str"))
+    elif actual.dtype == "object":
+        assert_eq(expected.astype("str"), actual)
+    else:
+        assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4, 5, 6],
+        [10, 20, 30, 40, 50, 60],
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        [1],
+        [2, 3, 4],
+        [10.0],
+        [1100.112, 2323.2322, 2323.2322],
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        ["1", "2", "3", "4", "5", "6"],
+        ["a"],
+        ["b", "c", "d"],
+        ["abcd", "defgh", "werty", "poiu"],
+    ],
+)
+def test_index_append_error(data, other):
+
+    gd_data = cudf.core.index.as_index(data)
+    gd_other = cudf.core.index.as_index(other)
+
+    with pytest.raises(TypeError):
+        gd_data.append(gd_other)
+
+    with pytest.raises(TypeError):
+        gd_other.append(gd_data)
