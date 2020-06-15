@@ -107,8 +107,8 @@ struct simple_op {
   auto get_null_replacing_element_transformer()
   {
     using element_transformer = typename Derived::transformer<ResultType>;
-    return null_replacing_transformer<ResultType, element_transformer>{
-      get_identity<ResultType>(), element_transformer{}};
+    return null_replacing_transformer<ResultType, element_transformer>{get_identity<ResultType>(),
+                                                                       element_transformer{}};
   }
 
   /**
