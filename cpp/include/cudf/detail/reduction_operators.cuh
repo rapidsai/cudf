@@ -191,33 +191,12 @@ struct compound_op : public simple_op<Derived> {
 // computes the final ResultType from the IntermediateType.
 // intermediate::compute_result method is enforced by CRTP base class compound_op
 
-template <typename T, typename Enable = void>
-class transformer_mean;
-template <typename T>
-class transformer_mean<T, typename std::enable_if_t<!cudf::is_timestamp<T>()>> {
- public:
-  template <typename InputType>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputType const& t) const
-  {
-    return thrust::identity<T>{}(t);
-  }
-};
-template <typename T>
-class transformer_mean<T, typename std::enable_if_t<cudf::is_timestamp<T>()>> {
- public:
-  template <typename InputType>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputType const& t) const
-  {
-    return thrust::identity<T>{}(t).time_since_epoch();
-  }
-};
-
 // operator for `mean`
 struct mean : public compound_op<mean> {
   using op = cudf::DeviceSum;
 
   template <typename ResultType>
-  using transformer = transformer_mean<ResultType>;
+  using transformer = thrust::identity<ResultType>;
 
   template <typename ResultType>
   struct intermediate {
