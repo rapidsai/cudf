@@ -335,8 +335,7 @@ cudf::size_type unique_count(column_view const& input,
   return detail::unique_count(input, null_handling, nan_handling);
 }
 
-cudf::size_type unique_count(table_view const& input,
-                             null_equality nulls_equal)
+cudf::size_type unique_count(table_view const& input, null_equality nulls_equal)
 {
   CUDF_FUNC_RANGE();
   return detail::unique_count(input, nulls_equal);
