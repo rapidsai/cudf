@@ -76,25 +76,7 @@ def expand_mask_bits(size, bits):
 
 
 @cuda.jit
-def gpu_shift(in_col, out_col, N):
-    """Shift value at index i of an input array forward by N positions and
-    store the output in a new array.
-    """
-    i = cuda.grid(1)
-    if N > 0:
-        if i < in_col.size:
-            out_col[i] = in_col[i - N]
-        if i < N:
-            out_col[i] = -1
-    else:
-        if i <= (in_col.size + N):
-            out_col[i] = in_col[i - N]
-        if i >= (in_col.size + N) and i < in_col.size:
-            out_col[i] = -1
-
-
-@cuda.jit
-def gpu_diff(in_col, out_col, N):
+def gpu_diff(in_col, out_col, out_mask, N):
     """Calculate the difference between values at positions i and i - N in an
     array and store the output in a new array.
     """
@@ -103,13 +85,15 @@ def gpu_diff(in_col, out_col, N):
     if N > 0:
         if i < in_col.size:
             out_col[i] = in_col[i] - in_col[i - N]
+            out_mask[i] = True
         if i < N:
-            out_col[i] = -1
+            out_mask[i] = False
     else:
         if i <= (in_col.size + N):
             out_col[i] = in_col[i] - in_col[i - N]
+            out_mask[i] = True
         if i >= (in_col.size + N) and i < in_col.size:
-            out_col[i] = -1
+            out_mask[i] = False
 
 
 @cuda.jit

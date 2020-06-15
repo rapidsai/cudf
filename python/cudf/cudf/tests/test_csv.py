@@ -91,6 +91,10 @@ def make_all_numeric_dataframe():
         "int32",
         "long",
         "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
     ]
 
     np_dtypes = [
@@ -105,6 +109,10 @@ def make_all_numeric_dataframe():
         np.int32,
         np.int64,
         np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
     ]
 
     for i in range(len(gdf_dtypes)):
@@ -142,7 +150,7 @@ def path_or_buf(tmpdir):
     yield _make_path_or_buf
 
 
-dtypes = [np.float64, np.float32, np.int64, np.int32]
+dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint64, np.uint32]
 dtypes_dict = {"1": np.float64, "2": np.float32, "3": np.int64, "4": np.int32}
 nelem = [5, 25, 100]
 
@@ -201,7 +209,7 @@ def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
         #    "int64", "date", "float64", "int64", "category", "str", "bool"
         # ],
         names=["1", "2", "3", "4", "5", "6"],
-        dtype=["int64", "date", "float64", "int64", "str", "bool"],
+        dtype=["int64", "date", "float64", "uint64", "str", "bool"],
         dayfirst=True,
         **cudf_arg,
     )
@@ -213,7 +221,7 @@ def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
         #    "int64", "date", "float64", "int64", "category", "str", "bool"
         # ],
         names=["1", "2", "3", "4", "5", "6"],
-        dtype=["int64", "date", "float64", "int64", "str", "bool"],
+        dtype=["int64", "date", "float64", "uint64", "str", "bool"],
         dayfirst=True,
         **pandas_arg,
     )
@@ -501,11 +509,19 @@ def test_csv_reader_NaN_values():
 def test_csv_reader_thousands(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file13.csv")
 
-    names = dtypes = ["float32", "float64", "int32", "int64"]
+    names = dtypes = [
+        "float32",
+        "float64",
+        "int32",
+        "int64",
+        "uint32",
+        "uint64",
+    ]
     lines = [
         ",".join(names),
-        "1'234.5, 1'234.567, 1'234'567, 1'234'567'890",
-        "12'345.6, 123'456.7, 12'345, 123'456'789",
+        "1'234.5, 1'234.567, 1'234'567, 1'234'567'890,\
+                1'234'567, 1'234'567'890",
+        "12'345.6, 123'456.7, 12'345, 123'456'789, 12'345, 123'456'789",
     ]
 
     with open(str(fname), "w") as fp:
@@ -515,6 +531,8 @@ def test_csv_reader_thousands(tmpdir):
     f64_ref = [1234.567, 123456.7]
     int32_ref = [1234567, 12345]
     int64_ref = [1234567890, 123456789]
+    uint32_ref = [1234567, 12345]
+    uint64_ref = [1234567890, 123456789]
 
     df = read_csv(
         str(fname), names=names, dtype=dtypes, skiprows=1, thousands="'"
@@ -524,6 +542,8 @@ def test_csv_reader_thousands(tmpdir):
     np.testing.assert_allclose(f64_ref, df["float64"].to_array())
     np.testing.assert_allclose(int32_ref, df["int32"].to_array())
     np.testing.assert_allclose(int64_ref, df["int64"].to_array())
+    np.testing.assert_allclose(uint32_ref, df["uint32"].to_array())
+    np.testing.assert_allclose(uint64_ref, df["uint64"].to_array())
 
 
 def test_csv_reader_buffer_strings():
