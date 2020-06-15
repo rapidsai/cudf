@@ -225,7 +225,7 @@ def test_string_numeric_astype(dtype):
     elif dtype.startswith("datetime64"):
         # pandas rounds the output format based on the data
         data = [1000000001, 2000000001, 3000000001, 4000000001, 5000000001]
-        if dtype != 'datetime64[ns]':
+        if dtype != "datetime64[ns]":
             pytest.xfail(reason=f"Pandas does not support {dtype}")
     ps = pd.Series(data, dtype=dtype)
     gs = Series(data, dtype=dtype)
