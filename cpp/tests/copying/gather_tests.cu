@@ -404,6 +404,26 @@ TYPED_TEST(GatherTestList, Gather)
   cudf::test::expect_columns_equal(results->view().column(0), expected);
 }
 
+TYPED_TEST(GatherTestList, GatherNulls)
+{
+  using T = TypeParam;
+
+  auto valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? true : false; });
+
+  // List<T>
+  cudf::test::lists_column_wrapper<T> list{
+    {{1, 2, 3, 4}, valids}, {5}, {{6, 7}, valids}, {{8, 9, 10}, valids}};
+  cudf::test::fixed_width_column_wrapper<int> gather_map{0, 2};
+
+  cudf::table_view source_table({list});
+  auto results = cudf::gather(source_table, gather_map);
+
+  cudf::test::lists_column_wrapper<T> expected{{{1, 2, 3, 4}, valids}, {{6, 7}, valids}};
+
+  cudf::test::expect_columns_equal(results->view().column(0), expected);
+}
+
 TYPED_TEST(GatherTestList, GatherNested)
 {
   using T   = TypeParam;
@@ -444,6 +464,60 @@ TYPED_TEST(GatherTestList, GatherNested)
       {{{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}},
       {{LCW{0}}},
       {{{10, 20}}, {LCW{30}}, {{40, 50}, {60, 70, 80}}}};
+
+    cudf::test::expect_columns_equal(results->view().column(0), expected);
+  }
+}
+
+TYPED_TEST(GatherTestList, GatherNestedNulls)
+{
+  using T   = TypeParam;
+  using LCW = cudf::test::lists_column_wrapper<T>;
+
+  auto valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? true : false; });
+
+  // List<List<T>>
+  {
+    cudf::test::lists_column_wrapper<T> list{
+      {{{2, 3}, valids}, {4, 5}},
+      {{{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}, valids},
+      {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}},
+      {{{{25, 26}, valids}, {27, 28}, {{29, 30}, valids}, {31, 32}, {33, 34}}, valids}};
+
+    cudf::test::fixed_width_column_wrapper<int> gather_map{0, 1, 3};
+
+    cudf::table_view source_table({list});
+    auto results = cudf::gather(source_table, gather_map);
+
+    cudf::test::lists_column_wrapper<T> expected{
+      {{{2, 3}, valids}, {4, 5}},
+      {{{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}, valids},
+      {{{{25, 26}, valids}, {27, 28}, {{29, 30}, valids}, {31, 32}, {33, 34}}, valids}};
+
+    cudf::test::expect_columns_equal(results->view().column(0), expected);
+  }
+
+  // List<List<List<T>>>
+  {
+    cudf::test::lists_column_wrapper<T> list{
+      {{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}},
+      {{{15, 16}, {{27, 28}, valids}, {{37, 38}, valids}, {47, 48}, {57, 58}}},
+      {{LCW{0}}},
+      {{{10}, {20, 30, 40, 50}, {60, 70, 80}},
+       {{0, 1, 3}, {5}},
+       {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
+      {{{{{10, 20}, valids}}, {LCW{30}}, {{40, 50}, {60, 70, 80}}}, valids}};
+
+    cudf::test::fixed_width_column_wrapper<int> gather_map{1, 2, 4};
+
+    cudf::table_view source_table({list});
+    auto results = cudf::gather(source_table, gather_map);
+
+    cudf::test::lists_column_wrapper<T> expected{
+      {{{15, 16}, {{27, 28}, valids}, {{37, 38}, valids}, {47, 48}, {57, 58}}},
+      {{LCW{0}}},
+      {{{{{10, 20}, valids}}, {LCW{30}}, {{40, 50}, {60, 70, 80}}}, valids}};
 
     cudf::test::expect_columns_equal(results->view().column(0), expected);
   }

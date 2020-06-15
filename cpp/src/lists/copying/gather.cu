@@ -71,7 +71,6 @@ struct list_gatherer {
  */
 std::unique_ptr<column> gather_list_leaf(column_view const& column,
                                          gather_data const& gd,
-                                         bool nullify_out_of_bounds,
                                          cudaStream_t stream,
                                          rmm::mr::device_memory_resource* mr)
 {
@@ -87,14 +86,39 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
                       cudaMemcpyDeviceToHost));
 
   // otherwise, just call a regular gather
-  return cudf::type_dispatcher(column.type(),
-                               cudf::detail::column_gatherer{},
-                               column,
-                               child_gather_map,
-                               child_gather_map + child_gather_map_size,
-                               nullify_out_of_bounds,
-                               stream,
-                               mr);
+  auto leaf_column =
+    cudf::type_dispatcher(column.type(),
+                          cudf::detail::column_gatherer{},
+                          column,
+                          child_gather_map,
+                          child_gather_map + child_gather_map_size,
+                          // note : we don't need to bother checking for out-of-bounds here since
+                          // our inputs at this stage aren't coming from the user.
+                          false,
+                          stream,
+                          mr);
+
+  // the column_gatherer doesn't create the null mask because it expects
+  // that will be done in the gather_bitmask() step.  however, gather_bitmask()
+  // only happens at the root level, and by definition this column is a
+  // leaf.  so we have to generate the bitmask ourselves.
+  // TODO : it might make sense to expose a gather() function that takes a column_view and
+  // returns a column that does this work correctly.
+  rmm::device_buffer null_mask{0, stream, mr};
+  size_type null_count = column.null_count();
+  if (null_count > 0) {
+    auto list_cdv = column_device_view::create(column);
+    auto validity = cudf::detail::valid_if(
+      child_gather_map,
+      child_gather_map + child_gather_map_size,
+      [cdv = *list_cdv] __device__(int index) { return cdv.is_valid(index) ? true : false; },
+      stream,
+      mr);
+
+    leaf_column->set_null_mask(std::move(validity.first), validity.second);
+  }
+
+  return std::move(leaf_column);
 }
 
 /**
@@ -103,7 +127,6 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
  */
 std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                                            gather_data& parent,
-                                           bool nullify_out_of_bounds,
                                            cudaStream_t stream,
                                            rmm::mr::device_memory_resource* mr)
 {
@@ -119,11 +142,24 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
 
   // generate gather_data for this level
   auto offset_result =
-    nullify_out_of_bounds
-      ? make_gather_offsets<true>(list, gather_map_begin, gather_map_size, stream, mr)
-      : make_gather_offsets<false>(list, gather_map_begin, gather_map_size, stream, mr);
+    make_gather_offsets<false>(list, gather_map_begin, gather_map_size, stream, mr);
   column_view offsets_v(*offset_result.first);
   gather_data gd{offsets_v.data<size_type>(), std::move(offset_result.second)};
+
+  // gather the bitmask, if relevant
+  rmm::device_buffer null_mask{0, stream, mr};
+  size_type null_count = list.null_count();
+  if (null_count > 0) {
+    auto list_cdv = column_device_view::create(list.parent());
+    auto validity = cudf::detail::valid_if(
+      gather_map_begin,
+      gather_map_begin + gather_map_size,
+      [cdv = *list_cdv] __device__(int index) { return cdv.is_valid(index) ? true : false; },
+      stream,
+      mr);
+    null_mask  = std::move(validity.first);
+    null_count = validity.second;
+  }
 
   // memory optimization. now that we have generated the base offset data we need for level N+1,
   // we are no longer going to be using gather_map_begin, so the base offset data it references
@@ -131,27 +167,29 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
   parent.base_offsets.release();
 
   // the nesting case.  we have to recurse through the hierarchy, but we can't do that via
-  // templates, so we can't pass an iterator.  so we will pass the data needed to create
-  // the necessary iterator, and the functions will build the iterator themselves.
+  // templates, so we can't pass an iterator.  so we will pass the data needed (gather_data)
+  // to create the necessary iterator, and the functions will build the iterator themselves.
   if (list.child().type() == cudf::data_type{LIST}) {
     // gather children.
-    // note : we don't need to bother checking for out-of-bounds here since
-    // our inputs at this stage aren't coming from the user.
-    auto child = gather_list_nested(list.child(), gd, false, stream, mr);
+    auto child = gather_list_nested(list.child(), gd, stream, mr);
 
     // return the nested column
-    return make_lists_column(
-      gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
+    return make_lists_column(gather_map_size,
+                             std::move(offset_result.first),
+                             std::move(child),
+                             null_count,
+                             std::move(null_mask));
   }
 
   // it's a leaf.  do a regular gather
-  // note : we don't need to bother checking for out-of-bounds here since
-  // our inputs at this stage aren't coming from the user.
-  auto child = gather_list_leaf(list.child(), gd, false, stream, mr);
+  auto child = gather_list_leaf(list.child(), gd, stream, mr);
 
   // assemble final column
-  return make_lists_column(
-    gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
+  return make_lists_column(gather_map_size,
+                           std::move(offset_result.first),
+                           std::move(child),
+                           null_count,
+                           std::move(null_mask));
 }
 
 }  // namespace detail

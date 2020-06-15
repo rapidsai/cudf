@@ -184,7 +184,6 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
  *
  * @param list View into the list column to gather from
  * @param gd The gather_data needed to construct a gather map iterator for this level
- * @param nullify_out_of_bounds Nullify values in the gather map that are out of bounds
  * @param stream CUDA stream on which to execute kernels
  * @param mr Memory resource to use for all allocations
  *
@@ -194,7 +193,6 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
 std::unique_ptr<column> gather_list_nested(
   lists_column_view const& list,
   gather_data& parent,
-  bool nullify_out_of_bounds,
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -204,7 +202,6 @@ std::unique_ptr<column> gather_list_nested(
  *
  * @param column View into the column to gather from
  * @param gd The gather_data needed to construct a gather map iterator for this level
- * @param nullify_out_of_bounds Nullify values in the gather map that are out of bounds
  * @param stream CUDA stream on which to execute kernels
  * @param mr Memory resource to use for all allocations
  *
@@ -214,7 +211,6 @@ std::unique_ptr<column> gather_list_nested(
 std::unique_ptr<column> gather_list_leaf(
   column_view const& column,
   gather_data const& gd,
-  bool nullify_out_of_bounds,
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
