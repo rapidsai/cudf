@@ -28,6 +28,7 @@ from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
+    count_bytes as cpp_count_bytes,
     count_characters as cpp_count_characters,
 )
 from cudf._lib.strings.capitalize import (
@@ -68,9 +69,11 @@ from cudf._lib.strings.extract import extract as cpp_extract
 from cudf._lib.strings.find import (
     contains as cpp_contains,
     endswith as cpp_endswith,
+    endswith_multiple as cpp_endswith_multiple,
     find as cpp_find,
     rfind as cpp_rfind,
     startswith as cpp_startswith,
+    startswith_multiple as cpp_startswith_multiple,
 )
 from cudf._lib.strings.findall import findall as cpp_findall
 from cudf._lib.strings.padding import (
@@ -115,13 +118,17 @@ from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.utils import utils
-from cudf.utils.dtypes import is_list_like, is_scalar, is_string_dtype
+from cudf.utils.dtypes import can_convert_to_column, is_scalar, is_string_dtype
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
     np.dtype("int16"): str_cast.stoi16,
     np.dtype("int32"): str_cast.stoi,
     np.dtype("int64"): str_cast.stol,
+    np.dtype("uint8"): str_cast.stoui8,
+    np.dtype("uint16"): str_cast.stoui16,
+    np.dtype("uint32"): str_cast.stoui,
+    np.dtype("uint64"): str_cast.stoul,
     np.dtype("float32"): str_cast.stof,
     np.dtype("float64"): str_cast.stod,
     np.dtype("bool"): str_cast.to_booleans,
@@ -138,6 +145,10 @@ _numeric_to_str_typecast_functions = {
     np.dtype("int16"): str_cast.i16tos,
     np.dtype("int32"): str_cast.itos,
     np.dtype("int64"): str_cast.ltos,
+    np.dtype("uint8"): str_cast.ui8tos,
+    np.dtype("uint16"): str_cast.ui16tos,
+    np.dtype("uint32"): str_cast.uitos,
+    np.dtype("uint64"): str_cast.ultos,
     np.dtype("float32"): str_cast.ftos,
     np.dtype("float64"): str_cast.dtos,
     np.dtype("bool"): str_cast.from_booleans,
@@ -303,6 +314,35 @@ class StringMethods(object):
 
         return self._return_or_inplace(
             cpp_count_characters(self._column), **kwargs,
+        )
+
+    def byte_count(self, **kwargs):
+        """
+        Computes the number of bytes of each string in the Series/Index.
+
+        Returns : Series or Index of int
+            A Series or Index of integer values
+            indicating the number of bytes of each strings in the
+            Series or Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["abc","d","ef"])
+        >>> s.str.byte_count()
+        0    3
+        1    1
+        2    2
+        dtype: int32
+        >>> s = cudf.Series(["Hello", "Bye", "Thanks 😊"])
+        >>> s.str.byte_count()
+        0     5
+        1     3
+        2    11
+        dtype: int32
+        """
+        return self._return_or_inplace(
+            cpp_count_bytes(self._column), **kwargs,
         )
 
     def cat(self, others=None, sep=None, na_rep=None, **kwargs):
@@ -668,13 +708,7 @@ class StringMethods(object):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        if (
-            is_list_like(pat)
-            or isinstance(pat, (cudf.Series, cudf.Index, pd.Series, pd.Index))
-        ) and (
-            is_list_like(repl)
-            or isinstance(repl, (cudf.Series, cudf.Index, pd.Series, pd.Index))
-        ):
+        if can_convert_to_column(pat) and can_convert_to_column(repl):
             warnings.warn(
                 "`n` parameter is not supported when \
                 `pat` and `repl` are list-like inputs"
@@ -2780,8 +2814,12 @@ class StringMethods(object):
 
         Parameters
         ----------
-        pat : str
-            Character sequence. Regular expressions are not accepted.
+        pat : str or list-like
+            If `str` is an `str`, evaluates whether each string of
+            series ends with `pat`.
+            If `pat` is a list-like, evaluates whether `self[i]`
+            ends with `pat[i]`.
+            Regular expressions are not accepted.
 
         Returns
         -------
@@ -2821,8 +2859,12 @@ class StringMethods(object):
             result_col = column.column_empty(
                 len(self._column), dtype="bool", masked=True
             )
-        else:
+        elif is_scalar(pat):
             result_col = cpp_endswith(self._column, as_scalar(pat, "str"))
+        else:
+            result_col = cpp_endswith_multiple(
+                self._column, column.as_column(pat, dtype="str")
+            )
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -2835,8 +2877,12 @@ class StringMethods(object):
 
         Parameters
         ----------
-        pat : str
-            Character sequence. Regular expressions are not accepted.
+        pat : str or list-like
+            If `str` is an `str`, evaluates whether each string of
+            series starts with `pat`.
+            If `pat` is a list-like, evaluates whether `self[i]`
+            starts with `pat[i]`.
+            Regular expressions are not accepted.
 
         Returns
         -------
@@ -2878,8 +2924,12 @@ class StringMethods(object):
             result_col = column.column_empty(
                 len(self._column), dtype="bool", masked=True
             )
-        else:
+        elif is_scalar(pat):
             result_col = cpp_startswith(self._column, as_scalar(pat, "str"))
+        else:
+            result_col = cpp_startswith_multiple(
+                self._column, column.as_column(pat, dtype="str")
+            )
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -3728,13 +3778,13 @@ class StringColumn(column.ColumnBase):
                 raise ValueError("Could not convert `None` value to datetime")
 
             boolean_match = self.binary_operator("eq", "NaT")
-        elif out_dtype.kind in ("i"):
+        elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
                     "Could not convert strings to integer \
                         type due to presence of non-integer values."
                 )
-        elif out_dtype.kind in ("f"):
+        elif out_dtype.kind == "f":
             if not cpp_is_float(self).all():
                 raise ValueError(
                     "Could not convert strings to float \
@@ -3853,9 +3903,9 @@ class StringColumn(column.ColumnBase):
 
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in ("i") and not cpp_is_integer(self).all():
+        elif to_dtype.kind in {"i", "u"} and not cpp_is_integer(self).all():
             return False
-        elif to_dtype.kind in ("f") and not cpp_is_float(self).all():
+        elif to_dtype.kind == "f" and not cpp_is_float(self).all():
             return False
         else:
             return True
@@ -3948,14 +3998,9 @@ def _string_column_binop(lhs, rhs, op, out_dtype):
 def _get_cols_list(others):
 
     if (
-        is_list_like(others)
+        can_convert_to_column(others)
         and len(others) > 0
-        and (
-            is_list_like(others[0])
-            or isinstance(
-                others[0], (cudf.Series, cudf.Index, pd.Series, pd.Index)
-            )
-        )
+        and (can_convert_to_column(others[0]))
     ):
         """
         If others is a list-like object (in our case lists & tuples)

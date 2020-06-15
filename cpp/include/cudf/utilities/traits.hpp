@@ -135,6 +135,27 @@ struct is_numeric_impl {
 };
 
 /**
+ * @brief Indicates whether the type `T` is a unsigned numeric type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is unsigned numeric
+ * @return false  `T` is signed numeric
+ **/
+template <typename T>
+constexpr inline bool is_unsigned()
+{
+  return std::is_unsigned<T>::value;
+}
+
+struct is_unsigned_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_unsigned<T>();
+  }
+};
+
+/**
  * @brief Indicates whether `type` is a numeric `data_type`.
  *
  * "Numeric" types are fundamental integral/floating point types such as `INT*`
@@ -163,6 +184,20 @@ template <typename T>
 constexpr inline bool is_index_type()
 {
   return std::is_integral<T>::value and not std::is_same<T, bool>::value;
+}
+
+/**
+ * @brief Indicates whether `type` is a unsigned numeric `data_type`.
+ *
+ * "Unsigned Numeric" types are fundamental integral types such as `UINT*`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is unsigned numeric
+ * @return false `type` is signed numeric
+ **/
+constexpr inline bool is_unsigned(data_type type)
+{
+  return cudf::type_dispatcher(type, is_unsigned_impl{});
 }
 
 /**
@@ -398,42 +433,6 @@ constexpr inline bool is_compound(data_type type)
 {
   return cudf::type_dispatcher(type, is_compound_impl{});
 }
-
-/**
- * @brief Indicates whether the type `T` is a simple type.
- *
- * "Simple" element types are implemented with only a single column, i.e.,
- * `num_children() == 0` for columns of "simple" elements
- *
- * @tparam T The type to verify
- * @return true `T` corresponds to a simple type
- * @return false `T` corresponds to a compound type
- **/
-template <typename T>
-constexpr inline bool is_simple()
-{
-  return not is_compound<T>();
-}
-
-struct is_simple_impl {
-  template <typename T>
-  bool operator()()
-  {
-    return is_simple<T>();
-  }
-};
-
-/**
- * @brief Indicates whether elements of `type` are simple.
- *
- * "Simple" element types are implemented with only a single column, i.e.,
- * `num_children() == 0` for columns of "simple" elements
- *
- * @param type The `data_type` to verify
- * @return true `type` is a simple type
- * @return false `type` is a compound type
- **/
-constexpr inline bool is_simple(data_type type) { return not is_compound(type); }
 
 /**
  * @brief Indicates whether `T` is a nested type.

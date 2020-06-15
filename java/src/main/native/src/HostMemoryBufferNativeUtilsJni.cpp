@@ -27,18 +27,19 @@
 
 extern "C" {
 
-JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_HostMemoryBuffer_wrapRangeInBuffer(JNIEnv *env,
-                                                          jclass clazz,
-                                                          jlong addr,
-                                                          jlong len) {
+JNIEXPORT jobject JNICALL
+Java_ai_rapids_cudf_HostMemoryBufferNativeUtils_wrapRangeInBuffer(JNIEnv *env, jclass,
+                                                                  jlong addr,
+                                                                  jlong len) {
   return env->NewDirectByteBuffer(reinterpret_cast<void *>(addr), len);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_HostMemoryBuffer_mmap(JNIEnv* env, jclass,
-                                                                  jstring jpath,
-                                                                  jint mode,
-                                                                  jlong offset,
-                                                                  jlong length) {
+JNIEXPORT jlong JNICALL
+Java_ai_rapids_cudf_HostMemoryBufferNativeUtils_mmap(JNIEnv* env, jclass,
+                                                     jstring jpath,
+                                                     jint mode,
+                                                     jlong offset,
+                                                     jlong length) {
   JNI_NULL_CHECK(env, jpath, "path is null", 0);
   JNI_ARG_CHECK(env, (mode == 0 || mode == 1), "bad mode value", 0);
   try {
@@ -62,8 +63,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_HostMemoryBuffer_mmap(JNIEnv* env, j
   } CATCH_STD(env, 0);
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_HostMemoryBuffer_munmap(JNIEnv* env, jclass,
-                                                                   jlong address, jlong length) {
+JNIEXPORT void JNICALL
+Java_ai_rapids_cudf_HostMemoryBufferNativeUtils_munmap(JNIEnv* env, jclass,
+                                                       jlong address, jlong length) {
   JNI_NULL_CHECK(env, address, "address is NULL", );
   try {
     int rc = munmap(reinterpret_cast<void*>(address), length);

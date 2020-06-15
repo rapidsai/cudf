@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <join/hash_join.cuh>
-#include <join/join_common_utils.hpp>
+#include "hash_join.cuh"
+#include "join_common_utils.hpp"
+#include "nested_loop_join.cuh"
 
 namespace cudf {
 namespace detail {
@@ -33,13 +34,14 @@ namespace detail {
  * @brief Returns a vector with non-common indices which is set difference
  * between `[0, num_columns)` and index values in common_column_indices
  *
- * @param num_columns The number of columns , which represents column indices
+ * @param num_columns The number of columns, which represents column indices
  * from `[0, num_columns)` in a table
  * @param common_column_indices A vector of common indices which needs to be
  * excluded from `[0, num_columns)`
+ *
  * @return vector A vector containing only the indices which are not present in
  * `common_column_indices`
- **/
+ */
 auto non_common_column_indices(size_type num_columns,
                                std::vector<size_type> const& common_column_indices)
 {
@@ -107,21 +109,19 @@ struct valid_range {
   }
 };
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Creates a table containing the complement of left join indices.
  * This table has two columns. The first one is filled with JoinNoneValue(-1)
  * and the second one contains values from 0 to right_table_row_count - 1
  * excluding those found in the right_indices column.
  *
- * @Param right_indices Vector of indices
- * @Param left_table_row_count Number of rows of left table
- * @Param right_table_row_count Number of rows of right table
+ * @param right_indices Vector of indices
+ * @param left_table_row_count Number of rows of left table
+ * @param right_table_row_count Number of rows of right table
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
- * @Returns  Pair of vectors containing the left join indices complement
+ * @return Pair of vectors containing the left join indices complement
  */
-/* ----------------------------------------------------------------------------*/
 std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
 get_left_join_indices_complement(rmm::device_vector<size_type>& right_indices,
                                  size_type left_table_row_count,
@@ -178,24 +178,22 @@ get_left_join_indices_complement(rmm::device_vector<size_type>& right_indices,
   return std::make_pair(std::move(left_invalid_indices), std::move(right_indices_complement));
 }
 
-/* --------------------------------------------------------------------------*/
 /**
- * @brief  Computes the base join operation between two tables and returns the
+ * @brief Computes the base join operation between two tables and returns the
  * output indices of left and right table as a combined table, i.e. if full
  * join is specified as the join type then left join is called.
  *
- * @throws cudf::logic_error
- * If `left`/`right` table is empty
- * If type mismatch between joining columns
+ * @throw cudf::logic_error if `left` or `right` table is empty
+ * @throw cudf::logic_error if types do not match between joining columns
+ *
+ * @tparam JoinKind The type of join to be performed
  *
  * @param left  Table of left columns to join
  * @param right Table of right  columns to join
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @tparam join_kind The type of join to be performed
  *
- * @returns Join output indices vector pair
+ * @return Join output indices vector pair
  */
-/* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
 std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> get_base_join_indices(
   table_view const& left, table_view const& right, cudaStream_t stream)
@@ -214,7 +212,6 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> get_base
   return get_base_hash_join_indices<BaseJoinKind>(left, right, false, stream);
 }
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Combines the non common left, common left and non common right
  * columns in the correct order to form the join output table.
@@ -230,9 +227,8 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> get_base
  * @param right_noncommon_cols Table obtained by gathering non common right
  * columns.
  *
- * @Returns  Rearranged columns.
+ * @return Rearranged columns.
  */
-/* ----------------------------------------------------------------------------*/
 std::vector<std::unique_ptr<column>> combine_join_columns(
   std::vector<std::unique_ptr<column>>&& left_noncommon_cols,
   std::vector<size_type> const& left_noncommon_col_indices,
@@ -254,10 +250,11 @@ std::vector<std::unique_ptr<column>> combine_join_columns(
   return combined_cols;
 }
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Gathers rows from `left` and `right` table and combines them into a
  * single table.
+ *
+ * @tparam JoinKind The type of join to be performed
  *
  * @param left Left input table
  * @param right Right input table
@@ -271,13 +268,12 @@ std::vector<std::unique_ptr<column>> combine_join_columns(
  * `left`. For a full join, the result will be gathered from both common
  * columns in `left` and `right` and concatenated to form a single column.
  *
- * @Returns `table` containing the concatenation of rows from `left` and
+ * @return `table` containing the concatenation of rows from `left` and
  * `right` specified by `joined_indices`.
  * For any columns indicated by `columns_in_common`, only the corresponding
  * column in `left` will be included in the result. Final form would look like
  * `left(including common columns)+right(excluding common columns)`.
  */
-/* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
 std::unique_ptr<table> construct_join_output_df(
   table_view const& left,
@@ -291,7 +287,7 @@ std::unique_ptr<table> construct_join_output_df(
   left_common_col.reserve(columns_in_common.size());
   std::vector<size_type> right_common_col;
   right_common_col.reserve(columns_in_common.size());
-  for (const auto c : columns_in_common) {
+  for (const auto& c : columns_in_common) {
     left_common_col.push_back(c.first);
     right_common_col.push_back(c.second);
   }
@@ -357,23 +353,25 @@ std::unique_ptr<table> construct_join_output_df(
                                                       right_table->release()));
 }
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Performs join on the columns provided in `left` and `right` as per
  * the joining indices given in `left_on` and `right_on` and creates a single
  * table.
  *
- * @throws cudf::logic_error
- * If `columns_in_common` contains a pair of indices (L, R) if L does not exist
- * in `left_on` or R does not exist in `right_on`.
- * If `columns_in_common` contains a pair of indices (L, R) such that the
- * location of `L` within `left_on` is not equal to location of R within
- * `right_on`
- * If number of elements in `left_on` or `right_on` mismatch.
- * If number of columns in either `left` or `right` table is 0 or exceeds
- * MAX_JOIN_SIZE
- * @throws std::out_of_range if element of `left_on` or `right_on` exceed the
+ * @throw cudf::logic_error if `columns_in_common` contains a pair of indices
+ * (`L`, `R`) where `L` does not exist in `left_on` or `R` does not exist in
+ * `right_on`.
+ * @throw cudf::logic_error if `columns_in_common` contains a pair of indices
+ * (`L`, `R`) such that the location of `L` within `left_on` is not equal to
+ * the location of `R` within `right_on`.
+ * @throw cudf::logic_error if the number of elements in `left_on` or
+ * `right_on` are not equal.
+ * @throw cudf::logic_error if the number of columns in either `left` or
+ * `right` table is 0 or exceeds MAX_JOIN_SIZE.
+ * @throw std::out_of_range if elements of `left_on` or `right_on` exceed the
  * number of columns in the left or right table.
+ *
+ * @tparam JoinKind The type of join to be performed
  *
  * @param left The left table
  * @param right The right table
@@ -385,21 +383,16 @@ std::unique_ptr<table> construct_join_output_df(
  * `left_on` and `right_on`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
  * from `left_on` if it is left join or from intersection of `left_on` and
- * `right_on`
- * if it is inner join or gathered from both `left_on` and `right_on` if it is
- * full join.
- * Else, for every column in `left_on` and `right_on`, an output column will
- * be produced.
+ * `right_on` if it is inner join or gathered from both `left_on` and
+ * `right_on` if it is full join. Else, for every column in `left_on` and
+ * `right_on`, an output column will be produced.
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
- * @tparam join_kind The type of join to be performed
- *
- * @returns Result of joining `left` and `right` tables on the columns
- * specified by `left_on` and `right_on`. The resulting table will be joined columns of
+ * @return Result of joining `left` and `right` tables on the columns specified
+ * by `left_on` and `right_on`. The resulting table will be joined columns of
  * `left(including common columns)+right(excluding common columns)`.
  */
-/* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
 std::unique_ptr<table> join_call_compute_df(
   table_view const& left,

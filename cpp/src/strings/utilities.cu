@@ -24,8 +24,6 @@
 #include "char_types/char_cases.h"
 #include "char_types/char_flags.h"
 
-#include <rmm/rmm.h>
-#include <rmm/rmm_api.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
