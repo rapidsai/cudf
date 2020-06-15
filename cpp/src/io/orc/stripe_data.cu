@@ -643,6 +643,18 @@ static const __device__ __constant__ uint8_t kRLEv2_W[32] = {
   17, 18, 19, 20, 21, 22, 23, 24, 26, 28, 30, 32, 40, 48, 56, 64};
 
 /**
+ * @brief Maps the RLEv2 patch size (pw + pgw) to number of bits
+ *
+ * Patch size (in bits) is only allowed to be from the below set. If `pw + pgw == 34` then the size
+ * of the patch in the file is the smallest size in the set that can fit 34 bits i.e.
+ * `ClosestFixedBitsMap[34] == 40`
+ */
+static const __device__ __constant__ uint8_t ClosestFixedBitsMap[65] = {
+  1,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+  22, 23, 24, 26, 26, 28, 28, 30, 30, 32, 32, 40, 40, 40, 40, 40, 40, 40, 40, 48, 48, 48,
+  48, 48, 48, 48, 48, 56, 56, 56, 56, 56, 56, 56, 56, 64, 64, 64, 64, 64, 64, 64, 64};
+
+/**
  * @brief ORC Integer RLEv2 decoding
  *
  * @param[in] bs input byte stream
@@ -834,9 +846,10 @@ static __device__ uint32_t Integer_RLEv2(
       uint32_t pgw      = 1 + ((pw_byte3 >> 5) & 7);  // patch gap width, 1 to 8 bits
       uint32_t pll      = pw_byte3 & 0x1f;            // patch list length
       if (pll != 0) {
+        uint32_t pgw_pw_len = ClosestFixedBitsMap[pw + pgw];
         uint64_t patch_pos64 =
           (tr < pll)
-            ? bytestream_readbits64(bs, pos * 8 + ((n * w + 7) & ~7) + tr * (pgw + pw), pgw + pw)
+            ? bytestream_readbits64(bs, pos * 8 + ((n * w + 7) & ~7) + tr * (pgw + pw), pgw_pw_len)
             : 0;
         uint32_t patch_pos;
         T patch = 1;
