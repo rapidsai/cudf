@@ -3970,7 +3970,13 @@ def _get_cols_list(others):
     if (
         can_convert_to_column(others)
         and len(others) > 0
-        and (can_convert_to_column(others[0]))
+        and (
+            can_convert_to_column(
+                others.iloc[0]
+                if isinstance(others, cudf.Series)
+                else others[0]
+            )
+        )
     ):
         """
         If others is a list-like object (in our case lists & tuples)
