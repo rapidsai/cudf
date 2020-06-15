@@ -2066,6 +2066,10 @@ class DataFrame(Frame, Serializable):
     def loc(self):
         """
         Selecting rows and columns by label or boolean mask.
+        In case result is expected to be a single
+        row, it will be returned as a Series if all the
+        elements of the rows are of same type, else a
+        DataFrame is returned.
 
         Examples
         --------
@@ -2113,6 +2117,13 @@ class DataFrame(Frame, Serializable):
         d  3  8
         e  0  9
 
+        Mixed dtype single row output as a dataframe (pandas results in Series)
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":["a", "b", "c"]})
+        >>> df.loc[0]
+           a  b
+        0  1  a
+
         See also
         --------
         DataFrame.iloc
@@ -2123,6 +2134,10 @@ class DataFrame(Frame, Serializable):
     def iloc(self):
         """
         Selecting rows and column by position.
+        In case result is expected to be a single
+        row, it will be returned as a Series if all the
+        elements of the rows are of same type, else a
+        DataFrame is returned.
 
         Examples
         --------
@@ -2180,6 +2195,14 @@ class DataFrame(Frame, Serializable):
         8  8  8  8
         9  9  9  9
         [10 more rows]
+
+        Mixed dtype single row output as a dataframe (pandas results in Series)
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":["a", "b", "c"]})
+        >>> df.iloc[0]
+           a  b
+        0  1  a
 
         See also
         --------
