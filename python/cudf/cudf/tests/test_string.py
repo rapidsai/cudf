@@ -224,13 +224,18 @@ def test_string_numeric_astype(dtype):
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
     elif dtype.startswith("datetime64"):
         # pandas rounds the output format based on the data
+        # Use numpy instead
+        # but fix '2011-01-01T00:00:00' -> '2011-01-01 00:00:00'
         data = [1000000001, 2000000001, 3000000001, 4000000001, 5000000001]
-        if dtype != "datetime64[ns]":
-            pytest.xfail(reason=f"Pandas does not support {dtype}")
-    ps = pd.Series(data, dtype=dtype)
+        ps = np.asarray(data, dtype=dtype).astype(str)
+        ps = np.array([i.replace("T", " ") for i in ps])
+
+    if not dtype.startswith("datetime64"):
+        ps = pd.Series(data, dtype=dtype)
+
     gs = Series(data, dtype=dtype)
 
-    expect = ps.astype("str")
+    expect = pd.Series(ps.astype("str"))
     got = gs.astype("str")
 
     assert_eq(expect, got)
