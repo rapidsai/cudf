@@ -564,6 +564,7 @@ add_library(cudf
             src/text/normalize.cu
             src/text/tokenize.cu
             src/text/ngrams_tokenize.cu
+            src/text/replace.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
             src/dictionary/add_keys.cu
