@@ -68,6 +68,7 @@
 - PR #5458 Install meta packages for dependencies
 - PR #5467 Move doc customization scripts to Jenkins
 - PR #5477 Add `is_index_type` trait 
+- PR #5487 Use sorted lists instead of sets for pytest parameterization
 
 ## Bug Fixes
 
