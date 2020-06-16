@@ -3632,7 +3632,7 @@ class StringMethods(object):
                 )
         else:
             raise TypeError(
-                f"replacements should be an array-like or a Series object, "
+                f"replacements should be an str, array-like or Series object, "
                 f"found {type(replacements)}"
             )
 

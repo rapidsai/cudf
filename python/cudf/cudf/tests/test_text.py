@@ -476,7 +476,7 @@ def test_text_replace_tokens_error_cases():
 
     with pytest.raises(
         TypeError,
-        match="replacements should be an array-like or a Series object,"
+        match="replacements should be an str, array-like or Series object,"
         " found <class 'set'>",
     ):
         sr.str.replace_tokens(["a"], {"s"})
