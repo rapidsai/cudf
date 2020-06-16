@@ -648,6 +648,8 @@ static const __device__ __constant__ uint8_t kRLEv2_W[32] = {
  * Patch size (in bits) is only allowed to be from the below set. If `pw + pgw == 34` then the size
  * of the patch in the file is the smallest size in the set that can fit 34 bits i.e.
  * `ClosestFixedBitsMap[34] == 40`
+ *
+ * @see https://github.com/apache/orc/commit/9faf7f5147a7bc69
  */
 static const __device__ __constant__ uint8_t ClosestFixedBitsMap[65] = {
   1,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
