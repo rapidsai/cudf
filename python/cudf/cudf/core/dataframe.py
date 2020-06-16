@@ -2066,10 +2066,9 @@ class DataFrame(Frame, Serializable):
     def loc(self):
         """
         Selecting rows and columns by label or boolean mask.
-        In case result is expected to be a single
-        row, it will be returned as a Series if all the
-        elements of the rows are of same type, else a
-        DataFrame is returned.
+        If DataFrame is of mixed types and result is expected
+        to be a Series in case of pandas, cudf will return a
+        DataFrame as it doesn't support mixed types under Series yet.
 
         Examples
         --------
@@ -2134,10 +2133,9 @@ class DataFrame(Frame, Serializable):
     def iloc(self):
         """
         Selecting rows and column by position.
-        In case result is expected to be a single
-        row, it will be returned as a Series if all the
-        elements of the rows are of same type, else a
-        DataFrame is returned.
+        If DataFrame is of mixed types and result is expected
+        to be a Series in case of pandas, cudf will return a
+        DataFrame as it doesn't support mixed types under Series yet.
 
         Examples
         --------
