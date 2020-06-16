@@ -64,6 +64,7 @@
 - PR #5441 Update Java HostMemoryBuffer to only load native libs when necessary
 - PR #5437 Improve libcudf join documentation
 - PR #5458 Install meta packages for dependencies
+- PR #5467 Move doc customization scripts to Jenkins
 
 ## Bug Fixes
 
@@ -94,6 +95,8 @@
 - PR #5446 Fix compile error caused by out-of-date PR merge (4990)
 - PR #5459 Fix str.translate to convert table characters to UTF-8
 - PR #5480 Fix merge sort docs
+- PR #5465 Fix benchmark out of memory errors due to multiple initialization
+- PR #5472 Fix str concat issue with indexed series
 
 
 # cuDF 0.14.0 (Date TBD)
