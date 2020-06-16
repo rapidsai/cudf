@@ -135,6 +135,27 @@ struct is_numeric_impl {
 };
 
 /**
+ * @brief Indicates whether the type `T` is a unsigned numeric type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is unsigned numeric
+ * @return false  `T` is signed numeric
+ **/
+template <typename T>
+constexpr inline bool is_unsigned()
+{
+  return std::is_unsigned<T>::value;
+}
+
+struct is_unsigned_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_unsigned<T>();
+  }
+};
+
+/**
  * @brief Indicates whether `type` is a numeric `data_type`.
  *
  * "Numeric" types are fundamental integral/floating point types such as `INT*`
@@ -148,6 +169,20 @@ struct is_numeric_impl {
 constexpr inline bool is_numeric(data_type type)
 {
   return cudf::type_dispatcher(type, is_numeric_impl{});
+}
+
+/**
+ * @brief Indicates whether `type` is a unsigned numeric `data_type`.
+ *
+ * "Unsigned Numeric" types are fundamental integral types such as `UINT*`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is unsigned numeric
+ * @return false `type` is signed numeric
+ **/
+constexpr inline bool is_unsigned(data_type type)
+{
+  return cudf::type_dispatcher(type, is_unsigned_impl{});
 }
 
 /**

@@ -16,7 +16,7 @@ from pandas.util.testing import (
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import NUMERIC_TYPES, assert_eq
 
 
 def data1():
@@ -246,9 +246,7 @@ def test_issue_165():
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 def test_typecast_from_datetime(data, dtype):
     pd_data = pd.Series(data.copy())
     np_data = np.array(pd_data)
@@ -308,9 +306,7 @@ def test_string_timstamp_typecast_to_different_datetime_resolutions(
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
-@pytest.mark.parametrize(
-    "from_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("from_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize(
     "to_dtype",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
@@ -326,9 +322,7 @@ def test_typecast_to_datetime(data, from_dtype, to_dtype):
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
-@pytest.mark.parametrize(
-    "from_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("from_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize(
     "to_dtype",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],

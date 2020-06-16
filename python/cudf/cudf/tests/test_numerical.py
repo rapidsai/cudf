@@ -17,6 +17,19 @@ def test_can_cast_safely_same_kind():
     data = Series([1, 2, 2 ** 31], dtype="int64")._column
     assert not data.can_cast_safely(to_dtype)
 
+    data = Series([1, 2, 3], dtype="uint32")._column
+    to_dtype = np.dtype("uint64")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = Series([1, 2, 3], dtype="uint64")._column
+    to_dtype = np.dtype("uint32")
+
+    assert data.can_cast_safely(to_dtype)
+
+    data = Series([1, 2, 2 ** 33], dtype="uint64")._column
+    assert not data.can_cast_safely(to_dtype)
+
 
 def test_can_cast_safely_mixed_kind():
     data = Series([1, 2, 3], dtype="int32")._column
@@ -25,6 +38,14 @@ def test_can_cast_safely_mixed_kind():
 
     # too big to fit into f32 exactly
     data = Series([1, 2, 2 ** 24 + 1], dtype="int32")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    data = Series([1, 2, 3], dtype="uint32")._column
+    to_dtype = np.dtype("float32")
+    assert data.can_cast_safely(to_dtype)
+
+    # too big to fit into f32 exactly
+    data = Series([1, 2, 2 ** 24 + 1], dtype="uint32")._column
     assert not data.can_cast_safely(to_dtype)
 
     to_dtype = np.dtype("float64")

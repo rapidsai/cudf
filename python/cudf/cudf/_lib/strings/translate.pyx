@@ -30,10 +30,14 @@ def translate(Column source_strings,
 
     for key in mapping_table:
         value = mapping_table[key]
+        if type(value) is int:
+            value = chr(value)
         if type(value) is str:
-            value = ord(value)
+            value = int.from_bytes(value.encode(), byteorder='big')
+        if type(key) is int:
+            key = chr(key)
         if type(key) is str:
-            key = ord(key)
+            key = int.from_bytes(key.encode(), byteorder='big')
         c_mapping_table.push_back((key, value))
 
     with nogil:
