@@ -2116,6 +2116,21 @@ class DataFrame(Frame, Serializable):
         See also
         --------
         DataFrame.iloc
+
+        Notes
+        -----
+        One notable difference from Pandas is when DataFrame is of
+        mixed types and result is expected to be a Series in case of Pandas.
+        cuDF will return a DataFrame as it doesn't support mixed types
+        under Series yet.
+
+        Mixed dtype single row output as a dataframe (pandas results in Series)
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":["a", "b", "c"]})
+        >>> df.loc[0]
+           a  b
+        0  1  a
         """
         return _DataFrameLocIndexer(self)
 
@@ -2184,6 +2199,21 @@ class DataFrame(Frame, Serializable):
         See also
         --------
         DataFrame.loc
+
+        Notes
+        -----
+        One notable difference from Pandas is when DataFrame is of
+        mixed types and result is expected to be a Series in case of Pandas.
+        cuDF will return a DataFrame as it doesn't support mixed types
+        under Series yet.
+
+        Mixed dtype single row output as a dataframe (pandas results in Series)
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":["a", "b", "c"]})
+        >>> df.iloc[0]
+           a  b
+        0  1  a
         """
         return _DataFrameIlocIndexer(self)
 
