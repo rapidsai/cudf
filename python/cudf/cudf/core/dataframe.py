@@ -3251,6 +3251,10 @@ class DataFrame(Frame, Serializable):
         -------
             merged : DataFrame
 
+        Notes
+        -----
+        DataFrames merges in cuDF results in a non-deterministic row ordering.
+
         Examples
         --------
         >>> import cudf
