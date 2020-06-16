@@ -136,3 +136,50 @@ def test_column_chunked_array_creation():
     expected_column = cudf.core.column.as_column(pyarrow_array)
 
     assert_eq(cudf.Series(actual_column), cudf.Series(expected_column))
+
+
+@pytest.mark.parametrize('data,from_dtype,to_dtype', [
+    ([1,2,3], 'int64', 'int32'),
+    ([1,2,3], 'int64', 'int16'),
+    ([1,2,3], 'int64', 'int8'),
+    (np.arange(8), 'int8', 'int64'),
+    (np.arange(16), 'int8', 'int64'),
+    (np.arange(128), 'int8', 'int64')
+])
+def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
+    cpu_data = np.asarray(data, dtype=from_dtype)
+    gpu_data = as_column(data, dtype=from_dtype)
+
+    cpu_data = cpu_data.view(to_dtype)
+    gpu_data = gpu_data.view(to_dtype)
+
+    expect = cudf.Series(gpu_data, dtype=gpu_data.dtype)
+    got = pd.Series(cpu_data, dtype=cpu_data.dtype)
+
+    assert_eq(expect, got)
+
+@pytest.mark.parametrize('data,from_dtype,to_dtype', [
+    (np.arange(9), 'int8', 'int64'),
+    (np.arange(3), 'int8', 'int16')
+])
+def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
+    cpu_data = np.asarray(data, dtype=from_dtype)
+    gpu_data = as_column(data, dtype=from_dtype)
+
+    try:
+        cpu_data = cpu_data.view(to_dtype)
+    except ValueError as error:
+        if "size must be a divisor of the total size"  in str(error):
+            with pytest.raises(ValueError, match="Buffer size must be divisible by element size"):
+                gpu_data = gpu_data.view(to_dtype)
+        else:
+            raise error
+
+
+#def test_column_pyview():
+#    int64_sr = cudf.Series([1], dtype='int64')
+#    int8_sr = cudf.Series([1,0,0,0,0,0,0,0], dtype='int8')
+
+#    expect = int64_sr.view('i1')
+#    assert_eq(expect, int8_sr)
+#    assert(expect._column.data.ptr == int8_sr._column.data.ptr)

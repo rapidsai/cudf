@@ -385,25 +385,9 @@ class ColumnBase(Column, Serializable):
                 children=self.base_children,
             )
 
-    def view(self, newcls, **kwargs):
-        """View the underlying column data differently using a subclass of
-        ColumnBase
-
-        Parameters
-        ----------
-        newcls : ColumnBase
-            The logical view to be used
-        **kwargs :
-            Additional paramters for instantiating instance of *newcls*.
-            Valid keywords are valid parameters for ``newcls.__init__``.
-            Any omitted keywords will be defaulted to the corresponding
-            attributes in ``self``.
-        """
-        params = Column._replace_defaults(self)
-        params.update(kwargs)
-        if "mask" in kwargs and "null_count" not in kwargs:
-            del params["null_count"]
-        return newcls(**params)
+    def view(self, dtype):
+        dtype = np.dtype(dtype)
+        return as_column(self.data, dtype=dtype)
 
     def element_indexing(self, index):
         """Default implementation for indexing to an element
