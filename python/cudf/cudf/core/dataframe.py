@@ -2203,7 +2203,7 @@ class DataFrame(Frame, Serializable):
         Notes
         -----
         One notable difference from Pandas is when DataFrame is of
-        mixed types and result is expected to be a Series in case of pandas,
+        mixed types and result is expected to be a Series in case of Pandas.
         cudf will return a DataFrame as it doesn't support mixed types
         under Series yet.
 
