@@ -17,6 +17,12 @@ def replace_tokens(Column strings,
                    Column targets,
                    Column replacements,
                    Scalar delimiter):
+    """
+    The `targets` tokens are searched for within each `strins`
+    in the Column and replaced with the corresponding `replacements`
+    if found. Tokens are identified by the `delimiter` character
+    provided.
+    """
 
     cdef column_view c_strings = strings.view()
     cdef column_view c_targets = targets.view()

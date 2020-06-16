@@ -119,12 +119,7 @@ from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.utils import utils
-from cudf.utils.dtypes import (
-    can_convert_to_column,
-    is_column_like,
-    is_scalar,
-    is_string_dtype,
-)
+from cudf.utils.dtypes import can_convert_to_column, is_scalar, is_string_dtype
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -3597,16 +3592,17 @@ class StringMethods(object):
             The character used to locate the tokens of each string.
             Default is whitespace.
         """
-        if is_column_like(targets):
+        if can_convert_to_column(targets):
             targets_column = column.as_column(targets)
         else:
             raise TypeError(
-                "targets should be an array-like or a Series object."
+                f"targets should be an array-like or a Series object, "
+                f"found {type(targets)}"
             )
 
         if is_scalar(replacements):
             replacements_column = column.as_column([replacements])
-        elif is_column_like(replacements):
+        elif can_convert_to_column(replacements):
             replacements_column = column.as_column(replacements)
             if len(targets_column) != len(replacements_column):
                 raise ValueError(
@@ -3615,7 +3611,8 @@ class StringMethods(object):
                 )
         else:
             raise TypeError(
-                "replacements should be an array-like or a Series object."
+                f"replacements should be an array-like or a Series object, "
+                f"found {type(replacements)}"
             )
 
         if delimiter is None:
