@@ -44,6 +44,7 @@ DATETIME_TYPES = {
 OTHER_TYPES = {"bool", "category", "str"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | OTHER_TYPES
 
+
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype.
     """

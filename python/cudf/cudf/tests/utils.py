@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
-from cudf import Series
 import cudf.utils.dtypes as dtypeutils
+from cudf import Series
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 
 supported_numpy_dtypes = [
