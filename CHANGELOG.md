@@ -68,6 +68,7 @@
 - PR #5458 Install meta packages for dependencies
 - PR #5467 Move doc customization scripts to Jenkins
 - PR #5483 Add NVTX range calls to dictionary APIs
+- PR #5477 Add `is_index_type` trait 
 
 ## Bug Fixes
 
@@ -97,8 +98,10 @@
 - PR #5439 Fix nvtext ngrams_tokenize performance for multi-byte UTF8
 - PR #5446 Fix compile error caused by out-of-date PR merge (4990)
 - PR #5459 Fix str.translate to convert table characters to UTF-8
+- PR #5480 Fix merge sort docs
 - PR #5465 Fix benchmark out of memory errors due to multiple initialization
 - PR #5472 Fix str concat issue with indexed series
+- PR #5484 Ensure flat index after groupby if nlevels == 1
 
 
 # cuDF 0.14.0 (Date TBD)
