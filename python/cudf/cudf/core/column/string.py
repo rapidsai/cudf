@@ -19,6 +19,7 @@ from cudf._lib.nvtext.ngrams_tokenize import (
     ngrams_tokenize as cpp_ngrams_tokenize,
 )
 from cudf._lib.nvtext.normalize import normalize_spaces as cpp_normalize_spaces
+from cudf._lib.nvtext.replace import replace_tokens as cpp_replace_tokens
 from cudf._lib.nvtext.tokenize import (
     character_tokenize as cpp_character_tokenize,
     count_tokens as cpp_count_tokens,
@@ -118,7 +119,12 @@ from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.utils import utils
-from cudf.utils.dtypes import can_convert_to_column, is_scalar, is_string_dtype
+from cudf.utils.dtypes import (
+    can_convert_to_column,
+    is_column_like,
+    is_scalar,
+    is_string_dtype,
+)
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -3568,6 +3574,65 @@ class StringMethods(object):
         kwargs.setdefault("retain_index", False)
         return self._return_or_inplace(
             cpp_ngrams_tokenize(self._column, n, delimiter, separator),
+            **kwargs,
+        )
+
+    def replace_tokens(self, targets, replacements, delimiter=None, **kwargs):
+        """
+        The targets tokens are searched for within each strins in the series
+        and replaced with the corresponding replacements if found.
+        Tokens are identified by the delimiter character provided.
+
+        Parameters
+        ----------
+        targets : array-like, Sequence or Series
+            The tokens to search for inside each string.
+
+        replacements : array-like, Sequence, Series or str
+            The strings to replace for each found target token found.
+            Alternately, this can be a single str instance and would be
+            used as replacement for each string found.
+
+        delimiter : str
+            The character used to locate the tokens of each string.
+            Default is whitespace.
+        """
+        if is_column_like(targets):
+            targets_column = column.as_column(targets)
+        else:
+            raise TypeError(
+                "targets should be an array-like or a Series object."
+            )
+
+        if is_scalar(replacements):
+            replacements_column = column.as_column([replacements])
+        elif is_column_like(replacements):
+            replacements_column = column.as_column(replacements)
+            if len(targets_column) != len(replacements_column):
+                raise ValueError(
+                    "targets and replacements should be same size"
+                    " sequences unless replacements is a string."
+                )
+        else:
+            raise TypeError(
+                "replacements should be an array-like or a Series object."
+            )
+
+        if delimiter is None:
+            delimiter = ""
+        elif not is_scalar(delimiter):
+            raise TypeError(
+                f"Type of delimiter should be a string,"
+                f" found {type(delimiter)}"
+            )
+
+        return self._return_or_inplace(
+            cpp_replace_tokens(
+                self._column,
+                targets_column,
+                replacements_column,
+                as_scalar(delimiter, dtype="str"),
+            ),
             **kwargs,
         )
 
