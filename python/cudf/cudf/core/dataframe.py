@@ -2066,9 +2066,6 @@ class DataFrame(Frame, Serializable):
     def loc(self):
         """
         Selecting rows and columns by label or boolean mask.
-        If DataFrame is of mixed types and result is expected
-        to be a Series in case of pandas, cudf will return a
-        DataFrame as it doesn't support mixed types under Series yet.
 
         Examples
         --------
@@ -2116,16 +2113,24 @@ class DataFrame(Frame, Serializable):
         d  3  8
         e  0  9
 
+        See also
+        --------
+        DataFrame.iloc
+
+        Notes
+        -----
+        One notable difference from Pandas is when DataFrame is of
+        mixed types and result is expected to be a Series in case of pandas,
+        cudf will return a DataFrame as it doesn't support mixed types
+        under Series yet.
+
         Mixed dtype single row output as a dataframe (pandas results in Series)
+
         >>> import cudf
         >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":["a", "b", "c"]})
         >>> df.loc[0]
            a  b
         0  1  a
-
-        See also
-        --------
-        DataFrame.iloc
         """
         return _DataFrameLocIndexer(self)
 
@@ -2133,9 +2138,6 @@ class DataFrame(Frame, Serializable):
     def iloc(self):
         """
         Selecting rows and column by position.
-        If DataFrame is of mixed types and result is expected
-        to be a Series in case of pandas, cudf will return a
-        DataFrame as it doesn't support mixed types under Series yet.
 
         Examples
         --------
@@ -2194,6 +2196,17 @@ class DataFrame(Frame, Serializable):
         9  9  9  9
         [10 more rows]
 
+        See also
+        --------
+        DataFrame.loc
+
+        Notes
+        -----
+        One notable difference from Pandas is when DataFrame is of
+        mixed types and result is expected to be a Series in case of pandas,
+        cudf will return a DataFrame as it doesn't support mixed types
+        under Series yet.
+
         Mixed dtype single row output as a dataframe (pandas results in Series)
 
         >>> import cudf
@@ -2201,10 +2214,6 @@ class DataFrame(Frame, Serializable):
         >>> df.iloc[0]
            a  b
         0  1  a
-
-        See also
-        --------
-        DataFrame.loc
         """
         return _DataFrameIlocIndexer(self)
 
