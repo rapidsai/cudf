@@ -210,15 +210,10 @@ class aggregate_metadata {
     }
   }
 
-  auto const &get_row_group(size_type idx) const
+  auto const &get_row_group(size_type idx, size_type src_idx) const
   {
-    size_t offset = idx;
-    for (auto const &pfm : per_file_metadata) {
-      auto const current_rg_size = pfm.row_groups.size();
-      if (offset < current_rg_size) return pfm.row_groups[offset];
-      offset -= current_rg_size;
-    }
-    CUDF_FAIL("Invalid row group index");
+    // TODO check indices
+    return per_file_metadata[src_idx].row_groups[idx];
   }
 
   int64_t get_num_rows() const
@@ -228,8 +223,10 @@ class aggregate_metadata {
         return sum + pfm.num_rows;
       });
   }
-  int get_num_row_groups() const
+  int get_num_row_groups(int src_idx = -1) const
   {
+    if (src_idx >= 0) return per_file_metadata[src_idx].row_groups.size();
+
     return std::accumulate(
       per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto &sum, auto &pfm) {
         return sum + pfm.row_groups.size();
@@ -301,58 +298,66 @@ class aggregate_metadata {
     }
   }
 
+  struct row_group_info {
+    size_type const index;
+    size_t const start_row;  // TODO source index
+    size_type const source_index;
+    row_group_info(size_type index, size_t start_row, size_type source_index)
+      : index(index), start_row(start_row), source_index(source_index)
+    {
+    }
+  };
+
   /**
    * @brief Filters and reduces down to a selection of row groups
    *
-   * @param row_group Index of the row group to select
-   * @param max_rowgroup_count Max number of consecutive row groups if > 0
-   * @param row_group_indices Arbitrary rowgroup list[max_rowgroup_count] if non-null
+   * @param row_group_indices Arbitrary TODO
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
    *
    * @return List of row group indexes and its starting row
    */
-  auto select_row_groups(size_type row_group,
-                         size_type max_rowgroup_count,
-                         const size_type *row_group_indices,
+  auto select_row_groups(std::vector<std::vector<size_type>> const &row_group_indices,
                          size_type &row_start,
                          size_type &row_count) const
   {
-    std::vector<std::pair<size_type, size_t>> selection;
+    if (!row_group_indices.empty()) {
+      std::vector<row_group_info> selection;
+      CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
+                   "must specify row groups for each source");
 
-    if (row_group_indices) {
-      row_count = 0;
-      for (size_type i = 0; i < max_rowgroup_count; i++) {
-        auto rowgroup_idx = row_group_indices[i];
-        CUDF_EXPECTS(rowgroup_idx >= 0 && rowgroup_idx < get_num_row_groups(),
-                     "Invalid rowgroup index");
-        selection.emplace_back(rowgroup_idx, row_count);
-        row_count += get_row_group(rowgroup_idx).num_rows;
+      for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
+        row_count = 0;
+        for (auto const &rowgroup_idx : row_group_indices[src_idx]) {
+          CUDF_EXPECTS(rowgroup_idx >= 0 && rowgroup_idx < get_num_row_groups(src_idx),
+                       "Invalid rowgroup index");
+          selection.emplace_back(rowgroup_idx, row_count, src_idx);
+          row_count += get_row_group(rowgroup_idx, src_idx).num_rows;
+        }
       }
-    } else if (row_group != -1) {
-      CUDF_EXPECTS(row_group < get_num_row_groups(), "Non-existent row group");
-      row_count = 0;
-      do {
-        selection.emplace_back(row_group, row_start + row_count);
-        row_count += get_row_group(row_group).num_rows;
-      } while (--max_rowgroup_count > 0 && ++row_group < get_num_row_groups());
-    } else {
-      row_start = std::max(row_start, 0);
-      if (row_count < 0) {
-        row_count = static_cast<size_type>(
-          std::min<int64_t>(get_num_rows(), std::numeric_limits<size_type>::max()));
-      }
-      CUDF_EXPECTS(row_count >= 0, "Invalid row count");
-      CUDF_EXPECTS(row_start <= get_num_rows(), "Invalid row start");
+      return selection;
+    }
 
-      for (size_type i = 0, count = 0; i < get_num_row_groups(); ++i) {
-        size_t chunk_start_row = count;
-        count += get_row_group(i).num_rows;
-        if (count > row_start || count == 0) { selection.emplace_back(i, chunk_start_row); }
+    row_start = std::max(row_start, 0);
+    if (row_count < 0) {
+      row_count = static_cast<size_type>(
+        std::min<int64_t>(get_num_rows(), std::numeric_limits<size_type>::max()));
+    }
+    CUDF_EXPECTS(row_count >= 0, "Invalid row count");
+    CUDF_EXPECTS(row_start <= get_num_rows(), "Invalid row start");
+
+    std::vector<row_group_info> selection;
+    size_type count = 0;
+    for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
+      for (size_t rg_idx = 0; rg_idx < per_file_metadata[src_idx].row_groups.size(); ++rg_idx) {
+        auto const chunk_start_row = count;
+        count += get_row_group(rg_idx, src_idx).num_rows;
+        if (count > row_start || count == 0) {
+          selection.emplace_back(rg_idx, chunk_start_row, src_idx);
+        }
         if (count >= row_start + row_count) { break; }
       }
     }
-
     return selection;
   }
 
@@ -387,14 +392,16 @@ class aggregate_metadata {
 
     return selection;
   }
-};
+};  // namespace parquet
 
-void reader::impl::read_column_chunks(std::vector<rmm::device_buffer> &page_data,
-                                      hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-                                      size_t begin_chunk,
-                                      size_t end_chunk,
-                                      const std::vector<size_t> &column_chunk_offsets,
-                                      cudaStream_t stream)
+void reader::impl::read_column_chunks(
+  std::vector<rmm::device_buffer> &page_data,
+  hostdevice_vector<gpu::ColumnChunkDesc> &chunks,  // TODO const?
+  size_t begin_chunk,
+  size_t end_chunk,
+  const std::vector<size_t> &column_chunk_offsets,
+  std::vector<size_type> const &chunk_source_map,
+  cudaStream_t stream)
 {
   // Transfer chunk data, coalescing adjacent chunks
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
@@ -416,7 +423,7 @@ void reader::impl::read_column_chunks(std::vector<rmm::device_buffer> &page_data
       next_chunk++;
     }
     if (io_size != 0) {
-      auto buffer         = _sources[0]->host_read(io_offset, io_size);
+      auto buffer         = _sources[chunk_source_map[chunk]]->host_read(io_offset, io_size);
       page_data[chunk]    = rmm::device_buffer(buffer->data(), buffer->size(), stream);
       uint8_t *d_compdata = reinterpret_cast<uint8_t *>(page_data[chunk].data());
       do {
@@ -662,24 +669,22 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> sources,
 
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
-                                       size_type row_group,
-                                       size_type max_rowgroup_count,
-                                       const size_type *row_group_indices,
+                                       std::vector<std::vector<size_type>> const &row_group_indices,
                                        cudaStream_t stream)
 {
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
 
   // Select only row groups required
-  const auto selected_row_groups = _metadata->select_row_groups(
-    row_group, max_rowgroup_count, row_group_indices, skip_rows, num_rows);
+  const auto selected_row_groups =
+    _metadata->select_row_groups(row_group_indices, skip_rows, num_rows);
 
   // Get a list of column data types
   std::vector<data_type> column_types;
   if (_metadata->get_num_row_groups() != 0) {
     for (const auto &col : _selected_columns) {
       auto const &col_schema =
-        _metadata->get_schema()[_metadata->get_row_group(0).columns[col.first].schema_idx];
+        _metadata->get_schema()[_metadata->get_row_group(0, 0).columns[col.first].schema_idx];
       auto const col_type = to_type_id(col_schema.type,
                                        col_schema.converted_type,
                                        _strings_to_categorical,
@@ -699,6 +704,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
     // Association between each column chunk and its column
     std::vector<int> chunk_col_map(num_chunks);
+    std::vector<size_type> chunk_source_map(num_chunks);
 
     // Tracker for eventually deallocating compressed and uncompressed data
     std::vector<rmm::device_buffer> page_data(num_chunks);
@@ -710,10 +716,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     size_t total_decompressed_size = 0;
     auto remaining_rows            = num_rows;
     for (const auto &rg : selected_row_groups) {
-      const auto &row_group      = _metadata->get_row_group(rg.first);
-      auto const row_group_start = rg.second;
-      auto const row_group_rows  = std::min<int>(remaining_rows, row_group.num_rows);
-      auto const io_chunk_idx    = chunks.size();
+      const auto &row_group       = _metadata->get_row_group(rg.index, rg.source_index);
+      auto const row_group_start  = rg.start_row;
+      auto const row_group_source = rg.source_index;
+      auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
+      auto const io_chunk_idx     = chunks.size();
 
       for (size_t i = 0; i < num_columns; ++i) {
         auto const col         = _selected_columns[i];
@@ -763,15 +770,21 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                            clock_rate));
 
         // Map each column chunk to its column index
-        chunk_col_map[chunks.size() - 1] = i;
+        chunk_col_map[chunks.size() - 1]    = i;
+        chunk_source_map[chunks.size() - 1] = row_group_source;
 
         if (col_meta.codec != Compression::UNCOMPRESSED) {
           total_decompressed_size += col_meta.total_uncompressed_size;
         }
       }
       // Read compressed chunk data to device memory
-      read_column_chunks(
-        page_data, chunks, io_chunk_idx, chunks.size(), column_chunk_offsets, stream);
+      read_column_chunks(page_data,
+                         chunks,
+                         io_chunk_idx,
+                         chunks.size(),
+                         column_chunk_offsets,
+                         chunk_source_map,
+                         stream);
 
       remaining_rows -= row_group.num_rows;
     }
@@ -798,10 +811,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       std::vector<column_buffer> out_buffers;
       out_buffers.reserve(column_types.size());
       for (size_t i = 0; i < column_types.size(); ++i) {
-        auto col = _selected_columns[i];
-        auto &col_schema =
-          _metadata->get_schema()
-            [_metadata->get_row_group(selected_row_groups[0].first).columns[col.first].schema_idx];
+        auto col                    = _selected_columns[i];
+        auto const &first_row_group = _metadata->get_row_group(selected_row_groups[0].index,
+                                                               selected_row_groups[0].source_index);
+        auto &col_schema = _metadata->get_schema()[first_row_group.columns[col.first].schema_idx];
         bool is_nullable = (col_schema.max_definition_level != 0);
         out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
@@ -869,31 +882,19 @@ reader::reader(std::unique_ptr<cudf::io::datasource> source,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read_all(cudaStream_t stream)
-{
-  return _impl->read(0, -1, -1, -1, nullptr, stream);
-}
-
-// Forward to implementation
-table_with_metadata reader::read_row_group(size_type row_group,
-                                           size_type row_group_count,
-                                           cudaStream_t stream)
-{
-  return _impl->read(0, -1, row_group, row_group_count, nullptr, stream);
-}
+table_with_metadata reader::read_all(cudaStream_t stream) { return _impl->read(0, -1, {}, stream); }
 
 // Forward to implementation
 table_with_metadata reader::read_row_groups(const std::vector<size_type> &row_group_list,
                                             cudaStream_t stream)
 {
-  return _impl->read(
-    0, -1, -1, static_cast<size_type>(row_group_list.size()), row_group_list.data(), stream);
+  return _impl->read(0, -1, {row_group_list}, stream);
 }
 
 // Forward to implementation
 table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream)
 {
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, -1, nullptr, stream);
+  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, {}, stream);
 }
 
 }  // namespace parquet

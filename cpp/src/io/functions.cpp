@@ -258,8 +258,6 @@ table_with_metadata read_parquet(read_parquet_args const& args, rmm::mr::device_
 
   if (args.row_group_list.size() > 0) {
     return reader->read_row_groups(args.row_group_list);
-  } else if (args.row_group != -1) {
-    return reader->read_row_group(args.row_group, std::max(args.row_group_count, 1));
   } else if (args.skip_rows != -1 || args.num_rows != -1) {
     return reader->read_rows(args.skip_rows, args.num_rows);
   } else {

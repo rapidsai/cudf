@@ -287,7 +287,7 @@ def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
 
     num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
-    gdf = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
+    gdf = [cudf.read_parquet(fname, row_group_list=[i]) for i in range(row_groups)]
     gdf = cudf.concat(gdf).reset_index(drop=True)
 
     if "col_category" in pdf.columns:
