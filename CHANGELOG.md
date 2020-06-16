@@ -67,6 +67,7 @@
 - PR #5437 Improve libcudf join documentation
 - PR #5458 Install meta packages for dependencies
 - PR #5467 Move doc customization scripts to Jenkins
+- PR #5483 Add NVTX range calls to dictionary APIs
 
 ## Bug Fixes
 
