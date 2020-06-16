@@ -265,7 +265,7 @@ cudf::size_type unique_count(column_view const& input,
  * Given an input table_view, number of unique rows in this table_view is returned
  *
  * @param[in] input The column_view whose unique elements will be counted.
- * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL,
+ * @param[in] nulls_equal flag to denote nulls are equal if null_equality::EQUAL,
  * nulls are not equal if null_equality::UNEQUAL
  *
  * @return number of unique rows in the table
