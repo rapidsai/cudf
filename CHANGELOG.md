@@ -66,6 +66,7 @@
 - PR #5437 Improve libcudf join documentation
 - PR #5458 Install meta packages for dependencies
 - PR #5467 Move doc customization scripts to Jenkins
+- PR #5482 Use rmm::device_uvector in place of rmm::device_vector in copy_if
 
 ## Bug Fixes
 
