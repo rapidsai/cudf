@@ -853,5 +853,151 @@ class lists_column_wrapper : public detail::column_wrapper {
   bool root = false;
 };
 
+namespace detail {
+/**
+ * @brief Fixed width column factory implementation methods.
+ *
+ * These functions converts every element returned by the input iterator into `TypeParam` thusly:
+ *    - If `TypeParam` isn't a timestamp, it explicitly creates a `TypeParam` with the item
+ *      returned by the input iterator
+ *    - If `TypeParam` is a timestamp, it creates a duration with the item returned by the
+ *      input iterator, and uses the duration to create a timestamp
+ **/
+template <typename TypeParam, typename InputIterator, typename ValidityIterator>
+auto make_fixed_width_column_with_type_param_impl(
+  InputIterator begin,
+  InputIterator end,
+  ValidityIterator vbegin,
+  ValidityIterator vend,
+  typename std::enable_if<!cudf::is_timestamp<TypeParam>(), void>::type* = nullptr)
+{
+  auto iter =
+    thrust::make_transform_iterator(begin, [](auto const& e) { return static_cast<TypeParam>(e); });
+  return (vbegin != vend)
+           ? fixed_width_column_wrapper<TypeParam>(iter, iter + std::distance(begin, end), vbegin)
+           : fixed_width_column_wrapper<TypeParam>(iter, iter + std::distance(begin, end));
+}
+
+template <typename TypeParam, typename InputIterator, typename ValidityIterator>
+auto make_fixed_width_column_with_type_param_impl(
+  InputIterator begin,
+  InputIterator end,
+  ValidityIterator vbegin,
+  ValidityIterator vend,
+  typename std::enable_if<cudf::is_timestamp<TypeParam>(), void>::type* = nullptr)
+{
+  auto iter = thrust::make_transform_iterator(
+    begin, [](auto const& e) { return TypeParam{typename TypeParam::duration{e}}; });
+  return (vbegin != vend)
+           ? fixed_width_column_wrapper<TypeParam>(iter, iter + std::distance(begin, end), vbegin)
+           : fixed_width_column_wrapper<TypeParam>(iter, iter + std::distance(begin, end));
+}
+}  // namespace detail
+
+/**
+ * @brief Creates a fixed width column wrapper for a non-nullable column of
+ * fixed-width elements from an initializer list.
+ *
+ * @param init_list The list of elements
+ * @return a fixed width column wrapper of type `TypeParam`
+ **/
+template <typename TypeParam, typename T>
+auto make_fixed_width_column_with_type_param(std::initializer_list<T> const& init_list)
+{
+  std::initializer_list<bool> const validity;
+  return detail::make_fixed_width_column_with_type_param_impl<TypeParam>(
+    std::cbegin(init_list), std::cend(init_list), std::cbegin(validity), std::cend(validity));
+}
+
+/**
+ * @brief Creates a fixed width column wrapper for a non-nullable column of
+ * fixed-width elements using elements in the range `[begin,end)`.
+ *
+ * @param begin The beginning of the sequence of elements
+ * @param end The end of the sequence of elements
+ * @return a fixed width column wrapper of type `TypeParam`
+ **/
+template <typename TypeParam, typename InputIterator>
+auto make_fixed_width_column_with_type_param(InputIterator begin, InputIterator end)
+{
+  std::initializer_list<bool> const validity;
+  return detail::make_fixed_width_column_with_type_param_impl<TypeParam>(
+    begin, end, std::cbegin(validity), std::cend(validity));
+}
+
+/**
+ * @brief Creates a fixed width column wrapper for a nullable column from a list of
+ * fixed-width elements using another list to indicate the validity of each element.
+ *
+ * @param init_list The list of elements
+ * @param validity The list of validity indicator booleans
+ * @return a fixed width column wrapper of type `TypeParam`
+ **/
+template <typename TypeParam, typename T>
+auto make_fixed_width_column_with_type_param(std::initializer_list<T> const& init_list,
+                                             std::initializer_list<bool> const& validity)
+{
+  return detail::make_fixed_width_column_with_type_param_impl<TypeParam>(
+    std::cbegin(init_list), std::cend(init_list), std::cbegin(validity), std::cend(validity));
+}
+
+/**
+ * @brief Creates a fixed width column wrapper for a nullable column from a list of
+ * fixed-width elements using another list to indicate the validity of each element.
+ *
+ * @brief Creates a fixed width column wrapper for a nullable column from a list of
+ * fixed-width elements and the the range `[v, v + element_list.size())` interpreted
+ * as booleans to indicate the validity of each element.
+ *
+ * @param init_list The list of elements
+ * @param v The beginning of the sequence of validity indicators
+ * @return a fixed width column wrapper of type `TypeParam`
+ **/
+template <typename TypeParam, typename T, typename ValidityIterator>
+auto make_fixed_width_column_with_type_param(std::initializer_list<T> const& init_list,
+                                             ValidityIterator v)
+{
+  return detail::make_fixed_width_column_with_type_param_impl<TypeParam>(
+    std::cbegin(init_list), std::cend(init_list), v, v + init_list.size());
+}
+
+/**
+ * @brief Creates a fixed width column wrapper for a nullable column from fixed-width elements
+ * in the range `[begin,end)` using a validity initializer list to indicate the validity
+ * of each element.
+ *
+ * @param begin The beginning of the sequence of elements
+ * @param end The end of the sequence of elements
+ * @param validity The list of validity indicator booleans
+ * @return a fixed width column wrapper of type `TypeParam`
+ **/
+template <typename TypeParam, typename InputIterator>
+auto make_fixed_width_column_with_type_param(InputIterator begin,
+                                             InputIterator end,
+                                             std::initializer_list<bool> const& validity)
+{
+  return detail::make_fixed_width_column_with_type_param_impl<TypeParam>(
+    begin, end, std::cbegin(validity), std::cend(validity));
+}
+
+/**
+ * @brief Creates a fixed width column wrapper for a nullable column from fixed-width elements
+ * in the range `[begin,end)` using the range `[v, v + distance(begin,end))` interpreted
+ * as booleans to indicate the validity of each element.
+ *
+ * @param begin The beginning of the sequence of elements
+ * @param end The end of the sequence of elements
+ * @param v The beginning of the sequence of validity indicators
+ * @return a fixed width column wrapper of type `TypeParam`
+ **/
+template <typename TypeParam, typename InputIterator, typename ValidityIterator>
+auto make_fixed_width_column_with_type_param(InputIterator begin,
+                                             InputIterator end,
+                                             ValidityIterator v)
+{
+  return detail::make_fixed_width_column_with_type_param_impl<TypeParam>(
+    begin, end, v, v + std::distance(begin, end));
+}
+
 }  // namespace test
 }  // namespace cudf
