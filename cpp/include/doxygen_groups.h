@@ -122,6 +122,7 @@
  *   @defgroup nvtext_ngrams NGrams
  *   @defgroup nvtext_normalize Normalizing
  *   @defgroup nvtext_tokenize Tokenizing
+ *   @defgroup nvtext_replace Replacing
  * @}
  * @defgroup utility_apis Utilities
  * @{
