@@ -270,14 +270,20 @@ def test_string_empty_numeric_astype(dtype):
 def test_string_concat():
     data1 = ["a", "b", "c", "d", "e"]
     data2 = ["f", "g", "h", "i", "j"]
+    index = [1, 2, 3, 4, 5]
 
-    ps1 = pd.Series(data1)
-    ps2 = pd.Series(data2)
-    gs1 = Series(data1)
-    gs2 = Series(data2)
+    ps1 = pd.Series(data1, index=index)
+    ps2 = pd.Series(data2, index=index)
+    gs1 = Series(data1, index=index)
+    gs2 = Series(data2, index=index)
 
     expect = pd.concat([ps1, ps2])
     got = concat([gs1, gs2])
+
+    assert_eq(expect, got)
+
+    expect = ps1.str.cat(ps2)
+    got = gs1.str.cat(gs2)
 
     assert_eq(expect, got)
 
