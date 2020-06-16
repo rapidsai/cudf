@@ -98,6 +98,7 @@
 - PR #5459 Fix str.translate to convert table characters to UTF-8
 - PR #5465 Fix benchmark out of memory errors due to multiple initialization
 - PR #5472 Fix str concat issue with indexed series
+- PR #5484 Ensure flat index after groupby if nlevels == 1
 
 
 # cuDF 0.14.0 (Date TBD)
