@@ -160,7 +160,7 @@ def test_string_repr(ps_gs, item):
 
 
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool", "object", "str"}
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool", "object", "str"]
 )
 def test_string_astype(dtype):
     if (
@@ -197,7 +197,7 @@ def test_string_astype(dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool", "object", "str"}
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool", "object", "str"]
 )
 def test_string_empty_astype(dtype):
     data = []
@@ -210,7 +210,7 @@ def test_string_empty_astype(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool"})
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool"])
 def test_string_numeric_astype(dtype):
     if dtype.startswith("bool"):
         data = [1, 0, 1, 0, 1]
@@ -243,7 +243,7 @@ def test_string_numeric_astype(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool"})
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool"])
 def test_string_empty_numeric_astype(dtype):
     data = []
 

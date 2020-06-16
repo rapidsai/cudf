@@ -1193,7 +1193,7 @@ def test_index_in_dataframe_constructor():
     assert pd.testing.assert_frame_equal(a.loc[4:], b.loc[4:].to_pandas())
 
 
-dtypes = NUMERIC_TYPES | DATETIME_TYPES | {"bool"}
+dtypes = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
 
 
 @pytest.mark.parametrize("nelem", [0, 2, 3, 100, 1000])
@@ -1728,7 +1728,7 @@ def test_series_hash_encode(nrows):
     assert enc_with_name_arr[0] != enc_arr[0]
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | {"bool"})
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
 def test_cuda_array_interface(dtype):
 
     np_data = np.arange(10).astype(dtype)
@@ -1901,7 +1901,7 @@ def test_arrow_handle_no_index_name(pdf, gdf):
 @pytest.mark.parametrize("num_rows", [1, 3, 10, 100])
 @pytest.mark.parametrize("num_bins", [1, 2, 4, 20])
 @pytest.mark.parametrize("right", [True, False])
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | {"bool"})
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
 def test_series_digitize(num_rows, num_bins, right, dtype):
     data = np.random.randint(0, 100, num_rows).astype(dtype)
     bins = np.unique(np.sort(np.random.randint(2, 95, num_bins).astype(dtype)))

@@ -497,7 +497,7 @@ def test_index_where(data, condition, other, error):
             gs.where(gs_condition, other=gs_other)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | OTHER_TYPES)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
 @pytest.mark.parametrize("copy", [True, False])
 def test_index_astype(dtype, copy):
     pdi = pd.Index([1, 2, 3])
