@@ -358,7 +358,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public byte getByte(long index) {
-    assert type == DType.INT8 || type == DType.BOOL8;
+    assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
     assertsForGet(index);
     return offHeap.data.getByte(index * type.sizeInBytes);
   }
@@ -367,7 +367,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public final short getShort(long index) {
-    assert type == DType.INT16;
+    assert type == DType.INT16 || type == DType.UINT16;
     assertsForGet(index);
     return offHeap.data.getShort(index * type.sizeInBytes);
   }
@@ -376,7 +376,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public final int getInt(long index) {
-    assert type == DType.INT32 || type == DType.TIMESTAMP_DAYS;
+    assert type == DType.INT32 || type == DType.UINT32 || type == DType.TIMESTAMP_DAYS;
     assertsForGet(index);
     return offHeap.data.getInt(index * type.sizeInBytes);
   }
@@ -405,7 +405,7 @@ public final class HostColumnVector implements AutoCloseable {
    */
   public final long getLong(long index) {
     // Timestamps with time values are stored as longs
-    assert type == DType.INT64 || type.hasTimeResolution();
+    assert type == DType.INT64 || type == DType.UINT64 || type.hasTimeResolution();
     assertsForGet(index);
     return offHeap.data.getLong(index * type.sizeInBytes);
   }
@@ -610,9 +610,29 @@ public final class HostColumnVector implements AutoCloseable {
 
   /**
    * Create a new vector from the given values.
+   * <p>
+   * Java does not have an unsigned byte type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static HostColumnVector fromUnsignedBytes(byte... values) {
+    return build(DType.UINT8, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
    */
   public static HostColumnVector fromShorts(short... values) {
     return build(DType.INT16, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   * <p>
+   * Java does not have an unsigned short type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static HostColumnVector fromUnsignedShorts(short... values) {
+    return build(DType.UINT16, values.length, (b) -> b.appendArray(values));
   }
 
   /**
@@ -624,9 +644,29 @@ public final class HostColumnVector implements AutoCloseable {
 
   /**
    * Create a new vector from the given values.
+   * <p>
+   * Java does not have an unsigned int type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static HostColumnVector fromUnsignedInts(int... values) {
+    return build(DType.UINT32, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
    */
   public static HostColumnVector fromLongs(long... values) {
     return build(DType.INT64, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   * <p>
+   * Java does not have an unsigned long type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static HostColumnVector fromUnsignedLongs(long... values) {
+    return build(DType.UINT64, values.length, (b) -> b.appendArray(values));
   }
 
   /**
@@ -727,9 +767,33 @@ public final class HostColumnVector implements AutoCloseable {
    * Create a new vector from the given values.  This API supports inline nulls,
    * but is much slower than using a regular array and should really only be used
    * for tests.
+   * <p>
+   * Java does not have an unsigned byte type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static HostColumnVector fromBoxedUnsignedBytes(Byte... values) {
+    return build(DType.UINT8, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
    */
   public static HostColumnVector fromBoxedShorts(Short... values) {
     return build(DType.INT16, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   * <p>
+   * Java does not have an unsigned short type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static HostColumnVector fromBoxedUnsignedShorts(Short... values) {
+    return build(DType.UINT16, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -745,9 +809,33 @@ public final class HostColumnVector implements AutoCloseable {
    * Create a new vector from the given values.  This API supports inline nulls,
    * but is much slower than using a regular array and should really only be used
    * for tests.
+   * <p>
+   * Java does not have an unsigned int type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static HostColumnVector fromBoxedUnsignedInts(Integer... values) {
+    return build(DType.UINT32, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
    */
   public static HostColumnVector fromBoxedLongs(Long... values) {
     return build(DType.INT64, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   * <p>
+   * Java does not have an unsigned long type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static HostColumnVector fromBoxedUnsignedLongs(Long... values) {
+    return build(DType.UINT64, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -878,7 +966,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public final Builder append(byte value) {
-      assert type == DType.INT8 || type == DType.BOOL8;
+      assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
       assert currentIndex < rows;
       data.setByte(currentIndex * type.sizeInBytes, value);
       currentIndex++;
@@ -887,14 +975,14 @@ public final class HostColumnVector implements AutoCloseable {
 
     public final Builder append(byte value, long count) {
       assert (count + currentIndex) <= rows;
-      assert type == DType.INT8 || type == DType.BOOL8;
+      assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
       data.setMemory(currentIndex * type.sizeInBytes, count, value);
       currentIndex += count;
       return this;
     }
 
     public final Builder append(short value) {
-      assert type == DType.INT16;
+      assert type == DType.INT16 || type == DType.UINT16;
       assert currentIndex < rows;
       data.setShort(currentIndex * type.sizeInBytes, value);
       currentIndex++;
@@ -902,7 +990,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public final Builder append(int value) {
-      assert (type == DType.INT32 || type == DType.TIMESTAMP_DAYS);
+      assert (type == DType.INT32 || type == DType.UINT32 || type == DType.TIMESTAMP_DAYS);
       assert currentIndex < rows;
       data.setInt(currentIndex * type.sizeInBytes, value);
       currentIndex++;
@@ -910,7 +998,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public final Builder append(long value) {
-      assert type == DType.INT64 || type == DType.TIMESTAMP_MILLISECONDS ||
+      assert type == DType.INT64 || type == DType.UINT64 || type == DType.TIMESTAMP_MILLISECONDS ||
           type == DType.TIMESTAMP_MICROSECONDS || type == DType.TIMESTAMP_NANOSECONDS ||
           type == DType.TIMESTAMP_SECONDS;
       assert currentIndex < rows;
@@ -985,14 +1073,14 @@ public final class HostColumnVector implements AutoCloseable {
 
     public Builder appendArray(byte... values) {
       assert (values.length + currentIndex) <= rows;
-      assert type == DType.INT8 || type == DType.BOOL8;
+      assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
       data.setBytes(currentIndex * type.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
 
     public Builder appendArray(short... values) {
-      assert type == DType.INT16;
+      assert type == DType.INT16 || type == DType.UINT16;
       assert (values.length + currentIndex) <= rows;
       data.setShorts(currentIndex * type.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;
@@ -1000,7 +1088,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public Builder appendArray(int... values) {
-      assert (type == DType.INT32 || type == DType.TIMESTAMP_DAYS);
+      assert (type == DType.INT32 || type == DType.UINT32 || type == DType.TIMESTAMP_DAYS);
       assert (values.length + currentIndex) <= rows;
       data.setInts(currentIndex * type.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;
@@ -1008,7 +1096,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public Builder appendArray(long... values) {
-      assert type == DType.INT64 || type == DType.TIMESTAMP_MILLISECONDS ||
+      assert type == DType.INT64 || type == DType.UINT64 || type == DType.TIMESTAMP_MILLISECONDS ||
           type == DType.TIMESTAMP_MICROSECONDS || type == DType.TIMESTAMP_NANOSECONDS ||
           type == DType.TIMESTAMP_SECONDS;
       assert (values.length + currentIndex) <= rows;

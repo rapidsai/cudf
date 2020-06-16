@@ -73,8 +73,9 @@ def test_sizeof_dataframe():
     assert sizeof >= nbytes
 
     serialized_nbytes = len(pickle.dumps(df, protocol=pickle.HIGHEST_PROTOCOL))
-    # Serialized size should be close to what __sizeof__ is giving
-    np.testing.assert_approx_equal(sizeof, serialized_nbytes, significant=2)
+
+    # assert at least sizeof bytes were serialized
+    assert serialized_nbytes >= sizeof
 
 
 def test_pickle_index():
@@ -86,7 +87,7 @@ def test_pickle_index():
 
 
 def test_pickle_buffer():
-    arr = np.arange(10)
+    arr = np.arange(10).view("|u1")
     buf = Buffer(arr)
     assert buf.size == arr.nbytes
     pickled = pickle.dumps(buf)

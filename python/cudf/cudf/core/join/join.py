@@ -119,7 +119,12 @@ class Merge(object):
         )
         result = self.out_class._from_table(libcudf_result)
         result = self.typecast_libcudf_to_output(result, output_dtypes)
-        return result[compute_result_col_names(self.lhs, self.rhs, self.how)]
+        if isinstance(result, cudf.Index):
+            return result
+        else:
+            return result[
+                compute_result_col_names(self.lhs, self.rhs, self.how)
+            ]
 
     def preprocess_merge_params(
         self, on, left_on, right_on, lsuffix, rsuffix, suffixes
@@ -131,6 +136,12 @@ class Merge(object):
         """
 
         self.out_class = cudf.DataFrame
+        if isinstance(self.lhs, cudf.MultiIndex) or isinstance(
+            self.rhs, cudf.MultiIndex
+        ):
+            self.out_class = cudf.MultiIndex
+        elif isinstance(self.lhs, cudf.Index):
+            self.out_class = self.lhs.__class__
 
         if on:
             on = [on] if isinstance(on, str) else list(on)
@@ -468,13 +479,11 @@ class Merge(object):
             l_data_join_cols = self.lhs._data
             r_data_join_cols = self.rhs._data
 
-        for i in range(
-            (self.left_index or self.right_index)
-            * len(self.lhs.index._data.items())
-        ):
-            index_dtypes[i] = self.libcudf_to_output_casting_rules(
-                l_idx_join_cols[i], r_idx_join_cols[i], self.how
-            )
+        if self.left_index or self.right_index:
+            for i in range(len(self.lhs.index._data.items())):
+                index_dtypes[i] = self.libcudf_to_output_casting_rules(
+                    l_idx_join_cols[i], r_idx_join_cols[i], self.how
+                )
 
         for name in itertools.chain(self.left_on, self.right_on):
             if name in self.left_on and name in self.right_on:
@@ -517,6 +526,7 @@ class Merge(object):
                 categories=dtype.categories,
                 codes=col.set_mask(None),
                 mask=col.base_mask,
+                ordered=dtype.ordered,
             )
         else:
             outcol = col.astype(dtype)

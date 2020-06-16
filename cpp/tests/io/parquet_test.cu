@@ -115,7 +115,9 @@ struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
 };
 
 // Declare typed test cases
-TYPED_TEST_CASE(ParquetWriterNumericTypeTest, cudf::test::NumericTypes);
+// TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
+using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
+TYPED_TEST_CASE(ParquetWriterNumericTypeTest, SupportedTypes);
 using SupportedTimestampTypes = cudf::test::TimestampTypes;
 TYPED_TEST_CASE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 
@@ -130,7 +132,7 @@ struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
 };
 
 // Declare typed test cases
-TYPED_TEST_CASE(ParquetChunkedWriterNumericTypeTest, cudf::test::NumericTypes);
+TYPED_TEST_CASE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
 
 namespace {
 // Generates a vector of uniform random values of type T

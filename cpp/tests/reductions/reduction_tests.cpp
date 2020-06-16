@@ -34,8 +34,10 @@ template <typename T>
 std::vector<T> convert_values(std::vector<int> const &int_values)
 {
   std::vector<T> v(int_values.size());
-  std::transform(
-    int_values.begin(), int_values.end(), v.begin(), [](int x) { return static_cast<T>(x); });
+  std::transform(int_values.begin(), int_values.end(), v.begin(), [](int x) {
+    if (std::is_unsigned<T>::value) x = std::abs(x);
+    return static_cast<T>(x);
+  });
   return v;
 }
 
@@ -681,7 +683,8 @@ struct StringReductionTest : public cudf::test::BaseFixture,
       using ScalarType                     = cudf::scalar_type_t<cudf::string_view>;
       auto result1                         = static_cast<ScalarType *>(result.get());
       EXPECT_TRUE(result1->is_valid());
-      std::cout << "expected=" << expected_value << ",got=" << result1->to_string() << std::endl;
+      if (!result1->is_valid())
+        std::cout << "expected=" << expected_value << ",got=" << result1->to_string() << std::endl;
       EXPECT_EQ(expected_value, result1->to_string())
         << (agg->kind == aggregation::MIN ? "MIN" : "MAX");
     };
@@ -773,23 +776,39 @@ TYPED_TEST(ReductionTest, Median)
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  double expected_value = std::is_same<T, bool>::value ? 1.0 : 3.0;
+  double expected_value = [] {
+    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_signed<T>::value) return 3.0;
+    return 13.5;
+  }();
   this->reduction_test(
     col, expected_value, this->ret_non_arithmetic, cudf::make_median_aggregation());
 
   auto col_odd              = cudf::split(col, {1})[1];
-  double expected_value_odd = std::is_same<T, bool>::value ? 1.0 : 0.0;
+  double expected_value_odd = [] {
+    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_signed<T>::value) return 0.0;
+    return 14.0;
+  }();
   this->reduction_test(
     col_odd, expected_value_odd, this->ret_non_arithmetic, cudf::make_median_aggregation());
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  double expected_null_value                          = std::is_same<T, bool>::value ? 1.0 : 0.0;
+  double expected_null_value                          = [] {
+    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_signed<T>::value) return 0.0;
+    return 13.0;
+  }();
 
   this->reduction_test(
     col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_median_aggregation());
 
   auto col_nulls_odd             = cudf::split(col_nulls, {1})[1];
-  double expected_null_value_odd = std::is_same<T, bool>::value ? 1.0 : -6.5;
+  double expected_null_value_odd = [] {
+    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_signed<T>::value) return -6.5;
+    return 13.5;
+  }();
   this->reduction_test(col_nulls_odd,
                        expected_null_value_odd,
                        this->ret_non_arithmetic,
@@ -807,7 +826,7 @@ TYPED_TEST(ReductionTest, Quantile)
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  double expected_value0 = std::is_same<T, bool>::value ? v[4] : v[6];
+  double expected_value0 = std::is_same<T, bool>::value || std::is_unsigned<T>::value ? v[4] : v[6];
   this->reduction_test(
     col, expected_value0, this->ret_non_arithmetic, cudf::make_quantile_aggregation({0.0}, interp));
   double expected_value1 = v[3];
@@ -831,7 +850,7 @@ TYPED_TEST(ReductionTest, Quantile)
 TYPED_TEST(ReductionTest, UniqueCount)
 {
   using T = TypeParam;
-  std::vector<int> int_values({1, -1, 1, 2, 0, 2, -2, 45});  // 6 unique values
+  std::vector<int> int_values({1, -3, 1, 2, 0, 2, -4, 45});  // 6 unique values
   std::vector<bool> host_bools({1, 1, 1, 0, 1, 1, 1, 1});
   std::vector<T> v = convert_values<T>(int_values);
 

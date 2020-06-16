@@ -1,6 +1,5 @@
 /*
- *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -48,6 +47,16 @@ public class IntColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  public void testUnsignedArrayAllocation() {
+    try (HostColumnVector v = HostColumnVector.fromUnsignedInts(0xfedcba98, 0x80000000, 5)) {
+      assertFalse(v.hasNulls());
+      assertEquals(0xfedcba98L, Integer.toUnsignedLong(v.getInt(0)));
+      assertEquals(0x80000000L, Integer.toUnsignedLong(v.getInt(1)));
+      assertEquals(5, Integer.toUnsignedLong(v.getInt(2)));
+    }
+  }
+
+  @Test
   public void testUpperIndexOutOfBoundsException() {
     try (HostColumnVector intColumnVector = HostColumnVector.fromInts(2, 3, 5)) {
       assertThrows(AssertionError.class, () -> intColumnVector.getInt(3));
@@ -71,6 +80,22 @@ public class IntColumnVectorTest extends CudfTestBase {
       for (int i = 0; i < 6; i++) {
         assertFalse(cv.isNull(i));
       }
+      assertTrue(cv.isNull(6));
+      assertTrue(cv.isNull(7));
+    }
+  }
+
+  @Test
+  public void testAddingUnsignedNullValues() {
+    try (HostColumnVector cv = HostColumnVector.fromBoxedUnsignedInts(
+            2, 3, 4, 5, 0xfedbca98, 0x80000000, null, null)) {
+      assertTrue(cv.hasNulls());
+      assertEquals(2, cv.getNullCount());
+      for (int i = 0; i < 6; i++) {
+        assertFalse(cv.isNull(i));
+      }
+      assertEquals(0xfedbca98L, Integer.toUnsignedLong(cv.getInt(4)));
+      assertEquals(0x80000000L, Integer.toUnsignedLong(cv.getInt(5)));
       assertTrue(cv.isNull(6));
       assertTrue(cv.isNull(7));
     }

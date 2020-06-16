@@ -38,6 +38,7 @@
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
+#include <cudf/strings/padding.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/split/split.hpp>
@@ -572,35 +573,43 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, job
     std::unique_ptr<cudf::column> result;
     if (n_data_type.id() == cudf::type_id::STRING) {
       switch (column->type().id()) {
-        case cudf::type_id::BOOL8: result = cudf::strings::from_booleans(*column); break;
+        case cudf::type_id::BOOL8:
+          result = cudf::strings::from_booleans(*column);
+          break;
         case cudf::type_id::FLOAT32:
-        case cudf::type_id::FLOAT64: result = cudf::strings::from_floats(*column); break;
+        case cudf::type_id::FLOAT64:
+          result = cudf::strings::from_floats(*column);
+          break;
         case cudf::type_id::INT8:
+        case cudf::type_id::UINT8:
         case cudf::type_id::INT16:
+        case cudf::type_id::UINT16:
         case cudf::type_id::INT32:
-        case cudf::type_id::INT64: result = cudf::strings::from_integers(*column); break;
+        case cudf::type_id::UINT32:
+        case cudf::type_id::INT64:
+        case cudf::type_id::UINT64:
+          result = cudf::strings::from_integers(*column);
+          break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
     } else if (column->type().id() == cudf::type_id::STRING) {
       switch (n_data_type.id()) {
-        case cudf::type_id::BOOL8: result = cudf::strings::to_booleans(*column); break;
-        case cudf::type_id::FLOAT32:
-          result = cudf::strings::to_floats(*column, cudf::data_type{cudf::type_id::FLOAT32});
+        case cudf::type_id::BOOL8:
+          result = cudf::strings::to_booleans(*column);
           break;
+        case cudf::type_id::FLOAT32:
         case cudf::type_id::FLOAT64:
-          result = cudf::strings::to_floats(*column, cudf::data_type{cudf::type_id::FLOAT64});
+          result = cudf::strings::to_floats(*column, n_data_type);
           break;
         case cudf::type_id::INT8:
-          result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT8});
-          break;
+        case cudf::type_id::UINT8:
         case cudf::type_id::INT16:
-          result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT16});
-          break;
+        case cudf::type_id::UINT16:
         case cudf::type_id::INT32:
-          result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT32});
-          break;
+        case cudf::type_id::UINT32:
         case cudf::type_id::INT64:
-          result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT64});
+        case cudf::type_id::UINT64:
+          result = cudf::strings::to_integers(*column, n_data_type);
           break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
@@ -941,6 +950,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplaceWithBackre
 
     std::unique_ptr<cudf::column> result = cudf::strings::replace_with_backrefs(
         scv, ss_pattern.get(), ss_replace.get());
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_zfill(
+    JNIEnv *env,
+    jclass,
+    jlong column_view,
+    jint j_width) {
+
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, j_width, "width is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::size_type width = reinterpret_cast<cudf::size_type>(j_width);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::zfill(scv, width);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

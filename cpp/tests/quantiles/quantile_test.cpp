@@ -87,13 +87,21 @@ struct test_case {
 template <typename T>
 test_case<T> interpolate_center()
 {
-  auto low   = std::numeric_limits<T>::lowest();
-  auto max   = std::numeric_limits<T>::max();
-  auto mid_d = std::is_floating_point<T>::value ? 0.0 : -0.5;
+  auto low     = std::numeric_limits<T>::lowest();
+  auto max     = std::numeric_limits<T>::max();
+  double mid_d = [] {
+    if (std::is_floating_point<T>::value) return 0.0;
+    if (std::is_signed<T>::value) return -0.5;
+    return static_cast<double>(std::numeric_limits<T>::max()) / 2.0;
+  }();
 
   // int64_t is internally casted to a double, meaning the lerp center point
   // is float-like.
-  auto lin_d = std::is_floating_point<T>::value || std::is_same<T, int64_t>::value ? 0.0 : -0.5;
+  double lin_d = [] {
+    if (std::is_floating_point<T>::value || std::is_same<T, int64_t>::value) return 0.0;
+    if (std::is_signed<T>::value) return -0.5;
+    return static_cast<double>(std::numeric_limits<T>::max()) / 2.0;
+  }();
   auto max_d = static_cast<double>(max);
   auto low_d = static_cast<double>(low);
   return test_case<T>{fixed_width_column_wrapper<T>({low, max}),
@@ -304,9 +312,13 @@ std::enable_if_t<std::is_floating_point<T>::value, test_case<T>> unsorted()
 template <typename T>
 std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>> unsorted()
 {
-  return test_case<T>{fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6}),
-                      {q_expect{0.0, -1, -1, -1, -1, -1}},
-                      fixed_width_column_wrapper<cudf::size_type>({6, 1, 7, 5, 4, 2, 3, 8, 0})};
+  return std::is_signed<T>()
+           ? test_case<T>{fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6}),
+                          {q_expect{0.0, -1, -1, -1, -1, -1}},
+                          fixed_width_column_wrapper<cudf::size_type>({6, 1, 7, 5, 4, 2, 3, 8, 0})}
+           : test_case<T>{fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, 1, 1, 6}),
+                          {q_expect{0.0, 1, 1, 1, 1, 1}},
+                          fixed_width_column_wrapper<cudf::size_type>({6, 1, 7, 5, 4, 2, 3, 8, 0})};
 }
 
 template <typename T>

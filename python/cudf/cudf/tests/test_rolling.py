@@ -245,3 +245,62 @@ def test_rolling_numba_udf_with_offset():
         gsr.rolling("2s").apply(some_func).fillna(-1),
         check_dtype=False,
     )
+
+
+@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+def test_rolling_groupby_simple(agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 1, 1, 1, 1, 2, 2, 2, 2],
+            "b": [1, 2, 3, 1, 2, 3, 1, 2, 3, 1],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    for window_size in range(1, len(pdf) + 1):
+        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(
+            -1
+        )
+        got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
+        assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+def test_rolling_groupby_multi(agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 1, 1, 1, 1, 2, 2, 2, 2],
+            "b": [0, 0, 1, 1, 0, 1, 2, 1, 1, 0],
+            "c": [1, 2, 3, 1, 2, 3, 1, 2, 3, 1],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    for window_size in range(1, len(pdf) + 1):
+        expect = getattr(
+            pdf.groupby(["a", "b"]).rolling(window_size), agg
+        )().fillna(-1)
+        got = getattr(
+            gdf.groupby(["a", "b"]).rolling(window_size), agg
+        )().fillna(-1)
+        assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize(
+    "window_size", ["1d", "2d", "3d", "4d", "5d", "6d", "7d"]
+)
+def test_rolling_groupby_offset(agg, window_size):
+    pdf = pd.DataFrame(
+        {
+            "date": pd.date_range(start="2016-01-01", periods=7, freq="D"),
+            "group": [1, 2, 2, 1, 1, 2, 1],
+            "val": [5, 6, 7, 8, 1, 2, 3],
+        }
+    ).set_index("date")
+    gdf = cudf.from_pandas(pdf)
+    expect = getattr(pdf.groupby("group").rolling(window_size), agg)().fillna(
+        -1
+    )
+    got = getattr(gdf.groupby("group").rolling(window_size), agg)().fillna(-1)
+    assert_eq(expect, got, check_dtype=False)

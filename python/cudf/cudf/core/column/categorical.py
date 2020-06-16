@@ -868,11 +868,10 @@ class CategoricalColumn(column.ColumnBase):
         return CategoricalAccessor(self, parent=parent)
 
     def unary_operator(self, unaryop):
-        msg = (
-            "Series of dtype `category` cannot perform the operation: "
-            "{}".format(unaryop)
+        raise TypeError(
+            f"Series of dtype `category` cannot perform the operation: "
+            f"{unaryop}"
         )
-        raise TypeError(msg)
 
     def binary_operator(self, op, rhs, reflect=False):
 
