@@ -2356,7 +2356,7 @@ def test_dataframe_empty_sort_index():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", dtypes | {"category"})
+@pytest.mark.parametrize("dtype", dtypes + ["category"])
 def test_dataframe_0_row_dtype(dtype):
     if dtype == "category":
         data = pd.Series(["a", "b", "c", "d", "e"], dtype="category")
