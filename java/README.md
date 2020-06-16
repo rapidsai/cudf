@@ -52,7 +52,7 @@ CUDA 10.0:
 
 Build the native code first, and make sure the a JDK is installed and available.
 
-When invoking cmake, make sure you pass in the options
+When building libcudf, make sure you pass in the cmake options
 `-DARROW_STATIC_LIB=ON -DBoost_USE_STATIC_LIBS=ON` so that Apache Arrow and Boost libraries are
 linked statically.
 
