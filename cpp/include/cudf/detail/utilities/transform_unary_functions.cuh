@@ -40,17 +40,17 @@ namespace cudf {
  */
 template <typename ResultType, typename Functor>
 struct null_replacing_transformer {
-  typedef ResultType type;
+  using type = ResultType;
   Functor f;
-  ResultType replacement;
+  type replacement;
   CUDA_HOST_DEVICE_CALLABLE
-  null_replacing_transformer(ResultType null_replacement, Functor transformer)
+  null_replacing_transformer(type null_replacement, Functor transformer)
     : f(transformer), replacement(null_replacement)
   {
   }
 
   template <typename ElementType>
-  CUDA_HOST_DEVICE_CALLABLE ResultType operator()(thrust::pair<ElementType, bool> const &pair_value)
+  CUDA_HOST_DEVICE_CALLABLE type operator()(thrust::pair<ElementType, bool> const &pair_value)
   {
     if (pair_value.second)
       return f(pair_value.first);

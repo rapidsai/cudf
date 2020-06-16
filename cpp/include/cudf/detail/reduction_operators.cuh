@@ -179,6 +179,17 @@ struct max : public simple_op<max> {
 template <typename Derived>
 struct compound_op : public simple_op<Derived> {
   /**
+   * @copydoc simple_op<Derived>::template get_null_replacing_element_transformer<ResultType>()
+   */
+  template <typename ResultType>
+  auto get_null_replacing_element_transformer() override
+  {
+    using element_transformer = typename Derived::transformer<ResultType>;
+    using OutputType          = typename Derived::intermediate<ResultType>::IntermediateType;
+    return null_replacing_transformer<OutputType, element_transformer>{
+      simple_op<Derived>::template get_identity<OutputType>(), element_transformer{}};
+  }
+  /**
    * @brief  computes the transformed result from result of simple operator.
    *
    * @tparam ResultType output type of compound reduction operator
