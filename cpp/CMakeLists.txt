@@ -185,14 +185,28 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
-message(STATUS "BUILDING ARROW")
-include(ConfigureArrow)
+find_path(ARROW_INCLUDE "arrow"
+          HINTS "$ENV{ARROW_ROOT}/include")
 
-if(ARROW_FOUND)
-    message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
-else()
-    message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
-endif(ARROW_FOUND)
+find_library(ARROW_LIBRARY "arrow"
+             NAMES libarrow
+             HINTS "$ENV{ARROW_ROOT}/lib" "$ENV{ARROW_ROOT}/build")
+
+find_library(ARROW_CUDA_LIBRARY "arrow_cuda"
+             NAMES libarrow_cuda
+             HINTS "$ENV{ARROW_ROOT}/lib" "$ENV{ARROW_ROOT}/build")
+
+message(STATUS "ARROW: ARROW_INCLUDE set to ${ARROW_INCLUDE}")
+message(STATUS "ARROW: ARROW_LIBRARY set to ${ARROW_LIBRARY}")
+message(STATUS "ARROW: ARROW_CUDA_LIBRARY set to ${ARROW_CUDA_LIBRARY}")
+
+add_library(arrow SHARED IMPORTED ${ARROW_LIBRARY})
+add_library(arrow_cuda SHARED IMPORTED ${ARROW_CUDA_LIBRARY})
+
+if(ARROW_INCLUDE AND ARROW_LIBRARY AND ARROW_CUDA_LIBRARY)
+    set_target_properties(arrow PROPERTIES IMPORTED_LOCATION ${ARROW_LIBRARY})
+    set_target_properties(arrow_cuda PROPERTIES IMPORTED_LOCATION ${ARROW_CUDA_LIBRARY})
+endif(ARROW_INCLUDE AND ARROW_LIBRARY AND ARROW_CUDA_LIBRARY)
 
 ###################################################################################################
 # - copy libcu++ ------------------------------------------------------------------------------------
@@ -339,8 +353,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_BINARY_DIR}/include/jit"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
-                    "${ARROW_INCLUDE_DIR}"
-                    "${FLATBUFFERS_INCLUDE_DIR}"
+                    "${ARROW_INCLUDE}"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
@@ -356,7 +369,6 @@ endif(CONDA_INCLUDE_DIRS)
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}")
 
@@ -698,11 +710,8 @@ endif(HT_DEFAULT_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-# Get all the symbols from the Arrow CUDA Library for Cython
-set(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
-
 # link targets for cuDF
-target_link_libraries(cudf rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------

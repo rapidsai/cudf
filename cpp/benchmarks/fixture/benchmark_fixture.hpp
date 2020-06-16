@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,8 @@
  */
 
 #include <benchmark/benchmark.h>
-#include <rmm/thrust_rmm_allocator.h>
-#include <memory>
 #include "rmm/mr/device/cnmem_memory_resource.hpp"
 #include "rmm/mr/device/default_memory_resource.hpp"
-#include "rmm/mr/device/device_memory_resource.hpp"
 
 namespace cudf {
 /**
@@ -54,13 +51,18 @@ namespace cudf {
  * BENCHMARK_REGISTER_F(my_benchmark, my_test_name)->Range(128, 512);
  */
 class benchmark : public ::benchmark::Fixture {
-  std::unique_ptr<rmm::mr::cnmem_memory_resource> mr{
-    std::make_unique<rmm::mr::cnmem_memory_resource>()};
-
  public:
-  virtual void SetUp(const ::benchmark::State& state) { rmm::mr::set_default_resource(mr.get()); }
+  virtual void SetUp(const ::benchmark::State& state)
+  {
+    auto mr = new rmm::mr::cnmem_memory_resource;
+    rmm::mr::set_default_resource(mr);  // set default resource to cnmem
+  }
 
-  virtual void TearDown(const ::benchmark::State& state) {}
+  virtual void TearDown(const ::benchmark::State& state)
+  {
+    delete rmm::mr::get_default_resource();
+    rmm::mr::set_default_resource(nullptr);  // reset default resource to the initial resource
+  }
 
   // eliminate partial override warnings (see benchmark/benchmark.h)
   virtual void SetUp(::benchmark::State& st) { SetUp(const_cast<const ::benchmark::State&>(st)); }

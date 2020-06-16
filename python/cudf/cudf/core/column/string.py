@@ -28,6 +28,7 @@ from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
+    count_bytes as cpp_count_bytes,
     count_characters as cpp_count_characters,
 )
 from cudf._lib.strings.capitalize import (
@@ -124,6 +125,10 @@ _str_to_numeric_typecast_functions = {
     np.dtype("int16"): str_cast.stoi16,
     np.dtype("int32"): str_cast.stoi,
     np.dtype("int64"): str_cast.stol,
+    np.dtype("uint8"): str_cast.stoui8,
+    np.dtype("uint16"): str_cast.stoui16,
+    np.dtype("uint32"): str_cast.stoui,
+    np.dtype("uint64"): str_cast.stoul,
     np.dtype("float32"): str_cast.stof,
     np.dtype("float64"): str_cast.stod,
     np.dtype("bool"): str_cast.to_booleans,
@@ -140,6 +145,10 @@ _numeric_to_str_typecast_functions = {
     np.dtype("int16"): str_cast.i16tos,
     np.dtype("int32"): str_cast.itos,
     np.dtype("int64"): str_cast.ltos,
+    np.dtype("uint8"): str_cast.ui8tos,
+    np.dtype("uint16"): str_cast.ui16tos,
+    np.dtype("uint32"): str_cast.uitos,
+    np.dtype("uint64"): str_cast.ultos,
     np.dtype("float32"): str_cast.ftos,
     np.dtype("float64"): str_cast.dtos,
     np.dtype("bool"): str_cast.from_booleans,
@@ -305,6 +314,35 @@ class StringMethods(object):
 
         return self._return_or_inplace(
             cpp_count_characters(self._column), **kwargs,
+        )
+
+    def byte_count(self, **kwargs):
+        """
+        Computes the number of bytes of each string in the Series/Index.
+
+        Returns : Series or Index of int
+            A Series or Index of integer values
+            indicating the number of bytes of each strings in the
+            Series or Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["abc","d","ef"])
+        >>> s.str.byte_count()
+        0    3
+        1    1
+        2    2
+        dtype: int32
+        >>> s = cudf.Series(["Hello", "Bye", "Thanks 😊"])
+        >>> s.str.byte_count()
+        0     5
+        1     3
+        2    11
+        dtype: int32
+        """
+        return self._return_or_inplace(
+            cpp_count_bytes(self._column), **kwargs,
         )
 
     def cat(self, others=None, sep=None, na_rep=None, **kwargs):
@@ -3740,13 +3778,13 @@ class StringColumn(column.ColumnBase):
                 raise ValueError("Could not convert `None` value to datetime")
 
             boolean_match = self.binary_operator("eq", "NaT")
-        elif out_dtype.kind in ("i"):
+        elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
                     "Could not convert strings to integer \
                         type due to presence of non-integer values."
                 )
-        elif out_dtype.kind in ("f"):
+        elif out_dtype.kind == "f":
             if not cpp_is_float(self).all():
                 raise ValueError(
                     "Could not convert strings to float \
@@ -3865,9 +3903,9 @@ class StringColumn(column.ColumnBase):
 
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in ("i") and not cpp_is_integer(self).all():
+        elif to_dtype.kind in {"i", "u"} and not cpp_is_integer(self).all():
             return False
-        elif to_dtype.kind in ("f") and not cpp_is_float(self).all():
+        elif to_dtype.kind == "f" and not cpp_is_float(self).all():
             return False
         else:
             return True
@@ -3962,7 +4000,13 @@ def _get_cols_list(others):
     if (
         can_convert_to_column(others)
         and len(others) > 0
-        and (can_convert_to_column(others[0]))
+        and (
+            can_convert_to_column(
+                others.iloc[0]
+                if isinstance(others, cudf.Series)
+                else others[0]
+            )
+        )
     ):
         """
         If others is a list-like object (in our case lists & tuples)
