@@ -2120,8 +2120,8 @@ class DataFrame(Frame, Serializable):
         Notes
         -----
         One notable difference from Pandas is when DataFrame is of
-        mixed types and result is expected to be a Series in case of pandas,
-        cudf will return a DataFrame as it doesn't support mixed types
+        mixed types and result is expected to be a Series in case of Pandas.
+        cuDF will return a DataFrame as it doesn't support mixed types
         under Series yet.
 
         Mixed dtype single row output as a dataframe (pandas results in Series)
@@ -2204,7 +2204,7 @@ class DataFrame(Frame, Serializable):
         -----
         One notable difference from Pandas is when DataFrame is of
         mixed types and result is expected to be a Series in case of Pandas.
-        cudf will return a DataFrame as it doesn't support mixed types
+        cuDF will return a DataFrame as it doesn't support mixed types
         under Series yet.
 
         Mixed dtype single row output as a dataframe (pandas results in Series)
