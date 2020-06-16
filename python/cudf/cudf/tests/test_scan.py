@@ -5,15 +5,13 @@ import pandas as pd
 import pytest
 
 from cudf.core.dataframe import DataFrame, Series
-from cudf.tests.utils import assert_eq, gen_rand
-
-params_dtype = [np.int8, np.int16, np.int32, np.int64, np.float32, np.float64]
+from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq, gen_rand
 
 params_sizes = [0, 1, 2, 5]
 
 
 def _gen_params():
-    for t, n in product(params_dtype, params_sizes):
+    for t, n in product(NUMERIC_TYPES, params_sizes):
         if (t == np.int8 or t == np.int16) and n > 20:
             # to keep data in range
             continue
@@ -50,17 +48,19 @@ def test_cumsum(dtype, nelem):
 def test_cumsum_masked():
     data = [1, 2, None, 4, 5]
     float_types = ["float32", "float64"]
-    int_types = ["int8", "int16", "int32", "int64"]
 
     for type_ in float_types:
         gs = Series(data).astype(type_)
         ps = pd.Series(data).astype(type_)
         assert_eq(gs.cumsum(), ps.cumsum())
 
-    for type_ in int_types:
-        expected = pd.Series([1, 3, -1, 7, 12]).astype("int64")
+    for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
-        assert_eq(gs.cumsum(), expected)
+        got = gs.cumsum()
+        expected = pd.Series(
+            [1, 3, got._column.default_na_value(), 7, 12], dtype="int64"
+        )
+        assert_eq(got, expected)
 
 
 @pytest.mark.parametrize("dtype,nelem", list(_gen_params()))
@@ -93,16 +93,17 @@ def test_cummin(dtype, nelem):
 def test_cummin_masked():
     data = [1, 2, None, 4, 5]
     float_types = ["float32", "float64"]
-    int_types = ["int8", "int16", "int32", "int64"]
 
     for type_ in float_types:
         gs = Series(data).astype(type_)
         ps = pd.Series(data).astype(type_)
         assert_eq(gs.cummin(), ps.cummin())
 
-    for type_ in int_types:
-        expected = pd.Series([1, 1, -1, 1, 1]).astype(type_)
+    for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
+        expected = pd.Series(
+            [1, 1, gs._column.default_na_value(), 1, 1]
+        ).astype(type_)
         assert_eq(gs.cummin(), expected)
 
 
@@ -136,16 +137,17 @@ def test_cummax(dtype, nelem):
 def test_cummax_masked():
     data = [1, 2, None, 4, 5]
     float_types = ["float32", "float64"]
-    int_types = ["int8", "int16", "int32", "int64"]
 
     for type_ in float_types:
         gs = Series(data).astype(type_)
         ps = pd.Series(data).astype(type_)
         assert_eq(gs.cummax(), ps.cummax())
 
-    for type_ in int_types:
-        expected = pd.Series([1, 2, -1, 4, 5]).astype(type_)
+    for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
+        expected = pd.Series(
+            [1, 2, gs._column.default_na_value(), 4, 5]
+        ).astype(type_)
         assert_eq(gs.cummax(), expected)
 
 
@@ -179,17 +181,19 @@ def test_cumprod(dtype, nelem):
 def test_cumprod_masked():
     data = [1, 2, None, 4, 5]
     float_types = ["float32", "float64"]
-    int_types = ["int8", "int16", "int32", "int64"]
 
     for type_ in float_types:
         gs = Series(data).astype(type_)
         ps = pd.Series(data).astype(type_)
         assert_eq(gs.cumprod(), ps.cumprod())
 
-    for type_ in int_types:
-        expected = pd.Series([1, 2, -1, 8, 40]).astype("int64")
+    for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
-        assert_eq(gs.cumprod(), expected)
+        got = gs.cumprod()
+        expected = pd.Series(
+            [1, 2, got._column.default_na_value(), 8, 40], dtype="int64"
+        )
+        assert_eq(got, expected)
 
 
 def test_scan_boolean_cumsum():
