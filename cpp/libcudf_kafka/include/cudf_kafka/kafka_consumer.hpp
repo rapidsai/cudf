@@ -16,8 +16,8 @@
 #pragma once
 
 #include <librdkafka/rdkafkacpp.h>
-#include <sys/time.h>
 #include <algorithm>
+#include <chrono>
 #include <cudf/io/datasource.hpp>
 #include <map>
 #include <memory>
@@ -34,17 +34,19 @@ namespace kafka {
 class kafka_consumer : public cudf::io::datasource {
  public:
   /**
-   * @brief Instantiate a Kafka consumer object
+   * @brief Instantiate a Kafka consumer object. Documentation for librdkafka configurations can be
+   *found at https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
    *
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client
    * @param topic_name name of the Kafka topic to consume from
-   * @param partition partition to consume from; 0 - (TOPIC_NUM_PARTITIONS - 1)
+   * @param partition partition index to consume from between `0` and `TOPIC_NUM_PARTITIONS - 1`
+   *inclusive
    * @param start_offset seek position for the specified TOPPAR (Topic/Partition combo)
    * @param end_offset position in the specified TOPPAR to read to
-   * @param batch_timeout maximum read time allowed. If end_offset is not reached before
-   *                      batch_timeout is a smaller subset will be returned
-   * @param delimiter optional delimiter that should be placed between kafka messages, Ex: "\n"
+   * @param batch_timeout maximum (millisecond) read time allowed. If end_offset is not reached
+   *before batch_timeout, a smaller subset will be returned
+   * @param delimiter optional delimiter to insert into the output between kafka messages, Ex: "\n"
    **/
   kafka_consumer(std::map<std::string, std::string> configs,
                  std::string topic_name,
@@ -54,15 +56,34 @@ class kafka_consumer : public cudf::io::datasource {
                  int batch_timeout,
                  std::string delimiter);
 
+  /**
+   * @brief Returns a buffer with a subset of data from Kafka Topic
+   *
+   * @param[in] offset Bytes from the start
+   * @param[in] size Bytes to read
+   *
+   * @return The data buffer
+   */
   std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size) override;
 
+  /**
+   * @brief Returns the size of the data in Kafka buffer
+   *
+   * @return size_t The size of the source data in bytes
+   */
   size_t size() const override;
 
+  /**
+   * @brief Reads a selected range into a preallocated buffer.
+   *
+   * @param[in] offset Bytes from the start
+   * @param[in] size Bytes to read
+   * @param[in] dst Address of the existing host memory
+   *
+   * @return The number of bytes read (can be smaller than size)
+   */
   size_t host_read(size_t offset, size_t size, uint8_t *dst) override;
 
-  /**
-   * @brief Base class destructor
-   **/
   virtual ~kafka_consumer(){};
 
  private:

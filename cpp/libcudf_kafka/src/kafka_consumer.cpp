@@ -16,6 +16,8 @@
 
 #include "cudf_kafka/kafka_consumer.hpp"
 #include <librdkafka/rdkafkacpp.h>
+#include <chrono>
+#include <memory>
 
 namespace cudf {
 namespace io {
@@ -38,29 +40,25 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
 {
   kafka_conf = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
 
-  // Set configs and check for invalids
-  RdKafka::Conf::ConfResult conf_res;
-  std::string errstr;    // Textual representation of Error
-  std::string conf_val;  // String value of a RDKafka configuration request
-
-  for (auto const &x : configs) {
-    conf_res = kafka_conf->set(x.first, x.second, errstr);
-    if (conf_res == RdKafka::Conf::ConfResult::CONF_UNKNOWN) {
-      CUDF_FAIL("'" + x.first + ", is an invalid librdkafka configuration property");
-    } else if (conf_res == RdKafka::Conf::ConfResult::CONF_INVALID) {
-      CUDF_FAIL("'" + x.second +
-                "' contains an invalid configuration value for librdkafka property '" + x.first +
-                "'");
-    }
+  for (auto const &key_value : configs) {
+    std::string error_string;
+    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+                   kafka_conf->set(key_value.first, key_value.second, error_string),
+                 "Invalid Kafka configuration");
+    std::string conf_val;
+    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group_id", conf_val),
+                 "Kafka group.id must be configured");
   }
 
   // Kafka 0.9 > requires group.id in the configuration
-  conf_res = kafka_conf->get("group.id", conf_val);
+  std::string conf_val;
+  RdKafka::Conf::ConfResult conf_res = kafka_conf->get("group.id", conf_val);
   if (conf_res == RdKafka::Conf::ConfResult::CONF_UNKNOWN) {
     CUDF_FAIL(
       "Kafka `group.id` was not supplied in its configuration and is required for operation");
   }
 
+  std::string errstr;
   consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
     RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
 
@@ -92,41 +90,27 @@ RdKafka::ErrorCode kafka_consumer::update_consumer_toppar_assignment(std::string
                                                                      int partition,
                                                                      int64_t offset)
 {
-  std::vector<RdKafka::TopicPartition *> _toppars;
-  _toppars.push_back(RdKafka::TopicPartition::create(topic, partition, offset));
-  return consumer.get()->assign(_toppars);
-}
-
-/**
- * Convenience method for getting "now()" in Kafka's standard format
- **/
-int64_t kafka_consumer::now()
-{
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  return ((int64_t)tv.tv_sec * 1000) + (tv.tv_usec / 1000);
+  std::vector<RdKafka::TopicPartition *> topic_partitions;
+  topic_partitions.push_back(RdKafka::TopicPartition::create(topic, partition, offset));
+  return consumer.get()->assign(topic_partitions);
 }
 
 void kafka_consumer::consume_to_buffer()
 {
-  int64_t messages_read = 0;
-  int64_t batch_size    = end_offset - start_offset;
-  int64_t end           = now() + batch_timeout;
-  int remaining_timeout = batch_timeout;
-
   update_consumer_toppar_assignment(topic_name, partition, start_offset);
 
-  while (messages_read < batch_size) {
-    std::unique_ptr<RdKafka::Message> msg{consumer->consume(remaining_timeout)};
+  int64_t messages_read = 0;
+  auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(batch_timeout);
+
+  while (messages_read < end_offset - start_offset && end > std::chrono::steady_clock::now()) {
+    std::unique_ptr<RdKafka::Message> msg{
+      consumer->consume((end - std::chrono::steady_clock::now()).count())};
 
     if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
       buffer.append(static_cast<char *>(msg->payload()));
       buffer.append(delimiter);
       messages_read++;
     }
-
-    remaining_timeout = end - now();
-    if (remaining_timeout < 0) { break; }
   }
 }
 

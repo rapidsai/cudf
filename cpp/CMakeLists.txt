@@ -813,13 +813,4 @@ if(BUILD_CUDF_KAFKA)
                       COMMAND ctest
                       DEPENDS build_tests_libcudf_kafka)
 
-    ####################################################################################################
-    # - cudf_kafka documentation
-    add_custom_command(OUTPUT CUDF_KAFKA_DOXYGEN
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/doxygen
-                   COMMAND doxygen Doxyfile
-                   VERBATIM)
-
-    add_custom_target(docs_libcudf_kafka DEPENDS CUDF_KAFKA_DOXYGEN)
-
 endif(BUILD_CUDF_KAFKA)
