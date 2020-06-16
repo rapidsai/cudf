@@ -97,10 +97,4 @@ message(STATUS "FlatBuffers installed here: " ${FLATBUFFERS_ROOT})
 set(FLATBUFFERS_INCLUDE_DIR "${FLATBUFFERS_ROOT}/include")
 set(FLATBUFFERS_LIBRARY_DIR "${FLATBUFFERS_ROOT}/lib")
 
-file(INSTALL ${ARROW_INCLUDE_DIR}/arrow/gpu DESTINATION include/arrow)
-
-install(DIRECTORY ${ARROW_INCLUDE_DIR}/arrow/gpu
-    DESTINATION include/arrow
-    COMPONENT cudf)
-
 add_definitions(-DARROW_METADATA_V4)
