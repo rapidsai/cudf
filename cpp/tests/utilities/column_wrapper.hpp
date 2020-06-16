@@ -377,6 +377,31 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
     : fixed_width_column_wrapper(std::cbegin(element_list), std::cend(element_list), v)
   {
   }
+
+  /**
+   * @brief Construct a nullable column of the fixed-width elements in the range
+   * `[begin,end)` using a validity initializer list to indicate the validity of each element.
+   *
+   * The validity of each element is determined by an `initializer_list` of
+   * booleans where `true` indicates the element is valid, and `false` indicates
+   * the element is null.
+   *
+   * Example:
+   * ```c++
+   * // Creates a nullable column of INT32 elements with 5 elements: {null, 1, null, 3, null}
+   * fixed_width_column_wrapper<int32_t> w(elements, elements + 5, {0, 1, 0, 1, 0});
+   *
+   * @param begin The beginning of the sequence of elements
+   * @param end The end of the sequence of elements
+   * @param validity The list of validity indicator booleans
+   **/
+  template <typename InputIterator>
+  fixed_width_column_wrapper(InputIterator begin,
+                             InputIterator end,
+                             std::initializer_list<bool> const& validity)
+    : fixed_width_column_wrapper(begin, end, std::cbegin(validity))
+  {
+  }
 };
 
 /**
