@@ -549,46 +549,32 @@ struct datetime_formatter {
       return;
     }
     if (units == timestamp_units::minutes) {
-      auto const hour      = scale_time(timestamp, 60);
-      timeparts[TP_HOUR]   = modulo_time(hour, 24);
+      timeparts[TP_HOUR]   = modulo_time(scale_time(timestamp, 60), 24);
       timeparts[TP_MINUTE] = modulo_time(timestamp, 60);
       return;
     }
     if (units == timestamp_units::seconds) {
-      auto const hour      = scale_time(timestamp, 3600);
-      auto const minute    = scale_time(timestamp, 60);
-      timeparts[TP_HOUR]   = modulo_time(hour, 24);
-      timeparts[TP_MINUTE] = modulo_time(minute, 60);
+      timeparts[TP_HOUR]   = modulo_time(scale_time(timestamp, 3600), 24);
+      timeparts[TP_MINUTE] = modulo_time(scale_time(timestamp, 60), 60);
       timeparts[TP_SECOND] = modulo_time(timestamp, 60);
       return;
     }
 
-    // common utility for setting time from a subsecond unit value
-    auto subsecond_fn = [&](int64_t hour, int64_t minute, int64_t second, int64_t subsecond_base) {
-      timeparts[TP_HOUR]      = modulo_time(scale_time(hour, 3600), 24);
-      timeparts[TP_MINUTE]    = modulo_time(scale_time(minute, 60), 60);
-      timeparts[TP_SECOND]    = modulo_time(second, 60);
+    // common utility for setting time components from a subsecond unit value
+    auto subsecond_fn = [&](int64_t subsecond_base) {
       timeparts[TP_SUBSECOND] = modulo_time(timestamp, subsecond_base);
+      timestamp               = timestamp / subsecond_base;
+      timeparts[TP_HOUR]      = modulo_time(scale_time(timestamp, 3600), 24);
+      timeparts[TP_MINUTE]    = modulo_time(scale_time(timestamp, 60), 60);
+      timeparts[TP_SECOND]    = modulo_time(timestamp, 60);
     };
 
-    auto hour   = timestamp / 1000;
-    auto minute = timestamp / 1000;
-    auto second = timestamp / 1000;
-    if (units == timestamp_units::ms) {
-      subsecond_fn(hour, minute, second, 1000);
-      return;
-    }
-    hour   = hour / 1000;
-    minute = minute / 1000;
-    second = second / 1000;
-    if (units == timestamp_units::us) {
-      subsecond_fn(hour, minute, second, 1000000);
-      return;
-    }
-    hour   = hour / 1000;
-    minute = minute / 1000;
-    second = second / 1000;
-    subsecond_fn(hour, minute, second, 1000000000);
+    if (units == timestamp_units::ms)
+      subsecond_fn(1000);
+    else if (units == timestamp_units::us)
+      subsecond_fn(1000000);
+    else
+      subsecond_fn(1000000000);
   }
 
   // utility to create 0-padded integers (up to 9 chars)
