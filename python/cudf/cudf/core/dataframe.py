@@ -3253,7 +3253,7 @@ class DataFrame(Frame, Serializable):
 
         Notes
         -----
-        DataFrames merges in cuDF results in a non-deterministic row ordering.
+        DataFrames merges in cuDF result in non-deterministic row ordering.
 
         Examples
         --------
