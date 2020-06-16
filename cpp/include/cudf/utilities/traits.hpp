@@ -63,22 +63,6 @@ template <typename L, typename R>
 struct is_equality_comparable_impl<L, R, void_t<equality_comparable<L, R>>> : std::true_type {
 };
 
-/**
- * @brief Indicates whether class `C` is templated instance of template class `T`
- *
- * Example: is_template<std::vector, std::vector<int>>::value
- *
- * @tparam class T Template Class Type
- * @tparam class C Templated Instance of a Class Type
- */
-template <template <class...> class T, class C>
-struct is_template_of : std::false_type {
-};
-
-template <template <class...> class T, class... Args>
-struct is_template_of<T, T<Args...>> : std::true_type {
-};
-
 template <typename T>
 using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>,
                                               std::is_same<cudf::timestamp_s, T>,
