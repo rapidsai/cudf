@@ -100,6 +100,7 @@
 - PR #5480 Fix merge sort docs
 - PR #5465 Fix benchmark out of memory errors due to multiple initialization
 - PR #5472 Fix str concat issue with indexed series
+- PR #5478 Fix `loc` and `iloc` doc
 - PR #5484 Ensure flat index after groupby if nlevels == 1
 
 
