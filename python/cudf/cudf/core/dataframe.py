@@ -3223,7 +3223,7 @@ class DataFrame(Frame, Serializable):
               outer join.
             - right : not supported.
             - outer : use union of keys from both frames, similar to a SQL
-              full outer join; sort keys lexicographically.
+              full outer join.
             - inner: use intersection of keys from both frames, similar to
               a SQL inner join.
         left_on : label or list, or array-like
