@@ -3591,6 +3591,27 @@ class StringMethods(object):
         delimiter : str
             The character used to locate the tokens of each string.
             Default is whitespace.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["this is me", "theme music", ""])
+        >>> targets = cudf.Series(["is", "me"])
+        >>> sr.str.replace_tokens(targets=targets, replacements="_")
+        0       this _ _
+        1    theme music
+        2
+        dtype: object
+        >>> sr = cudf.Series(["this;is;me", "theme;music", ""])
+        >>> sr.str.replace_tokens(targets=targets, replacements=":")
+        0     this;is;me
+        1    theme;music
+        2
+        dtype: object
         """
         if can_convert_to_column(targets):
             targets_column = column.as_column(targets)
