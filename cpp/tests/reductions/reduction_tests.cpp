@@ -230,59 +230,68 @@ TYPED_TEST(ReductionTest, SumOfSquare)
                        cudf::make_sum_of_squares_aggregation());
 }
 
-// TODO TYPED_TEST case for AllTypes
+template <typename T>
 struct ReductionAnyAllTest : public ReductionTest<bool> {
   ReductionAnyAllTest() {}
   ~ReductionAnyAllTest() {}
 };
 
-TEST_F(ReductionAnyAllTest, AnyAllTrueTrue)
+TYPED_TEST_CASE(ReductionAnyAllTest, cudf::test::NumericTypes);
+
+TYPED_TEST(ReductionAnyAllTest, AnyAllTrueTrue)
 {
-  using T = bool;
+  using T = TypeParam;
   std::vector<int> int_values({true, true, true, true});
   std::vector<bool> host_bools({1, 1, 0, 1});
-  std::vector<T> v = convert_values<bool>(int_values);
+  std::vector<T> v = convert_values<T>(int_values);
 
   // Min/Max succeeds for any gdf types including
   // non-arithmetic types (date32, date64, timestamp, category)
   bool result_error = true;
   bool expected     = true;
+  cudf::data_type output_dtype(cudf::BOOL8);
 
   // test without nulls
-  cudf::test::fixed_width_column_wrapper<bool> col(v.begin(), v.end());
+  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
 
-  this->reduction_test(col, expected, result_error, cudf::make_any_aggregation());
-  this->reduction_test(col, expected, result_error, cudf::make_all_aggregation());
+  this->reduction_test(col, expected, result_error, cudf::make_any_aggregation(), output_dtype);
+  this->reduction_test(col, expected, result_error, cudf::make_all_aggregation(), output_dtype);
 
   // test with nulls
-  cudf::test::fixed_width_column_wrapper<bool> col_nulls = construct_null_column(v, host_bools);
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
 
-  this->reduction_test(col_nulls, expected, result_error, cudf::make_any_aggregation());
-  this->reduction_test(col_nulls, expected, result_error, cudf::make_all_aggregation());
+  this->reduction_test(
+    col_nulls, expected, result_error, cudf::make_any_aggregation(), output_dtype);
+  this->reduction_test(
+    col_nulls, expected, result_error, cudf::make_all_aggregation(), output_dtype);
 }
 
-TEST_F(ReductionAnyAllTest, AnyAllFalseFalse)
+TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
 {
+  using T = TypeParam;
   std::vector<int> int_values({false, false, false, false});
   std::vector<bool> host_bools({1, 1, 0, 1});
-  std::vector<bool> v = convert_values<bool>(int_values);
+  std::vector<T> v = convert_values<T>(int_values);
 
   // Min/Max succeeds for any gdf types including
   // non-arithmetic types (date32, date64, timestamp, category)
   bool result_error = true;
   bool expected     = false;
+  cudf::data_type output_dtype(cudf::BOOL8);
 
   // test without nulls
-  cudf::test::fixed_width_column_wrapper<bool> col(v.begin(), v.end());
+  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
 
-  this->reduction_test(col, expected, result_error, cudf::make_any_aggregation());
-  this->reduction_test(col, expected, result_error, cudf::make_all_aggregation());
+  this->reduction_test(col, expected, result_error, cudf::make_any_aggregation(), output_dtype);
+  this->reduction_test(col, expected, result_error, cudf::make_all_aggregation(), output_dtype);
 
   // test with nulls
-  cudf::test::fixed_width_column_wrapper<bool> col_nulls = construct_null_column(v, host_bools);
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
 
-  this->reduction_test(col_nulls, expected, result_error, cudf::make_any_aggregation());
-  this->reduction_test(col_nulls, expected, result_error, cudf::make_all_aggregation());
+  this->reduction_test(
+    col_nulls, expected, result_error, cudf::make_any_aggregation(), output_dtype);
+  this->reduction_test(
+    col_nulls, expected, result_error, cudf::make_all_aggregation(), output_dtype);
 }
 
 // ----------------------------------------------------------------------------
@@ -588,9 +597,9 @@ TEST_F(ReductionErrorTest, empty_column)
     EXPECT_EQ(result->is_valid(), false);
   };
 
-  // test input column is nullptr, reduction throws an error if input is nullptr
-  // TODO(karthikeyann) invalid column_view
-  // EXPECT_ANY_THROW(statement(nullptr));
+  // default column_view{} is an empty column
+  // empty column_view
+  CUDF_EXPECT_NO_THROW(statement(cudf::column_view{}));
 
   // test if the size of input column is zero
   // expect result.is_valid() is false
