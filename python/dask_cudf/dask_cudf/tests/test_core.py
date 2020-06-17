@@ -530,7 +530,7 @@ def test_concat(gdf, gddf, series):
             .compute()
             .sort_values()
             .reset_index(drop=True)
-    )
+        )
     else:
         a = (
             cudf.concat([gdf, gdf + 1, gdf + 2])
