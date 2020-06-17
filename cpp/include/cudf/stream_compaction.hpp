@@ -260,7 +260,7 @@ cudf::size_type unique_count(column_view const& input,
                              nan_policy nan_handling);
 
 /**
- * @brief Count the unique rows in a table. 
+ * @brief Count the unique rows in a table.
  *
  *
  * @param[in] input Table whose unique rows will be counted.
