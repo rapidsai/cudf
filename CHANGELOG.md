@@ -17,7 +17,8 @@
 - PR #5364 Validate array interface during buffer construction
 - PR #5418 Add support for `DataFrame.info`
 - PR #5425 Add Python `Groupby.rolling()`
-- PR #5359 Add duration types
+- PR #5359 Add duration types 
+- PR #5434 Add nvtext function generate_character_grams
 - PR #5442 Add support for `cudf.isclose`
 - PR #5444 Remove usage of deprecated RMM APIs and headers.
 - PR #5463 Add `.str.byte_count` python api and cython(bindings)
@@ -73,6 +74,7 @@
 - PR #5483 Add NVTX range calls to dictionary APIs
 - PR #5477 Add `is_index_type` trait 
 - PR #5487 Use sorted lists instead of sets for pytest parameterization
+- PR #5491 allow build libcudf in custom dir
 
 ## Bug Fixes
 
