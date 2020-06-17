@@ -210,6 +210,7 @@ struct scatter_gather_functor {
     cudf::size_type const& output_size,
     cudf::size_type const* block_offsets,
     Filter filter,
+    cudf::size_type per_thread,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream                 = 0)
   {
@@ -236,6 +237,7 @@ struct scatter_gather_functor {
     cudf::size_type const& output_size,
     cudf::size_type const* block_offsets,
     Filter filter,
+    cudf::size_type per_thread,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream                 = 0)
   {
@@ -248,8 +250,6 @@ struct scatter_gather_functor {
     auto scatter = (has_valid) ? scatter_kernel<T, Filter, block_size, true>
                                : scatter_kernel<T, Filter, block_size, false>;
 
-    cudf::size_type per_thread =
-      cudf::detail::elements_per_thread(scatter, input.size(), block_size);
     cudf::detail::grid_1d grid{input.size(), block_size, per_thread};
 
     rmm::device_scalar<cudf::size_type> null_count{0, stream};
@@ -360,6 +360,7 @@ std::unique_ptr<table> copy_if(
                                    output_size,
                                    thrust::raw_pointer_cast(block_offsets),
                                    filter,
+                                   per_thread,
                                    mr,
                                    stream);
     });
