@@ -386,7 +386,20 @@ class ColumnBase(Column, Serializable):
             )
 
     def view(self, dtype):
-        dtype = np.dtype(dtype)
+        """
+        View the data underlying a column as different dtype.
+        
+        Parameters	
+        ----------
+        dtype : NumPy dtype, string
+            The dtype to view the data as
+        
+        """
+        if self.null_count > 0:
+            raise ValueError("Can not produce a view of a column with nulls")
+        dtype=np.dtype(dtype)
+        if self.data.size % dtype.itemsize:
+            raise TypeError('Source data size must be an even multiple of view data size')
         return as_column(self.data, dtype=dtype)
 
     def element_indexing(self, index):
