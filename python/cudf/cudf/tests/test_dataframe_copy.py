@@ -8,7 +8,7 @@ import pytest
 from numba import cuda
 
 from cudf.core.dataframe import DataFrame
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import ALL_TYPES, assert_eq
 
 
 """
@@ -92,19 +92,7 @@ expected_equality
     ],
 )
 @pytest.mark.parametrize("ncols", [0, 1, 10])
-@pytest.mark.parametrize(
-    "data_type",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "category",
-        "datetime64[ms]",
-    ],
-)
+@pytest.mark.parametrize("data_type", ALL_TYPES)
 def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
     pdf = pd.DataFrame()
     for i in range(ncols):
@@ -127,19 +115,7 @@ def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
     ],
 )
 @pytest.mark.parametrize("ncols", [0, 1, 10])
-@pytest.mark.parametrize(
-    "data_type",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "category",
-        "datetime64[ms]",
-    ],
-)
+@pytest.mark.parametrize("data_type", ALL_TYPES)
 def test_cudf_dataframe_copy_then_insert(copy_fn, ncols, data_type):
     pdf = pd.DataFrame()
     for i in range(ncols):

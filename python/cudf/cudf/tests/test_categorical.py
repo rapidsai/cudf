@@ -50,7 +50,7 @@ def test_categorical_integer():
     pdsr = pd.Series(cat)
     sr = Series(cat)
     np.testing.assert_array_equal(
-        cat.codes, sr.cat.codes.to_array(fillna="pandas")
+        cat.codes, sr.cat.codes.fillna(-1).to_array()
     )
     assert sr.null_count == 2
 
@@ -552,7 +552,8 @@ def test_categorical_set_categories_categoricals(data, new_categories):
         ["a", "1", "2", "1", "a"],
         pd.Series(["a", "1", "22", "1", "aa"]),
         pd.Series(["a", "1", "22", "1", "aa"], dtype="category"),
-        pd.Series([1, 2, 3, 4], dtype="int64"),
+        pd.Series([1, 2, 3, -4], dtype="int64"),
+        pd.Series([1, 2, 3, 4], dtype="uint64"),
         pd.Series([1, 2.3, 3, 4], dtype="float"),
         [None, 1, None, 2, None],
         [],
