@@ -97,7 +97,7 @@ struct simple_op {
 
   /**
    * @brief Get transformer functor for transforming input column pair iterator
-   * which inturn is used by reduction binary operator
+   * which is used by reduction binary operator
    *
    * @tparam ResultType output type for element transformer
    *
