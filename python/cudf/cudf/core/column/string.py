@@ -3574,7 +3574,7 @@ class StringMethods(object):
 
     def replace_tokens(self, targets, replacements, delimiter=None, **kwargs):
         """
-        The targets tokens are searched for within each strins in the series
+        The targets tokens are searched for within each string in the series
         and replaced with the corresponding replacements if found.
         Tokens are identified by the delimiter character provided.
 

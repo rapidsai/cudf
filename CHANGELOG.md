@@ -23,7 +23,6 @@
 - PR #5463 Add `.str.byte_count` python api and cython(bindings)
 - PR #5488 Add plumbings for `.str.replace_tokens`
 
-
 ## Improvements
 
 - PR #5486 Link Boost libraries statically in the Java build
