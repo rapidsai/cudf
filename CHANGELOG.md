@@ -65,7 +65,8 @@
 - PR #5437 Improve libcudf join documentation
 - PR #5458 Install meta packages for dependencies
 - PR #5467 Move doc customization scripts to Jenkins
-- PR #5477 Add `is_index_type` trait 
+- PR #5477 Add `is_index_type` trait
+- PR #5501 Adding only unsigned types support for categorical column codes
 
 ## Bug Fixes
 
