@@ -19,7 +19,6 @@
 - PR #5425 Add Python `Groupby.rolling()`
 - PR #5359 Add duration types 
 - PR #5434 Add nvtext function generate_character_grams
-- PR #5359 Add duration types
 - PR #5442 Add support for `cudf.isclose`
 - PR #5444 Remove usage of deprecated RMM APIs and headers.
 - PR #5463 Add `.str.byte_count` python api and cython(bindings)
