@@ -3987,6 +3987,10 @@ class StringColumn(column.ColumnBase):
     def _mimic_inplace(self, other_col, inplace=False):
         out = super()._mimic_inplace(other_col, inplace=inplace)
         return out
+    
+    def view(self, dtype):
+        return self.children[1].view(dtype)
+
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")

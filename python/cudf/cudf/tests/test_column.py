@@ -157,6 +157,7 @@ def test_column_chunked_array_creation():
         (np.arange(2), "float32", "int64"),
         (np.arange(8), "int8", "datetime64[ns]"),
         (np.arange(16), "int8", "datetime64[ns]"),
+        (np.array(['a']), 'str' , 'int8')
     ],
 )
 def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
@@ -169,7 +170,11 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
     got = cudf.Series(gpu_data_view, dtype=gpu_data_view.dtype)
 
-    assert gpu_data.data.ptr == got._column.data.ptr
+    if from_dtype == 'str':
+        gpu_ptr = gpu_data.children[1].data.ptr
+    else:
+        gpu_ptr = gpu_data.data.ptr
+    assert gpu_ptr == got._column.data.ptr
     assert_eq(expect, got)
 
 
