@@ -116,7 +116,7 @@ set(SCALAR_TEST_SRC
 ConfigureTest(SCALAR_TEST "${SCALAR_TEST_SRC}")
 
 ###################################################################################################
-# - timestamps tests ----------------------------------------------------------------------------------
+# - timestamps tests ------------------------------------------------------------------------------
 
 set(TIMESTAMPS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/timestamps_test.cu")
@@ -188,7 +188,7 @@ set(HASHING_TEST_SRC
 ConfigureTest(HASHING_TEST "${HASHING_TEST_SRC}")
 
 ###################################################################################################
-# - partitioning tests ---------------------------------------------------------------------------------
+# - partitioning tests ----------------------------------------------------------------------------
 
 set(PARTITIONING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/hash_partition_test.cpp"
@@ -225,7 +225,7 @@ set(REDUCTION_TEST_SRC
 ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
 
 ###################################################################################################
-# - replace tests --------------------------------------------------------------------------
+# - replace tests ---------------------------------------------------------------------------------
 
 set(REPLACE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cu")
@@ -434,7 +434,7 @@ set(ROLLING_TEST_SRC
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 ###################################################################################################
-# - grouped rolling tests ---------------------------------------------------------------------------------
+# - grouped rolling tests -------------------------------------------------------------------------
 
 set(GROUPED_ROLLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/grouped_rolling/grouped_rolling_test.cpp")
@@ -528,7 +528,7 @@ set(STRINGS_TEST_SRC
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 
 ###################################################################################################
-# - nvtext test ----------------------------------------------------------------------------------
+# - nvtext test -----------------------------------------------------------------------------------
 
 set(TEXT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tests.cpp"
@@ -551,7 +551,7 @@ set(BITMASK_TEST_SRC
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
 ###################################################################################################
-# - dictionary tests ---------------------------------------------------------------------------------
+# - dictionary tests ------------------------------------------------------------------------------
 
 set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/add_keys_test.cpp"
