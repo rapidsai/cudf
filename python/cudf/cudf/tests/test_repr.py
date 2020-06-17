@@ -9,7 +9,7 @@ from hypothesis import given, settings
 import cudf
 from cudf.tests import utils
 
-repr_categories = utils.NUMERIC_TYPES | {"str", "category", "datetime64[ns]"}
+repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
