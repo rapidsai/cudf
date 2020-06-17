@@ -24,6 +24,7 @@
 
 ## Improvements
 
+- PR #5492 compile_udf: compile straight to PTX instead of using @jit
 - PR #5486 Link Boost libraries statically in the Java build
 - PR #5479 Link Arrow libraries statically
 - PR #5414 Use new release of Thrust/CUB in the JNI build
