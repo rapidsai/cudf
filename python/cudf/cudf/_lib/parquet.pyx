@@ -147,7 +147,7 @@ cpdef generate_pandas_metadata(Table table, index):
     json_str = md.decode("utf-8")
     return json_str
 
-cpdef read_parquet(filepath_or_buffer, columns=None, row_group_list=None,
+cpdef read_parquet(filepaths_or_buffers, columns=None, row_group_list=None,
                    skip_rows=None, num_rows=None, strings_to_categorical=False,
                    use_pandas_metadata=True):
     """
@@ -160,7 +160,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group_list=None,
     """
 
     cdef cudf_io_types.source_info source = make_source_info(
-        filepath_or_buffer)
+        filepaths_or_buffers)
 
     # Setup parquet reader arguments
     cdef read_parquet_args args = read_parquet_args(source)

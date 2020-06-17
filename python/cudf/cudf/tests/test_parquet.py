@@ -420,6 +420,20 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
 
     assert_eq(expect, got)
 
+def test_parquet_reader_multiple_files(tmpdir):
+    test_pdf1 = make_pdf(nrows=1000, nvalids=1000 // 4)
+    test_pdf2 = make_pdf(nrows=500)
+    expect = pd.concat([test_pdf1, test_pdf2])
+
+    fname1 = tmpdir.join("multi1.parquet")
+    test_pdf1.to_parquet(fname1, engine="pyarrow")
+    fname2 = tmpdir.join("multi2.parquet")
+    test_pdf2.to_parquet(fname2, engine="pyarrow")
+
+    got = cudf.read_parquet([fname1, fname2])
+
+    assert_eq(expect, got)
+
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):

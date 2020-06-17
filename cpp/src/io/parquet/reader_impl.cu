@@ -704,6 +704,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
     // Association between each column chunk and its column
     std::vector<int> chunk_col_map(num_chunks);
+    // Association between each column chunk and its source
     std::vector<size_type> chunk_source_map(num_chunks);
 
     // Tracker for eventually deallocating compressed and uncompressed data
@@ -769,7 +770,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                            col_schema.decimal_scale,
                                            clock_rate));
 
-        // Map each column chunk to its column index
+        // Map each column chunk to its column index and its source index
         chunk_col_map[chunks.size() - 1]    = i;
         chunk_source_map[chunks.size() - 1] = row_group_source;
 

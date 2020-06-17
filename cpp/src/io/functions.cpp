@@ -37,13 +37,14 @@ std::unique_ptr<reader> make_reader(source_info const& source,
   }
   if (source.type == io_type::HOST_BUFFER) {
     return std::make_unique<reader>(
-      cudf::io::datasource::create(source.buffer.first, source.buffer.second), options, mr);
+      cudf::io::datasource::create(source.buffers[0].data, source.buffers[0].size), options, mr);
   }
   if (source.type == io_type::ARROW_RANDOM_ACCESS_FILE) {
-    return std::make_unique<reader>(cudf::io::datasource::create(source.file), options, mr);
+    return std::make_unique<reader>(cudf::io::datasource::create(source.files[0]), options, mr);
   }
   if (source.type == io_type::USER_IMPLEMENTED) {
-    return std::make_unique<reader>(cudf::io::datasource::create(source.user_source), options, mr);
+    return std::make_unique<reader>(
+      cudf::io::datasource::create(source.user_sources[0]), options, mr);
   }
   CUDF_FAIL("Unsupported source type");
 }
