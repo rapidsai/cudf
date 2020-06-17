@@ -154,12 +154,13 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     cpu_data = np.asarray(data, dtype=from_dtype)
     gpu_data = as_column(data, dtype=from_dtype)
 
-    cpu_data = cpu_data.view(to_dtype)
-    gpu_data = gpu_data.view(to_dtype)
+    cpu_data_view = cpu_data.view(to_dtype)
+    gpu_data_view = gpu_data.view(to_dtype)
 
-    expect = cudf.Series(gpu_data, dtype=gpu_data.dtype)
-    got = pd.Series(cpu_data, dtype=cpu_data.dtype)
+    expect = cudf.Series(gpu_data_view, dtype=gpu_data_view.dtype)
+    got = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
 
+    assert gpu_data.data.ptr == expect._column.data.ptr
     assert_eq(expect, got)
 
 
