@@ -166,9 +166,7 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
   // from level N-1 above us can be released
   parent.base_offsets.release();
 
-  // the nesting case.  we have to recurse through the hierarchy, but we can't do that via
-  // templates, so we can't pass an iterator.  so we will pass the data needed (gather_data)
-  // to create the necessary iterator, and the functions will build the iterator themselves.
+  // the nesting case.
   if (list.child().type() == cudf::data_type{LIST}) {
     // gather children.
     auto child = gather_list_nested(list.child(), gd, stream, mr);

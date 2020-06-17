@@ -270,9 +270,17 @@ struct column_gatherer_impl<list_view, MapItRoot> {
    * @brief Gather a list column from a hierarchy of list columns. This is the start
    * of the recursion - we will only ever get in here once.
    *
-   * This function is almost identical to gather_list_nested() but this similarity
-   * is a necessary evil to handle the recursive nature of the operation. This functor
-   * is called in a templated way, but we can't continue doing that for the nesting.
+   * This function is looks similar to gather_list_nested() but the difference is
+   * significant.  This particular level takes a templated gather map iterator of
+   * any type.  As we start recursing, we need to be able to generate new gather
+   * maps for each level.  To do this requires manifesting a buffer of intermediate
+   * data. If we were to do that at level N and then wrap it in an anonymous iterator
+   * to be passed to level N+1, these buffers of data would remain resident for the
+   * entirety of the recursion.  But if level N+1 could create it's own iterator
+   * internally from a buffer passed to it by level N, it could then -delete- that
+   * buffer of data after using it, keeping the amount of extra memory needed
+   * to a minimum. see comment on "memory optimization" inside cudf::list::gather_list_nested
+   *
    * The tree of calls can be visualized like this:
    *
    * R :  this operator
@@ -322,9 +330,7 @@ struct column_gatherer_impl<list_view, MapItRoot> {
     column_view offsets_v(*offset_result.first);
     lists::detail::gather_data gd{offsets_v.data<size_type>(), std::move(offset_result.second)};
 
-    // the nesting case.  we have to recurse through the hierarchy, but we can't do that via
-    // templates, so we can't pass an iterator.  so instead call a function that can build it's own
-    // iterator that does the same thing as -this- function.
+    // the nesting case.
     if (list.child().type() == cudf::data_type{LIST}) {
       // gather children
       auto child = lists::detail::gather_list_nested(list.child(), gd, stream, mr);
