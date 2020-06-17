@@ -24,6 +24,7 @@
 
 ## Improvements
 
+- PR #5486 Link Boost libraries statically in the Java build
 - PR #5479 Link Arrow libraries statically
 - PR #5414 Use new release of Thrust/CUB in the JNI build
 - PR #5403 Update required CMake version to 3.14 in contribution guide
@@ -64,11 +65,15 @@
 - PR #5429 Improve text wrapping in libcudf documentation
 - PR #5443 Remove unused `is_simple` trait
 - PR #5441 Update Java HostMemoryBuffer to only load native libs when necessary
+- PR #5452 Add support for strings conversion using negative timestamps
 - PR #5437 Improve libcudf join documentation
 - PR #5458 Install meta packages for dependencies
 - PR #5467 Move doc customization scripts to Jenkins
 - PR #5468 Add cudf::unique_count(table_view)
+- PR #5482 Use rmm::device_uvector in place of rmm::device_vector in copy_if
+- PR #5483 Add NVTX range calls to dictionary APIs
 - PR #5477 Add `is_index_type` trait 
+- PR #5487 Use sorted lists instead of sets for pytest parameterization
 
 ## Bug Fixes
 
@@ -101,6 +106,7 @@
 - PR #5480 Fix merge sort docs
 - PR #5465 Fix benchmark out of memory errors due to multiple initialization
 - PR #5472 Fix str concat issue with indexed series
+- PR #5478 Fix `loc` and `iloc` doc
 - PR #5484 Ensure flat index after groupby if nlevels == 1
 
 

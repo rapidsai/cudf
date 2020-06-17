@@ -444,9 +444,29 @@ struct datetime_formatter {
       return;
     }
 
+    // Specialized modulo expression that handles negative values.
+    // Examples:
+    //     modulo(1,60)    1
+    //     modulo(-1,60)  59
+    auto modulo_time = [](int64_t time, int64_t base) {
+      return static_cast<int32_t>(((time % base) + base) % base);
+    };
+
+    // This function handles converting units by dividing and adjusting for negative values.
+    // Examples:
+    //     scale(-61,60)  -2
+    //     scale(-60,60)  -1
+    //     scale(-59,60)  -1
+    //     scale( 59,60)   0
+    //     scale( 60,60)   1
+    //     scale( 61,60)   1
+    auto scale_time = [](int64_t time, int64_t base) {
+      return static_cast<int32_t>((time - ((time < 0) * (base - 1L))) / base);
+    };
+
     if (units == timestamp_units::months) {
-      int32_t month       = static_cast<int32_t>(timestamp % 12);
-      int32_t year        = static_cast<int32_t>(timestamp / 12) + 1970;
+      int32_t month       = modulo_time(timestamp, 12);
+      int32_t year        = scale_time(timestamp, 12) + 1970;
       timeparts[TP_YEAR]  = year;
       timeparts[TP_MONTH] = month + 1;  // months start at 1 and not 0
       timeparts[TP_DAY]   = 1;
@@ -456,27 +476,23 @@ struct datetime_formatter {
     // first, convert to days so we can handle months, leap years, etc.
     int32_t days = static_cast<int32_t>(timestamp);  // default to days
     if (units == timestamp_units::hours)
-      days = static_cast<int32_t>(timestamp / 24L);
+      days = scale_time(timestamp, 24L);
     else if (units == timestamp_units::minutes)
-      days = static_cast<int32_t>(timestamp / 1440L);  // 24*60
+      days = scale_time(timestamp, 1440L);  // 24*60
     else if (units == timestamp_units::seconds)
-      days = static_cast<int32_t>(timestamp / 86400L);  // 24*60*60
+      days = scale_time(timestamp, 86400L);  // 24*60*60
     else if (units == timestamp_units::ms)
-      days = static_cast<int32_t>(timestamp / 86400000L);
+      days = scale_time(timestamp, 86400000L);
     else if (units == timestamp_units::us)
-      days = static_cast<int32_t>(timestamp / 86400000000L);
+      days = scale_time(timestamp, 86400000000L);
     else if (units == timestamp_units::ns)
-      days = static_cast<int32_t>(timestamp / 86400000000000L);
+      days = scale_time(timestamp, 86400000000000L);
     days = days + 719468;  // 719468 is days between 0000-00-00 and 1970-01-01
 
-    constexpr int32_t daysInEra     = 146097;  // (400*365)+97
-    constexpr int32_t daysInCentury = 36524;   // (100*365) + 24;
-    constexpr int32_t daysIn4Years  = 1461;    // (4*365) + 1;
-    constexpr int32_t daysInYear    = 365;
-    // The months are shifted so that March is the starting month and February
-    // (with possible leap day in it) is the last month for the linear calculation.
-    // Day offsets for each month:   Mar Apr May June July  Aug Sep  Oct  Nov  Dec  Jan  Feb
-    const int32_t monthDayOffset[] = {0, 31, 61, 92, 122, 153, 184, 214, 245, 275, 306, 337, 366};
+    int32_t const daysInEra     = 146097;  // (400*365)+97
+    int32_t const daysInCentury = 36524;   // (100*365) + 24;
+    int32_t const daysIn4Years  = 1461;    // (4*365) + 1;
+    int32_t const daysInYear    = 365;
 
     // code logic handles leap years in chunks: 400y,100y,4y,1y
     int32_t year  = 400 * (days / daysInEra);
@@ -498,14 +514,17 @@ struct datetime_formatter {
     }
     year += leapy;
 
-    //
-    int32_t month = 12;
-    for (int32_t idx = 0; idx < month; ++idx) {  // find the month
-      if (days < monthDayOffset[idx + 1]) {
-        month = idx;
-        break;
-      }
-    }
+    // The months are shifted so that March is the starting month and February
+    // (with possible leap day in it) is the last month for the linear calculation.
+    // Day offsets for each month:   Mar Apr May June July Aug Sep  Oct  Nov  Dec  Jan  Feb
+    const int32_t monthDayOffset[] = {0, 31, 61, 92, 122, 153, 184, 214, 245, 275, 306, 337, 366};
+    // find month from days
+    int32_t month = [days, monthDayOffset] {
+      // find first offset that is bigger than days
+      auto itr = thrust::find_if(
+        thrust::seq, monthDayOffset, (monthDayOffset + 13), [days](auto d) { return days < d; });
+      return itr != (monthDayOffset + 13) ? thrust::distance(monthDayOffset, itr - 1) : 12;
+    }();
 
     // compute day of the year and account for calculating with March being the first month
     // for month >= 10, leap-day has been already been included
@@ -514,7 +533,7 @@ struct datetime_formatter {
                                   : days + /*Jan=*/31 + /*Feb=*/28 + 1 +  // 2-month shift
                                       ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
 
-    int32_t day = days - monthDayOffset[month] + 1;  // compute day of month
+    int32_t const day = days - monthDayOffset[month] + 1;  // compute day of month
     if (month >= 10) ++year;
     month = ((month + 2) % 12) + 1;  // adjust Jan-Mar offset
 
@@ -523,54 +542,39 @@ struct datetime_formatter {
     timeparts[TP_DAY]   = day;
     if (units == timestamp_units::days) return;
 
-    // done with date
-    // now work on time
-    int64_t hour = timestamp, minute = timestamp, second = timestamp;
+    // done with date, now work on time
+
     if (units == timestamp_units::hours) {
-      timeparts[TP_HOUR] = static_cast<int32_t>(hour % 24);
+      timeparts[TP_HOUR] = modulo_time(timestamp, 24);
       return;
     }
-    hour = hour / 60;
     if (units == timestamp_units::minutes) {
-      timeparts[TP_HOUR]   = static_cast<int32_t>(hour % 24);
-      timeparts[TP_MINUTE] = static_cast<int32_t>(minute % 60);
+      timeparts[TP_HOUR]   = modulo_time(scale_time(timestamp, 60), 24);
+      timeparts[TP_MINUTE] = modulo_time(timestamp, 60);
       return;
     }
-    hour   = hour / 60;
-    minute = minute / 60;
     if (units == timestamp_units::seconds) {
-      timeparts[TP_HOUR]   = static_cast<int32_t>(hour % 24);
-      timeparts[TP_MINUTE] = static_cast<int32_t>(minute % 60);
-      timeparts[TP_SECOND] = static_cast<int32_t>(second % 60);
+      timeparts[TP_HOUR]   = modulo_time(scale_time(timestamp, 3600), 24);
+      timeparts[TP_MINUTE] = modulo_time(scale_time(timestamp, 60), 60);
+      timeparts[TP_SECOND] = modulo_time(timestamp, 60);
       return;
     }
-    hour   = hour / 1000;
-    minute = minute / 1000;
-    second = second / 1000;
-    if (units == timestamp_units::ms) {
-      timeparts[TP_HOUR]      = static_cast<int32_t>(hour % 24);
-      timeparts[TP_MINUTE]    = static_cast<int32_t>(minute % 60);
-      timeparts[TP_SECOND]    = static_cast<int32_t>(second % 60);
-      timeparts[TP_SUBSECOND] = static_cast<int32_t>(timestamp % 1000);
-      return;
-    }
-    hour   = hour / 1000;
-    minute = minute / 1000;
-    second = second / 1000;
-    if (units == timestamp_units::us) {
-      timeparts[TP_HOUR]      = static_cast<int32_t>(hour % 24);
-      timeparts[TP_MINUTE]    = static_cast<int32_t>(minute % 60);
-      timeparts[TP_SECOND]    = static_cast<int32_t>(second % 60);
-      timeparts[TP_SUBSECOND] = static_cast<int32_t>(timestamp % 1000000);
-      return;
-    }
-    hour                    = hour / 1000;
-    minute                  = minute / 1000;
-    second                  = second / 1000;
-    timeparts[TP_HOUR]      = static_cast<int32_t>(hour % 24);
-    timeparts[TP_MINUTE]    = static_cast<int32_t>(minute % 60);
-    timeparts[TP_SECOND]    = static_cast<int32_t>(second % 60);
-    timeparts[TP_SUBSECOND] = static_cast<int32_t>(timestamp % 1000000000);
+
+    // common utility for setting time components from a subsecond unit value
+    auto subsecond_fn = [&](int64_t subsecond_base) {
+      timeparts[TP_SUBSECOND] = modulo_time(timestamp, subsecond_base);
+      timestamp               = timestamp / subsecond_base;
+      timeparts[TP_HOUR]      = modulo_time(scale_time(timestamp, 3600), 24);
+      timeparts[TP_MINUTE]    = modulo_time(scale_time(timestamp, 60), 60);
+      timeparts[TP_SECOND]    = modulo_time(timestamp, 60);
+    };
+
+    if (units == timestamp_units::ms)
+      subsecond_fn(1000);
+    else if (units == timestamp_units::us)
+      subsecond_fn(1000000);
+    else
+      subsecond_fn(1000000000);
   }
 
   // utility to create 0-padded integers (up to 9 chars)
@@ -602,8 +606,12 @@ struct datetime_formatter {
           ptr = int2str(ptr, item.length, timeparts[TP_YEAR]);
           break;
         case 'y':  // 2-digit year
-          ptr = int2str(ptr, item.length, timeparts[TP_YEAR] - 1900);
+        {
+          auto year = timeparts[TP_YEAR];
+          // remove hundredths digits and above
+          ptr = int2str(ptr, item.length, year - ((year / 100) * 100));
           break;
+        }
         case 'm':  // month
           ptr = int2str(ptr, item.length, timeparts[TP_MONTH]);
           break;
