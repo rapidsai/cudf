@@ -157,10 +157,10 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     cpu_data_view = cpu_data.view(to_dtype)
     gpu_data_view = gpu_data.view(to_dtype)
 
-    expect = cudf.Series(gpu_data_view, dtype=gpu_data_view.dtype)
-    got = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
+    expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
+    got = cudf.Series(gpu_data_view, dtype=gpu_data_view.dtype)
 
-    assert gpu_data.data.ptr == expect._column.data.ptr
+    assert gpu_data.data.ptr == got._column.data.ptr
     assert_eq(expect, got)
 
 
