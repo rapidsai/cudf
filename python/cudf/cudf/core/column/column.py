@@ -398,6 +398,8 @@ class ColumnBase(Column, Serializable):
         if self.null_count > 0:
             raise ValueError("Can not produce a view of a column with nulls")
         dtype = np.dtype(dtype)
+        if dtype.kind in ('o', 'u', 's'):
+            raise TypeError('Bytes viewed as str without metadata is ambiguous')
         if self.data.size % dtype.itemsize:
             raise TypeError(
                 "Source data size must be an even multiple of view data size"
