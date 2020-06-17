@@ -2115,3 +2115,108 @@ def test_string_str_byte_count(data, expected):
     expected = as_index(expected, dtype="int32")
     actual = si.str.byte_count()
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (["1", "2", "3", "4", "5"], [True, True, True, True, True]),
+        (
+            ["1.1", "2.0", "3.2", "4.3", "5."],
+            [False, False, False, False, False],
+        ),
+        (
+            [".12312", "213123.", ".3223.", "323423.."],
+            [False, False, False, False],
+        ),
+        ([""], [False]),
+        (
+            ["1..1", "+2", "++3", "4++", "-5"],
+            [False, True, False, False, True],
+        ),
+        (
+            [
+                "24313345435345 ",
+                "+2632726478",
+                "++367293674326",
+                "4382493264392746.237649274692++",
+                "-578239479238469264",
+            ],
+            [False, True, False, False, True],
+        ),
+        (
+            ["2a2b", "a+b", "++a", "a.b++", "-b"],
+            [False, False, False, False, False],
+        ),
+        (
+            ["2a2b", "1+3", "9.0++a", "+", "-"],
+            [False, False, False, False, False],
+        ),
+    ],
+)
+def test_str_isinteger(data, expected):
+    sr = Series(data, dtype="str")
+    expected = Series(expected)
+    actual = sr.str.isinteger()
+    assert_eq(expected, actual)
+
+    sr = as_index(data)
+    expected = as_index(expected)
+    actual = sr.str.isinteger()
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (["1", "2", "3", "4", "5"], [True, True, True, True, True]),
+        (["1.1", "2.0", "3.2", "4.3", "5."], [True, True, True, True, True]),
+        ([""], [False]),
+        (
+            [".12312", "213123.", ".3223.", "323423.."],
+            [True, True, False, False],
+        ),
+        (
+            ["1.00.323.1", "+2.1", "++3.30", "4.9991++", "-5.3"],
+            [False, True, False, False, True],
+        ),
+        (
+            [
+                "24313345435345 ",
+                "+2632726478",
+                "++367293674326",
+                "4382493264392746.237649274692++",
+                "-578239479238469264",
+            ],
+            [False, True, False, False, True],
+        ),
+        (
+            [
+                "24313345435345.32732 ",
+                "+2632726478.3627638276",
+                "++0.326294632367293674326",
+                "4382493264392746.237649274692++",
+                "-57823947923.8469264",
+            ],
+            [False, True, False, False, True],
+        ),
+        (
+            ["2a2b", "a+b", "++a", "a.b++", "-b"],
+            [False, False, False, False, False],
+        ),
+        (
+            ["2a2b", "1+3", "9.0++a", "+", "-"],
+            [False, False, False, False, False],
+        ),
+    ],
+)
+def test_str_isfloat(data, expected):
+    sr = Series(data, dtype="str")
+    expected = Series(expected)
+    actual = sr.str.isfloat()
+    assert_eq(expected, actual)
+
+    sr = as_index(data)
+    expected = as_index(expected)
+    actual = sr.str.isfloat()
+    assert_eq(expected, actual)
