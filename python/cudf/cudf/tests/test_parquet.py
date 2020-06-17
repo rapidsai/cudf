@@ -5,6 +5,7 @@ import random
 from glob import glob
 from io import BytesIO
 from string import ascii_letters
+import pathlib
 
 import numpy as np
 import pandas as pd
@@ -420,17 +421,38 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
 
     assert_eq(expect, got)
 
-def test_parquet_reader_multiple_files(tmpdir):
-    test_pdf1 = make_pdf(nrows=1000, nvalids=1000 // 4)
+
+def create_parquet_source(df, src_type, fname):
+    if src_type == "filepath":
+        df.to_parquet(fname, engine="pyarrow")
+        return str(fname)
+    if src_type == "pathobj":
+        df.to_parquet(fname, engine="pyarrow")
+        return fname
+    if src_type == "bytes_io":
+        buffer = BytesIO()
+        df.to_parquet(buffer, engine="pyarrow")
+        return buffer
+    if src_type == "bytes":
+        buffer = BytesIO()
+        df.to_parquet(buffer, engine="pyarrow")
+        return buffer.getvalue()
+    if src_type == "url":
+        df.to_parquet(fname, engine="pyarrow")
+        return pathlib.Path(fname).as_uri()
+
+
+@pytest.mark.parametrize(
+    "src", ["filepath", "pathobj", "bytes_io", "bytes", "url"]
+)
+def test_parquet_reader_multiple_files(tmpdir, src):
+    test_pdf1 = make_pdf(nrows=1000, nvalids=1000 // 2)
     test_pdf2 = make_pdf(nrows=500)
     expect = pd.concat([test_pdf1, test_pdf2])
 
-    fname1 = tmpdir.join("multi1.parquet")
-    test_pdf1.to_parquet(fname1, engine="pyarrow")
-    fname2 = tmpdir.join("multi2.parquet")
-    test_pdf2.to_parquet(fname2, engine="pyarrow")
-
-    got = cudf.read_parquet([fname1, fname2])
+    src1 = create_parquet_source(test_pdf1, src, tmpdir.join("multi1.parquet"))
+    src2 = create_parquet_source(test_pdf2, src, tmpdir.join("multi2.parquet"))
+    got = cudf.read_parquet([src1, src2])
 
     assert_eq(expect, got)
 
