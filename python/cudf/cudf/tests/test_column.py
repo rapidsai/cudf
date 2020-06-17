@@ -187,15 +187,3 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
                 gpu_data = gpu_data.view(to_dtype)
         else:
             raise error
-
-
-# def test_column_view()
-
-
-# def test_column_pyview():
-#    int64_sr = cudf.Series([1], dtype='int64')
-#    int8_sr = cudf.Series([1,0,0,0,0,0,0,0], dtype='int8')
-
-#    expect = int64_sr.view('i1')
-#    assert_eq(expect, int8_sr)
-#    assert(expect._column.data.ptr == int8_sr._column.data.ptr)
