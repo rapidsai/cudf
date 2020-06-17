@@ -71,6 +71,7 @@
 - PR #5467 Move doc customization scripts to Jenkins
 - PR #5483 Add NVTX range calls to dictionary APIs
 - PR #5477 Add `is_index_type` trait 
+- PR #5487 Use sorted lists instead of sets for pytest parameterization
 
 ## Bug Fixes
 

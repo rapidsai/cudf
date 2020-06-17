@@ -9,7 +9,7 @@ from cudf.core import Series
 from cudf.tests.utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | OTHER_TYPES)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
 def test_repeat(dtype):
     arr = np.random.rand(10) * 10
     repeats = np.random.randint(10, size=10)
