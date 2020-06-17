@@ -853,7 +853,7 @@ static __device__ uint32_t Integer_RLEv2(
         uint64_t patch_pos64 =
           (tr < pll) ? bytestream_readbits64(
                          bs, pos * 8 + ((n * w + 7) & ~7) + tr * (pgw_pw_len), pgw_pw_len)
-            : 0;
+                     : 0;
         uint32_t patch_pos;
         T patch = 1;
         patch <<= pw;
