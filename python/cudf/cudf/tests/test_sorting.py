@@ -176,7 +176,7 @@ def test_dataframe_nsmallest_sliced(counts, sliceobj):
 
 @pytest.mark.parametrize("num_cols", [1, 2, 3, 5])
 @pytest.mark.parametrize("num_rows", [0, 1, 2, 1000])
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
 def test_dataframe_multi_column(
