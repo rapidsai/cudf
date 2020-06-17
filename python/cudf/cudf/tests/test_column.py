@@ -141,13 +141,22 @@ def test_column_chunked_array_creation():
 @pytest.mark.parametrize(
     "data,from_dtype,to_dtype",
     [
-        ([1, 2, 3], "int64", "int32"),
-        ([1, 2, 3], "int64", "int16"),
-        ([1, 2, 3], "int64", "int8"),
+        # equal size different kind
+        (np.arange(3), "int64", "float64"),
+        (np.arange(3), "float32", "int32"),
+        (np.arange(1), "int64", "datetime64[ns]"),
+        # size / 2^n should work for all n
+        (np.arange(3), "int64", "int32"), 
+        (np.arange(3), "int64", "int16"),
+        (np.arange(3), "int64", "int8"),
+        (np.arange(3), "float64", "float32"),
+        # evenly divides into bigger type
         (np.arange(8), "int8", "int64"),
         (np.arange(16), "int8", "int64"),
         (np.arange(128), "int8", "int64"),
-        (np.arange(4), "int8", "str"),
+        (np.arange(2), "float32", "int64"),
+        (np.arange(8), "int8", "datetime64[ns]"),
+        (np.arange(16), "int8", "datetime64[ns]"),
     ],
 )
 def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
@@ -169,6 +178,8 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     [
         (np.arange(9), "int8", "int64"),
         (np.arange(3), "int8", "int16"),
+        (np.arange(6), "int8", "float32"),
+        (np.arange(2), "int64", "datetime64[ns]"),
         (np.arange(1), "int8", "datetime64[ns]"),
     ],
 )
