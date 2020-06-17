@@ -698,15 +698,16 @@ static __device__ uint32_t Integer_RLEv2(
           l = (l * n + 7) >> 3;
         } else if (mode == 2) {
           // 10wwwwwn.nnnnnnnn.xxxxxxxx.yyyyyyyy: patched base encoding
-          uint32_t byte2 = bytestream_readbyte(bs, pos++);
-          uint32_t byte3 = bytestream_readbyte(bs, pos++);
-          uint32_t bw    = 1 + (byte2 >> 5);        // base value width, 1 to 8 bytes
-          uint32_t pw    = kRLEv2_W[byte2 & 0x1f];  // patch width, 1 to 64 bits
-          uint32_t pgw   = 1 + (byte3 >> 5);        // patch gap width, 1 to 8 bits
-          uint32_t pll   = byte3 & 0x1f;            // patch list length
-          l              = (l * n + 7) >> 3;
+          uint32_t byte2      = bytestream_readbyte(bs, pos++);
+          uint32_t byte3      = bytestream_readbyte(bs, pos++);
+          uint32_t bw         = 1 + (byte2 >> 5);        // base value width, 1 to 8 bytes
+          uint32_t pw         = kRLEv2_W[byte2 & 0x1f];  // patch width, 1 to 64 bits
+          uint32_t pgw        = 1 + (byte3 >> 5);        // patch gap width, 1 to 8 bits
+          uint32_t pgw_pw_len = ClosestFixedBitsMap[min(pw + pgw, 64u)];  // ceiled patch width
+          uint32_t pll        = byte3 & 0x1f;                             // patch list length
+          l                   = (l * n + 7) >> 3;
           l += bw;
-          l += (pll * (pgw + pw) + 7) >> 3;
+          l += (pll * (pgw_pw_len) + 7) >> 3;
         } else {
           // 11wwwwwn.nnnnnnnn.<base>.<delta>: delta encoding
           uint32_t deltapos = varint_length<T>(bs, pos);
@@ -848,10 +849,10 @@ static __device__ uint32_t Integer_RLEv2(
       uint32_t pgw      = 1 + ((pw_byte3 >> 5) & 7);  // patch gap width, 1 to 8 bits
       uint32_t pll      = pw_byte3 & 0x1f;            // patch list length
       if (pll != 0) {
-        uint32_t pgw_pw_len = ClosestFixedBitsMap[pw + pgw];
+        uint32_t pgw_pw_len = ClosestFixedBitsMap[min(pw + pgw, 64u)];
         uint64_t patch_pos64 =
-          (tr < pll)
-            ? bytestream_readbits64(bs, pos * 8 + ((n * w + 7) & ~7) + tr * (pgw + pw), pgw_pw_len)
+          (tr < pll) ? bytestream_readbits64(
+                         bs, pos * 8 + ((n * w + 7) & ~7) + tr * (pgw_pw_len), pgw_pw_len)
             : 0;
         uint32_t patch_pos;
         T patch = 1;
