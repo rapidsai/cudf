@@ -107,6 +107,7 @@
 - PR #5472 Fix str concat issue with indexed series
 - PR #5478 Fix `loc` and `iloc` doc
 - PR #5484 Ensure flat index after groupby if nlevels == 1
+- PR #5489 Fix drop_nulls/boolean_mask corruption for large columns
 
 
 # cuDF 0.14.0 (Date TBD)
