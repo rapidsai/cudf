@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
+import cudf.utils.dtypes as dtypeutils
 from cudf import Series
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 
@@ -20,20 +21,15 @@ supported_numpy_dtypes = [
     "datetime64[us]",
 ]
 
-SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
-UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
-INTEGER_TYPES = SIGNED_INTEGER_TYPES | UNSIGNED_TYPES
-FLOAT_TYPES = {"float32", "float64"}
-SIGNED_TYPES = SIGNED_INTEGER_TYPES | FLOAT_TYPES
-NUMERIC_TYPES = SIGNED_TYPES | UNSIGNED_TYPES
-DATETIME_TYPES = {
-    "datetime64[s]",
-    "datetime64[ms]",
-    "datetime64[us]",
-    "datetime64[ns]",
-}
-OTHER_TYPES = {"bool", "category", "str"}
-ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | OTHER_TYPES
+SIGNED_INTEGER_TYPES = sorted(list(dtypeutils.SIGNED_INTEGER_TYPES))
+UNSIGNED_TYPES = sorted(list(dtypeutils.UNSIGNED_TYPES))
+INTEGER_TYPES = sorted(list(dtypeutils.INTEGER_TYPES))
+FLOAT_TYPES = sorted(list(dtypeutils.FLOAT_TYPES))
+SIGNED_TYPES = sorted(list(dtypeutils.SIGNED_TYPES))
+NUMERIC_TYPES = sorted(list(dtypeutils.NUMERIC_TYPES))
+DATETIME_TYPES = sorted(list(dtypeutils.DATETIME_TYPES))
+OTHER_TYPES = sorted(list(dtypeutils.OTHER_TYPES))
+ALL_TYPES = sorted(list(dtypeutils.ALL_TYPES))
 
 
 def random_bitmask(size):
