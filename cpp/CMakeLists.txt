@@ -592,6 +592,7 @@ add_library(cudf
             src/aggregation/aggregation.cpp
             src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp
+            src/ast/ast.cu
 )
 
 # Override RPATH for cudf
