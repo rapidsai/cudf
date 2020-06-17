@@ -3010,6 +3010,8 @@ def test_all(data):
         [0, 1, 2, 3],
         [-2, -1, 2, 3, 5],
         [-2, -1, 0, 3, 5],
+        [0, 0, 0, 0, 0],
+        [0, 0, None, 0],
         [True, False, False],
         [True],
         [False],
@@ -3032,10 +3034,8 @@ def test_all(data):
 )
 @pytest.mark.parametrize("axis", [0, 1])
 def test_any(data, axis):
-    # Pandas treats `None` in object type columns as True for some reason, so
-    # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = pd.Series(data).replace([None], False)
+        pdata = pd.Series(data)
         gdata = Series.from_pandas(pdata)
 
         if axis == 1:
@@ -3046,7 +3046,7 @@ def test_any(data, axis):
             expected = pdata.any(axis=axis)
             assert_eq(got, expected)
     else:
-        pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
+        pdata = pd.DataFrame(data, columns=["a", "b"])
         gdata = DataFrame.from_pandas(pdata)
 
         # test bool_only
@@ -4939,7 +4939,7 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 check_dtype=False,
             )
             assert_eq(
-                expect_mask.fillna(-1), got_mask.fillna(-1), check_dtype=False,
+                expect_mask.fillna(-1), got_mask.fillna(-1), check_dtype=False
             )
     else:
         with pytest.raises(error):
@@ -5125,12 +5125,8 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
             check_dtype=False,
         )
     else:
-        assert_eq(
-            expect_where, got_where, check_dtype=False,
-        )
-        assert_eq(
-            expect_mask, got_mask, check_dtype=False,
-        )
+        assert_eq(expect_where, got_where, check_dtype=False)
+        assert_eq(expect_mask, got_mask, check_dtype=False)
 
 
 @pytest.mark.parametrize(

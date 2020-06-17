@@ -17,10 +17,12 @@
 - PR #5364 Validate array interface during buffer construction
 - PR #5418 Add support for `DataFrame.info`
 - PR #5425 Add Python `Groupby.rolling()`
-- PR #5359 Add duration types
+- PR #5359 Add duration types 
+- PR #5434 Add nvtext function generate_character_grams
 - PR #5442 Add support for `cudf.isclose`
 - PR #5444 Remove usage of deprecated RMM APIs and headers.
 - PR #5463 Add `.str.byte_count` python api and cython(bindings)
+- PR #5488 Add plumbings for `.str.replace_tokens`
 
 ## Improvements
 
@@ -74,6 +76,7 @@
 - PR #5483 Add NVTX range calls to dictionary APIs
 - PR #5477 Add `is_index_type` trait 
 - PR #5487 Use sorted lists instead of sets for pytest parameterization
+- PR #5491 allow build libcudf in custom dir
 
 ## Bug Fixes
 
@@ -102,12 +105,14 @@
 - PR #5399 Fix cpp compiler warnings of unreachable code
 - PR #5439 Fix nvtext ngrams_tokenize performance for multi-byte UTF8
 - PR #5446 Fix compile error caused by out-of-date PR merge (4990)
+- PR #5423 Fix any() reduction ignore nulls 
 - PR #5459 Fix str.translate to convert table characters to UTF-8
 - PR #5480 Fix merge sort docs
 - PR #5465 Fix benchmark out of memory errors due to multiple initialization
 - PR #5472 Fix str concat issue with indexed series
 - PR #5478 Fix `loc` and `iloc` doc
 - PR #5484 Ensure flat index after groupby if nlevels == 1
+- PR #5489 Fix drop_nulls/boolean_mask corruption for large columns
 
 
 # cuDF 0.14.0 (Date TBD)
