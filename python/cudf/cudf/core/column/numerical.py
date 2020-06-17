@@ -356,8 +356,11 @@ class NumericalColumn(column.ColumnBase):
         if closest=True.
         """
         found = 0
+        sentinel_value = self.default_na_value()
         if len(self):
-            found = cudautils.find_last(self.data_array_view, value)
+            found = cudautils.find_last(
+                self.data_array_view, value, sentinel_value=sentinel_value
+            )
         if found == -1 and self.is_monotonic and closest:
             if value < self.min():
                 found = -1
@@ -365,7 +368,10 @@ class NumericalColumn(column.ColumnBase):
                 found = len(self) - 1
             else:
                 found = cudautils.find_last(
-                    self.data_array_view, value, compare="lt"
+                    self.data_array_view,
+                    value,
+                    compare="lt",
+                    sentinel_value=sentinel_value,
                 )
                 if found == -1:
                     raise ValueError("value not found")

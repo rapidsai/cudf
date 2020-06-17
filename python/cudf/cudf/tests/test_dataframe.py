@@ -4920,14 +4920,19 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
         if pd.api.types.is_categorical_dtype(expect_where):
             np.testing.assert_array_equal(
                 expect_where.cat.codes,
-                got_where.cat.codes.fillna(-1).to_array(),
+                got_where.cat.codes.astype(expect_where.cat.codes.dtype)
+                .fillna(-1)
+                .to_array(),
             )
             assert tuple(expect_where.cat.categories) == tuple(
                 got_where.cat.categories
             )
 
             np.testing.assert_array_equal(
-                expect_mask.cat.codes, got_mask.cat.codes.fillna(-1).to_array()
+                expect_mask.cat.codes,
+                got_mask.cat.codes.astype(expect_mask.cat.codes.dtype)
+                .fillna(-1)
+                .to_array(),
             )
             assert tuple(expect_mask.cat.categories) == tuple(
                 got_mask.cat.categories

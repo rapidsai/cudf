@@ -195,7 +195,7 @@ def find_first(arr, val, compare="eq"):
         return min_index
 
 
-def find_last(arr, val, compare="eq"):
+def find_last(arr, val, compare="eq", sentinel_value=-1):
     """
     Returns the index of the last occurrence of *val* in *arr*.
     Or the last occurrence of *arr* *compare* *val*, if *compare* is not eq
@@ -206,23 +206,30 @@ def find_last(arr, val, compare="eq"):
     arr : device array
     val : scalar
     compare: str ('gt', 'lt', or 'eq' (default))
+    sentinel_value : Numerical, default value
     """
     found = cuda.device_array_like(arr)
     if found.size > 0:
         if compare == "gt":
-            gpu_mark_gt.forall(found.size)(arr, val, found, -1)
+            gpu_mark_gt.forall(found.size)(arr, val, found, sentinel_value)
         elif compare == "lt":
-            gpu_mark_lt.forall(found.size)(arr, val, found, -1)
+            gpu_mark_lt.forall(found.size)(arr, val, found, sentinel_value)
         else:
             if arr.dtype in ("float32", "float64"):
-                gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
+                gpu_mark_found_float.forall(found.size)(
+                    arr, val, found, sentinel_value
+                )
             else:
-                gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
+                gpu_mark_found_int.forall(found.size)(
+                    arr, val, found, sentinel_value
+                )
     from cudf.core.column import as_column
 
     found_col = as_column(found)
+    if sentinel_value is not None and not np.isnan(sentinel_value):
+        found_col = found_col.find_and_replace([sentinel_value], [None], True)
     max_index = found_col.max()
-    return max_index
+    return -1 if max_index is None or np.isnan(max_index) else max_index
 
 
 @cuda.jit
