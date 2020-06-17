@@ -181,8 +181,8 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
     except ValueError as error:
         if "size must be a divisor" in str(error):
             with pytest.raises(
-                ValueError,
-                match="Buffer size must be divisible by element size",
+                TypeError,
+                match="Source data size must be an even multiple of view data size",
             ):
                 gpu_data = gpu_data.view(to_dtype)
         else:
