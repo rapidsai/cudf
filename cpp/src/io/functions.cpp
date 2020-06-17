@@ -28,25 +28,25 @@ namespace cudf {
 namespace io {
 namespace {
 template <typename reader, typename reader_options>
-std::unique_ptr<reader> make_reader(source_info const& source,
+std::unique_ptr<reader> make_reader(source_info const& src_info,
                                     reader_options const& options,
                                     rmm::mr::device_memory_resource* mr)
 {
-  if (source.type == io_type::FILEPATH) {
-    return std::make_unique<reader>(source.filepaths, options, mr);
+  if (src_info.type == io_type::FILEPATH) {
+    return std::make_unique<reader>(src_info.filepaths, options, mr);
   }
-  if (source.type == io_type::HOST_BUFFER) {
-    return std::make_unique<reader>(
-      cudf::io::datasource::create(source.buffers[0].data, source.buffers[0].size), options, mr);
-  }
-  if (source.type == io_type::ARROW_RANDOM_ACCESS_FILE) {
-    return std::make_unique<reader>(cudf::io::datasource::create(source.files[0]), options, mr);
-  }
-  if (source.type == io_type::USER_IMPLEMENTED) {
-    return std::make_unique<reader>(
-      cudf::io::datasource::create(source.user_sources[0]), options, mr);
-  }
-  CUDF_FAIL("Unsupported source type");
+
+  std::vector<std::unique_ptr<datasource>> datasources;
+  if (src_info.type == io_type::HOST_BUFFER) {
+    datasources = cudf::io::datasource::create(src_info.buffers);
+  } else if (src_info.type == io_type::ARROW_RANDOM_ACCESS_FILE) {
+    datasources = cudf::io::datasource::create(src_info.files);
+  } else if (src_info.type == io_type::USER_IMPLEMENTED) {
+    datasources = cudf::io::datasource::create(src_info.user_sources);
+  } else
+    CUDF_FAIL("Unsupported source type");
+
+  return std::make_unique<reader>(std::move(datasources), options, mr);
 }
 
 template <typename writer, typename writer_options>

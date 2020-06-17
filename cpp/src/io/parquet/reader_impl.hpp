@@ -57,7 +57,7 @@ class reader::impl {
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::vector<std::unique_ptr<datasource>> sources,
+  explicit impl(std::vector<std::unique_ptr<datasource>> &&sources,
                 reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 

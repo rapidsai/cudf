@@ -89,7 +89,7 @@ class reader {
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::unique_ptr<cudf::io::datasource> source,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -180,7 +180,7 @@ class reader {
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::unique_ptr<cudf::io::datasource> source,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -328,7 +328,7 @@ class reader {
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::unique_ptr<cudf::io::datasource> source,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -445,7 +445,7 @@ class reader {
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::unique_ptr<cudf::io::datasource> source,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -565,7 +565,7 @@ class reader {
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::unique_ptr<cudf::io::datasource> source,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 

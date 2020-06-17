@@ -649,7 +649,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
   }
 }
 
-reader::impl::impl(std::vector<std::unique_ptr<datasource>> sources,
+reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
                    reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
   : _sources(std::move(sources)), _mr(mr)
@@ -845,37 +845,19 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
-std::vector<std::unique_ptr<datasource>> datasources(std::vector<std::string> const &filepaths)
-{
-  std::vector<std::unique_ptr<datasource>> sources;
-  sources.reserve(filepaths.size());
-  std::transform(
-    filepaths.cbegin(), filepaths.cend(), std::back_inserter(sources), [](auto const &filepath) {
-      return datasource::create(filepath);
-    });
-  return sources;
-}
-
-std::vector<std::unique_ptr<datasource>> datasources(std::unique_ptr<cudf::io::datasource> &&source)
-{
-  std::vector<std::unique_ptr<datasource>> sources;
-  sources.emplace_back(std::move(source));
-  return sources;
-}
-
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasources(filepaths), options, mr))
+  : _impl(std::make_unique<impl>(datasource::create(filepaths), options, mr))
 {
 }
 
 // Forward to implementation
-reader::reader(std::unique_ptr<cudf::io::datasource> source,
+reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasources(std::move(source)), options, mr))
+  : _impl(std::make_unique<impl>(std::move(sources), options, mr))
 {
 }
 
