@@ -21,7 +21,7 @@ except ImportError:
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = NUMERIC_TYPES | DATETIME_TYPES | {"bool"}
+    types = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
     renamer = {
         "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
     }

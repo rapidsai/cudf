@@ -29,6 +29,21 @@ _np_pa_dtypes = {
     np.str_: pa.string(),
 }
 
+SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
+UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
+INTEGER_TYPES = SIGNED_INTEGER_TYPES | UNSIGNED_TYPES
+FLOAT_TYPES = {"float32", "float64"}
+SIGNED_TYPES = SIGNED_INTEGER_TYPES | FLOAT_TYPES
+NUMERIC_TYPES = SIGNED_TYPES | UNSIGNED_TYPES
+DATETIME_TYPES = {
+    "datetime64[s]",
+    "datetime64[ms]",
+    "datetime64[us]",
+    "datetime64[ns]",
+}
+OTHER_TYPES = {"bool", "category", "str"}
+ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | OTHER_TYPES
+
 
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype.

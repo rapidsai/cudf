@@ -9,6 +9,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+import cudf.utils.dtypes as dtypeutils
 from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
@@ -160,7 +161,7 @@ def test_string_repr(ps_gs, item):
 
 
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool", "object", "str"}
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool", "object", "str"]
 )
 def test_string_astype(dtype):
     if (
@@ -180,6 +181,7 @@ def test_string_astype(dtype):
             "2019-06-03T00:00:00Z",
             "2019-05-04T00:00:00Z",
             "2018-06-04T00:00:00Z",
+            "1922-07-21T01:02:03Z",
         ]
     elif dtype == "str" or dtype == "object":
         data = ["ab", "cd", "ef", "gh", "ij"]
@@ -197,7 +199,7 @@ def test_string_astype(dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool", "object", "str"}
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool", "object", "str"]
 )
 def test_string_empty_astype(dtype):
     data = []
@@ -210,7 +212,7 @@ def test_string_empty_astype(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool"})
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool"])
 def test_string_numeric_astype(dtype):
     if dtype.startswith("bool"):
         data = [1, 0, 1, 0, 1]
@@ -241,7 +243,7 @@ def test_string_numeric_astype(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool"})
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool"])
 def test_string_empty_numeric_astype(dtype):
     data = []
 
@@ -260,14 +262,20 @@ def test_string_empty_numeric_astype(dtype):
 def test_string_concat():
     data1 = ["a", "b", "c", "d", "e"]
     data2 = ["f", "g", "h", "i", "j"]
+    index = [1, 2, 3, 4, 5]
 
-    ps1 = pd.Series(data1)
-    ps2 = pd.Series(data2)
-    gs1 = Series(data1)
-    gs2 = Series(data2)
+    ps1 = pd.Series(data1, index=index)
+    ps2 = pd.Series(data2, index=index)
+    gs1 = Series(data1, index=index)
+    gs2 = Series(data2, index=index)
 
     expect = pd.concat([ps1, ps2])
     got = concat([gs1, gs2])
+
+    assert_eq(expect, got)
+
+    expect = ps1.str.cat(ps2)
+    got = gs1.str.cat(gs2)
 
     assert_eq(expect, got)
 
@@ -2075,7 +2083,9 @@ def test_string_int_to_ipv4():
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES - {"int64", "uint64"})
+@pytest.mark.parametrize(
+    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int64", "uint64"}))
+)
 def test_string_int_to_ipv4_dtype_fail(dtype):
     gsr = Series([1, 2, 3, 4, 5]).astype(dtype)
     with pytest.raises(TypeError):
