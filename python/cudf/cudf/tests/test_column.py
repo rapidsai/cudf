@@ -146,7 +146,7 @@ def test_column_chunked_array_creation():
         (np.arange(3), "float32", "int32"),
         (np.arange(1), "int64", "datetime64[ns]"),
         # size / 2^n should work for all n
-        (np.arange(3), "int64", "int32"), 
+        (np.arange(3), "int64", "int32"),
         (np.arange(3), "int64", "int16"),
         (np.arange(3), "int64", "int8"),
         (np.arange(3), "float64", "float32"),
@@ -157,7 +157,7 @@ def test_column_chunked_array_creation():
         (np.arange(2), "float32", "int64"),
         (np.arange(8), "int8", "datetime64[ns]"),
         (np.arange(16), "int8", "datetime64[ns]"),
-        (np.array(['a']), 'str' , 'int8')
+        (np.array(["a"]), "str", "int8"),
     ],
 )
 def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
@@ -170,7 +170,7 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
     got = cudf.Series(gpu_data_view, dtype=gpu_data_view.dtype)
 
-    if from_dtype == 'str':
+    if from_dtype == "str":
         gpu_ptr = gpu_data.children[1].data.ptr
     else:
         gpu_ptr = gpu_data.data.ptr
@@ -197,9 +197,32 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
     except ValueError as error:
         if "size must be a divisor" in str(error):
             with pytest.raises(
-                TypeError,
-                match="Source data size must be an even multiple",
+                TypeError, match="Source data size must be an even multiple",
             ):
                 gpu_data = gpu_data.view(to_dtype)
         else:
             raise error
+
+
+def test_column_view_nulls_widths_even():
+
+    data = [1, 2, None, 4, None]
+    expect_data = [
+        np.int32(val).view("float32") if val is not None else np.nan
+        for val in data
+    ]
+
+    sr = cudf.Series(data, dtype="int32")
+    expect = cudf.Series(expect_data, dtype="float32")
+    got = cudf.Series(sr._column.view("float32"))
+
+    assert_eq(expect, got)
+
+    data = [None, 2.1, None, 5.3, 8.8]
+    expect_data = [np.float64(val).view("int64") if val is not None else val for val in data]
+
+    sr = cudf.Series(data, dtype="float64")
+    expect = cudf.Series(expect_data, dtype="int64")
+    got = cudf.Series(sr._column.view("int64"))
+
+    assert_eq(expect, got)
