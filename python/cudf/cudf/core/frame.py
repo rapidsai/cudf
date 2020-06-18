@@ -1239,11 +1239,14 @@ class Frame(libcudf.table.Table):
                 # For Index replace if replacement has string change
                 # thecolumn type to string so mixed replacements
                 # will select the proper column type and function.
-                if not hasattr(self, "index") and any(
-                    type(item) == str for item in replacement
-                ) and type(self) != cudf.core.index.StringIndex:
+                if (
+                    not hasattr(self, "index")
+                    and any(type(item) == str for item in replacement)
+                    and type(self) != cudf.core.index.StringIndex
+                ):
                     raise NotImplementedError(
-                        "Implicit conversion of index to mixed type is not yet supported."
+                        "Implicit conversion of index to "
+                        "mixed type is not yet supported."
                     )
 
                 try:
