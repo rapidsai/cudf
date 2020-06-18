@@ -18,7 +18,7 @@ import os
 cdef source_info make_source_info(src) except*:
     if not len(src):
         raise ValueError("Need to pass at least one source")
-
+    print(type(src[0]))
     cdef const unsigned char[::1] c_buffer
     cdef vector[host_buffer] c_host_buffers
     cdef vector[string] c_files
@@ -29,8 +29,7 @@ cdef source_info make_source_info(src) except*:
             if (len(buffer) > 0):
                 c_buffer = buffer
                 c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0], c_buffer.shape[0]))
-        else:
-            empty_buffer = False
+                empty_buffer = False
     elif isinstance(src[0], io.BytesIO):
         for bio in src:
             c_buffer = bio.getbuffer() # check is empty?
