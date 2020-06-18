@@ -24,6 +24,7 @@
 - PR #5463 Add `.str.byte_count` python api and cython(bindings)
 - PR #5488 Add plumbings for `.str.replace_tokens`
 - PR #5497 Add `.str.isinteger` & `.str.isfloat`
+- PR #5510 Add support for `cudf.Index` to create Indexes
 
 ## Improvements
 
