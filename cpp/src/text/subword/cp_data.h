@@ -1,0 +1,19 @@
+#include <stdint.h>
+#include <vector>
+
+#define SHIFT_FOR_NEW_CP 0
+#define NEW_CP_MASK 0x1fffff
+
+#define BYTES_LESS_1_SHIFT 21
+#define BYTES_LESS_1_MASK 0x3
+
+#define MULTICHAR_SHIFT 23
+#define MULTICHAR_MASK 1
+
+#define TOKEN_CAT_SHIFT 24
+#define TOKEN_CAT_MASK 7
+#define TOKEN_CAT_ADD_SPACE 0
+#define TOKEN_CAT_ADD_SPACE_IF_LOWER 1
+#define TOKEN_CAT_REMOVE_CHAR 2
+#define TOKEN_CAT_REMOVE_CHAR_IF_LOWER 3
+#define TOKEN_CAT_ALWAYS_REPLACE 4
