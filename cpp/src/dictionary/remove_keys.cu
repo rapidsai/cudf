@@ -16,6 +16,7 @@
 
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -176,12 +177,14 @@ std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_col
                                     column_view const& keys_to_remove,
                                     rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::remove_keys(dictionary_column, keys_to_remove, mr);
 }
 
 std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& dictionary_column,
                                            rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::remove_unused_keys(dictionary_column, mr);
 }
 

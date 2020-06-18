@@ -50,8 +50,6 @@ namespace strings {
  *
  * Invalid formats are not checked. If the string contains unexpected
  * or insufficient characters, that output row entry's timestamp value is undefined.
- * Negative timestamp values are not currently supported. These would have
- * dates formatted before 1970-01-01.
  *
  * Any null string entry will result in a corresponding null row in the output column.
  *
@@ -98,7 +96,6 @@ std::unique_ptr<column> to_timestamps(
  * | %%p | Only 'AM' or 'PM' |
  *
  * No checking is done for invalid formats or invalid timestamp values.
- * Negative timestamp values are not currently supported.
  * All timestamps values are formatted to UTC.
  *
  * Any null input entry will result in a corresponding null entry in the output column.

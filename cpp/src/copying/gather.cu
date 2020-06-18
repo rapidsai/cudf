@@ -17,9 +17,7 @@ namespace cudf {
 namespace detail {
 
 struct dispatch_map_type {
-  template <typename map_type,
-            std::enable_if_t<std::is_integral<map_type>::value and
-                             not std::is_same<map_type, bool>::value>* = nullptr>
+  template <typename map_type, std::enable_if_t<is_index_type<map_type>()>* = nullptr>
   std::unique_ptr<table> operator()(
     table_view const& source_table,
     column_view const& gather_map,
@@ -60,8 +58,7 @@ struct dispatch_map_type {
 
   template <typename map_type,
             typename... Args,
-            std::enable_if_t<not std::is_integral<map_type>::value or
-                             std::is_same<map_type, bool>::value>* = nullptr>
+            std::enable_if_t<not is_index_type<map_type>()>* = nullptr>
   std::unique_ptr<table> operator()(Args&&... args)
   {
     CUDF_FAIL("Gather map must be an integral type.");
