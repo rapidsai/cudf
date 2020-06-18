@@ -53,13 +53,13 @@ struct ast_binary_expression {
 
 template <typename Element>
 __device__ Element ast_resolve_data_source(ast_expression_source expression_source,
-                                           table_device_view const& table)
+                                           table_device_view const& table,
+                                           cudf::size_type row_index)
 {
-  const cudf::size_type row = 0;
   switch (expression_source.source) {
     case ast_data_source::COLUMN: {
       auto column = table.column(expression_source.data_index);
-      return column.data<Element>()[row];
+      return column.data<Element>()[row_index];
     }
     case ast_data_source::LITERAL: {
       // TODO: Fetch and return literal.
@@ -90,10 +90,11 @@ __device__ Element ast_evaluate_operator(ast_binary_operator op, Element lhs, El
 
 template <typename Element>
 __device__ Element ast_evaluate_expression(ast_binary_expression<Element> binary_expression,
-                                           table_device_view table)
+                                           table_device_view table,
+                                           cudf::size_type row_index)
 {
-  const Element lhs = ast_resolve_data_source<Element>(binary_expression.lhs, table);
-  const Element rhs = ast_resolve_data_source<Element>(binary_expression.rhs, table);
+  const Element lhs = ast_resolve_data_source<Element>(binary_expression.lhs, table, row_index);
+  const Element rhs = ast_resolve_data_source<Element>(binary_expression.rhs, table, row_index);
   return ast_evaluate_operator(binary_expression.op, lhs, rhs);
 }
 
@@ -107,7 +108,8 @@ __global__ void compute_ast_column_kernel(table_device_view table,
   const auto num_rows             = table.num_rows();
 
   for (cudf::size_type row_index = start_idx; row_index < num_rows; row_index += stride) {
-    output.element<Element>(row_index) = ast_evaluate_expression(binary_expression, table);
+    output.element<Element>(row_index) =
+      ast_evaluate_expression(binary_expression, table, row_index);
   }
 }
 
