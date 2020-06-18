@@ -34,7 +34,7 @@ template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   cudaStream_t stream = 0, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
-  auto s = new ScalarType(0, false, stream, mr);
+  auto s = new ScalarType(T{0}, false, stream, mr);
   return std::unique_ptr<cudf::scalar>(s);
 }
 
