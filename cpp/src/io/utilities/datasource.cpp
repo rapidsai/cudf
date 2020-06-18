@@ -262,7 +262,7 @@ std::unique_ptr<datasource> datasource::create(const std::string &filepath,
                                                size_t size)
 {
   // Use our own memory mapping implementation for direct file reads
-  return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, size);
+  return std::make_unique<file_source>(filepath.c_str());
 }
 
 std::unique_ptr<datasource> datasource::create(const char *data, size_t size)
