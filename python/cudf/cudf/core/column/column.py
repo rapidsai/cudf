@@ -395,10 +395,15 @@ class ColumnBase(Column, Serializable):
             The dtype to view the data as
         
         """
-        if self.null_count > 0 and self.dtype.itemsize != dtype.itemsize:
-            raise ValueError("Can not produce a view of a column with nulls")
-
         dtype = np.dtype(dtype)
+
+        if self.null_count > 0:
+            if self.dtype.itemsize != dtype.itemsize:
+                raise ValueError("Can not produce a view of a column with nulls")
+            else:
+                pass
+
+
         if dtype.kind in ('o', 'u', 's'):
             raise TypeError('Bytes viewed as str without metadata is ambiguous')
 
@@ -406,7 +411,7 @@ class ColumnBase(Column, Serializable):
             raise TypeError(
                 "Source data size must be an even multiple of view data size"
             )
-        return as_column(self.data, dtype=dtype)
+        return build_column(self.data, dtype=dtype, mask=self.mask)
 
     def element_indexing(self, index):
         """Default implementation for indexing to an element
