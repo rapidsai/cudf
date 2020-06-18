@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
@@ -89,6 +90,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
                                data_type indices_type,
                                rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::encode(input_column, indices_type, mr);
 }
 
