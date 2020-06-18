@@ -78,6 +78,7 @@
 - PR #5477 Add `is_index_type` trait 
 - PR #5487 Use sorted lists instead of sets for pytest parameterization
 - PR #5491 allow build libcudf in custom dir
+- PR #5509 Add a file datasource that avoid the use of mmap
 
 ## Bug Fixes
 
