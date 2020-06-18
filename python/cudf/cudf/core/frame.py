@@ -885,7 +885,7 @@ class Frame(libcudf.table.Table):
             distinct_count = map_index.distinct_count()
             if map_size < distinct_count:
                 raise ValueError(
-                    "ERROR: map_size must be >= %d (got %d)."
+                    f"ERROR: map_size must be >= {distinct_count} (got {map_size})."
                     % (distinct_count, map_size)
                 )
 
