@@ -25,6 +25,9 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
+#include <algorithm>
+#include <numeric>
+
 struct DropNullsTest : public cudf::test::BaseFixture {
 };
 
@@ -74,6 +77,52 @@ TEST_F(DropNullsTest, MixedSetOfRows)
   cudf::test::fixed_width_column_wrapper<int32_t> col2_expected{{10, 40, 5, 2}, {1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<double> col3_expected{{10, 40, 5, 2}, {1, 1, 1, 1}};
   cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
+
+  auto got = cudf::drop_nulls(input, keys);
+
+  cudf::test::expect_tables_equal(expected, got->view());
+}
+
+TEST_F(DropNullsTest, LargeColumn)
+{
+  // This test is a C++ repro of the failing Python in this issue:
+  // https://github.com/rapidsai/cudf/issues/5456
+  // Specifically, there are two large columns, one nullable, one non-nullable
+  using T       = int32_t;
+  using index_T = int64_t;
+  constexpr cudf::size_type column_size{270000};
+  std::vector<index_T> index(column_size);
+  std::vector<T> data(column_size);
+  std::vector<bool> mask_data(column_size);
+
+  std::iota(index.begin(), index.end(), 0);
+  std::generate_n(data.begin(), column_size, [x = 1]() mutable { return x++ % 3; });
+  std::transform(data.begin(), data.end(), mask_data.begin(), [](auto const& x) { return x != 0; });
+
+  std::vector<T> expected_data(column_size);
+  // zeros are the null elements, remove them
+  auto end           = std::remove_copy(data.begin(), data.end(), expected_data.begin(), 0);
+  auto expected_size = std::distance(expected_data.begin(), end);
+  expected_data.resize(expected_size);
+
+  std::vector<index_T> expected_index(expected_size);
+  std::copy_if(index.begin(), index.end(), expected_index.begin(), [](auto const& x) {
+    return (x - 2) % 3 != 0;
+  });
+
+  // output null mask is all true
+  std::vector<bool> expected_mask(expected_size, true);
+
+  cudf::test::fixed_width_column_wrapper<T> col1(data.begin(), data.end(), mask_data.begin());
+  cudf::test::fixed_width_column_wrapper<index_T> index1(index.begin(), index.end());
+  cudf::table_view input{{index1, col1}};
+  std::vector<cudf::size_type> keys{1};
+
+  cudf::test::fixed_width_column_wrapper<T> exp1(
+    expected_data.begin(), expected_data.end(), expected_mask.begin());
+  cudf::test::fixed_width_column_wrapper<index_T> exp_index1(expected_index.begin(),
+                                                             expected_index.end());
+  cudf::table_view expected{{exp_index1, exp1}};
 
   auto got = cudf::drop_nulls(input, keys);
 

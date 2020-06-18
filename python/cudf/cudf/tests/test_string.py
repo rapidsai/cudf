@@ -9,6 +9,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+import cudf.utils.dtypes as dtypeutils
 from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
@@ -160,7 +161,7 @@ def test_string_repr(ps_gs, item):
 
 
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool", "object", "str"}
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool", "object", "str"]
 )
 def test_string_astype(dtype):
     if (
@@ -180,6 +181,7 @@ def test_string_astype(dtype):
             "2019-06-03T00:00:00Z",
             "2019-05-04T00:00:00Z",
             "2018-06-04T00:00:00Z",
+            "1922-07-21T01:02:03Z",
         ]
     elif dtype == "str" or dtype == "object":
         data = ["ab", "cd", "ef", "gh", "ij"]
@@ -197,7 +199,7 @@ def test_string_astype(dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool", "object", "str"}
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool", "object", "str"]
 )
 def test_string_empty_astype(dtype):
     data = []
@@ -210,7 +212,7 @@ def test_string_empty_astype(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool"})
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool"])
 def test_string_numeric_astype(dtype):
     if dtype.startswith("bool"):
         data = [1, 0, 1, 0, 1]
@@ -223,7 +225,14 @@ def test_string_numeric_astype(dtype):
     elif dtype.startswith("float"):
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
     elif dtype.startswith("datetime64"):
-        data = [1000000000, 2000000000, 3000000000, 4000000000, 5000000000]
+        data = [
+            1000000000,
+            2000000000,
+            3000000000,
+            4000000000,
+            5000000000,
+            -2000000000,
+        ]
     if dtype.startswith("datetime64"):
         ps = pd.Series(data, dtype="datetime64[ns]")
         gs = Series.from_pandas(ps)
@@ -243,7 +252,7 @@ def test_string_numeric_astype(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool"})
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool"])
 def test_string_empty_numeric_astype(dtype):
     data = []
 
@@ -262,14 +271,20 @@ def test_string_empty_numeric_astype(dtype):
 def test_string_concat():
     data1 = ["a", "b", "c", "d", "e"]
     data2 = ["f", "g", "h", "i", "j"]
+    index = [1, 2, 3, 4, 5]
 
-    ps1 = pd.Series(data1)
-    ps2 = pd.Series(data2)
-    gs1 = Series(data1)
-    gs2 = Series(data2)
+    ps1 = pd.Series(data1, index=index)
+    ps2 = pd.Series(data2, index=index)
+    gs1 = Series(data1, index=index)
+    gs2 = Series(data2, index=index)
 
     expect = pd.concat([ps1, ps2])
     got = concat([gs1, gs2])
+
+    assert_eq(expect, got)
+
+    expect = ps1.str.cat(ps2)
+    got = gs1.str.cat(gs2)
 
     assert_eq(expect, got)
 
@@ -2034,7 +2049,9 @@ def test_string_int_to_ipv4():
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES - {"int64", "uint64"})
+@pytest.mark.parametrize(
+    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int64", "uint64"}))
+)
 def test_string_int_to_ipv4_dtype_fail(dtype):
     gsr = Series([1, 2, 3, 4, 5]).astype(dtype)
     with pytest.raises(TypeError):
@@ -2097,4 +2114,109 @@ def test_string_str_byte_count(data, expected):
     si = as_index(data)
     expected = as_index(expected, dtype="int32")
     actual = si.str.byte_count()
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (["1", "2", "3", "4", "5"], [True, True, True, True, True]),
+        (
+            ["1.1", "2.0", "3.2", "4.3", "5."],
+            [False, False, False, False, False],
+        ),
+        (
+            [".12312", "213123.", ".3223.", "323423.."],
+            [False, False, False, False],
+        ),
+        ([""], [False]),
+        (
+            ["1..1", "+2", "++3", "4++", "-5"],
+            [False, True, False, False, True],
+        ),
+        (
+            [
+                "24313345435345 ",
+                "+2632726478",
+                "++367293674326",
+                "4382493264392746.237649274692++",
+                "-578239479238469264",
+            ],
+            [False, True, False, False, True],
+        ),
+        (
+            ["2a2b", "a+b", "++a", "a.b++", "-b"],
+            [False, False, False, False, False],
+        ),
+        (
+            ["2a2b", "1+3", "9.0++a", "+", "-"],
+            [False, False, False, False, False],
+        ),
+    ],
+)
+def test_str_isinteger(data, expected):
+    sr = Series(data, dtype="str")
+    expected = Series(expected)
+    actual = sr.str.isinteger()
+    assert_eq(expected, actual)
+
+    sr = as_index(data)
+    expected = as_index(expected)
+    actual = sr.str.isinteger()
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (["1", "2", "3", "4", "5"], [True, True, True, True, True]),
+        (["1.1", "2.0", "3.2", "4.3", "5."], [True, True, True, True, True]),
+        ([""], [False]),
+        (
+            [".12312", "213123.", ".3223.", "323423.."],
+            [True, True, False, False],
+        ),
+        (
+            ["1.00.323.1", "+2.1", "++3.30", "4.9991++", "-5.3"],
+            [False, True, False, False, True],
+        ),
+        (
+            [
+                "24313345435345 ",
+                "+2632726478",
+                "++367293674326",
+                "4382493264392746.237649274692++",
+                "-578239479238469264",
+            ],
+            [False, True, False, False, True],
+        ),
+        (
+            [
+                "24313345435345.32732 ",
+                "+2632726478.3627638276",
+                "++0.326294632367293674326",
+                "4382493264392746.237649274692++",
+                "-57823947923.8469264",
+            ],
+            [False, True, False, False, True],
+        ),
+        (
+            ["2a2b", "a+b", "++a", "a.b++", "-b"],
+            [False, False, False, False, False],
+        ),
+        (
+            ["2a2b", "1+3", "9.0++a", "+", "-"],
+            [False, False, False, False, False],
+        ),
+    ],
+)
+def test_str_isfloat(data, expected):
+    sr = Series(data, dtype="str")
+    expected = Series(expected)
+    actual = sr.str.isfloat()
+    assert_eq(expected, actual)
+
+    sr = as_index(data)
+    expected = as_index(expected)
+    actual = sr.str.isfloat()
     assert_eq(expected, actual)
