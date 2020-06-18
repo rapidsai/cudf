@@ -372,43 +372,35 @@ def test_dataframe_index_rename(axis):
 
     assert_eq(expect, got)
 
+    expect = pdf.rename(index={1: 5, 2: 6})
+    got = gdf.rename(index={1: 5, 2: 6})
+
+    assert_eq(expect, got)
+
+    expect = pdf.rename({1: 5, 2: 6})
+    got = gdf.rename({1: 5, 2: 6})
+
+    assert_eq(expect, got)
+
     # `pandas` can support indexes with mixed values. We automatically convert
-    # an index with mixed values to a `StringIndex`. Breaking the comparison.
-    expect = pdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
-    got = gdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
+    # an index with mixed values to a `StringIndex`. Breaking the comparison.        
+    with pytest.raises(NotImplementedError):
+        expect = pdf.rename(mapper={1: "6", 2: "y"}, axis=axis)
+        got = gdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
 
-    assert_eq(expect.index.astype("str"), got.index)
-
-    expect = pdf.rename(index={1: "x", 2: "y"})
-    got = gdf.rename(index={1: "x", 2: "y"})
-
-    assert_eq(expect.index.astype("str"), got.index)
-
-    expect = pdf.rename({1: "x", 2: "y"})
-    got = gdf.rename({1: "x", 2: "y"})
-
-    assert_eq(expect.index.astype("str"), got.index)
+        assert_eq(expect, got)
 
 
 def test_dataframe_MI_rename():
     gdf = DataFrame(
-        {"a": np.arange(10), "b": np.arange(10), "c": np.arange(10)}
-    )
-    pdf = gdf.to_pandas()
+        {"a": np.arange(10), "b": np.arange(10), "c": np.arange(10)})
     gdg = gdf.groupby(["a", "b"]).count()
-    pdg = pdf.groupby(["a", "b"]).count()
+    pdg = gdg.to_pandas()
 
-    expect = pdg.rename(mapper={1: "x", 2: "y"}, axis=0)
-    got = gdg.rename(mapper={1: "x", 2: "y"}, axis=0)
+    expect = pdg.rename(mapper={1: 5, 2: 6}, axis=0)
+    got = gdg.rename(mapper={1: 5, 2: 6}, axis=0)
 
-    # pandas MultiIndex has no dtype so it doesn't use
-    # astype. Just for this test to get the values returned
-    # to line up in the right type we loop through
-    # and make all of the values for *expect* string
-    expect_values = list(
-        (str(x[0]), str(x[0])) for x in expect.index._values.tolist()
-    )
-    assert_eq(expect_values, got.index._values)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("axis", [1, "columns"])

@@ -1241,8 +1241,11 @@ class Frame(libcudf.table.Table):
                 # will select the proper column type and function.
                 if not hasattr(self, "index") and any(
                     type(item) == str for item in replacement
-                ):
-                    col = col.astype(str)
+                ) and type(self) != cudf.core.index.StringIndex:
+                    raise NotImplementedError(
+                        "Implicit conversion of index to mixed type is not yet supported."
+                    )
+
                 try:
                     (
                         col_all_nan,
