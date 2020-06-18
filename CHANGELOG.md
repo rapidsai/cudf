@@ -79,6 +79,7 @@
 - PR #5477 Add `is_index_type` trait 
 - PR #5487 Use sorted lists instead of sets for pytest parameterization
 - PR #5491 allow build libcudf in custom dir
+- PR #5503 Change `unique_count` to `distinct_count`
 
 ## Bug Fixes
 
