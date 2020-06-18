@@ -297,7 +297,6 @@ def test_pandas_concat_compatibility_axis1_overlap(index, names, data):
     assert_eq(got, expect)
 
 
-@pytest.mark.xfail(raises=ValueError)
 def test_pandas_concat_compatibility_axis1_eq_index():
     with pytest.raises(
         ValueError, match=r"cannot reindex from a duplicate axis"
