@@ -208,6 +208,55 @@ class user_datasource_wrapper : public datasource {
   datasource *const source;  ///< A non-owning pointer to the user-implemented datasource
 };
 
+class file_source : public datasource {
+  class vector_buffer : public buffer {
+    std::vector<uint8_t> _data;
+
+   public:
+    explicit vector_buffer(std::vector<uint8_t> &&data) : _data(std::move(data)) {}
+    size_t size() const override { return _data.size(); }
+    const uint8_t *data() const override { return _data.data(); }
+  };
+
+ public:
+  explicit file_source(const char *filepath)
+  {
+    _file_desc = open(filepath, O_RDONLY);
+    CUDF_EXPECTS(_file_desc != -1, "Cannot open file");
+
+    struct stat st;
+    CUDF_EXPECTS(fstat(_file_desc, &st) != -1, "Cannot query file size");
+    _file_size = static_cast<size_t>(st.st_size);
+  }
+
+  virtual ~file_source() { close(_file_desc); }
+
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    lseek(_file_desc, offset, SEEK_SET);
+    // Clamp length to available data in the mapped region
+    auto const read_size = std::min(size, _file_size - offset);
+    std::vector<uint8_t> v(read_size);
+    CUDF_EXPECTS(read(_file_desc, v.data(), read_size) == read_size, "read failed");
+    return std::make_unique<vector_buffer>(std::move(v));
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t *dst) override
+  {
+    lseek(_file_desc, offset, SEEK_SET);
+
+    // Clamp length to available data in the mapped region
+    auto const read_size = std::min(size, _file_size - offset);
+    return read(_file_desc, dst, read_size);
+  }
+
+  size_t size() const override { return _file_size; }
+
+ private:
+  size_t _file_size = 0;
+  int _file_desc    = -1;
+};
+
 std::unique_ptr<datasource> datasource::create(const std::string &filepath,
                                                size_t offset,
                                                size_t size)
