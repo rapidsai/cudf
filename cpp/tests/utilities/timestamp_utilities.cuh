@@ -68,10 +68,12 @@ inline cudf::test::fixed_width_column_wrapper<T> generate_timestamps(int32_t cou
 
   if (nullable) {
     auto mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
-    return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count, mask);
+    return cudf::test::fixed_width_column_wrapper<T>(
+      cudf::test::make_fixed_width_column_with_type_param<T>(iter, iter + count, mask));
   } else {
     // This needs to be in an else to quash `statement_not_reachable` warnings
-    return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count);
+    return cudf::test::fixed_width_column_wrapper<T>(
+      cudf::test::make_fixed_width_column_with_type_param<T>(iter, iter + count));
   }
 }
 

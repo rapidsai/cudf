@@ -106,9 +106,6 @@ class column_wrapper {
  * @brief Creates a `device_buffer` containing the elements in the range
  * `[begin,end)`.
  *
- * This is applicable for fixed width types that allows implicit construction of `Element` from the
- * items returned by the `InputIterator`.
- *
  * @tparam InputIterator Iterator type for `begin` and `end`
  * @param begin Begining of the sequence of elements
  * @param end End of the sequence of elements
@@ -116,43 +113,10 @@ class column_wrapper {
  *`[begin,end)`
  **/
 template <typename Element, typename InputIterator>
-rmm::device_buffer make_elements(
-  InputIterator begin,
-  InputIterator end,
-  typename std::enable_if<
-    std::is_convertible<typename std::iterator_traits<InputIterator>::value_type,
-                        Element>::value>::type* = nullptr)
+rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<Element>(), "Unexpected non-fixed width type.");
   thrust::host_vector<Element> elements(begin, end);
-  return rmm::device_buffer{elements.data(), elements.size() * sizeof(Element)};
-}
-
-/**
- * @brief Creates a `device_buffer` containing the elements in the range
- * `[begin,end)`.
- *
- * This is applicable for types that do not allow implicit construction of `Element` from the
- * arithmetic items returned by the `InputIterator`.
- *
- * @tparam InputIterator Iterator type for `begin` and `end`
- * @param begin Begining of the sequence of elements
- * @param end End of the sequence of elements
- * @return rmm::device_buffer Buffer containing all elements in the range
- *`[begin,end)`
- **/
-template <typename Element, typename InputIterator>
-rmm::device_buffer make_elements(
-  InputIterator begin,
-  InputIterator end,
-  typename std::enable_if<
-    !std::is_convertible<typename std::iterator_traits<InputIterator>::value_type,
-                         Element>::value>::type* = nullptr)
-{
-  static_assert(cudf::is_fixed_width<Element>(), "Unexpected non-fixed width type.");
-  cudf::size_type size = std::distance(begin, end);
-  thrust::host_vector<Element> elements(size);
-  std::transform(begin, end, elements.begin(), [](auto elem) { return Element(elem); });
   return rmm::device_buffer{elements.data(), elements.size() * sizeof(Element)};
 }
 
@@ -880,13 +844,95 @@ class lists_column_wrapper : public detail::column_wrapper {
 
 namespace detail {
 /**
+ * @brief Convert between arithmetic and chrono types where possible.
+ **/
+template <typename SourceT, typename TargetT, typename InputIterator, typename ValidityIterator>
+struct fixed_width_type_converter {
+ private:
+  template <typename Lambda>
+  auto create_column_wrapper(InputIterator begin,
+                             InputIterator end,
+                             ValidityIterator vbegin,
+                             ValidityIterator vend,
+                             Lambda l) const
+  {
+    auto iter = thrust::make_transform_iterator(begin, l);
+    return (vbegin != vend)
+             ? fixed_width_column_wrapper<TargetT>(iter, iter + std::distance(begin, end), vbegin)
+             : fixed_width_column_wrapper<TargetT>(iter, iter + std::distance(begin, end));
+  }
+
+ public:
+  // Convert integral values to timestamps
+  template <
+    typename SrcT                        = SourceT,
+    typename TargT                       = TargetT,
+    typename std::enable_if<std::is_integral<SrcT>::value && cudf::is_timestamp_t<TargT>::value,
+                            void>::type* = nullptr>
+  auto operator()(InputIterator begin,
+                  InputIterator end,
+                  ValidityIterator vbegin,
+                  ValidityIterator vend) const
+  {
+    return create_column_wrapper(
+      begin, end, vbegin, vend, [](auto const& e) { return TargT{typename TargT::duration{e}}; });
+  }
+
+  // Convert timestamps to arithmetic values
+  template <
+    typename SrcT                        = SourceT,
+    typename TargT                       = TargetT,
+    typename std::enable_if<cudf::is_timestamp_t<SrcT>::value && std::is_arithmetic<TargT>::value,
+                            void>::type* = nullptr>
+  auto operator()(InputIterator begin,
+                  InputIterator end,
+                  ValidityIterator vbegin,
+                  ValidityIterator vend) const
+  {
+    return create_column_wrapper(begin, end, vbegin, vend, [](auto const& e) {
+      return static_cast<TargT>(e.time_since_epoch().count());
+    });
+  }
+
+  // Convert timestamps to duration values
+  template <
+    typename SrcT                        = SourceT,
+    typename TargT                       = TargetT,
+    typename std::enable_if<cudf::is_timestamp_t<SrcT>::value && cudf::is_duration_t<TargT>::value,
+                            void>::type* = nullptr>
+  auto operator()(InputIterator begin,
+                  InputIterator end,
+                  ValidityIterator vbegin,
+                  ValidityIterator vend) const
+  {
+    return create_column_wrapper(
+      begin, end, vbegin, vend, [](auto const& e) { return TargT{e.time_since_epoch()}; });
+  }
+
+  // Convert duration to arithmetic values
+  template <
+    typename SrcT                        = SourceT,
+    typename TargT                       = TargetT,
+    typename std::enable_if<cudf::is_duration_t<SrcT>::value && std::is_arithmetic<TargT>::value,
+                            void>::type* = nullptr>
+  auto operator()(InputIterator begin,
+                  InputIterator end,
+                  ValidityIterator vbegin,
+                  ValidityIterator vend) const
+  {
+    return create_column_wrapper(
+      begin, end, vbegin, vend, [](auto const& e) { return static_cast<TargT>(e.count()); });
+  }
+};
+
+/**
  * @brief Fixed width column factory implementation methods.
  *
  * These functions converts every element returned by the input iterator into `TypeParam` thusly:
- *    - If `TypeParam` isn't a timestamp, it explicitly creates a `TypeParam` with the item
- *      returned by the input iterator
- *    - If `TypeParam` is a timestamp, it creates a duration with the item returned by the
- *      input iterator, and uses the duration to create a timestamp
+ * - If `TypeParam` is creatable or convertible from the item returned by the input iterator,
+ *   it is returned after converting the item to `TypeParam`.
+ * - otherwise, an attempt is made to convert between fixed width types where possible using
+ *   `fixed_width_type_converter`
  **/
 template <typename TypeParam, typename InputIterator, typename ValidityIterator>
 auto make_fixed_width_column_with_type_param_impl(
@@ -894,7 +940,12 @@ auto make_fixed_width_column_with_type_param_impl(
   InputIterator end,
   ValidityIterator vbegin,
   ValidityIterator vend,
-  typename std::enable_if<!cudf::is_timestamp<TypeParam>(), void>::type* = nullptr)
+  typename std::enable_if<
+    cudf::is_convertible<typename std::iterator_traits<InputIterator>::value_type,
+                         TypeParam>::value ||
+      std::is_constructible<TypeParam,
+                            typename std::iterator_traits<InputIterator>::value_type>::value,
+    void>::type* = nullptr)
 {
   auto iter =
     thrust::make_transform_iterator(begin, [](auto const& e) { return static_cast<TypeParam>(e); });
@@ -909,15 +960,56 @@ auto make_fixed_width_column_with_type_param_impl(
   InputIterator end,
   ValidityIterator vbegin,
   ValidityIterator vend,
-  typename std::enable_if<cudf::is_timestamp<TypeParam>(), void>::type* = nullptr)
+  typename std::enable_if<
+    !cudf::is_convertible<typename std::iterator_traits<InputIterator>::value_type,
+                          TypeParam>::value &&
+      !std::is_constructible<TypeParam,
+                             typename std::iterator_traits<InputIterator>::value_type>::value,
+    void>::type* = nullptr)
 {
-  auto iter = thrust::make_transform_iterator(
-    begin, [](auto const& e) { return TypeParam{typename TypeParam::duration{e}}; });
-  return (vbegin != vend)
-           ? fixed_width_column_wrapper<TypeParam>(iter, iter + std::distance(begin, end), vbegin)
-           : fixed_width_column_wrapper<TypeParam>(iter, iter + std::distance(begin, end));
+  return fixed_width_type_converter<typename std::iterator_traits<InputIterator>::value_type,
+                                    TypeParam,
+                                    InputIterator,
+                                    ValidityIterator>{}(begin, end, vbegin, vend);
 }
 }  // namespace detail
+
+/**
+ * @brief Factory methods to create a fixed width column of type `TypeParam` with fixed width
+ * values.
+ *
+ * In typed tests that use fixed width types, it is often required to create a fixed width column
+ * of a type with constant set of values that may or may not conform to the fixed width column
+ * type that is being created. These wrappers facilitates the creation of the column with those
+ * values. The factory methods are required as the fixed width types can't always be naturally
+ * converted from the constant fixed type values. For instance, a type test that may want
+ * to create a fixed width column of int32_t, duration_s, timestamp_s etc. with a bunch of
+ * integer values; or a fixed width column of timestamp_s with integer duration values etc.
+ * may use these factory methods to create a fixed width column wrapper.
+ * @code{.cpp}
+ * // Creates a fixed width column wrapper of a fixed width type T with a bunch of integer values
+ * TYPED_TEST_CASE(TestFoo, cudf::test::FixedWidthTypes);
+ *
+ * TYPED_TEST(TestFoo, Test0)
+ * {
+ *    using T = TypeParam;
+ *
+ *    // Create a column of integers/floats/timestamps/durations with the values from the list
+ *    auto col0 = cudf::test::make_fixed_width_column_with_type_param<T>({0, 1, 2, 3});
+ *
+ *    // Create a column of integers/floats/timestamps/durations with the values from the list
+ *    auto col1 = cudf::test::make_fixed_width_column_with_type_param<T>({cudf::duration_D{11},
+ *                                                                        cudf::duration_D{17},
+ *                                                                        cudf::duration_D{23}});
+ *
+ *    fixed_width_column_wrapper<cudf::duration_s> col2 =
+ *      cudf::test::make_fixed_width_column_with_type_param<cudf::duration_s>(
+ *        {cudf::timestamp_D{cudf::timestamp_D::min()},
+ *         cudf::timestamp_D{cudf::timestamp_D::max()}});
+ *    ...
+ * }
+ * @endcode
+ **/
 
 /**
  * @brief Creates a fixed width column wrapper for a non-nullable column of
@@ -936,10 +1028,10 @@ auto make_fixed_width_column_with_type_param(std::initializer_list<T> const& ini
 
 /**
  * @brief Creates a fixed width column wrapper for a non-nullable column of
- * fixed-width elements using elements in the range `[begin,end)`.
+ * fixed-width elements using fixed width elements in the range `[begin,end)`.
  *
- * @param begin The beginning of the sequence of elements
- * @param end The end of the sequence of elements
+ * @param begin The beginning of the sequence of fixed width elements
+ * @param end The end of the sequence of fixed width elements
  * @return a fixed width column wrapper of type `TypeParam`
  **/
 template <typename TypeParam, typename InputIterator>
@@ -954,7 +1046,7 @@ auto make_fixed_width_column_with_type_param(InputIterator begin, InputIterator 
  * @brief Creates a fixed width column wrapper for a nullable column from a list of
  * fixed-width elements using another list to indicate the validity of each element.
  *
- * @param init_list The list of elements
+ * @param init_list The list of fixed width elements
  * @param validity The list of validity indicator booleans
  * @return a fixed width column wrapper of type `TypeParam`
  **/
@@ -968,13 +1060,10 @@ auto make_fixed_width_column_with_type_param(std::initializer_list<T> const& ini
 
 /**
  * @brief Creates a fixed width column wrapper for a nullable column from a list of
- * fixed-width elements using another list to indicate the validity of each element.
- *
- * @brief Creates a fixed width column wrapper for a nullable column from a list of
  * fixed-width elements and the the range `[v, v + element_list.size())` interpreted
  * as booleans to indicate the validity of each element.
  *
- * @param init_list The list of elements
+ * @param init_list The list of fixed width elements
  * @param v The beginning of the sequence of validity indicators
  * @return a fixed width column wrapper of type `TypeParam`
  **/
@@ -991,8 +1080,8 @@ auto make_fixed_width_column_with_type_param(std::initializer_list<T> const& ini
  * in the range `[begin,end)` using a validity initializer list to indicate the validity
  * of each element.
  *
- * @param begin The beginning of the sequence of elements
- * @param end The end of the sequence of elements
+ * @param begin The beginning of the sequence of fixed width elements
+ * @param end The end of the sequence of fixed width elements
  * @param validity The list of validity indicator booleans
  * @return a fixed width column wrapper of type `TypeParam`
  **/
@@ -1010,8 +1099,8 @@ auto make_fixed_width_column_with_type_param(InputIterator begin,
  * in the range `[begin,end)` using the range `[v, v + distance(begin,end))` interpreted
  * as booleans to indicate the validity of each element.
  *
- * @param begin The beginning of the sequence of elements
- * @param end The end of the sequence of elements
+ * @param begin The beginning of the sequence of fixed width elements
+ * @param end The end of the sequence of fixed width elements
  * @param v The beginning of the sequence of validity indicators
  * @return a fixed width column wrapper of type `TypeParam`
  **/

@@ -49,7 +49,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
 
     cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
-    auto destination = cudf::test::fixed_width_column_wrapper<T>(
+    auto destination = cudf::test::make_fixed_width_column_with_type_param<T>(
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(0) + size,
       cudf::test::make_counting_transform_iterator(0, destination_validity));
@@ -72,7 +72,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
     auto expected_elements = cudf::test::make_counting_transform_iterator(
       0,
       [begin, end, value](auto i) { return (i >= begin && i < end) ? value : static_cast<T>(i); });
-    auto expected = cudf::test::fixed_width_column_wrapper<T>(
+    auto expected = cudf::test::make_fixed_width_column_with_type_param<T>(
       expected_elements,
       expected_elements + size,
       cudf::test::make_counting_transform_iterator(

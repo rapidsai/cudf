@@ -190,7 +190,8 @@ TYPED_TEST_CASE(HashPartitionFixedWidth, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(HashPartitionFixedWidth, NullableFixedWidth)
 {
-  fixed_width_column_wrapper<TypeParam> fixed({1, 2, 3, 4}, {1, 1, 1, 1});
+  fixed_width_column_wrapper<TypeParam> fixed(
+    cudf::test::make_fixed_width_column_with_type_param<TypeParam>({1, 2, 3, 4}, {1, 1, 1, 1}));
   cudf::table_view input({fixed});
 
   std::vector<cudf::size_type> const columns_to_hash({0});
@@ -215,12 +216,14 @@ void run_fixed_width_test(size_t cols,
     std::generate(columns.begin(), columns.end(), [rows]() {
       auto iter   = thrust::make_counting_iterator(0);
       auto valids = thrust::make_transform_iterator(iter, [](auto i) { return i % 4 != 0; });
-      return fixed_width_column_wrapper<T>(iter, iter + rows, valids);
+      return fixed_width_column_wrapper<T>(
+        cudf::test::make_fixed_width_column_with_type_param<T>(iter, iter + rows, valids));
     });
   } else {
     std::generate(columns.begin(), columns.end(), [rows]() {
       auto iter = thrust::make_counting_iterator(0);
-      return fixed_width_column_wrapper<T>(iter, iter + rows);
+      return fixed_width_column_wrapper<T>(
+        cudf::test::make_fixed_width_column_with_type_param<T>(iter, iter + rows));
     });
   }
   auto input = cudf::table_view(make_view_vector(columns));
