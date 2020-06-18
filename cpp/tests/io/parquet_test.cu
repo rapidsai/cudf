@@ -645,7 +645,8 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
   auto state = cudf_io::write_parquet_chunked_begin(args);
   cudf_io::write_parquet_chunked(*table1, state);
   cudf_io::write_parquet_chunked(*table2, state);
-  cudf_io::write_parquet_chunked_end(state);
+  auto md = cudf_io::write_parquet_chunked_end(state);
+  assert(!md);
 
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
@@ -673,7 +674,8 @@ TEST_F(ParquetChunkedWriterTest, ManyTables)
   std::for_each(table_views.begin(), table_views.end(), [&state](table_view const& tbl) {
     cudf_io::write_parquet_chunked(tbl, state);
   });
-  cudf_io::write_parquet_chunked_end(state);
+  auto md = cudf_io::write_parquet_chunked_end(state, true, "dummy/path");
+  assert(md);
 
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
