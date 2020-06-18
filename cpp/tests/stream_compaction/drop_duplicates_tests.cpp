@@ -51,6 +51,31 @@ TYPED_TEST(UniqueCountCommon, NoNull)
             cudf::unique_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
+TYPED_TEST(UniqueCountCommon, TableNoNull)
+{
+  using T = TypeParam;
+
+  std::vector<T> input1 = cudf::test::make_type_param_vector<T>(
+    {1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4});
+  std::vector<T> input2 = cudf::test::make_type_param_vector<T>(
+    {3, 3, 4, 31, 1, 8, 5, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4, 1});
+
+  std::vector<std::pair<T, T>> pair_input;
+  std::transform(
+    input1.begin(), input1.end(), input2.begin(), std::back_inserter(pair_input), [](T a, T b) {
+      return std::make_pair(a, b);
+    });
+
+  cudf::test::fixed_width_column_wrapper<T> input_col1(input1.begin(), input1.end());
+  cudf::test::fixed_width_column_wrapper<T> input_col2(input2.begin(), input2.end());
+
+  std::vector<cudf::column_view> cols{input_col1, input_col2};
+  cudf::table_view input_table(cols);
+
+  cudf::size_type expected = std::set<std::pair<T, T>>(pair_input.begin(), pair_input.end()).size();
+  EXPECT_EQ(expected, cudf::unique_count(input_table, null_equality::EQUAL));
+}
+
 struct UniqueCount : public cudf::test::BaseFixture {
 };
 
@@ -176,6 +201,57 @@ TEST_F(UniqueCount, StringColumnWithNull)
     (std::vector<std::string>{"", "this", "is", "This", "a", "column", "of", "strings"}).size();
   EXPECT_EQ(expected,
             cudf::unique_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
+}
+
+TEST_F(UniqueCount, TableWithNull)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col1{{5, 4, 3, 5, 8, 1, 4, 5, 0, 9, -1},
+                                                       {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{{2, 2, 2, -1, 2, 1, 2, 0, 0, 9, -1},
+                                                       {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0}};
+  cudf::table_view input{{col1, col2}};
+
+  EXPECT_EQ(8, cudf::unique_count(input, null_equality::EQUAL));
+  EXPECT_EQ(10, cudf::unique_count(input, null_equality::UNEQUAL));
+}
+
+TEST_F(UniqueCount, EmptyColumnedTable)
+{
+  std::vector<cudf::column_view> cols{};
+
+  cudf::table_view input(cols);
+
+  EXPECT_EQ(0, cudf::unique_count(input, null_equality::EQUAL));
+  EXPECT_EQ(0, cudf::unique_count(input, null_equality::UNEQUAL));
+  EXPECT_EQ(0, cudf::unique_count(cudf::table_view{}, null_equality::EQUAL));
+  EXPECT_EQ(0, cudf::unique_count(cudf::table_view{}, null_equality::UNEQUAL));
+}
+
+TEST_F(UniqueCount, TableMixedTypes)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col1{{5, 4, 3, 5, 8, 1, 4, 5, 0, 9, -1},
+                                                       {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<double> col2{{2, 2, 2, -1, 2, 1, 2, 0, 0, 9, -1},
+                                                      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<uint32_t> col3{{2, 2, 2, -1, 2, 1, 2, 0, 0, 9, -1},
+                                                        {1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0}};
+  cudf::table_view input{{col1, col2, col3}};
+
+  EXPECT_EQ(9, cudf::unique_count(input, null_equality::EQUAL));
+  EXPECT_EQ(10, cudf::unique_count(input, null_equality::UNEQUAL));
+}
+
+TEST_F(UniqueCount, TableWithStringColumnWithNull)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col1{{0, 9, 8, 9, 6, 5, 4, 3, 2, 1, 0},
+                                                       {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0}};
+  cudf::test::strings_column_wrapper col2{
+    {"", "this", "is", "this", "this", "a", "column", "of", "the", "strings", ""},
+    {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0}};
+
+  cudf::table_view input{{col1, col2}};
+  EXPECT_EQ(9, cudf::unique_count(input, null_equality::EQUAL));
+  EXPECT_EQ(10, cudf::unique_count(input, null_equality::UNEQUAL));
 }
 
 struct DropDuplicate : public cudf::test::BaseFixture {

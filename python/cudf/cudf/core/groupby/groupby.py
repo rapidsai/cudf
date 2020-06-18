@@ -149,18 +149,22 @@ class GroupBy(Serializable):
             result = result.sort_index()
 
         if not _is_multi_agg(func):
-            try:
-                # drop the last level
-                if result.columns.nlevels > 1:
+            if result.columns.nlevels == 1:
+                # make sure it's a flat index:
+                result.columns = result.columns.get_level_values(0)
+
+            if result.columns.nlevels > 1:
+                try:
+                    # drop the last level
                     result.columns = result.columns.droplevel(-1)
-            except IndexError:
-                # Pandas raises an IndexError if we are left
-                # with an all-nan MultiIndex when dropping
-                # the last level
-                if result.shape[1] == 1:
-                    result.columns = [None]
-                else:
-                    raise
+                except IndexError:
+                    # Pandas raises an IndexError if we are left
+                    # with an all-nan MultiIndex when dropping
+                    # the last level
+                    if result.shape[1] == 1:
+                        result.columns = [None]
+                    else:
+                        raise
 
         # set index names to be group key names
         result.index.names = self.grouping.names
