@@ -23,6 +23,7 @@
 - PR #5444 Remove usage of deprecated RMM APIs and headers.
 - PR #5463 Add `.str.byte_count` python api and cython(bindings)
 - PR #5488 Add plumbings for `.str.replace_tokens`
+- PR #5502 Add Unsigned types support in dlpack
 
 ## Improvements
 
