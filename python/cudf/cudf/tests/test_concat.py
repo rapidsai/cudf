@@ -272,9 +272,7 @@ def test_pandas_concat_compatibility_axis1():
     assert_eq(got, expect)
 
 
-@pytest.mark.parametrize(
-    "index", [[1, 1, 1], [0, 1, 2], [2, 1, 0], [5, 9, 10]]
-)
+@pytest.mark.parametrize("index", [[0, 1, 2], [2, 1, 0], [5, 9, 10]])
 @pytest.mark.parametrize("names", [False, (0, 1)])
 @pytest.mark.parametrize(
     "data",
@@ -299,7 +297,7 @@ def test_pandas_concat_compatibility_axis1_overlap(index, names, data):
 
 def test_pandas_concat_compatibility_axis1_eq_index():
     with pytest.raises(
-        ValueError, match=r"cannot reindex from a duplicate axis"
+        ValueError, match="cannot reindex from a duplicate axis"
     ):
         s1 = gd.Series(["a", "b", "c"], index=[0, 1, 2])
         s2 = gd.Series(["a", "b", "c"], index=[1, 1, 1])
