@@ -32,12 +32,12 @@ using cudf::nan_policy;
 using cudf::null_equality;
 using cudf::null_policy;
 template <typename T>
-struct UniqueCountCommon : public cudf::test::BaseFixture {
+struct DistinctCountCommon : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(UniqueCountCommon, cudf::test::NumericTypes);
+TYPED_TEST_CASE(DistinctCountCommon, cudf::test::NumericTypes);
 
-TYPED_TEST(UniqueCountCommon, NoNull)
+TYPED_TEST(DistinctCountCommon, NoNull)
 {
   using T = TypeParam;
 
@@ -51,7 +51,7 @@ TYPED_TEST(UniqueCountCommon, NoNull)
             cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
-TYPED_TEST(UniqueCountCommon, TableNoNull)
+TYPED_TEST(DistinctCountCommon, TableNoNull)
 {
   using T = TypeParam;
 
@@ -76,10 +76,10 @@ TYPED_TEST(UniqueCountCommon, TableNoNull)
   EXPECT_EQ(expected, cudf::distinct_count(input_table, null_equality::EQUAL));
 }
 
-struct UniqueCount : public cudf::test::BaseFixture {
+struct DistinctCount : public cudf::test::BaseFixture {
 };
 
-TEST_F(UniqueCount, WithNull)
+TEST_F(DistinctCount, WithNull)
 {
   using T = int32_t;
 
@@ -95,7 +95,7 @@ TEST_F(UniqueCount, WithNull)
             cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
-TEST_F(UniqueCount, IgnoringNull)
+TEST_F(DistinctCount, IgnoringNull)
 {
   using T = int32_t;
 
@@ -112,7 +112,7 @@ TEST_F(UniqueCount, IgnoringNull)
             cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
 }
 
-TEST_F(UniqueCount, WithNansAndNull)
+TEST_F(DistinctCount, WithNansAndNull)
 {
   using T = float;
 
@@ -128,7 +128,7 @@ TEST_F(UniqueCount, WithNansAndNull)
             cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
-TEST_F(UniqueCount, WithNansOnly)
+TEST_F(DistinctCount, WithNansOnly)
 {
   using T = float;
 
@@ -142,7 +142,7 @@ TEST_F(UniqueCount, WithNansOnly)
             cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
-TEST_F(UniqueCount, NansAsNullWithNoNull)
+TEST_F(DistinctCount, NansAsNullWithNoNull)
 {
   using T = float;
 
@@ -156,7 +156,7 @@ TEST_F(UniqueCount, NansAsNullWithNoNull)
             cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_NULL));
 }
 
-TEST_F(UniqueCount, NansAsNullWithNull)
+TEST_F(DistinctCount, NansAsNullWithNull)
 {
   using T = float;
 
@@ -170,7 +170,7 @@ TEST_F(UniqueCount, NansAsNullWithNull)
             cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_NULL));
 }
 
-TEST_F(UniqueCount, NansAsNullWithIgnoreNull)
+TEST_F(DistinctCount, NansAsNullWithIgnoreNull)
 {
   using T = float;
 
@@ -184,7 +184,7 @@ TEST_F(UniqueCount, NansAsNullWithIgnoreNull)
             cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL));
 }
 
-TEST_F(UniqueCount, EmptyColumn)
+TEST_F(DistinctCount, EmptyColumn)
 {
   using T = float;
 
@@ -195,7 +195,7 @@ TEST_F(UniqueCount, EmptyColumn)
             cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL));
 }
 
-TEST_F(UniqueCount, StringColumnWithNull)
+TEST_F(DistinctCount, StringColumnWithNull)
 {
   cudf::test::strings_column_wrapper input_col{
     {"", "this", "is", "this", "This", "a", "column", "of", "the", "strings"},
@@ -207,7 +207,7 @@ TEST_F(UniqueCount, StringColumnWithNull)
             cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
 }
 
-TEST_F(UniqueCount, TableWithNull)
+TEST_F(DistinctCount, TableWithNull)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col1{{5, 4, 3, 5, 8, 1, 4, 5, 0, 9, -1},
                                                        {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0}};
@@ -219,7 +219,7 @@ TEST_F(UniqueCount, TableWithNull)
   EXPECT_EQ(10, cudf::distinct_count(input, null_equality::UNEQUAL));
 }
 
-TEST_F(UniqueCount, EmptyColumnedTable)
+TEST_F(DistinctCount, EmptyColumnedTable)
 {
   std::vector<cudf::column_view> cols{};
 
@@ -231,7 +231,7 @@ TEST_F(UniqueCount, EmptyColumnedTable)
   EXPECT_EQ(0, cudf::distinct_count(cudf::table_view{}, null_equality::UNEQUAL));
 }
 
-TEST_F(UniqueCount, TableMixedTypes)
+TEST_F(DistinctCount, TableMixedTypes)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col1{{5, 4, 3, 5, 8, 1, 4, 5, 0, 9, -1},
                                                        {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0}};
@@ -245,7 +245,7 @@ TEST_F(UniqueCount, TableMixedTypes)
   EXPECT_EQ(10, cudf::distinct_count(input, null_equality::UNEQUAL));
 }
 
-TEST_F(UniqueCount, TableWithStringColumnWithNull)
+TEST_F(DistinctCount, TableWithStringColumnWithNull)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col1{{0, 9, 8, 9, 6, 5, 4, 3, 2, 1, 0},
                                                        {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0}};
