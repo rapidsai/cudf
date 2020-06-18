@@ -51,27 +51,11 @@ TEST_F(ASTTest, BasicASTEvaluation)
   auto rhs = cudf::ast_expression_source{cudf::ast_data_source::COLUMN, 1};
   auto basic_expression =
     cudf::ast_binary_expression<int32_t>{cudf::ast_binary_operator::ADD, lhs, rhs};
-  if (basic_expression.op == cudf::ast_binary_operator::ADD) { printf("It's an add.\n"); }
 
-  auto to_host = [](cudf::column_view const& col) {
-    thrust::host_vector<int32_t> h_data(col.size());
-    CUDA_TRY(cudaMemcpy(
-      h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
-    return h_data;
-  };
+  printf("Performing evaluation:\n");
+  auto result_0 = cudf::compute_ast_column<int32_t>(table_a, basic_expression);
 
-  thrust::host_vector<int32_t> h_exp = to_host(expect_0);
-  thrust::host_vector<int32_t> h_got = to_host(table_a.column(0));
-
-  EXPECT_EQ(h_exp[0], h_got[0]);
-  EXPECT_EQ(h_exp[h_exp.size() - 1], h_got[h_got.size() - 1]);
-
-  // auto elt = table_a.column(0).data<int32_t>()[0];
-  // printf("Element: %i", elt);
-
-  // printf("Performing evaluation:\n");
-  // auto basic_eval = cudf::ast_evaluate_expression<int32_t>(basic_expression, table_a);
-  // printf("Result: %i\n", basic_eval);
+  cudf::test::expect_columns_equal(expect_0, result_0->view(), true);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
