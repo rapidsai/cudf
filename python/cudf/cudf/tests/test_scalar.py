@@ -88,7 +88,7 @@ def test_round_trip_scalar(value):
     np.testing.assert_equal(s.value, value)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"object"})
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["object"])
 def test_null_scalar(dtype):
     s = Scalar(None, dtype=dtype)
     assert s.value is None
