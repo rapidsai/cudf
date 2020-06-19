@@ -486,34 +486,34 @@ struct datetime_formatter {
       return;
     }
 
-    // first, convert to days so we can handle months, leap years, etc.
-    // 719468 is days between 0000-00-00 and 1970-01-01
-    auto days = scale_time(timestamp, units_base(units)) + 719468;
+    // with C++17, user structured bindings and const
+    int32_t days, year;
+    thrust::tie(days, year) = [&] {
+      // first, convert to days so we can handle months, leap years, etc.
+      // 719468 is days between 0000-00-00 and 1970-01-01
+      auto const days          = scale_time(timestamp, units_base(units)) + 719468;
+      auto const daysInEra     = 146097;  // (400*365)+97
+      auto const daysInCentury = 36524;   // (100*365) + 24;
+      auto const daysIn4Years  = 1461;    // (4*365) + 1;
+      auto const daysInYear    = 365;
 
-    int32_t const daysInEra     = 146097;  // (400*365)+97
-    int32_t const daysInCentury = 36524;   // (100*365) + 24;
-    int32_t const daysIn4Years  = 1461;    // (4*365) + 1;
-    int32_t const daysInYear    = 365;
+      // code logic handles leap years in chunks: 400y,100y,4y,1y
+      auto const daysModEra     = days % daysInEra;
+      auto const centuries      = daysModEra / daysInCentury;
+      auto const leapCentury    = centuries == 4;  // landed exactly on a leap century
+      auto const daysModCentury = daysModEra % daysInCentury + (leapCentury ? daysInCentury : 0);
+      auto const daysMod4Years  = daysModCentury % daysIn4Years;
+      auto const years          = daysMod4Years / daysInYear;
+      auto const leapYear       = years == 4;  // landed exactly on a leap year
+      auto const daysModYear    = daysMod4Years % daysInYear + (leapYear ? daysInYear : 0);
 
-    // code logic handles leap years in chunks: 400y,100y,4y,1y
-    int32_t year  = 400 * (days / daysInEra);
-    days          = days % daysInEra;
-    int32_t leapy = days / daysInCentury;
-    days          = days % daysInCentury;
-    if (leapy == 4) {  // landed exactly on a leap century
-      days += daysInCentury;
-      --leapy;
-    }
-    year += 100 * leapy;
-    year += 4 * (days / daysIn4Years);
-    days  = days % daysIn4Years;
-    leapy = days / daysInYear;
-    days  = days % daysInYear;
-    if (leapy == 4) {  // landed exactly on a leap year
-      days += daysInYear;
-      --leapy;
-    }
-    year += leapy;
+      auto const year = 400 * (days / daysInEra) +                   //
+                        100 * (centuries - (leapCentury ? 1 : 0)) +  //
+                        4 * (daysModCentury / daysIn4Years) +        //
+                        years - (leapYear ? 1 : 0);
+
+      return thrust::make_pair(daysModYear, year);
+    }();
 
     // The months are shifted so that March is the starting month and February
     // (with possible leap day in it) is the last month for the linear calculation.
