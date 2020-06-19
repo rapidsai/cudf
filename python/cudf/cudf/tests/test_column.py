@@ -142,3 +142,29 @@ def test_column_chunked_array_creation():
     expected_column = cudf.core.column.as_column(pyarrow_array)
 
     assert_eq(cudf.Series(actual_column), cudf.Series(expected_column))
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (
+            np.array([1, 2, 3, 4, 5], dtype="uint8"),
+            cudf.core.column.as_column([1, 2, 3, 4, 5], dtype="uint8"),
+        ),
+        (
+            cp.array([1, 2, 3, 4, 5], dtype="uint8"),
+            cudf.core.column.as_column([1, 2, 3, 4, 5], dtype="uint8"),
+        ),
+        (
+            cp.array([], dtype="uint8"),
+            cudf.core.column.as_column([], dtype="uint8"),
+        ),
+        (
+            cp.array([453], dtype="uint8"),
+            cudf.core.column.as_column([453], dtype="uint8"),
+        ),
+    ],
+)
+def test_as_colum_buffer(data, expected):
+    actual_column = cudf.core.column.as_column(cudf.core.Buffer(data))
+    assert_eq(cudf.Series(actual_column), cudf.Series(expected))
