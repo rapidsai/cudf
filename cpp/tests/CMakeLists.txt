@@ -375,7 +375,9 @@ ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 # - iterator tests --------------------------------------------------------------------------------
 
 set(ITERATOR_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/value_iterator_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/pair_iterator_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/scalar_iterator_test.cu")
 
 ConfigureTest(ITERATOR_TEST "${ITERATOR_TEST_SRC}")
 

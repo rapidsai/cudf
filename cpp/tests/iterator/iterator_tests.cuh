@@ -182,7 +182,3 @@ struct IteratorTest : public cudf::test::BaseFixture {
     }
   }
 };
-
-// DONE value_iterator_test.cu
-// DONE pair_iterator_test.cu
-// DONE scalar_iterator_test.cu
