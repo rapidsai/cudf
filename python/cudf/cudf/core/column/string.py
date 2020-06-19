@@ -3987,10 +3987,21 @@ class StringColumn(column.ColumnBase):
     def _mimic_inplace(self, other_col, inplace=False):
         out = super()._mimic_inplace(other_col, inplace=inplace)
         return out
-    
-    def view(self, dtype):
-        return self.children[1].view(dtype)
 
+    def view(self, dtype):
+        dtype = np.dtype(dtype)
+        if (
+            self.base_children[0][self.offset]
+            * self.base_children[1].dtype.itemsize
+        ) % dtype.itemsize:
+            raise TypeError(
+                "Slice data size must divide evenly into desired dtype size"
+            )
+        else:
+            offset = self.base_children[0][self.offset] * dtype.itemsize
+            return column.build_column(
+                self.base_children[1].data, dtype=dtype, offset=offset
+            )
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
