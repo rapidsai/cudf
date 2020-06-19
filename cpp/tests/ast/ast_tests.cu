@@ -34,28 +34,30 @@ struct ASTTest : public cudf::test::BaseFixture {
 
 TEST_F(ASTTest, BasicASTEvaluation)
 {
-  printf("Starting AST test.\n");
-  auto a_0 = column_wrapper<int32_t>{10, 20, 20, 50};
-  auto a_1 = column_wrapper<int32_t>{3, 7, 1, 0};
+  auto a_0 = column_wrapper<int32_t>{3, 20, 1, 50};
+  auto a_1 = column_wrapper<int32_t>{10, 7, 20, 0};
 
-  auto b_0 = column_wrapper<int32_t>{2, 1, 5};
-  auto b_1 = column_wrapper<int32_t>{7, 0, 4};
+  // auto b_0 = column_wrapper<int32_t>{2, 1, 5};
+  // auto b_1 = column_wrapper<int32_t>{7, 0, 4};
 
-  auto expect_0 = column_wrapper<int32_t>{13, 27, 21, 50};
+  auto expect_add  = column_wrapper<int32_t>{13, 27, 21, 50};
+  auto expect_less = column_wrapper<bool>{true, false, true, false};
 
   auto table_a = cudf::table_view{{a_0, a_1}};
-  auto table_b = cudf::table_view{{b_0, b_1}};
-  printf("Tables created.\n");
+  // auto table_b = cudf::table_view{{b_0, b_1}};
 
   auto lhs = cudf::ast_expression_source{cudf::ast_data_source::COLUMN, 0};
   auto rhs = cudf::ast_expression_source{cudf::ast_data_source::COLUMN, 1};
-  auto basic_expression =
+  auto expression_add =
     cudf::ast_binary_expression<int32_t>{cudf::ast_binary_operator::ADD, lhs, rhs};
+  auto expression_less =
+    cudf::ast_comparator_expression<int32_t>{cudf::ast_comparator::LESS, lhs, rhs};
 
-  printf("Performing evaluation:\n");
-  auto result_0 = cudf::compute_ast_column<int32_t>(table_a, basic_expression);
+  auto result_add  = cudf::compute_ast_column<int32_t>(table_a, expression_add);
+  auto result_less = cudf::compute_ast_column<int32_t>(table_a, expression_less);
 
-  cudf::test::expect_columns_equal(expect_0, result_0->view(), true);
+  cudf::test::expect_columns_equal(expect_add, result_add->view(), true);
+  cudf::test::expect_columns_equal(expect_less, result_less->view(), true);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
