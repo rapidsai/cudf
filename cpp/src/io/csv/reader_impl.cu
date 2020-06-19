@@ -349,12 +349,12 @@ table_with_metadata reader::impl::read(size_t range_offset,
       if (column_types[active_col].id() == type_id::EMPTY) {
         column_types[active_col] = data_type{STRING};
       }
-      out_buffers.emplace_back(
-        column_types[active_col],
-        num_records,
-        true,
-        stream,
-        column_types[active_col].id() != type_id::STRING ? mr_ : rmm::mr::get_default_resource());
+      const bool is_final_allocation = column_types[active_col].id() != type_id::STRING;
+      out_buffers.emplace_back(column_types[active_col],
+                               num_records,
+                               true,
+                               stream,
+                               is_final_allocation ? rmm::mr::get_default_resource() : mr_);
       metadata.column_names.emplace_back(col_names[col]);
       active_col++;
     }
