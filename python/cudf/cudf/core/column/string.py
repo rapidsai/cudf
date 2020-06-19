@@ -841,6 +841,129 @@ class StringMethods(object):
             cpp_slice_strings(self._column, start, stop, step), **kwargs,
         )
 
+    def isinteger(self, **kwargs):
+        """
+        Check whether all characters in each string form integer.
+
+        If a string has zero characters, False is returned for
+        that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
+
+        See also
+        --------
+        isalnum
+            Check whether all characters are alphanumeric.
+
+        isalpha
+            Check whether all characters are alphabetic.
+
+        isdecimal
+            Check whether all characters are decimal.
+
+        isdigit
+            Check whether all characters are digits.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
+
+        islower
+            Check whether all characters are lowercase.
+
+        isspace
+            Check whether all characters are whitespace.
+
+        isupper
+            Check whether all characters are uppercase.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["1", "0.1", "+100", "-15", "abc"])
+        >>> s.str.isinteger()
+        0     True
+        1    False
+        2     True
+        3     True
+        4    False
+        dtype: bool
+        >>> s = cudf.Series(["this is plan text", "", "10 10"])
+        >>> s.str.isinteger()
+        0    False
+        1    False
+        2    False
+        dtype: bool
+        """
+        return self._return_or_inplace(cpp_is_integer(self._column), **kwargs)
+
+    def isfloat(self, **kwargs):
+        """
+        Check whether all characters in each string form floating value.
+
+        If a string has zero characters, False is returned for
+        that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
+
+        See also
+        --------
+        isalnum
+            Check whether all characters are alphanumeric.
+
+        isalpha
+            Check whether all characters are alphabetic.
+
+        isdecimal
+            Check whether all characters are decimal.
+
+        isdigit
+            Check whether all characters are digits.
+
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        islower
+            Check whether all characters are lowercase.
+
+        isspace
+            Check whether all characters are whitespace.
+
+        isupper
+            Check whether all characters are uppercase.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["1.1", "0.123213", "+0.123", "-100.0001", "234",
+        ... "3-"])
+        >>> s.str.isfloat()
+        0     True
+        1     True
+        2     True
+        3     True
+        4     True
+        5    False
+        dtype: bool
+        >>> s = cudf.Series(["this is plain text", "\t\n", "9.9", "9.9.9"])
+        >>> s.str.isfloat()
+        0    False
+        1    False
+        2     True
+        3    False
+        dtype: bool
+        """
+        return self._return_or_inplace(cpp_is_float(self._column), **kwargs)
+
     def isdecimal(self, **kwargs):
         """
         Check whether all characters in each string are decimal.
@@ -858,27 +981,32 @@ class StringMethods(object):
 
         See also
         --------
-        isalpha
-            Check whether all characters are alphabetic.
-
-        isnumeric
-            Check whether all characters are numeric.
-
         isalnum
             Check whether all characters are alphanumeric.
+
+        isalpha
+            Check whether all characters are alphabetic.
 
         isdigit
             Check whether all characters are digits.
 
-        isspace
-            Check whether all characters are whitespace.
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
 
+        isspace
+            Check whether all characters are whitespace.
+
         isupper
             Check whether all characters are uppercase.
-
 
         Examples
         --------
@@ -918,24 +1046,29 @@ class StringMethods(object):
         isalpha
             Check whether all characters are alphabetic.
 
-        isnumeric
-            Check whether all characters are numeric.
+        isdecimal
+            Check whether all characters are decimal.
 
         isdigit
             Check whether all characters are digits.
 
-        isdecimal
-            Check whether all characters are decimal.
+        isinteger
+            Check whether all characters are integer.
 
-        isspace
-            Check whether all characters are whitespace.
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
 
+        isspace
+            Check whether all characters are whitespace.
+
         isupper
             Check whether all characters are uppercase.
-
 
         Examples
         --------
@@ -977,23 +1110,29 @@ class StringMethods(object):
 
         See also
         --------
-        isnumeric
-            Check whether all characters are numeric.
-
         isalnum
             Check whether all characters are alphanumeric.
-
-        isdigit
-            Check whether all characters are digits.
 
         isdecimal
             Check whether all characters are decimal.
 
-        isspace
-            Check whether all characters are whitespace.
+        isdigit
+            Check whether all characters are digits.
+
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
+
+        isspace
+            Check whether all characters are whitespace.
 
         isupper
             Check whether all characters are uppercase.
@@ -1028,27 +1167,32 @@ class StringMethods(object):
 
         See also
         --------
-        isalpha
-            Check whether all characters are alphabetic.
-
-        isnumeric
-            Check whether all characters are numeric.
-
         isalnum
             Check whether all characters are alphanumeric.
+
+        isalpha
+            Check whether all characters are alphabetic.
 
         isdecimal
             Check whether all characters are decimal.
 
-        isspace
-            Check whether all characters are whitespace.
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
 
+        isspace
+            Check whether all characters are whitespace.
+
         isupper
             Check whether all characters are uppercase.
-
 
         Examples
         --------
@@ -1084,23 +1228,29 @@ class StringMethods(object):
 
         See also
         --------
-        isalpha
-            Check whether all characters are alphabetic.
-
         isalnum
             Check whether all characters are alphanumeric.
 
-        isdigit
-            Check whether all characters are digits.
+        isalpha
+            Check whether all characters are alphabetic.
 
         isdecimal
             Check whether all characters are decimal.
 
-        isspace
-            Check whether all characters are whitespace.
+        isdigit
+            Check whether all characters are digits.
+
+        isinteger
+            Check whether all characters are integer.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
+
+        isspace
+            Check whether all characters are whitespace.
 
         isupper
             Check whether all characters are uppercase.
@@ -1147,26 +1297,32 @@ class StringMethods(object):
 
         See also
         --------
-        isalpha
-            Check whether all characters are alphabetic.
-
-        isnumeric
-            Check whether all characters are numeric.
-
         isalnum
             Check whether all characters are alphanumeric.
 
-        isdigit
-            Check whether all characters are digits.
+        isalpha
+            Check whether all characters are alphabetic.
 
         isdecimal
             Check whether all characters are decimal.
 
-        isspace
-            Check whether all characters are whitespace.
+        isdigit
+            Check whether all characters are digits.
+
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
+
+        isspace
+            Check whether all characters are whitespace.
 
         Examples
         --------
@@ -1198,20 +1354,26 @@ class StringMethods(object):
 
         See also
         --------
+        isalnum
+            Check whether all characters are alphanumeric.
+
         isalpha
             Check whether all characters are alphabetic.
 
-        isnumeric
-            Check whether all characters are numeric.
-
-        isalnum
-            Check whether all characters are alphanumeric.
+        isdecimal
+            Check whether all characters are decimal.
 
         isdigit
             Check whether all characters are digits.
 
-        isdecimal
-            Check whether all characters are decimal.
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         isspace
             Check whether all characters are whitespace.
@@ -1283,22 +1445,22 @@ class StringMethods(object):
 
         See also
         --------
-            lower
-                Converts all characters to lowercase.
+        lower
+            Converts all characters to lowercase.
 
-            upper
-                Converts all characters to uppercase.
+        upper
+            Converts all characters to uppercase.
 
-            title
-                Converts first character of each word to uppercase and
-                remaining to lowercase.
+        title
+            Converts first character of each word to uppercase and
+            remaining to lowercase.
 
-            capitalize
-                Converts first character to uppercase and remaining to
-                lowercase.
+        capitalize
+            Converts first character to uppercase and remaining to
+            lowercase.
 
-            swapcase
-                Converts uppercase to lowercase and lowercase to uppercase.
+        swapcase
+            Converts uppercase to lowercase and lowercase to uppercase.
 
         Examples
         --------
@@ -2776,27 +2938,32 @@ class StringMethods(object):
 
         See also
         --------
+        isalnum
+            Check whether all characters are alphanumeric.
+
         isalpha
             Check whether all characters are alphabetic.
 
-        isnumeric
-            Check whether all characters are numeric.
-
-        isalnum
-            Check whether all characters are alphanumeric.
+        isdecimal
+            Check whether all characters are decimal.
 
         isdigit
             Check whether all characters are digits.
 
-        isdecimal
-            Check whether all characters are decimal.
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
 
         isupper
             Check whether all characters are uppercase.
-
 
         Examples
         --------

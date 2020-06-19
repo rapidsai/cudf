@@ -23,6 +23,7 @@
 - PR #5444 Remove usage of deprecated RMM APIs and headers.
 - PR #5463 Add `.str.byte_count` python api and cython(bindings)
 - PR #5488 Add plumbings for `.str.replace_tokens`
+- PR #5497 Add `.str.isinteger` & `.str.isfloat`
 
 ## Improvements
 
@@ -71,11 +72,13 @@
 - PR #5437 Improve libcudf join documentation
 - PR #5458 Install meta packages for dependencies
 - PR #5467 Move doc customization scripts to Jenkins
+- PR #5468 Add cudf::unique_count(table_view)
 - PR #5482 Use rmm::device_uvector in place of rmm::device_vector in copy_if
 - PR #5483 Add NVTX range calls to dictionary APIs
 - PR #5477 Add `is_index_type` trait 
 - PR #5487 Use sorted lists instead of sets for pytest parameterization
 - PR #5491 allow build libcudf in custom dir
+- PR #5503 Change `unique_count` to `distinct_count`
 - PR #5496 Rename .cu tests (zero cuda kernels) to .cpp files
 
 ## Bug Fixes
@@ -105,6 +108,7 @@
 - PR #5399 Fix cpp compiler warnings of unreachable code
 - PR #5439 Fix nvtext ngrams_tokenize performance for multi-byte UTF8
 - PR #5446 Fix compile error caused by out-of-date PR merge (4990)
+- PR #5423 Fix any() reduction ignore nulls 
 - PR #5459 Fix str.translate to convert table characters to UTF-8
 - PR #5480 Fix merge sort docs
 - PR #5465 Fix benchmark out of memory errors due to multiple initialization
