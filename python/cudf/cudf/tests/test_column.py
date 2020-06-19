@@ -203,15 +203,32 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
         else:
             raise error
 
-@pytest.mark.parametrize('data,to_dtype', [(['a','b','c'], 'int8')])
+
+@pytest.mark.parametrize(
+    "data,to_dtype",
+    [
+        (["a", "b", "c"], "int8"),
+        (["ab"], "int8"),
+        (["ab"], "int16"),
+        (["a", "ab", "a"], "int8"),
+        (['abcd', 'efgh'], 'float32'),
+        (['abcdefgh'], 'datetime64[ns]')
+    ],
+)
 def test_column_view_valid_string_to_numeric(data, to_dtype):
     def str_host_view(list_of_str):
-        return np.concatenate([np.frombuffer(s.encode('utf-8'), dtype=to_dtype) for s in list_of_str])
+        return np.concatenate(
+            [
+                np.frombuffer(s.encode("utf-8"), dtype=to_dtype)
+                for s in list_of_str
+            ]
+        )
 
     expect = cudf.Series(cudf.Series(data)._column.view(to_dtype))
     got = cudf.Series(str_host_view(data))
 
     assert_eq(expect, got)
+
 
 def test_column_view_nulls_widths_even():
 
@@ -228,7 +245,10 @@ def test_column_view_nulls_widths_even():
     assert_eq(expect, got)
 
     data = [None, 2.1, None, 5.3, 8.8]
-    expect_data = [np.float64(val).view("int64") if val is not None else val for val in data]
+    expect_data = [
+        np.float64(val).view("int64") if val is not None else val
+        for val in data
+    ]
 
     sr = cudf.Series(data, dtype="float64")
     expect = cudf.Series(expect_data, dtype="int64")
@@ -236,15 +256,16 @@ def test_column_view_nulls_widths_even():
 
     assert_eq(expect, got)
 
+
 def test_column_view_numeric_slice():
 
-    data = np.array([1,2,3,4,5], dtype='int32')
+    data = np.array([1, 2, 3, 4, 5], dtype="int32")
     sr = cudf.Series(data)
 
-    expect = cudf.Series(data[1:].view('int64'))
-    got = cudf.Series(sr._column[1:].view('int64'))
+    expect = cudf.Series(data[1:].view("int64"))
+    got = cudf.Series(sr._column[1:].view("int64"))
 
     assert_eq(expect, got)
 
     expect = cudf.Series(data[1:3])
-    got = cudf.Series(sr._column[1:].view('int64'))
+    got = cudf.Series(sr._column[1:].view("int64"))
