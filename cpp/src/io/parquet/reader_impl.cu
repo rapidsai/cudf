@@ -32,7 +32,10 @@
 
 #include <algorithm>
 #include <array>
+#include <fstream>
+#include <mutex>
 #include <regex>
+#include <thread>
 
 namespace cudf {
 namespace io {
@@ -344,6 +347,39 @@ struct metadata : public FileMetaData {
   }
 };
 
+template <typename task_t>
+class task_list {
+  auto empty_impl() const { return next_task_idx >= tasks.size(); }
+
+ public:
+  task_list(std::vector<task_t> &&tasks) : tasks(std::move(tasks)) {}
+
+  task_t take()
+  {
+    std::unique_lock<std::mutex> mlock(mutex_);
+    if (empty_impl()) return task_t{};
+    return tasks[next_task_idx++];
+  }
+
+  auto empty()
+  {
+    std::unique_lock<std::mutex> mlock(mutex_);
+    return empty_impl();
+  }
+
+ private:
+  const std::vector<task_t> tasks;
+  size_t next_task_idx = 0;
+  std::mutex mutex_;
+};
+
+struct read_task {
+  size_t chunk;
+  size_t next_chunk;
+  size_t offset;
+  size_t size;
+};
+
 void reader::impl::read_column_chunks(std::vector<rmm::device_buffer> &page_data,
                                       hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
                                       size_t begin_chunk,
@@ -352,6 +388,7 @@ void reader::impl::read_column_chunks(std::vector<rmm::device_buffer> &page_data
                                       cudaStream_t stream)
 {
   // Transfer chunk data, coalescing adjacent chunks
+  std::vector<read_task> pending_tasks;
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
     const size_t io_offset   = column_chunk_offsets[chunk];
     size_t io_size           = chunks[chunk].compressed_size;
@@ -370,18 +407,26 @@ void reader::impl::read_column_chunks(std::vector<rmm::device_buffer> &page_data
       io_size += chunks[next_chunk].compressed_size;
       next_chunk++;
     }
-    if (io_size != 0) {
-      auto buffer         = _source->host_read(io_offset, io_size);
-      page_data[chunk]    = rmm::device_buffer(buffer->data(), buffer->size(), stream);
-      uint8_t *d_compdata = reinterpret_cast<uint8_t *>(page_data[chunk].data());
-      do {
-        chunks[chunk].compressed_data = d_compdata;
-        d_compdata += chunks[chunk].compressed_size;
-      } while (++chunk != next_chunk);
-    } else {
-      chunk = next_chunk;
-    }
+    pending_tasks.push_back({chunk, next_chunk, io_offset, io_size});
+    chunk = next_chunk;
   }
+  task_list<read_task> read_tasks{std::move(pending_tasks)};
+  auto read_worker = [&]() {
+    while (!read_tasks.empty()) {
+      auto task = read_tasks.take();
+      if (task.size == 0) continue;
+      auto buffer           = _source->host_read(task.offset, task.size);
+      page_data[task.chunk] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
+      uint8_t *d_compdata   = reinterpret_cast<uint8_t *>(page_data[task.chunk].data());
+      do {
+        chunks[task.chunk].compressed_data = d_compdata;
+        d_compdata += chunks[task.chunk].compressed_size;
+      } while (++task.chunk != task.next_chunk);
+    }
+  };
+  std::vector<std::thread> workers;
+  for (int i = 0; i < 4; ++i) workers.emplace_back(read_worker);
+  for (auto &worker : workers) worker.join();
 }
 
 size_t reader::impl::count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,

@@ -233,21 +233,18 @@ class file_source : public datasource {
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    lseek(_file_desc, offset, SEEK_SET);
     // Clamp length to available data in the mapped region
     auto const read_size = std::min(size, _file_size - offset);
     std::vector<uint8_t> v(read_size);
-    CUDF_EXPECTS(read(_file_desc, v.data(), read_size) == read_size, "read failed");
+    CUDF_EXPECTS(pread(_file_desc, v.data(), read_size, offset) == read_size, "read failed");
     return std::make_unique<vector_buffer>(std::move(v));
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t *dst) override
   {
-    lseek(_file_desc, offset, SEEK_SET);
-
     // Clamp length to available data in the mapped region
     auto const read_size = std::min(size, _file_size - offset);
-    return read(_file_desc, dst, read_size);
+    return pread(_file_desc, dst, read_size, offset);
   }
 
   size_t size() const override { return _file_size; }
@@ -255,7 +252,7 @@ class file_source : public datasource {
  private:
   size_t _file_size = 0;
   int _file_desc    = -1;
-};
+};  // namespace io
 
 std::unique_ptr<datasource> datasource::create(const std::string &filepath,
                                                size_t offset,
