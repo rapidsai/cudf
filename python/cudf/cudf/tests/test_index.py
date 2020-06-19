@@ -16,7 +16,7 @@ from cudf.core.index import (
     RangeIndex,
     as_index,
 )
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
 
 
 def test_df_set_index_from_series():
@@ -141,6 +141,7 @@ def test_categorical_index():
 def test_pandas_as_index():
     # Define Pandas Indexes
     pdf_int_index = pd.Int64Index([1, 2, 3, 4, 5])
+    pdf_uint_index = pd.UInt64Index([1, 2, 3, 4, 5])
     pdf_float_index = pd.Float64Index([1.0, 2.0, 3.0, 4.0, 5.0])
     pdf_datetime_index = pd.DatetimeIndex(
         [1000000, 2000000, 3000000, 4000000, 5000000]
@@ -149,18 +150,21 @@ def test_pandas_as_index():
 
     # Define cudf Indexes
     gdf_int_index = as_index(pdf_int_index)
+    gdf_uint_index = as_index(pdf_uint_index)
     gdf_float_index = as_index(pdf_float_index)
     gdf_datetime_index = as_index(pdf_datetime_index)
     gdf_category_index = as_index(pdf_category_index)
 
     # Check instance types
     assert isinstance(gdf_int_index, GenericIndex)
+    assert isinstance(gdf_uint_index, GenericIndex)
     assert isinstance(gdf_float_index, GenericIndex)
     assert isinstance(gdf_datetime_index, DatetimeIndex)
     assert isinstance(gdf_category_index, CategoricalIndex)
 
     # Check equality
     assert_eq(pdf_int_index, gdf_int_index)
+    assert_eq(pdf_uint_index, gdf_uint_index)
     assert_eq(pdf_float_index, gdf_float_index)
     assert_eq(pdf_datetime_index, gdf_datetime_index)
     assert_eq(pdf_category_index, gdf_category_index)
@@ -478,10 +482,12 @@ def test_index_where(data, condition, other, error):
             assert tuple(expect.categories) == tuple(got.categories)
         else:
             assert_eq(
-                ps.where(ps_condition, other=ps_other).fillna(-1).values,
+                ps.where(ps_condition, other=ps_other)
+                .fillna(gs._columns[0].default_na_value())
+                .values,
                 gs.where(gs_condition, other=gs_other)
                 .to_pandas()
-                .fillna(-1)
+                .fillna(gs._columns[0].default_na_value())
                 .values,
             )
     else:
@@ -491,19 +497,7 @@ def test_index_where(data, condition, other, error):
             gs.where(gs_condition, other=gs_other)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "str",
-        "category",
-    ],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
 @pytest.mark.parametrize("copy", [True, False])
 def test_index_astype(dtype, copy):
     pdi = pd.Index([1, 2, 3])

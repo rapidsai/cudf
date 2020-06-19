@@ -20,10 +20,29 @@ _np_pa_dtypes = {
     np.int16: pa.int16(),
     np.int8: pa.int8(),
     np.bool_: pa.int8(),
+    np.uint64: pa.uint64(),
+    np.uint32: pa.uint32(),
+    np.uint16: pa.uint16(),
+    np.uint8: pa.uint8(),
     np.datetime64: pa.date64(),
     np.object_: pa.string(),
     np.str_: pa.string(),
 }
+
+SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
+UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
+INTEGER_TYPES = SIGNED_INTEGER_TYPES | UNSIGNED_TYPES
+FLOAT_TYPES = {"float32", "float64"}
+SIGNED_TYPES = SIGNED_INTEGER_TYPES | FLOAT_TYPES
+NUMERIC_TYPES = SIGNED_TYPES | UNSIGNED_TYPES
+DATETIME_TYPES = {
+    "datetime64[s]",
+    "datetime64[ms]",
+    "datetime64[us]",
+    "datetime64[ns]",
+}
+OTHER_TYPES = {"bool", "category", "str"}
+ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | OTHER_TYPES
 
 
 def np_to_pa_dtype(dtype):
@@ -42,10 +61,10 @@ def np_to_pa_dtype(dtype):
 
 def get_numeric_type_info(dtype):
     _TypeMinMax = namedtuple("_TypeMinMax", "min,max")
-    if dtype.kind in "iu":
+    if dtype.kind in {"i", "u"}:
         info = np.iinfo(dtype)
         return _TypeMinMax(info.min, info.max)
-    elif dtype.kind in "f":
+    elif dtype.kind == "f":
         return _TypeMinMax(dtype.type("-inf"), dtype.type("+inf"))
     else:
         raise TypeError(dtype)
@@ -278,7 +297,7 @@ def min_signed_type(x, min_size=8):
     return np.int64(x).dtype
 
 
-def min_numeric_column_type(x):
+def min_column_type(x, expected_type):
     """
     Return the smallest dtype which can represent all
     elements of the `NumericalColumn` `x`
@@ -300,9 +319,10 @@ def min_numeric_column_type(x):
             # cuDF does not support float16 dtype
             result_type = np.dtype("float32")
         return result_type
-    if np.issubdtype(x.dtype, np.signedinteger):
-        max_bound_dtype = np.dtype(min_signed_type(x.max()))
-        min_bound_dtype = np.dtype(min_signed_type(x.min()))
+
+    if np.issubdtype(expected_type, np.integer):
+        max_bound_dtype = np.min_scalar_type(x.max())
+        min_bound_dtype = np.min_scalar_type(x.min())
         return np.promote_types(max_bound_dtype, min_bound_dtype)
 
     return x.dtype
@@ -310,7 +330,6 @@ def min_numeric_column_type(x):
 
 def check_cast_unsupported_dtype(dtype):
     from cudf._lib.types import np_to_cudf_types
-    import warnings
 
     if is_categorical_dtype(dtype):
         return dtype
@@ -323,24 +342,8 @@ def check_cast_unsupported_dtype(dtype):
     if dtype in np_to_cudf_types:
         return dtype
 
-    # A mapping of un-supported types to next capable supported dtype.
-    cast_types_map = {
-        np.dtype("uint8"): np.dtype("int16"),
-        np.dtype("uint16"): np.dtype("int32"),
-        np.dtype("uint32"): np.dtype("int64"),
-        np.dtype("uint64"): np.dtype("int64"),
-        np.dtype("float16"): np.dtype("float32"),
-    }
-
-    if dtype in cast_types_map:
-
-        if dtype == np.dtype("uint64"):
-            warnings.warn(
-                "Downcasting from uint64 to int64, potential data \
-                    overflow can occur."
-            )
-
-        return cast_types_map[dtype]
+    if dtype == np.dtype("float16"):
+        return np.dtype("float32")
 
     raise NotImplementedError(
         "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)
