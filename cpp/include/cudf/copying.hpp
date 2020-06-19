@@ -748,6 +748,8 @@ std::unique_ptr<table> scatter_to_table(
   column_view const& input,
   column_view const& row_labels,
   column_view const& column_labels,
+  size_type num_output_rows,
+  size_type num_output_columns,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */

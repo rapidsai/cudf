@@ -439,6 +439,15 @@ std::unique_ptr<table> boolean_mask_scatter(
   }
 }
 
+std::unique_ptr<table> scatter_to_table(column_view const& input,
+                                        column_view const& row_labels,
+                                        column_view const& column_labels,
+                                        rmm::mr::device_memory_resource* mr,
+                                        cudaStream_t stream)
+{
+  return std::make_unique<table>();
+}
+
 }  // namespace detail
 
 std::unique_ptr<table> scatter(table_view const& source,
