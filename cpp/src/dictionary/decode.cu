@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/table/table.hpp>
@@ -61,6 +62,7 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
 std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::decode(source, mr);
 }
 

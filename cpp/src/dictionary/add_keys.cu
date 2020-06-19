@@ -16,6 +16,7 @@
 
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -110,6 +111,7 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
                                  column_view const& keys,
                                  rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::add_keys(dictionary_column, keys, mr);
 }
 

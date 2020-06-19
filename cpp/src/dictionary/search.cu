@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/search.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -95,6 +96,7 @@ std::unique_ptr<numeric_scalar<int32_t>> get_index(dictionary_column_view const&
                                                    scalar const& key,
                                                    rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::get_index(dictionary, key, mr);
 }
 
