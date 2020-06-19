@@ -59,6 +59,10 @@ def pdf(request):
         "int16",
         "int32",
         "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
         "float32",
         "float64",
         "datetime64[ms]",
@@ -294,6 +298,12 @@ def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
         pdf = pdf.drop(columns=["col_category"])
     if "col_category" in gdf.columns:
         gdf = gdf.drop("col_category")
+
+    # pandas.to_parquet converts uint32 to int64 when writing file
+    if "col_uint32" in pdf.columns:
+        pdf = pdf.drop(columns=["col_uint32"])
+    if "col_uint32" in gdf.columns:
+        gdf = gdf.drop("col_uint32")
 
     assert_eq(pdf.reset_index(drop=True), gdf, check_categorical=False)
 
