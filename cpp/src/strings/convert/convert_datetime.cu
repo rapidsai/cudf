@@ -433,6 +433,19 @@ struct datetime_formatter {
   const int32_t* d_offsets;
   char* d_chars;
 
+  __device__ auto units_base(timestamp_units units) -> int64_t
+  {
+    switch (units) {
+      case timestamp_units::hours: return 24L;
+      case timestamp_units::minutes: return 1440L;   // 24*60
+      case timestamp_units::seconds: return 86400L;  // 24*60*60
+      case timestamp_units::ms: /**/ return 86400000L;
+      case timestamp_units::us: /**/ return 86400000000L;
+      case timestamp_units::ns: /**/ return 86400000000000L;
+    }
+    return 1L;  // days
+  }
+
   // divide timestamp integer into time components (year, month, day, etc)
   // TODO call the simt::std::chrono methods here instead when the are ready
   __device__ void dissect_timestamp(int64_t timestamp, int32_t* timeparts)
@@ -474,20 +487,8 @@ struct datetime_formatter {
     }
 
     // first, convert to days so we can handle months, leap years, etc.
-    int32_t days = static_cast<int32_t>(timestamp);  // default to days
-    if (units == timestamp_units::hours)
-      days = scale_time(timestamp, 24L);
-    else if (units == timestamp_units::minutes)
-      days = scale_time(timestamp, 1440L);  // 24*60
-    else if (units == timestamp_units::seconds)
-      days = scale_time(timestamp, 86400L);  // 24*60*60
-    else if (units == timestamp_units::ms)
-      days = scale_time(timestamp, 86400000L);
-    else if (units == timestamp_units::us)
-      days = scale_time(timestamp, 86400000000L);
-    else if (units == timestamp_units::ns)
-      days = scale_time(timestamp, 86400000000000L);
-    days = days + 719468;  // 719468 is days between 0000-00-00 and 1970-01-01
+    // 719468 is days between 0000-00-00 and 1970-01-01
+    auto days = scale_time(timestamp, units_base(units)) + 719468;
 
     int32_t const daysInEra     = 146097;  // (400*365)+97
     int32_t const daysInCentury = 36524;   // (100*365) + 24;
