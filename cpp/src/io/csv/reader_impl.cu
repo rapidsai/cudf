@@ -349,7 +349,12 @@ table_with_metadata reader::impl::read(size_t range_offset,
       if (column_types[active_col].id() == type_id::EMPTY) {
         column_types[active_col] = data_type{STRING};
       }
-      out_buffers.emplace_back(column_types[active_col], num_records, true, stream, mr_);
+      out_buffers.emplace_back(
+        column_types[active_col],
+        num_records,
+        true,
+        stream,
+        column_types[active_col].id() != type_id::STRING ? mr_ : rmm::mr::get_default_resource());
       metadata.column_names.emplace_back(col_names[col]);
       active_col++;
     }
