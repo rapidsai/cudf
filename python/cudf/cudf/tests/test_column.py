@@ -203,6 +203,16 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
         else:
             raise error
 
+@pytest.mark.parametrize('data,to_dtype', [(['a','b','c'], 'int8')])
+def test_column_view_valid_string_to_numeric(data, to_dtype):
+    def str_host_view(list_of_str):
+        return np.concatenate([np.frombuffer(s.encode('utf-8'), dtype=to_dtype) for s in list_of_str])
+
+    expect = cudf.Series(cudf.Series(data)._column.view(to_dtype))
+    got = cudf.Series(str_host_view(data))
+
+    assert_eq(expect, got)
+
 def test_column_view_nulls_widths_even():
 
     data = [1, 2, None, 4, None]
