@@ -69,18 +69,18 @@ TEST_F(CompoundColumnTest, ChildrenLevel1)
   rmm::device_buffer data2(data.data().get() + 200, 100 * sizeof(int32_t));
   rmm::device_buffer data3(data.data().get() + 300, 100 * sizeof(int32_t));
   auto child1 =
-    std::make_unique<cudf::column>(cudf::data_type{cudf::INT32}, 100, data1, null_mask, 0);
+    std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32}, 100, data1, null_mask, 0);
   auto child2 =
-    std::make_unique<cudf::column>(cudf::data_type{cudf::INT32}, 200, data2, null_mask, 0);
+    std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32}, 200, data2, null_mask, 0);
   auto child3 =
-    std::make_unique<cudf::column>(cudf::data_type{cudf::INT32}, 300, data3, null_mask, 0);
+    std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32}, 300, data3, null_mask, 0);
 
   std::vector<std::unique_ptr<cudf::column>> children;
   children.emplace_back(std::move(child1));
   children.emplace_back(std::move(child2));
   children.emplace_back(std::move(child3));
 
-  auto parent = std::make_unique<cudf::column>(cudf::data_type{cudf::STRING},
+  auto parent = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::STRING},
                                                100,
                                                rmm::device_buffer{0},
                                                rmm::device_buffer{0},
@@ -115,18 +115,18 @@ TEST_F(CompoundColumnTest, ChildrenLevel2)
   rmm::device_buffer data21(data.data().get() + 400, 100 * sizeof(int32_t));
   rmm::device_buffer data22(data.data().get() + 500, 100 * sizeof(int32_t));
   rmm::device_buffer data23(data.data().get() + 600, 100 * sizeof(int32_t));
-  auto gchild11 =
-    std::make_unique<cudf::column>(cudf::data_type{cudf::INT32}, 100, data11, null_mask, 0);
-  auto gchild12 =
-    std::make_unique<cudf::column>(cudf::data_type{cudf::INT32}, 200, data12, null_mask, 0);
-  auto gchild13 =
-    std::make_unique<cudf::column>(cudf::data_type{cudf::INT32}, 300, data13, null_mask, 0);
-  auto gchild21 =
-    std::make_unique<cudf::column>(cudf::data_type{cudf::INT32}, 400, data21, null_mask, 0);
-  auto gchild22 =
-    std::make_unique<cudf::column>(cudf::data_type{cudf::INT32}, 500, data22, null_mask, 0);
-  auto gchild23 =
-    std::make_unique<cudf::column>(cudf::data_type{cudf::INT32}, 600, data23, null_mask, 0);
+  auto gchild11 = std::make_unique<cudf::column>(
+    cudf::data_type{cudf::type_id::INT32}, 100, data11, null_mask, 0);
+  auto gchild12 = std::make_unique<cudf::column>(
+    cudf::data_type{cudf::type_id::INT32}, 200, data12, null_mask, 0);
+  auto gchild13 = std::make_unique<cudf::column>(
+    cudf::data_type{cudf::type_id::INT32}, 300, data13, null_mask, 0);
+  auto gchild21 = std::make_unique<cudf::column>(
+    cudf::data_type{cudf::type_id::INT32}, 400, data21, null_mask, 0);
+  auto gchild22 = std::make_unique<cudf::column>(
+    cudf::data_type{cudf::type_id::INT32}, 500, data22, null_mask, 0);
+  auto gchild23 = std::make_unique<cudf::column>(
+    cudf::data_type{cudf::type_id::INT32}, 600, data23, null_mask, 0);
 
   std::vector<std::unique_ptr<cudf::column>> gchildren1;
   gchildren1.emplace_back(std::move(gchild11));
@@ -137,13 +137,13 @@ TEST_F(CompoundColumnTest, ChildrenLevel2)
   gchildren2.emplace_back(std::move(gchild22));
   gchildren2.emplace_back(std::move(gchild23));
 
-  auto children1 = std::make_unique<cudf::column>(cudf::data_type{cudf::STRING},
+  auto children1 = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::STRING},
                                                   100,
                                                   rmm::device_buffer{0},
                                                   rmm::device_buffer{0},
                                                   0,
                                                   std::move(gchildren1));
-  auto children2 = std::make_unique<cudf::column>(cudf::data_type{cudf::STRING},
+  auto children2 = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::STRING},
                                                   100,
                                                   rmm::device_buffer{0},
                                                   rmm::device_buffer{0},
@@ -153,7 +153,7 @@ TEST_F(CompoundColumnTest, ChildrenLevel2)
   std::vector<std::unique_ptr<cudf::column>> children;
   children.emplace_back(std::move(children1));
   children.emplace_back(std::move(children2));
-  auto parent = std::make_unique<cudf::column>(cudf::data_type{cudf::STRING},
+  auto parent = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::STRING},
                                                100,
                                                rmm::device_buffer{0},
                                                rmm::device_buffer{0},

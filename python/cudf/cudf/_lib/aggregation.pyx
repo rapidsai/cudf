@@ -14,7 +14,8 @@ from cudf._lib.types import np_to_cudf_types, cudf_to_np_types, NullHandling
 from cudf._lib.move cimport move
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
-    underlying_type_t_null_policy
+    underlying_type_t_null_policy,
+    underlying_type_t_type_id,
 )
 from cudf._lib.types import Interpolation
 
@@ -233,8 +234,13 @@ cdef class _AggregationFactory:
                 "Result of window function has unsupported dtype {}"
                 .format(op[1])
             )
-        tid = np_to_cudf_types[output_np_dtype]
-
+        tid = (
+            <libcudf_types.type_id> (
+                <underlying_type_t_type_id> (
+                    np_to_cudf_types[output_np_dtype]
+                )
+            )
+        )
         out_dtype = libcudf_types.data_type(tid)
 
         agg.c_obj = move(libcudf_aggregation.make_udf_aggregation(

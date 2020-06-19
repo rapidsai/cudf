@@ -188,10 +188,10 @@ std::unique_ptr<table> drop_nans(
  * is returned.
  *
  * @throws cudf::logic_error if The `input` size  and `boolean_mask` size mismatches.
- * @throws cudf::logic_error if `boolean_mask` is not `BOOL8` type.
+ * @throws cudf::logic_error if `boolean_mask` is not `type_id::BOOL8` type.
  *
  * @param[in] input The input table_view to filter
- * @param[in] boolean_mask A nullable column_view of type BOOL8 used
+ * @param[in] boolean_mask A nullable column_view of type type_id::BOOL8 used
  * as a mask to filter the `input`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Table containing copy of all rows of @p input passing

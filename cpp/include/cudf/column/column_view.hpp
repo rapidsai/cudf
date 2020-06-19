@@ -193,7 +193,7 @@ class column_view_base {
   size_type offset() const noexcept { return _offset; }
 
  protected:
-  data_type _type{EMPTY};            ///< Element type
+  data_type _type{type_id::EMPTY};   ///< Element type
   size_type _size{};                 ///< Number of elements
   void const* _data{};               ///< Pointer to device memory containing elements
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
