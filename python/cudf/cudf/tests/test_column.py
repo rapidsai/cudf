@@ -203,7 +203,6 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
         else:
             raise error
 
-
 def test_column_view_nulls_widths_even():
 
     data = [1, 2, None, 4, None]
@@ -226,3 +225,16 @@ def test_column_view_nulls_widths_even():
     got = cudf.Series(sr._column.view("int64"))
 
     assert_eq(expect, got)
+
+def test_column_view_numeric_slice():
+
+    data = np.array([1,2,3,4,5], dtype='int32')
+    sr = cudf.Series(data)
+
+    expect = cudf.Series(data[1:].view('int64'))
+    got = cudf.Series(sr._column[1:].view('int64'))
+
+    assert_eq(expect, got)
+
+    expect = cudf.Series(data[1:3])
+    got = cudf.Series(sr._column[1:].view('int64'))
