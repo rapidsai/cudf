@@ -157,7 +157,6 @@ def test_column_chunked_array_creation():
         (np.arange(2), "float32", "int64"),
         (np.arange(8), "int8", "datetime64[ns]"),
         (np.arange(16), "int8", "datetime64[ns]"),
-        (np.array(["a"]), "str", "int8"),
     ],
 )
 def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
@@ -268,7 +267,7 @@ def test_column_view_numeric_slice():
     assert_eq(expect, got)
 
     expect = cudf.Series(data[1:3])
-    got = cudf.Series(sr._column[1:].view("int64"))
+    got = cudf.Series(sr._column[1:3].view("int64"))
 
 def test_column_view_string_slice():
     def str_host_view(list_of_str, to_dtype):
