@@ -165,6 +165,8 @@ def test_column_chunked_array_creation():
         ),
     ],
 )
-def test_as_colum_buffer(data, expected):
-    actual_column = cudf.core.column.as_column(cudf.core.Buffer(data))
+def test_as_column_buffer(data, expected):
+    actual_column = cudf.core.column.as_column(
+        cudf.core.Buffer(data), dtype=data.dtype
+    )
     assert_eq(cudf.Series(actual_column), cudf.Series(expected))

@@ -1195,16 +1195,9 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if dtype is not None:
             data = data.astype(dtype)
 
-    elif isinstance(arbitrary, Buffer):
+    elif type(arbitrary) is Buffer:
         if dtype is None:
-            # If the Buffer/Serializable object has
-            # __cuda_array_interface__ implemented, pick dtype from it.
-            if hasattr(arbitrary, "__cuda_array_interface__"):
-                dtype = np.dtype(arbitrary.__cuda_array_interface__["typestr"])
-            else:
-                raise TypeError(
-                    "dtype cannot be None if 'arbitrary' is a Buffer"
-                )
+            raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
 
         data = build_column(arbitrary, dtype=dtype)
 
