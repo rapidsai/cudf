@@ -109,12 +109,12 @@ TEST_F(TransformedIteratorTest, null_iterator_upcast)
 
   // data and valid arrays
   std::vector<T> host_values(column_size);
-  std::generate(host_values.begin(), host_values.end(), []() {
-    return static_cast<T>(random_int<T>(-128, 127));
-  });
   std::vector<bool> host_bools(column_size);
-  std::generate(
-    host_bools.begin(), host_bools.end(), []() { return static_cast<bool>(random_bool()); });
+
+  cudf::test::UniformRandomGenerator<T> rng(-128, 127);
+  cudf::test::UniformRandomGenerator<bool> rbg;
+  std::generate(host_values.begin(), host_values.end(), [&rng]() { return rng.generate(); });
+  std::generate(host_bools.begin(), host_bools.end(), [&rbg]() { return rbg.generate(); });
 
   cudf::test::fixed_width_column_wrapper<T> w_col(
     host_values.begin(), host_values.end(), host_bools.begin());
@@ -152,11 +152,12 @@ TEST_F(TransformedIteratorTest, null_iterator_square)
 
   // data and valid arrays
   std::vector<T> host_values(column_size);
-  std::generate(
-    host_values.begin(), host_values.end(), []() { return static_cast<T>(random_int(-128, 128)); });
   std::vector<bool> host_bools(column_size);
-  std::generate(
-    host_bools.begin(), host_bools.end(), []() { return static_cast<bool>(random_bool()); });
+
+  cudf::test::UniformRandomGenerator<T> rng(-128, 127);
+  cudf::test::UniformRandomGenerator<bool> rbg;
+  std::generate(host_values.begin(), host_values.end(), [&rng]() { return rng.generate(); });
+  std::generate(host_bools.begin(), host_bools.end(), [&rbg]() { return rbg.generate(); });
 
   cudf::test::fixed_width_column_wrapper<T> w_col(
     host_values.begin(), host_values.end(), host_bools.begin());
@@ -190,13 +191,14 @@ TEST_F(TransformedIteratorTest, large_size_reduction)
 
   // data and valid arrays
   std::vector<T> host_values(column_size);
-  std::generate(
-    host_values.begin(), host_values.end(), []() { return static_cast<T>(random_int(-128, 128)); });
   std::vector<bool> host_bools(column_size);
-  std::generate(
-    host_bools.begin(), host_bools.end(), []() { return static_cast<bool>(random_bool()); });
 
-  cudf::test::fixed_width_column_wrapper<TypeParam> w_col(
+  cudf::test::UniformRandomGenerator<T> rng(-128, 128);
+  cudf::test::UniformRandomGenerator<bool> rbg;
+  std::generate(host_values.begin(), host_values.end(), [&rng]() { return rng.generate(); });
+  std::generate(host_bools.begin(), host_bools.end(), [&rbg]() { return rbg.generate(); });
+
+  cudf::test::fixed_width_column_wrapper<T> w_col(
     host_values.begin(), host_values.end(), host_bools.begin());
   auto d_col = cudf::column_device_view::create(w_col);
 
@@ -360,3 +362,5 @@ TYPED_TEST(IteratorTest, error_handling)
                               "the data type mismatch");
   }
 }
+
+CUDF_TEST_PROGRAM_MAIN()

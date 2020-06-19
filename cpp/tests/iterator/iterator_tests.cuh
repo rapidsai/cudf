@@ -34,32 +34,7 @@
 #include <thrust/device_vector.h>
 #include <cub/device/device_reduce.cuh>
 
-// ---------------------------------------------------------------------------
-
-template <typename T>
-T random_int(T min, T max)
-{
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
-  static std::uniform_int_distribution<T> uniform{min, max};
-
-  return uniform(engine);
-}
-
-bool random_bool()
-{
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
-  static std::uniform_int_distribution<int> uniform{0, 1};
-
-  return static_cast<bool>(uniform(engine));
-}
-
-template <typename T>
-std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
-{
-  return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
-};
+// Base Typed test fixture for iterator test
 
 template <typename T>
 struct IteratorTest : public cudf::test::BaseFixture {

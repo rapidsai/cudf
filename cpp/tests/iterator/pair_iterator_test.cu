@@ -14,6 +14,13 @@
  */
 #include <tests/iterator/iterator_tests.cuh>
 
+// to print meanvar for debug.
+template <typename T>
+std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
+{
+  return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
+};
+
 // Transformers and Operators for pair_iterator test
 template <typename ElementType>
 struct transformer_pair_meanvar {
@@ -62,12 +69,12 @@ TYPED_TEST(PairIteratorTest, mean_var_output)
 
   // data and valid arrays
   std::vector<T> host_values(column_size);
-  std::generate(
-    host_values.begin(), host_values.end(), []() { return static_cast<T>(random_int(-128, 128)); });
-
   std::vector<bool> host_bools(column_size);
-  std::generate(
-    host_bools.begin(), host_bools.end(), []() { return static_cast<bool>(random_bool()); });
+
+  cudf::test::UniformRandomGenerator<T> rng;
+  cudf::test::UniformRandomGenerator<bool> rbg;
+  std::generate(host_values.begin(), host_values.end(), [&rng]() { return rng.generate(); });
+  std::generate(host_bools.begin(), host_bools.end(), [&rbg]() { return rbg.generate(); });
 
   cudf::test::fixed_width_column_wrapper<TypeParam> w_col(
     host_values.begin(), host_values.end(), host_bools.begin());
