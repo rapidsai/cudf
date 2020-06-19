@@ -61,29 +61,6 @@ std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
   return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
 };
 
-auto strings_to_string_views(std::vector<std::string>& input_strings)
-{
-  auto all_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
-  std::vector<char> chars;
-  std::vector<int32_t> offsets;
-  std::tie(chars, offsets) = cudf::test::detail::make_chars_and_offsets(
-    input_strings.begin(), input_strings.end(), all_valid);
-  thrust::device_vector<char> dev_chars(chars);
-  char* c_start = thrust::raw_pointer_cast(dev_chars.data());
-
-  // calculate the expected value by CPU. (but contains device pointers)
-  std::vector<cudf::string_view> replaced_array(input_strings.size());
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator<size_t>(replaced_array.size()),
-                 replaced_array.begin(),
-                 [c_start, offsets](auto i) {
-                   return cudf::string_view(c_start + offsets[i], offsets[i + 1] - offsets[i]);
-                 });
-  return std::make_tuple(std::move(dev_chars), replaced_array);
-}
-
-// ---------------------------------------------------------------------------
-
 template <typename T>
 struct IteratorTest : public cudf::test::BaseFixture {
   // iterator test case which uses cub
