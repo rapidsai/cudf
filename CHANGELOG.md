@@ -116,7 +116,7 @@
 - PR #5478 Fix `loc` and `iloc` doc
 - PR #5484 Ensure flat index after groupby if nlevels == 1
 - PR #5489 Fix drop_nulls/boolean_mask corruption for large columns
-
+- PR #5516 Update gpuCI image in local build script
 
 # cuDF 0.14.0 (Date TBD)
 
