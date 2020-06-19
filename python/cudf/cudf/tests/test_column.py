@@ -269,3 +269,23 @@ def test_column_view_numeric_slice():
 
     expect = cudf.Series(data[1:3])
     got = cudf.Series(sr._column[1:].view("int64"))
+
+def test_column_view_string_slice():
+    def str_host_view(list_of_str, to_dtype):
+        return np.concatenate(
+            [
+                np.frombuffer(s.encode("utf-8"), dtype=to_dtype)
+                for s in list_of_str
+            ]
+        )
+    data = ['a', 'b', 'cd', 'efg', 'h']
+
+    expect = cudf.Series(cudf.Series(data)._column[3:].view('int8'))
+    got = cudf.Series(str_host_view(data[3:], 'int8'))
+    
+    assert_eq(expect, got)
+
+    expect = cudf.Series(cudf.Series(data)._column[2:5].view('int8'))
+    got = cudf.Series(str_host_view(data[2:5], 'int8'))
+
+    assert_eq(expect, got)
