@@ -210,7 +210,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
 
   auto const strings_count = strings.size();
   if (strings_count == 0)  // if no strings, return an empty column
-    return cudf::make_empty_column(cudf::data_type{cudf::STRING});
+    return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
   auto const execpol        = rmm::exec_policy(stream);
   auto const strings_column = cudf::column_device_view::create(strings.parent(), stream);
@@ -243,9 +243,12 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                "Insufficient number of characters in each string to generate ngrams");
 
   // create output offsets column
-  auto offsets_column = cudf::make_numeric_column(
-    cudf::data_type{cudf::INT32}, total_ngrams + 1, cudf::mask_state::UNALLOCATED, stream, mr);
-  auto d_offsets = offsets_column->mutable_view().data<int32_t>();
+  auto offsets_column = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
+                                                  total_ngrams + 1,
+                                                  cudf::mask_state::UNALLOCATED,
+                                                  stream,
+                                                  mr);
+  auto d_offsets      = offsets_column->mutable_view().data<int32_t>();
   // compute the size of each ngram -- output goes in d_offsets
   character_ngram_generator_fn generator{d_strings, ngrams, d_ngram_offsets, d_offsets};
   thrust::for_each_n(execpol->on(stream),
