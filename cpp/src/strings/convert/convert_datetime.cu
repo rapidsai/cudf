@@ -433,7 +433,7 @@ struct datetime_formatter {
   const int32_t* d_offsets;
   char* d_chars;
 
-  __device__ auto units_base(timestamp_units units) -> int64_t
+  __device__ int64_t units_base(timestamp_units units)
   {
     switch (units) {
       case timestamp_units::hours: return 24L;
@@ -491,28 +491,29 @@ struct datetime_formatter {
     thrust::tie(days, year) = [&] {
       // first, convert to days so we can handle months, leap years, etc.
       // 719468 is days between 0000-00-00 and 1970-01-01
-      auto const days          = scale_time(timestamp, units_base(units)) + 719468;
-      auto const daysInEra     = 146097;  // (400*365)+97
-      auto const daysInCentury = 36524;   // (100*365) + 24;
-      auto const daysIn4Years  = 1461;    // (4*365) + 1;
-      auto const daysInYear    = 365;
+      auto const days            = scale_time(timestamp, units_base(units)) + 719468;
+      auto const days_in_era     = 146097;  // (400*365)+97
+      auto const days_in_century = 36524;   // (100*365) + 24;
+      auto const days_in_4_years = 1461;    // (4*365) + 1;
+      auto const days_in_year    = 365;
 
       // code logic handles leap years in chunks: 400y,100y,4y,1y
-      auto const daysModEra     = days % daysInEra;
-      auto const centuries      = daysModEra / daysInCentury;
-      auto const leapCentury    = centuries == 4;  // landed exactly on a leap century
-      auto const daysModCentury = daysModEra % daysInCentury + (leapCentury ? daysInCentury : 0);
-      auto const daysMod4Years  = daysModCentury % daysIn4Years;
-      auto const years          = daysMod4Years / daysInYear;
-      auto const leapYear       = years == 4;  // landed exactly on a leap year
-      auto const daysModYear    = daysMod4Years % daysInYear + (leapYear ? daysInYear : 0);
+      auto const days_mod_era = days % days_in_era;
+      auto const centuries    = days_mod_era / days_in_century;
+      auto const leap_century = centuries == 4;  // landed exactly on a leap century
+      auto const days_mod_century =
+        days_mod_era % days_in_century + (leap_century ? days_in_century : 0);
+      auto const days_mod_4_years = days_mod_century % days_in_4_years;
+      auto const years            = days_mod_4_years / days_in_year;
+      auto const leap_year        = years == 4;  // landed exactly on a leap year
+      auto const days_mod_year = days_mod_4_years % days_in_year + (leap_year ? days_in_year : 0);
 
-      auto const year = 400 * (days / daysInEra) +                   //
-                        100 * (centuries - (leapCentury ? 1 : 0)) +  //
-                        4 * (daysModCentury / daysIn4Years) +        //
-                        years - (leapYear ? 1 : 0);
+      auto const year = 400 * (days / days_in_era) +                  //
+                        100 * (centuries - (leap_century ? 1 : 0)) +  //
+                        4 * (days_mod_century / days_in_4_years) +    //
+                        years - (leap_year ? 1 : 0);
 
-      return thrust::make_pair(daysModYear, year);
+      return thrust::make_pair(days_mod_year, year);
     }();
 
     // The months are shifted so that March is the starting month and February
