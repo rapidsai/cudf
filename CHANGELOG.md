@@ -80,6 +80,7 @@
 - PR #5491 allow build libcudf in custom dir
 - PR #5503 Change `unique_count` to `distinct_count`
 - PR #5514 `convert_datetime.cu` Small Cleanup
+- PR #5496 Rename .cu tests (zero cuda kernels) to .cpp files
 
 ## Bug Fixes
 
@@ -116,7 +117,7 @@
 - PR #5478 Fix `loc` and `iloc` doc
 - PR #5484 Ensure flat index after groupby if nlevels == 1
 - PR #5489 Fix drop_nulls/boolean_mask corruption for large columns
-
+- PR #5516 Update gpuCI image in local build script
 
 # cuDF 0.14.0 (Date TBD)
 
