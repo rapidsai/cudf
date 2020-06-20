@@ -249,7 +249,7 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllTrueTrue)
   // non-arithmetic types (date32, date64, timestamp, category)
   bool result_error = true;
   bool expected     = true;
-  cudf::data_type output_dtype(cudf::BOOL8);
+  cudf::data_type output_dtype(cudf::type_id::BOOL8);
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
@@ -277,7 +277,7 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
   // non-arithmetic types (date32, date64, timestamp, category)
   bool result_error = true;
   bool expected     = false;
-  cudf::data_type output_dtype(cudf::BOOL8);
+  cudf::data_type output_dtype(cudf::type_id::BOOL8);
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
