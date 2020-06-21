@@ -323,7 +323,7 @@ class DataFrame(Frame, Serializable):
         else:
             index = as_index(index)
 
-        if isinstance(data[0], cudf.Series):
+        if len(data) > 0 and isinstance(data[0], cudf.Series):
             self._init_from_series_list(
                 data=data, columns=columns, index=index
             )

@@ -284,7 +284,7 @@ def test_gpu_parse_arrow_int(dtype):
     assert columns["depdelay"].dtype == dtype
     assert set(columns) == {"depdelay", "arrdelay"}
     assert list(columns["depdelay"].to_pandas()) == list(
-        depdelay.astype(dtype).to_pandas()
+        depdelay.astype(dtype)
     )
 
 
