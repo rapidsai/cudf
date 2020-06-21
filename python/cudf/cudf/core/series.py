@@ -767,6 +767,17 @@ class Series(Frame, Serializable):
             ".to_arrow(), .values_host."
         )
 
+    iteritems = __iter__
+
+    items = __iter__
+
+    def to_dict(self, into=dict):
+        raise TypeError(
+            "Implicit conversion to a host memory via to_dict() is not "
+            "allowed, To explicitly construct a dictionary object, "
+            "consider using .to_pandas().to_dict()"
+        )
+
     def __setitem__(self, key, value):
         if isinstance(key, slice):
             self.iloc[key] = value
