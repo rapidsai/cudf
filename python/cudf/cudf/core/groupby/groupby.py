@@ -10,6 +10,7 @@ import cudf
 import cudf._lib.groupby as libgroupby
 from cudf._lib.nvtx import annotate
 from cudf.core.abc import Serializable
+from cudf.utils.utils import cached_property
 
 
 class GroupBy(Serializable):
@@ -54,8 +55,6 @@ class GroupBy(Serializable):
         else:
             self.grouping = _Grouping(obj, by, level)
 
-        self._groupby = libgroupby.GroupBy(self.grouping.keys, dropna=dropna)
-
     def __getattr__(self, key):
         if key != "_agg_func_name_with_args":
             if key in libgroupby._GROUPBY_AGGS:
@@ -82,6 +81,10 @@ class GroupBy(Serializable):
             .groupby(self.grouping)
             .agg("size")
         )
+
+    @cached_property
+    def _groupby(self):
+        return libgroupby.GroupBy(self.grouping.keys, dropna=self._dropna)
 
     @annotate("GROUPBY_AGG", domain="cudf_python")
     def agg(self, func):
@@ -146,18 +149,22 @@ class GroupBy(Serializable):
             result = result.sort_index()
 
         if not _is_multi_agg(func):
-            try:
-                # drop the last level
-                if result.columns.nlevels > 1:
+            if result.columns.nlevels == 1:
+                # make sure it's a flat index:
+                result.columns = result.columns.get_level_values(0)
+
+            if result.columns.nlevels > 1:
+                try:
+                    # drop the last level
                     result.columns = result.columns.droplevel(-1)
-            except IndexError:
-                # Pandas raises an IndexError if we are left
-                # with an all-nan MultiIndex when dropping
-                # the last level
-                if result.shape[1] == 1:
-                    result.columns = [None]
-                else:
-                    raise
+                except IndexError:
+                    # Pandas raises an IndexError if we are left
+                    # with an all-nan MultiIndex when dropping
+                    # the last level
+                    if result.shape[1] == 1:
+                        result.columns = [None]
+                    else:
+                        raise
 
         # set index names to be group key names
         result.index.names = self.grouping.names
@@ -474,6 +481,17 @@ class GroupBy(Serializable):
         kwargs.update({"chunks": offsets})
         return grouped_values.apply_chunks(function, **kwargs)
 
+    def rolling(self, *args, **kwargs):
+        """
+        Returns a `RollingGroupby` object that enables rolling window
+        calculations on the groups.
+
+        See also
+        --------
+        cudf.core.window.Rolling
+        """
+        return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
+
 
 class DataFrameGroupBy(GroupBy):
     def __init__(
@@ -685,7 +703,9 @@ class _Grouping(Serializable):
         # Need to keep track of named key columns
         # to support `as_index=False` correctly
         self._named_columns = []
+        self._handle_by_or_level(by, level)
 
+    def _handle_by_or_level(self, by=None, level=None):
         if level is not None:
             if by is not None:
                 raise ValueError("Cannot specify both by and level")

@@ -799,7 +799,7 @@ TEST_F(CsvReaderTest, ArrowFileSource)
   }
 
   std::shared_ptr<arrow::io::ReadableFile> infile;
-  ASSERT_TRUE(arrow::io::ReadableFile::Open(filepath, &infile).ok());
+  ASSERT_TRUE(arrow::io::ReadableFile::Open(filepath).Value(&infile).ok());
 
   cudf_io::read_csv_args in_args{cudf_io::source_info{infile}};
   in_args.dtype = {"int8"};
@@ -1134,13 +1134,13 @@ class TestSource : public cudf::io::datasource {
   TestSource(std::string s) : str(std::move(s)) {}
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    size = min(size, str.size() - offset);
+    size = std::min(size, str.size() - offset);
     return std::make_unique<TestBuffer>((uint8_t*)str.data() + offset, size);
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
-    auto const read_size = min(size, str.size() - offset);
+    auto const read_size = std::min(size, str.size() - offset);
     memcpy(dst, str.data() + offset, size);
     return read_size;
   }

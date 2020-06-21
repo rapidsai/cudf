@@ -88,7 +88,15 @@ def test_series_binop_scalar(nelem, binop, obj_class):
 _bitwise_binops = [operator.and_, operator.or_, operator.xor]
 
 
-_int_types = ["int8", "int16", "int32", "int64", "longlong"]
+_int_types = [
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "uint8",
+    "uint16",
+    "uint32",
+]
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -207,19 +215,7 @@ def test_string_series_compare(obj, cmpop, cmp_obj):
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem", [1, 2, 100])
 @pytest.mark.parametrize("cmpop", _cmpops)
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-        "longlong",
-    ],
-)
+@pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES + ["datetime64[ms]"])
 def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
     arr1 = np.random.randint(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
@@ -292,13 +288,16 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
     np.testing.assert_array_equal(expect, got)
 
 
-_dtypes = [np.int16, np.int32, np.int64, np.float32, np.float64]
-
-
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize(
     "binop,lhs_dtype,rhs_dtype",
-    list(product([operator.add, operator.mul], _dtypes, _dtypes)),
+    list(
+        product(
+            [operator.add, operator.mul],
+            utils.NUMERIC_TYPES,
+            utils.NUMERIC_TYPES,
+        )
+    ),
 )
 def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
     nelem = 10
@@ -322,7 +321,8 @@ def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize(
-    "cmpop,lhs_dtype,rhs_dtype", list(product(_cmpops, _dtypes, _dtypes))
+    "cmpop,lhs_dtype,rhs_dtype",
+    list(product(_cmpops, utils.NUMERIC_TYPES, utils.NUMERIC_TYPES)),
 )
 def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
     nelem = 5
@@ -376,7 +376,9 @@ _reflected_ops = [
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize("func, dtype", list(product(_reflected_ops, _dtypes)))
+@pytest.mark.parametrize(
+    "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
+)
 def test_reflected_ops_scalar(func, dtype, obj_class):
     # create random series
     np.random.seed(12)
@@ -722,4 +724,6 @@ def test_ufunc_ops(lhs, rhs, ops):
 
     expect = np_op(lhs, rhs)
     got = cu_op(culhs, curhs)
-    utils.assert_eq(expect.fillna(-1), got, check_dtype=False)
+    utils.assert_eq(
+        expect.fillna(got._column.default_na_value()), got, check_dtype=False
+    )

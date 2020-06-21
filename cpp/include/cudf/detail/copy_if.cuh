@@ -33,6 +33,7 @@
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <algorithm>
 #include <cub/cub.cuh>
@@ -210,11 +211,11 @@ struct scatter_gather_functor {
     cudf::size_type const& output_size,
     cudf::size_type const* block_offsets,
     Filter filter,
+    cudf::size_type per_thread,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream                 = 0)
   {
-    // Actually we gather here
-    rmm::device_vector<cudf::size_type> indices(output_size, 0);
+    rmm::device_uvector<cudf::size_type> indices(output_size, stream);
 
     thrust::copy_if(rmm::exec_policy(stream)->on(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
@@ -236,6 +237,7 @@ struct scatter_gather_functor {
     cudf::size_type const& output_size,
     cudf::size_type const* block_offsets,
     Filter filter,
+    cudf::size_type per_thread,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream                 = 0)
   {
@@ -248,8 +250,6 @@ struct scatter_gather_functor {
     auto scatter = (has_valid) ? scatter_kernel<T, Filter, block_size, true>
                                : scatter_kernel<T, Filter, block_size, false>;
 
-    cudf::size_type per_thread =
-      cudf::detail::elements_per_thread(scatter, input.size(), block_size);
     cudf::detail::grid_1d grid{input.size(), block_size, per_thread};
 
     rmm::device_scalar<cudf::size_type> null_count{0, stream};
@@ -272,7 +272,7 @@ struct scatter_gather_functor {
                                                         per_thread,
                                                         filter);
 
-    if (has_valid) { output_column->set_null_count(null_count.value()); }
+    if (has_valid) { output_column->set_null_count(null_count.value(stream)); }
     return output_column;
   }
 };
@@ -309,45 +309,50 @@ std::unique_ptr<table> copy_if(
     elements_per_thread(compute_block_counts<Filter, block_size>, input.num_rows(), block_size);
   cudf::detail::grid_1d grid{input.num_rows(), block_size, per_thread};
 
-  // allocate temp storage for block counts and offsets
-  // TODO: use an uninitialized vector to avoid the initialization kernel
-  rmm::device_vector<cudf::size_type> block_counts(2 * grid.num_blocks + 1, 0);
-  auto block_offsets = &block_counts[grid.num_blocks];
+  // temp storage for block counts and offsets
+  rmm::device_uvector<cudf::size_type> block_counts(grid.num_blocks, stream);
+  rmm::device_uvector<cudf::size_type> block_offsets(grid.num_blocks + 1, stream);
 
   // 1. Find the count of elements in each block that "pass" the mask
   compute_block_counts<Filter, block_size><<<grid.num_blocks, block_size, 0, stream>>>(
-    thrust::raw_pointer_cast(block_counts.data()), input.num_rows(), per_thread, filter);
+    block_counts.begin(), input.num_rows(), per_thread, filter);
 
-  CHECK_CUDA(stream);
-
-  cudf::size_type output_size = 0;
+  // initialize just the first element of block_offsets to 0 since the InclusiveSum below
+  // starts at the second element.
+  CUDA_TRY(cudaMemsetAsync(block_offsets.begin(), 0, sizeof(cudf::size_type), stream));
 
   // 2. Find the offset for each block's output using a scan of block counts
   if (grid.num_blocks > 1) {
     // Determine and allocate temporary device storage
     size_t temp_storage_bytes = 0;
-    cub::DeviceScan::InclusiveSum(
-      nullptr, temp_storage_bytes, &block_counts[0], &block_offsets[1], grid.num_blocks, stream);
+    cub::DeviceScan::InclusiveSum(nullptr,
+                                  temp_storage_bytes,
+                                  block_counts.begin(),
+                                  block_offsets.begin() + 1,
+                                  grid.num_blocks,
+                                  stream);
     rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
 
     // Run exclusive prefix sum
     cub::DeviceScan::InclusiveSum(d_temp_storage.data(),
                                   temp_storage_bytes,
-                                  &block_counts[0],
-                                  &block_offsets[1],
+                                  block_counts.begin(),
+                                  block_offsets.begin() + 1,
                                   grid.num_blocks,
                                   stream);
-
-    CUDA_TRY(cudaStreamSynchronize(stream));
-    // As it is InclusiveSum, last value in block_offsets will be output_size
-    output_size = block_counts.back();
-  } else {
-    // With num_blocks <= 1, block_offsets will always be `0`
-    CUDA_TRY(cudaStreamSynchronize(stream));
-    output_size = block_counts[grid.num_blocks - 1];
   }
 
-  CHECK_CUDA(stream);
+  // As it is InclusiveSum, last value in block_offsets will be output_size
+  // unless num_blocks == 1, in which case output_size is just block_counts[0]
+  cudf::size_type output_size{0};
+  CUDA_TRY(cudaMemcpyAsync(
+    &output_size,
+    grid.num_blocks > 1 ? block_offsets.begin() + grid.num_blocks : block_counts.begin(),
+    sizeof(cudf::size_type),
+    cudaMemcpyDefault,
+    stream));
+
+  CUDA_TRY(cudaStreamSynchronize(stream));
 
   if (output_size == input.num_rows()) {
     return std::make_unique<table>(input, stream, mr);
@@ -358,8 +363,9 @@ std::unique_ptr<table> copy_if(
                                    scatter_gather_functor<Filter, block_size>{},
                                    col_view,
                                    output_size,
-                                   thrust::raw_pointer_cast(block_offsets),
+                                   block_offsets.begin(),
                                    filter,
+                                   per_thread,
                                    mr,
                                    stream);
     });

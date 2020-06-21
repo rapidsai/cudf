@@ -129,7 +129,7 @@ Compiler requirements:
 
 * `gcc`     version 5.4+
 * `nvcc`    version 10.0+
-* `cmake`   version 3.12.4+
+* `cmake`   version 3.14.0+
 
 CUDA/GPU requirements:
 
@@ -333,8 +333,8 @@ flag. Below is a list of the available arguments and their purpose:
 | `NUMBA_VERSION` | newest | >=0.40.0 | set numba version |
 | `NUMPY_VERSION` | newest | >=1.14.3 | set numpy version |
 | `PANDAS_VERSION` | newest | >=0.23.4 | set pandas version |
-| `PYARROW_VERSION` | 0.15.0 | Not supported | set pyarrow version |
-| `CMAKE_VERSION` | newest | >=3.12 | set cmake version |
+| `PYARROW_VERSION` | 0.17.1 | Not supported | set pyarrow version |
+| `CMAKE_VERSION` | newest | >=3.14 | set cmake version |
 | `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
 | `PYTHON_VERSION` | 3.6 | 3.7 | set python version |
 

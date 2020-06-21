@@ -50,11 +50,15 @@ CUDA 10.0:
 
 ## Build From Source
 
-Build the native code first, and make sure the a JDK is installed and available. 
+Build the native code first, and make sure the a JDK is installed and available.
+
+When building libcudf, make sure you pass in the cmake options
+`-DARROW_STATIC_LIB=ON -DBoost_USE_STATIC_LIBS=ON` so that Apache Arrow and Boost libraries are
+linked statically.
+
 If you use the default cmake options libcudart will be dynamically linked to libcudf and librmm
 which are included.  If you do this the resulting jar will have a classifier associated with it
 because that jar can only be used with a single version of the CUDA runtime.  
-
 
 There is experimental work to try and remove that requirement but it is not fully functional
 you can build RMM and cuDF with `-DCUDA_STATIC_RUNTIME=ON` when running cmake, and similarly 

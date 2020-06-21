@@ -953,3 +953,18 @@ def get_filepath_or_buffer(
         path_or_data = BytesIO(path_or_data.read())
 
     return path_or_data, compression
+
+
+def buffer_write_lines(buf, lines):
+    """
+    Appends lines to a buffer.
+    Parameters
+    ----------
+    buf
+        The buffer to write to
+    lines
+        The lines to append.
+    """
+    if any(isinstance(x, str) for x in lines):
+        lines = [str(x) for x in lines]
+    buf.write("\n".join(lines))

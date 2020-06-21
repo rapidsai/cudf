@@ -10,7 +10,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import NUMERIC_TYPES, assert_eq
 
 if LooseVersion(pd.__version__) < LooseVersion("0.24"):
     try:
@@ -24,7 +24,7 @@ if LooseVersion(pd.__version__) < LooseVersion("0.24"):
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = ["bool", "int8", "int16", "int32", "int64", "float32", "float64"]
+    types = NUMERIC_TYPES + ["bool"]
     renamer = {
         "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
     }

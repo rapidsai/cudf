@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -85,7 +86,6 @@ struct dispatch_compute_indices {
              cudaStream_t stream)
   {
     CUDF_FAIL("list_view dictionary set_keys not supported yet");
-    return nullptr;
   }
 };
 
@@ -150,6 +150,7 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
                                  column_view const& keys,
                                  rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::set_keys(dictionary_column, keys, mr);
 }
 

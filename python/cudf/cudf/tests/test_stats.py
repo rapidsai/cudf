@@ -8,7 +8,7 @@ from cudf.core import Series
 from cudf.datasets import randomdata
 from cudf.tests.utils import assert_eq
 
-params_dtypes = [np.int32, np.float32, np.float64]
+params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
 
 interpolation_methods = ["linear", "lower", "higher", "midpoint", "nearest"]

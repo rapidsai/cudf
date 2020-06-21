@@ -20,6 +20,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <type_traits>
@@ -68,6 +69,13 @@ using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>
                                               std::is_same<cudf::timestamp_ms, T>,
                                               std::is_same<cudf::timestamp_us, T>,
                                               std::is_same<cudf::timestamp_ns, T>>;
+
+template <typename T>
+using is_duration_t = simt::std::disjunction<std::is_same<cudf::duration_D, T>,
+                                             std::is_same<cudf::duration_s, T>,
+                                             std::is_same<cudf::duration_ms, T>,
+                                             std::is_same<cudf::duration_us, T>,
+                                             std::is_same<cudf::duration_ns, T>>;
 
 /**
  * @brief Indicates whether objects of types `L` and `R` can be relationally
@@ -127,6 +135,27 @@ struct is_numeric_impl {
 };
 
 /**
+ * @brief Indicates whether the type `T` is a unsigned numeric type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is unsigned numeric
+ * @return false  `T` is signed numeric
+ **/
+template <typename T>
+constexpr inline bool is_unsigned()
+{
+  return std::is_unsigned<T>::value;
+}
+
+struct is_unsigned_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_unsigned<T>();
+  }
+};
+
+/**
  * @brief Indicates whether `type` is a numeric `data_type`.
  *
  * "Numeric" types are fundamental integral/floating point types such as `INT*`
@@ -140,6 +169,96 @@ struct is_numeric_impl {
 constexpr inline bool is_numeric(data_type type)
 {
   return cudf::type_dispatcher(type, is_numeric_impl{});
+}
+
+/**
+ * @brief Indicates whether the type `T` is a index type.
+ *
+ * A type `T` is considered an index type if it is valid to use
+ * elements of type `T` to index into a column. I.e.,
+ * index types are integral types such as 'INT*' apart from 'bool'.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is index type
+ * @return false  `T` is not index type
+ **/
+template <typename T>
+constexpr inline bool is_index_type()
+{
+  return std::is_integral<T>::value and not std::is_same<T, bool>::value;
+}
+
+struct is_index_type_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_index_type<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether the type `type` is a index type.
+ *
+ * A type `T` is considered an index type if it is valid to use
+ * elements of type `T` to index into a column. I.e.,
+ * index types are integral types such as 'INT*' apart from 'bool'.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is index type
+ * @return false `type` is not index type
+ **/
+constexpr inline bool is_index_type(data_type type)
+{
+  return cudf::type_dispatcher(type, is_index_type_impl{});
+}
+
+/**
+ * @brief Indicates whether `type` is a unsigned numeric `data_type`.
+ *
+ * "Unsigned Numeric" types are fundamental integral types such as `UINT*`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is unsigned numeric
+ * @return false `type` is signed numeric
+ **/
+constexpr inline bool is_unsigned(data_type type)
+{
+  return cudf::type_dispatcher(type, is_unsigned_impl{});
+}
+
+/**
+ * @brief Indicates whether the type `T` is a floating point type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is floating point
+ * @return false  `T` is not floating point
+ **/
+template <typename T>
+constexpr inline bool is_floating_point()
+{
+  return std::is_floating_point<T>::value;
+}
+
+struct is_floating_point_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_floating_point<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a floating point `data_type`.
+ *
+ * "Floating point" types are fundamental floating point types such as `FLOAT*`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is floating point
+ * @return false `type` is not floating point
+ **/
+constexpr inline bool is_floating_point(data_type type)
+{
+  return cudf::type_dispatcher(type, is_floating_point_impl{});
 }
 
 /**
@@ -211,6 +330,54 @@ constexpr inline bool is_timestamp(data_type type)
 }
 
 /**
+ * @brief Indicates whether the type `T` is a duration type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a duration
+ * @return false  `T` is not a duration
+ **/
+template <typename T>
+constexpr inline bool is_duration()
+{
+  return is_duration_t<T>::value;
+}
+
+struct is_duration_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_duration<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a duration `data_type`.
+ *
+ * "Duration" types are int32_t or int64_t tick counts representing a time interval.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a duration
+ * @return false `type` is not a duration
+ **/
+constexpr inline bool is_duration(data_type type)
+{
+  return cudf::type_dispatcher(type, is_duration_impl{});
+}
+
+/**
+ * @brief Indicates whether the type `T` is a cudf chrono type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a chrono type
+ * @return false  `T` is not a chrono type
+ **/
+template <typename T>
+constexpr inline bool is_chrono()
+{
+  return cudf::is_timestamp<T>() || cudf::is_duration<T>();
+}
+
+/**
  * @brief Indicates whether elements of type `T` are fixed-width.
  *
  * Elements of a fixed-width type all have the same size in bytes.
@@ -224,7 +391,7 @@ constexpr inline bool is_fixed_width()
 {
   // TODO Add fixed width wrapper types
   // Is a category fixed width?
-  return cudf::is_numeric<T>() || cudf::is_timestamp<T>();
+  return cudf::is_numeric<T>() || cudf::is_chrono<T>();
 }
 
 struct is_fixed_width_impl {
@@ -292,42 +459,6 @@ constexpr inline bool is_compound(data_type type)
 {
   return cudf::type_dispatcher(type, is_compound_impl{});
 }
-
-/**
- * @brief Indicates whether the type `T` is a simple type.
- *
- * "Simple" element types are implemented with only a single column, i.e.,
- * `num_children() == 0` for columns of "simple" elements
- *
- * @tparam T The type to verify
- * @return true `T` corresponds to a simple type
- * @return false `T` corresponds to a compound type
- **/
-template <typename T>
-constexpr inline bool is_simple()
-{
-  return not is_compound<T>();
-}
-
-struct is_simple_impl {
-  template <typename T>
-  bool operator()()
-  {
-    return is_simple<T>();
-  }
-};
-
-/**
- * @brief Indicates whether elements of `type` are simple.
- *
- * "Simple" element types are implemented with only a single column, i.e.,
- * `num_children() == 0` for columns of "simple" elements
- *
- * @param type The `data_type` to verify
- * @return true `type` is a simple type
- * @return false `type` is a compound type
- **/
-constexpr inline bool is_simple(data_type type) { return not is_compound(type); }
 
 /**
  * @brief Indicates whether `T` is a nested type.

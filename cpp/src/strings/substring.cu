@@ -215,7 +215,7 @@ struct compute_substrings_from_fn {
     auto strings_count = d_column.size();
 
     // Copy the null mask
-    rmm::device_buffer null_mask;
+    rmm::device_buffer null_mask{0, stream, mr};
     if (d_column.nullable())
       null_mask = rmm::device_buffer(
         d_column.null_mask(), cudf::bitmask_allocation_size_bytes(strings_count), stream, mr);
@@ -256,7 +256,8 @@ struct compute_substrings_from_fn {
 // type dispatcher.
 struct compute_substrings {
   template <typename PositionType,
-            std::enable_if_t<std::is_integral<PositionType>::value>* = nullptr>
+            std::enable_if_t<std::is_integral<PositionType>::value and
+                             not std::is_same<PositionType, bool>::value>* = nullptr>
   std::unique_ptr<column> operator()(column_device_view const& d_column,
                                      size_type null_count,
                                      column_view const& starts_column,
@@ -273,13 +274,10 @@ struct compute_substrings {
   }
 
   template <typename PositionType,
-            std::enable_if_t<not std::is_integral<PositionType>::value>* = nullptr>
-  std::unique_ptr<column> operator()(column_device_view const& d_column,
-                                     size_type null_count,
-                                     column_view const& starts_column,
-                                     column_view const& stops_column,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
+            typename... Args,
+            std::enable_if_t<not std::is_integral<PositionType>::value or
+                             std::is_same<PositionType, bool>::value>* = nullptr>
+  std::unique_ptr<column> operator()(Args&&... args) const
   {
     CUDF_FAIL("Positions values must be an integral type.");
   }

@@ -1393,6 +1393,21 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Cast to unsigned Byte - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to byte
+   * When casting from a Date, Timestamp, or Boolean to a byte type the underlying numerical
+   * representation of the data will be used for the cast.
+   * <p>
+   * Java does not have an unsigned byte type, so properly decoding these values
+   * will require extra steps on the part of the application.  See
+   * {@link Byte#toUnsignedInt(byte)}.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asUnsignedBytes() {
+    return castTo(DType.UINT8);
+  }
+
+  /**
    * Cast to Short - ColumnVector
    * This method takes the value provided by the ColumnVector and casts to short
    * When casting from a Date, Timestamp, or Boolean to a short type the underlying numerical
@@ -1401,6 +1416,21 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector asShorts() {
     return castTo(DType.INT16);
+  }
+
+  /**
+   * Cast to unsigned Short - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to short
+   * When casting from a Date, Timestamp, or Boolean to a short type the underlying numerical
+   * representation of the data will be used for the cast.
+   * <p>
+   * Java does not have an unsigned short type, so properly decoding these values
+   * will require extra steps on the part of the application.  See
+   * {@link Short#toUnsignedInt(short)}.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asUnsignedShorts() {
+    return castTo(DType.UINT16);
   }
 
   /**
@@ -1415,6 +1445,21 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Cast to unsigned Int - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to int
+   * When casting from a Date, Timestamp, or Boolean to a int type the underlying numerical
+   * representation of the data will be used for the cast.
+   * <p>
+   * Java does not have an unsigned int type, so properly decoding these values
+   * will require extra steps on the part of the application.  See
+   * {@link Integer#toUnsignedLong(int)}.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asUnsignedInts() {
+    return castTo(DType.UINT32);
+  }
+
+  /**
    * Cast to Long - ColumnVector
    * This method takes the value provided by the ColumnVector and casts to long
    * When casting from a Date, Timestamp, or Boolean to a long type the underlying numerical
@@ -1423,6 +1468,21 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector asLongs() {
     return castTo(DType.INT64);
+  }
+
+  /**
+   * Cast to unsigned Long - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to long
+   * When casting from a Date, Timestamp, or Boolean to a long type the underlying numerical
+   * representation of the data will be used for the cast.
+   * <p>
+   * Java does not have an unsigned long type, so properly decoding these values
+   * will require extra steps on the part of the application.  See
+   * {@link Long#toUnsignedString(long)}.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asUnsignedLongs() {
+    return castTo(DType.UINT64);
   }
 
   /**
@@ -1858,6 +1918,21 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   public ColumnVector stringReplaceWithBackrefs(String pattern, String replace) {
     return new ColumnVector(stringReplaceWithBackrefs(getNativeView(), pattern,
         replace));
+  }
+
+  /**
+   * Add '0' as padding to the left of each string.
+   *
+   * If the string is already width or more characters, no padding is performed.
+   * No strings are truncated.
+   *
+   * Null string entries result in null entries in the output column.
+   *
+   * @param width The minimum number of characters for each string.
+   * @return New column of strings.
+   */
+  public ColumnVector zfill(int width) {
+    return new ColumnVector(zfill(getNativeView(), width));
   }
 
   /**
@@ -2356,6 +2431,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   private static native long stringConcatenation(long[] columnViews, long separator, long narep);
 
+  /**
+   * Native method to add zeros as padding to the left of each string.
+   */
+  private static native long zfill(long nativeHandle, int width);
+
   private static native long binaryOpVS(long lhs, long rhs, int op, int dtype);
 
   private static native long binaryOpVV(long lhs, long rhs, int op, int dtype);
@@ -2789,9 +2869,29 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Create a new vector from the given values.
+   * <p>
+   * Java does not have an unsigned byte type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromUnsignedBytes(byte... values) {
+    return build(DType.UINT8, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
    */
   public static ColumnVector fromShorts(short... values) {
     return build(DType.INT16, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   * <p>
+   * Java does not have an unsigned short type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromUnsignedShorts(short... values) {
+    return build(DType.UINT16, values.length, (b) -> b.appendArray(values));
   }
 
   /**
@@ -2803,9 +2903,29 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Create a new vector from the given values.
+   * <p>
+   * Java does not have an unsigned int type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromUnsignedInts(int... values) {
+    return build(DType.UINT32, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
    */
   public static ColumnVector fromLongs(long... values) {
     return build(DType.INT64, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   * <p>
+   * Java does not have an unsigned long type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromUnsignedLongs(long... values) {
+    return build(DType.UINT64, values.length, (b) -> b.appendArray(values));
   }
 
   /**
@@ -2890,9 +3010,33 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Create a new vector from the given values.  This API supports inline nulls,
    * but is much slower than using a regular array and should really only be used
    * for tests.
+   * <p>
+   * Java does not have an unsigned byte type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromBoxedUnsignedBytes(Byte... values) {
+    return build(DType.UINT8, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
    */
   public static ColumnVector fromBoxedShorts(Short... values) {
     return build(DType.INT16, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   * <p>
+   * Java does not have an unsigned short type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromBoxedUnsignedShorts(Short... values) {
+    return build(DType.UINT16, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -2908,9 +3052,33 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Create a new vector from the given values.  This API supports inline nulls,
    * but is much slower than using a regular array and should really only be used
    * for tests.
+   * <p>
+   * Java does not have an unsigned int type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromBoxedUnsignedInts(Integer... values) {
+    return build(DType.UINT32, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
    */
   public static ColumnVector fromBoxedLongs(Long... values) {
     return build(DType.INT64, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   * <p>
+   * Java does not have an unsigned long type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromBoxedUnsignedLongs(Long... values) {
+    return build(DType.UINT64, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**

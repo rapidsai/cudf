@@ -11,6 +11,7 @@ from pandas.api.types import is_dict_like
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
+from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     ColumnBase,
@@ -32,10 +33,12 @@ from cudf.core.window import Rolling
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    can_convert_to_column,
     is_categorical_dtype,
     is_datetime_dtype,
     is_list_like,
     is_scalar,
+    is_string_dtype,
     min_scalar_type,
 )
 
@@ -2308,6 +2311,14 @@ class Series(Frame, Serializable):
         4    105
         dtype: int64
         """
+        if is_string_dtype(self._column.dtype) or is_categorical_dtype(
+            self._column.dtype
+        ):
+            raise TypeError(
+                "User defined functions are currently not "
+                "supported on Series with dtypes `str` and `category`."
+            )
+
         if callable(udf):
             res_col = self._unaryop(udf)
         else:
@@ -3344,15 +3355,72 @@ class Series(Frame, Serializable):
         and exact version to be moved to libgdf
         """
         if method != "sort":
-            msg = "non sort based unique_count() not implemented yet"
+            msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count(method, dropna)
+        return self._column.distinct_count(method, dropna)
 
-    def value_counts(self, sort=True):
+    def value_counts(
+        self,
+        normalize=False,
+        sort=True,
+        ascending=False,
+        bins=None,
+        dropna=True,
+    ):
         """Return a Series containing counts of unique values.
+
+        The resulting object will be in descending order so that
+        the first element is the most frequently-occurring element.
+        Excludes NA values by default.
+
+        Parameters
+        ----------
+        normalize : bool, default False
+            If True then the object returned will contain the
+            relative frequencies of the unique values. normalize == True
+            is not supported.
+
+        sort : bool, default True
+            Sort by frequencies.
+
+        ascending : bool, default False
+            Sort in ascending order.
+
+        bins : int, optional
+            Rather than count values, group them into half-open bins,
+            works with numeric data. Not yet supported.
+
+        dropna : bool, default True
+            Don’t include counts of NaN and None.
+            dropna == False is not supported
+
+        Returns
+        -------
+        result : Series contanining counts of unique values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
+        >>> sr.value_counts(ascending=True)
+        1.0    1
+        2.0    2
+        3.0    3
+        dtype: int32
         """
+
+        if normalize is not False:
+            raise NotImplementedError(
+                "Only normalize == False is currently supported"
+            )
+        if dropna is not True:
+            raise NotImplementedError(
+                "Only dropna == True is currently supported"
+            )
+        if bins is not None:
+            raise NotImplementedError("bins is not yet supported")
 
         if self.null_count == len(self):
             return Series(np.array([], dtype=np.int32), name=self.name)
@@ -3361,7 +3429,7 @@ class Series(Frame, Serializable):
         res.index.name = None
 
         if sort:
-            return res.sort_values(ascending=False)
+            return res.sort_values(ascending=ascending)
         return res
 
     def scale(self):
@@ -3634,10 +3702,18 @@ class Series(Frame, Serializable):
         # TODO: move this libcudf
         input_col = self._column
         output_col = column_empty_like(input_col)
+        output_mask = column_empty_like(input_col, dtype="bool")
         if output_col.size > 0:
             cudautils.gpu_diff.forall(output_col.size)(
-                input_col, output_col, periods
+                input_col, output_col, output_mask, periods
             )
+
+        output_col = column.build_column(
+            data=output_col.data,
+            dtype=output_col.dtype,
+            mask=bools_to_mask(output_mask),
+        )
+
         return Series(output_col, name=self.name, index=self.index)
 
     @copy_docstring(SeriesGroupBy.__init__)
@@ -3856,9 +3932,14 @@ class Series(Frame, Serializable):
 
 
 truediv_int_dtype_corrections = {
+    "int8": "float32",
     "int16": "float32",
     "int32": "float32",
     "int64": "float64",
+    "uint8": "float32",
+    "uint16": "float32",
+    "uint32": "float64",
+    "uint64": "float64",
     "bool": "float32",
     "int": "float",
 }
@@ -3968,3 +4049,139 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     ]
 
     return result
+
+
+def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    """Returns a boolean array where two arrays are equal within a tolerance.
+
+    Two values in ``a`` and ``b`` are  considiered equal when the following
+    equation is satisfied.
+
+    .. math::
+       |a - b| \\le \\mathrm{atol} + \\mathrm{rtol} |b|
+
+    Parameters
+    ----------
+        a : list-like, array-like or cudf.Series
+            Input sequence to compare.
+        b : list-like, array-like or cudf.Series
+            Input sequence to compare.
+        rtol : float
+            The relative tolerance.
+        atol : float
+            The absolute tolerance.
+        equal_nan : bool
+            If ``True``, null's in ``a`` will be considered equal
+            to null's in ``b``.
+
+    Returns
+    -------
+    Series
+
+    See Also
+    --------
+        np.isclose : Returns a boolean array where two arrays are element-wise
+            equal within a tolerance.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> s1 = cudf.Series([1.9876543,   2.9876654,   3.9876543, None, 9.9, 1.0])
+    >>> s2 = cudf.Series([1.987654321, 2.987654321, 3.987654321, None, 19.9,
+    ... None])
+    >>> s1
+    0    1.9876543
+    1    2.9876654
+    2    3.9876543
+    3         null
+    4          9.9
+    5          1.0
+    dtype: float64
+    >>> s2
+    0    1.987654321
+    1    2.987654321
+    2    3.987654321
+    3           null
+    4           19.9
+    5           null
+    dtype: float64
+    >>> cudf.isclose(s1, s2)
+    0     True
+    1     True
+    2     True
+    3    False
+    4    False
+    5    False
+    dtype: bool
+    >>> cudf.isclose(s1, s2, equal_nan=True)
+    0     True
+    1     True
+    2     True
+    3     True
+    4    False
+    5    False
+    dtype: bool
+    >>> cudf.isclose(s1, s2, equal_nan=False)
+    0     True
+    1     True
+    2     True
+    3    False
+    4    False
+    5    False
+    dtype: bool
+    """
+
+    index = None
+
+    if not can_convert_to_column(a):
+        raise TypeError(
+            f"Parameter `a` is expected to be a "
+            f"list-like or Series object, found:{type(a)}"
+        )
+    if not can_convert_to_column(b):
+        raise TypeError(
+            f"Parameter `b` is expected to be a "
+            f"list-like or Series object, found:{type(a)}"
+        )
+
+    if isinstance(a, pd.Series):
+        a = Series.from_pandas(a)
+    if isinstance(b, pd.Series):
+        b = Series.from_pandas(b)
+
+    if isinstance(a, cudf.Series) and isinstance(b, cudf.Series):
+        b = b.reindex(a.index)
+        index = as_index(a.index)
+
+    a_col = column.as_column(a)
+    a_array = cupy.asarray(a_col.data_array_view)
+
+    b_col = column.as_column(b)
+    b_array = cupy.asarray(b_col.data_array_view)
+
+    result = cupy.isclose(
+        a=a_array, b=b_array, rtol=rtol, atol=atol, equal_nan=equal_nan
+    )
+    result_col = column.as_column(result)
+
+    if a_col.null_count and b_col.null_count:
+        a_nulls = a_col.isna()
+        b_nulls = b_col.isna()
+        null_values = a_nulls.binary_operator("or", b_nulls)
+
+        if equal_nan is True:
+            equal_nulls = a_nulls.binary_operator("and", b_nulls)
+
+        del a_nulls, b_nulls
+    elif a_col.null_count:
+        null_values = a_col.isna()
+    elif b_col.null_count:
+        null_values = b_col.isna()
+    else:
+        return Series(result_col, index=index)
+
+    result_col[null_values] = False
+    if equal_nan is True and a_col.null_count and b_col.null_count:
+        result_col[equal_nulls] = True
+
+    return Series(result_col, index=index)
