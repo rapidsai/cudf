@@ -6181,6 +6181,13 @@ class DataFrame(Frame, Serializable):
         df.columns = self.columns
         return df
 
+    def to_dict(self, orient="dict", into=dict):
+        raise TypeError(
+            "Implicit conversion to a host memory via to_dict() is not "
+            "allowed, To explicitly construct a dictionary object, "
+            "consider using .to_pandas().to_dict()"
+        )
+
 
 def from_pandas(obj, nan_as_null=None):
     """
