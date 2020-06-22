@@ -499,8 +499,8 @@ std::vector<contiguous_split_result> contiguous_split(
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs
  * @param[in] lhs left-hand column_view
  * @param[in] rhs right-hand column_view
- * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
- * each element. Null element represents false.
+ * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * boolean for each element. Null element represents false.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
@@ -562,8 +562,8 @@ std::unique_ptr<column> shift(column_view const& input,
  * @throws cudf::logic_error if boolean mask is not of the same length as rhs
  * @param[in] lhs left-hand scalar
  * @param[in] rhs right-hand column_view
- * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
- * each element. Null element represents false.
+ * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * boolean for each element. Null element represents false.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
@@ -586,8 +586,8 @@ std::unique_ptr<column> copy_if_else(
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs
  * @param[in] lhs left-hand column_view
  * @param[in] rhs right-hand scalar
- * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
- * each element. Null element represents false.
+ * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * boolean for each element. Null element represents false.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
@@ -608,8 +608,8 @@ std::unique_ptr<column> copy_if_else(
  * @throws cudf::logic_error if boolean mask is not of type bool
  * @param[in] lhs left-hand scalar
  * @param[in] rhs right-hand scalar
- * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
- * each element. null element represents false.
+ * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * boolean for each element. null element represents false.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements

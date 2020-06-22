@@ -62,8 +62,8 @@ struct dispatch_compute_indices {
       thrust::make_counting_iterator<size_type>(0),
       [d_new_keys] __device__(size_type idx) { return d_new_keys.template element<Element>(idx); });
 
-    auto result =
-      make_numeric_column(data_type{INT32}, input.size(), mask_state::UNALLOCATED, stream, mr);
+    auto result = make_numeric_column(
+      data_type{type_id::INT32}, input.size(), mask_state::UNALLOCATED, stream, mr);
     auto d_result = result->mutable_view().data<int32_t>();
     auto execpol  = rmm::exec_policy(stream);
     thrust::lower_bound(execpol->on(stream),

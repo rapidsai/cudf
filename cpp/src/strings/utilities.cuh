@@ -76,8 +76,8 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                            cudaStream_t stream                 = 0)
 {
-  auto offsets_column =
-    make_numeric_column(data_type{INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_column = make_numeric_column(
+    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view          = offsets_column->mutable_view();
   auto d_offsets             = offsets_view.template data<int32_t>();
   size_and_exec_fn.d_offsets = d_offsets;

@@ -43,21 +43,24 @@ data_type DLDataType_to_data_type(DLDataType type)
 
   if (type.code == kDLInt) {
     switch (type.bits) {
-      case 8: return data_type(INT8);
-      case 16: return data_type(INT16);
-      case 32: return data_type(INT32);
-      case 64: return data_type(INT64);
+      case 8: return data_type(type_id::INT8);
+      case 16: return data_type(type_id::INT16);
+      case 32: return data_type(type_id::INT32);
+      case 64: return data_type(type_id::INT64);
       default: CUDF_FAIL("Unsupported bitsize for kDLInt");
     }
   } else if (type.code == kDLUInt) {
     switch (type.bits) {
-      case 8: return data_type(BOOL8);
+      case 8: return data_type(type_id::UINT8);
+      case 16: return data_type(type_id::UINT16);
+      case 32: return data_type(type_id::UINT32);
+      case 64: return data_type(type_id::UINT64);
       default: CUDF_FAIL("Unsupported bitsize for kDLUInt");
     }
   } else if (type.code == kDLFloat) {
     switch (type.bits) {
-      case 32: return data_type(FLOAT32);
-      case 64: return data_type(FLOAT64);
+      case 32: return data_type(type_id::FLOAT32);
+      case 64: return data_type(type_id::FLOAT64);
       default: CUDF_FAIL("Unsupported bitsize for kDLFloat");
     }
   } else {

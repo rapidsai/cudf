@@ -604,7 +604,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _selected_columns = _metadata->select_columns(options.columns, _has_timestamp_column);
 
   // Override output timestamp resolution if requested
-  if (options.timestamp_type.id() != EMPTY) { _timestamp_type = options.timestamp_type; }
+  if (options.timestamp_type.id() != type_id::EMPTY) { _timestamp_type = options.timestamp_type; }
 
   // Enable or disable attempt to use row index for parsing
   _use_index = options.use_index;
