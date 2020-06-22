@@ -176,7 +176,15 @@ __global__ void __launch_bounds__(1024, 1)
   dtype_len = (dtype == INT64 || dtype == DOUBLE) ? 8 : 4;
   if (dtype == INT32) {
     uint32_t converted_type = s->col.converted_type;
-    dtype_len_in            = (converted_type == INT_8) ? 1 : (converted_type == INT_16) ? 2 : 4;
+    dtype_len_in            = [converted_type]() -> uint32_t {
+      switch (converted_type) {
+        case INT_8:
+        case UINT_8: return 1;
+        case INT_16:
+        case UINT_16: return 2;
+        default: return 4;
+      }
+    }();
   } else {
     dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
   }
