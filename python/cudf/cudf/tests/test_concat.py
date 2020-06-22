@@ -302,7 +302,7 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     ps2 = s2.to_pandas()
     expect = None
     got = None
-    
+
     try:
         expect = pd.concat([ps1, ps2], axis=1)
     except Exception as e:
