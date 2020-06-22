@@ -25,6 +25,7 @@
 - PR #5488 Add plumbings for `.str.replace_tokens`
 - PR #5502 Add Unsigned int types support in dlpack
 - PR #5497 Add `.str.isinteger` & `.str.isfloat`
+- PR #5510 Add support for `cudf.Index` to create Indexes
 
 ## Improvements
 
