@@ -204,6 +204,22 @@ class aggregate_metadata {
                    std::back_inserter(per_file_metadata),
                    [](auto const &source) { return metadata(source.get()); });
 
+    // verify that the input files have matching columns
+    size_type num_cols = -1;
+    for (auto const &pfm : per_file_metadata) {
+      if (pfm.row_groups.size() != 0) {
+        if (num_cols == -1)
+          num_cols = pfm.row_groups[0].columns.size();
+        else
+          CUDF_EXPECTS(num_cols == static_cast<size_type>(pfm.row_groups[0].columns.size()),
+                       "All sources must have the same number of columns");
+      }
+    }
+    for (auto const &pfm : per_file_metadata) {
+      CUDF_EXPECTS(per_file_metadata[0].schema == pfm.schema,
+                   "All sources must have the same schemas");
+    }
+
     // merge key/value maps TODO: warn/throw if there are mismatches?
     for (auto const &pfm : per_file_metadata) {
       for (auto const &kv : pfm.key_value_metadata) { agg_keyval_map[kv.key] = kv.value; }
@@ -212,7 +228,8 @@ class aggregate_metadata {
 
   auto const &get_row_group(size_type idx, size_type src_idx) const
   {
-    // TODO check indices
+    CUDF_EXPECTS(src_idx >= 0 && src_idx < static_cast<size_type>(per_file_metadata.size()),
+                 "invalid source index");
     return per_file_metadata[src_idx].row_groups[idx];
   }
 
@@ -223,10 +240,8 @@ class aggregate_metadata {
         return sum + pfm.num_rows;
       });
   }
-  int get_num_row_groups(int src_idx = -1) const
+  int get_num_row_groups() const
   {
-    if (src_idx >= 0) return per_file_metadata[src_idx].row_groups.size();
-
     return std::accumulate(
       per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto &sum, auto &pfm) {
         return sum + pfm.row_groups.size();
@@ -236,7 +251,7 @@ class aggregate_metadata {
   auto get_column_names() const { return per_file_metadata[0].get_column_names(); }
 
   // TODO make sure schemas match
-  auto const &get_schema() const { return per_file_metadata[0].schema; }
+  auto const &get_schema(int idx) const { return per_file_metadata[0].schema[idx]; }
 
   auto const &get_key_value_metadata() const { return agg_keyval_map; }
 
@@ -329,8 +344,10 @@ class aggregate_metadata {
       row_count = 0;
       for (size_t src_idx = 0; src_idx < row_group_lists.size(); ++src_idx) {
         for (auto const &rowgroup_idx : row_group_lists[src_idx]) {
-          CUDF_EXPECTS(rowgroup_idx >= 0 && rowgroup_idx < get_num_row_groups(src_idx),
-                       "Invalid rowgroup index");
+          CUDF_EXPECTS(
+            rowgroup_idx >= 0 &&
+              rowgroup_idx < static_cast<size_type>(per_file_metadata[src_idx].row_groups.size()),
+            "Invalid rowgroup index");
           selection.emplace_back(rowgroup_idx, row_count, src_idx);
           row_count += get_row_group(rowgroup_idx, src_idx).num_rows;
         }
@@ -681,7 +698,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   if (_metadata->get_num_row_groups() != 0) {
     for (const auto &col : _selected_columns) {
       auto const &col_schema =
-        _metadata->get_schema()[_metadata->get_row_group(0, 0).columns[col.first].schema_idx];
+        _metadata->get_schema(_metadata->get_row_group(0, 0).columns[col.first].schema_idx);
       auto const col_type = to_type_id(col_schema.type,
                                        col_schema.converted_type,
                                        _strings_to_categorical,
@@ -725,7 +742,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       for (size_t i = 0; i < num_columns; ++i) {
         auto const col         = _selected_columns[i];
         auto const &col_meta   = row_group.columns[col.first].meta_data;
-        auto const &col_schema = _metadata->get_schema()[row_group.columns[col.first].schema_idx];
+        auto const &col_schema = _metadata->get_schema(row_group.columns[col.first].schema_idx);
 
         // Spec requires each row group to contain exactly one chunk for every
         // column. If there are too many or too few, continue with best effort
@@ -814,7 +831,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         auto col                    = _selected_columns[i];
         auto const &first_row_group = _metadata->get_row_group(selected_row_groups[0].index,
                                                                selected_row_groups[0].source_index);
-        auto &col_schema = _metadata->get_schema()[first_row_group.columns[col.first].schema_idx];
+        auto &col_schema = _metadata->get_schema(first_row_group.columns[col.first].schema_idx);
         bool is_nullable = (col_schema.max_definition_level != 0);
         out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
