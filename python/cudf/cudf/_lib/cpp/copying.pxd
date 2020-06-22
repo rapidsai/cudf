@@ -154,3 +154,11 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         column_view input,
         size_type index
     ) except +
+
+    unique_ptr[table] scatter_to_table(
+        const column_view& input,
+        const column_view& row_labels,
+        const column_view& column_labels,
+        size_type num_output_rows,
+        size_type num_output_columns
+    ) except +

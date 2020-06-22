@@ -656,3 +656,33 @@ def get_element(Column input_column, size_type index):
         )
 
     return Scalar.from_unique_ptr(move(c_output))
+
+
+def scatter_to_table(
+        Column input_column,
+        Column row_labels,
+        Column column_labels
+):
+    cdef column_view input_view = input_column.view()
+    cdef column_view row_labels_view = row_labels.view()
+    cdef column_view column_labels_view = column_labels.view()
+
+    cdef size_type num_output_rows = row_labels.max() + 1
+    cdef size_type num_output_columns = column_labels.max() + 1
+
+    cdef unique_ptr[table] c_output
+    with nogil:
+        c_output = move(
+            cpp_copying.scatter_to_table(
+                input_view,
+                row_labels_view,
+                column_labels_view,
+                num_output_rows,
+                num_output_columns
+            )
+        )
+
+    return Table.from_unique_ptr(
+        move(c_output),
+        column_names=range(num_output_columns)
+    )
