@@ -51,7 +51,10 @@ data_type DLDataType_to_data_type(DLDataType type)
     }
   } else if (type.code == kDLUInt) {
     switch (type.bits) {
-      case 8: return data_type(BOOL8);
+      case 8: return data_type(UINT8);
+      case 16: return data_type(UINT16);
+      case 32: return data_type(UINT32);
+      case 64: return data_type(UINT64);
       default: CUDF_FAIL("Unsupported bitsize for kDLUInt");
     }
   } else if (type.code == kDLFloat) {
