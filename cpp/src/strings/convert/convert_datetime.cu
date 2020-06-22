@@ -450,7 +450,7 @@ struct datetime_formatter {
   }
 
   // divide timestamp integer into time components (year, month, day, etc)
-  // TODO call the simt::std::chrono methods here instead when the are ready
+  // TODO call the simt::std::chrono methods here instead when they are ready
   __device__ void dissect_timestamp(int64_t timestamp, int32_t* timeparts)
   {
     if (units == timestamp_units::years) {
