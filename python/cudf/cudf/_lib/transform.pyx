@@ -80,7 +80,6 @@ def transform(Column input, op):
     compiled_op = cudautils.compile_udf(op, nb_signature)
     c_str = compiled_op[0].encode('UTF-8')
     np_dtype = np.dtype(compiled_op[1])
-    print("RGSL  :np_dtype is ", np_dtype)
 
     try:
         c_tid = <type_id> (
