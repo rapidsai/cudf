@@ -2220,3 +2220,29 @@ def test_str_isfloat(data, expected):
     expected = as_index(expected)
     actual = sr.str.isfloat()
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+        ["a", "z", ".", '"', "aa", "zz"],
+        ["aa", "zz"],
+        ["z", "a", "zz", "aa"],
+        ["1", "2", "3", "4", "5"],
+        [""],
+        ["a"],
+        ["hello"],
+        ["small text", "this is a larger text......"],
+        ["👋🏻", "🔥", "🥇"],
+        ["This is 💯", "here is a calendar", "📅"],
+        ["", ".", ";", "[", "]"],
+        ["\t", ".", "\n", "\n\t", "\t\n"],
+    ],
+)
+def test_str_max_min(data):
+    psr = pd.Series(data)
+    sr = Series(data)
+
+    assert_eq(psr.min(), sr.min())
+    assert_eq(psr.max(), sr.max())
