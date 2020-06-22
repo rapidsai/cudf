@@ -16,7 +16,10 @@
 
 #pragma once
 
-#include <text/subword/cp_data.h>
+#include <text/subword/detail/cp_data.h>
+
+namespace nvtext {
+namespace detail {
 
 __device__ __forceinline__ uint32_t get_cp_metadata(uint32_t* meta_data_ptr, uint32_t cp)
 {
@@ -59,3 +62,6 @@ __device__ __forceinline__ uint64_t get_extra_cps(uint64_t* aux_table_ptr, uint3
 {
   return aux_table_ptr[cp];
 }
+
+}  // namespace detail
+}  // namespace nvtext

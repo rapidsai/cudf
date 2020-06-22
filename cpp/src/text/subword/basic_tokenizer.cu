@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-#include <text/subword/cp_util.cuh>
-#include <text/subword/data_transfer_utils.cuh>
-#include <text/subword/tokenizer_utils.cuh>
-#include <text/subword/tokenizers.hpp>
+#include <cudf/utilities/error.hpp>
+#include <text/subword/detail/cp_util.cuh>
+#include <text/subword/detail/tokenizer_utils.cuh>
+#include <text/subword/detail/tokenizers.hpp>
 
 #include <cub/cub.cuh>
 #include <string>
 #include <vector>
 
 namespace nvtext {
+namespace detail {
 namespace {
 
 #define SORT_BIT 22
@@ -38,20 +39,20 @@ __device__ __forceinline__ bool is_head_byte(unsigned char utf8_byte)
   return (utf8_byte >> 6) != 2;
 }
 
-/*
-  If the byte at start_byte_for_thread is a head byte, the unicode code-point encoded by
-  the utf8 character started at that byte is returned and the head_byte boolean passed in
-  is set to true.
-
-  If the byte at start_byte_for_thread is not a head byte, 0 is returned AND the head_byte
-  boolean passed in is set to false.
-
-  All threads start reading bytes from the pointer denoted by sentences.
-
-  Params
-  --------
-  sentences: A pointer to the start of the sequence of characters to be tokenized.
-*/
+/**
+ * @brief Converts a UTF-8 character into a unicode code point value.
+ *
+ * If the byte at start_byte_for_thread is a head byte, the unicode code-point encoded by
+ * the utf8 character started at that byte is returned and the head_byte boolean passed in
+ * is set to true.
+ *
+ * If the byte at start_byte_for_thread is not a head byte, 0 is returned AND the head_byte
+ * boolean passed in is set to false.
+ *
+ * All threads start reading bytes from the pointer denoted by sentences.
+ *
+ * @param sentences A pointer to the start of the sequence of characters to be tokenized.
+ */
 __device__ __forceinline__ uint32_t extract_code_points_from_utf8(
   const unsigned char* sentences, const uint32_t start_byte_for_thread, bool& head_byte)
 {
@@ -165,41 +166,22 @@ __global__ void gpuBasicTokenizer(const unsigned char* sentences,
   BlockStore(temp_storage).Store(block_base, replacement_code_points);
 }
 
-void flatten_sentences(const std::vector<std::string>& sentences,
-                       char* flattened_sentences,
-                       uint32_t* sentence_offsets)
-{
-  uint32_t start_copy = 0;
-  for (uint32_t i = 0; i < sentences.size(); ++i) {
-    const uint32_t sentence_length = sentences[i].size();
-
-    sentences[i].copy(flattened_sentences + start_copy, sentence_length);
-    sentence_offsets[i] = start_copy;
-    start_copy += sentence_length;
-  }
-  sentence_offsets[sentences.size()] = start_copy;
-}
-
-// -------------------------------------- Basic tokenizer definitions
-// ------------------------------------------------------------ See tokenizers.cuh
-
-GpuBasicTokenizer::GpuBasicTokenizer(uint32_t max_num_sentences,
-                                     uint32_t max_num_chars,
-                                     std::vector<uint32_t> const& cp_metadata,
-                                     std::vector<uint64_t> const& aux_table,
-                                     bool do_lower_case)
+basic_tokenizer::basic_tokenizer(uint32_t max_num_sentences,
+                                 uint32_t max_num_chars,
+                                 std::vector<uint32_t> const& cp_metadata,
+                                 std::vector<uint64_t> const& aux_table,
+                                 bool do_lower_case,
+                                 cudaStream_t stream)
   : do_lower_case(do_lower_case),
     device_sentence_offsets(max_num_sentences + 1),
     device_sentences(max_num_chars),
     device_cp_metadata{cp_metadata},
     device_aux_table{aux_table}
 {
-  size_t max_BLOCKS            = (max_num_chars + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-  size_t max_threads_on_device = max_BLOCKS * THREADS_PER_BLOCK;
-
+  size_t max_BLOCKS               = (max_num_chars + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+  size_t max_threads_on_device    = max_BLOCKS * THREADS_PER_BLOCK;
   const size_t max_new_char_total = MAX_NEW_CHARS * max_threads_on_device;
   device_code_points.resize(max_new_char_total);
-
   device_chars_per_thread.resize(max_threads_on_device);
 
   // Determine temporary device storage requirements for cub
@@ -224,37 +206,29 @@ GpuBasicTokenizer::GpuBasicTokenizer(uint32_t max_num_sentences,
   device_num_selected.resize(1);
 }
 
-std::pair<ptr_length_pair<uint32_t*>, ptr_length_pair<uint32_t*>> GpuBasicTokenizer::tokenize(
-  const char* device_sentences_, const uint32_t* offsets, uint32_t offset_size)
+std::pair<ptr_length_pair, ptr_length_pair> basic_tokenizer::tokenize(const char* device_sentences_,
+                                                                      const uint32_t* offsets,
+                                                                      uint32_t offset_size,
+                                                                      cudaStream_t stream)
 {
-  ptr_length_pair<uint32_t*> cp_and_length;
-  ptr_length_pair<uint32_t*> offset_and_length;
+  ptr_length_pair cp_and_length;
+  ptr_length_pair offset_and_length;
 
-  // size_t num_offsets = offset_size + 1;
-  // std::vector<uint32_t> sentence_offsets(num_offsets);
-  // uint32_t start_copy = 0;
-  // for (uint32_t i = 0; i < offset_size; ++i) {
-  //  sentence_offsets[i] = start_copy;
-  //  start_copy += offsets[i];
-  //}
-  // sentence_offsets[offset_size] = start_copy;
-  // device_sentence_offsets = sentence_offsets;
   size_t num_offsets = std::min(size_t{offset_size + 1}, device_sentence_offsets.size());
-  cudaMemcpy(device_sentence_offsets.data().get(),
-             offsets,
-             sizeof(uint32_t) * num_offsets,
-             cudaMemcpyDeviceToDevice);
+  CUDA_TRY(cudaMemcpyAsync(device_sentence_offsets.data().get(),
+                           offsets,
+                           sizeof(uint32_t) * num_offsets,
+                           cudaMemcpyDeviceToDevice,
+                           stream));
   uint32_t sentences_size = device_sentence_offsets[num_offsets - 1];
-  // sentence_offsets[offset_size]
 
   static NotEqual select_op((1 << SORT_BIT));
 
-  size_t BLOCKS = (sentences_size + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-
+  size_t BLOCKS                   = (sentences_size + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
   const size_t max_new_char_total = MAX_NEW_CHARS * BLOCKS * THREADS_PER_BLOCK;
   size_t threads_on_device        = BLOCKS * THREADS_PER_BLOCK;
 
-  gpuBasicTokenizer<<<BLOCKS, THREADS_PER_BLOCK>>>(
+  gpuBasicTokenizer<<<BLOCKS, THREADS_PER_BLOCK, 0, stream>>>(
     (unsigned char*)device_sentences_,
     thrust::raw_pointer_cast(device_sentence_offsets.data()),
     sentences_size,  // sentence_offsets[offset_size],
@@ -264,7 +238,7 @@ std::pair<ptr_length_pair<uint32_t*>, ptr_length_pair<uint32_t*>> GpuBasicTokeni
     thrust::raw_pointer_cast(device_chars_per_thread.data()),
     do_lower_case,
     offset_size);
-  assertCudaSuccess(cudaPeekAtLastError());
+  CHECK_CUDA(stream);
 
   cub::DeviceSelect::If(thrust::raw_pointer_cast(cub_temp_storage.data()),
                         max_cub_storage_bytes,
@@ -273,7 +247,7 @@ std::pair<ptr_length_pair<uint32_t*>, ptr_length_pair<uint32_t*>> GpuBasicTokeni
                         thrust::raw_pointer_cast(device_num_selected.data()),
                         max_new_char_total,
                         select_op);
-  assertCudaSuccess(cudaPeekAtLastError());
+  CHECK_CUDA(stream);
 
   // We also need to prefix sum the number of characters up to an including the current character in
   // order to get the new sentence lengths.
@@ -282,30 +256,30 @@ std::pair<ptr_length_pair<uint32_t*>, ptr_length_pair<uint32_t*>> GpuBasicTokeni
                                 thrust::raw_pointer_cast(device_chars_per_thread.data()),
                                 thrust::raw_pointer_cast(device_chars_per_thread.data()),
                                 threads_on_device);
-  assertCudaSuccess(cudaPeekAtLastError());
+  CHECK_CUDA(stream);
 
   constexpr uint16_t SENTENCE_UPDATE_THREADS = 64;
   size_t SEN_KERNEL_BLOCKS = (offset_size + SENTENCE_UPDATE_THREADS - 1) / SENTENCE_UPDATE_THREADS;
-  update_sentence_lengths<<<SEN_KERNEL_BLOCKS, SENTENCE_UPDATE_THREADS>>>(
+  update_sentence_lengths<<<SEN_KERNEL_BLOCKS, SENTENCE_UPDATE_THREADS, 0, stream>>>(
     thrust::raw_pointer_cast(device_sentence_offsets.data()),
     thrust::raw_pointer_cast(device_chars_per_thread.data()),
     offset_size);
-  assertCudaSuccess(cudaPeekAtLastError());
+  CHECK_CUDA(stream);
 
   offset_and_length.gpu_ptr = thrust::raw_pointer_cast(device_sentence_offsets.data());
   offset_and_length.length  = offset_size + 1;
 
   uint32_t num_chars = 0;
-  assertCudaSuccess(cudaMemcpy(&num_chars,
-                               offset_and_length.gpu_ptr + offset_size,
-                               sizeof(num_chars),
-                               cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpyAsync(&num_chars,
+                           offset_and_length.gpu_ptr + offset_size,
+                           sizeof(num_chars),
+                           cudaMemcpyDeviceToHost,
+                           stream));
   cp_and_length.gpu_ptr = thrust::raw_pointer_cast(device_code_points.data());
   cp_and_length.length  = num_chars;
 
   return std::make_pair(cp_and_length, offset_and_length);
 }
 
-GpuBasicTokenizer::~GpuBasicTokenizer() {}
-
+}  // namespace detail
 }  // namespace nvtext

@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
-#include <text/subword/data_transfer_utils.cuh>
-#include <text/subword/hash_utils.cuh>
-#include <text/subword/tokenizer_utils.cuh>
-#include <text/subword/tokenizers.hpp>
+#include <cudf/utilities/error.hpp>
+#include <text/subword/detail/hash_utils.cuh>
+#include <text/subword/detail/tokenizer_utils.cuh>
+#include <text/subword/detail/tokenizers.hpp>
 
 #include <iostream>
-#include "cp_data_vec.ah"
+#include "detail/cp_data_vec.ah"
 
 namespace nvtext {
+namespace detail {
 
 __global__ void compute_tensor_metadata_kernel(  // input
   uint32_t* token_ids,
@@ -99,20 +100,21 @@ __global__ void compute_tensor_metadata_kernel(  // input
   }
 }
 
-GpuFullTokenizer::GpuFullTokenizer(std::string const& vocab_file,
-                                   uint32_t max_num_sentences,
-                                   uint32_t max_num_chars,
-                                   uint32_t max_rows_final_tensor,
-                                   uint32_t max_sequence_length,
-                                   uint32_t stride,
-                                   bool do_truncate,
-                                   bool do_lower_case,
-                                   int max_inp_chars_per_word)
+full_tokenizer::full_tokenizer(std::string const& vocab_file,
+                               uint32_t max_num_sentences,
+                               uint32_t max_num_chars,
+                               uint32_t max_rows_final_tensor,
+                               uint32_t max_sequence_length,
+                               uint32_t stride,
+                               bool do_truncate,
+                               bool do_lower_case,
+                               cudaStream_t stream,
+                               int max_inp_chars_per_word)
   : max_sequence_length(max_sequence_length),
     stride(stride),
     do_truncate(do_truncate),
-    basic_tokenizer(max_num_sentences, max_num_chars, cp_data, aux_data, do_lower_case),
-    word_piece_tokenizer(vocab_file, max_num_chars, max_inp_chars_per_word),
+    basic(max_num_sentences, max_num_chars, cp_data, aux_data, do_lower_case, stream),
+    word_piece(vocab_file, max_num_chars, max_inp_chars_per_word, stream),
     tensor_tokenIDS(max_rows_final_tensor * max_sequence_length),
     attention_mask(max_rows_final_tensor * max_sequence_length),
     metadata(max_rows_final_tensor * 3),
@@ -121,12 +123,13 @@ GpuFullTokenizer::GpuFullTokenizer(std::string const& vocab_file,
 {
 }
 
-void GpuFullTokenizer::tokenize(const char* device_sentences,
-                                const uint32_t* offsets,
-                                uint32_t offset_size)
+void full_tokenizer::tokenize(const char* device_sentences,
+                              const uint32_t* offsets,
+                              uint32_t offset_size,
+                              cudaStream_t stream)
 {
-  auto cps_and_offsets = basic_tokenizer.tokenize(device_sentences, offsets, offset_size);
-  word_piece_tokenizer.tokenize(cps_and_offsets.first, cps_and_offsets.second);
+  auto cps_and_offsets = basic.tokenize(device_sentences, offsets, offset_size, stream);
+  word_piece.tokenize(cps_and_offsets.first, cps_and_offsets.second, stream);
   // return cps_and_offsets;
   uint32_t* device_token_ids = cps_and_offsets.first.gpu_ptr;
   uint32_t* device_offsets   = cps_and_offsets.second.gpu_ptr;
@@ -134,10 +137,11 @@ void GpuFullTokenizer::tokenize(const char* device_sentences,
   // copy log offsets to host
   std::vector<uint32_t> host_offsets;
   host_offsets.resize(offset_size + 1);
-  cudaMemcpy(host_offsets.data(),
-             device_offsets,
-             sizeof(uint32_t) * (offset_size + 1),
-             cudaMemcpyDeviceToHost);
+  CUDA_TRY(cudaMemcpyAsync(host_offsets.data(),
+                           device_offsets,
+                           sizeof(uint32_t) * (offset_size + 1),
+                           cudaMemcpyDeviceToHost,
+                           stream));
 
   // compute number of rows required for final tensor
   nrows_tensor_tokenIDS = 0;
@@ -173,7 +177,7 @@ void GpuFullTokenizer::tokenize(const char* device_sentences,
   device_row2row_within_log = host_row2row_within_log;
 
   // compute final-tensor, mask, and metadata
-  compute_tensor_metadata_kernel<<<nrows_tensor_tokenIDS, max_sequence_length>>>(
+  compute_tensor_metadata_kernel<<<nrows_tensor_tokenIDS, max_sequence_length, 0, stream>>>(
     device_token_ids,
     device_offsets,
     thrust::raw_pointer_cast(device_row2log.data()),
@@ -186,23 +190,22 @@ void GpuFullTokenizer::tokenize(const char* device_sentences,
     thrust::raw_pointer_cast(metadata.data()));
 }
 
-uint32_t GpuFullTokenizer::get_nrows_tensor_tokenIDS() { return nrows_tensor_tokenIDS; }
+uint32_t full_tokenizer::get_nrows_tensor_tokenIDS() { return nrows_tensor_tokenIDS; }
 
-uint32_t* GpuFullTokenizer::get_tensor_tokenIDS()
+uint32_t* full_tokenizer::get_tensor_tokenIDS()
 {
   return thrust::raw_pointer_cast(tensor_tokenIDS.data());
 }
 
-uint32_t* GpuFullTokenizer::get_attention_mask()
+uint32_t* full_tokenizer::get_attention_mask()
 {
   return thrust::raw_pointer_cast(attention_mask.data());
 }
 
-uint32_t* GpuFullTokenizer::get_tensor_metadata()
+uint32_t* full_tokenizer::get_tensor_metadata()
 {
   return thrust::raw_pointer_cast(metadata.data());
 }
 
-GpuFullTokenizer::~GpuFullTokenizer() {}
-
+}  // namespace detail
 }  // namespace nvtext

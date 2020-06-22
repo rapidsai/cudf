@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <text/subword/data_transfer_utils.cuh>
-
 #include <rmm/thrust_rmm_allocator.h>
 #include <stdint.h>
 #include <thrust/device_vector.h>
@@ -86,7 +84,6 @@ void load_hash_information(const std::string& path,
   sep_tok_id = std::stoi(line);
 }
 
-// See hash_utils.cuh
 void transfer_hash_info_to_device(const std::string hash_data_file,
                                   rmm::device_vector<uint64_t>& device_hash_table,
                                   rmm::device_vector<uint64_t>& device_bin_coefficients,

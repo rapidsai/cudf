@@ -22,7 +22,7 @@
 #include <iostream>
 #include <vector>
 
-#include <text/subword/tokenizers.hpp>
+#include <text/subword/detail/tokenizers.hpp>
 
 namespace nvtext {
 namespace detail {
@@ -41,14 +41,15 @@ std::unique_ptr<TokenizerResult> subword_tokenize(cudf::strings_column_view cons
 {
   // Create tokenizer
   // nvtxRangePushA("create Tokenizer");
-  GpuFullTokenizer tokenizer(filename_hashed_vocabulary,
-                             max_num_sentences,
-                             max_num_chars,
-                             max_rows_tensor,
-                             max_sequence_length,
-                             stride,
-                             do_truncate,
-                             do_lower);
+  full_tokenizer tokenizer(filename_hashed_vocabulary,
+                           max_num_sentences,
+                           max_num_chars,
+                           max_rows_tensor,
+                           max_sequence_length,
+                           stride,
+                           do_truncate,
+                           do_lower,
+                           stream);
   // nvtxRangePop();
 
   auto strings_count = sentences.size();
@@ -64,7 +65,7 @@ std::unique_ptr<TokenizerResult> subword_tokenize(cudf::strings_column_view cons
   // Run GPU tokenizer
   // nvtxRangePushA("Tokenize");
   // tokenizer.tokenize(device_sentences, offsets, offset_size);
-  tokenizer.tokenize(d_chars, d_offsets, strings_count);
+  tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
   // nvtxRangePop();
 
   // Get output from tokenizer

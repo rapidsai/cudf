@@ -566,9 +566,9 @@ add_library(cudf
             src/text/ngrams_tokenize.cu
             src/text/replace.cu
             src/text/subword/hash_utils.cu
-            src/text/subword/basicTokenizer.cu
-            src/text/subword/wordPieceTokenizer.cu
-            src/text/subword/fullTokenizer.cu
+            src/text/subword/basic_tokenizer.cu
+            src/text/subword/word_piece_tokenizer.cu
+            src/text/subword/full_tokenizer.cu
             src/text/subword/subword_tokenize.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
