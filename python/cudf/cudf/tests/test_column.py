@@ -7,20 +7,16 @@ import pyarrow as pa
 import pytest
 
 import cudf
+import cudf.utils.dtypes as dtypeutils
 from cudf.core.column.column import as_column
 from cudf.tests.utils import assert_eq
 
-dtypes = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "float32",
-    "float64",
-    "datetime64[ns]",
-    "str",
-    "category",
-]
+dtypes = sorted(
+    list(
+        dtypeutils.ALL_TYPES
+        - {"datetime64[s]", "datetime64[ms]", "datetime64[us]"}
+    )
+)
 
 
 @pytest.fixture(params=dtypes, ids=dtypes)

@@ -182,7 +182,7 @@ struct InterleaveStringsColumnsTest : public BaseFixture {
 
 TEST_F(InterleaveStringsColumnsTest, ZeroSizedColumns)
 {
-  cudf::column_view col0(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
 
   auto results = cudf::interleave_columns(cudf::table_view{{col0}});
   cudf::test::expect_strings_empty(results->view());

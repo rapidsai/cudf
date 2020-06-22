@@ -185,7 +185,8 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
   size_t hash_impl() const
   {
     return std::hash<std::string>{}(_source) ^ std::hash<std::string>{}(_operator_name) ^
-           std::hash<std::string>{}(_function_name) ^ std::hash<int>{}(_output_type.id());
+           std::hash<std::string>{}(_function_name) ^
+           std::hash<int>{}(static_cast<int32_t>(_output_type.id()));
   }
 };
 

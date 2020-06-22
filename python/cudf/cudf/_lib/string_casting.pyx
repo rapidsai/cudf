@@ -7,6 +7,7 @@ from cudf._lib.move cimport move
 from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types cimport underlying_type_t_type_id
 
 from cudf.core.column.column import as_column
 
@@ -61,7 +62,11 @@ def floating_to_string(Column input_col):
 def string_to_floating(Column input_col, object out_type):
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
-    cdef type_id tid = np_to_cudf_types[out_type]
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[out_type]
+        )
+    )
     cdef data_type c_out_type = data_type(tid)
     with nogil:
         c_result = move(
@@ -150,7 +155,11 @@ def integer_to_string(Column input_col):
 def string_to_integer(Column input_col, object out_type):
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
-    cdef type_id tid = np_to_cudf_types[out_type]
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[out_type]
+        )
+    )
     cdef data_type c_out_type = data_type(tid)
     with nogil:
         c_result = move(
@@ -289,6 +298,134 @@ def stol(Column input_col, **kwargs):
     return string_to_integer(input_col, np.dtype("int64"))
 
 
+def ui8tos(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type uint8 to string column
+
+    Parameters:
+    -----------
+    input_col : input column of type uint8
+
+    Returns
+    -------
+    A Column with uint8 values cast to string
+    """
+
+    return integer_to_string(input_col)
+
+
+def stoui8(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type string to uint8
+
+    Parameters:
+    -----------
+    input_col : input column of type string
+
+    Returns
+    -------
+    A Column with strings cast to uint8
+    """
+
+    return string_to_integer(input_col, np.dtype("uint8"))
+
+
+def ui16tos(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type uint16 to string column
+
+    Parameters:
+    -----------
+    input_col : input column of type uint16
+
+    Returns
+    -------
+    A Column with uint16 values cast to string
+    """
+
+    return integer_to_string(input_col)
+
+
+def stoui16(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type string to uint16
+
+    Parameters:
+    -----------
+    input_col : input column of type string
+
+    Returns
+    -------
+    A Column with strings cast to uint16
+    """
+
+    return string_to_integer(input_col, np.dtype("uint16"))
+
+
+def uitos(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type uint32 to string column
+
+    Parameters:
+    -----------
+    input_col : input column of type uint32
+
+    Returns
+    -------
+    A Column with uint32 values cast to string
+    """
+
+    return integer_to_string(input_col)
+
+
+def stoui(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type string to uint32
+
+    Parameters:
+    -----------
+    input_col : input column of type string
+
+    Returns
+    -------
+    A Column with strings cast to uint32
+    """
+
+    return string_to_integer(input_col, np.dtype("uint32"))
+
+
+def ultos(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type uint64 to string column
+
+    Parameters:
+    -----------
+    input_col : input column of type uint64
+
+    Returns
+    -------
+    A Column with uint64 values cast to string
+    """
+
+    return integer_to_string(input_col)
+
+
+def stoul(Column input_col, **kwargs):
+    """
+    Converting/Casting input column of type string to uint64
+
+    Parameters:
+    -----------
+    input_col : input column of type string
+
+    Returns
+    -------
+    A Column with strings cast to uint64
+    """
+
+    return string_to_integer(input_col, np.dtype("uint64"))
+
+
 def _to_booleans(Column input_col, object string_true="True"):
     """
     Converting/Casting input column of type string to boolean column
@@ -412,7 +549,11 @@ def timestamp2int(
     if input_col.size == 0:
         return as_column([], dtype=kwargs.get('dtype'))
     cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = np_to_cudf_types[kwargs.get('dtype')]
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[kwargs.get('dtype')]
+        )
+    )
     cdef data_type out_type = data_type(tid)
     cdef string c_timestamp_format = kwargs.get('format').encode('UTF-8')
     cdef unique_ptr[column] c_result
@@ -488,7 +629,11 @@ def htoi(Column input_col, **kwargs):
     """
 
     cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = np_to_cudf_types[kwargs.get('dtype', np.dtype("int64"))]
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[kwargs.get('dtype', np.dtype("int64"))]
+        )
+    )
     cdef data_type c_out_type = data_type(tid)
 
     cdef unique_ptr[column] c_result

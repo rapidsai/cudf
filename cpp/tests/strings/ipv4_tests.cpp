@@ -71,7 +71,7 @@ TEST_F(StringsConvertTest, IntegersToIPv4)
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::INT64}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_column(cudf::data_type{cudf::type_id::INT64}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::integers_to_ipv4(zero_size_column);
   cudf::test::expect_strings_empty(results->view());
   results = cudf::strings::ipv4_to_integers(results->view());
@@ -80,6 +80,6 @@ TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4)
 
 TEST_F(StringsConvertTest, IPv4Error)
 {
-  auto column = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, 100);
+  auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, 100);
   EXPECT_THROW(cudf::strings::integers_to_ipv4(column->view()), cudf::logic_error);
 }

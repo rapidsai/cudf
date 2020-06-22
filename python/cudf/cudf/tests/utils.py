@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
+import cudf.utils.dtypes as dtypeutils
 from cudf import Series
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 
@@ -19,6 +20,16 @@ supported_numpy_dtypes = [
     "datetime64[ms]",
     "datetime64[us]",
 ]
+
+SIGNED_INTEGER_TYPES = sorted(list(dtypeutils.SIGNED_INTEGER_TYPES))
+UNSIGNED_TYPES = sorted(list(dtypeutils.UNSIGNED_TYPES))
+INTEGER_TYPES = sorted(list(dtypeutils.INTEGER_TYPES))
+FLOAT_TYPES = sorted(list(dtypeutils.FLOAT_TYPES))
+SIGNED_TYPES = sorted(list(dtypeutils.SIGNED_TYPES))
+NUMERIC_TYPES = sorted(list(dtypeutils.NUMERIC_TYPES))
+DATETIME_TYPES = sorted(list(dtypeutils.DATETIME_TYPES))
+OTHER_TYPES = sorted(list(dtypeutils.OTHER_TYPES))
+ALL_TYPES = sorted(list(dtypeutils.ALL_TYPES))
 
 
 def random_bitmask(size):
@@ -109,13 +120,21 @@ def gen_rand(dtype, size, **kwargs):
             return res
         else:
             return res * 2 - 1
-    elif dtype == np.int8 or np.int16:
+    elif dtype == np.int8 or dtype == np.int16:
         low = kwargs.get("low", -32)
         high = kwargs.get("high", 32)
         return np.random.randint(low=low, high=high, size=size).astype(dtype)
     elif dtype.kind == "i":
         low = kwargs.get("low", -10000)
         high = kwargs.get("high", 10000)
+        return np.random.randint(low=low, high=high, size=size).astype(dtype)
+    elif dtype == np.uint8 or dtype == np.uint16:
+        low = kwargs.get("low", 0)
+        high = kwargs.get("high", 32)
+        return np.random.randint(low=low, high=high, size=size).astype(dtype)
+    elif dtype.kind == "u":
+        low = kwargs.get("low", 0)
+        high = kwargs.get("high", 128)
         return np.random.randint(low=low, high=high, size=size).astype(dtype)
     elif dtype.kind == "b":
         low = kwargs.get("low", 0)

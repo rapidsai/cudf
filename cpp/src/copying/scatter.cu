@@ -39,9 +39,7 @@ namespace cudf {
 namespace detail {
 namespace {
 struct dispatch_map_type {
-  template <typename MapType,
-            std::enable_if_t<std::is_integral<MapType>::value and
-                             not std::is_same<MapType, bool>::value>* = nullptr>
+  template <typename MapType, std::enable_if_t<is_index_type<MapType>()>* = nullptr>
   std::unique_ptr<table> operator()(table_view const& source,
                                     column_view const& scatter_map,
                                     table_view const& target,
@@ -58,9 +56,7 @@ struct dispatch_map_type {
                            stream);
   }
 
-  template <typename MapType,
-            std::enable_if_t<not std::is_integral<MapType>::value or
-                             std::is_same<MapType, bool>::value>* = nullptr>
+  template <typename MapType, std::enable_if_t<not is_index_type<MapType>()>* = nullptr>
   std::unique_ptr<table> operator()(table_view const& source,
                                     column_view const& scatter_map,
                                     table_view const& target,
@@ -331,8 +327,8 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                                              rmm::mr::device_memory_resource* mr,
                                              cudaStream_t stream)
 {
-  auto indices =
-    cudf::make_numeric_column(data_type{INT32}, target.size(), mask_state::UNALLOCATED, stream);
+  auto indices = cudf::make_numeric_column(
+    data_type{type_id::INT32}, target.size(), mask_state::UNALLOCATED, stream);
   auto mutable_indices = indices->mutable_view();
 
   thrust::sequence(rmm::exec_policy(stream)->on(stream),
@@ -373,7 +369,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                "Mismatch in number of input columns and target columns");
   CUDF_EXPECTS(boolean_mask.size() == target.num_rows(),
                "Boolean mask size and number of target rows mismatch");
-  CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be of Boolean type");
+  CUDF_EXPECTS(boolean_mask.type().id() == type_id::BOOL8, "Mask must be of Boolean type");
   // Count valid pair of input and columns as per type at each column index i
   CUDF_EXPECTS(
     std::all_of(thrust::counting_iterator<size_type>(0),
@@ -411,7 +407,7 @@ std::unique_ptr<table> boolean_mask_scatter(
                "Mismatch in number of scalars and target columns");
   CUDF_EXPECTS(boolean_mask.size() == target.num_rows(),
                "Boolean mask size and number of target rows mismatch");
-  CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be of Boolean type");
+  CUDF_EXPECTS(boolean_mask.type().id() == type_id::BOOL8, "Mask must be of Boolean type");
 
   // Count valid pair of input and columns as per type at each column/scalar index i
   CUDF_EXPECTS(

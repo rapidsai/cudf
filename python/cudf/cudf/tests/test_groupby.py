@@ -1109,3 +1109,14 @@ def test_groupby_apply_noempty_group():
         .apply(lambda x: x.iloc[[0, 1]])
         .reset_index(drop=True),
     )
+
+
+def test_reset_index_after_empty_groupby():
+    # GH #5475
+    pdf = pd.DataFrame({"a": [1, 2, 3]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").sum().reset_index(),
+        gdf.groupby("a").sum().reset_index(),
+    )

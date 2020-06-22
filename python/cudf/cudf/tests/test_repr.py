@@ -9,11 +9,37 @@ from hypothesis import given, settings
 import cudf
 from cudf.tests import utils
 
-repr_categories = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
+repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+
+
+@pytest.mark.parametrize("dtype", repr_categories)
+@pytest.mark.parametrize("nrows", [0, 5, 10])
+def test_null_series(nrows, dtype):
+    size = 5
+    mask = utils.random_bitmask(size)
+    data = cudf.Series(np.random.randint(1, 9, size))
+    column = data.set_mask(mask)
+    sr = cudf.Series(column).astype(dtype)
+    ps = sr.to_pandas()
+    pd.options.display.max_rows = int(nrows)
+    psrepr = ps.__repr__()
+    psrepr = psrepr.replace("NaN", "null")
+    psrepr = psrepr.replace("NaT", "null")
+    if (
+        dtype.startswith("int")
+        or dtype.startswith("uint")
+        or dtype.startswith("long")
+    ):
+        psrepr = psrepr.replace(
+            str(sr._column.default_na_value()) + "\n", "null\n"
+        )
+
+    print(psrepr)
+    print(sr)
+    assert psrepr.split() == sr.__repr__().split()
+
+
+dtype_categories = [
     "float32",
     "float64",
     "datetime64[ns]",
@@ -22,30 +48,11 @@ repr_categories = [
 ]
 
 
-@pytest.mark.parametrize("dtype", repr_categories)
-@pytest.mark.parametrize("nrows", [0, 5, 10])
-def test_null_series(nrows, dtype):
-    size = 5
-    mask = utils.random_bitmask(size)
-    data = cudf.Series(np.random.randint(0, 128, size))
-    column = data.set_mask(mask)
-    sr = cudf.Series(column).astype(dtype)
-    ps = sr.to_pandas()
-    pd.options.display.max_rows = int(nrows)
-    psrepr = ps.__repr__()
-    psrepr = psrepr.replace("NaN", "null")
-    psrepr = psrepr.replace("NaT", "null")
-    psrepr = psrepr.replace("-1\n", "null\n")
-    print(psrepr)
-    print(sr)
-    assert psrepr.split() == sr.__repr__().split()
-
-
 @pytest.mark.parametrize("ncols", [1, 2, 3, 4, 5, 10])
 def test_null_dataframe(ncols):
     size = 20
     gdf = cudf.DataFrame()
-    for idx, dtype in enumerate(repr_categories):
+    for idx, dtype in enumerate(dtype_categories):
         mask = utils.random_bitmask(size)
         data = cudf.Series(np.random.randint(0, 128, size))
         column = data.set_mask(mask)
@@ -56,7 +63,6 @@ def test_null_dataframe(ncols):
     pdfrepr = pdf.__repr__()
     pdfrepr = pdfrepr.replace("NaN", "null")
     pdfrepr = pdfrepr.replace("NaT", "null")
-    pdfrepr = pdfrepr.replace("-1", "null")
     print(pdf)
     print(gdf)
     assert pdfrepr.split() == gdf.__repr__().split()
@@ -222,17 +228,7 @@ def test_groupby_MI(nrows, ncols):
     assert gdg.T.__repr__() == pdg.T.__repr__()
 
 
-numerical_categories = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "float32",
-    "float64",
-]
-
-
-@pytest.mark.parametrize("dtype", numerical_categories)
+@pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES)
 @pytest.mark.parametrize("length", [0, 1, 10, 100, 1000])
 def test_generic_index(length, dtype):
     psr = pd.Series(
