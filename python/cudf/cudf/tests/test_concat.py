@@ -300,7 +300,9 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     s2 = gd.Series(["a", "b", "c"], index=[1, 1, 1])
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
-
+    expect = None
+    got = None
+    
     try:
         expect = pd.concat([ps1, ps2], axis=1)
     except Exception as e:
@@ -310,7 +312,7 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     with pytest.raises(e_type, match=e_msg):
         got = gd.concat([s1, s2], axis=1)
 
-        assert_eq(got, expect)
+    assert_eq(got, expect)
 
 
 def test_concat_duplicate_columns():
