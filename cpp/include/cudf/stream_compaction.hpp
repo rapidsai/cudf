@@ -255,9 +255,9 @@ std::unique_ptr<table> drop_duplicates(
  *
  * @return number of unique elements
  */
-cudf::size_type unique_count(column_view const& input,
-                             null_policy null_handling,
-                             nan_policy nan_handling);
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling);
 
 /**
  * @brief Count the unique rows in a table.
@@ -269,8 +269,8 @@ cudf::size_type unique_count(column_view const& input,
  *
  * @return number of unique rows in the table
  */
-cudf::size_type unique_count(table_view const& input,
-                             null_equality nulls_equal = null_equality::EQUAL);
+cudf::size_type distinct_count(table_view const& input,
+                               null_equality nulls_equal = null_equality::EQUAL);
 
 /** @} */
 }  // namespace cudf
