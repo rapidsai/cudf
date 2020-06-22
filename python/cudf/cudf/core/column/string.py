@@ -2,7 +2,6 @@
 
 import pickle
 import warnings
-from codecs import decode
 
 import numpy as np
 import pandas as pd
@@ -454,7 +453,10 @@ class StringMethods(object):
             data = [""]
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
-            out = out.iloc[0]
+            if isinstance(out, StringColumn):
+                out = out[0]
+            else:
+                out = out.iloc[0]
         return out
 
     def join(self, sep):
@@ -3952,6 +3954,26 @@ class StringColumn(column.ColumnBase):
     def max(self, dtype=None):
         return libcudf.reduce.reduce("max", self, dtype=dtype)
 
+    def sum(self, dtype=None):
+        return self.str().cat()
+
+    def product(self, dtype=None):
+        raise TypeError("can't multiply sequence by non-int of type 'object'")
+
+    def mean(self, dtype=np.float64):
+        cat_result = self.str().cat()
+        try:
+            cat_result = float(cat_result)
+        except ValueError:
+            raise TypeError(f"Could not convert {cat_result} to numeric")
+        return cat_result / len(self)
+
+    def var(self, ddof=1, dtype=np.float64):
+        raise TypeError("unsupported operation for object of type 'object'")
+
+    def std(self, ddof=1, dtype=np.float64):
+        raise TypeError("unsupported operation for object of type 'object'")
+
     def set_base_data(self, value):
         if value is not None:
             raise RuntimeError(
@@ -4255,18 +4277,6 @@ class StringColumn(column.ColumnBase):
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(op, type(self), type(rhs)))
-
-    def sum(self, dtype=None):
-        # Should we be raising here? Pandas can't handle the mix of strings and
-        # None and throws, but we already have a test that looks to ignore
-        # nulls and returns anyway.
-
-        # if self.null_count > 0:
-        #     raise ValueError("Cannot get sum of string column with nulls")
-
-        if len(self) == 0:
-            return ""
-        return decode(self.children[1].data.to_host_array(), encoding="utf-8")
 
     @property
     def is_unique(self):
