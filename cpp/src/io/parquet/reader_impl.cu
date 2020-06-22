@@ -179,32 +179,85 @@ struct metadata : public FileMetaData {
     CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
     CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
   }
-
-  std::vector<std::string> get_column_names() const  // move to ctor
-  {
-    std::vector<std::string> all_names;
-    if (row_groups.size() != 0) {
-      for (const auto &chunk : row_groups[0].columns) {
-        all_names.emplace_back(name_from_path(chunk.meta_data.path_in_schema));
-      }
-    }
-    return all_names;
-  }
 };
 
 class aggregate_metadata {
-  std::vector<metadata> per_file_metadata;
-  std::map<std::string, std::string> agg_keyval_map;
+  std::vector<metadata> const per_file_metadata;
+  std::map<std::string, std::string> const agg_keyval_map;
+  size_type const num_rows;
+  size_type const num_row_groups;
+  std::vector<std::string> const column_names;
+
+  /**
+   * @brief Create a metadata object from each element in the source vector
+   */
+  auto metadatas_from_sources(std::vector<std::unique_ptr<datasource>> const &sources)
+  {
+    std::vector<metadata> metadatas;
+    std::transform(
+      sources.cbegin(), sources.cend(), std::back_inserter(metadatas), [](auto const &source) {
+        return metadata(source.get());
+      });
+    return metadatas;
+  }
+
+  /**
+   * @brief Merge the keyvalue maps from each per-file metadata object into a single map.
+   */
+  auto merge_keyval_metadata()
+  {
+    std::map<std::string, std::string> merged;
+    // merge key/value maps TODO: warn/throw if there are mismatches?
+    for (auto const &pfm : per_file_metadata) {
+      for (auto const &kv : pfm.key_value_metadata) { merged[kv.key] = kv.value; }
+    }
+    return merged;
+  }
+
+  /**
+   * @brief Sums up the number of rows of each source
+   */
+  size_type calc_num_rows() const
+  {
+    return std::accumulate(
+      per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto &sum, auto &pfm) {
+        return sum + pfm.num_rows;
+      });
+  }
+
+  /**
+   * @brief Sums up the number of row groups of each source
+   */
+  size_type calc_num_row_groups() const
+  {
+    return std::accumulate(
+      per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto &sum, auto &pfm) {
+        return sum + pfm.row_groups.size();
+      });
+  }
+  std::vector<std::string> gather_column_names()
+  {
+    for (auto const &pfm : per_file_metadata) {
+      if (pfm.row_groups.size() != 0) {
+        std::vector<std::string> column_names;
+        for (const auto &chunk : pfm.row_groups[0].columns) {
+          column_names.emplace_back(name_from_path(chunk.meta_data.path_in_schema));
+        }
+        return column_names;
+      }
+    }
+    return {};
+  }
 
  public:
   aggregate_metadata(std::vector<std::unique_ptr<datasource>> const &sources)
+    : per_file_metadata(metadatas_from_sources(sources)),
+      agg_keyval_map(merge_keyval_metadata()),
+      num_rows(calc_num_rows()),
+      num_row_groups(calc_num_row_groups()),
+      column_names(gather_column_names())
   {
-    std::transform(sources.cbegin(),
-                   sources.cend(),
-                   std::back_inserter(per_file_metadata),
-                   [](auto const &source) { return metadata(source.get()); });
-
-    // verify that the input files have matching columns
+    // Verify that the input files have matching numbers of columns
     size_type num_cols = -1;
     for (auto const &pfm : per_file_metadata) {
       if (pfm.row_groups.size() != 0) {
@@ -215,14 +268,10 @@ class aggregate_metadata {
                        "All sources must have the same number of columns");
       }
     }
+    // Verify that the input files have matching schemas
     for (auto const &pfm : per_file_metadata) {
       CUDF_EXPECTS(per_file_metadata[0].schema == pfm.schema,
                    "All sources must have the same schemas");
-    }
-
-    // merge key/value maps TODO: warn/throw if there are mismatches?
-    for (auto const &pfm : per_file_metadata) {
-      for (auto const &kv : pfm.key_value_metadata) { agg_keyval_map[kv.key] = kv.value; }
     }
   }
 
@@ -233,24 +282,10 @@ class aggregate_metadata {
     return per_file_metadata[src_idx].row_groups[idx];
   }
 
-  int64_t get_num_rows() const
-  {
-    return std::accumulate(
-      per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto &sum, auto &pfm) {
-        return sum + pfm.num_rows;
-      });
-  }
-  int get_num_row_groups() const
-  {
-    return std::accumulate(
-      per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto &sum, auto &pfm) {
-        return sum + pfm.row_groups.size();
-      });
-  }
-  // TODO make sure names match
-  auto get_column_names() const { return per_file_metadata[0].get_column_names(); }
+  auto get_num_rows() const { return num_rows; }
 
-  // TODO make sure schemas match
+  auto get_num_row_groups() const { return num_row_groups; }
+
   auto const &get_schema(int idx) const { return per_file_metadata[0].schema[idx]; }
 
   auto const &get_key_value_metadata() const { return agg_keyval_map; }
@@ -389,18 +424,16 @@ class aggregate_metadata {
   auto select_columns(std::vector<std::string> use_names, bool include_index) const
   {
     std::vector<std::pair<int, std::string>> selection;
-
-    const auto names = get_column_names();
     if (use_names.empty()) {
       // No columns specified; include all in the dataset
-      for (const auto &name : names) { selection.emplace_back(selection.size(), name); }
+      for (const auto &name : column_names) { selection.emplace_back(selection.size(), name); }
     } else {
       // Load subset of columns; include PANDAS index unless excluded
       if (include_index) { add_pandas_index_names(use_names); }
       for (const auto &use_name : use_names) {
-        for (size_t i = 0; i < names.size(); ++i) {
-          if (names[i] == use_name) {
-            selection.emplace_back(i, names[i]);
+        for (size_t i = 0; i < column_names.size(); ++i) {
+          if (column_names[i] == use_name) {
+            selection.emplace_back(i, column_names[i]);
             break;
           }
         }
