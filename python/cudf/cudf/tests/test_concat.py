@@ -310,7 +310,7 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     with pytest.raises(e_type, match=e_msg):
         got = gd.concat([s1, s2], axis=1)
 
-        assert_eq(got, expect)
+    assert_eq(got, expect)
 
 
 def test_concat_duplicate_columns():
