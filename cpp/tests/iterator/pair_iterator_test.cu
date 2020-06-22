@@ -13,6 +13,7 @@
  * the License.
  */
 #include <tests/iterator/iterator_tests.cuh>
+#include <type_traits>
 
 // to print meanvar for debug.
 template <typename T>
@@ -106,7 +107,14 @@ TYPED_TEST(PairIteratorTest, mean_var_output)
                                it_dev_squared + d_col->size(),
                                thrust::make_pair(T_output{}, true),
                                sum_if_not_null{});
-  EXPECT_EQ(expected_value, result.first) << "pair iterator reduction sum";
+  if (not std::is_floating_point<T>()) {
+    EXPECT_EQ(expected_value, result.first) << "pair iterator reduction sum";
+  } else {
+    EXPECT_NEAR(expected_value.value, result.first.value, 1e-3) << "pair iterator reduction sum";
+    EXPECT_NEAR(expected_value.value_squared, result.first.value_squared, 1e-3)
+      << "pair iterator reduction sum squared";
+    EXPECT_EQ(expected_value.count, result.first.count) << "pair iterator reduction count";
+  }
 }
 #endif
 
