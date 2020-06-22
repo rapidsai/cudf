@@ -764,10 +764,7 @@ extern "C" __global__ void __launch_bounds__(512)
             int32_t ts_scale = kTimeScale[min(s->chunk.scale, 9)];
             int64_t seconds  = ts / ts_scale;
             int32_t nanos    = (ts - seconds * ts_scale);
-            if (nanos < 0) {
-              seconds += 1;
-              nanos += ts_scale;
-            }
+            if (nanos < 0) { nanos += ts_scale; }
             s->vals.i64[nz_idx] = seconds - kORCTimeToUTC;
             if (nanos != 0) {
               // Trailing zeroes are encoded in the lower 3-bits
