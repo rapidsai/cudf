@@ -1755,7 +1755,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
     assert separator != null : "separator scalar provided may not be null";
     assert separator.getType() == DType.STRING : "separator scalar must be a string scalar";
-    assert separator.isValid() == true : "separator string scalar may not contain a null value";
     assert narep != null : "narep scalar provided may not be null";
     assert narep.getType() == DType.STRING : "narep scalar must be a string scalar";
     long size = columns[0].getRowCount();
@@ -1804,8 +1803,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert substring != null : "target string may not be null";
     assert substring.getType() == DType.STRING : "substring scalar must be a string scalar";
-    assert substring.isValid() == true : "substring string scalar may not contain a null value";
-    assert substring.getJavaString().isEmpty() == false : "substring string scalar may not be empty";
     assert start >= 0 : "start index must be a positive value";
     assert end >= start || end == -1 : "end index must be -1 or >= the start index";
 
@@ -1826,7 +1823,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert delimiter != null : "delimiter may not be null";
     assert delimiter.getType() == DType.STRING : "delimiter must be a string scalar";
-    assert delimiter.isValid() == true : "delimiter string scalar may not contain a null value";
     return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
   }
 
@@ -1945,8 +1941,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern scalar may not be null";
     assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
-    assert pattern.isValid() == true : "pattern string scalar may not contain a null value";
-    assert pattern.getJavaString().isEmpty() == false : "pattern string scalar may not be empty";
     return new ColumnVector(stringStartWith(getNativeView(), pattern.getScalarHandle()));
   }
 
@@ -1960,8 +1954,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern scalar may not be null";
     assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
-    assert pattern.isValid() == true : "pattern string scalar may not contain a null value";
-    assert pattern.getJavaString().isEmpty() == false : "pattern string scalar may not be empty";
     return new ColumnVector(stringEndWith(getNativeView(), pattern.getScalarHandle()));
   }
 
@@ -1986,7 +1978,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert toStrip != null : "toStrip scalar may not be null";
     assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
-    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
     return new ColumnVector(stringStrip(getNativeView(), StripType.BOTH.nativeId, toStrip.getScalarHandle()));
   }
 
@@ -2011,7 +2002,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert toStrip != null : "toStrip  Scalar may not be null";
     assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
-    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
     return new ColumnVector(stringStrip(getNativeView(), StripType.LEFT.nativeId, toStrip.getScalarHandle()));
   }
 
@@ -2036,7 +2026,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert toStrip != null : "toStrip  Scalar may not be null";
     assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
-    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
     return new ColumnVector(stringStrip(getNativeView(), StripType.RIGHT.nativeId, toStrip.getScalarHandle()));
   }
 
@@ -2051,8 +2040,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert compString != null : "compString scalar may not be null";
     assert compString.getType() == DType.STRING : "compString scalar must be a string scalar";
-    assert compString.isValid() : "compString string scalar may not contain a null value";
-    assert !compString.getJavaString().isEmpty() : "compString string scalar may not be empty";
     return new ColumnVector(stringContains(getNativeView(), compString.getScalarHandle()));
   }
 

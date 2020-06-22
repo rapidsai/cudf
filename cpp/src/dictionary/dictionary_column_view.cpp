@@ -22,7 +22,8 @@ namespace cudf {
 dictionary_column_view::dictionary_column_view(column_view const& dictionary_column)
   : column_view(dictionary_column)
 {
-  CUDF_EXPECTS(type().id() == DICTIONARY32, "dictionary_column_view only supports DICTIONARY type");
+  CUDF_EXPECTS(type().id() == type_id::DICTIONARY32,
+               "dictionary_column_view only supports DICTIONARY type");
   if (size() > 0) CUDF_EXPECTS(num_children() == 2, "dictionary column has no children");
 }
 
@@ -35,8 +36,12 @@ column_view dictionary_column_view::indices() const noexcept { return child(0); 
 
 column_view dictionary_column_view::get_indices_annotated() const noexcept
 {
-  return column_view(
-    data_type{INT32}, size(), indices().data<int32_t>(), null_mask(), null_count(), offset());
+  return column_view(data_type{type_id::INT32},
+                     size(),
+                     indices().data<int32_t>(),
+                     null_mask(),
+                     null_count(),
+                     offset());
 }
 
 column_view dictionary_column_view::keys() const noexcept { return child(1); }

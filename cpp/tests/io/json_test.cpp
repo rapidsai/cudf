@@ -109,8 +109,8 @@ TEST_F(JsonReaderTest, BasicJsonLines)
   EXPECT_EQ(result.tbl->num_columns(), 2);
   EXPECT_EQ(result.tbl->num_rows(), 3);
 
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::INT32);
-  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
 
   EXPECT_EQ(result.metadata.column_names[0], "0");
   EXPECT_EQ(result.metadata.column_names[1], "1");
@@ -163,9 +163,9 @@ TEST_F(JsonReaderTest, JsonLinesStrings)
   EXPECT_EQ(result.tbl->num_columns(), 3);
   EXPECT_EQ(result.tbl->num_rows(), 2);
 
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::INT32);
-  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::FLOAT64);
-  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::STRING);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::STRING);
 
   EXPECT_EQ(result.metadata.column_names[0], "0");
   EXPECT_EQ(result.metadata.column_names[1], "1");
@@ -222,17 +222,17 @@ TEST_F(JsonReaderTest, MultiColumn)
 
   const auto view = result.tbl->view();
 
-  EXPECT_EQ(view.column(0).type().id(), cudf::INT8);
-  EXPECT_EQ(view.column(1).type().id(), cudf::INT16);
-  EXPECT_EQ(view.column(2).type().id(), cudf::INT16);
-  EXPECT_EQ(view.column(3).type().id(), cudf::INT32);
-  EXPECT_EQ(view.column(4).type().id(), cudf::INT32);
-  EXPECT_EQ(view.column(5).type().id(), cudf::INT64);
-  EXPECT_EQ(view.column(6).type().id(), cudf::INT64);
-  EXPECT_EQ(view.column(7).type().id(), cudf::FLOAT32);
-  EXPECT_EQ(view.column(8).type().id(), cudf::FLOAT32);
-  EXPECT_EQ(view.column(9).type().id(), cudf::FLOAT64);
-  EXPECT_EQ(view.column(10).type().id(), cudf::FLOAT64);
+  EXPECT_EQ(view.column(0).type().id(), cudf::type_id::INT8);
+  EXPECT_EQ(view.column(1).type().id(), cudf::type_id::INT16);
+  EXPECT_EQ(view.column(2).type().id(), cudf::type_id::INT16);
+  EXPECT_EQ(view.column(3).type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(view.column(4).type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(view.column(5).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(view.column(6).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(view.column(7).type().id(), cudf::type_id::FLOAT32);
+  EXPECT_EQ(view.column(8).type().id(), cudf::type_id::FLOAT32);
+  EXPECT_EQ(view.column(9).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(view.column(10).type().id(), cudf::type_id::FLOAT64);
 
   cudf::test::expect_columns_equal(view.column(0),
                                    int8_wrapper{int8_values.begin(), int8_values.end(), validity});
@@ -270,7 +270,7 @@ TEST_F(JsonReaderTest, Booleans)
   // Booleans are the same (integer) data type, but valued at 0 or 1
   const auto view = result.tbl->view();
   EXPECT_EQ(result.tbl->num_columns(), 1);
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::BOOL8);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::BOOL8);
 
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
@@ -296,7 +296,7 @@ TEST_F(JsonReaderTest, Dates)
 
   const auto view = result.tbl->view();
   EXPECT_EQ(result.tbl->num_columns(), 1);
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::TIMESTAMP_MILLISECONDS);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::TIMESTAMP_MILLISECONDS);
 
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
@@ -326,9 +326,9 @@ TEST_F(JsonReaderTest, JsonLinesDtypeInference)
   EXPECT_EQ(result.tbl->num_columns(), 3);
   EXPECT_EQ(result.tbl->num_rows(), 2);
 
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::INT64);
-  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::FLOAT64);
-  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::STRING);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::STRING);
 
   EXPECT_EQ(std::string(result.metadata.column_names[0]), "0");
   EXPECT_EQ(std::string(result.metadata.column_names[1]), "1");
@@ -358,8 +358,8 @@ TEST_F(JsonReaderTest, JsonLinesFileInput)
   EXPECT_EQ(result.tbl->num_columns(), 2);
   EXPECT_EQ(result.tbl->num_rows(), 2);
 
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::INT64);
-  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
 
   EXPECT_EQ(std::string(result.metadata.column_names[0]), "0");
   EXPECT_EQ(std::string(result.metadata.column_names[1]), "1");
@@ -388,7 +388,7 @@ TEST_F(JsonReaderTest, JsonLinesByteRange)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->num_rows(), 3);
 
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::INT64);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(std::string(result.metadata.column_names[0]), "0");
 
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
@@ -412,9 +412,9 @@ TEST_F(JsonReaderTest, JsonLinesObjects)
   EXPECT_EQ(result.tbl->num_columns(), 2);
   EXPECT_EQ(result.tbl->num_rows(), 1);
 
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::INT64);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(std::string(result.metadata.column_names[0]), "co\\\"l1");
-  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
   EXPECT_EQ(std::string(result.metadata.column_names[1]), "col2");
 
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
@@ -437,8 +437,8 @@ TEST_F(JsonReaderTest, JsonLinesObjectsStrings)
   EXPECT_EQ(result.tbl->num_columns(), 3);
   EXPECT_EQ(result.tbl->num_rows(), 2);
 
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::INT64);
-  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
 
   EXPECT_EQ(std::string(result.metadata.column_names[0]), "col1");
   EXPECT_EQ(std::string(result.metadata.column_names[1]), "col2");
@@ -504,7 +504,7 @@ TEST_F(JsonReaderTest, ArrowFileSource)
   cudf_io::table_with_metadata result = cudf_io::read_json(in_args);
 
   EXPECT_EQ(result.tbl->num_columns(), static_cast<cudf::size_type>(in_args.dtype.size()));
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::INT8);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT8);
 
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
@@ -543,7 +543,7 @@ TEST_F(JsonReaderTest, StringInference)
   cudf_io::table_with_metadata result = cudf_io::read_json(in_args);
 
   EXPECT_EQ(result.tbl->num_columns(), 1);
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::STRING);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

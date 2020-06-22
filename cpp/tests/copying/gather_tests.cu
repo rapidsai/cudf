@@ -373,7 +373,8 @@ TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
 
 TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   rmm::device_vector<cudf::size_type> gather_map{};
   auto results = cudf::detail::gather(
     cudf::table_view({zero_size_strings_column}), gather_map.begin(), gather_map.end(), true);
