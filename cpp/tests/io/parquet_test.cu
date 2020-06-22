@@ -756,8 +756,8 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroups)
   cudf_io::write_parquet_chunked_end(state);
 
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
-  read_args.row_group_list = {1, 0, 1};
-  auto result              = cudf_io::read_parquet(read_args);
+  read_args.row_group_lists = {{1, 0, 1}};
+  auto result               = cudf_io::read_parquet(read_args);
 
   expect_tables_equal(*result.tbl, *full_table);
 }
@@ -774,9 +774,11 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroupsError)
   cudf_io::write_parquet_chunked_end(state);
 
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
-  read_args.row_group_list = {0, 1};
+  read_args.row_group_lists = {{0, 1}};
   EXPECT_THROW(cudf_io::read_parquet(read_args), cudf::logic_error);
-  read_args.row_group_list = {-1};
+  read_args.row_group_lists = {{-1}};
+  EXPECT_THROW(cudf_io::read_parquet(read_args), cudf::logic_error);
+  read_args.row_group_lists = {{0}, {0}};
   EXPECT_THROW(cudf_io::read_parquet(read_args), cudf::logic_error);
 }
 

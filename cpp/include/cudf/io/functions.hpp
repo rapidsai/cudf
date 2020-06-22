@@ -415,7 +415,7 @@ struct read_parquet_args {
   std::vector<std::string> columns;
 
   /// List of individual row groups to read (ignored if empty)
-  std::vector<size_type> row_group_list;  // expand to a vector<vector>
+  std::vector<std::vector<size_type>> row_group_lists;
   /// Rows to skip from the start; -1 is none
   size_type skip_rows = -1;
   /// Rows to read; -1 is all

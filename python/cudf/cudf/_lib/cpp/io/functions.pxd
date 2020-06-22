@@ -116,7 +116,7 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef cppclass read_parquet_args:
         cudf_io_types.source_info source
         vector[string] columns
-        vector[size_type] row_group_list
+        vector[vector[size_type]] row_group_lists
         size_t skip_rows
         size_t num_rows
         bool strings_to_categorical

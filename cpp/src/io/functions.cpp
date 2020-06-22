@@ -257,8 +257,8 @@ table_with_metadata read_parquet(read_parquet_args const& args, rmm::mr::device_
     args.columns, args.strings_to_categorical, args.use_pandas_metadata, args.timestamp_type};
   auto reader = make_reader<detail_parquet::reader>(args.source, options, mr);
 
-  if (args.row_group_list.size() > 0) {
-    return reader->read_row_groups(args.row_group_list);
+  if (args.row_group_lists.size() > 0) {
+    return reader->read_row_groups(args.row_group_lists);
   } else if (args.skip_rows != -1 || args.num_rows != -1) {
     return reader->read_rows(args.skip_rows, args.num_rows);
   } else {

@@ -174,23 +174,32 @@ def read_parquet(
 ):
     """{docstring}"""
 
+    # Multiple sources are passed as a list. If a single source is passed, 
+    # wrap it in a list for unified processing downstream.
     if not isinstance(filepath_or_buffer, list):
         filepath_or_buffer = [filepath_or_buffer]
 
+
+    # a list of row groups per source should be passed. If a single list is 
+    # passed, wrap in into a list to make the list of lists that is expected 
+    # for multiple sources
+    if row_group_list and not isinstance(row_group_list[0], list):
+        row_group_list = [row_group_list]
+
     filepaths_or_buffers = []
-    for fob in filepath_or_buffer:
-        tmp_fob, compression = ioutils.get_filepath_or_buffer(
-            fob, None, **kwargs
+    for source in filepath_or_buffer:
+        tmp_source, compression = ioutils.get_filepath_or_buffer(
+            source, None, **kwargs
         )
         if compression is not None:
             raise ValueError("URL content-encoding decompression is not supported")
-        filepaths_or_buffers.append(tmp_fob)
+        filepaths_or_buffers.append(tmp_source)
 
     if engine == "cudf":
         return libparquet.read_parquet(
             filepaths_or_buffers,
             columns=columns,
-            row_group_list=row_group_list,
+            row_group_lists=row_group_list,
             skip_rows=skip_rows,
             num_rows=num_rows,
             strings_to_categorical=strings_to_categorical,

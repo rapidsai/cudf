@@ -584,21 +584,6 @@ class reader {
   table_with_metadata read_all(cudaStream_t stream = 0);
 
   /**
-   * @brief Reads a specific group of rows.
-   *
-   * @param row_group Index of the row group
-   * @param row_group_count Number of row groups to read
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   *
-   * @throw cudf::logic_error if row group index is out of range
-   */
-  table_with_metadata read_row_group(size_type row_group,
-                                     size_type row_group_count = 1,
-                                     cudaStream_t stream       = 0);
-
-  /**
    * @brief Reads specific row groups.
    *
    * @param row_group_list Indices of the row groups
@@ -608,7 +593,7 @@ class reader {
    *
    * @throw cudf::logic_error if row group index is out of range
    */
-  table_with_metadata read_row_groups(const std::vector<size_type> &row_group_list,
+  table_with_metadata read_row_groups(std::vector<std::vector<size_type>> const &row_group_list,
                                       cudaStream_t stream = 0);
 
   /**

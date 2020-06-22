@@ -311,24 +311,24 @@ class aggregate_metadata {
   /**
    * @brief Filters and reduces down to a selection of row groups
    *
-   * @param row_group_indices Arbitrary TODO
+   * @param row_group_lists Lists of row group to reads, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
    *
    * @return List of row group indexes and its starting row
    */
-  auto select_row_groups(std::vector<std::vector<size_type>> const &row_group_indices,
+  auto select_row_groups(std::vector<std::vector<size_type>> const &row_group_lists,
                          size_type &row_start,
                          size_type &row_count) const
   {
-    if (!row_group_indices.empty()) {
+    if (!row_group_lists.empty()) {
       std::vector<row_group_info> selection;
-      CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
-                   "must specify row groups for each source");
+      CUDF_EXPECTS(row_group_lists.size() == per_file_metadata.size(),
+                   "Must specify row groups for each source");
 
-      for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
-        row_count = 0;
-        for (auto const &rowgroup_idx : row_group_indices[src_idx]) {
+      row_count = 0;
+      for (size_t src_idx = 0; src_idx < row_group_lists.size(); ++src_idx) {
+        for (auto const &rowgroup_idx : row_group_lists[src_idx]) {
           CUDF_EXPECTS(rowgroup_idx >= 0 && rowgroup_idx < get_num_row_groups(src_idx),
                        "Invalid rowgroup index");
           selection.emplace_back(rowgroup_idx, row_count, src_idx);
@@ -669,15 +669,12 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
 
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
-                                       std::vector<std::vector<size_type>> const &row_group_indices,
+                                       std::vector<std::vector<size_type>> const &row_group_list,
                                        cudaStream_t stream)
 {
-  std::vector<std::unique_ptr<column>> out_columns;
-  table_metadata out_metadata;
-
   // Select only row groups required
   const auto selected_row_groups =
-    _metadata->select_row_groups(row_group_indices, skip_rows, num_rows);
+    _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
 
   // Get a list of column data types
   std::vector<data_type> column_types;
@@ -694,6 +691,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       column_types.emplace_back(col_type);
     }
   }
+
+  std::vector<std::unique_ptr<column>> out_columns;
   out_columns.reserve(column_types.size());
 
   if (selected_row_groups.size() != 0 && column_types.size() != 0) {
@@ -834,6 +833,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     out_columns.emplace_back(make_empty_column(column_types[i]));
   }
 
+  table_metadata out_metadata;
   // Return column names (must match order of returned columns)
   out_metadata.column_names.resize(_selected_columns.size());
   for (size_t i = 0; i < _selected_columns.size(); i++) {
@@ -868,10 +868,10 @@ reader::~reader() = default;
 table_with_metadata reader::read_all(cudaStream_t stream) { return _impl->read(0, -1, {}, stream); }
 
 // Forward to implementation
-table_with_metadata reader::read_row_groups(const std::vector<size_type> &row_group_list,
-                                            cudaStream_t stream)
+table_with_metadata reader::read_row_groups(
+  std::vector<std::vector<size_type>> const &row_group_lists, cudaStream_t stream)
 {
-  return _impl->read(0, -1, {row_group_list}, stream);
+  return _impl->read(0, -1, row_group_lists, stream);
 }
 
 // Forward to implementation
