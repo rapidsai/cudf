@@ -151,10 +151,12 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
 
   // size of the child gather map
   size_type gather_map_size = 0;
-  CUDA_TRY(cudaMemcpy(&gather_map_size,
-                      parent.offsets + parent.base_offsets->size(),
-                      sizeof(size_type),
-                      cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpyAsync(&gather_map_size,
+                           parent.offsets + parent.base_offsets->size(),
+                           sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
 
   // generate gather_data for this level
   auto offset_result =
