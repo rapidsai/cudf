@@ -5949,3 +5949,22 @@ def test_cudf_isclose_different_index():
         [False, True, True, False, True, False], index=s1.index
     )
     assert_eq(expected, gd.isclose(s1, s2))
+
+
+def test_dataframe_iter_error():
+    df = gd.DataFrame({"a": [1, 2, 3], "b": [9, 5, 3]})
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host memory via to_dict() is not "
+        "allowed, To explicitly construct a dictionary object, "
+        "consider using .to_pandas().to_dict()",
+    ):
+        df.to_dict()
+
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host memory via to_dict() is not "
+        "allowed, To explicitly construct a dictionary object, "
+        "consider using .to_pandas().to_dict()",
+    ):
+        df["a"].to_dict()
