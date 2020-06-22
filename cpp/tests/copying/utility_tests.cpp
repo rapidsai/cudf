@@ -74,10 +74,10 @@ TEST_F(EmptyLikeStringTest, ColumnStringTest)
 
 std::unique_ptr<cudf::table> create_table(cudf::size_type size, cudf::mask_state state)
 {
-  auto num_column_1 = make_numeric_column(cudf::data_type{cudf::INT64}, size, state);
-  auto num_column_2 = make_numeric_column(cudf::data_type{cudf::INT32}, size, state);
-  auto num_column_3 = make_numeric_column(cudf::data_type{cudf::FLOAT64}, size, state);
-  auto num_column_4 = make_numeric_column(cudf::data_type{cudf::FLOAT32}, size, state);
+  auto num_column_1 = make_numeric_column(cudf::data_type{cudf::type_id::INT64}, size, state);
+  auto num_column_2 = make_numeric_column(cudf::data_type{cudf::type_id::INT32}, size, state);
+  auto num_column_3 = make_numeric_column(cudf::data_type{cudf::type_id::FLOAT64}, size, state);
+  auto num_column_4 = make_numeric_column(cudf::data_type{cudf::type_id::FLOAT32}, size, state);
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.push_back(std::move(num_column_1));
   columns.push_back(std::move(num_column_2));
