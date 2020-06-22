@@ -382,13 +382,14 @@ def test_dataframe_index_rename(axis):
 
     assert_eq(expect, got)
 
-    # `pandas` can support indexes with mixed values. We automatically convert
-    # an index with mixed values to a `StringIndex`. Breaking the comparison.
+    # `pandas` can support indexes with mixed values. We throw a
+    # `NotImplementedError`.
+    expect = pdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
+
     with pytest.raises(NotImplementedError):
-        expect = pdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
         got = gdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
 
-        assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 def test_dataframe_MI_rename():
