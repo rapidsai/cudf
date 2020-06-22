@@ -848,7 +848,6 @@ namespace detail {
  **/
 template <typename SourceT, typename TargetT, typename InputIterator, typename ValidityIterator>
 struct fixed_width_type_converter {
- private:
   template <typename Lambda>
   auto create_column_wrapper(InputIterator begin,
                              InputIterator end,
@@ -862,7 +861,6 @@ struct fixed_width_type_converter {
              : fixed_width_column_wrapper<TargetT>(iter, iter + std::distance(begin, end));
   }
 
- public:
   // Convert integral values to timestamps
   template <
     typename SrcT                        = SourceT,
@@ -947,11 +945,12 @@ auto make_fixed_width_column_with_type_param_impl(
                             typename std::iterator_traits<InputIterator>::value_type>::value,
     void>::type* = nullptr)
 {
-  auto iter =
-    thrust::make_transform_iterator(begin, [](auto const& e) { return static_cast<TypeParam>(e); });
-  return (vbegin != vend)
-           ? fixed_width_column_wrapper<TypeParam>(iter, iter + std::distance(begin, end), vbegin)
-           : fixed_width_column_wrapper<TypeParam>(iter, iter + std::distance(begin, end));
+  return fixed_width_type_converter<typename std::iterator_traits<InputIterator>::value_type,
+                                    TypeParam,
+                                    InputIterator,
+                                    ValidityIterator>{}
+    .create_column_wrapper(
+      begin, end, vbegin, vend, [](auto const& e) { return static_cast<TypeParam>(e); });
 }
 
 template <typename TypeParam, typename InputIterator, typename ValidityIterator>
