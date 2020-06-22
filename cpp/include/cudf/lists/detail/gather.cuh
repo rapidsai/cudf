@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) 2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #pragma once
 
 #include <thrust/transform_scan.h>
@@ -11,7 +26,7 @@ namespace detail {
 /**
  * @brief The information needed to create an iterator to gather level N+1
  *
- * See documentation for make_gather_offsets for a detailed explanation.
+ * @ref make_gather_offsets
  */
 struct gather_data {
   size_type const* offsets;
@@ -23,8 +38,10 @@ struct gather_data {
  * recursion in a hierarchy of list columns.
  *
  * Gathering from a single level of a list column is similar to gathering from
- * a string column.  Each row represents a list bounded by offsets. Example:
+ * a string column.  Each row represents a list bounded by offsets.
  *
+ * @code{.pseudo}
+ * Example:
  * Level 0 : List<List<int>>
  *           Size : 3
  *           Offsets : [0, 2, 5, 10]
@@ -32,7 +49,7 @@ struct gather_data {
  * This represents a column with 3 rows.
  * Row 0 has 2 elements (bounded by offsets 0,2)
  * Row 1 has 3 elements (bounded by offsets 2,5)
- * Row 2 has 5 eleemnts (bounded by offsets 5,10)
+ * Row 2 has 5 elements (bounded by offsets 5,10)
  *
  * If we wanted to gather rows 0 and 2 the offsets for our outgoing column
  * would be the compacted ranges (0,2) and (5,10). The level 1 column
@@ -55,12 +72,14 @@ struct gather_data {
  * final integer values we want to gather.
  *
  * [0, 1, 5, 6, 7, 8, 9]
+ * @endcode
  *
  * Thinking generally, this means that to produce a gather_map for level N+1, we need to use the
  * offsets from level N and the "base" offsets from level N-1. So we are always carrying along
  * one extra buffer of these "base" offsets which keeps our memory usage well controlled.
  *
- * A concrete example:
+ * @code{.pseudo}
+ * Example:
  *
  * "column of lists of lists of ints"
  * {
@@ -87,6 +106,15 @@ struct gather_data {
  *
  * Final column, doing gather([0, 2])
  *
+ * {
+ *   {
+ *      {2, 3}, {4, 5}
+ *   },
+ *   {
+ *      {15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}
+ *   }
+ * }
+ *
  * List<List<int32_t>>:
  * Length : 2
  * Offsets : 0, 2, 7
@@ -96,11 +124,11 @@ struct gather_data {
  *    Offsets : 0, 2, 4, 6, 8, 10, 12, 14
  *       Children :
  *          2, 3, 4, 5, 15, 16, 17, 18, 17, 18, 17, 18, 17, 18
+ * @endcode
  *
  * @tparam MapItType Iterator type to access the incoming column.
  * @param source_column View into the column to gather from
- * @param gather_map Iterator access to the gather map for `source_column`
- * map
+ * @param gather_map Iterator access to the gather map for `source_column` map
  * @param gather_map_size Size of the gather map.
  * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
  * @param stream CUDA stream on which to execute kernels
@@ -129,7 +157,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
 
   // outgoing offsets.  these will persist as output from the entire gather operation
   auto dst_offsets_c = cudf::make_fixed_width_column(
-    data_type{INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
   mutable_column_view dst_offsets_v = dst_offsets_c->mutable_view();
   size_type* dst_offsets            = dst_offsets_v.data<size_type>();
 
@@ -155,12 +183,12 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
     0,
     sum);
 
-  // for each span of offsets (each output row) we need to know the original offset value to build
-  // the gather map for the next level.  this data is temporary and will only persist until the
+  // For each span of offsets (each output row) we need to know the original offset value to build
+  // the gather map for the next level.  This data is temporary and will only persist until the
   // next level of recursion is done using it.  This way, even if we have a hierarchy 1000 levels
   // deep, we will only ever have at most 2 of these extra columns in memory.
   auto base_offsets = cudf::make_fixed_width_column(
-    data_type{INT32}, output_count, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_id::INT32}, output_count, mask_state::UNALLOCATED, stream, mr);
   mutable_column_view base_offsets_mcv = base_offsets->mutable_view();
   size_type* base_offsets_p            = base_offsets_mcv.data<size_type>();
 
@@ -179,11 +207,12 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
 }
 
 /**
- * @brief Gather a list column from a hierarchy of list columns. The recursion
- * continues from here at least 1 level further
+ * @brief Gather a list column from a hierarchy of list columns.
+ *
+ * The recursion continues from here at least 1 level further.
  *
  * @param list View into the list column to gather from
- * @param gd The gather_data needed to construct a gather map iterator for this level
+ * @param parent The gather_data needed to construct a gather map iterator for this level
  * @param stream CUDA stream on which to execute kernels
  * @param mr Memory resource to use for all allocations
  *
@@ -201,7 +230,7 @@ std::unique_ptr<column> gather_list_nested(
  * terminates here.
  *
  * @param column View into the column to gather from
- * @param gd The gather_data needed to construct a gather map iterator for this level
+ * @param parent The gather_data needed to construct a gather map iterator for this level
  * @param stream CUDA stream on which to execute kernels
  * @param mr Memory resource to use for all allocations
  *
@@ -210,7 +239,7 @@ std::unique_ptr<column> gather_list_nested(
  */
 std::unique_ptr<column> gather_list_leaf(
   column_view const& column,
-  gather_data const& gd,
+  gather_data const& parent,
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 

@@ -1,4 +1,18 @@
-
+/*
+ * Copyright (c) 2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #include <thrust/binary_search.h>
 #include <thrust/iterator/iterator_facade.h>
 #include <cudf/detail/gather.cuh>
@@ -50,12 +64,12 @@ struct list_gatherer {
     offsets      = gd.offsets;
   }
 
-  result_type operator() __device__(argument_type index)
+  __device__ result_type operator()(argument_type index)
   {
     // the "upper bound" of the span for a given offset is always offsets+1;
     size_type const* upper_bound_start = offsets + 1;
     // "step 1" from above
-    auto bound =
+    auto const bound =
       thrust::upper_bound(thrust::seq, upper_bound_start, upper_bound_start + offset_count, index);
     size_type offset_index = thrust::distance(upper_bound_start, bound);
     // "step 2" from above
@@ -70,20 +84,22 @@ struct list_gatherer {
  *
  */
 std::unique_ptr<column> gather_list_leaf(column_view const& column,
-                                         gather_data const& gd,
+                                         gather_data const& parent,
                                          cudaStream_t stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   // gather map for our child
   auto child_gather_map = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), list_gatherer{gd});
+    thrust::make_counting_iterator<size_type>(0), list_gatherer{parent});
 
   // size of the child gather map
   size_type child_gather_map_size;
-  CUDA_TRY(cudaMemcpy(&child_gather_map_size,
-                      gd.offsets + gd.base_offsets->size(),
-                      sizeof(size_type),
-                      cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpyAsync(&child_gather_map_size,
+                           parent.offsets + parent.base_offsets->size(),
+                           sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
 
   // otherwise, just call a regular gather
   auto leaf_column =
@@ -167,7 +183,7 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
   parent.base_offsets.release();
 
   // the nesting case.
-  if (list.child().type() == cudf::data_type{LIST}) {
+  if (list.child().type() == cudf::data_type{type_id::LIST}) {
     // gather children.
     auto child = gather_list_nested(list.child(), gd, stream, mr);
 

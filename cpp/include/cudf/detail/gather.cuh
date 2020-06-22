@@ -267,10 +267,9 @@ struct column_gatherer_impl<dictionary32, MapItType> {
 template <typename MapItRoot>
 struct column_gatherer_impl<list_view, MapItRoot> {
   /**
-   * @brief Gather a list column from a hierarchy of list columns. This is the start
-   * of the recursion - we will only ever get in here once.
+   * @brief Gather a list column from a hierarchy of list columns.
    *
-   * This function is looks similar to gather_list_nested() but the difference is
+   * This function is similar to gather_list_nested() but the difference is
    * significant.  This particular level takes a templated gather map iterator of
    * any type.  As we start recursing, we need to be able to generate new gather
    * maps for each level.  To do this requires manifesting a buffer of intermediate
@@ -283,6 +282,7 @@ struct column_gatherer_impl<list_view, MapItRoot> {
    *
    * The tree of calls can be visualized like this:
    *
+   * @code{.pseudo}
    * R :  this operator
    * N :  lists::detail::gather_list_nested
    * L :  lists::detail::gather_list_leaf
@@ -296,7 +296,9 @@ struct column_gatherer_impl<list_view, MapItRoot> {
    *              ...
    *               \
    *                L
+   * @endcode
    *
+   * This is the start of the recursion - we will only ever get in here once.
    * We will only ever travel down the left branch or the right branch, and we
    * will always end up in a final call to gather_list_leaf.
    *
@@ -319,7 +321,7 @@ struct column_gatherer_impl<list_view, MapItRoot> {
   {
     lists_column_view list(column);
     auto gather_map_size = std::distance(gather_map_begin, gather_map_end);
-    if (gather_map_size == 0) { return make_empty_column(data_type{LIST}); }
+    if (gather_map_size == 0) { return make_empty_column(data_type{type_id::LIST}); }
 
     // generate gather_data for this level
     auto offset_result = nullify_out_of_bounds
@@ -331,7 +333,7 @@ struct column_gatherer_impl<list_view, MapItRoot> {
     lists::detail::gather_data gd{offsets_v.data<size_type>(), std::move(offset_result.second)};
 
     // the nesting case.
-    if (list.child().type() == cudf::data_type{LIST}) {
+    if (list.child().type() == cudf::data_type{type_id::LIST}) {
       // gather children
       auto child = lists::detail::gather_list_nested(list.child(), gd, stream, mr);
 
