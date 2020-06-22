@@ -174,42 +174,15 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
                                        *cudf::column_device_view::create(chrono_rhs_col)}));
 }
 
-template <typename T>
-struct MakeChronoColumn {
-  template <typename ChronoT = T>
-  typename std::enable_if_t<
-    std::is_same<typename cudf::is_timestamp_t<ChronoT>::type, std::true_type>::value,
-    std::unique_ptr<cudf::column>>
-  operator()(cudf::size_type col_size,
-             rmm::device_buffer&& null_mask,
-             size_t null_count,
-             cudaStream_t stream,
-             rmm::mr::device_memory_resource* mr) const
-  {
-    return cudf::make_timestamp_column(
-      cudf::data_type{cudf::type_to_id<T>()}, col_size, null_mask, null_count, stream, mr);
-  }
-
-  template <typename ChronoT = T>
-  typename std::enable_if_t<
-    std::is_same<typename cudf::is_duration_t<ChronoT>::type, std::true_type>::value,
-    std::unique_ptr<cudf::column>>
-  operator()(cudf::size_type col_size,
-             rmm::device_buffer&& null_mask,
-             size_t null_count,
-             cudaStream_t stream,
-             rmm::mr::device_memory_resource* mr) const
-  {
-    return cudf::make_duration_column(
-      cudf::data_type{cudf::type_to_id<T>()}, col_size, null_mask, null_count, stream, mr);
-  }
-};
-
 TYPED_TEST(ChronoColumnTest, ChronoFactoryNullMaskAsParm)
 {
   rmm::device_buffer null_mask{create_null_mask(this->size(), cudf::mask_state::ALL_NULL)};
-  auto column = MakeChronoColumn<TypeParam>{}(
-    this->size(), std::move(null_mask), this->size(), this->stream(), this->mr());
+  auto column = make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
+                                        this->size(),
+                                        std::move(null_mask),
+                                        this->size(),
+                                        this->stream(),
+                                        this->mr());
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(this->size(), column->null_count());
@@ -221,8 +194,12 @@ TYPED_TEST(ChronoColumnTest, ChronoFactoryNullMaskAsParm)
 TYPED_TEST(ChronoColumnTest, ChronoFactoryNullMaskAsEmptyParm)
 {
   rmm::device_buffer null_mask{};
-  auto column = MakeChronoColumn<TypeParam>{}(
-    this->size(), std::move(null_mask), 0, this->stream(), this->mr());
+  auto column = make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
+                                        this->size(),
+                                        std::move(null_mask),
+                                        0,
+                                        this->stream(),
+                                        this->mr());
 
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());

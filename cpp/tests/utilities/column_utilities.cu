@@ -375,40 +375,15 @@ static auto numeric_to_string_precise(T value)
   return o.str();
 }
 
-template <typename T,
-          typename std::enable_if_t<std::is_same<T, cudf::duration_D>::value>* = nullptr>
-static auto duration_suffix(T)
-{
-  return " days";
-}
+static auto duration_suffix(cudf::duration_D) { return " days"; }
 
-template <typename T,
-          typename std::enable_if_t<std::is_same<T, cudf::duration_s>::value>* = nullptr>
-static auto duration_suffix(T)
-{
-  return " seconds";
-}
+static auto duration_suffix(cudf::duration_s) { return " seconds"; }
 
-template <typename T,
-          typename std::enable_if_t<std::is_same<T, cudf::duration_ms>::value>* = nullptr>
-static auto duration_suffix(T)
-{
-  return " milliseconds";
-}
+static auto duration_suffix(cudf::duration_ms) { return " milliseconds"; }
 
-template <typename T,
-          typename std::enable_if_t<std::is_same<T, cudf::duration_us>::value>* = nullptr>
-static auto duration_suffix(T)
-{
-  return " microseconds";
-}
+static auto duration_suffix(cudf::duration_us) { return " microseconds"; }
 
-template <typename T,
-          typename std::enable_if_t<std::is_same<T, cudf::duration_ns>::value>* = nullptr>
-static auto duration_suffix(T)
-{
-  return " nanoseconds";
-}
+static auto duration_suffix(cudf::duration_ns) { return " nanoseconds"; }
 
 std::string get_nested_type_str(cudf::column_view const& view)
 {
