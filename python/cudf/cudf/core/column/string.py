@@ -3989,19 +3989,23 @@ class StringColumn(column.ColumnBase):
         return out
 
     def view(self, dtype):
+        if self.null_count > 0:
+            raise ValueError("Can not produce a view of a column with nulls")
         dtype = np.dtype(dtype)
-        if (
-            self.base_children[0][self.offset]
-            * self.base_children[1].dtype.itemsize
-        ) % dtype.itemsize:
-            raise TypeError(
-                "Slice data size must divide evenly into desired dtype size"
-            )
-        else:
-            offset = self.base_children[0][self.offset] * dtype.itemsize
-            return column.build_column(
-                self.base_children[1].data, dtype=dtype, offset=offset
-            )
+        str_byte_offset = self.base_children[0][self.offset]
+        char_dtype_size = self.base_children[1].dtype.itemsize
+        n_bytes_to_view = (
+            self.base_children[1].size - str_byte_offset
+        ) * char_dtype_size
+
+        to_view = column.build_column(
+            self.base_children[1].data,
+            dtype=self.base_children[1].dtype,
+            offset=str_byte_offset,
+            size=n_bytes_to_view,
+        )
+
+        return to_view.view(dtype)
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")

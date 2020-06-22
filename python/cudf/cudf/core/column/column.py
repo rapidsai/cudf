@@ -397,21 +397,37 @@ class ColumnBase(Column, Serializable):
         """
         dtype = np.dtype(dtype)
 
-        if self.null_count > 0:
-            if self.dtype.itemsize != dtype.itemsize:
-                raise ValueError("Can not produce a view of a column with nulls")
-            else:
-                pass
-
-
-        if dtype.kind in ('o', 'u', 's'):
-            raise TypeError('Bytes viewed as str without metadata is ambiguous')
-
-        if self.data.size % dtype.itemsize:
+        if dtype.kind in ("o", "u", "s"):
             raise TypeError(
-                "Source data size must be an even multiple of view data size"
+                "Bytes viewed as str without metadata is ambiguous"
             )
-        return build_column(self.data, dtype=dtype, mask=self.mask)
+
+        if self.dtype.itemsize == dtype.itemsize:
+            return build_column(
+                self.base_data,
+                dtype=dtype,
+                mask=self.base_mask,
+                size=self.size,
+                offset=self.offset,
+            )
+
+        else:
+            if self.null_count > 0:
+                raise ValueError(
+                    "Can not produce a view of a column with nulls"
+                )
+
+            if (self.base_size*self.dtype.itemsize) % dtype.itemsize:
+                raise TypeError(
+                    f"Can not divide {self.base_size * self.dtype.itemsize}"
+                    + f" total bytes into {dtype} with size {dtype.itemsize}"
+                )
+
+            new_size = (self.base_size - self.offset) * self.dtype.itemsize
+            #import pdb
+            #pdb.set_trace()
+            view_buf = Buffer(data=self.base_data.ptr, size=new_size, owner=self.base_data._owner)
+            return build_column(view_buf, dtype=dtype)
 
     def element_indexing(self, index):
         """Default implementation for indexing to an element
