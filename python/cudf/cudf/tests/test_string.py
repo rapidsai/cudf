@@ -2240,9 +2240,150 @@ def test_str_isfloat(data, expected):
         ["\t", ".", "\n", "\n\t", "\t\n"],
     ],
 )
-def test_str_max_min(data):
+def test_str_min(data):
     psr = pd.Series(data)
     sr = Series(data)
 
     assert_eq(psr.min(), sr.min())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+        ["a", "z", ".", '"', "aa", "zz"],
+        ["aa", "zz"],
+        ["z", "a", "zz", "aa"],
+        ["1", "2", "3", "4", "5"],
+        [""],
+        ["a"],
+        ["hello"],
+        ["small text", "this is a larger text......"],
+        ["👋🏻", "🔥", "🥇"],
+        ["This is 💯", "here is a calendar", "📅"],
+        ["", ".", ";", "[", "]"],
+        ["\t", ".", "\n", "\n\t", "\t\n"],
+    ],
+)
+def test_str_max(data):
+    psr = pd.Series(data)
+    sr = Series(data)
+
     assert_eq(psr.max(), sr.max())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+        ["a", "z", ".", '"', "aa", "zz"],
+        ["aa", "zz"],
+        ["z", "a", "zz", "aa"],
+        ["1", "2", "3", "4", "5"],
+        [""],
+        ["a"],
+        ["hello"],
+        ["small text", "this is a larger text......"],
+        ["👋🏻", "🔥", "🥇"],
+        ["This is 💯", "here is a calendar", "📅"],
+        ["", ".", ";", "[", "]"],
+        ["\t", ".", "\n", "\n\t", "\t\n"],
+    ],
+)
+def test_str_sum(data):
+    psr = pd.Series(data)
+    sr = Series(data)
+
+    assert_eq(psr.sum(), sr.sum())
+
+
+@pytest.mark.parametrize(
+    "data", [["1", "2", "3", "4", "5"], ["1"]],
+)
+def test_str_mean(data):
+    psr = pd.Series(data)
+    sr = Series(data)
+
+    assert_eq(psr.mean(), sr.mean())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+        ["a", "z", ".", '"', "aa", "zz"],
+        ["aa", "zz"],
+        ["z", "a", "zz", "aa"],
+        [""],
+        ["a"],
+        ["hello"],
+        ["small text", "this is a larger text......"],
+        ["👋🏻", "🔥", "🥇"],
+        ["This is 💯", "here is a calendar", "📅"],
+        ["", ".", ";", "[", "]"],
+        ["\t", ".", "\n", "\n\t", "\t\n"],
+        ["1.0", "2.0", "3"],
+    ],
+)
+def test_str_mean_error(data):
+    psr = pd.Series(data)
+    sr = Series(data)
+    error_type = None
+    try:
+        psr.mean()
+    except Exception as e:
+        error_type = type(e)
+
+    if error_type is None:
+        raise AssertionError("psr.mean() should've failed")
+
+    with pytest.raises(error_type):
+        sr.mean()
+
+
+def test_string_product():
+    psr = pd.Series(["1", "2", "3", "4", "5"])
+    sr = Series(["1", "2", "3", "4", "5"])
+    error_type = None
+    try:
+        psr.product()
+    except Exception as e:
+        error_type = type(e)
+
+    if error_type is None:
+        raise AssertionError("psr.product() should've failed")
+
+    with pytest.raises(error_type):
+        sr.product()
+
+
+def test_string_var():
+    psr = pd.Series(["1", "2", "3", "4", "5"])
+    sr = Series(["1", "2", "3", "4", "5"])
+    error_type = None
+    try:
+        psr.var()
+    except Exception as e:
+        error_type = type(e)
+
+    if error_type is None:
+        raise AssertionError("psr.var() should've failed")
+
+    with pytest.raises(error_type):
+        sr.var()
+
+
+def test_string_std():
+    psr = pd.Series(["1", "2", "3", "4", "5"])
+    sr = Series(["1", "2", "3", "4", "5"])
+    error_type = None
+    try:
+        psr.std()
+    except Exception as e:
+        error_type = type(e)
+
+    if error_type is None:
+        raise AssertionError("psr.std() should've failed")
+
+    with pytest.raises(error_type):
+        sr.std()
