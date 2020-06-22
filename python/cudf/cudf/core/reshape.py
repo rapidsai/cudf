@@ -29,10 +29,7 @@ def _align_objs(objs, how="outer"):
     # Then check for duplicate index value.
     i_objs = iter(objs)
     first = next(i_objs)
-    if all(isinstance(o.index, cudf.MultiIndex) for o in objs):
-        match_index = all(first.index == rest.index for rest in i_objs)
-    else:
-        match_index = all(all(first.index == rest.index) for rest in i_objs)
+    match_index = all(first.index.equals(rest.index) for rest in i_objs)
 
     if match_index:
         return objs, True
