@@ -23,7 +23,9 @@
 - PR #5444 Remove usage of deprecated RMM APIs and headers.
 - PR #5463 Add `.str.byte_count` python api and cython(bindings)
 - PR #5488 Add plumbings for `.str.replace_tokens`
+- PR #5502 Add Unsigned int types support in dlpack
 - PR #5497 Add `.str.isinteger` & `.str.isfloat`
+- PR #5510 Add support for `cudf.Index` to create Indexes
 
 ## Improvements
 
@@ -80,6 +82,7 @@
 - PR #5491 allow build libcudf in custom dir
 - PR #5503 Change `unique_count` to `distinct_count`
 - PR #5496 Rename .cu tests (zero cuda kernels) to .cpp files
+- PR #5526 Change `type_id` to enum class
 
 ## Bug Fixes
 
@@ -112,12 +115,15 @@
 - PR #5459 Fix str.translate to convert table characters to UTF-8
 - PR #5480 Fix merge sort docs
 - PR #5465 Fix benchmark out of memory errors due to multiple initialization
+- PR #5473 Fix RLEv2 patched base in ORC reader
 - PR #5472 Fix str concat issue with indexed series
 - PR #5478 Fix `loc` and `iloc` doc
 - PR #5484 Ensure flat index after groupby if nlevels == 1
 - PR #5489 Fix drop_nulls/boolean_mask corruption for large columns
+- PR #5504 Remove some java assertions that are not needed
 - PR #5516 Update gpuCI image in local build script
 - PR #5523 Handle `dtype` of `Buffer` objects when not passed explicitly
+- PR #5534 Fix the java build around type_id
 
 # cuDF 0.14.0 (Date TBD)
 

@@ -242,7 +242,7 @@ struct read_csv_args {
   /// Whether to parse dates as DD/MM versus MM/DD
   bool dayfirst = false;
   /// Cast timestamp columns to a specific type
-  data_type timestamp_type{EMPTY};
+  data_type timestamp_type{type_id::EMPTY};
 
   read_csv_args() = default;
   explicit read_csv_args(source_info const& src) : source(src) {}
@@ -369,7 +369,7 @@ struct read_orc_args {
   /// Whether to use numpy-compatible dtypes
   bool use_np_dtypes = true;
   /// Cast timestamp columns to a specific type
-  data_type timestamp_type{EMPTY};
+  data_type timestamp_type{type_id::EMPTY};
 
   /// Whether to convert decimals to float64
   bool decimals_as_float = true;
@@ -430,7 +430,7 @@ struct read_parquet_args {
   /// Whether to use PANDAS metadata to load columns
   bool use_pandas_metadata = true;
   /// Cast timestamp columns to a specific type
-  data_type timestamp_type{EMPTY};
+  data_type timestamp_type{type_id::EMPTY};
 
   explicit read_parquet_args() = default;
 

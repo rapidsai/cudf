@@ -53,7 +53,8 @@ TEST_F(StringsFindMultipleTest, FindMultiple)
 
 TEST_F(StringsFindMultipleTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   std::vector<const char*> h_targets{""};
   cudf::test::strings_column_wrapper targets(h_targets.begin(), h_targets.end());
@@ -68,7 +69,8 @@ TEST_F(StringsFindMultipleTest, ErrorTest)
   cudf::test::strings_column_wrapper strings({"this string intentionally left blank"}, {0});
   auto strings_view = cudf::strings_column_view(strings);
 
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto empty_view = cudf::strings_column_view(zero_size_strings_column);
   // targets must have at least one string
   EXPECT_THROW(cudf::strings::find_multiple(strings_view, empty_view), cudf::logic_error);
