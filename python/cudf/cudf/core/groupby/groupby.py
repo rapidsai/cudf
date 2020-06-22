@@ -679,7 +679,6 @@ class SeriesGroupBy(GroupBy):
             isinstance(result.columns, pd.MultiIndex)
             and result.columns.nlevels > 1
         ):
-
             result.columns = result.columns.droplevel(0)
 
         return result

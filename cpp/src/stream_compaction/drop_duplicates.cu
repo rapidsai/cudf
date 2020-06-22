@@ -145,9 +145,9 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
   }
 }
 
-cudf::size_type unique_count(table_view const& keys,
-                             null_equality nulls_equal = null_equality::EQUAL,
-                             cudaStream_t stream       = 0)
+cudf::size_type distinct_count(table_view const& keys,
+                               null_equality nulls_equal,
+                               cudaStream_t stream)
 {
   // sort only indices
   auto sorted_indices = sorted_order(
@@ -287,10 +287,10 @@ struct has_nans {
   }
 };
 
-cudf::size_type unique_count(column_view const& input,
-                             null_policy null_handling,
-                             nan_policy nan_handling,
-                             cudaStream_t stream)
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling,
+                               cudaStream_t stream)
 {
   if (0 == input.size() || input.null_count() == input.size()) { return 0; }
 
@@ -306,7 +306,7 @@ cudf::size_type unique_count(column_view const& input,
     has_nan = cudf::type_dispatcher(input.type(), has_nans{}, input, stream);
   }
 
-  auto count = detail::unique_count(table_view{{input}}, null_equality::EQUAL, stream);
+  auto count = detail::distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 
   // if nan is considered null and there are already null values
   if (nan_handling == nan_policy::NAN_IS_NULL and has_nan and input.has_nulls()) --count;
@@ -329,12 +329,18 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
   return detail::drop_duplicates(input, keys, keep, nulls_equal, mr);
 }
 
-cudf::size_type unique_count(column_view const& input,
-                             null_policy null_handling,
-                             nan_policy nan_handling)
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling)
 {
   CUDF_FUNC_RANGE();
-  return detail::unique_count(input, null_handling, nan_handling);
+  return detail::distinct_count(input, null_handling, nan_handling);
+}
+
+cudf::size_type distinct_count(table_view const& input, null_equality nulls_equal)
+{
+  CUDF_FUNC_RANGE();
+  return detail::distinct_count(input, nulls_equal);
 }
 
 }  // namespace cudf
