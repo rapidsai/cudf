@@ -433,17 +433,20 @@ struct datetime_formatter {
   const int32_t* d_offsets;
   char* d_chars;
 
-  __device__ int64_t units_base(timestamp_units units)
+  __device__ cudf::timestamp_D::duration convert_to_days(int64_t timestamp, timestamp_units units)
   {
+    using namespace simt::std::chrono;
+    using minutes = duration<timestamp_s::rep, minutes::period>;
+    using hours   = duration<timestamp_s::rep, hours::period>;
     switch (units) {
-      case timestamp_units::hours: return 24L;
-      case timestamp_units::minutes: return 1440L;   // 24*60
-      case timestamp_units::seconds: return 86400L;  // 24*60*60
-      case timestamp_units::ms: /**/ return 86400000L;
-      case timestamp_units::us: /**/ return 86400000000L;
-      case timestamp_units::ns: /**/ return 86400000000000L;
+      case timestamp_units::minutes: return floor<days>(minutes(timestamp));
+      case timestamp_units::seconds: return floor<days>(cudf::timestamp_s::duration(timestamp));
+      case timestamp_units::hours: return floor<days>(hours(timestamp));
+      case timestamp_units::ms: return floor<days>(cudf::timestamp_ms::duration(timestamp));
+      case timestamp_units::us: return floor<days>(cudf::timestamp_us::duration(timestamp));
+      case timestamp_units::ns: return floor<days>(cudf::timestamp_ns::duration(timestamp));
+      default: return cudf::timestamp_D::duration(timestamp);
     }
-    return 1L;  // days
   }
 
   // divide timestamp integer into time components (year, month, day, etc)
@@ -486,58 +489,16 @@ struct datetime_formatter {
       return;
     }
 
-    // with C++17, user structured bindings and const
-    int32_t days, year;
-    thrust::tie(days, year) = [&] {
-      // first, convert to days so we can handle months, leap years, etc.
-      // 719468 is days between 0000-00-00 and 1970-01-01
-      auto const days            = scale_time(timestamp, units_base(units)) + 719468;
-      auto const days_in_era     = 146097;  // (400*365)+97
-      auto const days_in_century = 36524;   // (100*365) + 24;
-      auto const days_in_4_years = 1461;    // (4*365) + 1;
-      auto const days_in_year    = 365;
+    // first, convert to days so we can handle months, years, day of the year.
+    auto const days  = convert_to_days(timestamp, units);
+    auto const ymd   = simt::std::chrono::year_month_day(simt::std::chrono::sys_days(days));
+    auto const year  = static_cast<int32_t>(ymd.year());
+    auto const month = static_cast<unsigned>(ymd.month());
+    auto const day   = static_cast<unsigned>(ymd.day());
 
-      // code logic handles leap years in chunks: 400y,100y,4y,1y
-      auto const days_mod_era = days % days_in_era;
-      auto const centuries    = days_mod_era / days_in_century;
-      auto const leap_century = centuries == 4;  // landed exactly on a leap century
-      auto const days_mod_century =
-        days_mod_era % days_in_century + (leap_century ? days_in_century : 0);
-      auto const days_mod_4_years = days_mod_century % days_in_4_years;
-      auto const years            = days_mod_4_years / days_in_year;
-      auto const leap_year        = years == 4;  // landed exactly on a leap year
-      auto const days_mod_year = days_mod_4_years % days_in_year + (leap_year ? days_in_year : 0);
-
-      auto const year = 400 * (days / days_in_era) +                  //
-                        100 * (centuries - (leap_century ? 1 : 0)) +  //
-                        4 * (days_mod_century / days_in_4_years) +    //
-                        years - (leap_year ? 1 : 0);
-
-      return thrust::make_pair(days_mod_year, year);
-    }();
-
-    // The months are shifted so that March is the starting month and February
-    // (with possible leap day in it) is the last month for the linear calculation.
-    // Day offsets for each month:   Mar Apr May June July Aug Sep  Oct  Nov  Dec  Jan  Feb
-    const int32_t monthDayOffset[] = {0, 31, 61, 92, 122, 153, 184, 214, 245, 275, 306, 337, 366};
-    // find month from days
-    int32_t month = [days, monthDayOffset] {
-      // find first offset that is bigger than days
-      auto itr = thrust::find_if(
-        thrust::seq, monthDayOffset, (monthDayOffset + 13), [days](auto d) { return days < d; });
-      return itr != (monthDayOffset + 13) ? thrust::distance(monthDayOffset, itr - 1) : 12;
-    }();
-
-    // compute day of the year and account for calculating with March being the first month
-    // for month >= 10, leap-day has been already been included
-    timeparts[TP_DAY_OF_YEAR] = (month >= 10)
-                                  ? days - monthDayOffset[10] + 1
-                                  : days + /*Jan=*/31 + /*Feb=*/28 + 1 +  // 2-month shift
-                                      ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
-
-    int32_t const day = days - monthDayOffset[month] + 1;  // compute day of month
-    if (month >= 10) ++year;
-    month = ((month + 2) % 12) + 1;  // adjust Jan-Mar offset
+    int32_t const monthDayOffset[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+    timeparts[TP_DAY_OF_YEAR] =
+      day + monthDayOffset[month - 1] + (month > 2 and ymd.year().is_leap());
 
     timeparts[TP_YEAR]  = year;
     timeparts[TP_MONTH] = month;
