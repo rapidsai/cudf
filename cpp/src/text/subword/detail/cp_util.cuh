@@ -36,19 +36,19 @@ __device__ __forceinline__ uint32_t extract_token_cat(uint32_t cp_metadata)
   return (cp_metadata >> TOKEN_CAT_SHIFT) & TOKEN_CAT_MASK;
 }
 
-__device__ __forceinline__ uint32_t should_remove_cp(uint32_t cp_metadata, bool lower_case)
+__device__ __forceinline__ bool should_remove_cp(uint32_t cp_metadata, bool lower_case)
 {
   int cat = extract_token_cat(cp_metadata);
   return (cat == TOKEN_CAT_REMOVE_CHAR) || (lower_case && (cat == TOKEN_CAT_REMOVE_CHAR_IF_LOWER));
 }
 
-__device__ __forceinline__ uint32_t should_add_spaces(uint32_t cp_metadata, bool lower_case)
+__device__ __forceinline__ bool should_add_spaces(uint32_t cp_metadata, bool lower_case)
 {
   int cat = extract_token_cat(cp_metadata);
   return (cat == TOKEN_CAT_ADD_SPACE) || (lower_case && (cat == TOKEN_CAT_ADD_SPACE_IF_LOWER));
 }
 
-__device__ __forceinline__ uint32_t always_replace(uint32_t cp_metadata)
+__device__ __forceinline__ bool always_replace(uint32_t cp_metadata)
 {
   return extract_token_cat(cp_metadata) == TOKEN_CAT_ALWAYS_REPLACE;
 }

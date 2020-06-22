@@ -123,7 +123,7 @@ __global__ void gpuBasicTokenizer(const unsigned char* sentences,
       extract_code_points_from_utf8(sentences, char_for_thread, head_byte);
     const uint32_t thr_cp_metadata = get_cp_metadata(cp_metadata, code_point);
 
-    if (!should_remove_cp(thr_cp_metadata, do_lower_case) && head_byte) {
+    if (head_byte && !should_remove_cp(thr_cp_metadata, do_lower_case)) {
       num_new_chars = 1;
       // Apply lower cases and accent stripping if necessary
       const bool replacement_needed = do_lower_case || always_replace(thr_cp_metadata);
@@ -131,7 +131,7 @@ __global__ void gpuBasicTokenizer(const unsigned char* sentences,
       new_cp          = new_cp == 0 ? code_point : new_cp;
 
       replacement_code_points[0] = new_cp;
-      if (is_multi_char_transform(thr_cp_metadata) && do_lower_case) {
+      if (do_lower_case && is_multi_char_transform(thr_cp_metadata)) {
         uint64_t next_cps                = get_extra_cps(aux_table, code_point);
         replacement_code_points[1]       = static_cast<uint32_t>(next_cps >> 32);
         const uint32_t potential_next_cp = static_cast<uint32_t>(next_cps);
