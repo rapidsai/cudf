@@ -424,8 +424,6 @@ class ColumnBase(Column, Serializable):
                 )
 
             new_size = (self.base_size - self.offset) * self.dtype.itemsize
-            #import pdb
-            #pdb.set_trace()
             view_buf = Buffer(data=self.base_data.ptr, size=new_size, owner=self.base_data._owner)
             return build_column(view_buf, dtype=dtype)
 
