@@ -1,13 +1,32 @@
 #include <cudf/copying.hpp>
+#include <iostream>
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
 namespace cudf {
 namespace detail {
-
 namespace {
+
+template <typename T, typename MapIterator>
+__global__ void scatter_to_table_kernel(column_device_view const input_view,
+                                        MapIterator row_labels,
+                                        MapIterator column_labels,
+                                        mutable_table_device_view output_view,
+                                        size_type input_size,
+                                        size_type num_output_rows)
+{
+  size_type index = threadIdx.x + blockIdx.x * blockDim.x;
+
+  if (index < input_view.size()) {
+    output_view.column(column_labels[index]).template element<T>(row_labels[index]) =
+      input_view.element<T>(index);
+  }
+}
 
 template <typename Element, typename MapIterator>
 struct column_to_table_scatterer_impl {
@@ -28,8 +47,23 @@ struct column_to_table_scatterer_impl {
       result_columns.push_back(
         make_fixed_width_column(input.type(), num_output_rows, mask_flag, stream));
     }
+    auto result = std::make_unique<table>(std::move(result_columns));
 
-    return std::make_unique<table>(std::move(result_columns));
+    auto input_view  = cudf::column_device_view::create(input, stream);
+    auto output_view = cudf::mutable_table_device_view::create(*result, stream);
+
+    constexpr size_type block_size{256};
+    cudf::detail::grid_1d config(input.size(), block_size);
+    auto kernel = scatter_to_table_kernel<Element, decltype(row_labels_begin)>;
+
+    kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(*input_view,
+                                                                           row_labels_begin,
+                                                                           column_labels_begin,
+                                                                           *output_view,
+                                                                           input.size(),
+                                                                           num_output_rows);
+
+    return result;
   }
 };
 
@@ -99,9 +133,8 @@ std::unique_ptr<table> scatter_to_table(column_view const& input,
 }
 
 struct dispatch_map_type {
-  template <typename MapType,
-            std::enable_if_t<std::is_integral<MapType>::value and
-                             not std::is_same<MapType, bool>::value>* = nullptr>
+  template <typename MapType, std::enable_if_t<is_index_type<MapType>()>* = nullptr>
+
   std::unique_ptr<table> operator()(column_view const& input,
                                     column_view const& row_labels,
                                     column_view const& column_labels,
@@ -121,9 +154,7 @@ struct dispatch_map_type {
                             stream);
   }
 
-  template <typename MapType,
-            std::enable_if_t<not std::is_integral<MapType>::value or
-                             std::is_same<MapType, bool>::value>* = nullptr>
+  template <typename MapType, std::enable_if_t<not is_index_type<MapType>()>* = nullptr>
   std::unique_ptr<table> operator()(column_view const& input,
                                     column_view const& row_labels,
                                     column_view const& column_labels,
