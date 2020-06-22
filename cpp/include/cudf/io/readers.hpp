@@ -295,7 +295,7 @@ struct reader_options {
                                      "nan",
                                      "null"};
   /// Cast timestamp columns to a specific type
-  data_type timestamp_type{EMPTY};
+  data_type timestamp_type{type_id::EMPTY};
 
   reader_options()                       = default;
   reader_options(reader_options const &) = default;
@@ -387,7 +387,7 @@ struct reader_options {
   std::vector<std::string> columns;
   bool use_index     = true;
   bool use_np_dtypes = true;
-  data_type timestamp_type{EMPTY};
+  data_type timestamp_type{type_id::EMPTY};
   bool decimals_as_float    = true;
   int forced_decimals_scale = -1;
 
@@ -513,7 +513,7 @@ struct reader_options {
   std::vector<std::string> columns;
   bool strings_to_categorical = false;
   bool use_pandas_metadata    = false;
-  data_type timestamp_type{EMPTY};
+  data_type timestamp_type{type_id::EMPTY};
 
   reader_options()                       = default;
   reader_options(reader_options const &) = default;

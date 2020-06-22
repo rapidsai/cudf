@@ -24,6 +24,7 @@ from cudf._lib.io.utils cimport make_source_info
 from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
 from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types cimport underlying_type_t_type_id
 import numpy as np
 
 
@@ -49,7 +50,11 @@ cpdef read_orc(filepath_or_buffer, columns=None,
         (
             type_id.EMPTY
             if timestamp_type is None else
-            np_to_cudf_types[np.dtype(timestamp_type)]
+            <type_id>(
+                <underlying_type_t_type_id> (
+                    np_to_cudf_types[np.dtype(timestamp_type)]
+                )
+            )
         ),
         use_index,
         decimals_as_float,

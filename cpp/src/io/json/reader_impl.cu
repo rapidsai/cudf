@@ -404,17 +404,17 @@ void reader::impl::set_data_types(cudaStream_t stream)
     for (const auto &cinfo : h_column_infos) {
       if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
         // Entire column is NULL; allocate the smallest amount of memory
-        dtypes_.push_back(data_type(INT8));
+        dtypes_.push_back(data_type(type_id::INT8));
       } else if (cinfo.string_count > 0) {
-        dtypes_.push_back(data_type(STRING));
+        dtypes_.push_back(data_type(type_id::STRING));
       } else if (cinfo.datetime_count > 0) {
-        dtypes_.push_back(data_type(TIMESTAMP_MILLISECONDS));
+        dtypes_.push_back(data_type(type_id::TIMESTAMP_MILLISECONDS));
       } else if (cinfo.float_count > 0 || (cinfo.int_count > 0 && cinfo.null_count > 0)) {
-        dtypes_.push_back(data_type(FLOAT64));
+        dtypes_.push_back(data_type(type_id::FLOAT64));
       } else if (cinfo.int_count > 0) {
-        dtypes_.push_back(data_type(INT64));
+        dtypes_.push_back(data_type(type_id::INT64));
       } else if (cinfo.bool_count > 0) {
-        dtypes_.push_back(data_type(BOOL8));
+        dtypes_.push_back(data_type(type_id::BOOL8));
       } else {
         CUDF_FAIL("Data type detection failed.\n");
       }

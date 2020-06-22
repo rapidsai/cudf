@@ -11,6 +11,7 @@ import pandas as pd
 
 import cudf
 from cudf.core.column import column
+from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
 
 
@@ -26,15 +27,16 @@ class MultiIndex(Index):
     names: Name for each level
     """
 
-    def __init__(
-        self, levels=None, codes=None, labels=None, names=None, **kwargs
+    def __new__(
+        cls, levels=None, codes=None, labels=None, names=None, **kwargs
     ):
         from cudf.core.series import Series
         from cudf import DataFrame
 
-        super().__init__()
+        out = Frame().__new__(cls)
+        super(Index, out).__init__()
 
-        self._name = None
+        out._name = None
 
         column_names = []
         if labels:
@@ -60,11 +62,11 @@ class MultiIndex(Index):
             # try using those as the source_data column names:
             if len(dict.fromkeys(names)) == len(names):
                 source_data.columns = names
-            self._data = source_data._data
-            self.names = names
-            self._codes = codes
-            self._levels = levels
-            return
+            out._data = source_data._data
+            out.names = names
+            out._codes = codes
+            out._levels = levels
+            return out
 
         # name setup
         if isinstance(
@@ -93,33 +95,33 @@ class MultiIndex(Index):
             raise TypeError("Codes is not a Sequence of sequences")
 
         if isinstance(codes, DataFrame):
-            self._codes = codes
+            out._codes = codes
         elif len(levels) == len(codes):
-            self._codes = DataFrame()
+            out._codes = DataFrame()
             for i, codes in enumerate(codes):
                 name = column_names[i] or i
                 codes = column.as_column(codes)
-                self._codes[name] = codes.astype(np.int64)
+                out._codes[name] = codes.astype(np.int64)
         else:
             raise ValueError(
                 "MultiIndex has unequal number of levels and "
                 "codes and is inconsistent!"
             )
 
-        self._levels = [Series(level) for level in levels]
-        self._validate_levels_and_codes(self._levels, self._codes)
+        out._levels = [Series(level) for level in levels]
+        out._validate_levels_and_codes(out._levels, out._codes)
 
         source_data = DataFrame()
-        for i, name in enumerate(self._codes.columns):
-            codes = as_index(self._codes[name]._column)
-            if -1 in self._codes[name].values:
+        for i, name in enumerate(out._codes.columns):
+            codes = as_index(out._codes[name]._column)
+            if -1 in out._codes[name].values:
                 # Must account for null(s) in _source_data column
                 level = DataFrame(
-                    {name: [None] + list(self._levels[i])},
-                    index=range(-1, len(self._levels[i])),
+                    {name: [None] + list(out._levels[i])},
+                    index=range(-1, len(out._levels[i])),
                 )
             else:
-                level = DataFrame({name: self._levels[i]})
+                level = DataFrame({name: out._levels[i]})
 
             import cudf._lib as libcudf
 
@@ -127,8 +129,10 @@ class MultiIndex(Index):
                 level, codes._data.columns[0]
             )._data[name]
 
-        self._data = source_data._data
-        self.names = names
+        out._data = source_data._data
+        out.names = names
+
+        return out
 
     @property
     def names(self):

@@ -421,9 +421,9 @@ This simplified example of how the `type_dispatcher` works shows how the value o
 template <typename F>
 void type_dispatcher(data_type t, F f){
     switch(t.id())
-       case INT32: f.template operator()<int32_t>()
-       case INT64: f.template operator()<int64_t>()
-       case FLOAT: f.template operator()<float>()
+       case type_id::INT32: f.template operator()<int32_t>()
+       case type_id::INT64: f.template operator()<int64_t>()
+       case type_id::FLOAT: f.template operator()<float>()
        ...
 }
 ```
@@ -435,9 +435,9 @@ struct size_of_functor{
 template <typename T>
 int operator()(){ return sizeof(T); }
 };
-cudf::type_dispatcher(data_type{INT8}, size_of_functor{});  // returns 1
-cudf::type_dispatcher(data_type{INT32}, size_of_functor{});  // returns 4
-cudf::type_dispatcher(data_type{FLOAT64}, size_of_functor{});  // returns 8
+cudf::type_dispatcher(data_type{type_id::INT8}, size_of_functor{});  // returns 1
+cudf::type_dispatcher(data_type{type_id::INT32}, size_of_functor{});  // returns 4
+cudf::type_dispatcher(data_type{type_id::FLOAT64}, size_of_functor{});  // returns 8
 ```
 
 By default, the `type_dispatcher` uses `cudf::type_to_id<t>` to provide the mapping
