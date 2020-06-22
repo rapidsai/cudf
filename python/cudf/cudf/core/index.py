@@ -58,45 +58,44 @@ def _to_frame(this_index, index=True, name=None):
 
 
 class Index(Frame, Serializable):
-    """Immutable ndarray implementing an ordered, sliceable set.
-    The basic object storing axis labels for all cuDF objects.
-
-    Parameters:
-    -----------
-    data : array-like (1-dimensional)/ DataFrame
-        If it is a DataFrame, it will return a MultiIndex
-    dtype : NumPy dtype (default: object)
-        If dtype is None, we find the dtype that best fits the data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Index
-        cudf Index
-
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.Index([1, 2, 3], dtype="uint64", name="a")
-    UInt64Index([1, 2, 3], dtype='uint64', name='a')
-
-    >>> cudf.Index(cudf.DataFrame({"a":[1, 2], "b":[2, 3]}))
-    MultiIndex(levels=[0    1
-    1    2
-    dtype: int64, 0    2
-    1    3
-    dtype: int64],
-    codes=   a  b
-    0  0  0
-    1  1  1)
-    """
-
     def __new__(cls, data=None, dtype=None, name=None, **kwargs):
 
         return as_index(data, dtype=dtype, name=name, **kwargs)
 
     def __init__(self, data=None, dtype=None, name=None, **kwargs):
+        """Immutable ndarray implementing an ordered, sliceable set.
+        The basic object storing row labels for all cuDF objects.
+
+        Parameters:
+        -----------
+        data : array-like (1-dimensional)/ DataFrame
+            If it is a DataFrame, it will return a MultiIndex
+        dtype : NumPy dtype (default: object)
+            If dtype is None, we find the dtype that best fits the data.
+        name : object
+            Name to be stored in the index.
+
+        Returns
+        -------
+        Index
+            cudf Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> cudf.Index([1, 2, 3], dtype="uint64", name="a")
+        UInt64Index([1, 2, 3], dtype='uint64', name='a')
+
+        >>> cudf.Index(cudf.DataFrame({"a":[1, 2], "b":[2, 3]}))
+        MultiIndex(levels=[0    1
+        1    2
+        dtype: int64, 0    2
+        1    3
+        dtype: int64],
+        codes=   a  b
+        0  0  0
+        1  1  1)
+        """
         pass
 
     def serialize(self):
