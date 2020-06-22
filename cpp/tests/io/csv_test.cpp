@@ -845,7 +845,7 @@ TEST_F(CsvReaderTest, StringInference)
   const auto result = cudf_io::read_csv(in_args);
 
   EXPECT_EQ(result.tbl->num_columns(), 1);
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::STRING);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
 }
 
 TEST_F(CsvReaderTest, SkipRowsXorSkipFooter)

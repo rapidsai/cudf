@@ -195,7 +195,7 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
 
   // The values will be filled into this column
   auto unique_indices = cudf::make_numeric_column(
-    data_type{INT32}, keys_view.num_rows(), mask_state::UNALLOCATED, stream);
+    data_type{type_id::INT32}, keys_view.num_rows(), mask_state::UNALLOCATED, stream);
   auto mutable_unique_indices_view = unique_indices->mutable_view();
   // This is just slice of `unique_indices` but with different size as per the
   // keys_view has been processed in `get_unique_ordered_indices`
