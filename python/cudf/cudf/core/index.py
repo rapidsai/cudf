@@ -94,10 +94,7 @@ class Index(Frame, Serializable):
 
     def __new__(cls, data=None, dtype=None, name=None, **kwargs):
 
-        if name is None:
-            return as_index(data, dtype=dtype, **kwargs)
-        else:
-            return as_index(data, dtype=dtype, name=name, **kwargs)
+        return as_index(data, dtype=dtype, name=name, **kwargs)
 
     def __init__(self, data=None, dtype=None, name=None, **kwargs):
         pass
