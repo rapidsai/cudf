@@ -3946,6 +3946,12 @@ class StringColumn(column.ColumnBase):
                 / self.base_children[0].dtype.itemsize
             )
 
+    def min(self, dtype=None):
+        return libcudf.reduce.reduce("min", self, dtype=dtype)
+
+    def max(self, dtype=None):
+        return libcudf.reduce.reduce("max", self, dtype=dtype)
+
     def set_base_data(self, value):
         if value is not None:
             raise RuntimeError(
