@@ -22,7 +22,7 @@
 #include <iostream>
 #include <vector>
 
-#include "tokenizers.hpp"
+#include <text/subword/tokenizers.hpp>
 
 namespace nvtext {
 namespace detail {

@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include "cp_data_vec.ah"
-#include "data_transfer_utils.cuh"
-#include "hash_utils.cuh"
-#include "tokenizer_utils.cuh"
-#include "tokenizers.hpp"
+#include <text/subword/data_transfer_utils.cuh>
+#include <text/subword/hash_utils.cuh>
+#include <text/subword/tokenizer_utils.cuh>
+#include <text/subword/tokenizers.hpp>
 
 #include <iostream>
+#include "cp_data_vec.ah"
 
 namespace nvtext {
 
