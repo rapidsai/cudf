@@ -1235,19 +1235,6 @@ class Frame(libcudf.table.Table):
 
         for name, col in copy_data.items():
             if not (to_replace is None and replacement is None):
-                # For Index replace if replacement has string change
-                # thecolumn type to string so mixed replacements
-                # will select the proper column type and function.
-                if (
-                    not hasattr(self, "index")
-                    and any(type(item) == str for item in replacement)
-                    and type(self) != cudf.core.index.StringIndex
-                ):
-                    raise NotImplementedError(
-                        "Implicit conversion of index to "
-                        "mixed type is not yet supported."
-                    )
-
                 try:
                     (
                         col_all_nan,

@@ -2872,6 +2872,14 @@ class DataFrame(Frame, Serializable):
         )
 
         if index:
+            if (
+                any(type(item) == str for item in index.values())
+                and type(self.index) != cudf.core.index.StringIndex
+            ):
+                raise NotImplementedError(
+                    "Implicit conversion of index to "
+                    "mixed type is not yet supported."
+                )
             out = DataFrame(
                 index=self.index.replace(
                     to_replace=list(index.keys()),
