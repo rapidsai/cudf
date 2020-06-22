@@ -48,9 +48,10 @@ TEST_F(StringsAttributesTest, CodePoints)
 
 TEST_F(StringsAttributesTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-  cudf::column_view expected_column(cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
+  cudf::column_view expected_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
 
   auto results = cudf::strings::count_bytes(strings_view);
   cudf::test::expect_columns_equal(results->view(), expected_column);

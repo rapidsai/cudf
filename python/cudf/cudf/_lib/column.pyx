@@ -20,6 +20,7 @@ from libcpp.vector cimport vector
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
+from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.move cimport move
 
@@ -296,7 +297,11 @@ cdef class Column:
             col = self
         data_dtype = col.dtype
 
-        cdef libcudf_types.type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
+        cdef libcudf_types.type_id tid = <libcudf_types.type_id> (
+            <underlying_type_t_type_id> (
+                np_to_cudf_types[np.dtype(data_dtype)]
+            )
+        )
         cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[mutable_column_view] children
@@ -348,7 +353,11 @@ cdef class Column:
         else:
             col = self
         data_dtype = col.dtype
-        cdef libcudf_types.type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
+        cdef libcudf_types.type_id tid = <libcudf_types.type_id> (
+            <underlying_type_t_type_id> (
+                np_to_cudf_types[np.dtype(data_dtype)]
+            )
+        )
         cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
@@ -382,7 +391,9 @@ cdef class Column:
     cdef Column from_unique_ptr(unique_ptr[column] c_col):
 
         size = c_col.get()[0].size()
-        dtype = cudf_to_np_types[c_col.get()[0].type().id()]
+        dtype = cudf_to_np_types[
+            <underlying_type_t_type_id> (c_col.get()[0].type().id())
+        ]
 
         has_nulls = c_col.get()[0].has_nulls()
 
@@ -431,7 +442,9 @@ cdef class Column:
 
         size = cv.size()
         offset = cv.offset()
-        dtype = cudf_to_np_types[cv.type().id()]
+        dtype = cudf_to_np_types[
+            <underlying_type_t_type_id> (cv.type().id())
+        ]
 
         data_ptr = <uintptr_t>(cv.head[void]())
         data = None

@@ -50,7 +50,7 @@ constexpr std::array<cudf::type_id, sizeof...(Indices)> types_to_ids_impl(
  * Example:
  * ```
  * auto array = types_to_ids<Types<int32_t, float>>();
- * array == {INT32, FLOAT};
+ * array == {type_id::INT32, type_id::FLOAT};
  * ```
  *
  * @tparam TYPES List of types to conver to `type_id`s
@@ -271,7 +271,8 @@ static constexpr std::array<cudf::type_id, 12> non_numeric_type_ids{cudf::EMPTY,
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  **/
-static constexpr std::array<cudf::type_id, 2> non_fixed_width_type_ids{cudf::EMPTY, cudf::STRING};
+static constexpr std::array<cudf::type_id, 2> non_fixed_width_type_ids{cudf::type_id::EMPTY,
+                                                                       cudf::type_id::STRING};
 
 }  // namespace test
 }  // namespace cudf

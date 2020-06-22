@@ -279,8 +279,8 @@ class FillErrorTestFixture : public cudf::test::BaseFixture {
 
 TEST_F(FillErrorTestFixture, InvalidInplaceCall)
 {
-  auto p_val_int   = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
-  using T_int      = cudf::id_to_type<cudf::INT32>;
+  auto p_val_int   = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+  using T_int      = cudf::id_to_type<cudf::type_id::INT32>;
   using ScalarType = cudf::scalar_type_t<T_int>;
   static_cast<ScalarType*>(p_val_int.get())->set_value(5);
   static_cast<ScalarType*>(p_val_int.get())->set_valid(false);
@@ -302,8 +302,8 @@ TEST_F(FillErrorTestFixture, InvalidInplaceCall)
 
 TEST_F(FillErrorTestFixture, InvalidRange)
 {
-  auto p_val       = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
-  using T          = cudf::id_to_type<cudf::INT32>;
+  auto p_val       = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+  using T          = cudf::id_to_type<cudf::type_id::INT32>;
   using ScalarType = cudf::scalar_type_t<T>;
   static_cast<ScalarType*>(p_val.get())->set_value(5);
 
@@ -347,8 +347,8 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
 {
   cudf::size_type size{100};
 
-  auto p_val       = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
-  using T          = cudf::id_to_type<cudf::INT32>;
+  auto p_val       = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+  using T          = cudf::id_to_type<cudf::type_id::INT32>;
   using ScalarType = cudf::scalar_type_t<T>;
   static_cast<ScalarType*>(p_val.get())->set_value(5);
 

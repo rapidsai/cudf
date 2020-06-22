@@ -538,3 +538,15 @@ def test_index_to_series(data):
     gdi = cudf.from_pandas(pdi)
 
     assert_eq(pdi.to_series(), gdi.to_series())
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+@pytest.mark.parametrize("name", [1, "a", None])
+def test_index_basic(data, dtype, name):
+    pdi = pd.Index(data, dtype=dtype, name=name)
+    gdi = cudf.Index(data, dtype=dtype, name=name)
+
+    assert_eq(pdi, gdi)

@@ -125,7 +125,7 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
                                      cudaStream_t stream) const
   {
     if (target_in.size() == 0)  // empty begets empty
-      return make_empty_column(data_type{DICTIONARY32});
+      return make_empty_column(data_type{type_id::DICTIONARY32});
     if (source_in.size() == 0)  // no input, just make a copy
       return std::make_unique<column>(target_in, stream, mr);
 
@@ -151,7 +151,7 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
     auto const output_size = new_indices->size();        // record these
     auto const null_count  = new_indices->null_count();  // before the release
     auto contents          = new_indices->release();
-    auto indices_column    = std::make_unique<column>(data_type{INT32},
+    auto indices_column    = std::make_unique<column>(data_type{type_id::INT32},
                                                    static_cast<size_type>(output_size),
                                                    std::move(*(contents.data.release())),
                                                    rmm::device_buffer{0, stream, mr},
