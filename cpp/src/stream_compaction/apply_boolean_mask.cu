@@ -66,7 +66,7 @@ std::unique_ptr<table> apply_boolean_mask(table_view const& input,
 {
   if (boolean_mask.size() == 0) { return empty_like(input); }
 
-  CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be Boolean type");
+  CUDF_EXPECTS(boolean_mask.type().id() == type_id::BOOL8, "Mask must be Boolean type");
   // zero-size inputs are OK, but otherwise input size must match mask size
   CUDF_EXPECTS(input.num_rows() == 0 || input.num_rows() == boolean_mask.size(),
                "Column size mismatch");

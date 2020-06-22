@@ -188,10 +188,10 @@ std::unique_ptr<table> drop_nans(
  * is returned.
  *
  * @throws cudf::logic_error if The `input` size  and `boolean_mask` size mismatches.
- * @throws cudf::logic_error if `boolean_mask` is not `BOOL8` type.
+ * @throws cudf::logic_error if `boolean_mask` is not `type_id::BOOL8` type.
  *
  * @param[in] input The input table_view to filter
- * @param[in] boolean_mask A nullable column_view of type BOOL8 used
+ * @param[in] boolean_mask A nullable column_view of type type_id::BOOL8 used
  * as a mask to filter the `input`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Table containing copy of all rows of @p input passing
@@ -255,9 +255,9 @@ std::unique_ptr<table> drop_duplicates(
  *
  * @return number of unique elements
  */
-cudf::size_type unique_count(column_view const& input,
-                             null_policy null_handling,
-                             nan_policy nan_handling);
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling);
 
 /**
  * @brief Count the unique rows in a table.
@@ -269,8 +269,8 @@ cudf::size_type unique_count(column_view const& input,
  *
  * @return number of unique rows in the table
  */
-cudf::size_type unique_count(table_view const& input,
-                             null_equality nulls_equal = null_equality::EQUAL);
+cudf::size_type distinct_count(table_view const& input,
+                               null_equality nulls_equal = null_equality::EQUAL);
 
 /** @} */
 }  // namespace cudf
