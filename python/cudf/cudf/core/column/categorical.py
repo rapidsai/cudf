@@ -974,27 +974,45 @@ class CategoricalColumn(column.ColumnBase):
         Return col with *to_replace* replaced with *replacement*.
         """
 
+        # create a dataframe containing the pre-replacement categories
+        # and a copy of them to work with. The index of this dataframe
+        # represents the original ints that map to the categories
         old_cats = cudf.DataFrame()
         old_cats["cats"] = column.as_column(self.dtype.categories)
         new_cats = old_cats.copy(deep=True)
 
+        # Create a column with the appropriate labels replaced
         old_cats["cats_replace"] = old_cats["cats"].replace(
             to_replace, replacement
         )
 
+        # Construct the new categorical labels
+        # If a category is being replaced by an existing one, we
+        # want to map it to None. If it's totally new, we want to
+        # map it to the new label it is to be replaced by
         dtype_replace = cudf.Series(replacement)
         dtype_replace[dtype_replace.isin(old_cats["cats"])] = None
         new_cats["cats"] = new_cats["cats"].replace(to_replace, dtype_replace)
 
+        # anything we mapped to None, we want to now filter out since
+        # those categories don't exist anymore
+        # Resetting the index creates a column 'index' that associates
+        # the original integers to the new labels
         bmask = new_cats["cats"]._column.notna()
         new_cats = cudf.DataFrame(
             {"cats": new_cats["cats"]._column.apply_boolean_mask(bmask)}
         ).reset_index()
 
+        # old_cats contains replaced categories and the ints that
+        # previously mapped to those categories and the index of
+        # new_cats is a RangeIndex that contains the new ints
         catmap = old_cats.merge(
             new_cats, left_on="cats_replace", right_on="cats", how="inner"
         )
 
+        # The index of this frame is now the old ints, but the column
+        # named 'index', which came from the filtered categories,
+        # contains the new ints that we need to map to
         to_replace_col = column.as_column(catmap.index).astype(
             self.cat().codes.dtype
         )
