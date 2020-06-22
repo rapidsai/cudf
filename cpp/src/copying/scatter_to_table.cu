@@ -23,8 +23,10 @@ __global__ void scatter_to_table_kernel(column_device_view const input_view,
   size_type index = threadIdx.x + blockIdx.x * blockDim.x;
 
   if (index < input_view.size()) {
-    output_view.column(column_labels[index]).template element<T>(row_labels[index]) =
-      input_view.element<T>(index);
+    auto output_col_view = output_view.column(column_labels[index]);
+    output_col_view.template element<T>(row_labels[index]) = input_view.element<T>(index);
+
+    if (not input_view.is_null(index)) { output_col_view.set_valid(row_labels[index]); }
   }
 }
 
@@ -40,7 +42,7 @@ struct column_to_table_scatterer_impl {
                                     rmm::mr::device_memory_resource* mr,
                                     cudaStream_t stream) const
   {
-    auto mask_flag = input.nullable() ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
+    auto mask_flag = mask_state::ALL_NULL;
     std::vector<std::unique_ptr<column>> result_columns;
 
     for (auto i = 0; i < num_output_columns; ++i) {
