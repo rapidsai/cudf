@@ -34,7 +34,7 @@ std::unique_ptr<column> find_multiple(
   cudaStream_t stream                 = 0)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{INT32});
+  if (strings_count == 0) return make_empty_column(data_type{type_id::INT32});
   auto targets_count = targets.size();
   CUDF_EXPECTS(targets_count > 0, "Must include at least one search target");
   CUDF_EXPECTS(!targets.has_nulls(), "Search targets cannot contain null strings");
@@ -45,9 +45,13 @@ std::unique_ptr<column> find_multiple(
   auto d_targets      = *targets_column;
 
   // create output column
-  auto total_count = strings_count * targets_count;
-  auto results     = make_numeric_column(
-    data_type{INT32}, total_count, rmm::device_buffer{0, stream, mr}, 0, stream, mr);  // no nulls
+  auto total_count  = strings_count * targets_count;
+  auto results      = make_numeric_column(data_type{type_id::INT32},
+                                     total_count,
+                                     rmm::device_buffer{0, stream, mr},
+                                     0,
+                                     stream,
+                                     mr);  // no nulls
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<int32_t>();
   // fill output column with position values

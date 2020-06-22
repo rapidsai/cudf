@@ -52,7 +52,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
   cudf::size_type inputRows1 = static_cast<cudf::column_view const&>(leftColWrap1).size();
 
   auto sequence0 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
       return row;
@@ -101,7 +101,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
                                             "hj"});
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
       return row / 2;
@@ -133,7 +133,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
   EXPECT_EQ(inputRows, static_cast<cudf::column_view const&>(leftColWrap3).size());
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 1;
     else
       return 2 * row;
@@ -150,7 +150,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
   EXPECT_EQ(inputRows, static_cast<cudf::column_view const&>(rightColWrap1).size());
 
   auto sequence_r = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
       return 2 * row + 1;
@@ -194,7 +194,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
                                             "hj"});
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8) {
+    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       bool ret = (row % 2 == 0);
       return static_cast<TypeParam>(ret);
     } else
@@ -243,7 +243,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(leftColWrap1).size();
 
   auto sequence0 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
       return row;
@@ -296,7 +296,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
                                             "hj"},
                                            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0});
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
       return row / 2;
@@ -327,7 +327,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
   EXPECT_EQ(inputRows, static_cast<cudf::column_view const&>(leftColWrap3).size());
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 1;
     else
       return 2 * row;
@@ -345,7 +345,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
   EXPECT_EQ(inputRows, static_cast<cudf::column_view const&>(rightColWrap1).size());
 
   auto sequence_r = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8)
+    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
       return 2 * row + 1;
@@ -391,7 +391,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
                                            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0});
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::BOOL8) {
+    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       bool ret = (row % 2 == 0);
       return static_cast<TypeParam>(ret);
     } else

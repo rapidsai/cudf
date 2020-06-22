@@ -528,61 +528,61 @@ inline auto make_column(std::vector<R> data, std::vector<bool> mask)
 inline cudf::column make_exp_chrono_column(cudf::type_id type_id)
 {
   switch (type_id) {
-    case cudf::TIMESTAMP_DAYS:
+    case cudf::type_id::TIMESTAMP_DAYS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_D.size(),
         rmm::device_buffer{test_timestamps_D.data(),
                            test_timestamps_D.size() * sizeof(test_timestamps_D.front())});
-    case cudf::TIMESTAMP_SECONDS:
+    case cudf::type_id::TIMESTAMP_SECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_s.size(),
         rmm::device_buffer{test_timestamps_s.data(),
                            test_timestamps_s.size() * sizeof(test_timestamps_s.front())});
-    case cudf::TIMESTAMP_MILLISECONDS:
+    case cudf::type_id::TIMESTAMP_MILLISECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_ms.size(),
         rmm::device_buffer{test_timestamps_ms.data(),
                            test_timestamps_ms.size() * sizeof(test_timestamps_ms.front())});
-    case cudf::TIMESTAMP_MICROSECONDS:
+    case cudf::type_id::TIMESTAMP_MICROSECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_us.size(),
         rmm::device_buffer{test_timestamps_us.data(),
                            test_timestamps_us.size() * sizeof(test_timestamps_us.front())});
-    case cudf::TIMESTAMP_NANOSECONDS:
+    case cudf::type_id::TIMESTAMP_NANOSECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_ns.size(),
         rmm::device_buffer{test_timestamps_ns.data(),
                            test_timestamps_ns.size() * sizeof(test_timestamps_ns.front())});
-    case cudf::DURATION_DAYS:
+    case cudf::type_id::DURATION_DAYS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_D.size(),
         rmm::device_buffer{test_durations_D.data(),
                            test_durations_D.size() * sizeof(test_durations_D.front())});
-    case cudf::DURATION_SECONDS:
+    case cudf::type_id::DURATION_SECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_s.size(),
         rmm::device_buffer{test_durations_s.data(),
                            test_durations_s.size() * sizeof(test_durations_s.front())});
-    case cudf::DURATION_MILLISECONDS:
+    case cudf::type_id::DURATION_MILLISECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_ms.size(),
         rmm::device_buffer{test_durations_ms.data(),
                            test_durations_ms.size() * sizeof(test_durations_ms.front())});
-    case cudf::DURATION_MICROSECONDS:
+    case cudf::type_id::DURATION_MICROSECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_us.size(),
         rmm::device_buffer{test_durations_us.data(),
                            test_durations_us.size() * sizeof(test_durations_us.front())});
-    case cudf::DURATION_NANOSECONDS:
+    case cudf::type_id::DURATION_NANOSECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_ns.size(),
@@ -649,14 +649,16 @@ TEST_F(CastTimestampsSimple, IsIdempotent)
     cudf::cast(timestamps_ns, make_data_type<cudf::timestamp_ns::duration>());
 
   // Duration back to timestamp
-  auto timestamps_D_got = cudf::cast(*timestamps_D_dur, cudf::data_type{cudf::TIMESTAMP_DAYS});
-  auto timestamps_s_got = cudf::cast(*timestamps_s_dur, cudf::data_type{cudf::TIMESTAMP_SECONDS});
+  auto timestamps_D_got =
+    cudf::cast(*timestamps_D_dur, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS});
+  auto timestamps_s_got =
+    cudf::cast(*timestamps_s_dur, cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS});
   auto timestamps_ms_got =
-    cudf::cast(*timestamps_ms_dur, cudf::data_type{cudf::TIMESTAMP_MILLISECONDS});
+    cudf::cast(*timestamps_ms_dur, cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
   auto timestamps_us_got =
-    cudf::cast(*timestamps_us_dur, cudf::data_type{cudf::TIMESTAMP_MICROSECONDS});
+    cudf::cast(*timestamps_us_dur, cudf::data_type{cudf::type_id::TIMESTAMP_MICROSECONDS});
   auto timestamps_ns_got =
-    cudf::cast(*timestamps_ns_dur, cudf::data_type{cudf::TIMESTAMP_NANOSECONDS});
+    cudf::cast(*timestamps_ns_dur, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS});
 
   validate_cast_result<cudf::timestamp_D, cudf::timestamp_D>(timestamps_D, *timestamps_D_got);
   validate_cast_result<cudf::timestamp_s, cudf::timestamp_s>(timestamps_s, *timestamps_s_got);
@@ -684,14 +686,16 @@ TEST_F(CastDurationsSimple, IsIdempotent)
   auto durations_us_rep = cudf::cast(durations_us, make_data_type<cudf::duration_us::rep>());
   auto durations_ns_rep = cudf::cast(durations_ns, make_data_type<cudf::duration_ns::rep>());
 
-  auto durations_D_got = cudf::cast(*durations_D_rep, cudf::data_type{cudf::DURATION_DAYS});
-  auto durations_s_got = cudf::cast(*durations_s_rep, cudf::data_type{cudf::DURATION_SECONDS});
+  auto durations_D_got =
+    cudf::cast(*durations_D_rep, cudf::data_type{cudf::type_id::DURATION_DAYS});
+  auto durations_s_got =
+    cudf::cast(*durations_s_rep, cudf::data_type{cudf::type_id::DURATION_SECONDS});
   auto durations_ms_got =
-    cudf::cast(*durations_ms_rep, cudf::data_type{cudf::DURATION_MILLISECONDS});
+    cudf::cast(*durations_ms_rep, cudf::data_type{cudf::type_id::DURATION_MILLISECONDS});
   auto durations_us_got =
-    cudf::cast(*durations_us_rep, cudf::data_type{cudf::DURATION_MICROSECONDS});
+    cudf::cast(*durations_us_rep, cudf::data_type{cudf::type_id::DURATION_MICROSECONDS});
   auto durations_ns_got =
-    cudf::cast(*durations_ns_rep, cudf::data_type{cudf::DURATION_NANOSECONDS});
+    cudf::cast(*durations_ns_rep, cudf::data_type{cudf::type_id::DURATION_NANOSECONDS});
 
   validate_cast_result<cudf::duration_D, cudf::duration_D>(durations_D, *durations_D_got);
   validate_cast_result<cudf::duration_s, cudf::duration_s>(durations_s, *durations_s_got);
@@ -713,16 +717,16 @@ std::vector<cudf::type_id> get_higher_precision_chrono_type_ids(cudf::type_id se
   size_t idx = 0;
   std::vector<cudf::type_id> gte_ids{};
   // Arranged such that for every pair of types, the types that precede them have a lower precision
-  std::vector<cudf::type_id> timestamp_ids{cudf::TIMESTAMP_DAYS,
-                                           cudf::DURATION_DAYS,
-                                           cudf::TIMESTAMP_SECONDS,
-                                           cudf::DURATION_SECONDS,
-                                           cudf::TIMESTAMP_MILLISECONDS,
-                                           cudf::DURATION_MILLISECONDS,
-                                           cudf::TIMESTAMP_MICROSECONDS,
-                                           cudf::DURATION_MICROSECONDS,
-                                           cudf::TIMESTAMP_NANOSECONDS,
-                                           cudf::DURATION_NANOSECONDS};
+  std::vector<cudf::type_id> timestamp_ids{cudf::type_id::TIMESTAMP_DAYS,
+                                           cudf::type_id::DURATION_DAYS,
+                                           cudf::type_id::TIMESTAMP_SECONDS,
+                                           cudf::type_id::DURATION_SECONDS,
+                                           cudf::type_id::TIMESTAMP_MILLISECONDS,
+                                           cudf::type_id::DURATION_MILLISECONDS,
+                                           cudf::type_id::TIMESTAMP_MICROSECONDS,
+                                           cudf::type_id::DURATION_MICROSECONDS,
+                                           cudf::type_id::TIMESTAMP_NANOSECONDS,
+                                           cudf::type_id::DURATION_NANOSECONDS};
   for (cudf::type_id type_id : timestamp_ids) {
     if (type_id == search) break;
     idx++;
@@ -793,11 +797,15 @@ TEST_F(CastToTimestamps, AllValid)
   auto durations_us = make_column<cudf::duration_us>(test_durations_us);
   auto durations_ns = make_column<cudf::duration_ns>(test_durations_ns);
 
-  auto timestamps_D_got  = cudf::cast(durations_D, cudf::data_type{cudf::TIMESTAMP_DAYS});
-  auto timestamps_s_got  = cudf::cast(durations_s, cudf::data_type{cudf::TIMESTAMP_SECONDS});
-  auto timestamps_ms_got = cudf::cast(durations_ms, cudf::data_type{cudf::TIMESTAMP_MILLISECONDS});
-  auto timestamps_us_got = cudf::cast(durations_us, cudf::data_type{cudf::TIMESTAMP_MICROSECONDS});
-  auto timestamps_ns_got = cudf::cast(durations_ns, cudf::data_type{cudf::TIMESTAMP_NANOSECONDS});
+  auto timestamps_D_got = cudf::cast(durations_D, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS});
+  auto timestamps_s_got =
+    cudf::cast(durations_s, cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS});
+  auto timestamps_ms_got =
+    cudf::cast(durations_ms, cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
+  auto timestamps_us_got =
+    cudf::cast(durations_us, cudf::data_type{cudf::type_id::TIMESTAMP_MICROSECONDS});
+  auto timestamps_ns_got =
+    cudf::cast(durations_ns, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS});
 
   validate_cast_result<cudf::duration_D, cudf::timestamp_D>(durations_D, *timestamps_D_got);
   validate_cast_result<cudf::duration_s, cudf::timestamp_s>(durations_s, *timestamps_s_got);
@@ -885,11 +893,14 @@ TYPED_TEST(CastToDurations, AllValid)
   auto durations_us = make_column<T>(test_durations_us);
   auto durations_ns = make_column<T>(test_durations_ns);
 
-  auto durations_D_got  = cudf::cast(durations_D, cudf::data_type{cudf::DURATION_DAYS});
-  auto durations_s_got  = cudf::cast(durations_s, cudf::data_type{cudf::DURATION_SECONDS});
-  auto durations_ms_got = cudf::cast(durations_ms, cudf::data_type{cudf::DURATION_MILLISECONDS});
-  auto durations_us_got = cudf::cast(durations_us, cudf::data_type{cudf::DURATION_MICROSECONDS});
-  auto durations_ns_got = cudf::cast(durations_ns, cudf::data_type{cudf::DURATION_NANOSECONDS});
+  auto durations_D_got = cudf::cast(durations_D, cudf::data_type{cudf::type_id::DURATION_DAYS});
+  auto durations_s_got = cudf::cast(durations_s, cudf::data_type{cudf::type_id::DURATION_SECONDS});
+  auto durations_ms_got =
+    cudf::cast(durations_ms, cudf::data_type{cudf::type_id::DURATION_MILLISECONDS});
+  auto durations_us_got =
+    cudf::cast(durations_us, cudf::data_type{cudf::type_id::DURATION_MICROSECONDS});
+  auto durations_ns_got =
+    cudf::cast(durations_ns, cudf::data_type{cudf::type_id::DURATION_NANOSECONDS});
 
   validate_cast_result<T, cudf::duration_D>(durations_D, *durations_D_got);
   validate_cast_result<T, cudf::duration_s>(durations_s, *durations_s_got);
