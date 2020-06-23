@@ -211,10 +211,9 @@ __device__ bitmask_type get_mask_offset_word(bitmask_type const *__restrict__ so
   size_type source_word_index = destination_word_index + word_index(source_begin_bit);
   bitmask_type curr_word      = source[source_word_index];
   bitmask_type next_word      = 0;
-  if ((word_index(source_begin_bit) != 0) &&
-      (word_index(source_end_bit) >
-       word_index(source_begin_bit +
-                  destination_word_index * detail::size_in_bits<bitmask_type>()))) {
+  if (word_index(source_end_bit) >
+      word_index(source_begin_bit +
+                 destination_word_index * detail::size_in_bits<bitmask_type>())) {
     next_word = source[source_word_index + 1];
   }
   return __funnelshift_r(curr_word, next_word, source_begin_bit);
