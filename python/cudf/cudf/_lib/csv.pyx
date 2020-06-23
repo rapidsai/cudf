@@ -241,7 +241,18 @@ cdef read_csv_args make_read_csv_args(
 
     return read_csv_args_c
 
-def validate_args(delimiter, sep, delim_whitespace, decimal, thousands, nrows, skipfooter, byte_range, skiprows):
+
+def validate_args(
+    delimiter,
+    sep,
+    delim_whitespace,
+    decimal,
+    thousands,
+    nrows,
+    skipfooter,
+    byte_range,
+    skiprows
+):
     if delim_whitespace:
         if delimiter is not None:
             raise ValueError("cannot set both delimiter and delim_whitespace")
@@ -264,6 +275,7 @@ def validate_args(delimiter, sep, delim_whitespace, decimal, thousands, nrows, s
         if skipfooter != 0 or skiprows != 0 or nrows is not None:
             raise ValueError("""cannot manually limit rows to be read when
                                 using the byte range parameter""")
+
 
 def read_csv(
     filepath_or_buffer,
@@ -320,8 +332,9 @@ def read_csv(
         filepath_or_buffer
     ):
         filepath_or_buffer = filepath_or_buffer.encode()
-    
-    validate_args(delimiter, sep, delim_whitespace, decimal, thousands, nrows, skipfooter, byte_range, skiprows)
+
+    validate_args(delimiter, sep, delim_whitespace, decimal, thousands,
+                  nrows, skipfooter, byte_range, skiprows)
 
     # Alias sep -> delimiter.
     if delimiter is None:

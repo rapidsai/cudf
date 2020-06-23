@@ -62,8 +62,8 @@ cdef extern from "cudf/io/types.hpp" \
         const char* data
         size_t size
 
-        host_buffer() 
-        host_buffer(const char* data, size_t size) 
+        host_buffer()
+        host_buffer(const char* data, size_t size)
 
     cdef cppclass source_info:
         io_type type

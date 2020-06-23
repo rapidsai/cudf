@@ -6,7 +6,8 @@ from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from libcpp.string cimport string
-from cudf._lib.cpp.io.types cimport source_info, sink_info, data_sink, io_type, host_buffer
+from cudf._lib.cpp.io.types cimport source_info, io_type, host_buffer
+from cudf._lib.cpp.io.types cimport sink_info, data_sink
 
 import codecs
 import errno
@@ -28,26 +29,30 @@ cdef source_info make_source_info(src) except*:
         for buffer in src:
             if (len(buffer) > 0):
                 c_buffer = buffer
-                c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0], c_buffer.shape[0]))
+                c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
+                                                     c_buffer.shape[0]))
                 empty_buffer = False
     elif isinstance(src[0], io.BytesIO):
         for bio in src:
-            c_buffer = bio.getbuffer() # check is empty?
-            c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0], c_buffer.shape[0]))
+            c_buffer = bio.getbuffer()  # check if empty?
+            c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
+                                                 c_buffer.shape[0]))
     # Otherwise src is expected to be a numeric fd, string path, or PathLike.
     # TODO (ptaylor): Might need to update this check if accepted input types
     #                 change when UCX and/or cuStreamz support is added.
     elif isinstance(src[0], (int, float, complex, basestring, os.PathLike)):
         # If source is a file, return source_info where type=FILEPATH
         if not all(os.path.isfile(file) for file in src):
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), src)
+            raise FileNotFoundError(errno.ENOENT,
+                                    os.strerror(errno.ENOENT),
+                                    src)
 
         files = [<string> str(elem).encode() for elem in src]
         c_files = files
         return source_info(c_files)
     else:
         raise TypeError("Unrecognized input type: {}".format(type(src[0])))
-    
+
     if empty_buffer is True:
         c_host_buffers.push_back(host_buffer(<char*>NULL, 0))
 

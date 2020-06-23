@@ -175,7 +175,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_group_lists=None,
     args.skip_rows = skip_rows if skip_rows is not None else 0
     args.num_rows = num_rows if num_rows is not None else -1
     if row_group_lists is not None:
-        args.row_group_lists = row_group_lists 
+        args.row_group_lists = row_group_lists
     args.timestamp_type = cudf_types.data_type(cudf_types.type_id.EMPTY)
 
     # Read Parquet

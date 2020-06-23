@@ -174,14 +174,13 @@ def read_parquet(
 ):
     """{docstring}"""
 
-    # Multiple sources are passed as a list. If a single source is passed, 
+    # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
     if not isinstance(filepath_or_buffer, list):
         filepath_or_buffer = [filepath_or_buffer]
 
-
-    # a list of row groups per source should be passed. If a single list is 
-    # passed, wrap in into a list to make the list of lists that is expected 
+    # a list of row groups per source should be passed. If a single list is
+    # passed, wrap in into a list to make the list of lists that is expected
     # for multiple sources
     if row_group_list and not isinstance(row_group_list[0], list):
         row_group_list = [row_group_list]
@@ -192,7 +191,9 @@ def read_parquet(
             source, None, **kwargs
         )
         if compression is not None:
-            raise ValueError("URL content-encoding decompression is not supported")
+            raise ValueError(
+                "URL content-encoding decompression is not supported"
+            )
         filepaths_or_buffers.append(tmp_source)
 
     if engine == "cudf":
@@ -207,9 +208,12 @@ def read_parquet(
         )
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
-        pa_tables = [cudf.DataFrame.from_arrow(pq.read_pandas(
-            fob, columns=columns, *args, **kwargs)) 
-            for fob in filepaths_or_buffers]
+        pa_tables = [
+            cudf.DataFrame.from_arrow(
+                pq.read_pandas(fob, columns=columns, *args, **kwargs)
+            )
+            for fob in filepaths_or_buffers
+        ]
         return cudf.concat(pa_tables)
 
 
