@@ -101,15 +101,15 @@ __device__ __forceinline__ uint32_t extract_code_points_from_utf8(
 }
 }  // namespace
 
-__global__ void gpuBasicTokenizer(const unsigned char* sentences,
-                                  uint32_t* device_sentence_offsets,
-                                  const size_t total_bytes,
-                                  uint32_t* cp_metadata,
-                                  uint64_t* aux_table,
-                                  uint32_t* code_points,
-                                  uint32_t* chars_per_thread,
-                                  bool do_lower_case,
-                                  uint32_t num_sentences)
+__global__ void kernel_basic_tokenizer(const unsigned char* sentences,
+                                       uint32_t* device_sentence_offsets,
+                                       const size_t total_bytes,
+                                       uint32_t* cp_metadata,
+                                       uint64_t* aux_table,
+                                       uint32_t* code_points,
+                                       uint32_t* chars_per_thread,
+                                       bool do_lower_case,
+                                       uint32_t num_sentences)
 {
   constexpr uint32_t init_val                     = (1 << SORT_BIT);
   uint32_t replacement_code_points[MAX_NEW_CHARS] = {init_val, init_val, init_val};
@@ -228,7 +228,7 @@ std::pair<ptr_length_pair, ptr_length_pair> basic_tokenizer::tokenize(const char
   const size_t max_new_char_total = MAX_NEW_CHARS * BLOCKS * THREADS_PER_BLOCK;
   size_t threads_on_device        = BLOCKS * THREADS_PER_BLOCK;
 
-  gpuBasicTokenizer<<<BLOCKS, THREADS_PER_BLOCK, 0, stream>>>(
+  kernel_basic_tokenizer<<<BLOCKS, THREADS_PER_BLOCK, 0, stream>>>(
     (unsigned char*)device_sentences_,
     thrust::raw_pointer_cast(device_sentence_offsets.data()),
     sentences_size,  // sentence_offsets[offset_size],
