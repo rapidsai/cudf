@@ -1,11 +1,11 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 import os
+import pathlib
 import random
 from glob import glob
 from io import BytesIO
 from string import ascii_letters
-import pathlib
 
 import numpy as np
 import pandas as pd
