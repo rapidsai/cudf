@@ -46,15 +46,15 @@ TEST_F(ASTTest, BasicASTEvaluation)
   auto table_a = cudf::table_view{{a_0, a_1}};
   // auto table_b = cudf::table_view{{b_0, b_1}};
 
-  auto lhs = cudf::ast_expression_source{cudf::ast_data_source::COLUMN, 0};
-  auto rhs = cudf::ast_expression_source{cudf::ast_data_source::COLUMN, 1};
+  auto lhs = cudf::ast::expression_source{cudf::ast::data_source::COLUMN, 0};
+  auto rhs = cudf::ast::expression_source{cudf::ast::data_source::COLUMN, 1};
   auto expression_add =
-    cudf::ast_binary_expression<int32_t>{cudf::ast_binary_operator::ADD, lhs, rhs};
+    cudf::ast::binary_expression<int32_t>{cudf::ast::binary_operator::ADD, lhs, rhs};
   auto expression_less =
-    cudf::ast_comparator_expression<int32_t>{cudf::ast_comparator::LESS, lhs, rhs};
+    cudf::ast::comparator_expression<int32_t>{cudf::ast::comparator::LESS, lhs, rhs};
 
-  auto result_add  = cudf::compute_ast_column<int32_t>(table_a, expression_add);
-  auto result_less = cudf::compute_ast_column<int32_t>(table_a, expression_less);
+  auto result_add  = cudf::ast::compute_column<int32_t>(table_a, expression_add);
+  auto result_less = cudf::ast::compute_column<int32_t>(table_a, expression_less);
 
   cudf::test::expect_columns_equal(expect_add, result_add->view(), true);
   cudf::test::expect_columns_equal(expect_less, result_less->view(), true);
