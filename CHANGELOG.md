@@ -85,6 +85,7 @@
 - PR #5496 Rename .cu tests (zero cuda kernels) to .cpp files
 - PR #5526 Change `type_id` to enum class
 - PR #5559 Java APIs for missing date/time operators
+- PR #5562 Add missing joing type for java
 
 ## Bug Fixes
 
