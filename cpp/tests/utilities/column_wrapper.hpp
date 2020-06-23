@@ -103,6 +103,106 @@ class column_wrapper {
 };
 
 /**
+ * @brief Convert between source and target types when they differ and where possible.
+ **/
+template <typename SourceT, typename TargetT>
+struct fixed_width_type_converter {
+ private:
+  template <typename InputIterator, typename OutputIterator, typename Lambda>
+  void convert_elements(InputIterator begin, InputIterator end, OutputIterator out, Lambda l) const
+  {
+    std::transform(begin, end, out, l);
+  }
+
+ public:
+  // Are the types same - simply copy elements from [begin, end) to out
+  template <typename SrcT  = SourceT,
+            typename TargT = TargetT,
+            typename InputIterator,
+            typename OutputIterator,
+            typename std::enable_if<std::is_same<SrcT, TargT>::value, void>::type* = nullptr>
+  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  {
+    std::copy(begin, end, out);
+  }
+
+  // Are the types convertible or can target be constructed from source?
+  template <typename SrcT  = SourceT,
+            typename TargT = TargetT,
+            typename InputIterator,
+            typename OutputIterator,
+            typename std::enable_if<!std::is_same<SrcT, TargT>::value &&
+                                      (cudf::is_convertible<SrcT, TargT>::value ||
+                                       std::is_constructible<TargT, SrcT>::value),
+                                    void>::type* = nullptr>
+  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  {
+    convert_elements(begin, end, out, [](auto const& e) { return static_cast<TargT>(e); });
+  }
+
+#if 0
+  // This is to be used when timestamp disallows construction from tick counts; presently,
+  // this conflicts with the convertible/constructible overload
+  // Convert integral values to timestamps
+  template <
+    typename SrcT                        = SourceT,
+    typename TargT                       = TargetT,
+    typename InputIterator, typename OutputIterator,
+    typename std::enable_if<std::is_integral<SrcT>::value && cudf::is_timestamp_t<TargT>::value,
+                            void>::type* = nullptr>
+  void operator()(InputIterator begin,
+                  InputIterator end,
+                  OutputIterator out
+                  ) const
+  {
+    convert_elements(
+      begin, end, out, [](auto const& e) { return TargT{typename TargT::duration{e}}; });
+  }
+#endif
+
+  // Convert timestamps to arithmetic values
+  template <
+    typename SrcT  = SourceT,
+    typename TargT = TargetT,
+    typename InputIterator,
+    typename OutputIterator,
+    typename std::enable_if<cudf::is_timestamp_t<SrcT>::value && std::is_arithmetic<TargT>::value,
+                            void>::type* = nullptr>
+  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  {
+    convert_elements(begin, end, out, [](auto const& e) {
+      return static_cast<TargT>(e.time_since_epoch().count());
+    });
+  }
+
+  // Convert timestamps to duration values
+  template <
+    typename SrcT  = SourceT,
+    typename TargT = TargetT,
+    typename InputIterator,
+    typename OutputIterator,
+    typename std::enable_if<cudf::is_timestamp_t<SrcT>::value && cudf::is_duration_t<TargT>::value,
+                            void>::type* = nullptr>
+  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  {
+    convert_elements(begin, end, out, [](auto const& e) { return TargT{e.time_since_epoch()}; });
+  }
+
+  // Convert duration to arithmetic values
+  template <
+    typename SrcT  = SourceT,
+    typename TargT = TargetT,
+    typename InputIterator,
+    typename OutputIterator,
+    typename std::enable_if<cudf::is_duration_t<SrcT>::value && std::is_arithmetic<TargT>::value,
+                            void>::type* = nullptr>
+  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  {
+    convert_elements(begin, end, out, [](auto const& e) { return static_cast<TargT>(e.count()); });
+  }
+};
+
+/**
  * @brief Creates a `device_buffer` containing the elements in the range
  * `[begin,end)`.
  *
@@ -112,12 +212,14 @@ class column_wrapper {
  * @return rmm::device_buffer Buffer containing all elements in the range
  *`[begin,end)`
  **/
-template <typename Element, typename InputIterator>
+template <typename ElementTo, typename ElementFrom, typename InputIterator>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
-  static_assert(cudf::is_fixed_width<Element>(), "Unexpected non-fixed width type.");
-  thrust::host_vector<Element> elements(begin, end);
-  return rmm::device_buffer{elements.data(), elements.size() * sizeof(Element)};
+  static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
+  cudf::size_type size = std::distance(begin, end);
+  thrust::host_vector<ElementTo> elements(size);
+  fixed_width_type_converter<ElementFrom, ElementTo>{}(begin, end, elements.begin());
+  return rmm::device_buffer{elements.data(), elements.size() * sizeof(ElementTo)};
 }
 
 /**
@@ -200,7 +302,7 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, Validity
  *
  * @tparam Element The fixed-width element type
  **/
-template <typename ElementTo>
+template <typename ElementTo, typename SourceElementT = ElementTo>
 class fixed_width_column_wrapper : public detail::column_wrapper {
  public:
   /**
@@ -209,9 +311,10 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   fixed_width_column_wrapper() : column_wrapper{}
   {
     std::vector<ElementTo> empty;
-    wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
-                                   0,
-                                   detail::make_elements<ElementTo>(empty.begin(), empty.end())});
+    wrapped.reset(new cudf::column{
+      cudf::data_type{cudf::type_to_id<ElementTo>()},
+      0,
+      detail::make_elements<ElementTo, SourceElementT>(empty.begin(), empty.end())});
   }
 
   /**
@@ -238,7 +341,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
     cudf::size_type size = std::distance(begin, end);
     wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
-                                   detail::make_elements<ElementTo>(begin, end)});
+                                   detail::make_elements<ElementTo, SourceElementT>(begin, end)});
   }
 
   /**
@@ -272,7 +375,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 
     wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
-                                   detail::make_elements<ElementTo>(begin, end),
+                                   detail::make_elements<ElementTo, SourceElementT>(begin, end),
                                    detail::make_null_mask(v, v + size),
                                    cudf::UNKNOWN_NULL_COUNT});
   }
@@ -847,7 +950,7 @@ namespace detail {
  * @brief Convert between arithmetic and chrono types where possible.
  **/
 template <typename SourceT, typename TargetT, typename InputIterator, typename ValidityIterator>
-struct fixed_width_type_converter {
+struct rm_fixed_width_type_converter {
   template <typename Lambda>
   auto create_column_wrapper(InputIterator begin,
                              InputIterator end,
@@ -945,10 +1048,10 @@ auto make_fixed_width_column_with_type_param_impl(
                             typename std::iterator_traits<InputIterator>::value_type>::value,
     void>::type* = nullptr)
 {
-  return fixed_width_type_converter<typename std::iterator_traits<InputIterator>::value_type,
-                                    TypeParam,
-                                    InputIterator,
-                                    ValidityIterator>{}
+  return rm_fixed_width_type_converter<typename std::iterator_traits<InputIterator>::value_type,
+                                       TypeParam,
+                                       InputIterator,
+                                       ValidityIterator>{}
     .create_column_wrapper(
       begin, end, vbegin, vend, [](auto const& e) { return static_cast<TypeParam>(e); });
 }
@@ -966,10 +1069,10 @@ auto make_fixed_width_column_with_type_param_impl(
                              typename std::iterator_traits<InputIterator>::value_type>::value,
     void>::type* = nullptr)
 {
-  return fixed_width_type_converter<typename std::iterator_traits<InputIterator>::value_type,
-                                    TypeParam,
-                                    InputIterator,
-                                    ValidityIterator>{}(begin, end, vbegin, vend);
+  return rm_fixed_width_type_converter<typename std::iterator_traits<InputIterator>::value_type,
+                                       TypeParam,
+                                       InputIterator,
+                                       ValidityIterator>{}(begin, end, vbegin, vend);
 }
 }  // namespace detail
 
