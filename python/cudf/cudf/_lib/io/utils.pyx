@@ -19,7 +19,7 @@ import os
 cdef source_info make_source_info(src) except*:
     if not len(src):
         raise ValueError("Need to pass at least one source")
-    
+
     cdef const unsigned char[::1] c_buffer
     cdef vector[host_buffer] c_host_buffers
     cdef vector[string] c_files
