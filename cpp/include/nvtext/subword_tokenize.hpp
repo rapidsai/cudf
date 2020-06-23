@@ -17,23 +17,22 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/table_view.hpp>
 
 #include <stdint.h>
 #include <string.h>
 
 namespace nvtext {
 
-struct TokenizerResult {
+struct tokenizer_result {
   uint32_t nrows_tensor{};
   uint32_t* device_tensor_tokenIDS{};  // how are these freed?
   uint32_t* device_attention_mask{};
   uint32_t* device_tensor_metadata{};
 
-  TokenizerResult(uint32_t nrows_tensor,
-                  uint32_t* d_tensor_token_ids,
-                  uint32_t* d_attention_masks,
-                  uint32_t* d_tensor_metadata)
+  tokenizer_result(uint32_t nrows_tensor,
+                   uint32_t* d_tensor_token_ids,
+                   uint32_t* d_attention_masks,
+                   uint32_t* d_tensor_metadata)
     : nrows_tensor{nrows_tensor},
       device_tensor_tokenIDS{d_tensor_token_ids},
       device_attention_mask{d_attention_masks},
@@ -71,7 +70,7 @@ struct TokenizerResult {
  * @param mr Memory resource to allocate any returned objects.
  * @return tokenIDS, mask, metadata
  */
-std::unique_ptr<TokenizerResult> subword_tokenize(
+std::unique_ptr<tokenizer_result> subword_tokenize(
   cudf::strings_column_view const& sentences,
   std::string const& filename_hashed_vocabulary,
   uint32_t max_sequence_length,

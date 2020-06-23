@@ -51,19 +51,19 @@ __device__ __forceinline__ bool is_head_byte(unsigned char utf8_byte)
  * If the byte at start_byte_for_thread is not a head byte, 0 is returned AND the head_byte
  * boolean passed in is set to false.
  *
- * All threads start reading bytes from the pointer denoted by sentences.
+ * All threads start reading bytes from the pointer denoted by strings.
  *
- * @param sentences A pointer to the start of the sequence of characters to be tokenized.
+ * @param strings A pointer to the start of the sequence of characters to be tokenized.
  */
 __device__ __forceinline__ uint32_t extract_code_points_from_utf8(
-  const unsigned char* sentences, const uint32_t start_byte_for_thread, bool& head_byte)
+  const unsigned char* strings, const uint32_t start_byte_for_thread, bool& head_byte)
 {
   constexpr uint8_t max_utf8_blocks_for_char = 4;
   uint8_t utf8_blocks[max_utf8_blocks_for_char];
 
 #pragma unroll
   for (int i = 0; i < max_utf8_blocks_for_char; ++i) {
-    utf8_blocks[i] = sentences[start_byte_for_thread + i];
+    utf8_blocks[i] = strings[start_byte_for_thread + i];
   }
 
   // We can have at most 5 bits encoding the length. We check those bits to infer the actual length
@@ -103,15 +103,15 @@ __device__ __forceinline__ uint32_t extract_code_points_from_utf8(
 }
 }  // namespace
 
-__global__ void kernel_data_normalizer(const unsigned char* sentences,
-                                       uint32_t* device_sentence_offsets,
+__global__ void kernel_data_normalizer(const unsigned char* strings,
+                                       uint32_t* device_strings_offsets,
                                        const size_t total_bytes,
                                        uint32_t* cp_metadata,
                                        uint64_t* aux_table,
                                        uint32_t* code_points,
                                        uint32_t* chars_per_thread,
                                        bool do_lower_case,
-                                       uint32_t num_sentences)
+                                       uint32_t num_strings)
 {
   constexpr uint32_t init_val                     = (1 << SORT_BIT);
   uint32_t replacement_code_points[MAX_NEW_CHARS] = {init_val, init_val, init_val};
@@ -121,9 +121,8 @@ __global__ void kernel_data_normalizer(const unsigned char* sentences,
   uint32_t num_new_chars         = 0;
 
   if (char_for_thread < total_bytes) {
-    const uint32_t code_point =
-      extract_code_points_from_utf8(sentences, char_for_thread, head_byte);
-    const uint32_t metadata = get_cp_metadata(cp_metadata, code_point);
+    const uint32_t code_point = extract_code_points_from_utf8(strings, char_for_thread, head_byte);
+    const uint32_t metadata   = get_cp_metadata(cp_metadata, code_point);
 
     if (head_byte && !should_remove_cp(metadata, do_lower_case)) {
       num_new_chars = 1;
@@ -168,15 +167,15 @@ __global__ void kernel_data_normalizer(const unsigned char* sentences,
   BlockStore(temp_storage).Store(block_base, replacement_code_points);
 }
 
-data_normalizer::data_normalizer(uint32_t max_num_sentences,
+data_normalizer::data_normalizer(uint32_t max_num_strings,
                                  uint32_t max_num_chars,
                                  std::vector<uint32_t> const& cp_metadata,
                                  std::vector<uint64_t> const& aux_table,
                                  bool do_lower_case,
                                  cudaStream_t stream)
   : do_lower_case(do_lower_case),
-    device_sentence_offsets(max_num_sentences + 1),
-    device_sentences(max_num_chars),
+    device_strings_offsets(max_num_strings + 1),
+    device_strings(max_num_chars),
     device_cp_metadata{cp_metadata},
     device_aux_table{aux_table}
 {
@@ -210,76 +209,76 @@ data_normalizer::data_normalizer(uint32_t max_num_sentences,
   device_num_selected.resize(1);
 }
 
-std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(
-  const char* device_sentences_, const uint32_t* offsets, uint32_t offset_size, cudaStream_t stream)
+std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(const char* d_strings,
+                                                                       const uint32_t* d_offsets,
+                                                                       uint32_t num_strings,
+                                                                       cudaStream_t stream)
 {
   ptr_length_pair cp_and_length;
   ptr_length_pair offset_and_length;
 
-  size_t num_offsets = std::min(size_t{offset_size + 1}, device_sentence_offsets.size());
-  CUDA_TRY(cudaMemcpyAsync(device_sentence_offsets.data().get(),
-                           offsets,
+  size_t num_offsets = std::min(size_t{num_strings + 1}, device_strings_offsets.size());
+  CUDA_TRY(cudaMemcpyAsync(device_strings_offsets.data().get(),
+                           d_offsets,
                            sizeof(uint32_t) * num_offsets,
                            cudaMemcpyDeviceToDevice,
                            stream));
-  uint32_t sentences_size = device_sentence_offsets[num_offsets - 1];
+  uint32_t bytes_count = device_strings_offsets[num_offsets - 1];
 
   static NotEqual select_op((1 << SORT_BIT));
 
-  size_t BLOCKS                   = (sentences_size + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+  size_t BLOCKS                   = (bytes_count + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
   const size_t max_new_char_total = MAX_NEW_CHARS * BLOCKS * THREADS_PER_BLOCK;
   size_t threads_on_device        = BLOCKS * THREADS_PER_BLOCK;
 
   kernel_data_normalizer<<<BLOCKS, THREADS_PER_BLOCK, 0, stream>>>(
-    (unsigned char*)device_sentences_,
-    thrust::raw_pointer_cast(device_sentence_offsets.data()),
-    sentences_size,  // sentence_offsets[offset_size],
-    thrust::raw_pointer_cast(device_cp_metadata.data()),
-    thrust::raw_pointer_cast(device_aux_table.data()),
-    thrust::raw_pointer_cast(device_code_points.data()),
-    thrust::raw_pointer_cast(device_chars_per_thread.data()),
+    reinterpret_cast<const unsigned char*>(d_strings),
+    device_strings_offsets.data().get(),
+    bytes_count,
+    device_cp_metadata.data().get(),
+    device_aux_table.data().get(),
+    device_code_points.data().get(),
+    device_chars_per_thread.data().get(),
     do_lower_case,
-    offset_size);
+    num_strings);
   CHECK_CUDA(stream);
 
-  cub::DeviceSelect::If(thrust::raw_pointer_cast(cub_temp_storage.data()),
+  cub::DeviceSelect::If(cub_temp_storage.data().get(),
                         max_cub_storage_bytes,
-                        thrust::raw_pointer_cast(device_code_points.data()),
-                        thrust::raw_pointer_cast(device_code_points.data()),
-                        thrust::raw_pointer_cast(device_num_selected.data()),
+                        device_code_points.data().get(),
+                        device_code_points.data().get(),
+                        device_num_selected.data().get(),
                         max_new_char_total,
                         select_op,
                         stream);
   CHECK_CUDA(stream);
 
   // We also need to prefix sum the number of characters up to an including the current character in
-  // order to get the new sentence lengths.
-  cub::DeviceScan::InclusiveSum(thrust::raw_pointer_cast(cub_temp_storage.data()),
+  // order to get the new strings lengths.
+  cub::DeviceScan::InclusiveSum(cub_temp_storage.data().get(),
                                 max_cub_storage_bytes,
-                                thrust::raw_pointer_cast(device_chars_per_thread.data()),
-                                thrust::raw_pointer_cast(device_chars_per_thread.data()),
+                                device_chars_per_thread.data().get(),
+                                device_chars_per_thread.data().get(),
                                 threads_on_device,
                                 stream);
   CHECK_CUDA(stream);
 
   constexpr uint16_t SENTENCE_UPDATE_THREADS = 64;
-  size_t SEN_KERNEL_BLOCKS = (offset_size + SENTENCE_UPDATE_THREADS - 1) / SENTENCE_UPDATE_THREADS;
-  update_sentence_lengths<<<SEN_KERNEL_BLOCKS, SENTENCE_UPDATE_THREADS, 0, stream>>>(
-    thrust::raw_pointer_cast(device_sentence_offsets.data()),
-    thrust::raw_pointer_cast(device_chars_per_thread.data()),
-    offset_size);
+  size_t SEN_KERNEL_BLOCKS = (num_strings + SENTENCE_UPDATE_THREADS - 1) / SENTENCE_UPDATE_THREADS;
+  update_strings_lengths<<<SEN_KERNEL_BLOCKS, SENTENCE_UPDATE_THREADS, 0, stream>>>(
+    device_strings_offsets.data().get(), device_chars_per_thread.data().get(), num_strings);
   CHECK_CUDA(stream);
 
-  offset_and_length.gpu_ptr = thrust::raw_pointer_cast(device_sentence_offsets.data());
-  offset_and_length.length  = offset_size + 1;
+  offset_and_length.gpu_ptr = device_strings_offsets.data().get();
+  offset_and_length.length  = num_strings + 1;
 
   uint32_t num_chars = 0;
   CUDA_TRY(cudaMemcpyAsync(&num_chars,
-                           offset_and_length.gpu_ptr + offset_size,
+                           offset_and_length.gpu_ptr + num_strings,
                            sizeof(num_chars),
                            cudaMemcpyDeviceToHost,
                            stream));
-  cp_and_length.gpu_ptr = thrust::raw_pointer_cast(device_code_points.data());
+  cp_and_length.gpu_ptr = device_code_points.data().get();
   cp_and_length.length  = num_chars;
 
   return std::make_pair(cp_and_length, offset_and_length);

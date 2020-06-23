@@ -39,13 +39,13 @@ struct NotEqual {
 /*
 
 */
-static __global__ void update_sentence_lengths(uint32_t* old_lengths,
-                                               uint32_t* chars_up_to_idx,
-                                               size_t num_sentences)
+static __global__ void update_strings_lengths(uint32_t* old_lengths,
+                                              uint32_t* chars_up_to_idx,
+                                              size_t num_strings)
 {
   uint32_t sen_for_thread = threadIdx.x + blockDim.x * blockIdx.x + 1;
 
-  if (sen_for_thread <= num_sentences) {
+  if (sen_for_thread <= num_strings) {
     old_lengths[sen_for_thread] = chars_up_to_idx[old_lengths[sen_for_thread] - 1];
   }
 }

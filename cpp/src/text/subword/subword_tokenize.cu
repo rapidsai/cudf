@@ -19,7 +19,6 @@
 #include <cudf/utilities/error.hpp>
 #include <nvtext/subword_tokenize.hpp>
 
-//#include <nvToolsExt.h>
 #include <device_launch_parameters.h>
 #include <fstream>
 #include <iostream>
@@ -108,32 +107,32 @@ __global__ void compute_tensor_metadata_kernel(  // input
 
 }  // namespace
 
-std::unique_ptr<TokenizerResult> subword_tokenize(cudf::strings_column_view const& sentences,
-                                                  std::string const& filename_hashed_vocabulary,
-                                                  uint32_t max_sequence_length,
-                                                  uint32_t stride,
-                                                  bool do_lower,
-                                                  bool do_truncate,
-                                                  uint32_t max_num_sentences,
-                                                  uint32_t max_num_chars,
-                                                  uint32_t max_rows_tensor,
-                                                  cudaStream_t stream,
-                                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<tokenizer_result> subword_tokenize(cudf::strings_column_view const& strings,
+                                                   std::string const& filename_hashed_vocabulary,
+                                                   uint32_t max_sequence_length,
+                                                   uint32_t stride,
+                                                   bool do_lower,
+                                                   bool do_truncate,
+                                                   uint32_t max_num_strings,
+                                                   uint32_t max_num_chars,
+                                                   uint32_t max_rows_tensor,
+                                                   cudaStream_t stream,
+                                                   rmm::mr::device_memory_resource* mr)
 {
-  auto strings_count = sentences.size();
-  auto offsets       = sentences.offsets();
-  auto d_offsets     = offsets.data<uint32_t>() + sentences.offset();
-  // auto offset        = cudf::detail::get_value<int32_t>(offsets, sentences.offset(), stream);
+  auto strings_count = strings.size();
+  auto offsets       = strings.offsets();
+  auto d_offsets     = offsets.data<uint32_t>() + strings.offset();
+  // auto offset        = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);
   auto offset = thrust::device_pointer_cast(d_offsets)[0];
-  // auto chars_bytes = cudf::detail::get_value<int32_t>(offsets, sentences.offset() +
+  // auto chars_bytes = cudf::detail::get_value<int32_t>(offsets, strings.offset() +
   // strings_count, stream) - offset;
   auto chars_bytes = thrust::device_pointer_cast(d_offsets)[strings_count] - offset;
-  auto d_chars     = sentences.chars().data<char>() + offset;
+  auto d_chars     = strings.chars().data<char>() + offset;
 
   // Create tokenizer
   nvtxRangePushA("create tokenizer");
   wordpiece_tokenizer tokenizer(filename_hashed_vocabulary,
-                                max_num_sentences,
+                                max_num_strings,
                                 max_num_chars,
                                 max_rows_tensor,
                                 max_sequence_length,
@@ -214,32 +213,32 @@ std::unique_ptr<TokenizerResult> subword_tokenize(cudf::strings_column_view cons
     d_attention_mask,
     d_tensor_metadata);
 
-  auto result = std::make_unique<TokenizerResult>(
+  auto result = std::make_unique<tokenizer_result>(
     nrows_tensor_tokenIDS, d_tensor_token_ids, d_attention_mask, d_tensor_metadata);
   return result;
 }
 
 }  // namespace detail
 
-std::unique_ptr<TokenizerResult> subword_tokenize(cudf::strings_column_view const& sentences,
-                                                  std::string const& vocabulary_hashed_filename,
-                                                  uint32_t max_sequence_length,
-                                                  uint32_t stride,
-                                                  bool do_lower,
-                                                  bool do_truncate,
-                                                  uint32_t max_num_sentences,
-                                                  uint32_t max_num_chars,
-                                                  uint32_t max_rows_tensor,
-                                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<tokenizer_result> subword_tokenize(cudf::strings_column_view const& strings,
+                                                   std::string const& vocabulary_hashed_filename,
+                                                   uint32_t max_sequence_length,
+                                                   uint32_t stride,
+                                                   bool do_lower,
+                                                   bool do_truncate,
+                                                   uint32_t max_num_strings,
+                                                   uint32_t max_num_chars,
+                                                   uint32_t max_rows_tensor,
+                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::subword_tokenize(sentences,
+  return detail::subword_tokenize(strings,
                                   vocabulary_hashed_filename,
                                   max_sequence_length,
                                   stride,
                                   do_lower,
                                   do_truncate,
-                                  max_num_sentences,
+                                  max_num_strings,
                                   max_num_chars,
                                   max_rows_tensor,
                                   0,

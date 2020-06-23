@@ -179,8 +179,8 @@ __device__ __forceinline__ int retrieve(uint64_t key,
  * @param device_bin_offsets A pointer to the data containing the start index of each bin in
  *        the flattened hash table.
  * @param unk_tok_id The token id for unknown tokens
- * @param first_tok_id The token id for the starting of the first sentence
- * @param sep_tok_id The token id for sentence separators
+ * @param first_tok_id The token id for the starting of the first string
+ * @param sep_tok_id The token id for string separators
  * @param outer_table_a The outer hash value parameter A
  * @param outer_table_b The outer hash value parameter B
  * @param num_bins The number of bins for the outer hash

@@ -37,8 +37,7 @@ namespace {
  * `start_word_indices[word]` and `end_word_indices[word]` are the start and
  * end for the same word). This is not true before the cub::deviceselect is done.
  *
- * @param code_points A pointer to the code points in the sentence after being run through the basic
- *        tokenizer.
+ * @param code_points A pointer to the code points in the strings after normalization.
  * @param start_word_indices An array which will contain the starting index for each word scattered
  *        throughout. If an index does not represent a word start, the max uint32_t value is written
  *        to indicate this. A post processing step is required to select all the relevant values
@@ -88,9 +87,9 @@ __global__ void init_data_and_mark_word_start_and_ends(uint32_t* code_points,
 }
 
 /**
- * @brief Writes the indices of the characters that start and end sentences.
+ * @brief Writes the indices of the characters that start and end strings.
  *
- * This kernel should be called after `mark_word_start_and_ends` with at least `num_sentences` total
+ * This kernel should be called after `mark_word_start_and_ends` with at least `num_strings` total
  * threads.
  *
  * It is guaranteed that the same number of indices will be written to each
@@ -98,31 +97,30 @@ __global__ void init_data_and_mark_word_start_and_ends(uint32_t* code_points,
  * `start_word_indices[word]` and `end_word_indices[word]` are the start and
  * end for the same word). This is not true before the cub::deviceselect is done.
  *
- * @param code_points A pointer to the code points in the sentence after being run through the basic
- *        tokenizer.
- * @param sentence_offsets An array containing the index of the starting character of each sentence
+ * @param code_points A pointer to the code points in the strings.
+ * @param strings_offsets An array containing the index of the starting character of each string
  *        with an extra space at the end containing the total number of characters. As a result,
- *        this array is of length num_sentences + 1.
+ *        this array is of length num_strings + 1.
  * @param start_word_indices An array which will contain the starting index for each word scattered
  *        throughout. If an index does not represent a word start, the max-uint32_t value is written
  *        to indicate this.
  * @param end_word_indices An array which will contain the one past the end index for each word
  *        scattered throughout. If an index does not represent a word end, the max uint32_t value is
  *        written to indicate this.
- * @param num_sentences The total number of sentences to be processed.
+ * @param num_strings The total number of strings to be processed.
  */
-__global__ void mark_sentence_start_and_ends(uint32_t* code_points,
-                                             uint32_t* sentence_offsets,
-                                             uint32_t* start_word_indices,
-                                             uint32_t* end_word_indices,
-                                             uint32_t num_sentences)
+__global__ void mark_string_start_and_ends(uint32_t* code_points,
+                                           uint32_t* strings_offsets,
+                                           uint32_t* start_word_indices,
+                                           uint32_t* end_word_indices,
+                                           uint32_t num_strings)
 {
   uint32_t char_for_thread = blockDim.x * blockIdx.x + threadIdx.x;
-  // Ensure the starting character of each sentence is written to the word start array.
-  if (char_for_thread <= num_sentences) {
-    const uint32_t offset = sentence_offsets[char_for_thread];
+  // Ensure the starting character of each strings is written to the word start array.
+  if (char_for_thread <= num_strings) {
+    const uint32_t offset = strings_offsets[char_for_thread];
 
-    if ((char_for_thread < num_sentences) && (code_points[offset] != SPACE_CODE_POINT)) {
+    if ((char_for_thread < num_strings) && (code_points[offset] != SPACE_CODE_POINT)) {
       start_word_indices[offset] = offset;
     }
 
@@ -140,9 +138,9 @@ __global__ void mark_sentence_start_and_ends(uint32_t* code_points,
  *
  * The tokens_per_word array is kept to the length (num_code_points + 1). This means each thread
  * can write its number of tokens to the index in thread_to_word_map corresponding to the starting
- * character of each word. Since sentences must start at some word, we can prefix sum this array
- * and use the sentence_lengths code point offsets to directly index the number of tokens in each
- * sentence.
+ * character of each word. Since strings must start at some word, we can prefix sum this array
+ * and use the strings_lengths code point offsets to directly index the number of tokens in each
+ * string.
  *
  * The `token_ids` array should be initialized to the max uint32_t before calling this kernel.
  *
@@ -164,12 +162,12 @@ __global__ void mark_sentence_start_and_ends(uint32_t* code_points,
  *        token_ids array containing the word start code points.
  *        `word_ends[word] - filtered_start_indices[word] = word_length`
  * @param tokens_per_word An array of size num_code_points that will contain the number of tokens in
- *        each word in a sentence. This array can be exclusive summed and the result used in
- *        conjunction with the sentence lengths array to find the tokens in each sentence. This is
+ *        each word in a string. This array can be exclusive summed and the result used in
+ *        conjunction with the strings lengths array to find the tokens in each string. This is
  *        possible since the number of tokens in each word will be placed at the index corresponding
  *        to the start character of a word. If we assume prefix_summed is the prefix sum of the
- *        tokens_per_word array, then `prefix_summed[sentence_lengths[sentence] - 1]` is the number
- *        of tokens found before the start of sentence.
+ *        tokens_per_word array, then `prefix_summed[strings_lengths[string] - 1]` is the number
+ *        of tokens found before the start of string.
  * @param unk_token_id The token id to be place for unknown tokens
  * @param max_word_length The maximum length of a word. Any word longer than this length is
  *        replaced by the unknown token.
@@ -260,7 +258,7 @@ __global__ void kernel_wordpiece_tokenizer(uint32_t* code_points,
 }  // namespace
 
 wordpiece_tokenizer::wordpiece_tokenizer(std::string const& vocab_file,
-                                         uint32_t max_num_sentences,
+                                         uint32_t max_num_strings,
                                          uint32_t max_num_chars,
                                          uint32_t max_rows_final_tensor,
                                          uint32_t max_sequence_length,
@@ -273,7 +271,7 @@ wordpiece_tokenizer::wordpiece_tokenizer(std::string const& vocab_file,
     max_word_length{max_word_length},
     stride(stride),
     do_truncate(do_truncate),
-    normalizer(max_num_sentences, max_num_chars, cp_data, aux_data, do_lower_case, stream)
+    normalizer(max_num_strings, max_num_chars, cp_data, aux_data, do_lower_case, stream)
 {
   detail::transfer_hash_info_to_device(vocab_file,
                                        device_hash_table,
@@ -335,8 +333,8 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
   uint32_t* device_code_points = cp_and_length.gpu_ptr;
   size_t num_code_points       = cp_and_length.length;
 
-  uint32_t* device_sentence_offsets = offsets_and_length.gpu_ptr;
-  uint32_t num_sentences            = offsets_and_length.length - 1;
+  uint32_t* device_strings_offsets = offsets_and_length.gpu_ptr;
+  uint32_t num_strings             = offsets_and_length.length - 1;
 
   // Create a selection op for all device selects
   static NotEqual select_op(std::numeric_limits<uint32_t>::max());
@@ -357,13 +355,13 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
     thrust::raw_pointer_cast(device_tokens_per_word.data()));
   CHECK_CUDA(stream);
 
-  uint32_t word_split_blocks = (num_sentences + threads_per_block - 1) / threads_per_block;
-  detail::mark_sentence_start_and_ends<<<word_split_blocks, threads_per_block, 0, stream>>>(
+  uint32_t word_split_blocks = (num_strings + threads_per_block - 1) / threads_per_block;
+  detail::mark_string_start_and_ends<<<word_split_blocks, threads_per_block, 0, stream>>>(
     device_code_points,
-    device_sentence_offsets,
+    device_strings_offsets,
     device_start_word_indices,
     device_end_word_indices,
-    num_sentences);
+    num_strings);
   CHECK_CUDA(stream);
 
   // Now start_word_indices has the word starts scattered throughout the array. We need to select
@@ -439,9 +437,9 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
   CHECK_CUDA(stream);
 
   constexpr uint16_t sen_update_num_threads = 64;
-  size_t SEN_KERNEL_BLOCKS = (num_sentences + sen_update_num_threads - 1) / sen_update_num_threads;
-  update_sentence_lengths<<<SEN_KERNEL_BLOCKS, sen_update_num_threads, 0, stream>>>(
-    device_sentence_offsets, token_id_counts, num_sentences);
+  size_t SEN_KERNEL_BLOCKS = (num_strings + sen_update_num_threads - 1) / sen_update_num_threads;
+  update_strings_lengths<<<SEN_KERNEL_BLOCKS, sen_update_num_threads, 0, stream>>>(
+    device_strings_offsets, token_id_counts, num_strings);
   CHECK_CUDA(stream);
 
   // Grab total number of token ids from the device

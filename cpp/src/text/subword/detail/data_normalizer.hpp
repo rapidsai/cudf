@@ -43,9 +43,9 @@ class data_normalizer {
   /**
    * @brief Transfer to the GPU the metadata needed to normalize characters.
    *
-   * @param max_num_strings Maximum number of input sentences for instantiating the normalizer.
+   * @param max_num_strings Maximum number of input strings for instantiating the normalizer.
    *        Used to allocate temporary working memory on device.
-   *        If the input contains a larger number of sentences, behavior is undefined.
+   *        If the input contains a larger number of strings, behavior is undefined.
    * @param max_num_chars Maximum number of characters for instantiating the normalizer.
    *        Used to allocate temporary working memory on device.
    *        If the input contains a larger number of characters, behavior is undefined.
@@ -70,9 +70,9 @@ class data_normalizer {
    *
    * The result of this function returns two pointers to GPU data along with their lengths.
    * The first pointer is to a contiguous array of unicode code points corresponding to the
-   * characters in the text after running basic tokenization. All the sentences are in a
-   * flattened array. The second pointer is to the start offsets of the sentences in the
-   * flattened code_point array. That is, sentence `i` starts at `result.second.gpu_ptr[i]`.
+   * characters in the text after running basic tokenization. All the strings are in a
+   * flattened array. The second pointer is to the start offsets of the strings in the
+   * flattened code_point array. That is, string `i` starts at `result.second.gpu_ptr[i]`.
    * This array will always be of length `text_batch.size() + 1` since we need one entry
    * for each input and a last entry which has the total number of characters.
    *
@@ -80,11 +80,11 @@ class data_normalizer {
    *        If this precondition is not held then the behavior of this
    *        function is undefined.
    * @param d_offsets A vector of byte offsets to the beginning of individual strings in
-   *        the `device_sentences` parameter.
+   *        the `d_strings` parameter.
    * @param num_strings The number of strings identified in `d_strings`.
    * @return Two pointers to GPU data along with their lengths. The first is a pointer
    *         to the flattened code-points array along with its length and the second is
-   *         a pointer to the start offset in the code points array for each sentence.
+   *         a pointer to the start offset in the code points array for each string.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::pair<ptr_length_pair, ptr_length_pair> normalize(const char* d_strings,
@@ -99,8 +99,8 @@ class data_normalizer {
   rmm::device_vector<uint32_t> device_cp_metadata;
   rmm::device_vector<uint64_t> device_aux_table;
 
-  rmm::device_vector<unsigned char> device_sentences;
-  rmm::device_vector<uint32_t> device_sentence_offsets;
+  rmm::device_vector<unsigned char> device_strings;
+  rmm::device_vector<uint32_t> device_strings_offsets;
   rmm::device_vector<uint32_t> device_code_points;
   rmm::device_vector<uint32_t> device_chars_per_thread;
 
