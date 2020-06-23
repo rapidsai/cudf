@@ -304,12 +304,14 @@ wordpiece_tokenizer::wordpiece_tokenizer(std::string const& vocab_file,
                         device_word_indices.data().get(),
                         device_num_selected.data().get(),
                         2 * max_new_char_total,
-                        select_op);
+                        select_op,
+                        stream);
   cub::DeviceScan::InclusiveSum(nullptr,
                                 temp_storage_bytes_2,
                                 device_tokens_per_word.data().get(),
                                 device_word_indices.data().get(),
-                                max_new_char_total);
+                                max_new_char_total,
+                                stream);
   max_cub_storage_bytes = std::max(temp_storage_bytes, temp_storage_bytes_2);
   cub_temp_storage.resize(max_cub_storage_bytes);
   device_num_selected.resize(1);
@@ -374,7 +376,8 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
                         device_start_word_indices,
                         thrust::raw_pointer_cast(device_num_selected.data()),
                         2 * num_code_points,
-                        select_op);
+                        select_op,
+                        stream);
   CHECK_CUDA(stream);
 
   // Grab the number of words which is the number of threads needed for the main word piece
@@ -420,7 +423,8 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
                         contiguous_token_ids,
                         thrust::raw_pointer_cast(device_num_selected.data()),
                         num_code_points,
-                        select_op);
+                        select_op,
+                        stream);
   CHECK_CUDA(stream);
 
   // Repurpose start word indices since it is the same size and type as the required output.
@@ -430,7 +434,8 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
                                 max_cub_storage_bytes,
                                 thrust::raw_pointer_cast(device_tokens_per_word.data()),
                                 token_id_counts,
-                                num_code_points);
+                                num_code_points,
+                                stream);
   CHECK_CUDA(stream);
 
   constexpr uint16_t sen_update_num_threads = 64;

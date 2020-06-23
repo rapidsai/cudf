@@ -193,7 +193,8 @@ data_normalizer::data_normalizer(uint32_t max_num_sentences,
                                 temp_storage_scan_bytes,
                                 device_chars_per_thread,
                                 device_chars_per_thread,
-                                max_threads_on_device);
+                                max_threads_on_device,
+                                stream);
   size_t temp_storage_select_bytes = 0;
   static NotEqual select_op((1 << SORT_BIT));
   cub::DeviceSelect::If(nullptr,
@@ -202,7 +203,8 @@ data_normalizer::data_normalizer(uint32_t max_num_sentences,
                         thrust::raw_pointer_cast(device_code_points.data()),
                         thrust::raw_pointer_cast(device_num_selected.data()),
                         max_new_char_total,
-                        select_op);
+                        select_op,
+                        stream);
   max_cub_storage_bytes = std::max(temp_storage_scan_bytes, temp_storage_select_bytes);
   cub_temp_storage.resize(max_cub_storage_bytes);
   device_num_selected.resize(1);
@@ -246,7 +248,8 @@ std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(
                         thrust::raw_pointer_cast(device_code_points.data()),
                         thrust::raw_pointer_cast(device_num_selected.data()),
                         max_new_char_total,
-                        select_op);
+                        select_op,
+                        stream);
   CHECK_CUDA(stream);
 
   // We also need to prefix sum the number of characters up to an including the current character in
@@ -255,7 +258,8 @@ std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(
                                 max_cub_storage_bytes,
                                 thrust::raw_pointer_cast(device_chars_per_thread.data()),
                                 thrust::raw_pointer_cast(device_chars_per_thread.data()),
-                                threads_on_device);
+                                threads_on_device,
+                                stream);
   CHECK_CUDA(stream);
 
   constexpr uint16_t SENTENCE_UPDATE_THREADS = 64;
