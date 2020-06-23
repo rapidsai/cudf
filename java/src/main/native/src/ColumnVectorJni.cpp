@@ -564,7 +564,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_second(JNIEnv *env, jcl
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_weekDay(JNIEnv *env, jclass,
-                                                                jlong input_ptr) {
+                                                                 jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -576,7 +576,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_weekDay(JNIEnv *env, jc
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_lastDayOfMonth(JNIEnv *env, jclass,
-                                                                jlong input_ptr) {
+                                                                        jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -588,7 +588,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_lastDayOfMonth(JNIEnv *
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_dayOfYear(JNIEnv *env, jclass,
-                                                                jlong input_ptr) {
+                                                                   jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -598,8 +598,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_dayOfYear(JNIEnv *env, 
   }
   CATCH_STD(env, 0);
 }
-
-
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, jobject j_object,
                                                                 jlong handle, jint type) {
