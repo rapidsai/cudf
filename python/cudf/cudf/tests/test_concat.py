@@ -243,6 +243,74 @@ def test_concat_string_index_name(myindex):
     assert df3.index.name == myindex
 
 
+def test_pandas_concat_compatibility_axis1():
+    d1 = gd.datasets.randomdata(
+        3, dtypes={"a": float, "ind": float}
+    ).set_index("ind")
+    d2 = gd.datasets.randomdata(
+        3, dtypes={"b": float, "ind": float}
+    ).set_index("ind")
+    d3 = gd.datasets.randomdata(
+        3, dtypes={"c": float, "ind": float}
+    ).set_index("ind")
+    d4 = gd.datasets.randomdata(
+        3, dtypes={"d": float, "ind": float}
+    ).set_index("ind")
+    d5 = gd.datasets.randomdata(
+        3, dtypes={"e": float, "ind": float}
+    ).set_index("ind")
+
+    pd1 = d1.to_pandas()
+    pd2 = d2.to_pandas()
+    pd3 = d3.to_pandas()
+    pd4 = d4.to_pandas()
+    pd5 = d5.to_pandas()
+
+    expect = pd.concat([pd1, pd2, pd3, pd4, pd5], axis=1)
+    got = gd.concat([d1, d2, d3, d4, d5], axis=1)
+
+    assert_eq(got, expect)
+
+
+@pytest.mark.parametrize("index", [[0, 1, 2], [2, 1, 0], [5, 9, 10]])
+@pytest.mark.parametrize("names", [False, (0, 1)])
+@pytest.mark.parametrize(
+    "data",
+    [
+        (["a", "b", "c"], ["a", "b", "c"]),
+        (["a", "b", "c"], ["XX", "YY", "ZZ"]),
+    ],
+)
+def test_pandas_concat_compatibility_axis1_overlap(index, names, data):
+    s1 = gd.Series(data[0], index=[0, 1, 2])
+    s2 = gd.Series(data[1], index=index)
+    if names:
+        s1.name = names[0]
+        s2.name = names[1]
+    ps1 = s1.to_pandas()
+    ps2 = s2.to_pandas()
+    got = gd.concat([s1, s2], axis=1)
+    expect = pd.concat([ps1, ps2], axis=1)
+
+    assert_eq(got, expect)
+
+
+def test_pandas_concat_compatibility_axis1_eq_index():
+    s1 = gd.Series(["a", "b", "c"], index=[0, 1, 2])
+    s2 = gd.Series(["a", "b", "c"], index=[1, 1, 1])
+    ps1 = s1.to_pandas()
+    ps2 = s2.to_pandas()
+
+    try:
+        pd.concat([ps1, ps2], axis=1)
+    except Exception as e:
+        e_msg = str(e)
+        e_type = type(e)
+
+    with pytest.raises(e_type, match=e_msg):
+        gd.concat([s1, s2], axis=1)
+
+
 def test_concat_duplicate_columns():
     cdf = gd.DataFrame(
         {
