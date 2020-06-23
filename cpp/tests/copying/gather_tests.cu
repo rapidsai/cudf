@@ -470,6 +470,86 @@ TYPED_TEST(GatherTestList, GatherNested)
   }
 }
 
+TYPED_TEST(GatherTestList, GatherNestedForceRecycle)
+{
+  using T   = TypeParam;
+  using LCW = cudf::test::lists_column_wrapper<T>;
+
+  // these cases force the temporary memory-recycling behavior internal
+  // to the gather() recursion
+
+  // recycled on both levels
+  // List<List<List<T>>>
+  {
+    cudf::test::lists_column_wrapper<T> list{
+      {{LCW{2}}}, {{LCW{3}}}, {{LCW{5}}}, {{LCW{6}}}, {{LCW{7}}}};
+
+    cudf::test::fixed_width_column_wrapper<int> gather_map{0, 1, 2};
+
+    cudf::table_view source_table({list});
+    auto results = cudf::gather(source_table, gather_map);
+
+    cudf::test::lists_column_wrapper<T> expected{{{LCW{2}}}, {{LCW{3}}}, {{LCW{5}}}};
+
+    cudf::test::expect_columns_equal(results->view().column(0), expected);
+  }
+
+  // recycled on first level but not second
+  // List<List<List<T>>>
+  {
+    cudf::test::lists_column_wrapper<T> list{
+      {{LCW{2}}}, {{LCW{3}, LCW{4}}}, {{LCW{5}}}, {{LCW{6}}}, {{LCW{7}}}};
+
+    cudf::test::fixed_width_column_wrapper<int> gather_map{0, 1, 2};
+
+    cudf::table_view source_table({list});
+    auto results = cudf::gather(source_table, gather_map);
+
+    cudf::test::lists_column_wrapper<T> expected{{{LCW{2}}}, {{LCW{3}, LCW{4}}}, {{LCW{5}}}};
+
+    cudf::test::expect_columns_equal(results->view().column(0), expected);
+  }
+
+  // recycled on both levels
+  // List<List<List<T>>>
+  {
+    cudf::test::lists_column_wrapper<T> list{
+      {{LCW{2}}}, {{LCW{}}}, {{LCW{5}}}, {{LCW{6}}}, {{LCW{7}}}};
+
+    cudf::test::fixed_width_column_wrapper<int> gather_map{0, 1, 2};
+
+    cudf::table_view source_table({list});
+    auto results = cudf::gather(source_table, gather_map);
+
+    cudf::test::lists_column_wrapper<T> expected{{{LCW{2}}}, {{LCW{}}}, {{LCW{5}}}};
+
+    cudf::test::expect_columns_equal(results->view().column(0), expected);
+  }
+}
+
+TYPED_TEST(GatherTestList, GatherOutOfOrder)
+{
+  using T   = TypeParam;
+  using LCW = cudf::test::lists_column_wrapper<T>;
+
+  // List<List<T>>
+  {
+    cudf::test::lists_column_wrapper<T> list{{{2, 3}, {4, 5}},
+                                             {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}},
+                                             {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}};
+    cudf::test::fixed_width_column_wrapper<int> gather_map{1, 2, 0};
+
+    cudf::table_view source_table({list});
+    auto results = cudf::gather(source_table, gather_map);
+
+    cudf::test::lists_column_wrapper<T> expected{{{6, 7, 8}, {9, 10, 11}, {12, 13, 14}},
+                                                 {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}},
+                                                 {{2, 3}, {4, 5}}};
+
+    cudf::test::expect_columns_equal(results->view().column(0), expected);
+  }
+}
+
 TYPED_TEST(GatherTestList, GatherNestedNulls)
 {
   using T   = TypeParam;

@@ -18,6 +18,7 @@
 #include <thrust/transform_scan.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf {
 namespace lists {
@@ -26,11 +27,12 @@ namespace detail {
 /**
  * @brief The information needed to create an iterator to gather level N+1
  *
- * @ref make_gather_offsets
+ * @ref make_gather_data
  */
 struct gather_data {
-  size_type const* offsets;
-  std::unique_ptr<column> base_offsets;
+  std::unique_ptr<column> offsets;
+  rmm::device_uvector<size_type> base_offsets;
+  size_type gather_map_size;
 };
 
 /**
@@ -133,19 +135,20 @@ struct gather_data {
  * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
  * @param stream CUDA stream on which to execute kernels
  * @param mr Memory resource to use for all allocations
+ * @param prev_base_offsets (optional) The buffer backing the base offsets used in the gather map.
  *
- * @returns std::pair containing two columns of data.  the compacted offsets
- *          for the child column and the base (original) offsets from the source
- *          column that matches each of those new offsets.
+ * @returns The gather_data struct needed to construct the gather map for the
+ *          next level of recursion.
  *
  */
 template <bool NullifyOutOfBounds, typename MapItType>
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
+gather_data make_gather_data(
   cudf::lists_column_view const& source_column,
   MapItType gather_map,
   size_type gather_map_size,
-  cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  cudaStream_t stream,
+  rmm::mr::device_memory_resource* mr,
+  rmm::device_uvector<size_type> prev_base_offsets = rmm::device_uvector<size_type>{})
 {
   // size of the gather map is the # of output rows
   size_type output_count = gather_map_size;
@@ -184,26 +187,43 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
     sum);
 
   // For each span of offsets (each output row) we need to know the original offset value to build
-  // the gather map for the next level.  This data is temporary and will only persist until the
-  // next level of recursion is done using it.  This way, even if we have a hierarchy 1000 levels
-  // deep, we will only ever have at most 2 of these extra columns in memory.
-  auto base_offsets = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, output_count, mask_state::UNALLOCATED, stream, mr);
-  mutable_column_view base_offsets_mcv = base_offsets->mutable_view();
-  size_type* base_offsets_p            = base_offsets_mcv.data<size_type>();
+  // the gather map for the next level.  This data is temporary and will only be needed until the
+  // next level of recursion is done using it.
+  //
+  // additional optimization. if the "prev_base_offsets" buffer we have been passed is large enough
+  // to be used again, re-use it instead of allocating new memory. if it isn't big enough, release
+  // it.
+  if (prev_base_offsets.capacity() > 0) {
+    // reset size (but leave capacity)
+    prev_base_offsets.resize(0, stream);
+  }
+  bool can_recycle = prev_base_offsets.capacity() >= static_cast<size_t>(output_count);
+  rmm::device_uvector<size_type> base_offsets =
+    can_recycle ? std::move(prev_base_offsets)
+                : rmm::device_uvector<size_type>(output_count, stream);
+  if (!can_recycle) { prev_base_offsets.release(); }
 
   // generate the base offsets
   thrust::transform(rmm::exec_policy(stream)->on(stream),
                     gather_map,
                     gather_map + offset_count,
-                    base_offsets_p,
+                    base_offsets.data(),
                     [src_offsets, output_count, src_size] __device__(size_type index) {
                       // if this is an invalid index, this will be a NULL list
                       if (NullifyOutOfBounds && ((index < 0) || (index >= src_size))) { return 0; }
                       return src_offsets[index];
                     });
 
-  return {std::move(dst_offsets_c), std::move(base_offsets)};
+  // retrieve size of the resulting gather map for level N+1 (the last offset)
+  size_type child_gather_map_size = 0;
+  CUDA_TRY(cudaMemcpyAsync(&child_gather_map_size,
+                           dst_offsets + output_count,
+                           sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
+
+  return {std::move(dst_offsets_c), std::move(base_offsets), child_gather_map_size};
 }
 
 /**
@@ -212,7 +232,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
  * The recursion continues from here at least 1 level further.
  *
  * @param list View into the list column to gather from
- * @param parent The gather_data needed to construct a gather map iterator for this level
+ * @param gd The gather_data needed to construct a gather map iterator for this level
  * @param stream CUDA stream on which to execute kernels
  * @param mr Memory resource to use for all allocations
  *
@@ -221,7 +241,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
  */
 std::unique_ptr<column> gather_list_nested(
   lists_column_view const& list,
-  gather_data& parent,
+  gather_data& gd,
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -230,7 +250,7 @@ std::unique_ptr<column> gather_list_nested(
  * terminates here.
  *
  * @param column View into the column to gather from
- * @param parent The gather_data needed to construct a gather map iterator for this level
+ * @param gd The gather_data needed to construct a gather map iterator for this level
  * @param stream CUDA stream on which to execute kernels
  * @param mr Memory resource to use for all allocations
  *
@@ -239,7 +259,7 @@ std::unique_ptr<column> gather_list_nested(
  */
 std::unique_ptr<column> gather_list_leaf(
   column_view const& column,
-  gather_data const& parent,
+  gather_data const& gd,
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 

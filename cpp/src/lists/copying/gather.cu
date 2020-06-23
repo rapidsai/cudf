@@ -27,7 +27,7 @@ namespace detail {
  *
  * The iterator needed for gathering at level N+1 needs to reference the offsets
  * from level N and the "base" offsets used from level N-1.  An example of
- * the gather map needed for level N+1 (see documentation for make_gather_offsets for
+ * the gather map needed for level N+1 (see documentation for make_gather_data for
  * the full example)
  *
  * level N-1 offsets               : [0, 2, 5, 10], gather map[0, 2]
@@ -58,10 +58,10 @@ struct list_gatherer {
 
   list_gatherer(gather_data const& gd)
   {
-    column_view base_offsets_v(*gd.base_offsets);
-    offset_count = base_offsets_v.size();
-    base_offsets = base_offsets_v.data<size_type>();
-    offsets      = gd.offsets;
+    offset_count            = gd.base_offsets.size();
+    base_offsets            = gd.base_offsets.data();
+    mutable_column_view mcv = gd.offsets->mutable_view();
+    offsets                 = mcv.data<size_type>();
   }
 
   __device__ result_type operator()(argument_type index)
@@ -84,30 +84,22 @@ struct list_gatherer {
  *
  */
 std::unique_ptr<column> gather_list_leaf(column_view const& column,
-                                         gather_data const& parent,
+                                         gather_data const& gd,
                                          cudaStream_t stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  // gather map for our child
-  auto child_gather_map = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), list_gatherer{parent});
+  // gather map iterator for this level (N)
+  auto gather_map_begin = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<size_type>(0), list_gatherer{gd});
+  size_type gather_map_size = gd.gather_map_size;
 
-  // size of the child gather map
-  size_type child_gather_map_size;
-  CUDA_TRY(cudaMemcpyAsync(&child_gather_map_size,
-                           parent.offsets + parent.base_offsets->size(),
-                           sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
-
-  // otherwise, just call a regular gather
+  // call the normal gather
   auto leaf_column =
     cudf::type_dispatcher(column.type(),
                           cudf::detail::column_gatherer{},
                           column,
-                          child_gather_map,
-                          child_gather_map + child_gather_map_size,
+                          gather_map_begin,
+                          gather_map_begin + gather_map_size,
                           // note : we don't need to bother checking for out-of-bounds here since
                           // our inputs at this stage aren't coming from the user.
                           false,
@@ -125,8 +117,8 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
   if (null_count > 0) {
     auto list_cdv = column_device_view::create(column);
     auto validity = cudf::detail::valid_if(
-      child_gather_map,
-      child_gather_map + child_gather_map_size,
+      gather_map_begin,
+      gather_map_begin + gd.gather_map_size,
       [cdv = *list_cdv] __device__(int index) { return cdv.is_valid(index) ? true : false; },
       stream,
       mr);
@@ -142,27 +134,14 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
  *
  */
 std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
-                                           gather_data& parent,
+                                           gather_data& gd,
                                            cudaStream_t stream,
                                            rmm::mr::device_memory_resource* mr)
 {
+  // gather map iterator for this level (N)
   auto gather_map_begin = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), list_gatherer{parent});
-
-  // size of the child gather map
-  size_type gather_map_size = 0;
-  CUDA_TRY(cudaMemcpyAsync(&gather_map_size,
-                           parent.offsets + parent.base_offsets->size(),
-                           sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
-
-  // generate gather_data for this level
-  auto offset_result =
-    make_gather_offsets<false>(list, gather_map_begin, gather_map_size, stream, mr);
-  column_view offsets_v(*offset_result.first);
-  gather_data gd{offsets_v.data<size_type>(), std::move(offset_result.second)};
+    thrust::make_counting_iterator<size_type>(0), list_gatherer{gd});
+  size_type gather_map_size = gd.gather_map_size;
 
   // gather the bitmask, if relevant
   rmm::device_buffer null_mask{0, stream, mr};
@@ -179,30 +158,30 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
     null_count = validity.second;
   }
 
-  // memory optimization. now that we have generated the base offset data we need for level N+1,
-  // we are no longer going to be using gather_map_begin, so the base offset data it references
-  // from level N-1 above us can be released
-  parent.base_offsets.release();
+  // generate gather_data for next level (N+1), potentially recycling the temporary
+  // base_offsets buffer.
+  gather_data child_gd = make_gather_data<false>(
+    list, gather_map_begin, gather_map_size, stream, mr, std::move(gd.base_offsets));
 
   // the nesting case.
   if (list.child().type() == cudf::data_type{type_id::LIST}) {
     // gather children.
-    auto child = gather_list_nested(list.child(), gd, stream, mr);
+    auto child = gather_list_nested(list.child(), child_gd, stream, mr);
 
     // return the nested column
     return make_lists_column(gather_map_size,
-                             std::move(offset_result.first),
+                             std::move(child_gd.offsets),
                              std::move(child),
                              null_count,
                              std::move(null_mask));
   }
 
   // it's a leaf.  do a regular gather
-  auto child = gather_list_leaf(list.child(), gd, stream, mr);
+  auto child = gather_list_leaf(list.child(), child_gd, stream, mr);
 
   // assemble final column
   return make_lists_column(gather_map_size,
-                           std::move(offset_result.first),
+                           std::move(child_gd.offsets),
                            std::move(child),
                            null_count,
                            std::move(null_mask));

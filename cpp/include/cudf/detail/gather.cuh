@@ -323,14 +323,12 @@ struct column_gatherer_impl<list_view, MapItRoot> {
     auto gather_map_size = std::distance(gather_map_begin, gather_map_end);
     if (gather_map_size == 0) { return make_empty_column(data_type{type_id::LIST}); }
 
-    // generate gather_data for this level
-    auto offset_result = nullify_out_of_bounds
-                           ? lists::detail::make_gather_offsets<true>(
-                               column, gather_map_begin, gather_map_size, stream, mr)
-                           : lists::detail::make_gather_offsets<false>(
-                               column, gather_map_begin, gather_map_size, stream, mr);
-    column_view offsets_v(*offset_result.first);
-    lists::detail::gather_data gd{offsets_v.data<size_type>(), std::move(offset_result.second)};
+    // generate gather_data for the next level (N+1)
+    lists::detail::gather_data gd = nullify_out_of_bounds
+                                      ? lists::detail::make_gather_data<true>(
+                                          column, gather_map_begin, gather_map_size, stream, mr)
+                                      : lists::detail::make_gather_data<false>(
+                                          column, gather_map_begin, gather_map_size, stream, mr);
 
     // the nesting case.
     if (list.child().type() == cudf::data_type{type_id::LIST}) {
@@ -339,7 +337,7 @@ struct column_gatherer_impl<list_view, MapItRoot> {
 
       // return the final column
       return make_lists_column(
-        gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
+        gather_map_size, std::move(gd.offsets), std::move(child), 0, rmm::device_buffer{});
     }
 
     // it's a leaf.  do a regular gather
@@ -347,7 +345,7 @@ struct column_gatherer_impl<list_view, MapItRoot> {
 
     // assemble final column
     return make_lists_column(
-      gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
+      gather_map_size, std::move(gd.offsets), std::move(child), 0, rmm::device_buffer{});
   }
 };
 
