@@ -53,20 +53,23 @@ struct interleave_columns_functor {
     auto d_table     = *table;
     auto num_strings = num_columns * strings_count;
 
-    std::pair<rmm::device_buffer, size_type> valid_mask{{}, 0};
-    if (create_mask) {
-      // Create resulting null mask
-      valid_mask = cudf::detail::valid_if(
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(num_strings),
-        [num_columns, d_table] __device__(size_type idx) {
-          auto source_row_idx = idx % num_columns;
-          auto source_col_idx = idx / num_columns;
-          return !d_table.column(source_row_idx).is_null(source_col_idx);
-        },
-        stream,
-        mr);
-    }
+    std::pair<rmm::device_buffer, size_type> valid_mask = [&] {
+      if (create_mask) {
+        // Create resulting null mask
+        return cudf::detail::valid_if(
+          thrust::make_counting_iterator<size_type>(0),
+          thrust::make_counting_iterator<size_type>(num_strings),
+          [num_columns, d_table] __device__(size_type idx) {
+            auto source_row_idx = idx % num_columns;
+            auto source_col_idx = idx / num_columns;
+            return !d_table.column(source_row_idx).is_null(source_col_idx);
+          },
+          stream,
+          mr);
+      } else {
+        return std::make_pair(rmm::device_buffer{0, stream, mr}, 0);
+      }
+    }();
 
     auto const null_count = valid_mask.second;
 
@@ -160,12 +163,9 @@ struct interleave_columns_functor {
                          func_value,
                          func_validity);
 
-    rmm::device_buffer mask;
-    size_type null_count;
+    auto mask_and_count = valid_if(index_begin, index_end, func_validity, stream, mr);
 
-    std::tie(mask, null_count) = valid_if(index_begin, index_end, func_validity, stream, mr);
-
-    output->set_null_mask(std::move(mask), null_count);
+    output->set_null_mask(std::move(mask_and_count.first), mask_and_count.second);
 
     return output;
   }

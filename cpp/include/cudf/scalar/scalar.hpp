@@ -254,7 +254,7 @@ class string_scalar : public scalar {
  public:
   using value_type = cudf::string_view;
 
-  string_scalar() : scalar(data_type(STRING)) {}
+  string_scalar()                           = default;
   ~string_scalar()                          = default;
   string_scalar(string_scalar&& other)      = default;
   string_scalar(string_scalar const& other) = default;
@@ -341,7 +341,7 @@ class string_scalar : public scalar {
   const char* data() const { return static_cast<const char*>(_data.data()); }
 
  protected:
-  rmm::device_buffer _data{};  ///< device memory containing the string
+  rmm::device_buffer _data{0};  ///< device memory containing the string
 };
 
 /**

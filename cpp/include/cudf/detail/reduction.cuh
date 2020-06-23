@@ -57,17 +57,10 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   rmm::device_scalar<OutputType> dev_result{identity, stream, mr};
 
   // Allocate temporary storage
-  rmm::device_buffer d_temp_storage;
   size_t temp_storage_bytes = 0;
-  cub::DeviceReduce::Reduce(d_temp_storage.data(),
-                            temp_storage_bytes,
-                            d_in,
-                            dev_result.data(),
-                            num_items,
-                            binary_op,
-                            identity,
-                            stream);
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+  cub::DeviceReduce::Reduce(
+    nullptr, temp_storage_bytes, d_in, dev_result.data(), num_items, binary_op, identity, stream);
+  rmm::device_buffer d_temp_storage{temp_storage_bytes, stream};
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
@@ -101,17 +94,10 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   rmm::device_scalar<OutputType> dev_result{identity, stream};
 
   // Allocate temporary storage
-  rmm::device_buffer d_temp_storage;
   size_t temp_storage_bytes = 0;
-  cub::DeviceReduce::Reduce(d_temp_storage.data(),
-                            temp_storage_bytes,
-                            d_in,
-                            dev_result.data(),
-                            num_items,
-                            binary_op,
-                            identity,
-                            stream);
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+  cub::DeviceReduce::Reduce(
+    nullptr, temp_storage_bytes, d_in, dev_result.data(), num_items, binary_op, identity, stream);
+  rmm::device_buffer d_temp_storage{temp_storage_bytes, stream};
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
@@ -178,9 +164,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   rmm::device_scalar<IntermediateType> intermediate_result{identity, stream};
 
   // Allocate temporary storage
-  rmm::device_buffer d_temp_storage;
   size_t temp_storage_bytes = 0;
-  cub::DeviceReduce::Reduce(d_temp_storage.data(),
+  cub::DeviceReduce::Reduce(nullptr,
                             temp_storage_bytes,
                             d_in,
                             intermediate_result.data(),
@@ -188,7 +173,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             binary_op,
                             identity,
                             stream);
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+  rmm::device_buffer d_temp_storage{temp_storage_bytes, stream};
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),

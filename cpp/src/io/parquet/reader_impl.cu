@@ -735,11 +735,13 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     const auto total_pages = count_page_headers(chunks, stream);
     if (total_pages > 0) {
       hostdevice_vector<gpu::PageInfo> pages(total_pages, total_pages, stream);
-      rmm::device_buffer decomp_page_data;
 
       decode_page_headers(chunks, pages, stream);
+
+      rmm::device_buffer decomp_page_data = (total_decompressed_size > 0)
+                                              ? decompress_page_data(chunks, pages, stream)
+                                              : rmm::device_buffer{0, stream};
       if (total_decompressed_size > 0) {
-        decomp_page_data = decompress_page_data(chunks, pages, stream);
         // Free compressed data
         for (size_t c = 0; c < chunks.size(); c++) {
           if (chunks[c].codec != parquet::Compression::UNCOMPRESSED && page_data[c].size() != 0) {

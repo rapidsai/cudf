@@ -66,7 +66,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
   children.emplace_back(std::move(keys_column));
   return std::make_unique<column>(data_type{DICTIONARY32},
                                   count,
-                                  rmm::device_buffer{},
+                                  rmm::device_buffer{0},
                                   std::move(null_mask),
                                   null_count,
                                   std::move(children));

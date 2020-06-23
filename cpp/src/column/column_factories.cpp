@@ -49,9 +49,12 @@ std::size_t size_of(data_type element_type)
 }
 
 // Empty column of specified type
-std::unique_ptr<column> make_empty_column(data_type type)
+std::unique_ptr<column> make_empty_column(
+  data_type type,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
-  return std::make_unique<column>(type, 0, rmm::device_buffer{});
+  return std::make_unique<column>(type, 0, rmm::device_buffer{0, stream, mr});
 }
 
 // Allocate storage for a specified number of numeric elements
@@ -195,7 +198,7 @@ std::unique_ptr<column> make_column_from_scalar(scalar const& s,
                                                 rmm::mr::device_memory_resource* mr,
                                                 cudaStream_t stream)
 {
-  if (size == 0) return make_empty_column(s.type());
+  if (size == 0) return make_empty_column(s.type(), stream, mr);
   return type_dispatcher(s.type(), column_from_scalar_dispatch{}, s, size, mr, stream);
 }
 

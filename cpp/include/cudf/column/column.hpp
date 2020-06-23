@@ -94,7 +94,7 @@ class column {
   column(data_type dtype,
          size_type size,
          B1&& data,
-         B2&& null_mask                                  = {},
+         B2&& null_mask                                  = rmm::device_buffer{0},
          size_type null_count                            = UNKNOWN_NULL_COUNT,
          std::vector<std::unique_ptr<column>>&& children = {})
     : _type{dtype},
@@ -305,12 +305,12 @@ class column {
   operator mutable_column_view() { return this->mutable_view(); };
 
  private:
-  data_type _type{EMPTY};           ///< Logical type of elements in the column
-  cudf::size_type _size{};          ///< The number of elements in the column
-  rmm::device_buffer _data{};       ///< Dense, contiguous, type erased device memory
-                                    ///< buffer containing the column elements
-  rmm::device_buffer _null_mask{};  ///< Bitmask used to represent null values.
-                                    ///< May be empty if `null_count() == 0`
+  data_type _type{EMPTY};            ///< Logical type of elements in the column
+  cudf::size_type _size{};           ///< The number of elements in the column
+  rmm::device_buffer _data{0};       ///< Dense, contiguous, type erased device memory
+                                     ///< buffer containing the column elements
+  rmm::device_buffer _null_mask{0};  ///< Bitmask used to represent null values.
+                                     ///< May be empty if `null_count() == 0`
   mutable size_type _null_count{UNKNOWN_NULL_COUNT};  ///< The number of null elements
   std::vector<std::unique_ptr<column>> _children{};   ///< Depending on element type, child
                                                       ///< columns may contain additional data

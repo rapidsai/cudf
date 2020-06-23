@@ -115,30 +115,31 @@ std::unique_ptr<column> copy_range(
 
     // create resulting null mask
 
-    std::pair<rmm::device_buffer, size_type> valid_mask{};
-    if (target.has_nulls()) {  // check validities for both source & target
-      valid_mask = cudf::detail::valid_if(
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(target.size()),
-        [source_validity_begin, d_target, target_begin, target_end] __device__(size_type idx) {
-          return (idx >= target_begin && idx < target_end)
-                   ? *(source_validity_begin + (idx - target_begin))
-                   : d_target.is_valid_nocheck(idx);
-        },
-        stream,
-        mr);
-    } else {  // check validities for source only
-      valid_mask = cudf::detail::valid_if(
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(target.size()),
-        [source_validity_begin, d_target, target_begin, target_end] __device__(size_type idx) {
-          return (idx >= target_begin && idx < target_end)
-                   ? *(source_validity_begin + (idx - target_begin))
-                   : true;
-        },
-        stream,
-        mr);
-    }
+    std::pair<rmm::device_buffer, size_type> valid_mask = [&]() {
+      if (target.has_nulls()) {  // check validities for both source & target
+        return cudf::detail::valid_if(
+          thrust::make_counting_iterator<size_type>(0),
+          thrust::make_counting_iterator<size_type>(target.size()),
+          [source_validity_begin, d_target, target_begin, target_end] __device__(size_type idx) {
+            return (idx >= target_begin && idx < target_end)
+                     ? *(source_validity_begin + (idx - target_begin))
+                     : d_target.is_valid_nocheck(idx);
+          },
+          stream,
+          mr);
+      } else {  // check validities for source only
+        return cudf::detail::valid_if(
+          thrust::make_counting_iterator<size_type>(0),
+          thrust::make_counting_iterator<size_type>(target.size()),
+          [source_validity_begin, d_target, target_begin, target_end] __device__(size_type idx) {
+            return (idx >= target_begin && idx < target_end)
+                     ? *(source_validity_begin + (idx - target_begin))
+                     : true;
+          },
+          stream,
+          mr);
+      }
+    }();
 
     auto null_count = valid_mask.second;
     rmm::device_buffer null_mask{0, stream, mr};

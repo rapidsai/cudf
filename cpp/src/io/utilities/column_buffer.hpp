@@ -69,6 +69,7 @@ struct column_buffer {
                 bool is_nullable                    = true,
                 cudaStream_t stream                 = 0,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    : _data{0, stream}, _null_mask{0, stream}
   {
     if (type.id() == type_id::STRING) {
       _strings.resize(size);
@@ -92,8 +93,8 @@ struct column_buffer {
   auto& null_count() { return _null_count; }
 
   rmm::device_vector<str_pair> _strings;
-  rmm::device_buffer _data{};
-  rmm::device_buffer _null_mask{};
+  rmm::device_buffer _data;
+  rmm::device_buffer _null_mask;
   size_type _null_count{0};
 };
 

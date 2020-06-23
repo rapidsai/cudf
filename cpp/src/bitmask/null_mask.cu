@@ -355,12 +355,11 @@ rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
   CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
                "Mask pointer cannot be null");
 
-  rmm::device_buffer dest_mask{};
   auto num_bytes = bitmask_allocation_size_bytes(mask_size);
 
   auto number_of_mask_words = num_bitmask_words(mask_size);
 
-  dest_mask = rmm::device_buffer{num_bytes, stream, mr};
+  rmm::device_buffer dest_mask{num_bytes, stream, mr};
 
   rmm::device_vector<bitmask_type const *> d_masks(masks);
   rmm::device_vector<size_type> d_begin_bits(begin_bits);
@@ -612,14 +611,15 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(begin_bit >= 0, "Invalid range.");
   CUDF_EXPECTS(begin_bit <= end_bit, "Invalid bit range.");
-  rmm::device_buffer dest_mask{};
-  auto num_bytes = bitmask_allocation_size_bytes(end_bit - begin_bit);
-  if ((mask == nullptr) || (num_bytes == 0)) { return dest_mask; }
+
+  auto const num_bytes = bitmask_allocation_size_bytes(end_bit - begin_bit);
+  if ((mask == nullptr) || (num_bytes == 0)) { return rmm::device_buffer{0, stream, mr}; }
+
   if (begin_bit == 0) {
-    dest_mask = rmm::device_buffer{static_cast<void const *>(mask), num_bytes, stream, mr};
+    return rmm::device_buffer{mask, num_bytes, stream, mr};
   } else {
     auto number_of_mask_words = num_bitmask_words(end_bit - begin_bit);
-    dest_mask                 = rmm::device_buffer{num_bytes, stream, mr};
+    rmm::device_buffer dest_mask{num_bytes, stream, mr};
     cudf::detail::grid_1d config(number_of_mask_words, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
       static_cast<bitmask_type *>(dest_mask.data()),
@@ -628,8 +628,8 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask,
       end_bit,
       number_of_mask_words);
     CHECK_CUDA(stream);
+    return dest_mask;
   }
-  return dest_mask;
 }
 
 // Create a bitmask from a column view

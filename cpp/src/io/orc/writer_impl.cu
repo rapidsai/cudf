@@ -151,7 +151,8 @@ class orc_column_view {
       _data(col.head<uint8_t>() + col.offset() * _type_width),
       _nulls(col.nullable() ? col.null_mask() : nullptr),
       _clockscale(to_clockscale<uint8_t>(col.type().id())),
-      _type_kind(to_orc_type(col.type().id()))
+      _type_kind(to_orc_type(col.type().id())),
+      _indexes(0, stream)
   {
     if (_string_type && _data_count > 0) {
       strings_column_view view{col};

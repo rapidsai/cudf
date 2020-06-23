@@ -96,7 +96,7 @@ DLDataType data_type_to_DLDataType(data_type type)
 struct dltensor_context {
   int64_t shape[2];
   int64_t strides[2];
-  rmm::device_buffer buffer;
+  rmm::device_buffer buffer{0};
 
   static void deleter(DLManagedTensor* arg)
   {

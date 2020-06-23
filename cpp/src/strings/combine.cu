@@ -430,13 +430,14 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                        }
                      });
 
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             (null_count) ? std::move(valid_mask.first) : rmm::device_buffer{},
-                             stream,
-                             mr);
+  return make_strings_column(
+    strings_count,
+    std::move(offsets_column),
+    std::move(chars_column),
+    null_count,
+    (null_count) ? std::move(valid_mask.first) : rmm::device_buffer{0, stream, mr},
+    stream,
+    mr);
 }
 
 }  // namespace detail
