@@ -679,7 +679,8 @@ def test_dataframe_assign_col():
 
 def test_dataframe_set_index():
     random.seed(0)
-    df = cudf.datasets.randomdata(9, dtypes={"str": str, "a": float, "b": int})
+    df = cudf.datasets.randomdata(26, dtypes={"a": float, "b": int})
+    df["str"] = list("abcdefghijklmnopqrstuvwxyz")
     pdf = df.to_pandas()
 
     ddf = dgd.from_cudf(df, npartitions=4)
