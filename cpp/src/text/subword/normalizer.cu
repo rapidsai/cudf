@@ -16,8 +16,8 @@
 
 #include <cudf/utilities/error.hpp>
 #include <text/subword/detail/cp_util.cuh>
+#include <text/subword/detail/data_normalizer.hpp>
 #include <text/subword/detail/tokenizer_utils.cuh>
-#include <text/subword/detail/tokenizers.hpp>
 
 #include <device_launch_parameters.h>
 #include <cub/device/device_scan.cuh>

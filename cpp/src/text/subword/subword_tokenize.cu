@@ -24,7 +24,7 @@
 #include <iostream>
 #include <vector>
 
-#include <text/subword/detail/tokenizers.hpp>
+#include <text/subword/detail/wordpiece_tokenizer.hpp>
 
 namespace nvtext {
 namespace detail {
@@ -131,15 +131,15 @@ std::unique_ptr<TokenizerResult> subword_tokenize(cudf::strings_column_view cons
 
   // Create tokenizer
   // nvtxRangePushA("create Tokenizer");
-  full_tokenizer tokenizer(filename_hashed_vocabulary,
-                           max_num_sentences,
-                           max_num_chars,
-                           max_rows_tensor,
-                           max_sequence_length,
-                           stride,
-                           do_truncate,
-                           do_lower,
-                           stream);
+  wordpiece_tokenizer tokenizer(filename_hashed_vocabulary,
+                                max_num_sentences,
+                                max_num_chars,
+                                max_rows_tensor,
+                                max_sequence_length,
+                                stride,
+                                do_truncate,
+                                do_lower,
+                                stream);
   // nvtxRangePop();
 
   // Run tokenizer

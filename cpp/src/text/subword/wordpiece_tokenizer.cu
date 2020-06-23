@@ -19,7 +19,7 @@
 #include <text/subword/detail/cp_data_vec.ah>
 #include <text/subword/detail/hash_utils.cuh>
 #include <text/subword/detail/tokenizer_utils.cuh>
-#include <text/subword/detail/tokenizers.hpp>
+#include <text/subword/detail/wordpiece_tokenizer.hpp>
 
 #include <device_launch_parameters.h>
 #include <cub/device/device_scan.cuh>
@@ -178,20 +178,20 @@ __global__ void mark_sentence_start_and_ends(uint32_t* code_points,
  * @param outer_hash_b_param: The b parameter for the outer hash
  * @param num_outer_bins: The number of bins for the outer hash
  */
-__global__ void kernel_word_piece_tokenizer(uint32_t* code_points,
-                                            uint64_t* hash_table,
-                                            uint64_t* bin_coefficients,
-                                            uint16_t* bin_offsets,
-                                            uint32_t* token_ids,
-                                            uint32_t* word_starts,
-                                            uint32_t* word_ends,
-                                            uint8_t* tokens_per_word,
-                                            uint16_t unk_token_id,
-                                            uint32_t max_word_length,
-                                            uint32_t total_words,
-                                            uint32_t outer_hash_a_param,
-                                            uint32_t outer_hash_b_param,
-                                            uint16_t num_outer_bins)
+__global__ void kernel_wordpiece_tokenizer(uint32_t* code_points,
+                                           uint64_t* hash_table,
+                                           uint64_t* bin_coefficients,
+                                           uint16_t* bin_offsets,
+                                           uint32_t* token_ids,
+                                           uint32_t* word_starts,
+                                           uint32_t* word_ends,
+                                           uint8_t* tokens_per_word,
+                                           uint16_t unk_token_id,
+                                           uint32_t max_word_length,
+                                           uint32_t total_words,
+                                           uint32_t outer_hash_a_param,
+                                           uint32_t outer_hash_b_param,
+                                           uint16_t num_outer_bins)
 {
   const uint32_t word_to_tokenize = blockDim.x * blockIdx.x + threadIdx.x;
 
@@ -259,27 +259,21 @@ __global__ void kernel_word_piece_tokenizer(uint32_t* code_points,
 
 }  // namespace
 
-full_tokenizer::full_tokenizer(std::string const& vocab_file,
-                               uint32_t max_num_sentences,
-                               uint32_t max_num_chars,
-                               uint32_t max_rows_final_tensor,
-                               uint32_t max_sequence_length,
-                               uint32_t stride,
-                               bool do_truncate,
-                               bool do_lower_case,
-                               cudaStream_t stream,
-                               uint32_t max_word_length)
+wordpiece_tokenizer::wordpiece_tokenizer(std::string const& vocab_file,
+                                         uint32_t max_num_sentences,
+                                         uint32_t max_num_chars,
+                                         uint32_t max_rows_final_tensor,
+                                         uint32_t max_sequence_length,
+                                         uint32_t stride,
+                                         bool do_truncate,
+                                         bool do_lower_case,
+                                         cudaStream_t stream,
+                                         uint32_t max_word_length)
   : max_sequence_length{max_sequence_length},
     max_word_length{max_word_length},
     stride(stride),
     do_truncate(do_truncate),
     normalizer(max_num_sentences, max_num_chars, cp_data, aux_data, do_lower_case, stream)
-// tokenizer(vocab_file, max_num_chars, max_word_length, stream)
-// tensor_tokenIDS(max_rows_final_tensor * max_sequence_length),
-// attention_mask(max_rows_final_tensor * max_sequence_length),
-// metadata(max_rows_final_tensor * 3),
-// device_row2log(max_rows_final_tensor),
-// device_row2row_within_log(max_rows_final_tensor)
 {
   detail::transfer_hash_info_to_device(vocab_file,
                                        device_hash_table,
@@ -292,7 +286,6 @@ full_tokenizer::full_tokenizer(std::string const& vocab_file,
                                        outer_hash_b_param,
                                        num_outer_bins);
 
-  
   const size_t max_new_char_total = MAX_NEW_CHARS * max_num_chars;
   device_token_ids.resize(max_new_char_total);
   const size_t device_word_indices_count = 2 * max_new_char_total;
@@ -322,79 +315,20 @@ full_tokenizer::full_tokenizer(std::string const& vocab_file,
   device_num_selected.resize(1);
 }
 
-std::pair<uint32_t*, uint32_t*> full_tokenizer::tokenize(const char* d_strings,
-                                                         const uint32_t* d_offsets,
-                                                         uint32_t num_strings,
-                                                         cudaStream_t stream)
+std::pair<uint32_t*, uint32_t*> wordpiece_tokenizer::tokenize(const char* d_strings,
+                                                              const uint32_t* d_offsets,
+                                                              uint32_t num_strings,
+                                                              cudaStream_t stream)
 {
   auto cps_and_offsets = normalizer.normalize(d_strings, d_offsets, num_strings, stream);
   tokenize(cps_and_offsets.first, cps_and_offsets.second, stream);
   // return cps_and_offsets;
   return std::make_pair(cps_and_offsets.first.gpu_ptr, cps_and_offsets.second.gpu_ptr);
-#if 0  
-  uint32_t* device_token_ids = cps_and_offsets.first.gpu_ptr;
-  uint32_t* device_offsets   = cps_and_offsets.second.gpu_ptr;
-
-  // copy log offsets to host
-  std::vector<uint32_t> host_offsets;
-  host_offsets.resize(num_strings + 1);
-  CUDA_TRY(cudaMemcpyAsync(host_offsets.data(),
-                           device_offsets,
-                           sizeof(uint32_t) * (num_strings + 1),
-                           cudaMemcpyDeviceToHost,
-                           stream));
-
-  // compute number of rows required for final tensor
-  nrows_tensor_tokenIDS = 0;
-  std::vector<uint32_t> nrows_per_log;
-  nrows_per_log.resize(num_strings);
-  for (uint32_t i = 0; i < num_strings; i++) {
-    uint32_t ntokens = host_offsets[i + 1] - host_offsets[i];
-    if (do_truncate || ntokens <= max_sequence_length)
-      nrows_per_log[i] = 1;
-    else {
-      ntokens -= max_sequence_length;
-      nrows_per_log[i] = 1 + (ntokens / stride);
-      if (ntokens % stride) nrows_per_log[i]++;
-    }
-    nrows_tensor_tokenIDS += nrows_per_log[i];
-  }
-  // compute global_row to log, and global_row to within_log_row correspondence
-  std::vector<uint32_t> host_row2log;
-  std::vector<uint32_t> host_row2row_within_log;
-  host_row2log.resize(nrows_tensor_tokenIDS);
-  host_row2row_within_log.resize(nrows_tensor_tokenIDS);
-  int row_id = 0;
-  for (uint32_t i = 0; i < num_strings; i++) {
-    for (uint32_t j = 0; j < nrows_per_log[i]; j++) {
-      host_row2log[row_id]            = i;
-      host_row2row_within_log[row_id] = j;
-      row_id++;
-    }
-  }
-
-  // copy info to GPU
-  device_row2log            = host_row2log;
-  device_row2row_within_log = host_row2row_within_log;
-
-  // compute final-tensor, mask, and metadata
-  compute_tensor_metadata_kernel<<<nrows_tensor_tokenIDS, max_sequence_length, 0, stream>>>(
-    device_token_ids,
-    device_offsets,
-    thrust::raw_pointer_cast(device_row2log.data()),
-    thrust::raw_pointer_cast(device_row2row_within_log.data()),
-    max_sequence_length,
-    stride,
-    do_truncate,
-    thrust::raw_pointer_cast(tensor_tokenIDS.data()),
-    thrust::raw_pointer_cast(attention_mask.data()),
-    thrust::raw_pointer_cast(metadata.data()));
-#endif
 }
 
-void full_tokenizer::tokenize(ptr_length_pair& cp_and_length,
-                              ptr_length_pair& offsets_and_length,
-                              cudaStream_t stream)
+void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
+                                   ptr_length_pair& offsets_and_length,
+                                   cudaStream_t stream)
 {
   uint32_t* device_code_points = cp_and_length.gpu_ptr;
   size_t num_code_points       = cp_and_length.length;
@@ -460,7 +394,7 @@ void full_tokenizer::tokenize(ptr_length_pair& cp_and_length,
 
   const uint32_t wp_threads_per_block = 64;
   const uint32_t num_wp_blocks = (num_words + wp_threads_per_block - 1) / wp_threads_per_block;
-  detail::kernel_word_piece_tokenizer<<<num_wp_blocks, wp_threads_per_block, 0, stream>>>(
+  detail::kernel_wordpiece_tokenizer<<<num_wp_blocks, wp_threads_per_block, 0, stream>>>(
     device_code_points,
     thrust::raw_pointer_cast(device_hash_table.data()),
     thrust::raw_pointer_cast(device_bin_coefficients.data()),
@@ -515,23 +449,6 @@ void full_tokenizer::tokenize(ptr_length_pair& cp_and_length,
 
   cp_and_length.length = total_token_ids;
 }
-
-// uint32_t full_tokenizer::get_nrows_tensor_tokenIDS() { return nrows_tensor_tokenIDS; }
-//
-// uint32_t* full_tokenizer::get_tensor_tokenIDS()
-//{
-//  return thrust::raw_pointer_cast(tensor_tokenIDS.data());
-//}
-//
-// uint32_t* full_tokenizer::get_attention_mask()
-//{
-//  return thrust::raw_pointer_cast(attention_mask.data());
-//}
-//
-// uint32_t* full_tokenizer::get_tensor_metadata()
-//{
-//  return thrust::raw_pointer_cast(metadata.data());
-//}
 
 }  // namespace detail
 }  // namespace nvtext
