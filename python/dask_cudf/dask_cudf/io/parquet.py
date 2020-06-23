@@ -46,7 +46,7 @@ class CudfEngine(ArrowEngine):
         else:
             (path, row_group, partition_keys) = piece
 
-        row_group_list=[row_group] if row_group is not None else None
+        row_group_list = [row_group] if row_group is not None else None
 
         strings_to_cats = kwargs.get("strings_to_categorical", False)
         if cudf.utils.ioutils._is_local_filesystem(fs):
