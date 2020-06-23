@@ -46,15 +46,13 @@ class CudfEngine(ArrowEngine):
         else:
             (path, row_group, partition_keys) = piece
 
-        row_groups = [row_group] if row_group is not None else None
-
         strings_to_cats = kwargs.get("strings_to_categorical", False)
         if cudf.utils.ioutils._is_local_filesystem(fs):
             df = cudf.read_parquet(
                 path,
                 engine="cudf",
                 columns=columns,
-                row_groups=row_groups,
+                row_groups=row_group,
                 strings_to_categorical=strings_to_cats,
                 **kwargs.get("read", {}),
             )
@@ -64,7 +62,7 @@ class CudfEngine(ArrowEngine):
                     f,
                     engine="cudf",
                     columns=columns,
-                    row_groups=row_groups,
+                    row_groups=row_group,
                     strings_to_categorical=strings_to_cats,
                     **kwargs.get("read", {}),
                 )
