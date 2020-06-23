@@ -282,33 +282,22 @@ def test_parquet_read_metadata(tmpdir, pdf):
 
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
-def test_parquet_read_row_group_concat(tmpdir, pdf, row_group_size):
+def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
+    if "col_category" in pdf.columns:
+        pdf = pdf.drop(columns=["col_category"])
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
 
     num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
     gdf = [
-        cudf.read_parquet([fname, fname], row_group_list=[[i], []])
+        cudf.read_parquet(fname, row_group_list=[i])
         for i in range(row_groups)
     ]
-    gdf = cudf.concat(gdf).reset_index(drop=True)
+    gdf = cudf.concat(gdf)
+    assert_eq(pdf.reset_index(drop=True), gdf.reset_index(drop=True))
 
-    if "col_category" in pdf.columns:
-        pdf = pdf.drop(columns=["col_category"])
-    if "col_category" in gdf.columns:
-        gdf = gdf.drop("col_category")
-
-    assert_eq(pdf.reset_index(drop=True), gdf, check_categorical=False)
-
-
-@pytest.mark.parametrize("row_group_size", [5, 10])
-def test_parquet_read_row_group_split(tmpdir, pdf, row_group_size):
-    fname = tmpdir.join("row_group.parquet")
-    pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
-
-    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
-
+    # first half rows come from the first source, rest from the second
     gdf = cudf.read_parquet(
         [fname, fname],
         row_group_list=[
@@ -316,14 +305,32 @@ def test_parquet_read_row_group_split(tmpdir, pdf, row_group_size):
             list(range(row_groups // 2, row_groups)),
         ],
     )
-    gdf = gdf.reset_index(drop=True)
+    assert_eq(pdf.reset_index(drop=True), gdf.reset_index(drop=True))
 
-    if "col_category" in pdf.columns:
-        pdf = pdf.drop(columns=["col_category"])
-    if "col_category" in gdf.columns:
-        gdf = gdf.drop("col_category")
 
-    assert_eq(pdf.reset_index(drop=True), gdf, check_categorical=False)
+@pytest.mark.parametrize("row_group_size", [1, 5, 100])
+def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
+    fname = tmpdir.join("row_group.parquet")
+    pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
+
+    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
+
+    # alternate rows between the two sources
+    gdf = cudf.read_parquet(
+        [fname, fname],
+        row_group_list=[
+            list(range(0, row_groups, 2)),
+            list(range(1, row_groups, 2)),
+        ],
+    )
+
+    ref_df = [
+        cudf.read_parquet(fname, row_group_list=[i])
+        for i in list(range(0, row_groups, 2)) + list(range(1, row_groups, 2))
+    ]
+    ref_df = cudf.concat(ref_df)
+
+    assert_eq(ref_df, gdf)
 
 
 @pytest.mark.parametrize("row_group_size", [1, 4, 33])
@@ -336,11 +343,6 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     num_rows = total_rows // 4
     skip_rows = (total_rows - num_rows) // 2
     gdf = cudf.read_parquet(fname, skip_rows=skip_rows, num_rows=num_rows)
-
-    if "col_category" in pdf.columns:
-        pdf = pdf.drop(columns=["col_category"])
-    if "col_category" in gdf.columns:
-        gdf = gdf.drop("col_category")
 
     for row in range(num_rows):
         assert gdf["col_int32"].iloc[row] == row + skip_rows
