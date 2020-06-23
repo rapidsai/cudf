@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
-#include <cudf/scalar/scalar.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
@@ -41,7 +41,10 @@ struct TextSubwordTest : public cudf::test::BaseFixture {
 
 TEST(TextSubwordTest, Tokenize)
 {
-  cudf::test::strings_column_wrapper sentences{"This is a test."};
+  uint32_t nrows = MAX_NUM_SENTENCES - 1;
+  std::vector<const char*> h_strings(nrows, "This is a test. A test this is.");
+  // for (auto idx = 0; idx < 100; ++idx) h_strings.push_back("This is a test. A test this is.");
+  cudf::test::strings_column_wrapper sentences(h_strings.begin(), h_strings.end());
   // create a fake hashed vocab text file for this test
   // this only works with words in the sentences above
   std::string hash_file = temp_env->get_temp_filepath("fake_hashed_vocab.txt");
@@ -52,17 +55,17 @@ TEST(TextSubwordTest, Tokenize)
     for (auto c : coefficients) outfile << c.first << " " << c.second << "\n";
     std::vector<uint64_t> hash_table(23, 0);
     outfile << hash_table.size() << "\n";
-    hash_table[0]  = 3015668L;
-    hash_table[1]  = 6205475701751155871L;
-    hash_table[5]  = 6358029;
-    hash_table[16] = 451412625363L;
-    hash_table[20] = 6206321707968235495L;
+    hash_table[0]  = 3015668L;              // based on values
+    hash_table[1]  = 6205475701751155871L;  // from the
+    hash_table[5]  = 6358029;               // bert_hash_table.txt
+    hash_table[16] = 451412625363L;         // file for the test
+    hash_table[20] = 6206321707968235495L;  // words above
     for (auto h : hash_table) outfile << h << "\n";
     outfile << "100\n101\n102\n\n";
   }
 
-  uint32_t max_sequence_length = 64;
-  uint32_t stride              = 48;
+  uint32_t max_sequence_length = 16;
+  uint32_t stride              = 16;
   uint32_t do_truncate         = 0;
   uint32_t do_lower            = 1;
 
@@ -76,40 +79,47 @@ TEST(TextSubwordTest, Tokenize)
                                          MAX_NUM_CHARS,
                                          MAX_ROWS_TENSOR);
 
-  std::vector<uint32_t> host_final_tensor;
-  std::vector<uint32_t> host_attn_mask;
-  std::vector<uint32_t> host_metadata;
-  host_final_tensor.resize(result->nrows_tensor * max_sequence_length);
-  host_attn_mask.resize(result->nrows_tensor * max_sequence_length);
-  host_metadata.resize(result->nrows_tensor * 3);
+  EXPECT_EQ(nrows, result->nrows_tensor);
 
-  cudaMemcpy(host_final_tensor.data(),
-             result->device_tensor_tokenIDS,
-             result->nrows_tensor * max_sequence_length * sizeof(uint32_t),
-             cudaMemcpyDeviceToHost);
-  cudaMemcpy(host_attn_mask.data(),
-             result->device_attention_mask,
-             result->nrows_tensor * max_sequence_length * sizeof(uint32_t),
-             cudaMemcpyDeviceToHost);
-  cudaMemcpy(host_metadata.data(),
-             result->device_tensor_metadata,
-             result->nrows_tensor * 3 * sizeof(uint32_t),
-             cudaMemcpyDeviceToHost);
+  cudf::column_view token_ids(cudf::data_type{cudf::type_id::UINT32},
+                              result->nrows_tensor * max_sequence_length,
+                              result->device_tensor_tokenIDS);
+  {
+    std::vector<uint32_t> base_data(
+      {2023, 2003, 1037, 3231, 1012, 1037, 3231, 2023, 2003, 1012, 0, 0, 0, 0, 0, 0});
+    std::vector<uint32_t> h_expected;
+    for (auto idx = 0; idx < nrows; ++idx)
+      h_expected.insert(h_expected.end(), base_data.begin(), base_data.end());
+    cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
+    cudf::test::expect_columns_equal(token_ids, expected);
+  }
 
-  std::vector<uint32_t> expected_tensor;
-  std::vector<uint32_t> expected_attn_mask;
-  std::vector<uint32_t> expected_metadata;
-  expected_tensor = {2023, 2003, 1037, 3231, 1012, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                     0,    0,    0,    0,    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                     0,    0,    0,    0,    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                     0,    0,    0,    0,    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  EXPECT_EQ(expected_tensor, host_final_tensor);
-  expected_attn_mask = {1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  EXPECT_EQ(expected_attn_mask, host_attn_mask);
-  expected_metadata = {0, 0, 4};
-  EXPECT_EQ(expected_metadata, host_metadata);
+  cudf::column_view attention_mask(cudf::data_type{cudf::type_id::UINT32},
+                                   result->nrows_tensor * max_sequence_length,
+                                   result->device_attention_mask);
+  {
+    std::vector<uint32_t> base_data({1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0});
+    std::vector<uint32_t> h_expected;
+    for (auto idx = 0; idx < nrows; ++idx)
+      h_expected.insert(h_expected.end(), base_data.begin(), base_data.end());
+    cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
+    cudf::test::expect_columns_equal(attention_mask, expected);
+  }
+
+  cudf::column_view metadata(cudf::data_type{cudf::type_id::UINT32},
+                             result->nrows_tensor * 3,
+                             result->device_tensor_metadata);
+  {
+    std::vector<uint32_t> h_expected;
+    for (auto idx = 0; idx < nrows; ++idx) {
+      // 0,0,9,1,0,9,2,0,9,3,0,9,4,0,9,5,0,9,6,0,9,7,0,9,8,0,9,9,0,9,...
+      h_expected.push_back(idx);
+      h_expected.push_back(0);
+      h_expected.push_back(9);
+    }
+    cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
+    cudf::test::expect_columns_equal(metadata, expected);
+  }
 
   // not sure how these are freed by the caller
   cudaFree(result->device_attention_mask);

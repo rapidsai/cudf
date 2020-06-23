@@ -15,6 +15,7 @@
  */
 
 //#include <cudf/detail/get_value.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 #include <nvtext/subword_tokenize.hpp>
 
@@ -31,10 +32,10 @@ namespace detail {
 namespace {
 
 __global__ void compute_tensor_metadata_kernel(  // input
-  uint32_t* token_ids,
-  uint32_t* offsets,
-  uint32_t* row2log,
-  uint32_t* row2row_within_log,
+  uint32_t const* token_ids,
+  uint32_t const* offsets,
+  uint32_t const* row2log,
+  uint32_t const* row2row_within_log,
   uint32_t max_sequence_length,
   uint32_t stride,
   bool do_truncate,
@@ -130,7 +131,7 @@ std::unique_ptr<TokenizerResult> subword_tokenize(cudf::strings_column_view cons
   auto d_chars     = sentences.chars().data<char>() + offset;
 
   // Create tokenizer
-  // nvtxRangePushA("create Tokenizer");
+  nvtxRangePushA("create tokenizer");
   wordpiece_tokenizer tokenizer(filename_hashed_vocabulary,
                                 max_num_sentences,
                                 max_num_chars,
@@ -140,40 +141,29 @@ std::unique_ptr<TokenizerResult> subword_tokenize(cudf::strings_column_view cons
                                 do_truncate,
                                 do_lower,
                                 stream);
-  // nvtxRangePop();
+  nvtxRangePop();
 
   // Run tokenizer
-  // nvtxRangePushA("Tokenize");
-  // tokenizer.tokenize(device_sentences, offsets, offset_size);
+  nvtxRangePushA("tokenize");
   std::pair<uint32_t*, uint32_t*> tokens =
     tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
-  // nvtxRangePop();
-
-  // Format output from tokenizer
-  // nvtxRangePushA("Tokenizer output");
-  uint32_t nrows_tensor_tokenIDS = 0;
-  rmm::device_vector<uint32_t> tensor_tokenIDS(max_rows_tensor * max_sequence_length);
-  rmm::device_vector<uint32_t> attention_mask(max_rows_tensor * max_sequence_length);
-  // on device (one row per tensor row, with 3 elements
-  // [rowID, starting_pos, stop_pos])
-  rmm::device_vector<uint32_t> metadata(max_rows_tensor * 3);
-
+  nvtxRangePop();
   uint32_t* device_token_ids = tokens.first;
   uint32_t* device_offsets   = tokens.second;
 
+  // Format output from tokenizer
+  nvtx3::thread_range rt{"tokenizer output"};
   // copy log offsets to host
-  std::vector<uint32_t> host_offsets;
-  host_offsets.resize(strings_count + 1);
+  std::vector<uint32_t> host_offsets(strings_count + 1);
   CUDA_TRY(cudaMemcpyAsync(host_offsets.data(),
                            device_offsets,
-                           sizeof(uint32_t) * (strings_count + 1),
+                           sizeof(uint32_t) * host_offsets.size(),
                            cudaMemcpyDeviceToHost,
                            stream));
 
   // compute number of rows required for final tensor
-  nrows_tensor_tokenIDS = 0;
-  std::vector<uint32_t> nrows_per_log;
-  nrows_per_log.resize(strings_count);
+  uint32_t nrows_tensor_tokenIDS = 0;
+  std::vector<uint32_t> nrows_per_log(strings_count);
   for (auto i = 0; i < strings_count; i++) {
     uint32_t ntokens = host_offsets[i + 1] - host_offsets[i];
     if (do_truncate || ntokens <= max_sequence_length)
@@ -186,10 +176,8 @@ std::unique_ptr<TokenizerResult> subword_tokenize(cudf::strings_column_view cons
     nrows_tensor_tokenIDS += nrows_per_log[i];
   }
   // compute global_row to log, and global_row to within_log_row correspondence
-  std::vector<uint32_t> host_row2log;
-  std::vector<uint32_t> host_row2row_within_log;
-  host_row2log.resize(nrows_tensor_tokenIDS);
-  host_row2row_within_log.resize(nrows_tensor_tokenIDS);
+  std::vector<uint32_t> host_row2log(nrows_tensor_tokenIDS);
+  std::vector<uint32_t> host_row2row_within_log(nrows_tensor_tokenIDS);
   int row_id = 0;
   for (auto i = 0; i < strings_count; i++) {
     for (uint32_t j = 0; j < nrows_per_log[i]; j++) {
@@ -201,46 +189,33 @@ std::unique_ptr<TokenizerResult> subword_tokenize(cudf::strings_column_view cons
 
   // copy info to GPU
   // correspondence between each row of tensor_tokenIDS and log_id
-  rmm::device_vector<uint32_t> device_row2log(max_rows_tensor);
+  rmm::device_vector<uint32_t> device_row2log = host_row2log;
   // correspondence between each row of tensor_tokenIDS and row number within a specific log
-  rmm::device_vector<uint32_t> device_row2row_within_log(max_rows_tensor);
-  device_row2log            = host_row2log;
-  device_row2row_within_log = host_row2row_within_log;
+  rmm::device_vector<uint32_t> device_row2row_within_log = host_row2row_within_log;
+  // output data
+  uint32_t* d_tensor_token_ids = 0;
+  uint32_t* d_attention_mask   = 0;
+  uint32_t* d_tensor_metadata  = 0;
+  // TODO use the 'mr' parameter to allocate these; need to find out how they are freed
+  cudaMalloc(&d_tensor_token_ids, nrows_tensor_tokenIDS * max_sequence_length * sizeof(uint32_t));
+  cudaMalloc(&d_attention_mask, nrows_tensor_tokenIDS * max_sequence_length * sizeof(uint32_t));
+  cudaMalloc(&d_tensor_metadata, nrows_tensor_tokenIDS * 3 * sizeof(uint32_t));
 
   // compute final-tensor, mask, and metadata
   compute_tensor_metadata_kernel<<<nrows_tensor_tokenIDS, max_sequence_length, 0, stream>>>(
     device_token_ids,
     device_offsets,
-    thrust::raw_pointer_cast(device_row2log.data()),
-    thrust::raw_pointer_cast(device_row2row_within_log.data()),
+    device_row2log.data().get(),
+    device_row2row_within_log.data().get(),
     max_sequence_length,
     stride,
     do_truncate,
-    thrust::raw_pointer_cast(tensor_tokenIDS.data()),
-    thrust::raw_pointer_cast(attention_mask.data()),
-    thrust::raw_pointer_cast(metadata.data()));
+    d_tensor_token_ids,
+    d_attention_mask,
+    d_tensor_metadata);
 
-  auto result          = std::make_unique<TokenizerResult>();
-  result->nrows_tensor = nrows_tensor_tokenIDS;  // tokenizer.get_nrows_tensor_tokenIDS();
-  // TODO use the 'mr' parameter to allocate these
-  cudaMalloc((void**)&result->device_tensor_tokenIDS,
-             result->nrows_tensor * max_sequence_length * sizeof(uint32_t));
-  cudaMalloc((void**)&result->device_attention_mask,
-             result->nrows_tensor * max_sequence_length * sizeof(uint32_t));
-  cudaMalloc((void**)&result->device_tensor_metadata, result->nrows_tensor * 3 * sizeof(uint32_t));
-  cudaMemcpy(result->device_tensor_tokenIDS,
-             tensor_tokenIDS.data().get(),  // tokenizer.get_tensor_tokenIDS(),
-             result->nrows_tensor * max_sequence_length * sizeof(uint32_t),
-             cudaMemcpyDeviceToDevice);
-  cudaMemcpy(result->device_attention_mask,
-             attention_mask.data().get(),  // tokenizer.get_attention_mask(),
-             result->nrows_tensor * max_sequence_length * sizeof(uint32_t),
-             cudaMemcpyDeviceToDevice);
-  cudaMemcpy(result->device_tensor_metadata,
-             metadata.data().get(),  // tokenizer.get_tensor_metadata(),
-             result->nrows_tensor * 3 * sizeof(uint32_t),
-             cudaMemcpyDeviceToDevice);
-  // nvtxRangePop();
+  auto result = std::make_unique<TokenizerResult>(
+    nrows_tensor_tokenIDS, d_tensor_token_ids, d_attention_mask, d_tensor_metadata);
   return result;
 }
 
@@ -257,6 +232,7 @@ std::unique_ptr<TokenizerResult> subword_tokenize(cudf::strings_column_view cons
                                                   uint32_t max_rows_tensor,
                                                   rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::subword_tokenize(sentences,
                                   vocabulary_hashed_filename,
                                   max_sequence_length,

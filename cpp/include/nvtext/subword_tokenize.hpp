@@ -29,6 +29,17 @@ struct TokenizerResult {
   uint32_t* device_tensor_tokenIDS{};  // how are these freed?
   uint32_t* device_attention_mask{};
   uint32_t* device_tensor_metadata{};
+
+  TokenizerResult(uint32_t nrows_tensor,
+                  uint32_t* d_tensor_token_ids,
+                  uint32_t* d_attention_masks,
+                  uint32_t* d_tensor_metadata)
+    : nrows_tensor{nrows_tensor},
+      device_tensor_tokenIDS{d_tensor_token_ids},
+      device_attention_mask{d_attention_masks},
+      device_tensor_metadata{d_tensor_metadata}
+  {
+  }
 };
 
 /**
