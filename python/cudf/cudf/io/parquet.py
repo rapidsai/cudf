@@ -9,6 +9,7 @@ from pyarrow.compat import guid
 import cudf
 import cudf._lib.parquet as libparquet
 from cudf.utils import ioutils
+from cudf.utils.dtypes import is_list_like
 
 
 def _get_partition_groups(df, partition_cols, preserve_index=False):
@@ -164,7 +165,7 @@ def read_parquet(
     filepath_or_buffer,
     engine="cudf",
     columns=None,
-    row_group_list=None,
+    row_groups=None,
     skip_rows=None,
     num_rows=None,
     strings_to_categorical=False,
@@ -176,14 +177,16 @@ def read_parquet(
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
-    if not isinstance(filepath_or_buffer, list):
+    if not is_list_like(filepath_or_buffer):
         filepath_or_buffer = [filepath_or_buffer]
 
-    # a list of row groups per source should be passed. If a single list is
-    # passed, wrap in into a list to make the list of lists that is expected
-    # for multiple sources
-    if row_group_list and not isinstance(row_group_list[0], list):
-        row_group_list = [row_group_list]
+    # a list of row groups per source should be passed. make the list of 
+    # lists that is expected for multiple sources
+    if row_groups is not None:
+        if not is_list_like(row_groups):
+            row_groups = [[row_groups]]
+        elif not is_list_like(row_groups[0]):
+            row_groups = [row_groups]
 
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
@@ -200,7 +203,7 @@ def read_parquet(
         return libparquet.read_parquet(
             filepaths_or_buffers,
             columns=columns,
-            row_group_lists=row_group_list,
+            row_groups=row_groups,
             skip_rows=skip_rows,
             num_rows=num_rows,
             strings_to_categorical=strings_to_categorical,

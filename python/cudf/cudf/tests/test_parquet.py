@@ -291,7 +291,7 @@ def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
     num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
     gdf = [
-        cudf.read_parquet(fname, row_group_list=[i]) for i in range(row_groups)
+        cudf.read_parquet(fname, row_groups=[i]) for i in range(row_groups)
     ]
     gdf = cudf.concat(gdf)
     assert_eq(pdf.reset_index(drop=True), gdf.reset_index(drop=True))
@@ -299,7 +299,7 @@ def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
     # first half rows come from the first source, rest from the second
     gdf = cudf.read_parquet(
         [fname, fname],
-        row_group_list=[
+        row_groups=[
             list(range(row_groups // 2)),
             list(range(row_groups // 2, row_groups)),
         ],
@@ -317,14 +317,14 @@ def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
     # alternate rows between the two sources
     gdf = cudf.read_parquet(
         [fname, fname],
-        row_group_list=[
+        row_groups=[
             list(range(0, row_groups, 2)),
             list(range(1, row_groups, 2)),
         ],
     )
 
     ref_df = [
-        cudf.read_parquet(fname, row_group_list=[i])
+        cudf.read_parquet(fname, row_groups=i)
         for i in list(range(0, row_groups, 2)) + list(range(1, row_groups, 2))
     ]
     ref_df = cudf.concat(ref_df)

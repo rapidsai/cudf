@@ -361,24 +361,24 @@ class aggregate_metadata {
   /**
    * @brief Filters and reduces down to a selection of row groups
    *
-   * @param row_group_lists Lists of row group to reads, one per source
+   * @param row_groups Lists of row group to reads, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
    *
    * @return List of row group indexes and its starting row
    */
-  auto select_row_groups(std::vector<std::vector<size_type>> const &row_group_lists,
+  auto select_row_groups(std::vector<std::vector<size_type>> const &row_groups,
                          size_type &row_start,
                          size_type &row_count) const
   {
-    if (!row_group_lists.empty()) {
+    if (!row_groups.empty()) {
       std::vector<row_group_info> selection;
-      CUDF_EXPECTS(row_group_lists.size() == per_file_metadata.size(),
+      CUDF_EXPECTS(row_groups.size() == per_file_metadata.size(),
                    "Must specify row groups for each source");
 
       row_count = 0;
-      for (size_t src_idx = 0; src_idx < row_group_lists.size(); ++src_idx) {
-        for (auto const &rowgroup_idx : row_group_lists[src_idx]) {
+      for (size_t src_idx = 0; src_idx < row_groups.size(); ++src_idx) {
+        for (auto const &rowgroup_idx : row_groups[src_idx]) {
           CUDF_EXPECTS(
             rowgroup_idx >= 0 &&
               rowgroup_idx < static_cast<size_type>(per_file_metadata[src_idx].row_groups.size()),
@@ -918,10 +918,10 @@ reader::~reader() = default;
 table_with_metadata reader::read_all(cudaStream_t stream) { return _impl->read(0, -1, {}, stream); }
 
 // Forward to implementation
-table_with_metadata reader::read_row_groups(
-  std::vector<std::vector<size_type>> const &row_group_lists, cudaStream_t stream)
+table_with_metadata reader::read_row_groups(std::vector<std::vector<size_type>> const &row_groups,
+                                            cudaStream_t stream)
 {
-  return _impl->read(0, -1, row_group_lists, stream);
+  return _impl->read(0, -1, row_groups, stream);
 }
 
 // Forward to implementation

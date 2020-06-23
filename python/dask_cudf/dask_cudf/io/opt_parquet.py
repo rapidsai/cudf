@@ -126,7 +126,7 @@ def _read_partition(part, index, columns, strings_to_cats):
 
     df = cudf.io.read_parquet(
         path,
-        row_group_list=row_groups,
+        row_groups=row_groups,
         columns=columns,
         strings_to_cats=strings_to_cats,
     )

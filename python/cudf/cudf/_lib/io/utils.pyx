@@ -16,7 +16,7 @@ import os
 
 # Converts the Python source input to libcudf++ IO source_info
 # with the appropriate type and source values
-cdef source_info make_source_info(src) except*:
+cdef source_info make_source_info(list src) except*:
     if not len(src):
         raise ValueError("Need to pass at least one source")
 
