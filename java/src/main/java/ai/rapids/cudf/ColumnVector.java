@@ -809,11 +809,47 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * <p>
    * Postconditions - A new vector is allocated with the result. The caller owns the vector and
    * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   * @return A new INT16 vector allocated on the GPU.
    */
   public ColumnVector second() {
     assert type.hasTimeResolution();
     return new ColumnVector(second(getNativeView()));
+  }
+
+  /**
+   * Get the day of the week from a timestamp.
+   * <p>
+   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
+   * is responsible for its lifecycle.
+   * @return A new INT16 vector allocated on the GPU. Monday=1, ..., Sunday=7
+   */
+  public ColumnVector weekDay() {
+    assert type.isTimestamp();
+    return new ColumnVector(weekDay(getNativeView()));
+  }
+
+  /**
+   * Get the date that is the last day of the month for this timestamp.
+   * <p>
+   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
+   * is responsible for its lifecycle.
+   * @return A new TIMESTAMP_DAYS vector allocated on the GPU.
+   */
+  public ColumnVector lastDayOfMonth() {
+    assert type.isTimestamp();
+    return new ColumnVector(lastDayOfMonth(getNativeView()));
+  }
+
+  /**
+   * Get the day of the year from a timestamp.
+   * <p>
+   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
+   * is responsible for its lifecycle.
+   * @return A new INT16 vector allocated on the GPU. The value is between [1, {365-366}]
+   */
+  public ColumnVector dayOfYear() {
+    assert type.isTimestamp();
+    return new ColumnVector(dayOfYear(getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2344,7 +2380,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * using the replace template for back-references.
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param pattern The regular expression patterns to search within each string.
-   * @param repl The replacement template for creating the output string.
+   * @param replace The replacement template for creating the output string.
    * @return native handle of the resulting cudf column containing the string results.
    */
   private static native long stringReplaceWithBackrefs(long columnView, String pattern,
@@ -2506,6 +2542,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long minute(long viewHandle) throws CudfException;
 
   private static native long second(long viewHandle) throws CudfException;
+
+  private static native long weekDay(long viewHandle) throws CudfException;
+
+  private static native long lastDayOfMonth(long viewHandle) throws CudfException;
+
+  private static native long dayOfYear(long viewHandle) throws CudfException;
 
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 
