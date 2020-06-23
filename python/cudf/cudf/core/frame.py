@@ -1254,7 +1254,8 @@ class Frame(libcudf.table.Table):
                     # Do not change the copy_data[name]
                     pass
 
-        result = self._from_table(Frame(copy_data, self.index))
+            result = self._from_table(Frame(copy_data, self._index))
+
         return result
 
     def _copy_categories(self, other, include_index=True):
