@@ -12,6 +12,44 @@ from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
+def _align_objs(objs, how="outer"):
+    """Align a set of Series or Dataframe objects.
+
+    Parameters
+    ----------
+    objs : list of DataFrame, Series, or Index
+
+    Returns
+    -------
+    A bool for if indexes have matched and a set of
+    reindexed and aligned objects ready for concatenation
+    """
+    # Check if multiindex then check if indexes match. GenericIndex
+    # returns ndarray tuple of bools requiring additional filter.
+    # Then check for duplicate index value.
+    i_objs = iter(objs)
+    first = next(i_objs)
+    match_index = all(first.index.equals(rest.index) for rest in i_objs)
+
+    if match_index:
+        return objs, True
+    else:
+        if not all(o.index.is_unique for o in objs):
+            raise ValueError("cannot reindex from a duplicate axis")
+
+        index = objs[0].index
+        for obj in objs[1:]:
+            name = index.name
+            index = (
+                cudf.DataFrame(index=obj.index)
+                .join(cudf.DataFrame(index=index), how=how)
+                .index
+            )
+            index.name = name
+
+        return [obj.reindex(index) for obj in objs], False
+
+
 def concat(objs, axis=0, ignore_index=False, sort=None):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
@@ -28,6 +66,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     -------
     A new object of like type with rows from each object in ``objs``.
     """
+
     if sort not in (None, False):
         raise NotImplementedError("sort parameter is not yet supported")
 
@@ -58,6 +97,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
+
         assert typs.issubset(allowed_typs)
         df = DataFrame()
 
@@ -70,8 +110,10 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
                     sr_name += 1
                 objs[idx] = o.to_frame(name=name)
 
+        objs, match_index = _align_objs(objs)
+
         for idx, o in enumerate(objs):
-            if idx == 0:
+            if not ignore_index and idx == 0:
                 df.index = o.index
             for col in o._data.names:
                 if col in df._data:
@@ -88,8 +130,14 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         for o in objs[1:]:
             result_columns = result_columns.append(o.columns)
 
-        df.columns = result_columns
-        return df
+        df.columns = result_columns.unique()
+        if ignore_index:
+            df.index = None
+            return df
+        elif not match_index:
+            return df.sort_index()
+        else:
+            return df
 
     typ = list(typs)[0]
 
