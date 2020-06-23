@@ -246,6 +246,56 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
 };
 
 /**
+ * @brief An owning class to represent a fixed_point number in device memory
+ *
+ * @ingroup scalar_classes
+ *
+ * @tparam T the data type of the fixed_point number
+ */
+template <typename T>
+class fixed_point_scalar : public detail::fixed_width_scalar<T> {
+  static_assert(is_fixed_point<T>(), "Unexpected non-fixed_point type.");
+
+ public:
+  fixed_point_scalar()                                = default;
+  ~fixed_point_scalar()                               = default;
+  fixed_point_scalar(fixed_point_scalar&& other)      = default;
+  fixed_point_scalar(fixed_point_scalar const& other) = default;
+  fixed_point_scalar& operator=(fixed_point_scalar const& other) = delete;
+  fixed_point_scalar& operator=(fixed_point_scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new fixed_point scalar object
+   *
+   * @param value The initial value of the scalar
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  fixed_point_scalar(T value,
+                     bool is_valid                       = true,
+                     cudaStream_t stream                 = 0,
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
+  {
+  }
+
+  /**
+   * @brief Construct a new fixed_point scalar object from existing device memory.
+   *
+   * @param[in] data The scalar's data in device memory
+   * @param[in] is_valid Whether the value held by the scalar is valid
+   */
+  fixed_point_scalar(rmm::device_scalar<T>&& data,
+                     bool is_valid                       = true,
+                     cudaStream_t stream                 = 0,
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
+  {
+  }
+};
+
+/**
  * @brief An owning class to represent a string in device memory
  *
  * @ingroup scalar_classes

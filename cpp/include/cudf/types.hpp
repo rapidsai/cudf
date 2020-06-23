@@ -63,6 +63,10 @@ class list_view;
 class scalar;
 template <typename T>
 class numeric_scalar;
+
+template <typename T>
+class fixed_point_scalar;
+
 class string_scalar;
 template <typename T>
 class timestamp_scalar;
@@ -71,6 +75,10 @@ class duration_scalar;
 
 template <typename T>
 class numeric_scalar_device_view;
+
+template <typename T>
+class fixed_point_scalar_device_view;
+
 class string_scalar_device_view;
 template <typename T>
 class timestamp_scalar_device_view;

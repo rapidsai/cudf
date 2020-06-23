@@ -176,8 +176,8 @@ struct type_to_scalar_type_impl<cudf::string_view> {
 
 template <>  // TODO: this is a temporary solution for make_pair_iterator
 struct type_to_scalar_type_impl<numeric::decimal32> {
-  using ScalarType       = cudf::numeric_scalar<numeric::decimal32>;
-  using ScalarDeviceType = cudf::numeric_scalar_device_view<numeric::decimal32>;
+  using ScalarType       = cudf::fixed_point_scalar<numeric::decimal32>;
+  using ScalarDeviceType = cudf::fixed_point_scalar_device_view<numeric::decimal32>;
 };
 
 template <>  // TODO: this is a temporary solution for make_pair_iterator
