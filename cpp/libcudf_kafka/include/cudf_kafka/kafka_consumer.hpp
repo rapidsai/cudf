@@ -35,17 +35,17 @@ class kafka_consumer : public cudf::io::datasource {
  public:
   /**
    * @brief Instantiate a Kafka consumer object. Documentation for librdkafka configurations can be
-   *found at https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+   * found at https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
    *
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client
    * @param topic_name name of the Kafka topic to consume from
    * @param partition partition index to consume from between `0` and `TOPIC_NUM_PARTITIONS - 1`
-   *inclusive
+   * inclusive
    * @param start_offset seek position for the specified TOPPAR (Topic/Partition combo)
    * @param end_offset position in the specified TOPPAR to read to
    * @param batch_timeout maximum (millisecond) read time allowed. If end_offset is not reached
-   *before batch_timeout, a smaller subset will be returned
+   * before batch_timeout, a smaller subset will be returned
    * @param delimiter optional delimiter to insert into the output between kafka messages, Ex: "\n"
    **/
   kafka_consumer(std::map<std::string, std::string> configs,
@@ -100,9 +100,9 @@ class kafka_consumer : public cudf::io::datasource {
   std::string buffer;
 
  private:
-  RdKafka::ErrorCode update_consumer_toppar_assignment(std::string const &topic,
-                                                       int partition,
-                                                       int64_t offset);
+  RdKafka::ErrorCode update_consumer_topic_partition_assignment(std::string const &topic,
+                                                                int partition,
+                                                                int64_t offset);
 
   /**
    * Convenience method for getting "now()" in Kafka's standard format

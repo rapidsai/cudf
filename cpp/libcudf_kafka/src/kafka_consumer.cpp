@@ -45,18 +45,12 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
     CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
                    kafka_conf->set(key_value.first, key_value.second, error_string),
                  "Invalid Kafka configuration");
-    std::string conf_val;
-    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group_id", conf_val),
-                 "Kafka group.id must be configured");
   }
 
   // Kafka 0.9 > requires group.id in the configuration
   std::string conf_val;
-  RdKafka::Conf::ConfResult conf_res = kafka_conf->get("group.id", conf_val);
-  if (conf_res == RdKafka::Conf::ConfResult::CONF_UNKNOWN) {
-    CUDF_FAIL(
-      "Kafka `group.id` was not supplied in its configuration and is required for operation");
-  }
+  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group_id", conf_val),
+               "Kafka group.id must be configured");
 
   std::string errstr;
   consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
@@ -86,9 +80,8 @@ size_t kafka_consumer::size() const { return buffer.size(); }
 /**
  * Change the TOPPAR assignment for this consumer instance
  **/
-RdKafka::ErrorCode kafka_consumer::update_consumer_toppar_assignment(std::string const &topic,
-                                                                     int partition,
-                                                                     int64_t offset)
+RdKafka::ErrorCode kafka_consumer::update_consumer_topic_partition_assignment(
+  std::string const &topic, int partition, int64_t offset)
 {
   std::vector<RdKafka::TopicPartition *> topic_partitions;
   topic_partitions.push_back(RdKafka::TopicPartition::create(topic, partition, offset));
@@ -97,7 +90,7 @@ RdKafka::ErrorCode kafka_consumer::update_consumer_toppar_assignment(std::string
 
 void kafka_consumer::consume_to_buffer()
 {
-  update_consumer_toppar_assignment(topic_name, partition, start_offset);
+  update_consumer_topic_partition_assignment(topic_name, partition, start_offset);
 
   int64_t messages_read = 0;
   auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(batch_timeout);
