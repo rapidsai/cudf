@@ -6,6 +6,7 @@ from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.vector cimport vector
 from libc.stdint cimport int32_t
+from libcpp.pair cimport pair
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_scalar
@@ -670,19 +671,19 @@ def scatter_to_table(
     cdef size_type num_output_rows = row_labels.max() + 1
     cdef size_type num_output_columns = column_labels.max() + 1
 
-    cdef unique_ptr[table] c_output
-    with nogil:
-        c_output = move(
-            cpp_copying.scatter_to_table(
-                input_view,
-                row_labels_view,
-                column_labels_view,
-                num_output_rows,
-                num_output_columns
-            )
-        )
+    cdef pair[unique_ptr[column], table_view] c_output
 
-    return Table.from_unique_ptr(
-        move(c_output),
+    with nogil:
+        c_output = move(cpp_copying.scatter_to_table(
+            input_view,
+            row_labels_view,
+            column_labels_view,
+            num_output_rows,
+            num_output_columns
+        ))
+
+    return Table.from_table_view(
+        c_output.second,
+        owner=Column.from_unique_ptr(move(c_output.first)),
         column_names=range(num_output_columns)
     )

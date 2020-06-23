@@ -744,7 +744,7 @@ std::unique_ptr<scalar> get_element(
  * @returns table with elements from `input` scattered to positions specified by
  * `row_indices` and `column_indices`.
  */
-std::unique_ptr<table> scatter_to_table(
+std::pair<std::unique_ptr<cudf::column>, cudf::table_view> scatter_to_table(
   column_view const& input,
   column_view const& row_labels,
   column_view const& column_labels,

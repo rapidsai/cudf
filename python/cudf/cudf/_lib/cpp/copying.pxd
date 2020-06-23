@@ -6,6 +6,7 @@ from libcpp cimport bool
 from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from libcpp.pair cimport pair
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport (
@@ -155,7 +156,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         size_type index
     ) except +
 
-    unique_ptr[table] scatter_to_table(
+    pair[unique_ptr[column], table_view] scatter_to_table(
         const column_view& input,
         const column_view& row_labels,
         const column_view& column_labels,
