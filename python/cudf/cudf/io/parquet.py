@@ -180,7 +180,7 @@ def read_parquet(
     if not is_list_like(filepath_or_buffer):
         filepath_or_buffer = [filepath_or_buffer]
 
-    # a list of row groups per source should be passed. make the list of 
+    # a list of row groups per source should be passed. make the list of
     # lists that is expected for multiple sources
     if row_groups is not None:
         if not is_list_like(row_groups):
