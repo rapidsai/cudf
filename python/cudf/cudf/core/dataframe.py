@@ -1039,7 +1039,13 @@ class DataFrame(Frame, Serializable):
                 upper_rows = int(nrows / 2.0) + 1
                 lower_rows = upper_rows + (nrows % 2)
             if len(self._data.names) > ncols:
-                right_cols = len(self._data.names) - int(ncols / 2.0) - 1
+                right_cols = len(self._data.names) - int(ncols / 2.0)
+                # adjust right columns for output if multiindex.
+                right_cols = (
+                    right_cols - 1
+                    if isinstance(self.index, cudf.MultiIndex)
+                    else right_cols
+                )
                 left_cols = int(ncols / 2.0) + 1
             if right_cols > 0:
                 # Pick ncols - left_cols number of columns
@@ -2369,8 +2375,16 @@ class DataFrame(Frame, Serializable):
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
 
         if idx is not None:
-            idx = idx if isinstance(idx, Index) else as_index(idx)
-            if df.index.dtype != idx.dtype:
+            idx = as_index(idx)
+
+            if isinstance(idx, cudf.core.MultiIndex):
+                idx_dtype_match = (
+                    df.index._source_data.dtypes == idx._source_data.dtypes
+                ).all()
+            else:
+                idx_dtype_match = df.index.dtype == idx.dtype
+
+            if not idx_dtype_match:
                 cols = cols if cols is not None else list(df.columns)
                 df = DataFrame()
             else:
