@@ -128,7 +128,8 @@ def _read_partition(part, index, columns, strings_to_cats):
         path,
         row_group_list=row_groups,
         columns=columns,
-        strings_to_cats=strings_to_cats)
+        strings_to_cats=strings_to_cats
+    )
 
     if index and (index[0] in df.columns):
         df = df.set_index(index[0])
