@@ -128,7 +128,7 @@ class full_tokenizer {
    *        input stream to lower case AND strip accents from those characters.
    *        If false, accented and uppercase characters are not transformed.
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   * @param max_inp_chars_per_word The length of the longest word that will be tokenized. Words
+   * @param max_word_length The length of the longest word that will be tokenized. Words
    *        longer than this will simply be replaced by the unknown token
    *        unk_token which was specified in the python script
    *        python/perfect_hash.py
@@ -141,8 +141,8 @@ class full_tokenizer {
                  uint32_t stride,
                  bool do_truncate,
                  bool do_lower_case,
-                 cudaStream_t stream        = 0,
-                 int max_inp_chars_per_word = 200);
+                 cudaStream_t stream      = 0,
+                 uint32_t max_word_length = 200);
 
   /**
    * @brief Splits the input text into token ids.
@@ -193,21 +193,21 @@ class full_tokenizer {
   uint32_t max_sequence_length;
   uint32_t stride;
   bool do_truncate;
+  uint32_t max_word_length;
 
   // hash table parameters
-  uint32_t outer_hash_a_param;
-  uint32_t outer_hash_b_param;
-  uint16_t num_outer_bins;
-  uint16_t unk_token_id;
-  uint16_t first_tok_id;
-  uint16_t sep_tok_id;
-  unsigned int max_word_length;
+  uint32_t outer_hash_a_param{};
+  uint32_t outer_hash_b_param{};
+  uint16_t num_outer_bins{};
+  uint16_t unk_token_id{};
+  uint16_t first_tok_id{};
+  uint16_t sep_tok_id{};
   rmm::device_vector<uint64_t> device_hash_table;
   rmm::device_vector<uint64_t> device_bin_coefficients;
   rmm::device_vector<uint16_t> device_bin_offsets;
 
   // pointers to device data needed for tokenization
-  rmm::device_vector<uint32_t> device_token_ids{};
+  rmm::device_vector<uint32_t> device_token_ids;
   rmm::device_vector<uint32_t> device_word_indices;
   rmm::device_vector<uint8_t> device_tokens_per_word;
 

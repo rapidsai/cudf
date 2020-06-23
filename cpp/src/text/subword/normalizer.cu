@@ -19,7 +19,9 @@
 #include <text/subword/detail/tokenizer_utils.cuh>
 #include <text/subword/detail/tokenizers.hpp>
 
-#include <cub/cub.cuh>
+#include <device_launch_parameters.h>
+#include <cub/device/device_scan.cuh>
+#include <cub/device/device_select.cuh>
 #include <string>
 #include <vector>
 
@@ -101,7 +103,7 @@ __device__ __forceinline__ uint32_t extract_code_points_from_utf8(
 }
 }  // namespace
 
-__global__ void kernel_basic_tokenizer(const unsigned char* sentences,
+__global__ void kernel_data_normalizer(const unsigned char* sentences,
                                        uint32_t* device_sentence_offsets,
                                        const size_t total_bytes,
                                        uint32_t* cp_metadata,
@@ -166,7 +168,7 @@ __global__ void kernel_basic_tokenizer(const unsigned char* sentences,
   BlockStore(temp_storage).Store(block_base, replacement_code_points);
 }
 
-basic_tokenizer::basic_tokenizer(uint32_t max_num_sentences,
+data_normalizer::data_normalizer(uint32_t max_num_sentences,
                                  uint32_t max_num_chars,
                                  std::vector<uint32_t> const& cp_metadata,
                                  std::vector<uint64_t> const& aux_table,
@@ -206,10 +208,8 @@ basic_tokenizer::basic_tokenizer(uint32_t max_num_sentences,
   device_num_selected.resize(1);
 }
 
-std::pair<ptr_length_pair, ptr_length_pair> basic_tokenizer::tokenize(const char* device_sentences_,
-                                                                      const uint32_t* offsets,
-                                                                      uint32_t offset_size,
-                                                                      cudaStream_t stream)
+std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(
+  const char* device_sentences_, const uint32_t* offsets, uint32_t offset_size, cudaStream_t stream)
 {
   ptr_length_pair cp_and_length;
   ptr_length_pair offset_and_length;
@@ -228,7 +228,7 @@ std::pair<ptr_length_pair, ptr_length_pair> basic_tokenizer::tokenize(const char
   const size_t max_new_char_total = MAX_NEW_CHARS * BLOCKS * THREADS_PER_BLOCK;
   size_t threads_on_device        = BLOCKS * THREADS_PER_BLOCK;
 
-  kernel_basic_tokenizer<<<BLOCKS, THREADS_PER_BLOCK, 0, stream>>>(
+  kernel_data_normalizer<<<BLOCKS, THREADS_PER_BLOCK, 0, stream>>>(
     (unsigned char*)device_sentences_,
     thrust::raw_pointer_cast(device_sentence_offsets.data()),
     sentences_size,  // sentence_offsets[offset_size],
