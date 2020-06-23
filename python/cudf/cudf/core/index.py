@@ -58,11 +58,33 @@ def _to_frame(this_index, index=True, name=None):
 
 
 class Index(Frame, Serializable):
-    def __new__(cls, data=None, dtype=None, name=None, **kwargs):
+    def __new__(
+        cls,
+        data=None,
+        dtype=None,
+        copy=False,
+        name=None,
+        tupleize_cols=True,
+        **kwargs,
+    ):
+        if tupleize_cols != True:
+            raise NotImplementedError(
+                "tupleize_cols != True is not yet supported"
+            )
 
+        if copy is True:
+            data = data.copy()
         return as_index(data, dtype=dtype, name=name, **kwargs)
 
-    def __init__(self, data=None, dtype=None, name=None, **kwargs):
+    def __init__(
+        self,
+        data=None,
+        dtype=None,
+        copy=False,
+        name=None,
+        tupleize_cols=True,
+        **kwargs,
+    ):
         """Immutable ndarray implementing an ordered, sliceable set.
         The basic object storing row labels for all cuDF objects.
 
@@ -72,8 +94,13 @@ class Index(Frame, Serializable):
             If it is a DataFrame, it will return a MultiIndex
         dtype : NumPy dtype (default: object)
             If dtype is None, we find the dtype that best fits the data.
+        copy : bool
+            Make a copy of input data.
         name : object
             Name to be stored in the index.
+        tupleize_cols : bool (default: True)
+            When True, attempt to create a MultiIndex if possible.
+            tupleize_cols == False is not yet supported.
 
         Returns
         -------
@@ -914,17 +941,34 @@ class Index(Frame, Serializable):
 
 
 class RangeIndex(Index):
-    def __new__(cls, start, stop=None, name=None):
-        """An iterable integer index defined by a starting value and ending value.
-        Can be sliced and indexed arbitrarily without allocating memory for the
-        complete structure.
+    """
+    Immutable Index implementing a monotonic integer range.
 
-        Parameters
-        ----------
-        start: The first value
-        stop: The last value
-        name: Name of the index
-        """
+    This is the default index type used by DataFrame and Series
+    when no explicit index is provided by the user.
+
+    Parameters
+    ----------
+    start : int (default: 0), or other RangeIndex instance
+    stop : int (default: 0)
+    name : object, optional
+        Name to be stored in the index.
+    copy : bool, default False
+        Unused, accepted for homogeneity with other index types.
+
+
+    Returns
+    -------
+    RangeIndex
+    """
+
+    def __new__(
+        cls, start, stop=None, step=None, dtype=None, copy=False, name=None
+    ) -> "RangeIndex":
+
+        if step is not None:
+            raise NotImplementedError("step is not yet supported")
+
         out = Frame.__new__(cls)
         if isinstance(start, range):
             therange = start
@@ -1247,7 +1291,7 @@ class GenericIndex(Index):
     def __initializer__(self, values, **kwargs):
         from cudf.core.series import Series
 
-        kwargs = _setdefault_name(values, kwargs)
+        kwargs = _setdefault_name(values, **kwargs)
 
         # normalize the input
         if isinstance(values, Series):
@@ -1412,23 +1456,77 @@ class GenericIndex(Index):
 
 
 class DatetimeIndex(GenericIndex):
-    # TODO this constructor should take a timezone or something to be
-    # consistent with pandas
-    def __new__(cls, values, **kwargs):
+    """
+    Immutable ndarray of datetime64 data, represented internally as int64.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional), optional
+        Optional datetime-like data to construct index with.
+    copy : bool
+        Make a copy of input ndarray.
+    freq : str, optional
+        This is not yet supported
+    tz : pytz.timezone or dateutil.tz.tzfile
+        This is not yet supported
+    ambiguous : ‘infer’, bool-ndarray, ‘NaT’, default ‘raise’
+        This is not yet supported
+    name : object
+        Name to be stored in the index.
+    dayfirst : bool, default False
+        If True, parse dates in data with the day first order.
+        This is not yet supported
+    yearfirst : bool, default False
+        If True parse dates in data with the year first order.
+        This is not yet supported
+    """
+
+    def __new__(
+        cls,
+        data=None,
+        freq=None,
+        tz=None,
+        normalize=False,
+        closed=None,
+        ambiguous="raise",
+        dayfirst=False,
+        yearfirst=False,
+        dtype=None,
+        copy=False,
+        name=None,
+    ) -> "DatetimeIndex":
         # we should be more strict on what we accept here but
         # we'd have to go and figure out all the semantics around
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
         out = Frame().__new__(cls)
-        kwargs = _setdefault_name(values, kwargs)
-        if isinstance(values, np.ndarray) and values.dtype.kind == "M":
-            values = column.as_column(values)
-        elif isinstance(values, pd.DatetimeIndex):
-            values = column.as_column(values.values)
-        elif isinstance(values, (list, tuple)):
-            values = column.as_column(np.array(values, dtype="<M8[ms]"))
-        out.__initializer__(values, **kwargs)
+
+        if freq != None:
+            raise NotImplementedError("Freq is not yet supported")
+        if tz != None:
+            raise NotImplementedError("tz is not yet supported")
+        if normalize is not False:
+            raise NotImplementedError("normalize == True is not yet supported")
+        if closed != None:
+            raise NotImplementedError("closed is not yet supported")
+        if ambiguous != "raise":
+            raise NotImplementedError("ambiguous is not yet supported")
+        if dayfirst is not True:
+            raise NotImplementedError("dayfirst == True is not yet supported")
+        if yearfirst is not True:
+            raise NotImplementedError("yearfirst == True is not yet supported")
+
+        if copy is True:
+            data = data.copy()
+        kwargs = _setdefault_name(data, name=name)
+        if isinstance(data, np.ndarray) and data.dtype.kind == "M":
+            data = column.as_column(data)
+        elif isinstance(data, pd.DatetimeIndex):
+            data = column.as_column(data.values)
+        elif isinstance(data, (list, tuple)):
+            data = column.as_column(np.array(data, dtype="<M8[ms]"))
+        out.__initializer__(data, **kwargs)
         return out
 
     @property
@@ -1481,39 +1579,83 @@ class CategoricalIndex(GenericIndex):
     """An categorical of orderable values that represent the indices of another
     Column
 
-    Attributes
+    Parameters
     ----------
-    _values: A CategoricalColumn object
-    name: A string
+    data : array-like (1-dimensional)
+        The values of the categorical. If categories are given, values not in categories will be replaced with None/NaN.
+    categories : list-like, optional
+        The categories for the categorical. Items need to be unique. If the categories are not given here (and also not in dtype), they will be inferred from the data.
+    ordered : bool, optional
+        Whether or not this categorical is treated as an ordered categorical. If not given here or in dtype, the resulting categorical will be unordered.
+    dtype : CategoricalDtype or “category”, optional
+        If CategoricalDtype, cannot be used together with categories or ordered.
+    copy : bool, default False
+        Make a copy of input ndarray.
+    name : object, optional
+        Name to be stored in the index.
+
+    Return
+    ------
+    CategoricalIndex
     """
 
-    def __new__(cls, values, **kwargs):
+    def __new__(
+        cls,
+        data=None,
+        categories=None,
+        ordered=None,
+        dtype=None,
+        copy=False,
+        name=None,
+    ) -> "CategoricalIndex":
+        if isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
+            if categories is not None or ordered is not None:
+                raise ValueError(
+                    "Cannot specify `categories` or `ordered` together with `dtype`."
+                )
+        if copy is True:
+            data = data.copy()
         out = Frame().__new__(cls)
-        kwargs = _setdefault_name(values, kwargs)
-        if isinstance(values, CategoricalColumn):
-            values = values
-        elif isinstance(values, pd.Series) and (
-            is_categorical_dtype(values.dtype)
+        kwargs = _setdefault_name(data, name=name)
+        if isinstance(data, CategoricalColumn):
+            data = data
+        elif isinstance(data, pd.Series) and (
+            is_categorical_dtype(data.dtype)
         ):
-            codes_data = column.as_column(values.cat.codes.values)
-            values = column.build_categorical_column(
-                categories=values.cat.categories,
+            codes_data = column.as_column(data.cat.codes.values)
+            data = column.build_categorical_column(
+                categories=data.cat.categories,
                 codes=codes_data,
-                ordered=values.cat.ordered,
+                ordered=data.cat.ordered,
             )
-        elif isinstance(values, (pd.Categorical, pd.CategoricalIndex)):
-            codes_data = column.as_column(values.codes)
-            values = column.build_categorical_column(
-                categories=values.categories,
+        elif isinstance(data, (pd.Categorical, pd.CategoricalIndex)):
+            codes_data = column.as_column(data.codes)
+            data = column.build_categorical_column(
+                categories=data.categories,
                 codes=codes_data,
-                ordered=values.ordered,
+                ordered=data.ordered,
             )
-        elif isinstance(values, (list, tuple)):
-            values = column.as_column(
-                pd.Categorical(values, categories=values)
+        else:
+            data = column.as_column(
+                data, dtype="category" if dtype is None else dtype
             )
+            # dtype has already been taken care
+            dtype = None
 
-        out.__initializer__(values, **kwargs)
+        if categories is not None:
+            data.cat().set_categories(
+                categories, ordered=ordered, inplace=True
+            )
+        elif isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
+            data.cat().set_categories(
+                dtype.categories, ordered=ordered, inplace=True
+            )
+        elif ordered is True and data.ordered is False:
+            data.cat().as_ordered(inplace=True)
+        elif ordered is False and data.ordered is True:
+            data.cat().as_unordered(inplace=True)
+
+        out.__initializer__(data, **kwargs)
 
         return out
 
@@ -1543,7 +1685,7 @@ class StringIndex(GenericIndex):
 
     def __new__(cls, values, **kwargs):
         out = Frame().__new__(cls)
-        kwargs = _setdefault_name(values, kwargs)
+        kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
             values = values.copy()
         elif isinstance(values, StringIndex):
@@ -1609,7 +1751,7 @@ def as_index(arbitrary, **kwargs):
         - GenericIndex for all other inputs.
     """
 
-    kwargs = _setdefault_name(arbitrary, kwargs)
+    kwargs = _setdefault_name(arbitrary, **kwargs)
 
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
@@ -1641,10 +1783,79 @@ def as_index(arbitrary, **kwargs):
     )
 
 
-def _setdefault_name(values, kwargs):
+def _setdefault_name(values, **kwargs):
     if "name" not in kwargs:
         if not hasattr(values, "name"):
             kwargs.setdefault("name", None)
         else:
             kwargs.setdefault("name", values.name)
     return kwargs
+
+
+def Int64Index(data=None, dtype="int64", copy=False, name=None):
+    """Immutable ndarray implementing an ordered, sliceable set.
+    The basic object storing row labels for all cuDF objects.
+    Int64Index is a special case of Index with purely integer labels.
+
+    Parameters:
+    -----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype (default: int64)
+            If dtype is None, we find the dtype that best fits the data.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Index
+    """
+
+    return Index(data=data, dtype=dtype, copy=copy, name=name)
+
+
+def UInt64Index(data=None, dtype="uint64", copy=False, name=None):
+    """Immutable ndarray implementing an ordered, sliceable set.
+    The basic object storing row labels for all cuDF objects.
+    UInt64Index is a special case of Index with purely unsigned integer labels.
+
+    Parameters:
+    -----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype (default: uint64)
+        If dtype is None, we find the dtype that best fits the data.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Index
+    """
+
+    return Index(data=data, dtype=dtype, copy=copy, name=name)
+
+
+def Float64Index(data=None, dtype="float64", copy=False, name=None):
+    """Immutable ndarray implementing an ordered, sliceable set.
+    The basic object storing row labels for all cuDF objects.
+    Float64Index is a special case of Index with purely float labels.
+
+    Parameters:
+    -----------
+    data : array-like (1-dimensional)
+    dtype : NumPy dtype (default: float64)
+        If dtype is None, we find the dtype that best fits the data.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    Index
+    """
+
+    return Index(data=data, dtype=dtype, copy=copy, name=name)

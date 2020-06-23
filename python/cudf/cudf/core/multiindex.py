@@ -20,18 +20,53 @@ class MultiIndex(Index):
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
 
-    Properties
-    ---
-    levels: Labels for each category in the index hierarchy.
-    codes: Assignment of individual items into the categories of the hierarchy.
-    names: Name for each level
+    Parameters
+    ----------
+    levels : sequence of arrays
+        The unique labels for each level.
+    labels : sequence of arrays
+        labels is depreciated, please use levels
+    codes: sequence of arrays
+        Integers for each level designating which label at each location.
+    sortorder : optional int
+        Not yet supported
+    names: optional sequence of objects
+        Names for each of the index levels.
+    copy : bool, default False
+        Copy the meta-data.
+    verify_integrity : bool, default True
+        Check that the levels/codes are consistent and valid.
+        Not yet supported
+
+    Returns
+    -------
+    MultiIndex
     """
 
     def __new__(
-        cls, levels=None, codes=None, labels=None, names=None, **kwargs
-    ):
+        cls,
+        levels=None,
+        codes=None,
+        sortorder=None,
+        labels=None,
+        names=None,
+        dtype=None,
+        copy=False,
+        name=None,
+        **kwargs,
+    ) -> "MultiIndex":
         from cudf.core.series import Series
         from cudf import DataFrame
+
+        if copy is True:
+            levels = levels.copy()
+            codes = codes.copy()
+
+        if sortorder is not None:
+            NotImplemented("sortorder is not yet supported")
+
+        if name is not None:
+            NotImplemented("Use `names`, `name` is not yet supported")
 
         out = Frame().__new__(cls)
         super(Index, out).__init__()
