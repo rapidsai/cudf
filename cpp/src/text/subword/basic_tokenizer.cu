@@ -30,10 +30,10 @@ namespace {
 #define SORT_BIT 22
 #define THREADS_PER_BLOCK 64
 
-/*
-  Returns true if the byte passed in could be a valid head byte for
-  a utf8 character.
-*/
+/**
+ * @brief Returns true if the byte passed in could be a valid head byte for
+ * a utf8 character. That is, not binary `10xxxxxx`
+ */
 __device__ __forceinline__ bool is_head_byte(unsigned char utf8_byte)
 {
   return (utf8_byte >> 6) != 2;
@@ -121,17 +121,17 @@ __global__ void kernel_basic_tokenizer(const unsigned char* sentences,
   if (char_for_thread < total_bytes) {
     const uint32_t code_point =
       extract_code_points_from_utf8(sentences, char_for_thread, head_byte);
-    const uint32_t thr_cp_metadata = get_cp_metadata(cp_metadata, code_point);
+    const uint32_t metadata = get_cp_metadata(cp_metadata, code_point);
 
-    if (head_byte && !should_remove_cp(thr_cp_metadata, do_lower_case)) {
+    if (head_byte && !should_remove_cp(metadata, do_lower_case)) {
       num_new_chars = 1;
       // Apply lower cases and accent stripping if necessary
-      const bool replacement_needed = do_lower_case || always_replace(thr_cp_metadata);
-      uint32_t new_cp = replacement_needed ? get_first_cp(thr_cp_metadata) : code_point;
-      new_cp          = new_cp == 0 ? code_point : new_cp;
+      const bool replacement_needed = do_lower_case || always_replace(metadata);
+      uint32_t new_cp               = replacement_needed ? get_first_cp(metadata) : code_point;
+      new_cp                        = new_cp == 0 ? code_point : new_cp;
 
       replacement_code_points[0] = new_cp;
-      if (do_lower_case && is_multi_char_transform(thr_cp_metadata)) {
+      if (do_lower_case && is_multi_char_transform(metadata)) {
         uint64_t next_cps                = get_extra_cps(aux_table, code_point);
         replacement_code_points[1]       = static_cast<uint32_t>(next_cps >> 32);
         const uint32_t potential_next_cp = static_cast<uint32_t>(next_cps);
@@ -140,7 +140,7 @@ __global__ void kernel_basic_tokenizer(const unsigned char* sentences,
         num_new_chars = 2 + (potential_next_cp != 0);
       }
 
-      if (should_add_spaces(thr_cp_metadata, do_lower_case)) {
+      if (should_add_spaces(metadata, do_lower_case)) {
         // Need to shift all existing code-points up one
         for (int loc = num_new_chars; loc > 0; --loc) {
           replacement_code_points[loc] = replacement_code_points[loc - 1];

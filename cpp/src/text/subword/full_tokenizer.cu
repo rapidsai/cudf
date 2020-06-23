@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <text/subword/detail/cp_data.h>
 #include <cudf/utilities/error.hpp>
 #include <text/subword/detail/hash_utils.cuh>
 #include <text/subword/detail/tokenizer_utils.cuh>
@@ -24,81 +25,6 @@
 
 namespace nvtext {
 namespace detail {
-
-__global__ void compute_tensor_metadata_kernel(  // input
-  uint32_t* token_ids,
-  uint32_t* offsets,
-  uint32_t* row2log,
-  uint32_t* row2row_within_log,
-  uint32_t max_sequence_length,
-  uint32_t stride,
-  bool do_truncate,
-  // output
-  uint32_t* final_tensor,
-  uint32_t* attn_mask,
-  uint32_t* metadata)
-{
-  uint32_t absolute_row_id      = blockIdx.x;
-  uint32_t log_id               = row2log[absolute_row_id];
-  uint32_t row_within_log       = row2row_within_log[absolute_row_id];
-  uint32_t offset_token_ids_log = offsets[log_id];
-  uint32_t n_tokens_log         = offsets[log_id + 1] - offset_token_ids_log;
-  bool last_row_of_log =
-    (absolute_row_id == gridDim.x - 1) || (row2log[absolute_row_id + 1] != log_id);
-
-  uint32_t row_offset_token_ids = offset_token_ids_log;
-  if (row_within_log) row_offset_token_ids += max_sequence_length;
-  for (int i = 1; i < row_within_log; i++) row_offset_token_ids += stride;
-
-  if (row_within_log == 0) {
-    if (threadIdx.x < n_tokens_log) {
-      // copy token ids
-      final_tensor[absolute_row_id * max_sequence_length + threadIdx.x] =
-        token_ids[row_offset_token_ids + threadIdx.x];
-      attn_mask[absolute_row_id * max_sequence_length + threadIdx.x] = 1;
-    } else {
-      // pad with 0
-      final_tensor[absolute_row_id * max_sequence_length + threadIdx.x] = 0;
-      attn_mask[absolute_row_id * max_sequence_length + threadIdx.x]    = 0;
-    }
-  } else {
-    uint32_t n_replicates = max_sequence_length - stride;
-    if ((row_offset_token_ids - n_replicates + threadIdx.x) <
-        (offset_token_ids_log + n_tokens_log)) {
-      // replicate elements or copy new tokens
-      final_tensor[absolute_row_id * max_sequence_length + threadIdx.x] =
-        token_ids[row_offset_token_ids - n_replicates + threadIdx.x];
-      attn_mask[absolute_row_id * max_sequence_length + threadIdx.x] = 1;
-    } else {
-      // pad with 0
-      final_tensor[absolute_row_id * max_sequence_length + threadIdx.x] = 0;
-      attn_mask[absolute_row_id * max_sequence_length + threadIdx.x]    = 0;
-    }
-  }
-
-  // write metadata
-  if (threadIdx.x == 0) {
-    metadata[absolute_row_id * 3] = log_id;
-    if (row_within_log == 0)
-      metadata[absolute_row_id * 3 + 1] = 0;
-    else
-      metadata[absolute_row_id * 3 + 1] = (max_sequence_length - stride) / 2;
-    if (last_row_of_log) {
-      if (n_tokens_log < max_sequence_length)
-        metadata[absolute_row_id * 3 + 2] = n_tokens_log - 1;
-      else {
-        if (!do_truncate)
-          metadata[absolute_row_id * 3 + 2] =
-            (max_sequence_length - stride) + (n_tokens_log - max_sequence_length) % stride - 1;
-        else
-          // truncate
-          metadata[absolute_row_id * 3 + 2] = (max_sequence_length - 1);
-      }
-    } else
-      metadata[absolute_row_id * 3 + 2] =
-        max_sequence_length - (max_sequence_length - stride) / 2 - 1;
-  }
-}
 
 full_tokenizer::full_tokenizer(std::string const& vocab_file,
                                uint32_t max_num_sentences,
@@ -113,41 +39,83 @@ full_tokenizer::full_tokenizer(std::string const& vocab_file,
   : max_sequence_length(max_sequence_length),
     stride(stride),
     do_truncate(do_truncate),
-    basic(max_num_sentences, max_num_chars, cp_data, aux_data, do_lower_case, stream),
-    word_piece(vocab_file, max_num_chars, max_inp_chars_per_word, stream),
-    tensor_tokenIDS(max_rows_final_tensor * max_sequence_length),
-    attention_mask(max_rows_final_tensor * max_sequence_length),
-    metadata(max_rows_final_tensor * 3),
-    device_row2log(max_rows_final_tensor),
-    device_row2row_within_log(max_rows_final_tensor)
+    normalizer(max_num_sentences, max_num_chars, cp_data, aux_data, do_lower_case, stream)
+// tokenizer(vocab_file, max_num_chars, max_inp_chars_per_word, stream)
+// tensor_tokenIDS(max_rows_final_tensor * max_sequence_length),
+// attention_mask(max_rows_final_tensor * max_sequence_length),
+// metadata(max_rows_final_tensor * 3),
+// device_row2log(max_rows_final_tensor),
+// device_row2row_within_log(max_rows_final_tensor)
 {
+  detail::transfer_hash_info_to_device(vocab_file,
+                                       device_hash_table,
+                                       device_bin_coefficients,
+                                       device_bin_offsets,
+                                       unk_token_id,
+                                       first_tok_id,
+                                       sep_tok_id,
+                                       outer_hash_a_param,
+                                       outer_hash_b_param,
+                                       num_outer_bins);
+
+  max_word_length = max_inp_chars_per_word;
+
+  const size_t max_new_char_total = MAX_NEW_CHARS * max_num_chars;
+  device_token_ids.resize(max_new_char_total);
+  const size_t device_word_indices_count = 2 * max_new_char_total;
+  device_word_indices.resize(device_word_indices_count);
+
+  const size_t four_byte_cp_chunks = 1 + (max_new_char_total - 1) / sizeof(uint32_t);
+  const size_t rounded_num_cps     = sizeof(uint32_t) * four_byte_cp_chunks;
+  device_tokens_per_word.resize(rounded_num_cps);
+
+  // Determine temporary device storage requirements for cub
+  static NotEqual select_op(std::numeric_limits<uint32_t>::max());
+  size_t temp_storage_bytes = 0, temp_storage_bytes_2 = 0;
+  cub::DeviceSelect::If(nullptr,
+                        temp_storage_bytes,
+                        device_word_indices.data().get(),
+                        device_word_indices.data().get(),
+                        device_num_selected.data().get(),
+                        2 * max_new_char_total,
+                        select_op);
+  cub::DeviceScan::InclusiveSum(nullptr,
+                                temp_storage_bytes_2,
+                                device_tokens_per_word.data().get(),
+                                device_word_indices.data().get(),
+                                max_new_char_total);
+  max_cub_storage_bytes = std::max(temp_storage_bytes, temp_storage_bytes_2);
+  cub_temp_storage.resize(max_cub_storage_bytes);
+  device_num_selected.resize(1);
 }
 
-void full_tokenizer::tokenize(const char* device_sentences,
-                              const uint32_t* offsets,
-                              uint32_t offset_size,
-                              cudaStream_t stream)
+std::pair<uint32_t*, uint32_t*> full_tokenizer::tokenize(const char* d_strings,
+                                                         const uint32_t* d_offsets,
+                                                         uint32_t num_strings,
+                                                         cudaStream_t stream)
 {
-  auto cps_and_offsets = basic.tokenize(device_sentences, offsets, offset_size, stream);
-  word_piece.tokenize(cps_and_offsets.first, cps_and_offsets.second, stream);
+  auto cps_and_offsets = normalizer.normalize(d_strings, d_offsets, num_strings, stream);
+  tokenize(cps_and_offsets.first, cps_and_offsets.second, stream);
   // return cps_and_offsets;
+  return std::make_pair(cps_and_offsets.first.gpu_ptr, cps_and_offsets.second.gpu_ptr);
+#if 0  
   uint32_t* device_token_ids = cps_and_offsets.first.gpu_ptr;
   uint32_t* device_offsets   = cps_and_offsets.second.gpu_ptr;
 
   // copy log offsets to host
   std::vector<uint32_t> host_offsets;
-  host_offsets.resize(offset_size + 1);
+  host_offsets.resize(num_strings + 1);
   CUDA_TRY(cudaMemcpyAsync(host_offsets.data(),
                            device_offsets,
-                           sizeof(uint32_t) * (offset_size + 1),
+                           sizeof(uint32_t) * (num_strings + 1),
                            cudaMemcpyDeviceToHost,
                            stream));
 
   // compute number of rows required for final tensor
   nrows_tensor_tokenIDS = 0;
   std::vector<uint32_t> nrows_per_log;
-  nrows_per_log.resize(offset_size);
-  for (uint32_t i = 0; i < offset_size; i++) {
+  nrows_per_log.resize(num_strings);
+  for (uint32_t i = 0; i < num_strings; i++) {
     uint32_t ntokens = host_offsets[i + 1] - host_offsets[i];
     if (do_truncate || ntokens <= max_sequence_length)
       nrows_per_log[i] = 1;
@@ -164,7 +132,7 @@ void full_tokenizer::tokenize(const char* device_sentences,
   host_row2log.resize(nrows_tensor_tokenIDS);
   host_row2row_within_log.resize(nrows_tensor_tokenIDS);
   int row_id = 0;
-  for (uint32_t i = 0; i < offset_size; i++) {
+  for (uint32_t i = 0; i < num_strings; i++) {
     for (uint32_t j = 0; j < nrows_per_log[i]; j++) {
       host_row2log[row_id]            = i;
       host_row2row_within_log[row_id] = j;
@@ -188,24 +156,25 @@ void full_tokenizer::tokenize(const char* device_sentences,
     thrust::raw_pointer_cast(tensor_tokenIDS.data()),
     thrust::raw_pointer_cast(attention_mask.data()),
     thrust::raw_pointer_cast(metadata.data()));
+#endif
 }
 
-uint32_t full_tokenizer::get_nrows_tensor_tokenIDS() { return nrows_tensor_tokenIDS; }
-
-uint32_t* full_tokenizer::get_tensor_tokenIDS()
-{
-  return thrust::raw_pointer_cast(tensor_tokenIDS.data());
-}
-
-uint32_t* full_tokenizer::get_attention_mask()
-{
-  return thrust::raw_pointer_cast(attention_mask.data());
-}
-
-uint32_t* full_tokenizer::get_tensor_metadata()
-{
-  return thrust::raw_pointer_cast(metadata.data());
-}
+// uint32_t full_tokenizer::get_nrows_tensor_tokenIDS() { return nrows_tensor_tokenIDS; }
+//
+// uint32_t* full_tokenizer::get_tensor_tokenIDS()
+//{
+//  return thrust::raw_pointer_cast(tensor_tokenIDS.data());
+//}
+//
+// uint32_t* full_tokenizer::get_attention_mask()
+//{
+//  return thrust::raw_pointer_cast(attention_mask.data());
+//}
+//
+// uint32_t* full_tokenizer::get_tensor_metadata()
+//{
+//  return thrust::raw_pointer_cast(metadata.data());
+//}
 
 }  // namespace detail
 }  // namespace nvtext
