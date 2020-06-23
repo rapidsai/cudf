@@ -3948,12 +3948,6 @@ class StringColumn(column.ColumnBase):
                 / self.base_children[0].dtype.itemsize
             )
 
-    def min(self, dtype=None):
-        return libcudf.reduce.reduce("min", self, dtype=dtype)
-
-    def max(self, dtype=None):
-        return libcudf.reduce.reduce("max", self, dtype=dtype)
-
     def sum(self, dtype=None):
         return self.str().cat()
 
@@ -3961,12 +3955,9 @@ class StringColumn(column.ColumnBase):
         raise TypeError("can't multiply sequence by non-int of type 'object'")
 
     def mean(self, dtype=np.float64):
-        cat_result = self.str().cat()
-        try:
-            cat_result = float(cat_result)
-        except ValueError:
-            raise TypeError(f"Could not convert {cat_result} to numeric")
-        return cat_result / len(self)
+        raise NotImplementedError(
+            "mean for Series of type 'object' is not yet implemented."
+        )
 
     def var(self, ddof=1, dtype=np.float64):
         raise TypeError("unsupported operation for object of type 'object'")

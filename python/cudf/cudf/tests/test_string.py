@@ -2297,54 +2297,10 @@ def test_str_sum(data):
     assert_eq(psr.sum(), sr.sum())
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        ["1", "2", "3", "4", "5"],
-        ["1"],
-        ["1", "2", "3", "4", "5.10"],
-        ["546.4554", "34", "34534", "43534"],
-        ["3443", "4354", "545.45", "4554", "5454"],
-    ],
-)
-def test_str_mean(data):
-    psr = pd.Series(data)
-    sr = Series(data)
+def test_str_mean():
+    sr = Series(["a", "b", "c", "d", "e"])
 
-    assert_eq(psr.mean(), sr.mean())
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        ["a", "b", "c", "d", "e"],
-        ["a", "z", ".", '"', "aa", "zz"],
-        ["aa", "zz"],
-        ["z", "a", "zz", "aa"],
-        [""],
-        ["a"],
-        ["hello"],
-        ["small text", "this is a larger text......"],
-        ["👋🏻", "🔥", "🥇"],
-        ["This is 💯", "here is a calendar", "📅"],
-        ["", ".", ";", "[", "]"],
-        ["\t", ".", "\n", "\n\t", "\t\n"],
-        ["1.0", "2.0", "3"],
-    ],
-)
-def test_str_mean_error(data):
-    psr = pd.Series(data)
-    sr = Series(data)
-    error_type = None
-    try:
-        psr.mean()
-    except Exception as e:
-        error_type = type(e)
-
-    if error_type is None:
-        raise AssertionError("psr.mean() should've failed")
-
-    with pytest.raises(error_type):
+    with pytest.raises(NotImplementedError):
         sr.mean()
 
 
