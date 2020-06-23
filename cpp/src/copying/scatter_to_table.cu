@@ -37,7 +37,7 @@ struct index_pair_to_index {
 
 template <typename MapIterator>
 struct column_to_table_scatterer {
-  template <typename Element, std::enable_if_t<is_fixed_width<Element>()>* = nullptr>
+  template <typename Element>
   std::pair<std::unique_ptr<column>, table_view> operator()(column_view const& input,
                                                             MapIterator row_labels_begin,
                                                             MapIterator row_labels_end,
@@ -49,8 +49,18 @@ struct column_to_table_scatterer {
                                                             cudaStream_t stream) const
   {
     // Generate a column of all nulls:
-    auto target_column = make_fixed_width_column(
-      input.type(), num_output_columns * num_output_rows, mask_state::ALL_NULL, stream);
+    std::unique_ptr<column> target_column;
+    if (input.type() == data_type{STRING}) {
+      target_column =
+        std::make_unique<column>(input.type(),
+                                 num_output_rows * num_output_columns,
+                                 rmm::device_buffer{0, stream, mr},
+                                 create_null_mask(input.size(), mask_state::ALL_NULL, stream, mr),
+                                 num_output_rows * num_output_columns);
+    } else {
+      target_column = make_fixed_width_column(
+        input.type(), num_output_columns * num_output_rows, mask_state::ALL_NULL, stream);
+    }
 
     auto target_table = table_view{{target_column->view()}};
 
@@ -72,20 +82,6 @@ struct column_to_table_scatterer {
     table_view result_table_view{cudf::split(result_column->view(), splits)};
 
     return std::make_pair(std::move(result_column), result_table_view);
-  }
-
-  template <typename Element, std::enable_if_t<not is_fixed_width<Element>()>* = nullptr>
-  std::pair<std::unique_ptr<column>, table_view> operator()(column_view const& input,
-                                                            MapIterator row_labels_begin,
-                                                            MapIterator row_labels_end,
-                                                            MapIterator column_labels_begin,
-                                                            MapIterator column_labels_end,
-                                                            size_type num_output_rows,
-                                                            size_type num_output_columns,
-                                                            rmm::mr::device_memory_resource* mr,
-                                                            cudaStream_t stream) const
-  {
-    CUDF_FAIL("");
   }
 };
 
