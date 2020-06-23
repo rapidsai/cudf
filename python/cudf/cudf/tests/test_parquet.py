@@ -23,7 +23,19 @@ def datadir(datadir):
 
 @pytest.fixture(params=[1, 5, 10, 100])
 def simple_pdf(request):
-    types = ["bool", "int8", "int16", "int32", "int64", "float32", "float64"]
+    types = [
+        "bool",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        # "uint32", pandas promotes uint32 to int64
+        "uint64",
+        "float32",
+        "float64",
+    ]
     renamer = {
         "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
     }
