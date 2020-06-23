@@ -401,6 +401,7 @@
 - PR #4883 Fix series get/set to match pandas
 - PR #4861 Fix to_integers illegal-memory-access with all-empty strings column
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
+- PR #4879 Fix output for `cudf.concat` with `axis=1` for pandas parity 
 - PR #4838 Fix to support empty inputs to `replace` method
 - PR #4859 JSON reader: fix data type inference for string columns
 - PR #4868 Temporary fix to skip validation on Dask related runs
@@ -443,6 +444,7 @@
 - PR #5103 Fix `read_csv` issue with names and header
 - PR #5090 Fix losing nulls while creating DataFrame from dictionary
 - PR #5089 Return false for sign-only string in libcudf is_float and is_integer
+- PR #5124 `DataFrame.rename` support for renaming indexes w/ default for `index`
 - PR #5108 Fix float-to-string convert for -0.0
 - PR #5111 Fix header not being included in legacy jit transform.
 - PR #5115 Fix hex-to-integer logic when string has prefix '0x'
