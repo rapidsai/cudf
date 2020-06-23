@@ -291,8 +291,7 @@ def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
     num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
     gdf = [
-        cudf.read_parquet(fname, row_group_list=[i])
-        for i in range(row_groups)
+        cudf.read_parquet(fname, row_group_list=[i]) for i in range(row_groups)
     ]
     gdf = cudf.concat(gdf)
     assert_eq(pdf.reset_index(drop=True), gdf.reset_index(drop=True))
