@@ -53,10 +53,6 @@ static void BM_cuda_tokenizer_cudf(benchmark::State& state)
                                            MAX_NUM_SENTENCES,
                                            MAX_NUM_CHARS,
                                            MAX_ROWS_TENSOR);
-    // not sure how these are freed by the caller
-    cudaFree(result->device_attention_mask);
-    cudaFree(result->device_tensor_metadata);
-    cudaFree(result->device_tensor_tokenIDS);
   }
 }
 BENCHMARK(BM_cuda_tokenizer_cudf);

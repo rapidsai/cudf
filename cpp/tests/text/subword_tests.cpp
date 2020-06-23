@@ -79,11 +79,11 @@ TEST(TextSubwordTest, Tokenize)
                                          MAX_NUM_CHARS,
                                          MAX_ROWS_TENSOR);
 
-  EXPECT_EQ(nrows, result->nrows_tensor);
+  EXPECT_EQ(nrows, result.nrows_tensor);
 
   cudf::column_view token_ids(cudf::data_type{cudf::type_id::UINT32},
-                              result->nrows_tensor * max_sequence_length,
-                              result->device_tensor_tokenIDS);
+                              result.nrows_tensor * max_sequence_length,
+                              result.device_tensor_tokenIDS->data());
   {
     std::vector<uint32_t> base_data(
       {2023, 2003, 1037, 3231, 1012, 1037, 3231, 2023, 2003, 1012, 0, 0, 0, 0, 0, 0});
@@ -95,8 +95,8 @@ TEST(TextSubwordTest, Tokenize)
   }
 
   cudf::column_view attention_mask(cudf::data_type{cudf::type_id::UINT32},
-                                   result->nrows_tensor * max_sequence_length,
-                                   result->device_attention_mask);
+                                   result.nrows_tensor * max_sequence_length,
+                                   result.device_attention_mask->data());
   {
     std::vector<uint32_t> base_data({1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0});
     std::vector<uint32_t> h_expected;
@@ -107,8 +107,8 @@ TEST(TextSubwordTest, Tokenize)
   }
 
   cudf::column_view metadata(cudf::data_type{cudf::type_id::UINT32},
-                             result->nrows_tensor * 3,
-                             result->device_tensor_metadata);
+                             result.nrows_tensor * 3,
+                             result.device_tensor_metadata->data());
   {
     std::vector<uint32_t> h_expected;
     for (auto idx = 0; idx < nrows; ++idx) {
@@ -120,9 +120,4 @@ TEST(TextSubwordTest, Tokenize)
     cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
     cudf::test::expect_columns_equal(metadata, expected);
   }
-
-  // not sure how these are freed by the caller
-  cudaFree(result->device_attention_mask);
-  cudaFree(result->device_tensor_metadata);
-  cudaFree(result->device_tensor_tokenIDS);
 }
