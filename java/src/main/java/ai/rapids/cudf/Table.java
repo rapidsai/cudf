@@ -943,7 +943,7 @@ public final class Table implements AutoCloseable {
   /**
    * Joins two tables all of the left against all of the right. Be careful as this
    * gets very big and you can easily use up all of the GPUs memory.
-   * @param right teh right table
+   * @param right the right table
    * @return the joined table.  The order of the columns returned will be left columns,
    * right columns.
    */
