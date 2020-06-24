@@ -39,7 +39,7 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));
   children.emplace_back(std::move(child_column));
-  return std::make_unique<column>(cudf::data_type{LIST},
+  return std::make_unique<column>(cudf::data_type{type_id::LIST},
                                   num_rows,
                                   rmm::device_buffer{0, stream, mr},
                                   null_mask,

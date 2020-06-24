@@ -25,7 +25,7 @@ def test_series_invert(dtype):
     np.testing.assert_equal((~sr).to_array(), ~arr)
 
 
-@pytest.mark.parametrize("dtype", utils.INTEGER_TYPES | {"bool"})
+@pytest.mark.parametrize("dtype", utils.INTEGER_TYPES + ["bool"])
 def test_series_not(dtype):
     import pandas as pd
 
