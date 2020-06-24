@@ -33,7 +33,7 @@ class MultiIndex(Index):
     names: optional sequence of objects
         Names for each of the index levels.
     copy : bool, default False
-        Copy the meta-data.
+        Copy the meta-data. Not yet supported
     verify_integrity : bool, default True
         Check that the levels/codes are consistent and valid.
         Not yet supported
@@ -75,10 +75,6 @@ class MultiIndex(Index):
         from cudf.core.series import Series
         from cudf import DataFrame
 
-        if copy is True:
-            levels = levels.copy()
-            codes = codes.copy()
-
         if sortorder is not None:
             NotImplemented("sortorder is not yet supported")
 
@@ -87,6 +83,9 @@ class MultiIndex(Index):
 
         out = Frame().__new__(cls)
         super(Index, out).__init__()
+
+        if copy is True and isinstance(codes, DataFrame):
+            codes = codes.copy()
 
         out._name = None
 
