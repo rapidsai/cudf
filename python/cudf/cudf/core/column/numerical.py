@@ -315,13 +315,6 @@ class NumericalColumn(column.ColumnBase):
             else:
                 fill_value = fill_value.astype(self.dtype)
         result = libcudf.replace.replace_nulls(self, fill_value)
-        result = column.build_column(
-            result.base_data,
-            result.dtype,
-            mask=None,
-            offset=result.offset,
-            size=result.size,
-        )
 
         return result
 
