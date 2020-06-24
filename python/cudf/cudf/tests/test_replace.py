@@ -707,3 +707,31 @@ def test_multiindex_clip(lower, upper, inplace):
         assert_eq(df, index.to_frame(index=False))
     else:
         assert_eq(expected, got.to_frame(index=False))
+
+
+@pytest.mark.parametrize(
+    "data", [[1, 2.0, 3, 4, None, 1, None, 10, None], ["a", "b", "c"]]
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        None,
+        [1, 2, 3],
+        ["a", "b", "z"],
+        ["a", "b", "c", "d", "e", "f", "g", "l", "m"],
+    ],
+)
+@pytest.mark.parametrize("value", [[1, 2, 3, 4, None, 1, None, 10, None]])
+def test_series_fillna(data, index, value):
+    psr = pd.Series(
+        data,
+        index=index if index is not None and len(index) == len(data) else None,
+    )
+    gsr = Series(
+        data,
+        index=index if index is not None and len(index) == len(data) else None,
+    )
+
+    expect = psr.fillna(pd.Series(value))
+    got = gsr.fillna(Series(value))
+    assert_eq(expect, got)
