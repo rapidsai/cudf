@@ -4248,18 +4248,25 @@ class DataFrame(Frame, Serializable):
             outdf = {}  # this dict will just hold Nones
         else:
             outdf = self.copy()
-
-        if not is_dict_like(value):
+        if isinstance(value, cudf.Series):
+            value = dict.fromkeys(value.index, value)
+        elif isinstance(value, cudf.DataFrame):
+            if not self.index.equals(value.index):
+                value = value.reindex(self.index)
+            else:
+                value = value
+        elif not is_dict_like(value):
             value = dict.fromkeys(self.columns, value)
 
         for k in value:
-            outdf[k] = self[k].fillna(
-                value[k],
-                method=method,
-                axis=axis,
-                inplace=inplace,
-                limit=limit,
-            )
+            if k in outdf:
+                outdf[k] = self[k].fillna(
+                    value[k],
+                    method=method,
+                    axis=axis,
+                    inplace=inplace,
+                    limit=limit,
+                )
 
         if not inplace:
             return outdf
@@ -6202,6 +6209,36 @@ class DataFrame(Frame, Serializable):
         )
         df.columns = self.columns
         return df
+
+    def keys(self):
+        """
+        Get the columns.
+        This is index for Series, columns for DataFrame.
+        Returns
+        -------
+        Index
+            Columns of DataFrame.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'one' : [1, 2, 3], 'five' : ['a', 'b', 'c']})
+        >>> df
+        one five
+        0    1    a
+        1    2    b
+        2    3    c
+        >>> df.keys()
+        Index(['one', 'five'], dtype='object')
+        >>> df = cudf.DataFrame(columns=[0, 1, 2, 3])
+        >>> df
+        Empty DataFrame
+        Columns: [0, 1, 2, 3]
+        Index: []
+        >>> df.keys()
+        Int64Index([0, 1, 2, 3], dtype='int64')
+        """
+        return self.columns
 
 
 def from_pandas(obj, nan_as_null=None):
