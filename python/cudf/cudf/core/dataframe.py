@@ -4248,6 +4248,7 @@ class DataFrame(Frame, Serializable):
             outdf = {}  # this dict will just hold Nones
         else:
             outdf = self.copy()
+
         if isinstance(value, cudf.Series):
             value = dict.fromkeys(value.index, value)
         elif isinstance(value, cudf.DataFrame):
@@ -4259,7 +4260,7 @@ class DataFrame(Frame, Serializable):
             value = dict.fromkeys(self.columns, value)
 
         for k in value:
-            if k in outdf:
+            if k in self:
                 outdf[k] = self[k].fillna(
                     value[k],
                     method=method,
