@@ -97,7 +97,7 @@ struct DeviceMin {
             typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity()
   {
-    return std::numeric_limits<T>::max();
+    return std::numeric_limits<T>::max();  // #TODO #TOREVIEW
   }
 
   // @brief identity specialized for string_view
