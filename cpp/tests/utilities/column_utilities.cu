@@ -428,6 +428,19 @@ struct column_view_printer {
   }
 
   template <typename Element,
+            typename std::enable_if_t<std::is_same<Element, numeric::decimal32>::value>* = nullptr>
+  void operator()(cudf::column_view const& col,
+                  std::vector<std::string>& out,
+                  std::string const& indent)
+  {
+    out.resize(col.size());
+    std::transform(thrust::make_counting_iterator(size_type{0}),
+                   thrust::make_counting_iterator(col.size()),
+                   out.begin(),
+                   [](auto idx) { return std::string(":p"); });  // #TODO
+  }
+
+  template <typename Element,
             typename std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
