@@ -46,7 +46,7 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         EQUAL "cudf::null_equality::EQUAL"
         UNEQUAL "cudf::null_equality::UNEQUAL"
 
-    cdef enum type_id:
+    ctypedef enum type_id "cudf::type_id":
         EMPTY "cudf::type_id::EMPTY"
         INT8  "cudf::type_id::INT8"
         INT16 "cudf::type_id::INT16"

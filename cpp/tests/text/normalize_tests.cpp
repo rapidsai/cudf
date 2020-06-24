@@ -65,7 +65,7 @@ TEST_F(TextNormalizeTest, Normalize)
 
 TEST_F(TextNormalizeTest, NormalizeEmptyTest)
 {
-  auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
+  auto strings = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
   cudf::strings_column_view strings_view(strings->view());
   auto const results = nvtext::normalize_spaces(strings_view);
   EXPECT_EQ(results->size(), 0);

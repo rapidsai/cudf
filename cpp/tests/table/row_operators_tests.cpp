@@ -16,7 +16,6 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>

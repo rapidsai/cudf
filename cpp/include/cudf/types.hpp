@@ -181,8 +181,8 @@ enum class interpolation : int32_t {
 /**
  * @brief Identifies a column's logical element type
  **/
-enum type_id {
-  EMPTY = 0,               ///< Always null with no underlying data
+enum class type_id : int32_t {
+  EMPTY,                   ///< Always null with no underlying data
   INT8,                    ///< 1 byte signed integer
   INT16,                   ///< 2 byte signed integer
   INT32,                   ///< 4 byte signed integer
@@ -239,7 +239,7 @@ class data_type {
   CUDA_HOST_DEVICE_CALLABLE type_id id() const noexcept { return _id; }
 
  private:
-  type_id _id{EMPTY};
+  type_id _id{type_id::EMPTY};
   // Store additional type specific metadata, timezone, decimal precision and
   // scale, etc.
 };

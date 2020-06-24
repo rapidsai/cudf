@@ -81,7 +81,7 @@ std::unique_ptr<cudf::column> normalize_spaces(
   cudaStream_t stream                 = 0)
 {
   cudf::size_type strings_count = strings.size();
-  if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::STRING});
+  if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
   // create device column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
