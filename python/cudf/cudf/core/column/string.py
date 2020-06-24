@@ -3997,9 +3997,11 @@ class StringColumn(column.ColumnBase):
             )
         dtype = np.dtype(dtype)
         str_byte_offset = self.base_children[0][self.offset]
+        str_end_byte_offset = self.base_children[0][self.offset + self.size]
         char_dtype_size = self.base_children[1].dtype.itemsize
+
         n_bytes_to_view = (
-            self.base_children[1].size - str_byte_offset
+            str_end_byte_offset - str_byte_offset
         ) * char_dtype_size
 
         to_view = column.build_column(
