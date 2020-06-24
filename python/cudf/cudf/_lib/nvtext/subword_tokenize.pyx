@@ -54,7 +54,8 @@ def subword_tokenize(
             )
         )
 
-    # return 3 tensor components
-    return [Column.from_unique_ptr(move(c_result.tensor_token_ids)),
-            Column.from_unique_ptr(move(c_result.tensor_attention_mask)),
-            Column.from_unique_ptr(move(c_result.tensor_metadata))]
+    # return the 3 tensor components
+    tokens = Column.from_unique_ptr(move(c_result.tensor_token_ids))
+    masks = Column.from_unique_ptr(move(c_result.tensor_attention_mask))
+    metadata = Column.from_unique_ptr(move(c_result.tensor_metadata))
+    return tokens, masks, metadata
