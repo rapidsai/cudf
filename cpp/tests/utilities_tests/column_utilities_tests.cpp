@@ -183,8 +183,7 @@ TEST_F(ColumnUtilitiesStringsTest, PrintColumnDuration)
 {
   const char* delimiter = ",";
 
-  cudf::test::fixed_width_column_wrapper<cudf::duration_s> cudf_col(
-    cudf::test::make_fixed_width_column_with_type_param<cudf::duration_s>({100, 0, 7, 140000}));
+  cudf::test::fixed_width_column_wrapper<cudf::duration_s, int32_t> cudf_col({100, 0, 7, 140000});
 
   auto expected = "100 seconds,0 seconds,7 seconds,140000 seconds";
 

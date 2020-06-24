@@ -514,15 +514,13 @@ inline auto make_data_type()
 template <typename T, typename R>
 inline auto make_column(std::vector<R> data)
 {
-  return cudf::test::fixed_width_column_wrapper<T>(
-    cudf::test::make_fixed_width_column_with_type_param<T>(data.begin(), data.end()));
+  return cudf::test::fixed_width_column_wrapper<T, R>(data.begin(), data.end());
 }
 
 template <typename T, typename R>
 inline auto make_column(std::vector<R> data, std::vector<bool> mask)
 {
-  return cudf::test::fixed_width_column_wrapper<T>(
-    cudf::test::make_fixed_width_column_with_type_param<T>(data.begin(), data.end(), mask.begin()));
+  return cudf::test::fixed_width_column_wrapper<T, R>(data.begin(), data.end(), mask.begin());
 }
 
 inline cudf::column make_exp_chrono_column(cudf::type_id type_id)
@@ -595,15 +593,13 @@ inline cudf::column make_exp_chrono_column(cudf::type_id type_id)
 template <typename T, typename R>
 inline auto make_column(thrust::host_vector<R> data)
 {
-  return cudf::test::fixed_width_column_wrapper<T>(
-    cudf::test::make_fixed_width_column_with_type_param<T>(data.begin(), data.end()));
+  return cudf::test::fixed_width_column_wrapper<T, R>(data.begin(), data.end());
 }
 
 template <typename T, typename R>
 inline auto make_column(thrust::host_vector<R> data, thrust::host_vector<bool> mask)
 {
-  return cudf::test::fixed_width_column_wrapper<T>(
-    cudf::test::make_fixed_width_column_with_type_param<T>(data.begin(), data.end(), mask.begin()));
+  return cudf::test::fixed_width_column_wrapper<T, R>(data.begin(), data.end(), mask.begin());
 }
 
 template <typename T, typename R>

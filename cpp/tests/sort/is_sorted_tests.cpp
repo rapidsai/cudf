@@ -89,15 +89,13 @@ auto empty()
 template <typename T>
 auto nulls_after()
 {
-  return fixed_width_column_wrapper<T>(
-    cudf::test::make_fixed_width_column_with_type_param<T>({0, 0}, {1, 0}));
+  return fixed_width_column_wrapper<T, int32_t>({0, 0}, {1, 0});
 }
 
 template <typename T>
 auto nulls_before()
 {
-  return fixed_width_column_wrapper<T>(
-    cudf::test::make_fixed_width_column_with_type_param<T>({0, 0}, {0, 1}));
+  return fixed_width_column_wrapper<T, int32_t>({0, 0}, {0, 1});
 }
 
 // ----- bool

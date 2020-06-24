@@ -12,7 +12,7 @@
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5397 Add internal implementation of nested loop equijoins.
 - PR #5303 Add slice_strings functionality using delimiter string
-- PR #5394 Add duration types (builds on PR 5359)
+- PR #5394 Enable cast and binops with duration types (builds on PR 5359)
 - PR #5301 Add Java bindings for `zfill`
 - PR #5359 Add duration types
 - PR #5364 Validate array interface during buffer construction

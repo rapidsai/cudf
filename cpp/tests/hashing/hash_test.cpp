@@ -43,12 +43,11 @@ TEST_F(HashTest, MultiValue)
   fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
 
   using ts = cudf::timestamp_s;
-  fixed_width_column_wrapper<ts> const secs_col(
-    cudf::test::make_fixed_width_column_with_type_param<ts>({ts::duration::zero(),
-                                                             static_cast<ts::duration>(100),
-                                                             static_cast<ts::duration>(-100),
-                                                             ts::duration::min(),
-                                                             ts::duration::max()}));
+  fixed_width_column_wrapper<ts, ts::duration> const secs_col({ts::duration::zero(),
+                                                               static_cast<ts::duration>(100),
+                                                               static_cast<ts::duration>(-100),
+                                                               ts::duration::min(),
+                                                               ts::duration::max()});
 
   auto const input1 = cudf::table_view({strings_col, ints_col, bools_col1, secs_col});
   auto const input2 = cudf::table_view({strings_col, ints_col, bools_col2, secs_col});
@@ -90,20 +89,18 @@ TEST_F(HashTest, MultiValueNulls)
 
   // Nulls with different values should be equal
   using ts = cudf::timestamp_s;
-  fixed_width_column_wrapper<ts> const secs_col1(
-    cudf::test::make_fixed_width_column_with_type_param<ts>({ts::duration::zero(),
-                                                             static_cast<ts::duration>(100),
-                                                             static_cast<ts::duration>(-100),
-                                                             ts::duration::min(),
-                                                             ts::duration::max()},
-                                                            {1, 0, 0, 1, 1}));
-  fixed_width_column_wrapper<ts> const secs_col2(
-    cudf::test::make_fixed_width_column_with_type_param<ts>({ts::duration::zero(),
-                                                             static_cast<ts::duration>(-200),
-                                                             static_cast<ts::duration>(200),
-                                                             ts::duration::min(),
-                                                             ts::duration::max()},
-                                                            {1, 0, 0, 1, 1}));
+  fixed_width_column_wrapper<ts, ts::duration> const secs_col1({ts::duration::zero(),
+                                                                static_cast<ts::duration>(100),
+                                                                static_cast<ts::duration>(-100),
+                                                                ts::duration::min(),
+                                                                ts::duration::max()},
+                                                               {1, 0, 0, 1, 1});
+  fixed_width_column_wrapper<ts, ts::duration> const secs_col2({ts::duration::zero(),
+                                                                static_cast<ts::duration>(-200),
+                                                                static_cast<ts::duration>(200),
+                                                                ts::duration::min(),
+                                                                ts::duration::max()},
+                                                               {1, 0, 0, 1, 1});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1, secs_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2, secs_col2});
@@ -123,8 +120,7 @@ TYPED_TEST_CASE(HashTestTyped, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(HashTestTyped, Equality)
 {
-  fixed_width_column_wrapper<TypeParam> const col(
-    cudf::test::make_fixed_width_column_with_type_param<TypeParam>({0, 127, 1, 2, 8}));
+  fixed_width_column_wrapper<TypeParam, int32_t> const col{0, 127, 1, 2, 8};
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
@@ -140,10 +136,8 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
   using T = TypeParam;
 
   // Nulls with different values should be equal
-  fixed_width_column_wrapper<T> const col1(
-    cudf::test::make_fixed_width_column_with_type_param<T>({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1}));
-  fixed_width_column_wrapper<T> const col2(
-    cudf::test::make_fixed_width_column_with_type_param<T>({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1}));
+  fixed_width_column_wrapper<T, int32_t> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  fixed_width_column_wrapper<T, int32_t> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});

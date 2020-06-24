@@ -52,14 +52,14 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
   constexpr cudf::size_type num_values{10};
   constexpr cudf::size_type repeat_count{10};
 
-  auto input = cudf::test::make_fixed_width_column_with_type_param<T>(
+  cudf::test::fixed_width_column_wrapper<T, int32_t> input(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + num_values);
 
   static_assert(repeat_count > 0, "repeat_count should be larger than 0.");
   auto expected_elements = cudf::test::make_counting_transform_iterator(
     0, [repeat_count](auto i) { return i / repeat_count; });
-  auto expected = cudf::test::make_fixed_width_column_with_type_param<T>(
-    expected_elements, expected_elements + num_values * repeat_count);
+  cudf::test::fixed_width_column_wrapper<T, typename decltype(expected_elements)::value_type>
+    expected(expected_elements, expected_elements + num_values * repeat_count);
 
   cudf::table_view input_table{{input}};
 
@@ -107,13 +107,13 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
     for (cudf::size_type j{0}; j < counts[i]; j++) { expected_values.push_back(inputs[i]); }
   }
 
-  auto input = cudf::test::make_fixed_width_column_with_type_param<T>(inputs.begin(), inputs.end());
+  cudf::test::fixed_width_column_wrapper<T> input(inputs.begin(), inputs.end());
 
   auto count =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>(counts.begin(), counts.end());
 
-  auto expected = cudf::test::make_fixed_width_column_with_type_param<T>(expected_values.begin(),
-                                                                         expected_values.end());
+  cudf::test::fixed_width_column_wrapper<T> expected(expected_values.begin(),
+                                                     expected_values.end());
 
   cudf::table_view input_table{{input}};
   auto p_ret = cudf::repeat(input_table, count);
@@ -148,13 +148,13 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
     }
   }
 
-  auto input = cudf::test::make_fixed_width_column_with_type_param<T>(
+  cudf::test::fixed_width_column_wrapper<T> input(
     input_values.begin(), input_values.end(), input_valids.begin());
 
   auto count =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>(counts.begin(), counts.end());
 
-  auto expected = cudf::test::make_fixed_width_column_with_type_param<T>(
+  cudf::test::fixed_width_column_wrapper<T> expected(
     expected_values.begin(), expected_values.end(), expected_valids.begin());
 
   cudf::table_view input_table{{input}};
@@ -169,14 +169,14 @@ TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
   using T = TypeParam;
   static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
 
-  auto input = cudf::test::make_fixed_width_column_with_type_param<T>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0));
+  cudf::test::fixed_width_column_wrapper<T, int32_t> input(thrust::make_counting_iterator(0),
+                                                           thrust::make_counting_iterator(0));
 
   auto count = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0));
 
-  auto expected = cudf::test::make_fixed_width_column_with_type_param<T>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0));
+  cudf::test::fixed_width_column_wrapper<T, int32_t> expected(thrust::make_counting_iterator(0),
+                                                              thrust::make_counting_iterator(0));
 
   cudf::table_view input_table{{input}};
   auto p_ret = cudf::repeat(input_table, count);
