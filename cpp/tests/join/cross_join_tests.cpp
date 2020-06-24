@@ -27,7 +27,7 @@
 #include <tests/utilities/type_lists.hpp>
 
 template <typename T>
-using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
+using column_wrapper = cudf::test::fixed_width_column_wrapper<T, int64_t>;
 
 template <typename T>
 class CrossJoinTypeTests : public cudf::test::BaseFixture {

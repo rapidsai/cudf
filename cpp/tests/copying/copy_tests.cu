@@ -35,7 +35,7 @@ struct CopyTest : public cudf::test::BaseFixture {
 TYPED_TEST_CASE(CopyTest, cudf::test::FixedWidthTypes);
 
 template <typename T>
-using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+using wrapper = cudf::test::fixed_width_column_wrapper<T, int64_t>;
 
 TYPED_TEST(CopyTest, CopyIfElseTestShort)
 {

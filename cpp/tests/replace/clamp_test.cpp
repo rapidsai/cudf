@@ -214,7 +214,7 @@ TYPED_TEST(ClampTestNumeric, WithNoNull)
 
   auto got = this->run_clamp(input, {}, lo, true, hi, true, lo, true, hi, true);
 
-  cudf::test::fixed_width_column_wrapper<T> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8});
+  cudf::test::fixed_width_column_wrapper<T, int64_t> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8});
 
   cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -229,7 +229,7 @@ TYPED_TEST(ClampTestNumeric, LowerNull)
 
   auto got = this->run_clamp(input, {}, lo, false, hi, true, lo, false, hi, true);
 
-  cudf::test::fixed_width_column_wrapper<T> expected({0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8});
+  cudf::test::fixed_width_column_wrapper<T, int64_t> expected({0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8});
 
   cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -244,7 +244,7 @@ TYPED_TEST(ClampTestNumeric, UpperNull)
 
   auto got = this->run_clamp(input, {}, lo, true, hi, false, lo, true, hi, false);
 
-  cudf::test::fixed_width_column_wrapper<T> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+  cudf::test::fixed_width_column_wrapper<T, int64_t> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
   cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -260,8 +260,8 @@ TYPED_TEST(ClampTestNumeric, InputNull)
 
   auto got = this->run_clamp(input, input_validity, lo, true, hi, true, lo, true, hi, true);
 
-  cudf::test::fixed_width_column_wrapper<T> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8},
-                                                     {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<T, int64_t> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8},
+                                                              {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
   cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -280,8 +280,8 @@ TYPED_TEST(ClampTestNumeric, InputNulliWithReplace)
   auto got =
     this->run_clamp(input, input_validity, lo, true, hi, true, lo_replace, true, hi_replace, true);
 
-  cudf::test::fixed_width_column_wrapper<T> expected({16, 16, 2, 3, 4, 5, 6, 7, 8, 32, 32},
-                                                     {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<T, int64_t> expected({16, 16, 2, 3, 4, 5, 6, 7, 8, 32, 32},
+                                                              {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
   cudf::test::expect_columns_equal(expected, got->view());
 }

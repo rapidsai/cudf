@@ -85,13 +85,13 @@ auto empty()
 template <typename T>
 auto nulls_after()
 {
-  return fixed_width_column_wrapper<T>({0, 0}, {1, 0});
+  return fixed_width_column_wrapper<T, int64_t>({0, 0}, {1, 0});
 }
 
 template <typename T>
 auto nulls_before()
 {
-  return fixed_width_column_wrapper<T>({0, 0}, {0, 1});
+  return fixed_width_column_wrapper<T, int64_t>({0, 0}, {0, 1});
 }
 
 // ----- bool

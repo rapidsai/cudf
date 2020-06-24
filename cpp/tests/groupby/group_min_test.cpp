@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <bits/stdint-intn.h>
 #include <tests/groupby/groupby_test_util.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
@@ -38,7 +39,7 @@ TYPED_TEST(groupby_min_test, basic)
     using R = cudf::detail::target_type_t<V, aggregation::MIN>;
 
     fixed_width_column_wrapper<K> keys { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    fixed_width_column_wrapper<V, int64_t> vals { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
     fixed_width_column_wrapper<R> expect_vals { 0, 1, 2 };
@@ -57,7 +58,7 @@ TYPED_TEST(groupby_min_test, empty_cols)
     using R = cudf::detail::target_type_t<V, aggregation::MIN>;
 
     fixed_width_column_wrapper<K> keys        { };
-    fixed_width_column_wrapper<V> vals        { };
+    fixed_width_column_wrapper<V, int64_t> vals        { };
 
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
@@ -76,7 +77,7 @@ TYPED_TEST(groupby_min_test, zero_valid_keys)
     using R = cudf::detail::target_type_t<V, aggregation::MIN>;
 
     fixed_width_column_wrapper<K> keys( { 1, 2, 3}, all_null() );
-    fixed_width_column_wrapper<V> vals  { 3, 4, 5};
+    fixed_width_column_wrapper<V, int64_t> vals  { 3, 4, 5};
 
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
@@ -95,10 +96,10 @@ TYPED_TEST(groupby_min_test, zero_valid_values)
     using R = cudf::detail::target_type_t<V, aggregation::MIN>;
 
     fixed_width_column_wrapper<K> keys   { 1, 1, 1};
-    fixed_width_column_wrapper<V> vals ( { 3, 4, 5}, all_null() );
+    fixed_width_column_wrapper<V, int64_t> vals ( { 3, 4, 5}, all_null() );
 
     fixed_width_column_wrapper<K> expect_keys { 1 };
-    fixed_width_column_wrapper<R> expect_vals({ 0 }, all_null());
+    fixed_width_column_wrapper<R, int64_t> expect_vals({ 0 }, all_null());
 
     auto agg = cudf::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -115,13 +116,13 @@ TYPED_TEST(groupby_min_test, null_keys_and_values)
 
     fixed_width_column_wrapper<K> keys({ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
                                        { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
+    fixed_width_column_wrapper<V, int64_t> vals({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
                                        { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
                                           //  { 1, 1,     2, 2, 2,   3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
                                           //  { 3, 6,     1, 4, 9,   2, 8,    -}
-    fixed_width_column_wrapper<R> expect_vals({ 3,        1,         2,       0},
+    fixed_width_column_wrapper<R, int64_t> expect_vals({ 3,        1,         2,       0},
                                               { 1,        1,         1,       0});
 
     auto agg = cudf::make_min_aggregation();

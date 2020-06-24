@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <bits/stdint-intn.h>
 #include <cudf/hashing.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
@@ -120,7 +121,7 @@ TYPED_TEST_CASE(HashTestTyped, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(HashTestTyped, Equality)
 {
-  fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
+  fixed_width_column_wrapper<TypeParam, int64_t> const col({0, 127, 1, 2, 8});
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
@@ -136,8 +137,8 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
   using T = TypeParam;
 
   // Nulls with different values should be equal
-  fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
-  fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  fixed_width_column_wrapper<T, int64_t> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  fixed_width_column_wrapper<T, int64_t> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});

@@ -206,7 +206,7 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, Validity
  *
  * @tparam Element The fixed-width element type
  **/
-template <typename ElementTo>
+template <typename ElementTo, typename ConstructFrom = ElementTo>
 class fixed_width_column_wrapper : public detail::column_wrapper {
  public:
   /**
@@ -295,59 +295,26 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *
    * @param element_list The list of elements
    **/
+  template <typename ElementFrom>
+  static constexpr bool is_explicitly_convertible()
+  {
+    return cudf::is_explicitly_convertible<ConstructFrom, ElementTo>::value and
+           cudf::is_implicitly_convertible<ElementFrom, ConstructFrom>::value;
+  }
   template <typename ElementFrom,
-            typename std::enable_if_t<!(is_chrono<ElementTo>() &&
-                                        std::is_same<ElementFrom, int>::value)>* = nullptr>
+            typename std::enable_if_t<!is_explicitly_convertible<ElementFrom>()>* = nullptr>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements)
     : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements))
   {
   }
-  // specialization for chrono types: explict conversion from initializer_list<int>
+  // specialization for explicitly convertible types: explict conversion from
+  // initializer_list<ElementTo>
   template <typename ElementFrom,
-            typename std::enable_if_t<(is_chrono<ElementTo>() &&
-                                       std::is_same<ElementFrom, int>::value)>* = nullptr>
+            typename std::enable_if_t<is_explicitly_convertible<ElementFrom>()>* = nullptr>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements)
     : fixed_width_column_wrapper(
         thrust::make_transform_iterator(std::cbegin(elements), cudf::typecaster<ElementTo>{}),
         thrust::make_transform_iterator(std::cend(elements), cudf::typecaster<ElementTo>{}))
-  {
-  }
-
-  /**
-   * @brief Construct a nullable column from a list of fixed-width elements
-   * using another list to indicate the validity of each element.
-   *
-   * The validity of each element is determined by an `initializer_list` of
-   * booleans where `true` indicates the element is valid, and `false` indicates
-   * the element is null.
-   *
-   * Example:
-   * ```c++
-   * // Creates a nullable INT32 column with 4 elements: {1, NULL, 3, NULL}
-   * fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}};
-   * ```
-   *
-   * @param elements The list of elements
-   * @param validity The list of validity indicator booleans
-   **/
-  template <typename ElementFrom,
-            typename std::enable_if_t<!(is_chrono<ElementTo>() &&
-                                        std::is_same<ElementFrom, int>::value)>* = nullptr>
-  fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements,
-                             std::initializer_list<bool> validity)
-    : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements), std::cbegin(validity))
-  {
-  }
-  // specialication for chrono types: explict conversion from initializer_list<int>
-  template <typename ElementFrom,
-            typename std::enable_if_t<(is_chrono<ElementTo>() &&
-                                       std::is_same<ElementFrom, int>::value)>* = nullptr>
-  fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements,
-                             std::initializer_list<bool> validity)
-    : fixed_width_column_wrapper(
-        thrust::make_transform_iterator(std::cbegin(elements), cudf::typecaster<ElementTo>{}),
-        thrust::make_transform_iterator(std::cend(elements), cudf::typecaster<ElementTo>{}),
-        std::cbegin(validity))
   {
   }
 
@@ -370,8 +337,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    **/
   template <typename ValidityIterator,
             typename ElementFrom,
-            typename std::enable_if_t<!(is_chrono<ElementTo>() &&
-                                        std::is_same<ElementFrom, int>::value)>* = nullptr>
+            typename std::enable_if_t<!is_explicitly_convertible<ElementFrom>()>* = nullptr>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements, ValidityIterator v)
     : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements), v)
   {
@@ -379,13 +345,36 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   // specialication for chrono types: explict conversion from initializer_list<int>
   template <typename ValidityIterator,
             typename ElementFrom,
-            typename std::enable_if_t<(is_chrono<ElementTo>() &&
-                                       std::is_same<ElementFrom, int>::value)>* = nullptr>
+            typename std::enable_if_t<is_explicitly_convertible<ElementFrom>()>* = nullptr>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements, ValidityIterator v)
     : fixed_width_column_wrapper(
         thrust::make_transform_iterator(std::cbegin(elements), cudf::typecaster<ElementTo>{}),
         thrust::make_transform_iterator(std::cend(elements), cudf::typecaster<ElementTo>{}),
         v)
+  {
+  }
+
+  /**
+   * @brief Construct a nullable column from a list of fixed-width elements
+   * using another list to indicate the validity of each element.
+   *
+   * The validity of each element is determined by an `initializer_list` of
+   * booleans where `true` indicates the element is valid, and `false` indicates
+   * the element is null.
+   *
+   * Example:
+   * ```c++
+   * // Creates a nullable INT32 column with 4 elements: {1, NULL, 3, NULL}
+   * fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}};
+   * ```
+   *
+   * @param elements The list of elements
+   * @param validity The list of validity indicator booleans
+   **/
+  template <typename ElementFrom>
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements,
+                             std::initializer_list<bool> validity)
+    : fixed_width_column_wrapper(elements, std::cbegin(validity))  // delegate
   {
   }
 };

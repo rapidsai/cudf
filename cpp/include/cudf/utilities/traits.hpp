@@ -63,6 +63,18 @@ template <typename L, typename R>
 struct is_equality_comparable_impl<L, R, void_t<equality_comparable<L, R>>> : std::true_type {
 };
 
+template <class From, class To>
+struct is_explicitly_convertible {
+  enum {
+    value = std::is_constructible<To, From>::value && not std::is_convertible<From, To>::value
+  };
+};
+
+template <class From, class To>
+struct is_implicitly_convertible {
+  enum { value = std::is_constructible<To, From>::value && std::is_convertible<From, To>::value };
+};
+
 template <typename T>
 using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>,
                                               std::is_same<cudf::timestamp_s, T>,

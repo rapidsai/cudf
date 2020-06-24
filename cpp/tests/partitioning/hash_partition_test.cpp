@@ -190,7 +190,7 @@ TYPED_TEST_CASE(HashPartitionFixedWidth, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(HashPartitionFixedWidth, NullableFixedWidth)
 {
-  fixed_width_column_wrapper<TypeParam> fixed({1, 2, 3, 4}, {1, 1, 1, 1});
+  fixed_width_column_wrapper<TypeParam, int64_t> fixed({1, 2, 3, 4}, {1, 1, 1, 1});
   cudf::table_view input({fixed});
 
   std::vector<cudf::size_type> const columns_to_hash({0});
