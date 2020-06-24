@@ -211,13 +211,11 @@ def read_parquet(
         )
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
-        pa_tables = [
-            cudf.DataFrame.from_arrow(
-                pq.read_pandas(fob, columns=columns, *args, **kwargs)
+        return cudf.DataFrame.from_arrow(
+            pq.ParquetDataset(filepaths_or_buffers).read_pandas(
+                columns=columns, *args, **kwargs
             )
-            for fob in filepaths_or_buffers
-        ]
-        return cudf.concat(pa_tables)
+        )
 
 
 @ioutils.doc_to_parquet()
