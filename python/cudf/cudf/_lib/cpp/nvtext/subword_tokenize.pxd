@@ -30,4 +30,3 @@ cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
 
 cdef extern from "<utility>" namespace "std" nogil:
     cdef tokenizer_result move(tokenizer_result)
-
