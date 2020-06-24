@@ -23,7 +23,7 @@ std::unique_ptr<cudf::scalar> cudf::reduction::any(column_view const& col,
                                                    rmm::mr::device_memory_resource* mr,
                                                    cudaStream_t stream)
 {
-  CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::BOOL8),
+  CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "any() operation can be applied with output type `bool8` only");
-  return cudf::reduction::max(col, cudf::data_type(cudf::BOOL8), mr, stream);
+  return cudf::reduction::max(col, cudf::data_type(cudf::type_id::BOOL8), mr, stream);
 }

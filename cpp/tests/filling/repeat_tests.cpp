@@ -26,6 +26,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>

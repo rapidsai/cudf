@@ -143,7 +143,8 @@ TEST_F(StringsFindTest, Find)
 
 TEST_F(StringsFindTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::find(strings_view, cudf::string_scalar("é"));
   EXPECT_EQ(results->size(), 0);

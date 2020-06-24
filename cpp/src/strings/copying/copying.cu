@@ -48,7 +48,8 @@ std::unique_ptr<cudf::column> slice(strings_column_view const& strings,
   rmm::device_vector<size_type> indices(strings_count);
   thrust::sequence(execpol->on(stream), indices.begin(), indices.end(), start, step);
   // create a column_view as a wrapper of these indices
-  column_view indices_view(data_type{INT32}, strings_count, indices.data().get(), nullptr, 0);
+  column_view indices_view(
+    data_type{type_id::INT32}, strings_count, indices.data().get(), nullptr, 0);
   // build a new strings column from the indices
   auto sliced_table = cudf::detail::gather(table_view{{strings.parent()}},
                                            indices_view,

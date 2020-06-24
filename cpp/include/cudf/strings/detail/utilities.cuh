@@ -47,7 +47,7 @@ std::unique_ptr<column> make_offsets_child_column(
   CUDF_EXPECTS(begin < end, "Invalid iterator range");
   auto count = thrust::distance(begin, end);
   auto offsets_column =
-    make_numeric_column(data_type{INT32}, count + 1, mask_state::UNALLOCATED, stream, mr);
+    make_numeric_column(data_type{type_id::INT32}, count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
   auto d_offsets    = offsets_view.template data<int32_t>();
   // Using inclusive-scan to compute last entry which is the total size.
