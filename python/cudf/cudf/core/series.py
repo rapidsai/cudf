@@ -1609,6 +1609,21 @@ class Series(Frame, Serializable):
         if axis:
             raise NotImplementedError("The axis keyword is not supported")
 
+        if isinstance(value, pd.Series):
+            value = Series.from_pandas(value)
+
+        if not (is_scalar(value) or isinstance(value, (dict, Series))):
+            raise TypeError(
+                f'"value" parameter must be a scalar, dict '
+                f"or Series, but you passed a "
+                f'"{type(value)}"'
+            )
+
+        if isinstance(value, (dict, Series)):
+            value = Series(value)
+            if not self.index.equals(value.index):
+                value = value.reindex(self.index)
+
         data = self._column.fillna(value)
 
         if inplace:
