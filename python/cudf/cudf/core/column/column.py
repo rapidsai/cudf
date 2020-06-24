@@ -388,12 +388,15 @@ class ColumnBase(Column, Serializable):
     def view(self, dtype):
         """
         View the data underlying a column as different dtype.
+        The source column must divide evenly into the size of
+        the desired data type. Columns with nulls may only be
+        viewed as dtypes with size equal to source dtype size
 
         Parameters
         ----------
         dtype : NumPy dtype, string
             The dtype to view the data as
-        
+
         """
         dtype = np.dtype(dtype)
 
@@ -417,14 +420,18 @@ class ColumnBase(Column, Serializable):
                     "Can not produce a view of a column with nulls"
                 )
 
-            if (self.base_size*self.dtype.itemsize) % dtype.itemsize:
+            if (self.base_size * self.dtype.itemsize) % dtype.itemsize:
                 raise TypeError(
                     f"Can not divide {self.base_size * self.dtype.itemsize}"
                     + f" total bytes into {dtype} with size {dtype.itemsize}"
                 )
 
             new_size = (self.base_size - self.offset) * self.dtype.itemsize
-            view_buf = Buffer(data=self.base_data.ptr, size=new_size, owner=self.base_data._owner)
+            view_buf = Buffer(
+                data=self.base_data.ptr,
+                size=new_size,
+                owner=self.base_data._owner,
+            )
             return build_column(view_buf, dtype=dtype)
 
     def element_indexing(self, index):

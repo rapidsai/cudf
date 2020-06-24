@@ -119,6 +119,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.utils import utils
 from cudf.utils.dtypes import can_convert_to_column, is_scalar, is_string_dtype
+from cudf.utils.docutils import copy_docstring
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -3988,6 +3989,7 @@ class StringColumn(column.ColumnBase):
         out = super()._mimic_inplace(other_col, inplace=inplace)
         return out
 
+    @copy_docstring(column.ColumnBase.view)
     def view(self, dtype):
         if self.null_count > 0:
             raise ValueError("Can not produce a view of a column with nulls")
