@@ -268,7 +268,9 @@ def test_column_view_numeric_slice(slc):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("slc", [slice(3, None), slice(None, 4), slice(2, 5)])
+@pytest.mark.parametrize(
+    "slc", [slice(3, None), slice(None, 4), slice(2, 5), slice(1, 3)]
+)
 def test_column_view_string_slice(slc):
     def str_host_view(list_of_str, to_dtype):
         return np.concatenate(
