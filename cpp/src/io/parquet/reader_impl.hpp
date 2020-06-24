@@ -51,9 +51,9 @@ class aggregate_metadata;
 class reader::impl {
  public:
   /**
-   * @brief Constructor from a dataset source with reader options.
+   * @brief Constructor from an array of dataset sources with reader options.
    *
-   * @param source Dataset source
+   * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */

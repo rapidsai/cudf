@@ -138,7 +138,9 @@ struct table_with_metadata {
 };
 
 /**
- * @brief TODO
+ * @brief Non-owning view of a host memory buffer
+ *
+ * Used to describe buffer input in `source_info` objects.
  */
 struct host_buffer {
   const char* data = nullptr;

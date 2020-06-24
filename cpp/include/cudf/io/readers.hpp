@@ -72,9 +72,9 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from a file path
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to the file containing the whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
@@ -83,9 +83,9 @@ class reader {
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor from a datasource
+   * @brief Constructor from an array of datasources
    *
-   * @param source Input datasource object to read the dataset from
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
@@ -163,9 +163,9 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from a file path
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to the file containing the whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
@@ -174,9 +174,9 @@ class reader {
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor from a datasource
+   * @brief Constructor from an array of datasources
    *
-   * @param source Input datasource object to read the dataset from
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
@@ -311,9 +311,9 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from a file path
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to the file containing the whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
@@ -322,9 +322,9 @@ class reader {
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor from a datasource
+   * @brief Constructor from an array of datasources
    *
-   * @param source Input datasource object to read the dataset from
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
@@ -428,9 +428,9 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from a file path
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to the file containing the whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
@@ -439,9 +439,9 @@ class reader {
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor from a datasource
+   * @brief Constructor from an array of datasources
    *
-   * @param source Input datasource object to read the dataset from
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
@@ -548,9 +548,9 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from a file path
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to the file containing the whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
@@ -559,9 +559,9 @@ class reader {
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor from a datasource
+   * @brief Constructor from an array of datasources
    *
-   * @param source Input datasource object to read the dataset from
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
