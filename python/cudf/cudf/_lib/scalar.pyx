@@ -3,11 +3,21 @@
 import numpy as np
 import pandas as pd
 
-from libc.stdint cimport int8_t, int16_t, int32_t, int64_t
+from libc.stdint cimport (
+    int8_t,
+    int16_t,
+    int32_t,
+    int64_t,
+    uint8_t,
+    uint16_t,
+    uint32_t,
+    uint64_t,
+)
 from libcpp.memory cimport unique_ptr
 from libcpp cimport bool
 
 from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
+from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.move cimport move
 
 from cudf._lib.cpp.wrappers.timestamps cimport (
@@ -78,7 +88,7 @@ cdef class Scalar:
         device scalar.
         """
         cdef libcudf_types.data_type cdtype = self.c_value.get()[0].type()
-        return cudf_to_np_types[cdtype.id()]
+        return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
 
     @property
     def value(self):
@@ -130,6 +140,14 @@ cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s,
         s.reset(new numeric_scalar[int32_t](value, valid))
     elif dtype == "int64":
         s.reset(new numeric_scalar[int64_t](value, valid))
+    elif dtype == "uint8":
+        s.reset(new numeric_scalar[uint8_t](value, valid))
+    elif dtype == "uint16":
+        s.reset(new numeric_scalar[uint16_t](value, valid))
+    elif dtype == "uint32":
+        s.reset(new numeric_scalar[uint32_t](value, valid))
+    elif dtype == "uint64":
+        s.reset(new numeric_scalar[uint64_t](value, valid))
     elif dtype == "float32":
         s.reset(new numeric_scalar[float](value, valid))
     elif dtype == "float64":
@@ -186,6 +204,14 @@ cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
         return np.int32((<numeric_scalar[int32_t]*>s_ptr)[0].value())
     elif cdtype.id() == libcudf_types.INT64:
         return np.int64((<numeric_scalar[int64_t]*>s_ptr)[0].value())
+    elif cdtype.id() == libcudf_types.UINT8:
+        return np.uint8((<numeric_scalar[uint8_t]*>s_ptr)[0].value())
+    elif cdtype.id() == libcudf_types.UINT16:
+        return np.uint16((<numeric_scalar[uint16_t]*>s_ptr)[0].value())
+    elif cdtype.id() == libcudf_types.UINT32:
+        return np.uint32((<numeric_scalar[uint32_t]*>s_ptr)[0].value())
+    elif cdtype.id() == libcudf_types.UINT64:
+        return np.uint64((<numeric_scalar[uint64_t]*>s_ptr)[0].value())
     elif cdtype.id() == libcudf_types.FLOAT32:
         return np.float32((<numeric_scalar[float]*>s_ptr)[0].value())
     elif cdtype.id() == libcudf_types.FLOAT64:

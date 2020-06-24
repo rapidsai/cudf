@@ -7,20 +7,16 @@ import pyarrow as pa
 import pytest
 
 import cudf
+import cudf.utils.dtypes as dtypeutils
 from cudf.core.column.column import as_column
 from cudf.tests.utils import assert_eq
 
-dtypes = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "float32",
-    "float64",
-    "datetime64[ns]",
-    "str",
-    "category",
-]
+dtypes = sorted(
+    list(
+        dtypeutils.ALL_TYPES
+        - {"datetime64[s]", "datetime64[ms]", "datetime64[us]"}
+    )
+)
 
 
 @pytest.fixture(params=dtypes, ids=dtypes)
@@ -146,3 +142,31 @@ def test_column_chunked_array_creation():
     expected_column = cudf.core.column.as_column(pyarrow_array)
 
     assert_eq(cudf.Series(actual_column), cudf.Series(expected_column))
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (
+            np.array([1, 2, 3, 4, 5], dtype="uint8"),
+            cudf.core.column.as_column([1, 2, 3, 4, 5], dtype="uint8"),
+        ),
+        (
+            cp.array([1, 2, 3, 4, 5], dtype="uint8"),
+            cudf.core.column.as_column([1, 2, 3, 4, 5], dtype="uint8"),
+        ),
+        (
+            cp.array([], dtype="uint8"),
+            cudf.core.column.as_column([], dtype="uint8"),
+        ),
+        (
+            cp.array([453], dtype="uint8"),
+            cudf.core.column.as_column([453], dtype="uint8"),
+        ),
+    ],
+)
+def test_as_column_buffer(data, expected):
+    actual_column = cudf.core.column.as_column(
+        cudf.core.Buffer(data), dtype=data.dtype
+    )
+    assert_eq(cudf.Series(actual_column), cudf.Series(expected))

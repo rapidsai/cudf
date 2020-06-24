@@ -139,7 +139,7 @@ def pyarrow_buffer_to_cudf_buffer(arrow_buf, mask_size=0):
     Given a PyArrow Buffer backed by either host or device memory, convert it
     to a cuDF Buffer
     """
-    from cudf._lib.arrow._cuda import CudaBuffer as arrowCudaBuffer
+    from pyarrow.cuda import CudaBuffer as arrowCudaBuffer
 
     # Try creating a PyArrow CudaBuffer from the PyArrow Buffer object, it
     # fails with an ArrowTypeError if it's a host based Buffer so we catch and
@@ -417,7 +417,11 @@ def time_col_replace_nulls(input_col):
     out_col = cudf._lib.replace.replace(
         input_col,
         column.as_column(
-            Buffer(np.array([np.datetime64("NaT")], dtype=input_col.dtype)),
+            Buffer(
+                np.array([np.datetime64("NaT")], dtype=input_col.dtype).view(
+                    "|u1"
+                )
+            ),
             dtype=input_col.dtype,
         ),
         null,

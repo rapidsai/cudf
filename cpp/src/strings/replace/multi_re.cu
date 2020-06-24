@@ -56,19 +56,22 @@ struct replace_multi_regex_fn {
   size_type number_of_patterns;
   found_range* d_found_ranges;       // working array matched (begin,end) values
   column_device_view const d_repls;  // replacment strings
-  const int32_t* d_offsets{};        // these are null when
+  int32_t* d_offsets{};              // these are null when
   char* d_chars{};                   // only computing size
 
-  __device__ size_type operator()(size_type idx)
+  __device__ void operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) return 0;
+    if (d_strings.is_null(idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
+    }
     u_char data1[stack_size];
     u_char data2[stack_size];
-    string_view d_str     = d_strings.element<string_view>(idx);
-    auto nchars           = d_str.length();      // number of characters in input string
+    auto const d_str      = d_strings.element<string_view>(idx);
+    auto const nchars     = d_str.length();      // number of characters in input string
     auto nbytes           = d_str.size_bytes();  // number of bytes in input string
-    const char* in_ptr    = d_str.data();        // input pointer (i)
-    char* out_ptr         = d_offsets ? d_chars + d_offsets[idx] : nullptr;
+    auto in_ptr           = d_str.data();        // input pointer
+    auto out_ptr          = d_chars ? d_chars + d_offsets[idx] : nullptr;
     found_range* d_ranges = d_found_ranges + (idx * number_of_patterns);
     size_type lpos        = 0;
     size_type ch_pos      = 0;
@@ -117,7 +120,8 @@ struct replace_multi_regex_fn {
     }
     if (out_ptr)  // copy the remainder
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
-    return nbytes;
+    else
+      d_offsets[idx] = nbytes;
   }
 };
 

@@ -116,7 +116,9 @@ class DatetimeColumn(column.ColumnBase):
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
-        return column.build_column(data=Buffer(ary), dtype=self.dtype)
+        return column.build_column(
+            data=Buffer(ary.data_array_view.view("|u1")), dtype=self.dtype
+        )
 
     @property
     def as_numerical(self):
@@ -206,12 +208,6 @@ class DatetimeColumn(column.ColumnBase):
         )
 
         return result
-
-    def min(self, dtype=None):
-        return libcudf.reduce.reduce("min", self, dtype=dtype)
-
-    def max(self, dtype=None):
-        return libcudf.reduce.reduce("max", self, dtype=dtype)
 
     def find_first_value(self, value, closest=False):
         """

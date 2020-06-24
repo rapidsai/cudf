@@ -473,7 +473,6 @@
                                     <!--Set by groovy script-->
                                     <directory>${native.deps.path}</directory>
                                     <includes>
-                                        <include>libboost_filesystem.so</include>
                                         <include>librmm.so</include>
                                     </includes>
                                 </resource>

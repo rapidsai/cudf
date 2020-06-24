@@ -66,7 +66,7 @@ TEST_F(DictionaryFillTest, FillWithNull)
 
 TEST_F(DictionaryFillTest, Empty)
 {
-  auto dictionary = cudf::make_empty_column(cudf::data_type{cudf::DICTIONARY32});
+  auto dictionary = cudf::make_empty_column(cudf::data_type{cudf::type_id::DICTIONARY32});
   cudf::numeric_scalar<int64_t> fv(-10);
   auto results = cudf::fill(dictionary->view(), 0, 0, fv);
   cudf::test::expect_columns_equal(results->view(), dictionary->view());

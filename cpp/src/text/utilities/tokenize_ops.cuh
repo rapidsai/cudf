@@ -49,7 +49,7 @@ struct characters_tokenizer {
       spaces{true},
       itr{d_str.begin()},
       start_position(0),
-      end_position(d_str.length())
+      end_position(d_str.size_bytes())
   {
   }
 
@@ -85,24 +85,24 @@ struct characters_tokenizer {
   __device__ bool next_token()
   {
     if (itr != d_str.begin()) {  // skip these 2 lines the first time through
-      start_position = end_position + 1;
       ++itr;
+      start_position = itr.byte_offset();
     }
-    if (start_position >= d_str.length()) return false;
+    if (start_position >= d_str.size_bytes()) return false;
     // continue search for the next token
-    end_position = d_str.length();
+    end_position = d_str.size_bytes();
     for (; itr != d_str.end(); ++itr) {
       cudf::char_utf8 ch = *itr;
       if (spaces == is_delimiter(ch)) {
         if (spaces)
-          start_position = itr.position() + 1;
+          start_position = (itr + 1).byte_offset();
         else
-          end_position = itr.position() + 1;
+          end_position = (itr + 1).byte_offset();
         continue;
       }
       spaces = !spaces;
       if (spaces) {
-        end_position = itr.position();
+        end_position = itr.byte_offset();
         break;
       }
     }
@@ -117,7 +117,7 @@ struct characters_tokenizer {
    */
   __device__ position_pair token_byte_positions()
   {
-    return position_pair{d_str.byte_offset(start_position), d_str.byte_offset(end_position)};
+    return position_pair{start_position, end_position};
   }
 
  private:
