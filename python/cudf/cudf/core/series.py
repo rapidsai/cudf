@@ -3920,6 +3920,49 @@ class Series(Frame, Serializable):
 
         return result
 
+    def keys(self):
+        """
+        Return alias for index.
+
+        Returns
+        -------
+        Index
+            Index of the Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series([10, 11, 12, 13, 14, 15])
+        >>> sr
+        0    10
+        1    11
+        2    12
+        3    13
+        4    14
+        5    15
+        dtype: int64
+
+        >>> sr.keys()
+        RangeIndex(start=0, stop=6)
+        >>> sr = cudf.Series(['a', 'b', 'c'])
+        >>> sr
+        0    a
+        1    b
+        2    c
+        dtype: object
+        >>> sr.keys()
+        RangeIndex(start=0, stop=3)
+        >>> sr = cudf.Series([1, 2, 3], index=['a', 'b', 'c'])
+        >>> sr
+        a    1
+        b    2
+        c    3
+        dtype: int64
+        >>> sr.keys()
+        StringIndex(['a' 'b' 'c'], dtype='object')
+        """
+        return self.index
+
 
 truediv_int_dtype_corrections = {
     "int8": "float32",
