@@ -14,14 +14,23 @@
  * limitations under the License.
  */
 
-#include <algorithm>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/type_lists.hpp>
+#include "tests/utilities/column_utilities.hpp"
+#include "tests/utilities/table_utilities.hpp"
+
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include "cudf/types.hpp"
+
+#include <algorithm>
 #include <limits>
 #include <numeric>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/type_lists.hpp>
 #include <type_traits>
 #include <vector>
 
@@ -512,6 +521,35 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   thrust::host_vector<int32_t> vec3_host = vec3;
 
   EXPECT_EQ(vec2, vec3);
+}
+
+template <typename T>
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+
+TEST_F(FixedPointTest, FixedPointSortedOrderGather)
+{
+  auto const ZERO  = decimal32{0, scale_type{0}};
+  auto const ONE   = decimal32{1, scale_type{0}};
+  auto const TWO   = decimal32{2, scale_type{0}};
+  auto const THREE = decimal32{3, scale_type{0}};
+  auto const FOUR  = decimal32{4, scale_type{0}};
+
+  auto const input_vec  = std::vector<decimal32>{TWO, ONE, ZERO, FOUR, THREE};
+  auto const index_vec  = std::vector<cudf::size_type>{2, 1, 0, 4, 3};
+  auto const sorted_vec = std::vector<decimal32>{ZERO, ONE, TWO, THREE, FOUR};
+
+  auto const input_col  = wrapper<decimal32>(input_vec.begin(), input_vec.end());
+  auto const index_col  = wrapper<cudf::size_type>(index_vec.begin(), index_vec.end());
+  auto const sorted_col = wrapper<decimal32>(sorted_vec.begin(), sorted_vec.end());
+
+  auto const sorted_table = cudf::table_view{{sorted_col}};
+  auto const input_table  = cudf::table_view{{input_col}};
+
+  auto const indices = cudf::sorted_order(input_table);
+  auto const sorted  = cudf::gather(input_table, indices->view());
+
+  cudf::test::expect_columns_equal(index_col, indices->view());
+  cudf::test::expect_tables_equal(sorted_table, sorted->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
