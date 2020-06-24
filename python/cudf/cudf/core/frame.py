@@ -1713,8 +1713,11 @@ def _get_replacement_values(to_replace, replacement, col_name, column):
     from pandas.api.types import is_dict_like
 
     all_nan = False
-
-    if is_dict_like(to_replace) and replacement is None:
+    if (
+        is_dict_like(to_replace)
+        and not isinstance(to_replace, cudf.Series)
+        and replacement is None
+    ):
         replacement = list(to_replace.values())
         to_replace = list(to_replace.keys())
     elif not is_scalar(to_replace):
