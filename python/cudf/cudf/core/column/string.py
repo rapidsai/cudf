@@ -20,13 +20,13 @@ from cudf._lib.nvtext.ngrams_tokenize import (
 )
 from cudf._lib.nvtext.normalize import normalize_spaces as cpp_normalize_spaces
 from cudf._lib.nvtext.replace import replace_tokens as cpp_replace_tokens
+from cudf._lib.nvtext.subword_tokenize import (
+    subword_tokenize as cpp_subword_tokenize,
+)
 from cudf._lib.nvtext.tokenize import (
     character_tokenize as cpp_character_tokenize,
     count_tokens as cpp_count_tokens,
     tokenize as cpp_tokenize,
-)
-from cudf._lib.nvtext.subword_tokenize import (
-    subword_tokenize as cpp_subword_tokenize,
 )
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
