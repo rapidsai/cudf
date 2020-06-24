@@ -85,6 +85,7 @@
 - PR #5496 Rename .cu tests (zero cuda kernels) to .cpp files
 - PR #5526 Change `type_id` to enum class
 - PR #5559 Java APIs for missing date/time operators
+- PR #5562 Add missing join type for java
 
 ## Bug Fixes
 
@@ -128,6 +129,7 @@
 - PR #5523 Handle `dtype` of `Buffer` objects when not passed explicitly
 - PR #5534 Fix the java build around type_id
 - PR #5537 Fix issue related to using `set_index` on a string series
+- PR #5561 Fix `copy_bitmask` issue with offset
 
 # cuDF 0.14.0 (Date TBD)
 

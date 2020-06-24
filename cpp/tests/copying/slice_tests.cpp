@@ -344,3 +344,20 @@ TEST_F(SliceTableCornerCases, NegativeOffset)
 
   EXPECT_THROW(cudf::slice(src_table, indices), cudf::logic_error);
 }
+
+TEST_F(SliceTableCornerCases, MiscOffset)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+     3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col3{
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0}};
+  std::vector<cudf::size_type> indices{19, 38};
+  std::vector<cudf::column_view> result = cudf::slice(col2, indices);
+  cudf::column result_column(result[0]);
+
+  cudf::test::expect_columns_equal(col3, result_column);
+}
