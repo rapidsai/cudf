@@ -142,9 +142,9 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   nvtxRangePop();
 
   // Run tokenizer
-  nvtxRangePushA("tokenize");
+  // nvtxRangePushA("tokenize");
   auto tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
-  nvtxRangePop();
+  // nvtxRangePop();
   uint32_t const* device_token_ids = tokens.first;
   uint32_t const* device_offsets   = tokens.second;
 

@@ -15,6 +15,7 @@
  */
 
 #include <text/subword/detail/cp_data.h>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 #include <text/subword/detail/cp_data_vec.ah>
 #include <text/subword/detail/hash_utils.cuh>
@@ -321,8 +322,12 @@ std::pair<uint32_t*, uint32_t*> wordpiece_tokenizer::tokenize(char const* d_stri
                                                               uint32_t num_strings,
                                                               cudaStream_t stream)
 {
+  nvtxRangePushA("normalize");
   auto cps_and_offsets = normalizer.normalize(d_strings, d_offsets, num_strings, stream);
+  nvtxRangePop();
+  nvtxRangePushA("tokenize");
   tokenize(cps_and_offsets.first, cps_and_offsets.second, stream);
+  nvtxRangePop();
   return std::make_pair(cps_and_offsets.first.gpu_ptr, cps_and_offsets.second.gpu_ptr);
 }
 
