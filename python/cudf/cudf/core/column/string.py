@@ -3992,7 +3992,9 @@ class StringColumn(column.ColumnBase):
     @copy_docstring(column.ColumnBase.view)
     def view(self, dtype):
         if self.null_count > 0:
-            raise ValueError("Can not produce a view of a column with nulls")
+            raise ValueError(
+                "Can not produce a view of a string column with nulls"
+            )
         dtype = np.dtype(dtype)
         str_byte_offset = self.base_children[0][self.offset]
         char_dtype_size = self.base_children[1].dtype.itemsize

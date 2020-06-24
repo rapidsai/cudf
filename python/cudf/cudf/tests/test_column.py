@@ -255,21 +255,19 @@ def test_column_view_nulls_widths_even():
 
     assert_eq(expect, got)
 
-
-def test_column_view_numeric_slice():
+@pytest.mark.parametrize('slc', [slice(1, None), slice(None, 4), slice(2, 4)])
+def test_column_view_numeric_slice(slc):
 
     data = np.array([1, 2, 3, 4, 5], dtype="int32")
     sr = cudf.Series(data)
 
-    expect = cudf.Series(data[1:].view("int64"))
-    got = cudf.Series(sr._column[1:].view("int64"))
+    expect = cudf.Series(data[slc].view("int64"))
+    got = cudf.Series(sr._column[slc].view("int64"))
 
     assert_eq(expect, got)
 
-    expect = cudf.Series(data[1:3])
-    got = cudf.Series(sr._column[1:3].view("int64"))
-
-def test_column_view_string_slice():
+@pytest.mark.parametrize('slc', [slice(3, None), slice(None, 4), slice(2 , 5)])
+def test_column_view_string_slice(slc):
     def str_host_view(list_of_str, to_dtype):
         return np.concatenate(
             [
@@ -277,14 +275,9 @@ def test_column_view_string_slice():
                 for s in list_of_str
             ]
         )
-    data = ['a', 'b', 'cd', 'efg', 'h']
+    data = ['a', 'bcde', 'cd', 'efg', 'h']
 
-    expect = cudf.Series(cudf.Series(data)._column[3:].view('int8'))
-    got = cudf.Series(str_host_view(data[3:], 'int8'))
+    expect = cudf.Series(cudf.Series(data)._column[slc].view('int8'))
+    got = cudf.Series(str_host_view(data[slc], 'int8'))
     
-    assert_eq(expect, got)
-
-    expect = cudf.Series(cudf.Series(data)._column[2:5].view('int8'))
-    got = cudf.Series(str_host_view(data[2:5], 'int8'))
-
     assert_eq(expect, got)
