@@ -45,7 +45,7 @@ std::unique_ptr<column> all_characters_of_type(
   auto d_column       = *strings_column;
 
   // create output column
-  auto results      = make_numeric_column(data_type{BOOL8},
+  auto results      = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
                                      copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
@@ -91,7 +91,7 @@ std::unique_ptr<column> is_integer(
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
   // create output column
-  auto results   = make_numeric_column(data_type{BOOL8},
+  auto results   = make_numeric_column(data_type{type_id::BOOL8},
                                      strings.size(),
                                      copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
@@ -133,7 +133,7 @@ std::unique_ptr<column> is_float(
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
   // create output column
-  auto results   = make_numeric_column(data_type{BOOL8},
+  auto results   = make_numeric_column(data_type{type_id::BOOL8},
                                      strings.size(),
                                      copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
