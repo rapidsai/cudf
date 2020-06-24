@@ -83,8 +83,10 @@
 - PR #5503 Change `unique_count` to `distinct_count`
 - PR #5514 `convert_datetime.cu` Small Cleanup
 - PR #5496 Rename .cu tests (zero cuda kernels) to .cpp files
+- PR #5518 split iterator and gather tests to speedup build tests
 - PR #5526 Change `type_id` to enum class
 - PR #5559 Java APIs for missing date/time operators
+- PR #5562 Add missing join type for java
 
 ## Bug Fixes
 
@@ -128,6 +130,7 @@
 - PR #5523 Handle `dtype` of `Buffer` objects when not passed explicitly
 - PR #5534 Fix the java build around type_id
 - PR #5564 Fix CudfEngine.read_metadata API in dask_cudf
+- PR #5561 Fix `copy_bitmask` issue with offset
 
 # cuDF 0.14.0 (Date TBD)
 
