@@ -67,6 +67,7 @@ def path_or_buf(datadir):
                 "double1",
             ],
         ),
+        ("TestOrcFile.RLEv2.orc", ["x", "y"]),
         ("TestOrcFile.testSnappy.orc", None),
         ("TestOrcFile.demo-12-zlib.orc", ["_col2", "_col3", "_col4", "_col5"]),
     ],

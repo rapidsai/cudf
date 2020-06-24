@@ -100,7 +100,8 @@ TEST_F(TextGenerateNgramsTest, NgramsWithNulls)
 
 TEST_F(TextGenerateNgramsTest, Empty)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto results = nvtext::generate_ngrams(cudf::strings_column_view(zero_size_strings_column));
   cudf::test::expect_strings_empty(results->view());
   results = nvtext::generate_character_ngrams(cudf::strings_column_view(zero_size_strings_column));

@@ -3345,11 +3345,11 @@ class Series(Frame, Serializable):
         and exact version to be moved to libgdf
         """
         if method != "sort":
-            msg = "non sort based unique_count() not implemented yet"
+            msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count(method, dropna)
+        return self._column.distinct_count(method, dropna)
 
     def value_counts(
         self,

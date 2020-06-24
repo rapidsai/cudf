@@ -108,7 +108,7 @@ TEST_F(TextNgramsTokenizeTest, TokenizeOneGram)
 
 TEST_F(TextNgramsTokenizeTest, TokenizeEmptyTest)
 {
-  auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
+  auto strings = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
   cudf::strings_column_view strings_view(strings->view());
   auto results = nvtext::ngrams_tokenize(strings_view);
   EXPECT_EQ(results->size(), 0);
