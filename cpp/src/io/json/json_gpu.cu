@@ -25,6 +25,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
 
@@ -253,6 +254,7 @@ __inline__ __device__ cudf::string_view decode_value(const char *data,
 {
   return cudf::string_view{};
 }
+
 template <>
 __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
                                                       long start,
@@ -261,6 +263,7 @@ __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
 {
   return cudf::dictionary32{};
 }
+
 template <>
 __inline__ __device__ cudf::list_view decode_value(const char *data,
                                                    long start,
@@ -268,6 +271,15 @@ __inline__ __device__ cudf::list_view decode_value(const char *data,
                                                    ParseOptions const &opts)
 {
   return cudf::list_view{};
+}
+
+template <>
+__inline__ __device__ numeric::decimal32 decode_value(const char *data,
+                                                      long start,
+                                                      long end,
+                                                      ParseOptions const &opts)
+{
+  return numeric::decimal32{};
 }
 
 /**
