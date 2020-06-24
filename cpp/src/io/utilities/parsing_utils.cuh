@@ -142,7 +142,7 @@ template <typename T, int base = 10>
 __inline__ __device__ T
 parse_numeric(const char* data, long start, long end, ParseOptions const& opts)
 {
-  T value               = 0;
+  T value{};
   bool all_digits_valid = true;
 
   // Handle negative values if necessary
