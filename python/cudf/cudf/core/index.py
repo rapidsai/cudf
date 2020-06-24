@@ -67,7 +67,7 @@ class Index(Frame, Serializable):
         tupleize_cols=True,
         **kwargs,
     ):
-        if tupleize_cols != True:
+        if tupleize_cols is not True:
             raise NotImplementedError(
                 "tupleize_cols != True is not yet supported"
             )
@@ -951,15 +951,27 @@ class RangeIndex(Index):
     ----------
     start : int (default: 0), or other RangeIndex instance
     stop : int (default: 0)
+    step : int (default: 1)
+        Not yet supported
     name : object, optional
         Name to be stored in the index.
+    dtype : numpy dtype
+        Unused, accepted for homogeneity with other index types.
     copy : bool, default False
         Unused, accepted for homogeneity with other index types.
-
 
     Returns
     -------
     RangeIndex
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.RangeIndex(0, 10, name="a")
+    RangeIndex(start=0, stop=10, name='a')
+
+    >>> cudf.RangeIndex(range(1, 10), name="a")
+    RangeIndex(start=1, stop=10, name='a')
     """
 
     def __new__(
@@ -1075,9 +1087,9 @@ class RangeIndex(Index):
             start += self._start
             stop += self._start
             if sln == 0:
-                return RangeIndex(0, None, self.name)
+                return RangeIndex(0, stop=None, name=self.name)
             elif step == 1:
-                return RangeIndex(start, stop, self.name)
+                return RangeIndex(start, stop=stop, name=self.name)
             else:
                 return index_from_range(start, stop, step)
 
@@ -1479,6 +1491,18 @@ class DatetimeIndex(GenericIndex):
     yearfirst : bool, default False
         If True parse dates in data with the year first order.
         This is not yet supported
+
+    Returns:
+    --------
+    DatetimeIndex
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.DatetimeIndex([1, 2, 3, 4], name="a")
+    DatetimeIndex(['1970-01-01 00:00:00.001000', '1970-01-01 00:00:00.002000',
+                   '1970-01-01 00:00:00.003000', '1970-01-01 00:00:00.004000'],
+                  dtype='datetime64[ms]', name='a')
     """
 
     def __new__(
@@ -1502,19 +1526,19 @@ class DatetimeIndex(GenericIndex):
         # and then just dispatch upstream
         out = Frame().__new__(cls)
 
-        if freq != None:
+        if freq is not None:
             raise NotImplementedError("Freq is not yet supported")
-        if tz != None:
+        if tz is not None:
             raise NotImplementedError("tz is not yet supported")
         if normalize is not False:
             raise NotImplementedError("normalize == True is not yet supported")
-        if closed != None:
+        if closed is not None:
             raise NotImplementedError("closed is not yet supported")
         if ambiguous != "raise":
             raise NotImplementedError("ambiguous is not yet supported")
-        if dayfirst is not True:
+        if dayfirst is not False:
             raise NotImplementedError("dayfirst == True is not yet supported")
-        if yearfirst is not True:
+        if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
 
         if copy is True:
@@ -1582,13 +1606,19 @@ class CategoricalIndex(GenericIndex):
     Parameters
     ----------
     data : array-like (1-dimensional)
-        The values of the categorical. If categories are given, values not in categories will be replaced with None/NaN.
+        The values of the categorical. If categories are given,
+        values not in categories will be replaced with None/NaN.
     categories : list-like, optional
-        The categories for the categorical. Items need to be unique. If the categories are not given here (and also not in dtype), they will be inferred from the data.
+        The categories for the categorical. Items need to be unique.
+        If the categories are not given here (and also not in dtype),
+        they will be inferred from the data.
     ordered : bool, optional
-        Whether or not this categorical is treated as an ordered categorical. If not given here or in dtype, the resulting categorical will be unordered.
+        Whether or not this categorical is treated as an ordered categorical.
+        If not given here or in dtype, the resulting categorical will be
+        unordered.
     dtype : CategoricalDtype or “category”, optional
-        If CategoricalDtype, cannot be used together with categories or ordered.
+        If CategoricalDtype, cannot be used together with categories or
+        ordered.
     copy : bool, default False
         Make a copy of input ndarray.
     name : object, optional
@@ -1597,6 +1627,24 @@ class CategoricalIndex(GenericIndex):
     Return
     ------
     CategoricalIndex
+
+    Examples
+    --------
+    >>> import cudf
+    >>> import pandas as pd
+    >>> cudf.CategoricalIndex(
+    ... data=[1, 2, 3, 4], categories=[1, 2], ordered=False, name="a")
+    CategoricalIndex(['1', '2', 'null', 'null'],
+            categories=['1', '2', 'null'],
+            ordered=False,
+            dtype='category')
+
+    >>> cudf.CategoricalIndex(
+    ... data=[1, 2, 3, 4], dtype=pd.CategoricalDtype([1, 2, 3]), name="a")
+    CategoricalIndex(['1', '2', '3', 'null'],
+            categories=['1', '2', '3', 'null'],
+            ordered=False,
+            dtype='category')
     """
 
     def __new__(
@@ -1611,7 +1659,8 @@ class CategoricalIndex(GenericIndex):
         if isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
             if categories is not None or ordered is not None:
                 raise ValueError(
-                    "Cannot specify `categories` or `ordered` together with `dtype`."
+                    "Cannot specify `categories` or \
+                        `ordered` together with `dtype`."
                 )
         if copy is True:
             data = data.copy()
@@ -1784,11 +1833,11 @@ def as_index(arbitrary, **kwargs):
 
 
 def _setdefault_name(values, **kwargs):
-    if "name" not in kwargs:
+    if "name" not in kwargs or kwargs["name"] is None:
         if not hasattr(values, "name"):
-            kwargs.setdefault("name", None)
+            kwargs.update({"name": None})
         else:
-            kwargs.setdefault("name", values.name)
+            kwargs.update({"name": values.name})
     return kwargs
 
 
@@ -1810,6 +1859,15 @@ def Int64Index(data=None, dtype="int64", copy=False, name=None):
     Returns
     -------
     Index
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.Int64Index([1, 2, 3, 4], name="a")
+    Int64Index([1, 2, 3, 4], dtype='int64', name='a')
+
+    >>> cudf.Int64Index([1, 2, 3, 4], dtype="int16", name="a")
+    Int64Index([1, 2, 3, 4], dtype='int64', name='a')
     """
 
     return Index(data=data, dtype=dtype, copy=copy, name=name)
@@ -1833,6 +1891,15 @@ def UInt64Index(data=None, dtype="uint64", copy=False, name=None):
     Returns
     -------
     Index
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.UInt64Index([1, 2, 3, 4], name="a")
+    UInt64Index([1, 2, 3, 4], dtype='uint64', name='a')
+
+    >>> cudf.UInt64Index([1, 2, 3, 4], dtype="uint16", name="a")
+    UInt64Index([1, 2, 3, 4], dtype='uint64', name='a')
     """
 
     return Index(data=data, dtype=dtype, copy=copy, name=name)
@@ -1856,6 +1923,15 @@ def Float64Index(data=None, dtype="float64", copy=False, name=None):
     Returns
     -------
     Index
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.Float64Index([1, 2, 3], name="a")
+    Float64Index([1.0, 2.0, 3.0], dtype='float64', name='a')
+
+    >>> cudf.Float64Index([1, 2, 3], dtype="float32", name="a")
+    Float64Index([1.0, 2.0, 3.0], dtype='float64', name='a')
     """
 
     return Index(data=data, dtype=dtype, copy=copy, name=name)

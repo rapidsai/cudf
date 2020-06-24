@@ -41,6 +41,23 @@ class MultiIndex(Index):
     Returns
     -------
     MultiIndex
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.MultiIndex(
+    ... levels=[[1, 2], ['blue', 'red']], codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+    MultiIndex(levels=[0    1
+    1    2
+    dtype: int64, 0    blue
+    1     red
+    dtype: object],
+    codes=   0  1
+    0  0  1
+    1  0  0
+    2  1  1
+    3  1  0)
+
     """
 
     def __new__(

@@ -12,11 +12,14 @@ import rmm
 from cudf import core, datasets
 from cudf._version import get_versions
 from cudf.core import (
+    CategoricalIndex,
     DataFrame,
+    DatetimeIndex,
     Float64Index,
     Index,
     Int64Index,
     MultiIndex,
+    RangeIndex,
     Series,
     UInt64Index,
     from_pandas,

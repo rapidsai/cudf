@@ -285,7 +285,7 @@ def test_index_notna(idx):
 
 def test_rangeindex_slice_attr_name():
     start, stop = 0, 10
-    rg = RangeIndex(start, stop, "myindex")
+    rg = RangeIndex(start, stop, name="myindex")
     sliced_rg = rg[0:9]
     assert_eq(rg.name, sliced_rg.name)
 
@@ -579,6 +579,7 @@ def test_numerical_index_apis(data, name):
 @pytest.mark.parametrize("name", [1, "a", None])
 def test_categorical_index_basic(data, categories, dtype, ordered, name):
 
+    # can't have both dtype and categories/ordered
     if dtype is not None:
         categories = None
         ordered = None
