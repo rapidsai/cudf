@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <bits/stdint-intn.h>
 #include <tests/groupby/groupby_test_util.hpp>
 
 #include <tests/utilities/base_fixture.hpp>

@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <bits/stdint-intn.h>
 #include <cudf/copying.hpp>
 #include <cudf/partitioning.hpp>
 #include <cudf/table/table.hpp>

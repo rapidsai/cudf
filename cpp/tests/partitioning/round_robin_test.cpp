@@ -19,7 +19,6 @@
 #include <cudf/types.hpp>
 #include <tests/utilities/base_fixture.hpp>
 
-#include <bits/stdint-intn.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/partitioning.hpp>

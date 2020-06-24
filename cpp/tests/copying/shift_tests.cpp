@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <bits/stdint-intn.h>
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
