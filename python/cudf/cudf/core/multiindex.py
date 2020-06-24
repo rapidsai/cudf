@@ -84,7 +84,7 @@ class MultiIndex(Index):
         out = Frame().__new__(cls)
         super(Index, out).__init__()
 
-        if copy is True and isinstance(codes, DataFrame):
+        if copy == True and isinstance(codes, DataFrame):
             codes = codes.copy()
 
         out._name = None
