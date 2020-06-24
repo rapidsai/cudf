@@ -83,5 +83,9 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> codify(
+  cudf::column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** @} */  // end of group
 }  // namespace cudf
