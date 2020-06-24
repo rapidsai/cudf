@@ -19,13 +19,12 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 #include <nvtext/subword_tokenize.hpp>
+#include <text/subword/detail/wordpiece_tokenizer.hpp>
 
 #include <device_launch_parameters.h>
 #include <fstream>
 #include <iostream>
 #include <vector>
-
-#include <text/subword/detail/wordpiece_tokenizer.hpp>
 
 namespace nvtext {
 namespace detail {
@@ -161,7 +160,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                            stream));
 
   // compute number of rows required for final tensor
-  uint32_t nrows_tensor_tokenIDS = 0;
+  uint32_t nrows_tensor_token_ids = 0;
   std::vector<uint32_t> nrows_per_log(strings_count);
   for (auto i = 0; i < strings_count; i++) {
     uint32_t ntokens = host_offsets[i + 1] - host_offsets[i];
@@ -172,11 +171,11 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
       nrows_per_log[i] = 1 + (ntokens / stride);
       if (ntokens % stride) nrows_per_log[i]++;
     }
-    nrows_tensor_tokenIDS += nrows_per_log[i];
+    nrows_tensor_token_ids += nrows_per_log[i];
   }
   // compute global_row to log, and global_row to within_log_row correspondence
-  std::vector<uint32_t> host_row2log(nrows_tensor_tokenIDS);
-  std::vector<uint32_t> host_row2row_within_log(nrows_tensor_tokenIDS);
+  std::vector<uint32_t> host_row2log(nrows_tensor_token_ids);
+  std::vector<uint32_t> host_row2row_within_log(nrows_tensor_token_ids);
   int row_id = 0;
   for (auto i = 0; i < strings_count; i++) {
     for (uint32_t j = 0; j < nrows_per_log[i]; j++) {
@@ -194,24 +193,24 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 
   // output data
   auto tensor_token_ids = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT32},
-                                                    nrows_tensor_tokenIDS * max_sequence_length,
+                                                    nrows_tensor_token_ids * max_sequence_length,
                                                     cudf::mask_state::UNALLOCATED,
                                                     stream,
                                                     mr);
   auto tensor_attention_mask =
     cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT32},
-                              nrows_tensor_tokenIDS * max_sequence_length,
+                              nrows_tensor_token_ids * max_sequence_length,
                               cudf::mask_state::UNALLOCATED,
                               stream,
                               mr);
   auto tensor_metadata = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT32},
-                                                   nrows_tensor_tokenIDS * 3,
+                                                   nrows_tensor_token_ids * 3,
                                                    cudf::mask_state::UNALLOCATED,
                                                    stream,
                                                    mr);
 
   // compute final-tensor, mask, and metadata
-  kernel_compute_tensor_metadata<<<nrows_tensor_tokenIDS, max_sequence_length, 0, stream>>>(
+  kernel_compute_tensor_metadata<<<nrows_tensor_token_ids, max_sequence_length, 0, stream>>>(
     device_token_ids,
     device_offsets,
     device_row2log.data().get(),
@@ -223,7 +222,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
     tensor_attention_mask->mutable_view().data<uint32_t>(),
     tensor_metadata->mutable_view().data<uint32_t>());
 
-  return tokenizer_result{nrows_tensor_tokenIDS,
+  return tokenizer_result{nrows_tensor_token_ids,
                           max_sequence_length,
                           std::move(tensor_token_ids),
                           std::move(tensor_attention_mask),

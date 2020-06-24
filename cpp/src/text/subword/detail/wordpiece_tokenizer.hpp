@@ -39,10 +39,10 @@ class wordpiece_tokenizer {
    * @param max_num_chars Maximum number of characters for instantiating the tokenizer.
    *        Used to allocate temporary working memory on the GPU.
    *        If the input contains a larger number of characters, behavior is undefined.
-   * @param max_rows_final_tensor Maximum number of rows in tensor_tokenIDS expected by tokenizer.
+   * @param max_rows_final_tensor Maximum number of rows in tensor_token-ids expected by tokenizer.
    *        Used to allocate temporary working memory on the GPU.
    *        If the output contains a larger number of rows, behavior is undefined.
-   * @param max_sequence_length Limit the number of tokenIDs per row in final tensor with tokenIDS
+   * @param max_sequence_length Limit the number of token-ids per row in the output
    * @param stride Each row in tensor-token-ids will replicate `max_sequence_length - stride`
    *        token-ids from the previous row, unless it is the first string.
    * @param do_truncate If true, the tokenizer will discard all the token-ids after
