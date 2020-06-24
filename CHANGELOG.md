@@ -25,6 +25,7 @@
 - PR #5488 Add plumbings for `.str.replace_tokens`
 - PR #5502 Add Unsigned int types support in dlpack
 - PR #5497 Add `.str.isinteger` & `.str.isfloat`
+- PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
 
 ## Improvements
@@ -83,6 +84,7 @@
 - PR #5503 Change `unique_count` to `distinct_count`
 - PR #5514 `convert_datetime.cu` Small Cleanup
 - PR #5496 Rename .cu tests (zero cuda kernels) to .cpp files
+- PR #5518 split iterator and gather tests to speedup build tests
 - PR #5526 Change `type_id` to enum class
 - PR #5559 Java APIs for missing date/time operators
 - PR #5562 Add missing join type for java
@@ -128,6 +130,7 @@
 - PR #5516 Update gpuCI image in local build script
 - PR #5523 Handle `dtype` of `Buffer` objects when not passed explicitly
 - PR #5534 Fix the java build around type_id
+- PR #5537 Fix issue related to using `set_index` on a string series
 - PR #5561 Fix `copy_bitmask` issue with offset
 
 # cuDF 0.14.0 (Date TBD)
