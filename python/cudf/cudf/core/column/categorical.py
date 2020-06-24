@@ -284,8 +284,12 @@ class CategoricalAccessor(object):
         dtype: category
         Categories (5, int64): [1, 2, 0, 3, 4]
         """
-        new_categories = column.as_column(new_categories)
+
         old_categories = self._column.categories
+        new_categories = column.as_column(
+            new_categories,
+            dtype=old_categories.dtype if len(new_categories) == 0 else None,
+        )
 
         if (
             old_categories.dtype == "object"
