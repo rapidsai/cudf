@@ -106,7 +106,7 @@ filepath_or_buffer : str, path object, bytes, file-like object, or a list
     Contains one or more of the following: either a path to a file (a `str`,
     `pathlib.Path`, or `py._path.local.LocalPath`), URL (including http, ftp,
     and S3 locations), Python bytes of raw binary data, or any object with a
-    `read()` method (such as builtin `open()` file handler function or 
+    `read()` method (such as builtin `open()` file handler function or
     `BytesIO`).
 engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
