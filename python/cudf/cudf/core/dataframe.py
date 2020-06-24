@@ -6213,19 +6213,14 @@ class DataFrame(Frame, Serializable):
                     "or if the Series has a name"
                 )
 
-            index = Index([other.name], name=self.index.name)
             idx_diff = other.index.difference(self.columns)
+            current_cols = cudf.Index(self._data.names)
             try:
-                combined_columns = self.columns.append(idx_diff)
+                combined_columns = current_cols.append(idx_diff)
             except TypeError:
-                combined_columns = self.columns.astype("str").append(idx_diff)
-            other = (
-                other.reindex(combined_columns, copy=False)
-                .to_frame()
-                .T.infer_objects()
-                .rename_axis(index.names, copy=False)
-            )
-            if not self.columns.equals(combined_columns):
+                combined_columns = current_cols.astype("str").append(idx_diff)
+            other = other.reindex(combined_columns, copy=False).to_frame().T
+            if not current_cols.equals(combined_columns):
                 self = self.reindex(columns=combined_columns)
         elif isinstance(other, list):
             if not other:
