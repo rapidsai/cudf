@@ -465,17 +465,6 @@ class Index(Frame, Serializable):
             return as_index(difference.take(inds))
         return difference
 
-        # lhs = cudf.DataFrame(
-        #     {"x": self._values, "orig_order": cupy.arange(len(self))}
-        # )
-        # rhs = cudf.DataFrame(
-        #     {"x": other._values, "bool": cupy.ones(len(other), "bool")}
-        # )
-        # res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
-        # res = res.drop_duplicates(subset="orig_order", ignore_index=True)
-        # res = res._data["bool"].fillna(False)
-        # return None
-
     def _apply_op(self, fn, other=None):
         from cudf.core.series import Series
 
