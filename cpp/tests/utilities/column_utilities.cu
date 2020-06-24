@@ -433,11 +433,16 @@ struct column_view_printer {
                   std::vector<std::string>& out,
                   std::string const& indent)
   {
+    auto const h_data = cudf::test::to_host<Element>(col);
+
     out.resize(col.size());
     std::transform(thrust::make_counting_iterator(size_type{0}),
                    thrust::make_counting_iterator(col.size()),
                    out.begin(),
-                   [](auto idx) { return std::string(":p"); });  // #TODO
+                   [&](auto idx) {
+                     auto const d = static_cast<double>(h_data.first[idx]);
+                     return std::to_string(d);
+                   });
   }
 
   template <typename Element,
