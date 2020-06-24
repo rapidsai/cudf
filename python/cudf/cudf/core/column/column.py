@@ -398,6 +398,7 @@ class ColumnBase(Column, Serializable):
             The dtype to view the data as
 
         """
+
         dtype = np.dtype(dtype)
 
         if dtype.kind in ("o", "u", "s"):
@@ -420,16 +421,17 @@ class ColumnBase(Column, Serializable):
                     "Can not produce a view of a column with nulls"
                 )
 
-            if (self.base_size * self.dtype.itemsize) % dtype.itemsize:
+            if (self.size * self.dtype.itemsize) % dtype.itemsize:
                 raise TypeError(
-                    f"Can not divide {self.base_size * self.dtype.itemsize}"
+                    f"Can not divide {self.size * self.dtype.itemsize}"
                     + f" total bytes into {dtype} with size {dtype.itemsize}"
                 )
 
-            new_size = (self.base_size - self.offset) * self.dtype.itemsize
+            new_buf_ptr = self.base_data.ptr + self.offset * self.dtype.itemsize
+            new_buf_size = self.size * self.dtype.itemsize
             view_buf = Buffer(
-                data=self.base_data.ptr,
-                size=new_size,
+                data=new_buf_ptr,
+                size=new_buf_size,
                 owner=self.base_data._owner,
             )
             return build_column(view_buf, dtype=dtype)
