@@ -25,6 +25,7 @@
 - PR #5488 Add plumbings for `.str.replace_tokens`
 - PR #5502 Add Unsigned int types support in dlpack
 - PR #5497 Add `.str.isinteger` & `.str.isfloat`
+- PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
 
 ## Improvements
@@ -130,6 +131,7 @@
 - PR #5523 Handle `dtype` of `Buffer` objects when not passed explicitly
 - PR #5534 Fix the java build around type_id
 - PR #5564 Fix CudfEngine.read_metadata API in dask_cudf
+- PR #5537 Fix issue related to using `set_index` on a string series
 - PR #5561 Fix `copy_bitmask` issue with offset
 
 # cuDF 0.14.0 (Date TBD)
