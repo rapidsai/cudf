@@ -83,6 +83,26 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Encode the values of the given column as integers
+ *
+ * The encoded values are integers in the range [0, n), where `n`
+ * is the number of distinct values in the input column.
+ * The result column is such that keys[result[i]] == input[i],
+ * where `keys` is the set of distinct values in `input` in sorted order.
+ *
+ * Examples:
+ * input: {'a', 'b', 'b', 'a'}
+ * output: [{'a', 'b'}, {0, 1, 1, 0}]
+ *
+ * input: {1, 3, 1, 2, 9}
+ * output: [{1, 2, 3, 9}, {0, 2, 0, 1, 3}]
+ *
+ * @param input        Column containing values to be encode
+ * @param mr           Device memory resource used to allocate the returned bitmask.
+ * @return A pair containing the distinct values of the input column in sorter order,
+ * and a column of integer indices representing the encoded values.
+ */
 std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> codify(
   cudf::column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
