@@ -5994,3 +5994,78 @@ def test_cudf_isclose_different_index():
         [False, True, True, False, True, False], index=s1.index
     )
     assert_eq(expected, gd.isclose(s1, s2))
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame({"a": [1, 2, 3, 4, 5, 10, 11, 12, 33, 55, 19]}),
+        pd.DataFrame(
+            {
+                "one": [1, 2, 3, 4, 5, 10],
+                "two": ["abc", "def", "ghi", "xyz", "pqr", "abc"],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "one": [1, 2, 3, 4, 5, 10],
+                "two": ["abc", "def", "ghi", "xyz", "pqr", "abc"],
+            },
+            index=[10, 20, 30, 40, 50, 60],
+        ),
+        pd.DataFrame(
+            {
+                "one": [1, 2, 3, 4, 5, 10],
+                "two": ["abc", "def", "ghi", "xyz", "pqr", "abc"],
+            },
+            index=["a", "b", "c", "d", "e", "f"],
+        ),
+        pd.DataFrame(index=["a", "b", "c", "d", "e", "f"]),
+        pd.DataFrame(columns=["a", "b", "c", "d", "e", "f"]),
+        pd.DataFrame(index=[10, 11, 12]),
+        pd.DataFrame(columns=[10, 11, 12]),
+        pd.DataFrame(),
+        pd.DataFrame({"one": [], "two": []}),
+        pd.DataFrame({2: [], 1: []}),
+        pd.DataFrame(
+            {
+                0: [1, 2, 3, 4, 5, 10],
+                1: ["abc", "def", "ghi", "xyz", "pqr", "abc"],
+                100: ["a", "b", "b", "x", "z", "a"],
+            },
+            index=[10, 20, 30, 40, 50, 60],
+        ),
+    ],
+)
+def test_dataframe_keys(df):
+    gdf = gd.from_pandas(df)
+
+    assert_eq(df.keys(), gdf.keys())
+
+
+@pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series([1, 2, 3, 4, 5, 10, 11, 12, 33, 55, 19]),
+        pd.Series(["abc", "def", "ghi", "xyz", "pqr", "abc"]),
+        pd.Series(
+            [1, 2, 3, 4, 5, 10],
+            index=["abc", "def", "ghi", "xyz", "pqr", "abc"],
+        ),
+        pd.Series(
+            ["abc", "def", "ghi", "xyz", "pqr", "abc"],
+            index=[1, 2, 3, 4, 5, 10],
+        ),
+        pd.Series(index=["a", "b", "c", "d", "e", "f"]),
+        pd.Series(index=[10, 11, 12]),
+        pd.Series(),
+        pd.Series([]),
+    ],
+)
+def test_series_keys(ps):
+    gds = gd.from_pandas(ps)
+
+    if len(ps) == 0 and not isinstance(ps.index, pd.RangeIndex):
+        assert_eq(ps.keys().astype("float64"), gds.keys())
+    else:
+        assert_eq(ps.keys(), gds.keys())
