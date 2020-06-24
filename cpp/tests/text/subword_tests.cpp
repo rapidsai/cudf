@@ -43,10 +43,9 @@ TEST(TextSubwordTest, Tokenize)
 {
   uint32_t nrows = MAX_NUM_SENTENCES - 1;
   std::vector<const char*> h_strings(nrows, "This is a test. A test this is.");
-  // for (auto idx = 0; idx < 100; ++idx) h_strings.push_back("This is a test. A test this is.");
-  cudf::test::strings_column_wrapper sentences(h_strings.begin(), h_strings.end());
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   // create a fake hashed vocab text file for this test
-  // this only works with words in the sentences above
+  // this only works with words in the strings above
   std::string hash_file = temp_env->get_temp_filepath("fake_hashed_vocab.txt");
   {
     std::vector<std::pair<int, int>> coefficients(23, {65559, 0});
@@ -69,7 +68,7 @@ TEST(TextSubwordTest, Tokenize)
   uint32_t do_truncate         = 0;
   uint32_t do_lower            = 1;
 
-  auto result = nvtext::subword_tokenize(cudf::strings_column_view{sentences},
+  auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
                                          hash_file,
                                          max_sequence_length,
                                          stride,
@@ -81,9 +80,6 @@ TEST(TextSubwordTest, Tokenize)
 
   EXPECT_EQ(nrows, result.nrows_tensor);
 
-  cudf::column_view token_ids(cudf::data_type{cudf::type_id::UINT32},
-                              result.nrows_tensor * max_sequence_length,
-                              result.device_tensor_tokenIDS->data());
   {
     std::vector<uint32_t> base_data(
       {2023, 2003, 1037, 3231, 1012, 1037, 3231, 2023, 2003, 1012, 0, 0, 0, 0, 0, 0});
@@ -91,24 +87,18 @@ TEST(TextSubwordTest, Tokenize)
     for (auto idx = 0; idx < nrows; ++idx)
       h_expected.insert(h_expected.end(), base_data.begin(), base_data.end());
     cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
-    cudf::test::expect_columns_equal(token_ids, expected);
+    cudf::test::expect_columns_equal(result.tensor_token_ids->view(), expected);
   }
 
-  cudf::column_view attention_mask(cudf::data_type{cudf::type_id::UINT32},
-                                   result.nrows_tensor * max_sequence_length,
-                                   result.device_attention_mask->data());
   {
     std::vector<uint32_t> base_data({1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0});
     std::vector<uint32_t> h_expected;
     for (auto idx = 0; idx < nrows; ++idx)
       h_expected.insert(h_expected.end(), base_data.begin(), base_data.end());
     cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
-    cudf::test::expect_columns_equal(attention_mask, expected);
+    cudf::test::expect_columns_equal(result.tensor_attention_mask->view(), expected);
   }
 
-  cudf::column_view metadata(cudf::data_type{cudf::type_id::UINT32},
-                             result.nrows_tensor * 3,
-                             result.device_tensor_metadata->data());
   {
     std::vector<uint32_t> h_expected;
     for (auto idx = 0; idx < nrows; ++idx) {
@@ -118,6 +108,6 @@ TEST(TextSubwordTest, Tokenize)
       h_expected.push_back(9);
     }
     cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
-    cudf::test::expect_columns_equal(metadata, expected);
+    cudf::test::expect_columns_equal(result.tensor_metadata->view(), expected);
   }
 }

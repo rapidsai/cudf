@@ -5,16 +5,17 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libc.stdint cimport uint32_t
 
-from rmm._lib.device_buffer cimport device_buffer
+from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 
 
 cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
     cdef cppclass tokenizer_result "nvtext::tokenizer_result":
         uint32_t nrows_tensor
-        unique_ptr[device_buffer] device_tensor_tokenIDS
-        unique_ptr[device_buffer] device_attention_mask
-        unique_ptr[device_buffer] device_tensor_metadata
+        uint32_t sequence_length
+        unique_ptr[column] tensor_token_ids
+        unique_ptr[column] tensor_attention_mask
+        unique_ptr[column] tensor_metadata
 
     cdef tokenizer_result subword_tokenize(
         const column_view &strings,

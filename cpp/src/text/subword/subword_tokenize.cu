@@ -15,6 +15,7 @@
  */
 
 //#include <cudf/detail/get_value.cuh>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 #include <nvtext/subword_tokenize.hpp>
@@ -130,7 +131,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   auto d_chars     = strings.chars().data<char>() + offset;
 
   // Create tokenizer
-  nvtxRangePushA("create tokenizer");
+  nvtxRangePushA("create_tokenizer");
   wordpiece_tokenizer tokenizer(filename_hashed_vocabulary,
                                 max_num_strings,
                                 max_num_chars,
@@ -151,7 +152,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   uint32_t* device_offsets   = tokens.second;
 
   // Format output from tokenizer
-  nvtx3::thread_range rt{"tokenizer output"};
+  nvtx3::thread_range rt{"tokenizer_output"};
   // copy log offsets to host
   std::vector<uint32_t> host_offsets(strings_count + 1);
   CUDA_TRY(cudaMemcpyAsync(host_offsets.data(),
@@ -191,12 +192,24 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   rmm::device_vector<uint32_t> device_row2log = host_row2log;
   // correspondence between each row of tensor_tokenIDS and row number within a specific log
   rmm::device_vector<uint32_t> device_row2row_within_log = host_row2row_within_log;
+
   // output data
-  rmm::device_buffer d_tensor_token_ids(
-    nrows_tensor_tokenIDS * max_sequence_length * sizeof(uint32_t), stream, mr);
-  rmm::device_buffer d_attention_mask(
-    nrows_tensor_tokenIDS * max_sequence_length * sizeof(uint32_t), stream, mr);
-  rmm::device_buffer d_tensor_metadata(nrows_tensor_tokenIDS * 3 * sizeof(uint32_t), stream, mr);
+  auto tensor_token_ids = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT32},
+                                                    nrows_tensor_tokenIDS * max_sequence_length,
+                                                    cudf::mask_state::UNALLOCATED,
+                                                    stream,
+                                                    mr);
+  auto tensor_attention_mask =
+    cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT32},
+                              nrows_tensor_tokenIDS * max_sequence_length,
+                              cudf::mask_state::UNALLOCATED,
+                              stream,
+                              mr);
+  auto tensor_metadata = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT32},
+                                                   nrows_tensor_tokenIDS * 3,
+                                                   cudf::mask_state::UNALLOCATED,
+                                                   stream,
+                                                   mr);
 
   // compute final-tensor, mask, and metadata
   compute_tensor_metadata_kernel<<<nrows_tensor_tokenIDS, max_sequence_length, 0, stream>>>(
@@ -207,14 +220,15 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
     max_sequence_length,
     stride,
     do_truncate,
-    reinterpret_cast<uint32_t*>(d_tensor_token_ids.data()),
-    reinterpret_cast<uint32_t*>(d_attention_mask.data()),
-    reinterpret_cast<uint32_t*>(d_tensor_metadata.data()));
+    tensor_token_ids->mutable_view().data<uint32_t>(),
+    tensor_attention_mask->mutable_view().data<uint32_t>(),
+    tensor_metadata->mutable_view().data<uint32_t>());
 
   return tokenizer_result{nrows_tensor_tokenIDS,
-                          std::make_unique<rmm::device_buffer>(std::move(d_tensor_token_ids)),
-                          std::make_unique<rmm::device_buffer>(std::move(d_attention_mask)),
-                          std::make_unique<rmm::device_buffer>(std::move(d_tensor_metadata))};
+                          max_sequence_length,
+                          std::move(tensor_token_ids),
+                          std::move(tensor_attention_mask),
+                          std::move(tensor_metadata)};
 }
 
 }  // namespace detail
@@ -230,7 +244,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t max_rows_tensor,
                                   rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
+  // CUDF_FUNC_RANGE();
   return detail::subword_tokenize(strings,
                                   vocabulary_hashed_filename,
                                   max_sequence_length,

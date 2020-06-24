@@ -36,7 +36,10 @@ static std::string create_hash_vocab_file()
 
 static void BM_cuda_tokenizer_cudf(benchmark::State& state)
 {
-  cudf::test::strings_column_wrapper sentences{"This is a test."};
+  uint32_t nrows = MAX_NUM_SENTENCES - 1;
+  std::vector<const char*> h_strings(nrows, "This is a test ");
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
+  // cudf::test::strings_column_wrapper strings{"This is a test."};
   std::string hash_file = create_hash_vocab_file();
   std::vector<uint32_t> offsets{14};
   uint32_t max_sequence_length = 64;
@@ -44,7 +47,7 @@ static void BM_cuda_tokenizer_cudf(benchmark::State& state)
   uint32_t do_truncate         = 0;
   uint32_t do_lower            = 1;
   for (auto _ : state) {
-    auto result = nvtext::subword_tokenize(cudf::strings_column_view{sentences},
+    auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
                                            hash_file,
                                            max_sequence_length,
                                            stride,

@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -24,49 +25,83 @@
 namespace nvtext {
 
 struct tokenizer_result {
+  /**
+   * @brief The number of rows for the output token-ids.
+   */
   uint32_t nrows_tensor{};
-  std::unique_ptr<rmm::device_buffer> device_tensor_tokenIDS;
-  std::unique_ptr<rmm::device_buffer> device_attention_mask;
-  std::unique_ptr<rmm::device_buffer> device_tensor_metadata;
+  /**
+   * @brief The number of token-ids in each row.
+   */
+  uint32_t sequence_length{};
+  /**
+   * @brief A vector of token-ids for each row.
+   *
+   * This is a flat matrix (nrows_tensor x sequence_length) of token-ids.
+   */
+  std::unique_ptr<cudf::column> tensor_token_ids;
+  /**
+   * @brief This mask identifies which tensor-token-ids are valid.
+   */
+  std::unique_ptr<cudf::column> tensor_attention_mask;
+  /**
+   * @brief The metadata for each tensor row.
+   *
+   * Three elements per tensor row [rowID, start_pos, stop_pos])
+   */
+  std::unique_ptr<cudf::column> tensor_metadata;
 };
 
 /**
- * @brief Creates a full tokenizer that cleans the text and splits it into tokens.
+ * @brief Creates a tokenizer that cleans the text, splits it into tokens and
+ *        returns token-ids from an input vocabulary.
  *
- * @param sentences The input sentences to tokenize.
+ * The strings are first normalized by converting to lower-case, removing
+ * punctuation, replacing a select set of multi-byte characters and
+ * whitespace characters.
+ *
+ * The strings are then tokenized by using whitespace as a delimiter.
+ * Consecutive delimiters are ignored. Each token is then assigned
+ * a 4-byte token-id mapped from the provided vocabulary table.
+ *
+ * Essentially each string is converted into one or more vectors of token-ids
+ * in the output column. The total number of these vectors x `max_sequence_length`
+ * is the size of the output column.
+ *
+ * @param strings The input strings to tokenize.
  * @param filename_hashed_vocabulary A path to the preprocessed vocab.txt file.
- *               Note that this is the file AFTER python/perfect_hash.py has been used
- *               for preprocessing. Passing in the default vocab.txt file will cause
- *               undefined behavior.
- * @param max_sequence_length Limit the number of tokenIDs per row in final tensor with tokenIDS
- * @param stride Each row in tensor-tokenIDS will replicate (max_sequence_length - stride) tokenIDs
- *               from previous row, unless it is the first row of sentence/log.
- * @param do_lower_case If true, the tokenizer will convert uppercase characters in the
- *                      input stream to lower case AND strip accents from those characters.
- *                      If false, accented and uppercase characters are not transformed.
- * @param do_truncate If true, tokenizer will discard all the tokenIDs after max_sequence_length
- *                    for each input sentence/log. If false, it will use a new row in the
- *                    tensor-tokenIDS to continue generating the output.
- * @param max_num_sentences Maximum number of input sentences for instantiating the tokenizer.
- *                          Used to allocate memory on device.
- *                          If input contains larger number of sentences, behavior is undefined.
+ *        Note that this is the file AFTER python/perfect_hash.py has been used
+ *        for preprocessing.
+ * @param max_sequence_length Limit of the number of token-ids per row in final tensor
+ *        for each string.
+ * @param stride Each row in the output token-ids will replicate `max_sequence_length - stride`
+ *        the token-ids from the previous row, unless it is the first string.
+ * @param do_lower_case If true, the tokenizer will convert upper-case characters in the
+ *        input stream to lower-case and strip accents from those characters.
+ *        If false, accented and upper-case characters are not transformed.
+ * @param do_truncate If true, the tokenizer will discard all the token-ids after
+ *        `max_sequence_length` for each input string. If false, it will use a new row
+ *        in the output token-ids to continue generating the output.
+ * @param max_num_strings Maximum number of input strings for instantiating the tokenizer.
+ *        Used for allocating temporary working memory on the GPU.
+ *        If the input contains a larger number of strings, behavior is undefined.
  * @param max_num_chars Maximum number of characters for instantiating the tokenizer.
- *                      Used to allocate memory on device.
- *                      If input contains larger number of characters, behavior is undefined.
- * @param max_rows_tensor Maximum number of rows in tensor_tokenIDS expected by tokenizer.
- *                        Used to allocate memory on device.
- *                        If output contains larger number of rows, behavior is undefined.
+ *        Used for allocating temporary working memory on the GPU.
+ *        If input contains larger number of characters, behavior is undefined.
+ * @param max_rows_tensor Maximum number of rows for the output token-ids expected
+ *        to be generated by the tokenizer.
+ *        Used for allocating temporary working memory on the GPU device.
+ *        If the output generates a larger number of rows, behavior is undefined.
  * @param mr Memory resource to allocate any returned objects.
- * @return tokenIDS, mask, metadata
+ * @return token-ids, attention-mask, and metadata
  */
 tokenizer_result subword_tokenize(
-  cudf::strings_column_view const& sentences,
+  cudf::strings_column_view const& strings,
   std::string const& filename_hashed_vocabulary,
   uint32_t max_sequence_length,
   uint32_t stride,
   bool do_lower,
   bool do_truncate,
-  uint32_t max_num_sentences,
+  uint32_t max_num_strings,
   uint32_t max_num_chars,
   uint32_t max_rows_tensor,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
