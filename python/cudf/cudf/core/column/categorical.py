@@ -1162,7 +1162,9 @@ class CategoricalColumn(column.ColumnBase):
         return out
 
     def view(self, dtype):
-        raise NotImplementedError('Can not create a view of a categorical column')
+        raise NotImplementedError(
+            'Categorical column views are not currently supported'
+        )
 
 
 def _create_empty_categorical_column(categorical_column, dtype):
