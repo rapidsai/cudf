@@ -254,20 +254,12 @@ def test_fillna_dataframe(fill_type, inplace):
             "b": Series.from_pandas(fill_value_pd["b"]),
         }
 
-    # https://github.com/pandas-dev/pandas/issues/27197
-    # pandas df.fill_value with series is not working
-
-    if isinstance(fill_value_pd, pd.Series):
-        expect = pd.DataFrame()
-        for col in pdf.columns:
-            expect[col] = pdf[col].fillna(fill_value_pd)
-    else:
-        expect = pdf.fillna(fill_value_pd)
-
+    expect = pdf.fillna(fill_value_pd, inplace=inplace)
     got = gdf.fillna(fill_value_cudf, inplace=inplace)
 
     if inplace:
         got = gdf
+        expect = pdf
 
     assert_eq(expect, got)
 
