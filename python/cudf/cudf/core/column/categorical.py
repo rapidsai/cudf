@@ -1163,7 +1163,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def view(self, dtype):
         raise NotImplementedError(
-            'Categorical column views are not currently supported'
+            "Categorical column views are not currently supported"
         )
 
 

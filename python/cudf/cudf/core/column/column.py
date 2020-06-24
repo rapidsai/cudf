@@ -427,7 +427,9 @@ class ColumnBase(Column, Serializable):
                     + f" total bytes into {dtype} with size {dtype.itemsize}"
                 )
 
-            new_buf_ptr = self.base_data.ptr + self.offset * self.dtype.itemsize
+            new_buf_ptr = (
+                self.base_data.ptr + self.offset * self.dtype.itemsize
+            )
             new_buf_size = self.size * self.dtype.itemsize
             view_buf = Buffer(
                 data=new_buf_ptr,

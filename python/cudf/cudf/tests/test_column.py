@@ -210,8 +210,8 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
         (["ab"], "int8"),
         (["ab"], "int16"),
         (["a", "ab", "a"], "int8"),
-        (['abcd', 'efgh'], 'float32'),
-        (['abcdefgh'], 'datetime64[ns]')
+        (["abcd", "efgh"], "float32"),
+        (["abcdefgh"], "datetime64[ns]"),
     ],
 )
 def test_column_view_valid_string_to_numeric(data, to_dtype):
@@ -255,7 +255,8 @@ def test_column_view_nulls_widths_even():
 
     assert_eq(expect, got)
 
-@pytest.mark.parametrize('slc', [slice(1, None), slice(None, 4), slice(2, 4)])
+
+@pytest.mark.parametrize("slc", [slice(1, None), slice(None, 4), slice(2, 4)])
 def test_column_view_numeric_slice(slc):
 
     data = np.array([1, 2, 3, 4, 5], dtype="int32")
@@ -266,7 +267,8 @@ def test_column_view_numeric_slice(slc):
 
     assert_eq(expect, got)
 
-@pytest.mark.parametrize('slc', [slice(3, None), slice(None, 4), slice(2 , 5)])
+
+@pytest.mark.parametrize("slc", [slice(3, None), slice(None, 4), slice(2, 5)])
 def test_column_view_string_slice(slc):
     def str_host_view(list_of_str, to_dtype):
         return np.concatenate(
@@ -275,9 +277,10 @@ def test_column_view_string_slice(slc):
                 for s in list_of_str
             ]
         )
-    data = ['a', 'bcde', 'cd', 'efg', 'h']
 
-    expect = cudf.Series(cudf.Series(data)._column[slc].view('int8'))
-    got = cudf.Series(str_host_view(data[slc], 'int8'))
-    
+    data = ["a", "bcde", "cd", "efg", "h"]
+
+    expect = cudf.Series(cudf.Series(data)._column[slc].view("int8"))
+    got = cudf.Series(str_host_view(data[slc], "int8"))
+
     assert_eq(expect, got)
