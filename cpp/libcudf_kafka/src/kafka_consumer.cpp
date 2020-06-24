@@ -70,6 +70,7 @@ std::unique_ptr<cudf::io::datasource::buffer> kafka_consumer::host_read(size_t o
 
 size_t kafka_consumer::host_read(size_t offset, size_t size, uint8_t *dst)
 {
+  if (offset > buffer.size()) { return 0; }
   auto const read_size = std::min(size, buffer.size() - offset);
   memcpy(dst, buffer.data() + offset, size);
   return read_size;
