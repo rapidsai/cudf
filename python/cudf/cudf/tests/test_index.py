@@ -544,29 +544,37 @@ def test_index_to_series(data):
     "data",
     [
         [1, 2, 3, 4, 5, 6],
+        [4, 5, 6, 10, 20, 30],
         [10, 20, 30, 40, 50, 60],
         ["1", "2", "3", "4", "5", "6"],
+        ["5", "6", "2", "a", "b", "c"],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        [1.0, 5.0, 6.0, 0.0, 1.3],
     ],
 )
 @pytest.mark.parametrize(
     "other",
     [
         [1, 2, 3, 4, 5, 6],
+        [4, 5, 6, 10, 20, 30],
         [10, 20, 30, 40, 50, 60],
         ["1", "2", "3", "4", "5", "6"],
+        ["5", "6", "2", "a", "b", "c"],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        [1.0, 5.0, 6.0, 0.0, 1.3],
+        [],
     ],
 )
-def test_index_difference(data, other):
+@pytest.mark.parametrize("sort", [None, False])
+def test_index_difference(data, other, sort):
     pd_data = pd.Index(data)
     pd_other = pd.Index(other)
 
     gd_data = cudf.core.index.as_index(data)
     gd_other = cudf.core.index.as_index(other)
 
-    expected = pd_data.difference(pd_other)
-    actual = gd_data.difference(gd_other)
+    expected = pd_data.difference(pd_other, sort=sort)
+    actual = gd_data.difference(gd_other, sort=sort)
     assert_eq(expected, actual)
 
 
