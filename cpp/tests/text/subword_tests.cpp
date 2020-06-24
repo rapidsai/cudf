@@ -46,7 +46,7 @@ TEST(TextSubwordTest, Tokenize)
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   // create a fake hashed vocab text file for this test
   // this only works with words in the strings above
-  std::string hash_file = temp_env->get_temp_filepath("fake_hashed_vocab.txt");
+  std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   {
     std::vector<std::pair<int, int>> coefficients(23, {65559, 0});
     std::ofstream outfile(hash_file, std::ofstream::out);
@@ -64,7 +64,7 @@ TEST(TextSubwordTest, Tokenize)
   }
 
   uint32_t max_sequence_length = 16;
-  uint32_t stride              = 16;
+  uint32_t stride              = 16;  // no repeated tokens
   uint32_t do_truncate         = 0;
   uint32_t do_lower            = 1;
 

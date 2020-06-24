@@ -17,7 +17,7 @@ static std::string create_hash_vocab_file()
 {
   std::string dir_template("/tmp");
   if (const char* env_p = std::getenv("WORKSPACE")) dir_template = env_p;
-  std::string hash_file = dir_template + "/fake_hash_vocab.txt";
+  std::string hash_file = dir_template + "/hash_vocab.txt";
   std::vector<std::pair<int, int>> coefficients(23, {65559, 0});
   std::ofstream outfile(hash_file, std::ofstream::out);
   outfile << "1\n0\n" << coefficients.size() << "\n";

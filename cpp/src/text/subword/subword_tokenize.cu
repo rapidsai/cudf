@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-//#include <cudf/detail/get_value.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 #include <nvtext/subword_tokenize.hpp>
@@ -31,7 +31,8 @@ namespace nvtext {
 namespace detail {
 namespace {
 
-__global__ void compute_tensor_metadata_kernel(  // input
+__global__ void compute_tensor_metadata_kernel(
+  // input
   uint32_t const* token_ids,
   uint32_t const* offsets,
   uint32_t const* row2log,
@@ -123,12 +124,10 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   auto strings_count = strings.size();
   auto offsets       = strings.offsets();
   auto d_offsets     = offsets.data<uint32_t>() + strings.offset();
-  // auto offset        = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);
-  auto offset = thrust::device_pointer_cast(d_offsets)[0];
-  // auto chars_bytes = cudf::detail::get_value<int32_t>(offsets, strings.offset() +
-  // strings_count, stream) - offset;
-  auto chars_bytes = thrust::device_pointer_cast(d_offsets)[strings_count] - offset;
-  auto d_chars     = strings.chars().data<char>() + offset;
+  auto offset        = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);
+  auto chars_bytes =
+    cudf::detail::get_value<int32_t>(offsets, strings.offset() + strings_count, stream) - offset;
+  auto d_chars = strings.chars().data<char>() + offset;
 
   // Create tokenizer
   nvtxRangePushA("create_tokenizer");
@@ -188,9 +187,9 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   }
 
   // copy info to GPU
-  // correspondence between each row of tensor_tokenIDS and log_id
+  // correspondence between each row of tensor_token_ids and log_id
   rmm::device_vector<uint32_t> device_row2log = host_row2log;
-  // correspondence between each row of tensor_tokenIDS and row number within a specific log
+  // correspondence between each row of tensor_token_ids and row number within a specific log
   rmm::device_vector<uint32_t> device_row2row_within_log = host_row2row_within_log;
 
   // output data

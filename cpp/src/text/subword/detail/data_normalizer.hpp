@@ -50,7 +50,7 @@ class data_normalizer {
    *        Used to allocate temporary working memory on device.
    *        If the input contains a larger number of characters, behavior is undefined.
    * @param do_lower_case If true, the normalizer will convert uppercase characters in the
-   *        input stream to lower case AND strip accents from those characters.
+   *        input stream to lower case and strip accents from those characters.
    *        If false, accented and uppercase characters are not transformed.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
@@ -65,26 +65,24 @@ class data_normalizer {
    * @brief Normalize a vector of strings.
    *
    * If `do_lower_case` is true, this function will convert each character to lowercase
-   * AND strip accents from the characters. If false it will do all other conversions
+   * and strip accents from the characters. If false it will do all other conversions
    * in the class description except lower-casing and punctuation stripping.
    *
    * The result of this function returns two pointers to GPU data along with their lengths.
    * The first pointer is to a contiguous array of unicode code points corresponding to the
-   * characters in the text after running basic tokenization. All the strings are in a
-   * flattened array. The second pointer is to the start offsets of the strings in the
-   * flattened code_point array. That is, string `i` starts at `result.second.gpu_ptr[i]`.
-   * This array will always be of length `text_batch.size() + 1` since we need one entry
-   * for each input and a last entry which has the total number of characters.
+   * characters in the text after running normalization. The second pointer is to the
+   * offsets of the strings in the code point array. That is, string `i` starts at
+   * `result.second.gpu_ptr[i]`.
+   * This array will always be of length `num_strings + 1` since we need one entry
+   * for each input and a last entry which has the total number of bytes.
    *
-   * @param d_strings A vector of strings which MUST be encoded in the utf8 format.
-   *        If this precondition is not held then the behavior of this
-   *        function is undefined.
+   * @param d_strings A vector of strings which MUST be encoded in the UTF-8 format.
    * @param d_offsets A vector of byte offsets to the beginning of individual strings in
    *        the `d_strings` parameter.
    * @param num_strings The number of strings identified in `d_strings`.
    * @return Two pointers to GPU data along with their lengths. The first is a pointer
-   *         to the flattened code-points array along with its length and the second is
-   *         a pointer to the start offset in the code points array for each string.
+   *         to the code points array and the second is a pointer to the offsets
+   *         used to locate the code points for each string.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::pair<ptr_length_pair, ptr_length_pair> normalize(const char* d_strings,
@@ -99,11 +97,11 @@ class data_normalizer {
   rmm::device_vector<uint32_t> device_cp_metadata;
   rmm::device_vector<uint64_t> device_aux_table;
 
+  // working memory for the normalization logic
   rmm::device_vector<unsigned char> device_strings;
   rmm::device_vector<uint32_t> device_strings_offsets;
   rmm::device_vector<uint32_t> device_code_points;
   rmm::device_vector<uint32_t> device_chars_per_thread;
-
   rmm::device_vector<size_t> cub_temp_storage;
   rmm::device_vector<uint32_t> device_num_selected;
   size_t max_cub_storage_bytes;

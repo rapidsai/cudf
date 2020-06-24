@@ -22,9 +22,12 @@
 namespace nvtext {
 namespace detail {
 
-// A selection op for cub to get elements from an array not equal to a certain value. See
-// https://nvlabs.github.io/cub/structcub_1_1_device_partition.html for an example of this
-// struct.
+/**
+ * @brief A selection op for cub to get elements from an array not equal to a certain value.
+ *
+ * See https://nvlabs.github.io/cub/structcub_1_1_device_partition.html for an example of
+ * this struct.
+ */
 struct NotEqual {
   uint32_t val_to_omit;
 
@@ -36,18 +39,16 @@ struct NotEqual {
   }
 };
 
-/*
-
-*/
-static __global__ void update_strings_lengths(uint32_t* old_lengths,
+/**
+ * @brief Inplace update of lengths values.
+ */
+static __global__ void update_strings_lengths(uint32_t* lengths,
                                               uint32_t* chars_up_to_idx,
                                               size_t num_strings)
 {
   uint32_t sen_for_thread = threadIdx.x + blockDim.x * blockIdx.x + 1;
-
-  if (sen_for_thread <= num_strings) {
-    old_lengths[sen_for_thread] = chars_up_to_idx[old_lengths[sen_for_thread] - 1];
-  }
+  if (sen_for_thread <= num_strings)
+    lengths[sen_for_thread] = chars_up_to_idx[lengths[sen_for_thread] - 1];
 }
 
 }  // namespace detail

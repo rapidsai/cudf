@@ -21,17 +21,16 @@
 namespace nvtext {
 namespace detail {
 
-// PRIME is constant for both levels and a and b are constant for
-// the first level hash.
+// Used for hashing functions in this file
 constexpr uint64_t PRIME = 281474976710677;
 
 /**
  * @brief This does a multiply mod 48 without overflow for the sdbm hash "pop" method.
  *
  * This method computes the bottom 48 bits of the result of multiplying two numbers
- * respecting the restrictions described in params.
+ * respecting the restrictions specified by the parameters.
  *
- * It works by splitting num into reps 16 bit chunks and performing reps multiplies.
+ * It works by splitting `num` into 16 bit chunks and performing repeated multiplies.
  * The result of all of those multiplies are added together.
  *
  * @param num_48bit A multiplicand that is at most 48 bits.
@@ -62,7 +61,7 @@ __device__ __forceinline__ uint64_t mul_mod_48(uint64_t num_48bit, uint64_t num)
  * starting with "##" exist in the table since we can pass in the hash of "##" as the start value.
  *
  * @param sequence_start Code points to hash
- * @param length Number of code points to has
+ * @param length Number of code points to hash
  * @param start_value Initializes the hash computation.
  * @return The sdbm hash of all elements in range `[sequence_start, sequence_start + length)`
  */
@@ -107,7 +106,7 @@ __device__ __forceinline__ uint64_t prev_sdbm_hash(uint64_t current_hash, uint32
  *
  * This is a universal hash function with parameters chosen to achieve perfect hashing.
  *
- * Algorithm is `((a*k + b) % PRIME) % table_size` where PRIME is globally defined
+ * Algorithm is `((a*k + b) % PRIME) % table_size` where @ref PRIME is globally defined
  * as 281474976710677
  *
  * @return The computed hash value.
@@ -122,9 +121,9 @@ __device__ __forceinline__ uint32_t hash(uint64_t key, uint64_t a, uint64_t b, u
  *
  * If there is no value in the table with the input key, -1 is returned.
  *
- * This method will ALWAYS return the correct value if a key is in the table however, some
+ * This method will ALWAYS return the correct value if a key is in the table. However, some
  * code point sequences may hash to the same key in which case an incorrect value is returned.
- * This is unlikely and the times this occurs are unlikely to affect the model's performance.
+ * This collision is rare and will not likely affect the model's performance.
  *
  * @param key The key to search for in the hash table
  * @param hash_table A pointer to the flattened hash table
@@ -146,8 +145,7 @@ __device__ __forceinline__ int retrieve(uint64_t key,
   auto const start_ht_offset = bin_offsets[hash_bin];
 
   // The shift constants are due to how the hash coefficients are packed and are
-  // obtained from the python script perfect_hash.py which generates the expected
-  // tables.
+  // obtained from the python script perfect_hash.py which generates the expected tables.
   auto const inner_bin_a = bin_params >> 16;
   auto const inner_bin_b = (bin_params >> 9) & ((1 << 7) - 1);
   auto const bin_size    = static_cast<uint8_t>(bin_params);
@@ -169,7 +167,6 @@ __device__ __forceinline__ int retrieve(uint64_t key,
  * algorithm.
  *
  * This function reads the text file of values and loads them into the parameter objects.
- *
  *
  * @param hash_data_file The path to the file containing the hashing information after the python
  *        script has been stored.

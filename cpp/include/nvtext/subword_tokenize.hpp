@@ -75,9 +75,9 @@ struct tokenizer_result {
  *        for each string.
  * @param stride Each row in the output token-ids will replicate `max_sequence_length - stride`
  *        the token-ids from the previous row, unless it is the first string.
- * @param do_lower_case If true, the tokenizer will convert upper-case characters in the
+ * @param do_lower_case If true, the tokenizer will convert uppercase characters in the
  *        input stream to lower-case and strip accents from those characters.
- *        If false, accented and upper-case characters are not transformed.
+ *        If false, accented and uppercase characters are not transformed.
  * @param do_truncate If true, the tokenizer will discard all the token-ids after
  *        `max_sequence_length` for each input string. If false, it will use a new row
  *        in the output token-ids to continue generating the output.
