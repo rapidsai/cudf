@@ -43,8 +43,9 @@ std::unique_ptr<reader> make_reader(source_info const& src_info,
     datasources = cudf::io::datasource::create(src_info.files);
   } else if (src_info.type == io_type::USER_IMPLEMENTED) {
     datasources = cudf::io::datasource::create(src_info.user_sources);
-  } else
+  } else {
     CUDF_FAIL("Unsupported source type");
+  }
 
   return std::make_unique<reader>(std::move(datasources), options, mr);
 }

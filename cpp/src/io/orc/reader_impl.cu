@@ -836,8 +836,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 reader::reader(std::vector<std::string> const &filepaths,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(filepaths[0]), options, mr))
 {
+  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(datasource::create(filepaths[0]), options, mr);
 }
 
 // Forward to implementation

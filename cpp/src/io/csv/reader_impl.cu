@@ -761,10 +761,11 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 reader::reader(std::vector<std::string> const &filepaths,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(nullptr, filepaths[0], options, mr))
 {
+  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
+  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, mr);
 }
 
 // Forward to implementation

@@ -194,7 +194,7 @@ struct source_info {
     : type(io_type::USER_IMPLEMENTED), user_sources({source})
   {
   }
-};  // namespace io
+};
 
 /**
  * @brief Destination information for write interfaces
