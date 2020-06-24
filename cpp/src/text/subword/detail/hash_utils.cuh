@@ -65,7 +65,7 @@ __device__ __forceinline__ uint64_t mul_mod_48(uint64_t num_48bit, uint64_t num)
  * @param start_value Initializes the hash computation.
  * @return The sdbm hash of all elements in range `[sequence_start, sequence_start + length)`
  */
-__device__ __forceinline__ uint64_t sdbm_hash(uint32_t* sequence_start,
+__device__ __forceinline__ uint64_t sdbm_hash(uint32_t const* sequence_start,
                                               uint32_t length,
                                               uint64_t start_value = 0)
 {
@@ -132,13 +132,13 @@ __device__ __forceinline__ uint32_t hash(uint64_t key, uint64_t a, uint64_t b, u
  * @return -1 if key is not in the hash table. If the key is in the table returns an index in
  *         [0, vocab_size) indicating the index for the token in the bert model.
  */
-__device__ __forceinline__ int retrieve(uint64_t key,
-                                        uint32_t outer_table_a,
-                                        uint32_t outer_table_b,
-                                        uint16_t num_bins,
-                                        uint64_t* hash_table,
-                                        uint64_t* bin_coefficients,
-                                        uint16_t* bin_offsets)
+__device__ __forceinline__ int retrieve(uint64_t const key,
+                                        uint32_t const outer_table_a,
+                                        uint32_t const outer_table_b,
+                                        uint16_t const num_bins,
+                                        uint64_t const* hash_table,
+                                        uint64_t const* bin_coefficients,
+                                        uint16_t const* bin_offsets)
 {
   auto const hash_bin        = hash(key, outer_table_a, outer_table_b, num_bins);
   auto const bin_params      = bin_coefficients[hash_bin];
@@ -160,11 +160,13 @@ __device__ __forceinline__ int retrieve(uint64_t key,
 }
 
 /**
- * @brief Loads the hashing information from hash_data_file AFTER running the perfect_hash.py python
+ * @brief Loads the hashing information from hash_data_file.
+ *
+ * This file is created using the perfect_hash.py python
  * script on the bert vocabulary file.
  *
- * The file includes values from a two level hashing scheme based on the FKS perfect hashing
- * algorithm.
+ * The file includes values from a two level hashing scheme
+ * based on the FKS perfect hashing algorithm.
  *
  * This function reads the text file of values and loads them into the parameter objects.
  *

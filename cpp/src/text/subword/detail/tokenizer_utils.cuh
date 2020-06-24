@@ -43,7 +43,7 @@ struct NotEqual {
  * @brief Inplace update of lengths values.
  */
 static __global__ void update_strings_lengths(uint32_t* lengths,
-                                              uint32_t* chars_up_to_idx,
+                                              uint32_t const* chars_up_to_idx,
                                               size_t num_strings)
 {
   uint32_t sen_for_thread = threadIdx.x + blockDim.x * blockIdx.x + 1;

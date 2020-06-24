@@ -93,7 +93,7 @@ class data_normalizer {
  private:
   bool do_lower_case;
 
-  // pointers to device data needed for tokenization
+  // pointers to device data needed for normalization
   rmm::device_vector<uint32_t> device_cp_metadata;
   rmm::device_vector<uint64_t> device_aux_table;
 

@@ -31,7 +31,7 @@ namespace nvtext {
 namespace detail {
 namespace {
 
-__global__ void compute_tensor_metadata_kernel(
+__global__ void kernel_compute_tensor_metadata(
   // input
   uint32_t const* token_ids,
   uint32_t const* offsets,
@@ -144,15 +144,15 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 
   // Run tokenizer
   nvtxRangePushA("tokenize");
-  std::pair<uint32_t*, uint32_t*> tokens =
-    tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
+  auto tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
   nvtxRangePop();
-  uint32_t* device_token_ids = tokens.first;
-  uint32_t* device_offsets   = tokens.second;
+  uint32_t const* device_token_ids = tokens.first;
+  uint32_t const* device_offsets   = tokens.second;
 
   // Format output from tokenizer
   nvtx3::thread_range rt{"tokenizer_output"};
   // copy log offsets to host
+  // TODO: do all of this on the GPU instead
   std::vector<uint32_t> host_offsets(strings_count + 1);
   CUDA_TRY(cudaMemcpyAsync(host_offsets.data(),
                            device_offsets,
@@ -211,7 +211,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                                    mr);
 
   // compute final-tensor, mask, and metadata
-  compute_tensor_metadata_kernel<<<nrows_tensor_tokenIDS, max_sequence_length, 0, stream>>>(
+  kernel_compute_tensor_metadata<<<nrows_tensor_tokenIDS, max_sequence_length, 0, stream>>>(
     device_token_ids,
     device_offsets,
     device_row2log.data().get(),
