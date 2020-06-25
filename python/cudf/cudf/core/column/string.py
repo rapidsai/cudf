@@ -119,6 +119,7 @@ from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.utils import utils
+from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import can_convert_to_column, is_scalar, is_string_dtype
 
 _str_to_numeric_typecast_functions = {
@@ -4282,6 +4283,30 @@ class StringColumn(column.ColumnBase):
     def _mimic_inplace(self, other_col, inplace=False):
         out = super()._mimic_inplace(other_col, inplace=inplace)
         return out
+
+    @copy_docstring(column.ColumnBase.view)
+    def view(self, dtype):
+        if self.null_count > 0:
+            raise ValueError(
+                "Can not produce a view of a string column with nulls"
+            )
+        dtype = np.dtype(dtype)
+        str_byte_offset = self.base_children[0][self.offset]
+        str_end_byte_offset = self.base_children[0][self.offset + self.size]
+        char_dtype_size = self.base_children[1].dtype.itemsize
+
+        n_bytes_to_view = (
+            str_end_byte_offset - str_byte_offset
+        ) * char_dtype_size
+
+        to_view = column.build_column(
+            self.base_children[1].data,
+            dtype=self.base_children[1].dtype,
+            offset=str_byte_offset,
+            size=n_bytes_to_view,
+        )
+
+        return to_view.view(dtype)
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
