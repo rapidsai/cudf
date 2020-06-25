@@ -5351,24 +5351,31 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
 
 
 @pytest.mark.parametrize(
-    "data",
+    "data,columns",
     [
-        [1, 2, 3, 100, 112, 35464],
-        range(100),
-        [],
-        (-10, 21, 32, 32, 1, 2, 3),
-        (),
-        [[1, 2, 3], [1, 2, 3]],
-        [range(100), range(100)],
-        ((1, 2, 3), (1, 2, 3)),
-        [[1, 2, 3]],
-        [range(100)],
-        ((1, 2, 3),),
+        ([1, 2, 3, 100, 112, 35464], ["a"]),
+        (range(100), None),
+        ([], None),
+        ((-10, 21, 32, 32, 1, 2, 3), ["p"]),
+        ((), None),
+        ([[1, 2, 3], [1, 2, 3]], ["col1", "col2", "col3"]),
+        ([range(100), range(100)], ["range" + str(i) for i in range(100)]),
+        (((1, 2, 3), (1, 2, 3)), ["tuple0", "tuple1", "tuple2"]),
+        ([[1, 2, 3]], ["list col1", "list col2", "list col3"]),
+        ([range(100)], ["range" + str(i) for i in range(100)]),
+        (((1, 2, 3),), ["k1", "k2", "k3"]),
     ],
 )
-def test_dataframe_init_1d_list(data):
-    expect = pd.DataFrame(data)
-    actual = DataFrame(data)
+def test_dataframe_init_1d_list(data, columns):
+    expect = pd.DataFrame(data, columns=columns)
+    actual = DataFrame(data, columns=columns)
+
+    assert_eq(
+        expect, actual, check_index_type=False if len(data) == 0 else True
+    )
+
+    expect = pd.DataFrame(data, columns=None)
+    actual = DataFrame(data, columns=None)
 
     assert_eq(
         expect, actual, check_index_type=False if len(data) == 0 else True
