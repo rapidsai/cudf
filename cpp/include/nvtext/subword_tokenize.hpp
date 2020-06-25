@@ -24,6 +24,9 @@
 
 namespace nvtext {
 
+// TODO: Create API to load the vocab file and return an object
+//       Then create another API like the one below to accept this object instead of a file.
+
 struct tokenizer_result {
   /**
    * @brief The number of rows for the output token-ids.

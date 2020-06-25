@@ -31,29 +31,32 @@ namespace nvtext {
 namespace detail {
 namespace {
 /**
- * @brief Writes the index to each thread which points to the start of a word to idx_for_sen_start.
+ * @brief Initializes the token-ids, word-indices, and token counts vectors.
  *
- * It is guaranteed that the same number of indices will be written to each
- * kernel and that after the select step, the two arrays will be aligned (ie.
- * `start_word_indices[word]` and `end_word_indices[word]` are the start and
- * end for the same word).
+ * Each thread process a single code point from code_points.
+ * This also locates the start and end of each word within the code_points buffer.
+ * A word start is identified as a non-space character that appears right after a space.
+ * A word end is identified as a space character that appears right after a non-space one.
+ * If the code point at this thread does not represent a word start or word end,
+ * a max uint32_t value is written to the appropriate vector instead.
+ * A post processing step is required to filter the relevant values in these
+ * vectors.
  *
- * @param code_points A pointer to the code points in the strings after normalization.
- * @param start_word_indices An array which will contain the starting index for each word scattered
- *        throughout. If an index does not represent a word start, the max uint32_t value is written
- *        to indicate this. A post processing step is required to select all the relevant values
- *        from this array.
- * @param end_word_indices An array which will contain the one past the end index for each word
- *        scattered throughout. If an index does not represent a word end, the max uint32_t value is
- *        written to indicate this. A post processing step is required to select all the relevant
- *        values from this array.
- * @param num_code_points The total number of code_points in the code_points array.
- * @param token_ids The array which will hold the token ids. This kernel initialized all values in
- *        this array to the max uint32_t. It is assumed that the length of this array is
- *        `num_code_points`.
- * @param tokens_per_word The array which will hold the number of tokens in each word. This kernel
- *         initialized all values in this array to 0. It is assumed that the length of this array is
- *         `num_code_points`.
+ * It is guaranteed that the same number of valid values will be written to both the
+ * start and end indices and that after the select step, the two arrays will be aligned.
+ *  That is, `start_word_indices[word]` and `end_word_indices[word]` are the start and
+ * end for the same word.
+ *
+ * @param code_points[in] A pointer to the code points in the strings after normalization.
+ * @param start_word_indices[out] An array of size `num_code_points` which will contain the
+ *        starting index for each word.
+ * @param end_word_indices[out] An array of size `num_code_points` which will contain the
+ *        ending index for each word.
+ * @param num_code_points The total number of code_points.
+ * @param token_ids[out] An array of size `num_code_points` which will hold the token ids.
+ *        This kernel just sets all the values to max uint32_t.
+ * @param tokens_per_word[out] An array of size `num_code_points` which hold the number of
+ *        tokens. This kernel just sets all the values to 0.
  */
 __global__ void init_data_and_mark_word_start_and_ends(uint32_t const* code_points,
                                                        uint32_t* start_word_indices,
@@ -88,15 +91,14 @@ __global__ void init_data_and_mark_word_start_and_ends(uint32_t const* code_poin
 }
 
 /**
- * @brief Writes the indices of the characters that start and end strings.
+ * @brief Resolves the string boundaries for the start and end words.
  *
- * This kernel should be called after `mark_word_start_and_ends` with at least `num_strings` total
- * threads.
+ * This kernel should be called after `mark_word_start_and_ends` with at
+ * least `num_strings` total threads.
  *
- * It is guaranteed that the same number of indices will be written to each
- * kernel and that after the select step, the two arrays will be aligned (ie.
- * `start_word_indices[word]` and `end_word_indices[word]` are the start and
- * end for the same word). This is not true before the cub::deviceselect is done.
+ * The start and end indices are updated to honor the string boundaries
+ * within the strings array. This corrects any word ranges that span across
+ * individual strings.
  *
  * @param code_points A pointer to the code points in the strings.
  * @param strings_offsets An array containing the index of the starting character of each string
@@ -116,29 +118,29 @@ __global__ void mark_string_start_and_ends(uint32_t const* code_points,
                                            uint32_t* end_word_indices,
                                            uint32_t num_strings)
 {
-  uint32_t char_for_thread = blockDim.x * blockIdx.x + threadIdx.x;
+  uint32_t idx = blockDim.x * blockIdx.x + threadIdx.x;
   // Ensure the starting character of each strings is written to the word start array.
-  if (char_for_thread <= num_strings) {
-    auto const offset = strings_offsets[char_for_thread];
+  if (idx <= num_strings) {
+    auto const offset = strings_offsets[idx];
 
-    if ((char_for_thread < num_strings) && (code_points[offset] != SPACE_CODE_POINT)) {
+    if ((idx < num_strings) && (code_points[offset] != SPACE_CODE_POINT)) {
       start_word_indices[offset] = offset;
     }
 
-    if ((char_for_thread > 0) && (code_points[offset - 1] != SPACE_CODE_POINT)) {
+    if ((idx > 0) && (code_points[offset - 1] != SPACE_CODE_POINT)) {
       end_word_indices[offset - 1] = offset;
     }
   }
 }
 
 /**
- * @brief Splits words into their token ids.
+ * @brief Converts words into token ids.
  *
- * Each thread is assigned a word to tokenize based on thread_to_word_map. Each thread tokenizes
- * its word and writes the number of tokens it found in the tokens_per_word array.
+ * Each thread is assigned a word to convert based on the `hash_table`. Each thread converts
+ * its word and writes the number of tokens it found in the `tokens_per_word` array.
  *
- * The tokens_per_word array is kept to the length (num_code_points + 1). This means each thread
- * can write its number of tokens to the index in thread_to_word_map corresponding to the starting
+ * The `tokens_per_word` array is kept to the length `num_code_points + 1`. This means each thread
+ * can write its number of tokens to the `tokens_per_word` corresponding to the starting
  * character of each word. Since strings must start at some word, we can prefix sum this array
  * and use the strings_lengths code point offsets to directly index the number of tokens in each
  * string.
@@ -167,7 +169,7 @@ __global__ void mark_string_start_and_ends(uint32_t const* code_points,
  *        conjunction with the strings lengths array to find the tokens in each string. This is
  *        possible since the number of tokens in each word will be placed at the index corresponding
  *        to the start character of a word. If we assume prefix_summed is the prefix sum of the
- *        tokens_per_word array, then `prefix_summed[strings_lengths[string] - 1]` is the number
+ *        tokens_per_word array, then `prefix_summed[strings_lengths[string_idx] - 1]` is the number
  *        of tokens found before the start of string.
  * @param unk_token_id The token id to be place for unknown tokens
  * @param max_word_length The maximum length of a word. Any word longer than this length is
@@ -216,12 +218,13 @@ __global__ void kernel_wordpiece_tokenizer(uint32_t const* code_points,
   }
 
   while (start < token_end) {
-    end                   = token_end;
-    int token_id          = -1;
+    end = token_end;
+    // init token_id to no token
+    int token_id = -1;
+    // compute current length
     uint32_t const length = token_end - start;
     uint64_t substr_hash =
       sdbm_hash(code_points + start, length, start == token_start ? 0 : hashtag_hash);
-
     while (start < end) {
       token_id = retrieve(substr_hash,
                           outer_hash_a_param,
@@ -239,13 +242,11 @@ __global__ void kernel_wordpiece_tokenizer(uint32_t const* code_points,
     if (token_id == -1) {
       end      = token_end;
       token_id = unk_token_id;
-
-      // We need to clean up the global array. This case is very uncommon. Only 0.016% of words
-      // cannot be resolved to a token from the squad dev set.
+      // We need to clean up the global array. This case is very uncommon.
+      //  Only 0.016% of words cannot be resolved to a token from the squad dev set.
       for (uint32_t i = 1; i < num_values_tokenized; ++i) {
         token_ids[token_start + i] = std::numeric_limits<uint32_t>::max();
       }
-
       num_values_tokenized = 0;
     }
 
@@ -275,6 +276,7 @@ wordpiece_tokenizer::wordpiece_tokenizer(std::string const& vocab_file,
     do_truncate(do_truncate),
     normalizer(max_num_strings, max_num_chars, cp_data, aux_data, do_lower_case, stream)
 {
+  // load vocab hash file into device memory
   detail::transfer_hash_info_to_device(vocab_file,
                                        device_hash_table,
                                        device_bin_coefficients,
@@ -298,6 +300,7 @@ wordpiece_tokenizer::wordpiece_tokenizer(std::string const& vocab_file,
   // Determine temporary device storage requirements for cub
   static NotEqual select_op(std::numeric_limits<uint32_t>::max());
   size_t temp_storage_bytes = 0, temp_storage_bytes_2 = 0;
+  rmm::device_vector<uint32_t> device_num_selected(1);
   cub::DeviceSelect::If(nullptr,
                         temp_storage_bytes,
                         device_word_indices.data().get(),
@@ -314,7 +317,6 @@ wordpiece_tokenizer::wordpiece_tokenizer(std::string const& vocab_file,
                                 stream);
   max_cub_storage_bytes = std::max(temp_storage_bytes, temp_storage_bytes_2);
   cub_temp_storage.resize(max_cub_storage_bytes);
-  device_num_selected.resize(1);
 }
 
 std::pair<uint32_t*, uint32_t*> wordpiece_tokenizer::tokenize(char const* d_strings,
@@ -373,10 +375,11 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
   // all values not equal to the max uint32_t and place them at the start of the array. We leverage
   // the fact that the start_word_indices and the end_word indices are contiguous to only launch one
   // device select kernel.
+  rmm::device_vector<uint32_t> device_num_selected(1);
   cub::DeviceSelect::If(cub_temp_storage.data().get(),
                         max_cub_storage_bytes,
-                        device_start_word_indices,
-                        device_start_word_indices,
+                        device_start_word_indices,  // input
+                        device_start_word_indices,  // output
                         device_num_selected.data().get(),
                         2 * num_code_points,
                         select_op,
@@ -387,7 +390,6 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
   // tokenizer kernel. The number of tokens selected out will be double the number of words since we
   // select from both the start and end index arrays.
   uint32_t num_words = 0;
-  device_num_selected.resize(1);
   CUDA_TRY(cudaMemcpyAsync(&num_words,
                            device_num_selected.data().get(),
                            sizeof(num_words),
@@ -432,7 +434,6 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
 
   // Repurpose start word indices since it is the same size and type as the required output.
   uint32_t* token_id_counts = device_start_word_indices;
-  device_start_word_indices = nullptr;
   cub::DeviceScan::InclusiveSum(cub_temp_storage.data().get(),
                                 max_cub_storage_bytes,
                                 device_tokens_per_word.data().get(),

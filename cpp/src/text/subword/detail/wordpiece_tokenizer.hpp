@@ -114,6 +114,7 @@ class wordpiece_tokenizer {
   uint16_t unk_token_id{};
   uint16_t first_tok_id{};
   uint16_t sep_tok_id{};
+  // TODO: change these to rmm::device_uvectors
   rmm::device_vector<uint64_t> device_hash_table;
   rmm::device_vector<uint64_t> device_bin_coefficients;
   rmm::device_vector<uint16_t> device_bin_offsets;
@@ -123,7 +124,6 @@ class wordpiece_tokenizer {
   rmm::device_vector<uint32_t> device_word_indices;
   rmm::device_vector<uint8_t> device_tokens_per_word;
   rmm::device_vector<size_t> cub_temp_storage;
-  rmm::device_vector<uint32_t> device_num_selected;
   size_t max_cub_storage_bytes;
 };
 
