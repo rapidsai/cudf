@@ -1487,7 +1487,7 @@ class BaseNumericIndex(GenericIndex):
 
     def __new__(cls, data=None, dtype=None, copy=False, name=None):
 
-        out = Frame().__new__(cls)
+        out = Frame.__new__(cls)
         dtype = index_to_dtype[cls]
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
@@ -1501,72 +1501,62 @@ class BaseNumericIndex(GenericIndex):
         return out
 
 
+@copy_docstring(BaseNumericIndex)
 class Int8Index(BaseNumericIndex):
-    __doc__ = BaseNumericIndex.__doc__
-
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
+@copy_docstring(BaseNumericIndex)
 class Int16Index(BaseNumericIndex):
-    __doc__ = BaseNumericIndex.__doc__
-
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
+@copy_docstring(BaseNumericIndex)
 class Int32Index(BaseNumericIndex):
-    __doc__ = BaseNumericIndex.__doc__
-
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
+@copy_docstring(BaseNumericIndex)
 class Int64Index(BaseNumericIndex):
-    __doc__ = BaseNumericIndex.__doc__
-
     def __init__(self, data=None, dtype=None, copy=False, name=None):
         pass
 
 
+@copy_docstring(BaseNumericIndex)
 class UInt8Index(BaseNumericIndex):
-    __doc__ = BaseNumericIndex.__doc__
-
     def __init__(self, data=None, dtype=None, copy=False, name=None):
         pass
 
 
+@copy_docstring(BaseNumericIndex)
 class UInt16Index(BaseNumericIndex):
-    __doc__ = BaseNumericIndex.__doc__
-
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
+@copy_docstring(BaseNumericIndex)
 class UInt32Index(BaseNumericIndex):
-    __doc__ = BaseNumericIndex.__doc__
-
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
+@copy_docstring(BaseNumericIndex)
 class UInt64Index(BaseNumericIndex):
-    __doc__ = BaseNumericIndex.__doc__
-
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
+@copy_docstring(BaseNumericIndex)
 class Float32Index(BaseNumericIndex):
-    __doc__ = BaseNumericIndex.__doc__
-
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
+@copy_docstring(BaseNumericIndex)
 class Float64Index(BaseNumericIndex):
-    __doc__ = BaseNumericIndex.__doc__
-
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
@@ -1629,7 +1619,7 @@ class DatetimeIndex(GenericIndex):
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
-        out = Frame().__new__(cls)
+        out = Frame.__new__(cls)
 
         if freq is not None:
             raise NotImplementedError("Freq is not yet supported")
@@ -1770,7 +1760,7 @@ class CategoricalIndex(GenericIndex):
 
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
-        out = Frame().__new__(cls)
+        out = Frame.__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
             data = data
@@ -1839,7 +1829,7 @@ class StringIndex(GenericIndex):
     """
 
     def __new__(cls, values, **kwargs):
-        out = Frame().__new__(cls)
+        out = Frame.__new__(cls)
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
             values = values.copy()

@@ -83,7 +83,7 @@ class MultiIndex(Index):
                 "Use `names`, `name` is not yet supported"
             )
 
-        out = Frame().__new__(cls)
+        out = Frame.__new__(cls)
         super(Index, out).__init__()
 
         if copy and isinstance(codes, DataFrame):
