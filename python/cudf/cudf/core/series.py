@@ -526,7 +526,7 @@ class Series(Frame, Serializable):
     def __deepcopy__(self):
         return self.copy()
 
-    def append(self, other, ignore_index=False):
+    def append(self, to_append, ignore_index=False, verify_integrity=False):
         """Append values from another ``Series`` or array-like object.
         If ``ignore_index=True``, the index is reset.
 
@@ -539,30 +539,43 @@ class Series(Frame, Serializable):
         -------
         A new Series equivalent to self concatenated with other
         """
-        this = self
-        other = Series(other)
-
-        from cudf.core.column import numerical
-        from cudf.utils.dtypes import numeric_normalize_types
-
-        if (this.dtype == "object" and other.dtype != "object") or (
-            other.dtype == "object" and this.dtype != "object"
-        ):
-            raise TypeError(
-                "cudf does not support mixed types, please type-cast "
-                "both series to same dtypes."
+        if verify_integrity not in (None, False):
+            raise NotImplementedError(
+                "verify_integrity parameter is not supported yet."
             )
 
-        if isinstance(this._column, numerical.NumericalColumn):
-            if self.dtype != other.dtype:
-                this, other = numeric_normalize_types(this, other)
+        if isinstance(to_append, (list, tuple)):
+            to_concat = [self]
+            to_concat.extend(to_append)
+        else:
+            to_concat = [self, Series(to_append)]
+
+        to_concat = [Series(obj) for obj in to_concat]
+
+        from cudf.utils.dtypes import numeric_normalize_types
+
+        dtype_mismatch = False
+        for obj in to_concat:
+            if not dtype_mismatch and self.dtype != obj.dtype:
+                dtype_mismatch = True
+
+            if (self.dtype == "object" and obj.dtype != "object") or (
+                obj.dtype == "object" and self.dtype != "object"
+            ):
+                raise TypeError(
+                    "cudf does not support mixed types, please type-cast "
+                    "both series to same dtypes."
+                )
+
+        if dtype_mismatch:
+            to_concat = numeric_normalize_types(*to_concat)
 
         if ignore_index:
             index = None
         else:
             index = True
 
-        return Series._concat([this, other], index=index)
+        return Series._concat(to_concat, index=index)
 
     def reindex(self, index=None, copy=True):
         """Return a Series that conforms to a new index
