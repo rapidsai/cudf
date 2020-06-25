@@ -85,6 +85,7 @@
 - PR #5496 Rename .cu tests (zero cuda kernels) to .cpp files
 - PR #5526 Change `type_id` to enum class
 - PR #5559 Java APIs for missing date/time operators
+- PR #5582 Add support for axis and other parameters to `DataFrame.sort_index` and fix other bunch of issues.
 
 ## Bug Fixes
 
