@@ -33,7 +33,7 @@ class MultiIndex(Index):
     names: optional sequence of objects
         Names for each of the index levels.
     copy : bool, default False
-        Copy the meta-data. Not yet supported
+        Copy the meta-data.
     verify_integrity : bool, default True
         Check that the levels/codes are consistent and valid.
         Not yet supported

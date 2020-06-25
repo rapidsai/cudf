@@ -1501,61 +1501,51 @@ class NumericIndex(GenericIndex):
         return out
 
 
-@copy_docstring(NumericIndex)
 class Int8Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(NumericIndex)
 class Int16Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(NumericIndex)
 class Int32Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(NumericIndex)
 class Int64Index(NumericIndex):
     def __init__(self, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(NumericIndex)
 class UInt8Index(NumericIndex):
     def __init__(self, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(NumericIndex)
 class UInt16Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(NumericIndex)
 class UInt32Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(NumericIndex)
 class UInt64Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(NumericIndex)
 class Float32Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(NumericIndex)
 class Float64Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
