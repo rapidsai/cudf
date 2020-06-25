@@ -72,13 +72,7 @@ class Index(Frame, Serializable):
                 "tupleize_cols != True is not yet supported"
             )
 
-        if (
-            copy is True
-            and data is not None
-            and hasattr(data, "cuda_array_interface")
-        ):
-            data = data.copy()
-        return as_index(data, dtype=dtype, name=name, **kwargs)
+        return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
 
     def __init__(
         self,
@@ -784,7 +778,7 @@ class Index(Frame, Serializable):
             if hasattr(cudf_index_module, submodule):
                 cudf_index_module = getattr(cudf_index_module, submodule)
             else:
-                raise NotImplemented
+                raise NotImplementedError
 
         fname = func.__name__
 
@@ -795,18 +789,18 @@ class Index(Frame, Serializable):
             if not any(
                 issubclass(t, handled_type) for handled_type in handled_types
             ):
-                raise NotImplemented
+                raise NotImplementedError
 
         if hasattr(cudf_index_module, fname):
             cudf_func = getattr(cudf_index_module, fname)
             # Handle case if cudf_func is same as numpy function
             if cudf_func is func:
-                raise NotImplemented
+                raise NotImplementedError
             else:
                 return cudf_func(*args, **kwargs)
 
         else:
-            raise NotImplemented
+            raise NotImplementedError
 
     def isin(self, values):
         """Return a boolean array where the index values are in values.
@@ -1327,18 +1321,6 @@ class GenericIndex(Index):
         name = kwargs.get("name")
         super(Index, self).__init__({name: values})
 
-    def _initialize_numeric(
-        self, data=None, dtype=None, expected_dtype=None, copy=False, name=None
-    ):
-        if copy == True:
-            data = column.as_column(data).copy()
-
-        kwargs = _setdefault_name(data, name=name)
-
-        data = column.as_column(data, dtype=dtype).astype(expected_dtype)
-
-        self._initialize(data, **kwargs)
-
     @property
     def _values(self):
         return next(iter(self._data.columns))
@@ -1484,16 +1466,15 @@ class GenericIndex(Index):
         return self._values.__cuda_array_interface__
 
 
-class Int8Index(GenericIndex):
-    """Immutable, ordered and sliceable sequence of integer labels.
+class BaseNumericIndex(GenericIndex):
+    """Immutable, ordered and sliceable sequence of labels.
     The basic object storing row labels for all cuDF objects.
-    Int8Index is a special case of Index with purely integer labels.
 
     Parameters:
     -----------
     data : array-like (1-dimensional)
-    dtype : NumPy dtype (default: int8)
-            If dtype is None, we find the dtype that best fits the data.
+    dtype : NumPy dtype,
+            but not used.
     copy : bool
         Make a copy of input data.
     name : object
@@ -1502,449 +1483,92 @@ class Int8Index(GenericIndex):
     Returns
     -------
     Index
-
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.Int8Index([1, 2, 3, 4], name="a").dtype
-    dtype('int8')
-
-    >>> cudf.Int8Index([1, 2, 3, 4], dtype="int32", name="a").dtype
-    dtype('int8')
-
-    >>> cudf.Int8Index([1, 2, 3, 4],  name="a")
-    Int64Index([1, 2, 3, 4], dtype='int64', name='a')
     """
 
-    def __new__(cls, data=None, dtype="int8", copy=False, name=None):
+    def __new__(cls, data=None, dtype=None, copy=False, name=None):
 
         out = Frame().__new__(cls)
+        dtype = index_to_dtype[cls]
+        if copy:
+            data = column.as_column(data, dtype=dtype).copy()
 
-        out._initialize_numeric(
-            data=data, dtype=dtype, expected_dtype="int8", copy=copy, name=name
-        )
+        kwargs = _setdefault_name(data, name=name)
+
+        data = column.as_column(data, dtype=dtype)
+
+        out._initialize(data, **kwargs)
 
         return out
 
 
-class Int16Index(GenericIndex):
-    """Immutable, ordered and sliceable sequence of integer labels.
-    The basic object storing row labels for all cuDF objects.
-    Int16Index is a special case of Index with purely integer labels.
-
-    Parameters:
-    -----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype (default: int16)
-            If dtype is None, we find the dtype that best fits the data.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Index
-
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.Int16Index([1, 2, 3, 4], name="a").dtype
-    dtype('int16')
-
-    >>> cudf.Int16Index([1, 2, 3, 4], dtype="int32", name="a").dtype
-    dtype('int16')
-
-    >>> cudf.Int16Index([1, 2, 3, 4],  name="a")
-    Int64Index([1, 2, 3, 4], dtype='int64', name='a')
-    """
-
-    def __new__(cls, data=None, dtype="int16", copy=False, name=None):
-
-        out = Frame().__new__(cls)
-
-        out._initialize_numeric(
-            data=data,
-            dtype=dtype,
-            expected_dtype="int16",
-            copy=copy,
-            name=name,
-        )
-
-        return out
-
-
-class Int32Index(GenericIndex):
-    """Immutable, ordered and sliceable sequence of integer labels.
-    The basic object storing row labels for all cuDF objects.
-    Int32Index is a special case of Index with purely integer labels.
-
-    Parameters:
-    -----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype (default: int32)
-            If dtype is None, we find the dtype that best fits the data.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Index
-
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.Int32Index([1, 2, 3, 4], name="a").dtype
-    dtype('int32')
-
-    >>> cudf.Int32Index([1, 2, 3, 4], dtype="int64", name="a").dtype
-    dtype('int32')
-
-    >>> cudf.Int32Index([1, 2, 3, 4],  name="a")
-    Int64Index([1, 2, 3, 4], dtype='int64', name='a')
-    """
-
-    def __new__(cls, data=None, dtype="int32", copy=False, name=None):
-
-        out = Frame().__new__(cls)
-
-        out._initialize_numeric(
-            data=data,
-            dtype=dtype,
-            expected_dtype="int32",
-            copy=copy,
-            name=name,
-        )
-
-        return out
-
-
-class Int64Index(GenericIndex):
-    """Immutable, ordered and sliceable sequence of integer labels.
-    The basic object storing row labels for all cuDF objects.
-    Int64Index is a special case of Index with purely integer labels.
-
-    Parameters:
-    -----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype (default: int64)
-            If dtype is None, we find the dtype that best fits the data.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Index
-
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.Int64Index([1, 2, 3, 4], name="a").dtype
-    dtype('int64')
-
-    >>> cudf.Int64Index([1, 2, 3, 4], dtype="int16", name="a").dtype
-    dtype('int64')
-
-    >>> cudf.Int64Index([1, 2, 3, 4],  name="a")
-    Int64Index([1, 2, 3, 4], dtype='int64', name='a')
-    """
-
-    def __new__(cls, data=None, dtype="int64", copy=False, name=None):
-
-        out = Frame().__new__(cls)
-
-        out._initialize_numeric(
-            data=data,
-            dtype=dtype,
-            expected_dtype="int64",
-            copy=copy,
-            name=name,
-        )
-
-        return out
-
-
-class UInt8Index(GenericIndex):
-    """Immutable, ordered and sliceable sequence of unsigned integer labels.
-    The basic object storing row labels for all cuDF objects.
-    UInt8Index is a special case of Index with purely integer labels.
-
-    Parameters:
-    -----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype (default: uint8)
-            If dtype is None, we find the dtype that best fits the data.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Index
-
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.UInt8Index([1, 2, 3, 4], name="a").dtype
-    dtype('uint8')
-
-    >>> cudf.UInt8Index([1, 2, 3, 4], dtype="uint16", name="a").dtype
-    dtype('uint8')
-
-    >>> cudf.UInt8Index([1, 2, 3, 4],  name="a")
-    UInt64Index([1, 2, 3, 4], dtype='uint64', name='a')
-    """
-
-    def __new__(cls, data=None, dtype="uint8", copy=False, name=None):
-
-        out = Frame().__new__(cls)
-
-        out._initialize_numeric(
-            data=data,
-            dtype=dtype,
-            expected_dtype="uint8",
-            copy=copy,
-            name=name,
-        )
-
-        return out
-
-
-class UInt16Index(GenericIndex):
-    """Immutable, ordered and sliceable sequence of unsigned integer labels.
-    The basic object storing row labels for all cuDF objects.
-    UInt16Index is a special case of Index with purely integer labels.
-
-    Parameters:
-    -----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype (default: uint16)
-            If dtype is None, we find the dtype that best fits the data.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Index
-
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.UInt16Index([1, 2, 3, 4], name="a").dtype
-    dtype('uint16')
-
-    >>> cudf.UInt16Index([1, 2, 3, 4], dtype="uint32", name="a").dtype
-    dtype('uint16')
-
-    >>> cudf.UInt16Index([1, 2, 3, 4],  name="a")
-    UInt64Index([1, 2, 3, 4], dtype='uint64', name='a')
-    """
-
-    def __new__(cls, data=None, dtype="uint16", copy=False, name=None):
-
-        out = Frame().__new__(cls)
-
-        out._initialize_numeric(
-            data=data,
-            dtype=dtype,
-            expected_dtype="uint16",
-            copy=copy,
-            name=name,
-        )
-
-        return out
-
-
-class UInt32Index(GenericIndex):
-    """Immutable, ordered and sliceable sequence of unsigned integer labels.
-    The basic object storing row labels for all cuDF objects.
-    UInt32Index is a special case of Index with purely integer labels.
-
-    Parameters:
-    -----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype (default: uint32)
-            If dtype is None, we find the dtype that best fits the data.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Index
-
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.UInt32Index([1, 2, 3, 4], name="a").dtype
-    dtype('uint32')
-
-    >>> cudf.UInt32Index([1, 2, 3, 4], dtype="uint64", name="a").dtype
-    dtype('uint32')
-
-    >>> cudf.UInt32Index([1, 2, 3, 4],  name="a")
-    UInt64Index([1, 2, 3, 4], dtype='uint64', name='a')
-    """
-
-    def __new__(cls, data=None, dtype="uint32", copy=False, name=None):
-
-        out = Frame().__new__(cls)
-
-        out._initialize_numeric(
-            data=data,
-            dtype=dtype,
-            expected_dtype="uint32",
-            copy=copy,
-            name=name,
-        )
-
-        return out
-
-
-class UInt64Index(GenericIndex):
-    """Immutable, ordered and sliceable sequence of unsigned integer labels.
-    The basic object storing row labels for all cuDF objects.
-    UInt64Index is a special case of Index with purely unsigned integer labels.
-
-    Parameters:
-    -----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype (default: uint64)
-        If dtype is None, we find the dtype that best fits the data.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Index
-
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.UInt64Index([1, 2, 3, 4], name="a").dtype
-    dtype('uint64')
-
-    >>> cudf.UInt64Index([1, 2, 3, 4], dtype="uint8", name="a").dtype
-    dtype('uint64')
-
-    >>> cudf.UInt64Index([1, 2, 3, 4],  name="a")
-    UInt64Index([1, 2, 3, 4], dtype='uint64', name='a')
-    """
-
-    def __new__(cls, data=None, dtype="uint64", copy=False, name=None):
-        out = Frame().__new__(cls)
-
-        out._initialize_numeric(
-            data=data,
-            dtype=dtype,
-            expected_dtype="uint64",
-            copy=copy,
-            name=name,
-        )
-
-        return out
-
-
-class Float32Index(GenericIndex):
-    """Immutable, ordered and sliceable sequence of floating labels.
-    The basic object storing row labels for all cuDF objects.
-    Float32Index is a special case of Index with purely float labels.
-
-    Parameters:
-    -----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype (default: float32)
-        If dtype is None, we find the dtype that best fits the data.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Index
-
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.Float32Index([1, 2, 3], name="a").dtype
-    dtype('float32') 
-
-    >>> cudf.Float32Index([1, 2, 3], name="a", dtype="float64").dtype
-    dtype('float32') 
-
-    >>> cudf.Float32Index([1, 2, 3], name="a")
-    Float64Index([1.0, 2.0, 3.0], dtype='float64', name='a')
-    """
-
-    def __new__(cls, data=None, dtype="float32", copy=False, name=None):
-        out = Frame().__new__(cls)
-
-        out._initialize_numeric(
-            data=data,
-            dtype=dtype,
-            expected_dtype="float32",
-            copy=copy,
-            name=name,
-        )
-
-        return out
-
-
-class Float64Index(GenericIndex):
-    """Immutable, ordered and sliceable sequence of floating labels.
-    The basic object storing row labels for all cuDF objects.
-    Float64Index is a special case of Index with purely float labels.
-
-    Parameters:
-    -----------
-    data : array-like (1-dimensional)
-    dtype : NumPy dtype (default: float64)
-        If dtype is None, we find the dtype that best fits the data.
-    copy : bool
-        Make a copy of input data.
-    name : object
-        Name to be stored in the index.
-
-    Returns
-    -------
-    Index
-
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.Float64Index([1, 2, 3], name="a").dtype
-    dtype('float64') 
-
-    >>> cudf.Float64Index([1, 2, 3], name="a", dtype="float32").dtype
-    dtype('float64') 
-
-    >>> cudf.Float64Index([1, 2, 3], name="a")
-    Float64Index([1.0, 2.0, 3.0], dtype='float64', name='a')
-    """
-
-    def __new__(cls, data=None, dtype="float64", copy=False, name=None):
-        out = Frame().__new__(cls)
-
-        out._initialize_numeric(
-            data=data,
-            dtype=dtype,
-            expected_dtype="float64",
-            copy=copy,
-            name=name,
-        )
-
-        return out
+class Int8Index(BaseNumericIndex):
+    __doc__ = BaseNumericIndex.__doc__
+
+    def __init__(cls, data=None, dtype=None, copy=False, name=None):
+        pass
+
+
+class Int16Index(BaseNumericIndex):
+    __doc__ = BaseNumericIndex.__doc__
+
+    def __init__(cls, data=None, dtype=None, copy=False, name=None):
+        pass
+
+
+class Int32Index(BaseNumericIndex):
+    __doc__ = BaseNumericIndex.__doc__
+
+    def __init__(cls, data=None, dtype=None, copy=False, name=None):
+        pass
+
+
+class Int64Index(BaseNumericIndex):
+    __doc__ = BaseNumericIndex.__doc__
+
+    def __init__(self, data=None, dtype=None, copy=False, name=None):
+        pass
+
+
+class UInt8Index(BaseNumericIndex):
+    __doc__ = BaseNumericIndex.__doc__
+
+    def __init__(self, data=None, dtype=None, copy=False, name=None):
+        pass
+
+
+class UInt16Index(BaseNumericIndex):
+    __doc__ = BaseNumericIndex.__doc__
+
+    def __init__(cls, data=None, dtype=None, copy=False, name=None):
+        pass
+
+
+class UInt32Index(BaseNumericIndex):
+    __doc__ = BaseNumericIndex.__doc__
+
+    def __init__(cls, data=None, dtype=None, copy=False, name=None):
+        pass
+
+
+class UInt64Index(BaseNumericIndex):
+    __doc__ = BaseNumericIndex.__doc__
+
+    def __init__(cls, data=None, dtype=None, copy=False, name=None):
+        pass
+
+
+class Float32Index(BaseNumericIndex):
+    __doc__ = BaseNumericIndex.__doc__
+
+    def __init__(cls, data=None, dtype=None, copy=False, name=None):
+        pass
+
+
+class Float64Index(BaseNumericIndex):
+    __doc__ = BaseNumericIndex.__doc__
+
+    def __init__(cls, data=None, dtype=None, copy=False, name=None):
+        pass
 
 
 class DatetimeIndex(GenericIndex):
@@ -2011,18 +1635,18 @@ class DatetimeIndex(GenericIndex):
             raise NotImplementedError("Freq is not yet supported")
         if tz is not None:
             raise NotImplementedError("tz is not yet supported")
-        if normalize != False:
+        if normalize is not False:
             raise NotImplementedError("normalize == True is not yet supported")
         if closed is not None:
             raise NotImplementedError("closed is not yet supported")
         if ambiguous != "raise":
             raise NotImplementedError("ambiguous is not yet supported")
-        if dayfirst != False:
+        if dayfirst is not False:
             raise NotImplementedError("dayfirst == True is not yet supported")
-        if yearfirst != False:
+        if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
 
-        if copy == True:
+        if copy:
             data = column.as_column(data).copy()
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, np.ndarray) and data.dtype.kind == "M":
@@ -2144,12 +1768,8 @@ class CategoricalIndex(GenericIndex):
                         `ordered` together with `dtype`."
                 )
 
-        if (
-            copy is True
-            and data is not None
-            and hasattr(data, "cuda_array_interface")
-        ):
-            data = data.copy()
+        if copy:
+            data = column.as_column(data, dtype=dtype).copy()
         out = Frame().__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
@@ -2332,6 +1952,19 @@ dtype_to_index = {
     np.uint64: UInt64Index,
     np.float32: Float32Index,
     np.float64: Float64Index,
+}
+
+index_to_dtype = {
+    Int8Index: np.int8,
+    Int16Index: np.int16,
+    Int32Index: np.int32,
+    Int64Index: np.int64,
+    UInt8Index: np.uint8,
+    UInt16Index: np.uint16,
+    UInt32Index: np.uint32,
+    UInt64Index: np.uint64,
+    Float32Index: np.float32,
+    Float64Index: np.float64,
 }
 
 

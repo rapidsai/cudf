@@ -76,15 +76,17 @@ class MultiIndex(Index):
         from cudf import DataFrame
 
         if sortorder is not None:
-            NotImplemented("sortorder is not yet supported")
+            raise NotImplementedError("sortorder is not yet supported")
 
         if name is not None:
-            NotImplemented("Use `names`, `name` is not yet supported")
+            raise NotImplementedError(
+                "Use `names`, `name` is not yet supported"
+            )
 
         out = Frame().__new__(cls)
         super(Index, out).__init__()
 
-        if copy == True and isinstance(codes, DataFrame):
+        if copy and isinstance(codes, DataFrame):
             codes = codes.copy()
 
         out._name = None
