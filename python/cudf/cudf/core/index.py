@@ -411,6 +411,35 @@ class Index(Frame, Serializable):
         return result
 
     def append(self, other):
+        """
+        Append a collection of Index options together.
+
+        Parameters
+        ----------
+        other : Index or list/tuple of indices
+
+        Returns
+        -------
+        appended : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1, 2, 10, 100])
+        >>> idx
+        Int64Index([1, 2, 10, 100], dtype='int64')
+        >>> other = cudf.Index([200, 400, 50])
+        >>> other
+        Int64Index([200, 400, 50], dtype='int64')
+        >>> idx.append(other)
+        Int64Index([1, 2, 10, 100, 200, 400, 50], dtype='int64')
+
+        append accepts list of Index objects
+
+        >>> idx.append([other, other])
+        Int64Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
+        """
+
         if isinstance(other, (list, tuple)):
             to_concat = [self] + list(other)
         else:
