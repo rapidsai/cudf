@@ -6074,5 +6074,54 @@ def test_dataframe_append_dataframe(df, other):
         )
 
 
-# other
-# pd.DataFrame({'a':['hello', 'world', 'this', 'is', 'rapids', 'ai']})
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=[10, 20]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=[0, 1], index=[10, 20]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=[1, 0], index=[7, 8]),
+        pd.DataFrame(
+            {
+                23: [315.3324, 3243.32432, 3232.332, -100.32],
+                33: [0.3223, 0.32, 0.0000232, 0.32224],
+            }
+        ),
+        pd.DataFrame(
+            {
+                0: [315.3324, 3243.32432, 3232.332, -100.32],
+                1: [0.3223, 0.32, 0.0000232, 0.32224],
+            },
+            index=[7, 20, 11, 9],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        pd.Series([10, 11, 23, 234, 13]),
+        pd.Series([10, 11, 23, 234, 13], index=[11, 12, 13, 44, 33]),
+        {1: 1},
+        {0: 10, 1: 100, 2: 102},
+    ],
+)
+def test_dataframe_append_series_dict(df, other):
+    pdf = df
+    other_pd = other
+
+    gdf = gd.from_pandas(df)
+    if isinstance(other, pd.Series):
+        other_gd = gd.from_pandas(other)
+    else:
+        other_gd = other
+
+    expected = pdf.append(other_pd, ignore_index=True, sort=True)
+    actual = gdf.append(other_gd, ignore_index=True, sort=True)
+
+    if expected.shape != df.shape:
+        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+    else:
+        assert_eq(
+            expected, actual, check_index_type=False if gdf.empty else True
+        )
