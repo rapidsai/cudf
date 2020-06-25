@@ -33,7 +33,7 @@ class MultiIndex(Index):
     names: optional sequence of objects
         Names for each of the index levels.
     copy : bool, default False
-        Copy the codes and/or levels.
+        Copy the levels and codes.
     verify_integrity : bool, default True
         Check that the levels/codes are consistent and valid.
         Not yet supported
@@ -86,8 +86,11 @@ class MultiIndex(Index):
         out = Frame.__new__(cls)
         super(Index, out).__init__()
 
-        if copy and isinstance(codes, DataFrame):
-            codes = codes.copy()
+        if copy:
+            if isinstance(codes, DataFrame):
+                codes = codes.copy()
+            if len(levels) > 0 and isinstance(levels[0], Series):
+                levels = [level.copy() for level in levels]
 
         out._name = None
 
