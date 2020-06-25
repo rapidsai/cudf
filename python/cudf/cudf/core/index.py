@@ -803,6 +803,20 @@ class Index(Frame, Serializable):
     def is_monotonic_decreasing(self):
         raise (NotImplementedError)
 
+    @property
+    def empty(self):
+        """
+        Indicator whether Index is empty.
+
+        True if Index is entirely empty (no items).
+
+        Returns
+        -------
+        out : bool
+            If Index is empty, return True, if not return False.
+        """
+        return not self.size
+
     def get_slice_bound(self, label, side, kind):
         """
         Calculate slice bound that corresponds to given label.
