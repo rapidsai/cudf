@@ -115,7 +115,8 @@ class Frame(libcudf.table.Table):
                 for cols in list_of_columns:
                     # If column not in this df, fill with an all-null column
                     if idx >= len(cols) or cols[idx] is None:
-                        n = len(next(filter(lambda x: x is not None, cols)))
+                        filtered_cols = [x for x in cols if x is not None]
+                        n = len(filtered_cols[0])
                         cols[idx] = column_empty(n, dtype, masked=True)
                     else:
                         # If column is categorical, rebase the codes with the
