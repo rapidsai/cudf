@@ -99,7 +99,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  * output: [{1, 2, 3, 9}, {0, 2, 0, 1, 3}]
  *
  * @param input        Column containing values to be encoded
- * @param mr           Device memory resource used to allocate the returned bitmask.
+ * @param mr           Device memory resource used to allocate the returned columns.
  * @return A pair containing the distinct values of the input column in sorter order,
  * and a column of integer indices representing the encoded values.
  */
