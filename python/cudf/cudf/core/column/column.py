@@ -422,7 +422,7 @@ class ColumnBase(Column, Serializable):
                 )
 
             if (self.size * self.dtype.itemsize) % dtype.itemsize:
-                raise TypeError(
+                raise ValueError(
                     f"Can not divide {self.size * self.dtype.itemsize}"
                     + f" total bytes into {dtype} with size {dtype.itemsize}"
                 )

@@ -181,10 +181,7 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
     got = cudf.Series(gpu_data_view, dtype=gpu_data_view.dtype)
 
-    if from_dtype == "str":
-        gpu_ptr = gpu_data.children[1].data.ptr
-    else:
-        gpu_ptr = gpu_data.data.ptr
+    gpu_ptr = gpu_data.data.ptr
     assert gpu_ptr == got._column.data.ptr
     assert_eq(expect, got)
 
@@ -208,7 +205,7 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
     except ValueError as error:
         if "size must be a divisor" in str(error):
             with pytest.raises(
-                TypeError, match="Can not divide",
+                ValueError, match="Can not divide",
             ):
                 gpu_data = gpu_data.view(to_dtype)
         else:
