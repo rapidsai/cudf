@@ -3213,15 +3213,22 @@ class DataFrame(Frame, Serializable):
                 "sort_remaining == False is not yet supported"
             )
 
-        if axis == 0 or axis == "index":
+        if axis in (0, "index"):
             if level is not None and isinstance(self.index, cudf.MultiIndex):
+                # Pandas currently don't handle na_position
+                # in case of MultiIndex
+                if ascending is True:
+                    na_position = "first"
+                else:
+                    na_position = "last"
+
                 if isinstance(level, (str, numbers.Number)):
                     labels = [self.index._get_level_label(level)]
                 else:
                     labels = [
                         self.index._get_level_label(lvl) for lvl in level
                     ]
-                inds = self.index.codes[labels].argsort(
+                inds = self.index._source_data[labels].argsort(
                     ascending=ascending, na_position=na_position
                 )
             else:

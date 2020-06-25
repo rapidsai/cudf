@@ -266,10 +266,10 @@ class MultiIndex(Index):
             label will be returned as per the index.
         """
 
-        if level in self.codes._data.names:
+        if level in self._data.names:
             return level
         else:
-            return self.codes._data.names[level]
+            return self._data.names[level]
 
     def isin(self, values, level=None):
         """Return a boolean array where the index values are in values.
