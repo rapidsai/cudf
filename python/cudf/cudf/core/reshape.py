@@ -50,7 +50,7 @@ def _align_objs(objs, how="outer"):
         return [obj.reindex(index) for obj in objs], False
 
 
-def concat(objs, axis=0, ignore_index=False, sort=None):
+def concat(objs, axis=0, ignore_index=False, sort=False):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
     Parameters
@@ -61,14 +61,13 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     ignore_index : bool, default False
         Set True to ignore the index of the *objs* and provide a
         default range index instead.
+    sort : bool, default False
+        Sort non-concatenation axis if it is not already aligned.
 
     Returns
     -------
     A new object of like type with rows from each object in ``objs``.
     """
-
-    # if sort not in (None, False):
-    #     raise NotImplementedError("sort parameter is not yet supported")
 
     if not objs:
         raise ValueError("Need at least one object to concatenate")
