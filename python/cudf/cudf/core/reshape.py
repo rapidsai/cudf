@@ -67,8 +67,8 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     A new object of like type with rows from each object in ``objs``.
     """
 
-    if sort not in (None, False):
-        raise NotImplementedError("sort parameter is not yet supported")
+    # if sort not in (None, False):
+    #     raise NotImplementedError("sort parameter is not yet supported")
 
     if not objs:
         raise ValueError("Need at least one object to concatenate")
@@ -149,7 +149,9 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     typ = list(typs)[0]
 
     if typ is DataFrame:
-        return DataFrame._concat(objs, axis=axis, ignore_index=ignore_index)
+        return DataFrame._concat(
+            objs, axis=axis, ignore_index=ignore_index, sort=sort
+        )
     elif typ is Series:
         return Series._concat(objs, axis=axis)
     elif typ is cudf.MultiIndex:
