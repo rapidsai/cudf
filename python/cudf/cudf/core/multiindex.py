@@ -20,21 +20,77 @@ class MultiIndex(Index):
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
 
-    Properties
-    ---
-    levels: Labels for each category in the index hierarchy.
-    codes: Assignment of individual items into the categories of the hierarchy.
-    names: Name for each level
+    Parameters
+    ----------
+    levels : sequence of arrays
+        The unique labels for each level.
+    labels : sequence of arrays
+        labels is depreciated, please use levels
+    codes: sequence of arrays
+        Integers for each level designating which label at each location.
+    sortorder : optional int
+        Not yet supported
+    names: optional sequence of objects
+        Names for each of the index levels.
+    copy : bool, default False
+        Copy the levels and codes.
+    verify_integrity : bool, default True
+        Check that the levels/codes are consistent and valid.
+        Not yet supported
+
+    Returns
+    -------
+    MultiIndex
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.MultiIndex(
+    ... levels=[[1, 2], ['blue', 'red']], codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+    MultiIndex(levels=[0    1
+    1    2
+    dtype: int64, 0    blue
+    1     red
+    dtype: object],
+    codes=   0  1
+    0  0  1
+    1  0  0
+    2  1  1
+    3  1  0)
+
     """
 
     def __new__(
-        cls, levels=None, codes=None, labels=None, names=None, **kwargs
-    ):
+        cls,
+        levels=None,
+        codes=None,
+        sortorder=None,
+        labels=None,
+        names=None,
+        dtype=None,
+        copy=False,
+        name=None,
+        **kwargs,
+    ) -> "MultiIndex":
         from cudf.core.series import Series
         from cudf import DataFrame
 
-        out = Frame().__new__(cls)
+        if sortorder is not None:
+            raise NotImplementedError("sortorder is not yet supported")
+
+        if name is not None:
+            raise NotImplementedError(
+                "Use `names`, `name` is not yet supported"
+            )
+
+        out = Frame.__new__(cls)
         super(Index, out).__init__()
+
+        if copy:
+            if isinstance(codes, DataFrame):
+                codes = codes.copy()
+            if len(levels) > 0 and isinstance(levels[0], Series):
+                levels = [level.copy() for level in levels]
 
         out._name = None
 
