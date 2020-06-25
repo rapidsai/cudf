@@ -6234,7 +6234,15 @@ class DataFrame(Frame, Serializable):
             to_concat = [self, *other]
         else:
             to_concat = [self, other]
-        return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort,)
+        to_concat = [
+            obj
+            for obj in to_concat
+            if isinstance(obj, Frame) and not obj.empty
+        ]
+        if len(to_concat) == 0:
+            return self.copy()
+
+        return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
 
 
 def from_pandas(obj, nan_as_null=None):
