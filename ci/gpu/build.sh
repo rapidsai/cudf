@@ -69,8 +69,7 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "rapids-notebook-env=$MINOR_VERSION.*"
 
 # https://docs.rapids.ai/maintainers/depmgmt/ 
-conda remove --force rapids-build-env rapids-notebook-env
-conda install "pandas>=1.0,<1.1.0a0"
+# conda install "your-pkg=1.0.0"
 
 # Install the master version of dask, distributed, and streamz
 logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps"
