@@ -347,9 +347,14 @@ table_with_metadata reader::impl::read(size_t range_offset,
     if (h_column_flags[col] & column_parse::enabled) {
       // Replace EMPTY dtype with STRING
       if (column_types[active_col].id() == type_id::EMPTY) {
-        column_types[active_col] = data_type{STRING};
+        column_types[active_col] = data_type{type_id::STRING};
       }
-      out_buffers.emplace_back(column_types[active_col], num_records, true, stream, mr_);
+      const bool is_final_allocation = column_types[active_col].id() != type_id::STRING;
+      out_buffers.emplace_back(column_types[active_col],
+                               num_records,
+                               true,
+                               stream,
+                               is_final_allocation ? mr_ : rmm::mr::get_default_resource());
       metadata.column_names.emplace_back(col_names[col]);
       active_col++;
     }
@@ -549,7 +554,7 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
 
   if (args_.dtype.empty()) {
     if (num_records == 0) {
-      dtypes.resize(num_active_cols, data_type{EMPTY});
+      dtypes.resize(num_active_cols, data_type{type_id::EMPTY});
     } else {
       d_column_flags = h_column_flags;
 

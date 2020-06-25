@@ -21,7 +21,7 @@ from cudf._lib.null_mask import (
 )
 from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import as_scalar
-from cudf._lib.stream_compaction import unique_count as cpp_unique_count
+from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
@@ -795,7 +795,7 @@ class ColumnBase(Column, Serializable):
 
     @property
     def is_unique(self):
-        return self.unique_count() == len(self)
+        return self.distinct_count() == len(self)
 
     @property
     def is_monotonic(self):
@@ -853,11 +853,11 @@ class ColumnBase(Column, Serializable):
         col_keys = self[col_inds]
         return col_keys, col_inds
 
-    def unique_count(self, method="sort", dropna=True):
+    def distinct_count(self, method="sort", dropna=True):
         if method != "sort":
-            msg = "non sort based unique_count() not implemented yet"
+            msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
-        return cpp_unique_count(self, ignore_nulls=dropna)
+        return cpp_distinct_count(self, ignore_nulls=dropna)
 
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
@@ -995,6 +995,12 @@ class ColumnBase(Column, Serializable):
         if "mask" in header:
             mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
+
+    def min(self, dtype=None):
+        return libcudf.reduce.reduce("min", self, dtype=dtype)
+
+    def max(self, dtype=None):
+        return libcudf.reduce.reduce("max", self, dtype=dtype)
 
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
@@ -1228,9 +1234,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if dtype is not None:
             data = data.astype(dtype)
 
-    elif isinstance(arbitrary, Buffer):
+    elif type(arbitrary) is Buffer:
         if dtype is None:
             raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
+
         data = build_column(arbitrary, dtype=dtype)
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):

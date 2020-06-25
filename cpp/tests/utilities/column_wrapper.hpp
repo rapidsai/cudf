@@ -737,7 +737,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     // underlying non-list data.
     // also, sanity check everything to make sure the types of all the columns are the same
     std::vector<column_view> cols;
-    type_id child_id = EMPTY;
+    type_id child_id = type_id::EMPTY;
     std::transform(elements.begin(),
                    elements.end(),
                    std::back_inserter(cols),
@@ -748,7 +748,7 @@ class lists_column_wrapper : public detail::column_wrapper {
 
                      // verify all children are of the same type (C++ allows you to use initializer
                      // lists that could construct an invalid list column type)
-                     if (child_id == EMPTY) {
+                     if (child_id == type_id::EMPTY) {
                        child_id = col.type().id();
                      } else {
                        CUDF_EXPECTS(child_id == col.type().id(), "Mismatched list types");

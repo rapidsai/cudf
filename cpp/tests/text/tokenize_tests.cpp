@@ -124,7 +124,7 @@ TEST_F(TextTokenizeTest, CharacterTokenize)
 
 TEST_F(TextTokenizeTest, TokenizeEmptyTest)
 {
-  auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
+  auto strings = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
   cudf::test::strings_column_wrapper all_empty({"", "", ""});
   cudf::test::strings_column_wrapper all_null({"", "", ""}, {0, 0, 0});
   cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 0, 0});

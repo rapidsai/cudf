@@ -70,7 +70,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
   rmm::device_vector<thrust::pair<const char*, cudf::size_type>> d_strings(strings);
   CUDA_TRY(cudaMemcpy(d_buffer.data().get(), h_buffer.data(), memsize, cudaMemcpyHostToDevice));
   auto column = cudf::make_strings_column(d_strings);
-  EXPECT_EQ(column->type(), cudf::data_type{cudf::STRING});
+  EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
   EXPECT_EQ(column->null_count(), nulls);
   if (nulls) {
     EXPECT_TRUE(column->nullable());
@@ -130,7 +130,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
   rmm::device_vector<cudf::size_type> d_offsets(h_offsets);
   rmm::device_vector<cudf::bitmask_type> d_nulls(h_nulls);
   auto column = cudf::make_strings_column(d_buffer, d_offsets, d_nulls, null_count);
-  EXPECT_EQ(column->type(), cudf::data_type{cudf::STRING});
+  EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
   EXPECT_EQ(column->null_count(), null_count);
   EXPECT_EQ(2, column->num_children());
 

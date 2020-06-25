@@ -228,12 +228,13 @@ TEST_F(StringsCharsTest, Numerics)
 
 TEST_F(StringsCharsTest, EmptyStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::all_characters_of_type(
     strings_view, cudf::strings::string_character_types::ALPHANUM);
   auto view = results->view();
-  EXPECT_EQ(cudf::BOOL8, view.type().id());
+  EXPECT_EQ(cudf::type_id::BOOL8, view.type().id());
   EXPECT_EQ(0, view.size());
   EXPECT_EQ(0, view.null_count());
   EXPECT_EQ(0, view.num_children());

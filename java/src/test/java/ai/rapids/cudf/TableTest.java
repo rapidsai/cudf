@@ -692,6 +692,48 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testFullJoinWithNonCommonKeys() {
+    try (Table leftTable = new Table.TestBuilder()
+            .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+            .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+            .build();
+         Table rightTable = new Table.TestBuilder()
+                 .column(  6,   5,   9,   8,  10,  32)
+                 .column(200, 201, 202, 203, 204, 205)
+                 .build();
+         Table expected = new Table.TestBuilder()
+                 .column(   0,    1,    2,    3,    4,   5,   6,    7,   8,   9,   10,   32) // common
+                 .column( 103,  104,  100,  101,  106, 108, 107,  105, 109, 102, null, null) // left
+                 .column(null, null, null, null, null, 201, 200, null, 203, 202,  204,  205) // right
+                 .build();
+         Table joinedTable = leftTable.onColumns(0).fullJoin(rightTable.onColumns(0));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(0, true))) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testFullJoinWithOnlyCommonKeys() {
+    try (Table leftTable = new Table.TestBuilder()
+            .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317)
+            .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+            .build();
+         Table rightTable = new Table.TestBuilder()
+                 .column(306, 301, 360, 109, 335, 254, 317, 361, 251, 326)
+                 .column(200, 201, 202, 203, 204, 205, 206, 207, 208, 209)
+                 .build();
+         Table joinedTable = leftTable.onColumns(0).fullJoin(rightTable.onColumns(new int[]{0}));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true));
+         Table expected = new Table.TestBuilder()
+                 .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317) // common
+                 .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109) // left
+                 .column(202, 209, 205, 200, 203, 207, 208, 204, 201, 206) // right
+                 .build()) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
   void testInnerJoinWithNonCommonKeys() {
     try (Table leftTable = new Table.TestBuilder()
         .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
@@ -813,6 +855,27 @@ public class TableTest extends CudfTestBase {
              .column(  10,   11, null,   13,   14,   16,   18,   19)
              .column("20", "21", "22", "23", "24", "26", "28", "29")
              .build()) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testCrossJoin() {
+    try (Table leftTable = new Table.TestBuilder()
+            .column(100, 101, 102)
+            .build();
+         Table rightTable = new Table.TestBuilder()
+                 .column(200, null)
+                 .build();
+         Table expected = new Table.TestBuilder()
+                 .column(  100, 100,  101, 101,  102, 102) // left
+                 .column( null, 200, null, 200, null, 200) // right
+                 .build();
+         Table joinedTable = leftTable.crossJoin(rightTable);
+         Table orderedJoinedTable =
+                 joinedTable.orderBy(
+                         Table.asc(0, true),
+                         Table.asc(1, true))) {
       assertTablesAreEqual(expected, orderedJoinedTable);
     }
   }

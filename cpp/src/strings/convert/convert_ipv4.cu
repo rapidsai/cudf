@@ -73,11 +73,11 @@ std::unique_ptr<column> ipv4_to_integers(
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_numeric_column(data_type{INT64}, 0);
+  if (strings_count == 0) return make_numeric_column(data_type{type_id::INT64}, 0);
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   // create output column copying the strings' null-mask
-  auto results   = make_numeric_column(data_type{INT64},
+  auto results   = make_numeric_column(data_type{type_id::INT64},
                                      strings_count,
                                      copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
@@ -161,7 +161,7 @@ std::unique_ptr<column> integers_to_ipv4(
   size_type strings_count = integers.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
-  CUDF_EXPECTS(integers.type().id() == INT64, "Input column must be INT64 type");
+  CUDF_EXPECTS(integers.type().id() == type_id::INT64, "Input column must be type_id::INT64 type");
 
   auto column   = column_device_view::create(integers, stream);
   auto d_column = *column;
