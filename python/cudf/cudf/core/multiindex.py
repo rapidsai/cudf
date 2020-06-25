@@ -255,6 +255,22 @@ class MultiIndex(Index):
         """
         return 2
 
+    def _get_level_label(self, level):
+        """ Get name of the level.
+
+        Parameters
+        ----------
+        level : int or level name
+            if level is name, it will be returned as it is
+            else if level is index of the level, then level
+            label will be returned as per the index.
+        """
+
+        if level in self.codes._data.names:
+            return level
+        else:
+            return self.codes._data.names[level]
+
     def isin(self, values, level=None):
         """Return a boolean array where the index values are in values.
 
@@ -807,8 +823,8 @@ class MultiIndex(Index):
             )
         return self._is_monotonic_decreasing
 
-    def argsort(self, ascending=True):
-        return self._source_data.argsort(ascending=ascending)
+    def argsort(self, ascending=True, **kwargs):
+        return self._source_data.argsort(ascending=ascending, **kwargs)
 
     def unique(self):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())

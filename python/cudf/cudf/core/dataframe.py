@@ -1106,6 +1106,7 @@ class DataFrame(Frame, Serializable):
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
+
         result = DataFrame(index=self.index)
 
         def op(lhs, rhs):
@@ -1122,6 +1123,18 @@ class DataFrame(Frame, Serializable):
             for k, col in enumerate(self._data):
                 result[col] = getattr(self[col], fn)(other[k])
         elif isinstance(other, DataFrame):
+            if fn in ("__eq__", "__ne__"):
+                try:
+                    if (self.index != other.index).any():
+                        raise ValueError(
+                            "Can only compare identically-labeled "
+                            "DataFrame objects"
+                        )
+                except RuntimeError:
+                    raise ValueError(
+                        "Can only compare identically-labeled "
+                        "DataFrame objects"
+                    )
 
             lhs, rhs = _align_indices(self, other)
             result.index = lhs.index
@@ -2746,7 +2759,7 @@ class DataFrame(Frame, Serializable):
         columns = (
             [target]
             if isinstance(target, (str, numbers.Number))
-            else list(target)
+            else list(set(target))
         )
         if inplace:
             outdf = self
@@ -3140,10 +3153,89 @@ class DataFrame(Frame, Serializable):
         )
 
     @annotate("SORT_INDEX", color="red", domain="cudf_python")
-    def sort_index(self, ascending=True):
-        """Sort by the index
+    def sort_index(
+        self,
+        axis=0,
+        level=None,
+        ascending=True,
+        inplace=False,
+        kind=None,
+        na_position="last",
+        sort_remaining=True,
+        ignore_index=False,
+    ):
+        """Sort object by labels (along an axis).
+
+        Parameters
+        ----------
+        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
+            The axis along which to sort. The value 0 identifies the rows,
+            and 1 identifies the columns.
+        level : int or level name or list of ints or list of level names
+            If not None, sort on values in specified index level(s).
+            This is only useful in the case of MultiIndex.
+        ascending : bool, default True
+            Sort ascending vs. descending.
+        inplace : bool, default False
+            If True, perform operation in-place.
+        kind : sorting method such as `quick sort` and others.
+            Not yet supported.
+        na_position : {‘first’, ‘last’}, default ‘last’
+            Puts NaNs at the beginning if first; last puts NaNs at the end.
+        sort_remaining : bool, default True
+            Not yet supported
+        ignore_index : bool, default False
+            if True, index will be replaced with RangeIndex.
+
+        Returns
+        -------
+        DataFrame or None
+
+        Examples
+        --------
+        >>> df=cudf.DataFrame({"b":[3, 2, 1], "a":[2, 1, 3]}, index=[1, 3, 2])
+        >>> df.sort_index(axis=0)
+           b  a
+        1  3  2
+        2  1  3
+        3  2  1
+        >>> df.sort_index(axis=1)
+           a  b
+        1  2  3
+        3  1  2
+        2  3  1
         """
-        return self.take(self.index.argsort(ascending=ascending))
+        if kind is not None:
+            raise NotImplementedError("kind is not yet supported")
+
+        if sort_remaining is False:
+            raise NotImplementedError(
+                "sort_remaining == False is not yet supported"
+            )
+
+        if axis == 0 or axis == "index":
+            if level is not None and isinstance(self.index, cudf.MultiIndex):
+                if isinstance(level, (str, numbers.Number)):
+                    labels = [self.index._get_level_label(level)]
+                else:
+                    labels = [
+                        self.index._get_level_label(lvl) for lvl in level
+                    ]
+                inds = self.index.codes[labels].argsort(
+                    ascending=ascending, na_position=na_position
+                )
+            else:
+                inds = self.index.argsort(
+                    ascending=ascending, na_position=na_position
+                )
+            outdf = self.take(inds)
+        else:
+            labels = sorted(self._data.names, reverse=not ascending)
+            outdf = self[labels]
+
+        if ignore_index is True:
+            outdf = outdf.reset_index(drop=True)
+        return self._mimic_inplace(outdf, inplace=inplace)
 
     def sort_values(self, by, ascending=True, na_position="last"):
         """

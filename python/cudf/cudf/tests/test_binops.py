@@ -488,6 +488,21 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     utils.assert_eq(cd_frame, pd_frame)
 
 
+@pytest.mark.parametrize("binop", [operator.eq, operator.ne])
+def test_df_different_index_shape(binop):
+    df1 = cudf.DataFrame([1, 2, 3], index=[1, 2, 3])
+    df2 = cudf.DataFrame([3, 2, 1], index=[3, 2, 1])
+
+    with pytest.raises(ValueError):
+        binop(df1, df2)
+
+    df1 = cudf.DataFrame([1, 2, 3])
+    df2 = cudf.DataFrame([3, 2])
+
+    with pytest.raises(ValueError):
+        binop(df1, df2)
+
+
 @pytest.mark.parametrize("op", [operator.eq, operator.ne])
 def test_boolean_scalar_binop(op):
     psr = pd.Series(np.random.choice([True, False], 10))
