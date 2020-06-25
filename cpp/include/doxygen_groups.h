@@ -132,3 +132,26 @@
  *   @defgroup utility_error Exception
  * @}
  */
+
+#ifdef _DOXYGEN_
+namespace cudf {
+/**
+ * @brief placeholder for device memory resource documentation
+ *
+ * @param[in] mr Device memory resource used to allocate the returned object's device memory.
+ */
+void param_mr_doc1();
+/**
+ * @brief placeholder for device memory resource documentation
+ *
+ * Device memory resource used to allocate the returned object's device memory.
+ */
+void param_mr_doc2();
+/**
+ * @brief placeholder for CUDA stream documentation
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+void param_stream_doc();
+}  // namespace cudf
+#endif  // _DOXYGEN_

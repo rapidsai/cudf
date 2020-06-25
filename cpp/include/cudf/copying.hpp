@@ -188,7 +188,7 @@ std::unique_ptr<column> allocate_like(
  * @param[in] input Immutable view of input column to emulate
  * @param[in] size The desired number of elements that the new column should have capacity for
  * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @copydetails param_mr_doc1
  * @return A column with sufficient uninitialized capacity to hold the specified number of elements
  * as `input` of the same type as `input.type()`
  */
@@ -273,7 +273,7 @@ void copy_range_in_place(column_view const& source,
  * @param source_end The index of the last element in the source range
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr @copydetails param_mr_doc2
  * @return std::unique_ptr<column> The result target column
  */
 std::unique_ptr<column> copy_range(
