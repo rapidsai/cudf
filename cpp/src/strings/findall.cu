@@ -154,7 +154,7 @@ std::unique_ptr<table> findall_re(
   // boundary case: if no columns, return all nulls column (issue #119)
   if (columns == 0)
     results.emplace_back(
-      std::make_unique<column>(data_type{STRING},
+      std::make_unique<column>(data_type{type_id::STRING},
                                strings_count,
                                rmm::device_buffer{0, stream, mr},  // no data
                                create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr),

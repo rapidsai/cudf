@@ -963,6 +963,12 @@ class ColumnBase(Column, Serializable):
             mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
 
+    def min(self, dtype=None):
+        return libcudf.reduce.reduce("min", self, dtype=dtype)
+
+    def max(self, dtype=None):
+        return libcudf.reduce.reduce("max", self, dtype=dtype)
+
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
     """Allocate a new column like the given *column*
@@ -1195,9 +1201,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if dtype is not None:
             data = data.astype(dtype)
 
-    elif isinstance(arbitrary, Buffer):
+    elif type(arbitrary) is Buffer:
         if dtype is None:
             raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
+
         data = build_column(arbitrary, dtype=dtype)
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):

@@ -305,7 +305,7 @@ class column {
   operator mutable_column_view() { return this->mutable_view(); };
 
  private:
-  data_type _type{EMPTY};           ///< Logical type of elements in the column
+  data_type _type{type_id::EMPTY};  ///< Logical type of elements in the column
   cudf::size_type _size{};          ///< The number of elements in the column
   rmm::device_buffer _data{};       ///< Dense, contiguous, type erased device memory
                                     ///< buffer containing the column elements

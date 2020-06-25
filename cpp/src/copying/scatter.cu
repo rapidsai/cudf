@@ -327,8 +327,8 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                                              rmm::mr::device_memory_resource* mr,
                                              cudaStream_t stream)
 {
-  auto indices =
-    cudf::make_numeric_column(data_type{INT32}, target.size(), mask_state::UNALLOCATED, stream);
+  auto indices = cudf::make_numeric_column(
+    data_type{type_id::INT32}, target.size(), mask_state::UNALLOCATED, stream);
   auto mutable_indices = indices->mutable_view();
 
   thrust::sequence(rmm::exec_policy(stream)->on(stream),
@@ -369,7 +369,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                "Mismatch in number of input columns and target columns");
   CUDF_EXPECTS(boolean_mask.size() == target.num_rows(),
                "Boolean mask size and number of target rows mismatch");
-  CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be of Boolean type");
+  CUDF_EXPECTS(boolean_mask.type().id() == type_id::BOOL8, "Mask must be of Boolean type");
   // Count valid pair of input and columns as per type at each column index i
   CUDF_EXPECTS(
     std::all_of(thrust::counting_iterator<size_type>(0),
@@ -407,7 +407,7 @@ std::unique_ptr<table> boolean_mask_scatter(
                "Mismatch in number of scalars and target columns");
   CUDF_EXPECTS(boolean_mask.size() == target.num_rows(),
                "Boolean mask size and number of target rows mismatch");
-  CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be of Boolean type");
+  CUDF_EXPECTS(boolean_mask.type().id() == type_id::BOOL8, "Mask must be of Boolean type");
 
   // Count valid pair of input and columns as per type at each column/scalar index i
   CUDF_EXPECTS(

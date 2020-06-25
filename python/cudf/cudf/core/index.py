@@ -58,8 +58,45 @@ def _to_frame(this_index, index=True, name=None):
 
 
 class Index(Frame, Serializable):
-    """The root interface for all Series indexes.
-    """
+    def __new__(cls, data=None, dtype=None, name=None, **kwargs):
+
+        return as_index(data, dtype=dtype, name=name, **kwargs)
+
+    def __init__(self, data=None, dtype=None, name=None, **kwargs):
+        """Immutable ndarray implementing an ordered, sliceable set.
+        The basic object storing row labels for all cuDF objects.
+
+        Parameters:
+        -----------
+        data : array-like (1-dimensional)/ DataFrame
+            If it is a DataFrame, it will return a MultiIndex
+        dtype : NumPy dtype (default: object)
+            If dtype is None, we find the dtype that best fits the data.
+        name : object
+            Name to be stored in the index.
+
+        Returns
+        -------
+        Index
+            cudf Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> cudf.Index([1, 2, 3], dtype="uint64", name="a")
+        UInt64Index([1, 2, 3], dtype='uint64', name='a')
+
+        >>> cudf.Index(cudf.DataFrame({"a":[1, 2], "b":[2, 3]}))
+        MultiIndex(levels=[0    1
+        1    2
+        dtype: int64, 0    2
+        1    3
+        dtype: int64],
+        codes=   a  b
+        0  0  0
+        1  1  1)
+        """
+        pass
 
     def serialize(self):
         """Serialize into pickle format suitable for file storage or network
@@ -856,13 +893,15 @@ class Index(Frame, Serializable):
                 values = next(iter(table._data.values()))
 
                 if isinstance(values, NumericalColumn):
-                    out = GenericIndex.__new__(GenericIndex)
+                    out = super(Index, GenericIndex).__new__(GenericIndex)
                 elif isinstance(values, DatetimeColumn):
-                    out = DatetimeIndex.__new__(DatetimeIndex)
+                    out = super(Index, DatetimeIndex).__new__(DatetimeIndex)
                 elif isinstance(values, StringColumn):
-                    out = StringIndex.__new__(StringIndex)
+                    out = super(Index, StringIndex).__new__(StringIndex)
                 elif isinstance(values, CategoricalColumn):
-                    out = CategoricalIndex.__new__(CategoricalIndex)
+                    out = super(Index, CategoricalIndex).__new__(
+                        CategoricalIndex
+                    )
                 out._data = table._data
                 out._index = None
                 return out
@@ -875,7 +914,7 @@ class Index(Frame, Serializable):
 
 
 class RangeIndex(Index):
-    def __init__(self, start, stop=None, name=None):
+    def __new__(cls, start, stop=None, name=None):
         """An iterable integer index defined by a starting value and ending value.
         Can be sliced and indexed arbitrarily without allocating memory for the
         complete structure.
@@ -886,17 +925,20 @@ class RangeIndex(Index):
         stop: The last value
         name: Name of the index
         """
+        out = Frame.__new__(cls)
         if isinstance(start, range):
             therange = start
             start = therange.start
             stop = therange.stop
         if stop is None:
             start, stop = 0, start
-        self._start = int(start)
-        self._stop = int(stop)
-        self._cached_values = None
-        self._index = None
-        self._name = name
+        out._start = int(start)
+        out._stop = int(stop)
+        out._cached_values = None
+        out._index = None
+        out._name = name
+
+        return out
 
     @property
     def name(self):
@@ -1186,7 +1228,7 @@ class GenericIndex(Index):
     name: A string
     """
 
-    def __init__(self, values, **kwargs):
+    def __new__(cls, values, **kwargs):
         """
         Parameters
         ----------
@@ -1197,6 +1239,12 @@ class GenericIndex(Index):
             Column's name. Otherwise if this name is different from the value
             Column's, the values Column will be cloned to adopt this name.
         """
+        out = Frame.__new__(cls)
+        out.__initializer__(values, **kwargs)
+
+        return out
+
+    def __initializer__(self, values, **kwargs):
         from cudf.core.series import Series
 
         kwargs = _setdefault_name(values, kwargs)
@@ -1216,7 +1264,7 @@ class GenericIndex(Index):
             assert isinstance(values, (NumericalColumn, StringColumn))
 
         name = kwargs.get("name")
-        super().__init__({name: values})
+        super(Index, self).__init__({name: values})
 
     @property
     def _values(self):
@@ -1366,12 +1414,13 @@ class GenericIndex(Index):
 class DatetimeIndex(GenericIndex):
     # TODO this constructor should take a timezone or something to be
     # consistent with pandas
-    def __init__(self, values, **kwargs):
+    def __new__(cls, values, **kwargs):
         # we should be more strict on what we accept here but
         # we'd have to go and figure out all the semantics around
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
+        out = Frame().__new__(cls)
         kwargs = _setdefault_name(values, kwargs)
         if isinstance(values, np.ndarray) and values.dtype.kind == "M":
             values = column.as_column(values)
@@ -1379,7 +1428,8 @@ class DatetimeIndex(GenericIndex):
             values = column.as_column(values.values)
         elif isinstance(values, (list, tuple)):
             values = column.as_column(np.array(values, dtype="<M8[ms]"))
-        super(DatetimeIndex, self).__init__(values, **kwargs)
+        out.__initializer__(values, **kwargs)
+        return out
 
     @property
     def year(self):
@@ -1437,7 +1487,8 @@ class CategoricalIndex(GenericIndex):
     name: A string
     """
 
-    def __init__(self, values, **kwargs):
+    def __new__(cls, values, **kwargs):
+        out = Frame().__new__(cls)
         kwargs = _setdefault_name(values, kwargs)
         if isinstance(values, CategoricalColumn):
             values = values
@@ -1461,7 +1512,10 @@ class CategoricalIndex(GenericIndex):
             values = column.as_column(
                 pd.Categorical(values, categories=values)
             )
-        super(CategoricalIndex, self).__init__(values, **kwargs)
+
+        out.__initializer__(values, **kwargs)
+
+        return out
 
     @property
     def codes(self):
@@ -1487,7 +1541,8 @@ class StringIndex(GenericIndex):
     name: A string
     """
 
-    def __init__(self, values, **kwargs):
+    def __new__(cls, values, **kwargs):
+        out = Frame().__new__(cls)
         kwargs = _setdefault_name(values, kwargs)
         if isinstance(values, StringColumn):
             values = values.copy()
@@ -1499,7 +1554,9 @@ class StringIndex(GenericIndex):
                 raise ValueError(
                     "Couldn't create StringIndex from passed in object"
                 )
-        super(StringIndex, self).__init__(values, **kwargs)
+
+        out.__initializer__(values, **kwargs)
+        return out
 
     def to_pandas(self):
         return pd.Index(self.to_array(), name=self.name, dtype="object")
@@ -1574,10 +1631,14 @@ def as_index(arbitrary, **kwargs):
         return RangeIndex(start=arbitrary.start, stop=arbitrary.stop, **kwargs)
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
+    elif isinstance(arbitrary, cudf.DataFrame):
+        return cudf.MultiIndex(source_data=arbitrary)
     elif isinstance(arbitrary, range):
         if arbitrary.step == 1:
             return RangeIndex(arbitrary.start, arbitrary.stop, **kwargs)
-    return as_index(column.as_column(arbitrary), **kwargs)
+    return as_index(
+        column.as_column(arbitrary, dtype=kwargs.get("dtype", None)), **kwargs
+    )
 
 
 def _setdefault_name(values, kwargs):
