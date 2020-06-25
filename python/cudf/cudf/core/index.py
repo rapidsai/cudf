@@ -915,7 +915,7 @@ class Index(Frame, Serializable):
 
                 if isinstance(values, NumericalColumn):
                     try:
-                        index_class_type = dtype_to_index[values.dtype.type]
+                        index_class_type = _dtype_to_index[values.dtype.type]
                     except KeyError:
                         index_class_type = GenericIndex
                     out = super(Index, index_class_type).__new__(
@@ -1466,7 +1466,7 @@ class GenericIndex(Index):
         return self._values.__cuda_array_interface__
 
 
-class BaseNumericIndex(GenericIndex):
+class NumericIndex(GenericIndex):
     """Immutable, ordered and sliceable sequence of labels.
     The basic object storing row labels for all cuDF objects.
 
@@ -1488,7 +1488,7 @@ class BaseNumericIndex(GenericIndex):
     def __new__(cls, data=None, dtype=None, copy=False, name=None):
 
         out = Frame.__new__(cls)
-        dtype = index_to_dtype[cls]
+        dtype = _index_to_dtype[cls]
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
 
@@ -1501,62 +1501,62 @@ class BaseNumericIndex(GenericIndex):
         return out
 
 
-@copy_docstring(BaseNumericIndex)
-class Int8Index(BaseNumericIndex):
+@copy_docstring(NumericIndex)
+class Int8Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(BaseNumericIndex)
-class Int16Index(BaseNumericIndex):
+@copy_docstring(NumericIndex)
+class Int16Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(BaseNumericIndex)
-class Int32Index(BaseNumericIndex):
+@copy_docstring(NumericIndex)
+class Int32Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(BaseNumericIndex)
-class Int64Index(BaseNumericIndex):
+@copy_docstring(NumericIndex)
+class Int64Index(NumericIndex):
     def __init__(self, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(BaseNumericIndex)
-class UInt8Index(BaseNumericIndex):
+@copy_docstring(NumericIndex)
+class UInt8Index(NumericIndex):
     def __init__(self, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(BaseNumericIndex)
-class UInt16Index(BaseNumericIndex):
+@copy_docstring(NumericIndex)
+class UInt16Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(BaseNumericIndex)
-class UInt32Index(BaseNumericIndex):
+@copy_docstring(NumericIndex)
+class UInt32Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(BaseNumericIndex)
-class UInt64Index(BaseNumericIndex):
+@copy_docstring(NumericIndex)
+class UInt64Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(BaseNumericIndex)
-class Float32Index(BaseNumericIndex):
+@copy_docstring(NumericIndex)
+class Float32Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
 
-@copy_docstring(BaseNumericIndex)
-class Float64Index(BaseNumericIndex):
+@copy_docstring(NumericIndex)
+class Float64Index(NumericIndex):
     def __init__(cls, data=None, dtype=None, copy=False, name=None):
         pass
 
@@ -1906,7 +1906,7 @@ def as_index(arbitrary, **kwargs):
         return idx
     elif isinstance(arbitrary, NumericalColumn):
         try:
-            return dtype_to_index[arbitrary.dtype.type](arbitrary, **kwargs)
+            return _dtype_to_index[arbitrary.dtype.type](arbitrary, **kwargs)
         except KeyError:
             return GenericIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, StringColumn):
@@ -1931,7 +1931,7 @@ def as_index(arbitrary, **kwargs):
     )
 
 
-dtype_to_index = {
+_dtype_to_index = {
     np.int8: Int8Index,
     np.int16: Int16Index,
     np.int32: Int32Index,
@@ -1944,7 +1944,7 @@ dtype_to_index = {
     np.float64: Float64Index,
 }
 
-index_to_dtype = {
+_index_to_dtype = {
     Int8Index: np.int8,
     Int16Index: np.int16,
     Int32Index: np.int32,
