@@ -25,6 +25,12 @@ def pandas_input(request):
     return pd.Series(data, dtype=request.param)
 
 
+def str_host_view(list_of_str, to_dtype):
+    return np.concatenate(
+        [np.frombuffer(s.encode("utf-8"), dtype=to_dtype) for s in list_of_str]
+    )
+
+
 @pytest.mark.parametrize("offset", [0, 1, 15])
 @pytest.mark.parametrize("size", [None, 50, 10, 0])
 def test_column_offset_and_size(pandas_input, offset, size):
@@ -221,16 +227,8 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
     ],
 )
 def test_column_view_valid_string_to_numeric(data, to_dtype):
-    def str_host_view(list_of_str):
-        return np.concatenate(
-            [
-                np.frombuffer(s.encode("utf-8"), dtype=to_dtype)
-                for s in list_of_str
-            ]
-        )
-
     expect = cudf.Series(cudf.Series(data)._column.view(to_dtype))
-    got = cudf.Series(str_host_view(data))
+    got = cudf.Series(str_host_view(data, to_dtype))
 
     assert_eq(expect, got)
 
@@ -278,14 +276,6 @@ def test_column_view_numeric_slice(slc):
     "slc", [slice(3, None), slice(None, 4), slice(2, 5), slice(1, 3)]
 )
 def test_column_view_string_slice(slc):
-    def str_host_view(list_of_str, to_dtype):
-        return np.concatenate(
-            [
-                np.frombuffer(s.encode("utf-8"), dtype=to_dtype)
-                for s in list_of_str
-            ]
-        )
-
     data = ["a", "bcde", "cd", "efg", "h"]
 
     expect = cudf.Series(cudf.Series(data)._column[slc].view("int8"))
