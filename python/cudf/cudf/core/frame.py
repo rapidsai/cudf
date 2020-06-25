@@ -37,7 +37,7 @@ class Frame(libcudf.table.Table):
 
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
-    def _concat(cls, objs, axis=0, ignore_index=False):
+    def _concat(cls, objs, axis=0, ignore_index=False, sort=False):
 
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
@@ -149,7 +149,15 @@ class Frame(libcudf.table.Table):
 
         # Get a list of the unique table column names
         names = [name for f in objs for name in f._column_names]
-        names = list(OrderedDict.fromkeys(names).keys())
+        names = OrderedDict.fromkeys(names).keys()
+
+        try:
+            if sort:
+                names = list(sorted(names))
+            else:
+                names = list(names)
+        except TypeError:
+            names = list(names)
 
         # Combine the index and table columns for each Frame into a
         # list of [...index_cols, ...table_cols]. If a table is
