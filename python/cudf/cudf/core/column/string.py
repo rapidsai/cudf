@@ -4162,9 +4162,10 @@ class StringColumn(column.ColumnBase):
 
     def __array__(self, dtype=None):
         raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
-            Conversion to GPU array in strings is not yet supported.\nTo \
-            explicitly construct a host array, consider using .to_array()"
+            "Implicit conversion to a host NumPy array via __array__ is not "
+            "allowed, Conversion to GPU array in strings is not yet "
+            "supported.\nTo explicitly construct a host array, "
+            "consider using .to_array()"
         )
 
     def serialize(self):

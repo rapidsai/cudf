@@ -789,10 +789,10 @@ class DataFrame(Frame, Serializable):
 
     def __array__(self, dtype=None):
         raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
-            To explicitly construct a GPU matrix, consider using \
-            .as_gpu_matrix()\nTo explicitly construct a host \
-            matrix, consider using .as_matrix()"
+            "Implicit conversion to a host NumPy array via __array__ is not "
+            "allowed, To explicitly construct a GPU matrix, consider using "
+            ".as_gpu_matrix()\nTo explicitly construct a host "
+            "matrix, consider using .as_matrix()"
         )
 
     def _get_numeric_data(self):
@@ -4854,8 +4854,6 @@ class DataFrame(Frame, Serializable):
     def to_gpu_matrix(self):
         """Convert to a numba gpu ndarray
 
-
-
         Returns
         -------
         numba gpu ndarray
@@ -4873,7 +4871,9 @@ class DataFrame(Frame, Serializable):
         Construct a DataFrame from a list of Columns
         """
         return cls(
-            data=dict(zip(range(len(cols)), cols)),
+            data=dict(zip(range(len(cols)), cols))
+            if columns is None
+            else dict(zip(columns, cols)),
             index=index,
             columns=columns,
         )
@@ -6203,7 +6203,100 @@ class DataFrame(Frame, Serializable):
         df.columns = self.columns
         return df
 
-    def append(self, other, ignore_index=False, sort=False):
+    def append(
+        self, other, ignore_index=False, verify_integrity=False, sort=False
+    ):
+        """
+        Append rows of `other` to the end of caller, returning a new object.
+        Columns in `other` that are not in the caller are added as new columns.
+
+        Parameters
+        ----------
+        other : DataFrame or Series/dict-like object, or list of these
+            The data to append.
+        ignore_index : bool, default False
+            If True, do not use the index labels.
+        sort : bool, default False
+            Sort columns ordering if the columns of
+            `self` and `other` are not aligned.
+
+        Returns
+        -------
+        DataFrame
+
+        See Also
+        --------
+        cudf.concat : General function to concatenate DataFrame or
+            objects.
+
+        Notes
+        -----
+        If a list of dict/series is passed and the keys are all contained in
+        the DataFrame's index, the order of the columns in the resulting
+        DataFrame will be unchanged.
+        Iteratively appending rows to a cudf DataFrame can be more
+        computationally intensive than a single concatenate. A better
+        solution is to append those rows to a list and then concatenate
+        the list with the original DataFrame all at once.
+        `verify_integrity` parameter is not supported yet.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame([[1, 2], [3, 4]], columns=list('AB'))
+        >>> df
+           A  B
+        0  1  2
+        1  3  4
+        >>> df2 = cudf.DataFrame([[5, 6], [7, 8]], columns=list('AB'))
+        >>> df2
+           A  B
+        0  5  6
+        1  7  8
+        >>> df.append(df2)
+           A  B
+        0  1  2
+        1  3  4
+        0  5  6
+        1  7  8
+
+        With `ignore_index` set to True:
+        >>> df.append(df2, ignore_index=True)
+           A  B
+        0  1  2
+        1  3  4
+        2  5  6
+        3  7  8
+
+        The following, while not recommended methods for generating DataFrames,
+        show two ways to generate a DataFrame from multiple data sources.
+        Less efficient:
+        >>> df = cudf.DataFrame(columns=['A'])
+        >>> for i in range(5):
+        ...     df = df.append({'A': i}, ignore_index=True)
+        >>> df
+           A
+        0  0
+        1  1
+        2  2
+        3  3
+        4  4
+
+        More efficient than above:
+        >>> cudf.concat([cudf.DataFrame([i], columns=['A']) for i in range(5)],
+        ...           ignore_index=True)
+           A
+        0  0
+        1  1
+        2  2
+        3  3
+        4  4
+        """
+        if verify_integrity not in (None, False):
+            raise NotImplementedError(
+                "verify_integrity parameter is not supported yet."
+            )
+
         if isinstance(other, (cudf.Series, dict)):
             if isinstance(other, dict):
                 other = Series(other)
