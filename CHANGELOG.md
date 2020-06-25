@@ -128,6 +128,7 @@
 - PR #5523 Handle `dtype` of `Buffer` objects when not passed explicitly
 - PR #5534 Fix the java build around type_id
 - PR #5561 Fix `copy_bitmask` issue with offset
+- PR #5578 Fix getattr logic in GroupBy
 
 # cuDF 0.14.0 (Date TBD)
 
