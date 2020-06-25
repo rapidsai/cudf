@@ -474,6 +474,41 @@ class Index(Frame, Serializable):
         return self._concat(to_concat)
 
     def difference(self, other, sort=None):
+        """
+        Return a new Index with elements from the index that are not in
+        `other`.
+
+        This is the set difference of two Index objects.
+
+        Parameters
+        ----------
+        other : Index or array-like
+        sort : False or None, default None
+            Whether to sort the resulting index. By default, the
+            values are attempted to be sorted, but any TypeError from
+            incomparable elements is caught by cudf.
+            * None : Attempt to sort the result, but catch any TypeErrors
+              from comparing incomparable elements.
+            * False : Do not sort the result.
+
+        Returns
+        -------
+        difference : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx1 = cudf.Index([2, 1, 3, 4])
+        >>> idx1
+        Int64Index([2, 1, 3, 4], dtype='int64')
+        >>> idx2 = cudf.Index([3, 4, 5, 6])
+        >>> idx2
+        Int64Index([3, 4, 5, 6], dtype='int64')
+        >>> idx1.difference(idx2)
+        Int64Index([1, 2], dtype='int64')
+        >>> idx1.difference(idx2, sort=False)
+        Int64Index([2, 1], dtype='int64')
+        """
         if self.equals(other):
             if cudf.utils.dtypes.is_string_dtype(self.dtype):
                 return StringIndex([], dtype=self.dtype)
