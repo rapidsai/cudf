@@ -778,7 +778,7 @@ class Index(Frame, Serializable):
             if hasattr(cudf_index_module, submodule):
                 cudf_index_module = getattr(cudf_index_module, submodule)
             else:
-                raise NotImplementedError
+                return NotImplemented
 
         fname = func.__name__
 
@@ -789,18 +789,18 @@ class Index(Frame, Serializable):
             if not any(
                 issubclass(t, handled_type) for handled_type in handled_types
             ):
-                raise NotImplementedError
+                return NotImplemented
 
         if hasattr(cudf_index_module, fname):
             cudf_func = getattr(cudf_index_module, fname)
             # Handle case if cudf_func is same as numpy function
             if cudf_func is func:
-                raise NotImplementedError
+                return NotImplemented
             else:
                 return cudf_func(*args, **kwargs)
 
         else:
-            raise NotImplementedError
+            return NotImplemented
 
     def isin(self, values):
         """Return a boolean array where the index values are in values.
