@@ -19,9 +19,9 @@ from cudf.core.index import (
 )
 from cudf.tests.utils import (
     FLOAT_TYPES,
-    INTEGER_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
+    SIGNED_INTEGER_TYPES,
     UNSIGNED_TYPES,
     assert_eq,
 )
@@ -562,7 +562,7 @@ def test_index_basic(data, dtype, name):
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize("name", [1, "a", None])
-@pytest.mark.parametrize("dtype", INTEGER_TYPES)
+@pytest.mark.parametrize("dtype", SIGNED_INTEGER_TYPES)
 def test_integer_index_apis(data, name, dtype):
     pindex = pd.Int64Index(data, dtype=dtype, name=name)
     # Int8Index
