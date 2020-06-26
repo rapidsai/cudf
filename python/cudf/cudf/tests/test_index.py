@@ -1092,3 +1092,42 @@ def test_categorical_index_basic(data, categories, dtype, ordered, name):
     )
 
     assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.MultiIndex.from_arrays(
+            [[1, 1, 2, 2], ["red", "blue", "red", "blue"]],
+            names=("number", "color"),
+        ),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 4], ["yellow", "violet", "pink", "white"]],
+            names=("number1", "color2"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        pd.MultiIndex.from_arrays(
+            [[1, 1, 2, 2], ["red", "blue", "red", "blue"]],
+            names=("number", "color"),
+        ),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 4], ["yellow", "violet", "pink", "white"]],
+            names=("number1", "color2"),
+        ),
+    ],
+)
+def test_multiindex_append(data, other):
+    pdi = data
+    other_pd = other
+
+    gdi = cudf.from_pandas(data)
+    other_gd = cudf.from_pandas(other)
+
+    expected = pdi.append(other_pd)
+    actual = gdi.append(other_gd)
+
+    assert_eq(expected, actual)

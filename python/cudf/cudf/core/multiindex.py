@@ -890,6 +890,27 @@ class MultiIndex(Index):
             temp_other = self.to_pandas()
         return temp_self.difference(temp_other, sort)
 
+    def append(self, other):
+        """
+        Append a collection of Index options together
+
+        Parameters
+        ----------
+        other : Index or list/tuple of indices
+
+        Returns
+        -------
+        appended : Index
+        """
+        if isinstance(other, (list, tuple)):
+            other = [
+                o.to_pandas() if hasattr(o, "to_pandas") else o for o in other
+            ]
+        elif hasattr(other, "to_pandas"):
+            other = other.to_pandas()
+
+        return cudf.from_pandas(self.to_pandas().append(other))
+
     def nan_to_num(*args, **kwargs):
         return args[0]
 
