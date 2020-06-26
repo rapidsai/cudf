@@ -102,9 +102,9 @@ class data_normalizer {
   rmm::device_vector<uint32_t> device_strings_offsets;
   rmm::device_vector<uint32_t> device_code_points;
   rmm::device_vector<uint32_t> device_chars_per_thread;
-  rmm::device_vector<size_t> cub_temp_storage;
-  rmm::device_vector<uint32_t> device_num_selected;
-  size_t max_cub_storage_bytes;
+  // rmm::device_vector<size_t> cub_temp_storage;
+  // rmm::device_vector<uint32_t> device_num_selected;
+  // size_t max_cub_storage_bytes;
 };
 
 }  // namespace detail
