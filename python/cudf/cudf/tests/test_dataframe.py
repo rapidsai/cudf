@@ -2423,8 +2423,6 @@ def test_dataframe_sort_index(
         inplace=inplace,
         na_position=na_position,
     )
-    if ignore_index is True:
-        expected = expected
     got = gdf.sort_index(
         axis=axis,
         ascending=ascending,

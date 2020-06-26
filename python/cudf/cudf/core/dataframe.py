@@ -1124,13 +1124,7 @@ class DataFrame(Frame, Serializable):
                 result[col] = getattr(self[col], fn)(other[k])
         elif isinstance(other, DataFrame):
             if fn in ("__eq__", "__ne__"):
-                try:
-                    if (self.index != other.index).any():
-                        raise ValueError(
-                            "Can only compare identically-labeled "
-                            "DataFrame objects"
-                        )
-                except RuntimeError:
+                if not self.index.equals(other.index):
                     raise ValueError(
                         "Can only compare identically-labeled "
                         "DataFrame objects"
@@ -3208,7 +3202,7 @@ class DataFrame(Frame, Serializable):
         if kind is not None:
             raise NotImplementedError("kind is not yet supported")
 
-        if sort_remaining is False:
+        if not sort_remaining:
             raise NotImplementedError(
                 "sort_remaining == False is not yet supported"
             )
@@ -3222,12 +3216,12 @@ class DataFrame(Frame, Serializable):
                 else:
                     na_position = "last"
 
-                if isinstance(level, (str, numbers.Number)):
-                    labels = [self.index._get_level_label(level)]
-                else:
+                if is_list_like(level):
                     labels = [
                         self.index._get_level_label(lvl) for lvl in level
                     ]
+                else:
+                    labels = [self.index._get_level_label(level)]
                 inds = self.index._source_data[labels].argsort(
                     ascending=ascending, na_position=na_position
                 )
