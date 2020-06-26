@@ -969,6 +969,12 @@ class ColumnBase(Column, Serializable):
     def max(self, dtype=None):
         return libcudf.reduce.reduce("max", self, dtype=dtype)
 
+    def codify(self):
+        return libcudf.transform.codify(self)
+
+    def scatter_to_table(self, index, columns, names):
+        return libcudf.copying.scatter_to_table(self, index, columns, names)
+
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
     """Allocate a new column like the given *column*
