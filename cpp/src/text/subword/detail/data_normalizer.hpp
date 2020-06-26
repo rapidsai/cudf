@@ -56,8 +56,6 @@ class data_normalizer {
    */
   data_normalizer(uint32_t max_num_strings,
                   uint32_t max_num_chars,
-                  std::vector<uint32_t> const& cp_metadata,
-                  std::vector<uint64_t> const& aux_table,
                   bool do_lower_case  = true,
                   cudaStream_t stream = 0);
 

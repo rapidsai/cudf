@@ -16,10 +16,12 @@
 
 #include <text/subword/detail/cp_data.h>
 #include <cudf/utilities/error.hpp>
+#include <text/subword/detail/codepoint_metadata.ah>
 #include <text/subword/detail/data_normalizer.hpp>
 #include <text/subword/detail/tokenizer_utils.cuh>
 
 #include <device_launch_parameters.h>
+#include <thrust/fill.h>
 #include <cub/device/device_scan.cuh>
 #include <cub/device/device_select.cuh>
 #include <string>
@@ -201,16 +203,59 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
 
 data_normalizer::data_normalizer(uint32_t max_num_strings,
                                  uint32_t max_num_chars,
-                                 std::vector<uint32_t> const& cp_metadata,
-                                 std::vector<uint64_t> const& aux_table,
                                  bool do_lower_case,
                                  cudaStream_t stream)
   : do_lower_case(do_lower_case),
     device_strings_offsets(max_num_strings + 1),
     device_strings(max_num_chars),
-    device_cp_metadata{cp_metadata},
-    device_aux_table{aux_table}
+    device_cp_metadata(codepoint_metadata_size),
+    device_aux_table(aux_codepoint_data_size)
 {
+  auto execpol = rmm::exec_policy(stream);
+  thrust::fill(execpol->on(stream),
+               device_cp_metadata.begin() + cp_section1_end,
+               device_cp_metadata.end(),
+               codepoint_metadata_default_value);
+  CUDA_TRY(cudaMemcpyAsync(device_cp_metadata.data().get(),
+                           codepoint_metadata,
+                           cp_section1_end * sizeof(codepoint_metadata[0]),  // 1st section
+                           cudaMemcpyHostToDevice,
+                           stream));
+  CUDA_TRY(cudaMemcpyAsync(
+    device_cp_metadata.data().get() + cp_section2_begin,
+    cp_metadata_917505_917999,
+    (cp_section2_end - cp_section2_begin + 1) * sizeof(codepoint_metadata[0]),  // 2nd section
+    cudaMemcpyHostToDevice,
+    stream));
+
+  thrust::fill(execpol->on(stream),
+               device_aux_table.begin() + aux_section1_end,
+               device_aux_table.end(),
+               aux_codepoint_default_value);
+  CUDA_TRY(cudaMemcpyAsync(device_aux_table.data().get(),
+                           aux_codepoint_data,
+                           aux_section1_end * sizeof(aux_codepoint_data[0]),  // 1st section
+                           cudaMemcpyHostToDevice,
+                           stream));
+  CUDA_TRY(cudaMemcpyAsync(
+    device_aux_table.data().get() + aux_section2_begin,
+    aux_cp_data_44032_55203,
+    (aux_section2_end - aux_section2_begin + 1) * sizeof(aux_codepoint_data[0]),  // 2nd section
+    cudaMemcpyHostToDevice,
+    stream));
+  CUDA_TRY(cudaMemcpyAsync(
+    device_aux_table.data().get() + aux_section3_begin,
+    aux_cp_data_70475_71099,
+    (aux_section3_end - aux_section3_begin + 1) * sizeof(aux_codepoint_data[0]),  // 3rd section
+    cudaMemcpyHostToDevice,
+    stream));
+  CUDA_TRY(cudaMemcpyAsync(
+    device_aux_table.data().get() + aux_section4_begin,
+    aux_cp_data_119134_119232,
+    (aux_section4_end - aux_section4_begin + 1) * sizeof(aux_codepoint_data[0]),  // 4th section
+    cudaMemcpyHostToDevice,
+    stream));
+
   size_t max_BLOCKS               = (max_num_chars + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
   size_t max_threads_on_device    = max_BLOCKS * THREADS_PER_BLOCK;
   const size_t max_new_char_total = MAX_NEW_CHARS * max_threads_on_device;

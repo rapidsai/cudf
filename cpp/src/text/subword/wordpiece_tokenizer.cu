@@ -17,7 +17,6 @@
 #include <text/subword/detail/cp_data.h>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
-#include <text/subword/detail/cp_data_vec.ah>
 #include <text/subword/detail/hash_utils.cuh>
 #include <text/subword/detail/tokenizer_utils.cuh>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
@@ -274,7 +273,7 @@ wordpiece_tokenizer::wordpiece_tokenizer(std::string const& vocab_file,
     max_word_length{max_word_length},
     stride(stride),
     do_truncate(do_truncate),
-    normalizer(max_num_strings, max_num_chars, cp_data, aux_data, do_lower_case, stream)
+    normalizer(max_num_strings, max_num_chars, do_lower_case, stream)
 {
   // load vocab hash file into device memory
   detail::transfer_hash_info_to_device(vocab_file,
