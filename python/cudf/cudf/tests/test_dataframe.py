@@ -5994,3 +5994,34 @@ def test_cudf_isclose_different_index():
         [False, True, True, False, True, False], index=s1.index
     )
     assert_eq(expected, gd.isclose(s1, s2))
+
+
+def test_cudf_arrow_array_error():
+    df = gd.DataFrame({"a": [1, 2, 3]})
+
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow Table via __arrow_array__"
+        " is not allowed, To explicitly construct a PyArrow Table, consider "
+        "using .to_arrow()",
+    ):
+        df.__arrow_array__()
+
+    sr = gd.Series([1, 2, 3])
+
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow Array via __arrow_array__"
+        " is not allowed, To explicitly construct a PyArrow Array, consider "
+        "using .to_arrow()",
+    ):
+        sr.__arrow_array__()
+
+    sr = gd.Series(["a", "b", "c"])
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow Array via __arrow_array__"
+        " is not allowed, To explicitly construct a PyArrow Array, consider "
+        "using .to_arrow()",
+    ):
+        sr.__arrow_array__()
