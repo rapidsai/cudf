@@ -55,13 +55,13 @@ class GroupBy(Serializable):
         else:
             self.grouping = _Grouping(obj, by, level)
 
-    def __getattr__(self, key):
-        if key != "_agg_func_name_with_args":
+    def __getattribute__(self, key):
+        try:
+            return super().__getattribute__(key)
+        except AttributeError:
             if key in libgroupby._GROUPBY_AGGS:
                 return functools.partial(self._agg_func_name_with_args, key)
-        raise AttributeError(
-            f"'{self.__class__.__name__}' has no attribute '{key}'"
-        )
+            raise
 
     def __iter__(self):
         group_names, offsets, grouped_values = self._grouped()
@@ -587,10 +587,15 @@ class DataFrameGroupBy(GroupBy):
             dropna=dropna,
         )
 
-    def __getattr__(self, key):
-        if key in self.obj:
-            return self.obj[key].groupby(self.grouping, dropna=self._dropna)
-        return super().__getattr__(key)
+    def __getattribute__(self, key):
+        try:
+            return super().__getattribute__(key)
+        except AttributeError:
+            if key in self.obj:
+                return self.obj[key].groupby(
+                    self.grouping, dropna=self._dropna
+                )
+            raise
 
     def __getitem__(self, key):
         return self.obj[key].groupby(self.grouping, dropna=self._dropna)

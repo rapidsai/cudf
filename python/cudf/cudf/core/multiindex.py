@@ -125,14 +125,7 @@ class MultiIndex(Index):
             return out
 
         # name setup
-        if isinstance(
-            names,
-            (
-                Sequence,
-                pd.core.indexes.frozen.FrozenNDArray,
-                pd.core.indexes.frozen.FrozenList,
-            ),
-        ):
+        if isinstance(names, (Sequence, pd.core.indexes.frozen.FrozenList,),):
             if sum(x is None for x in names) > 1:
                 column_names = list(range(len(codes)))
             else:
@@ -146,7 +139,7 @@ class MultiIndex(Index):
             raise ValueError("Must pass non-zero number of levels/codes")
 
         if not isinstance(codes, DataFrame) and not isinstance(
-            codes[0], (Sequence, pd.core.indexes.frozen.FrozenNDArray)
+            codes[0], (Sequence, np.ndarray)
         ):
             raise TypeError("Codes is not a Sequence of sequences")
 
@@ -555,7 +548,9 @@ class MultiIndex(Index):
     def _get_row_major(self, df, row_tuple):
         from cudf import Series
 
-        if pd.api.types.is_bool_dtype(row_tuple):
+        if pd.api.types.is_bool_dtype(
+            list(row_tuple) if isinstance(row_tuple, tuple) else row_tuple
+        ):
             return df[row_tuple]
 
         valid_indices = self._get_valid_indices_by_tuple(
