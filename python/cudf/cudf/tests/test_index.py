@@ -826,11 +826,23 @@ def test_index_append_error(data, other):
     gd_data = cudf.core.index.as_index(data)
     gd_other = cudf.core.index.as_index(other)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(
+        TypeError,
+        match="cudf does not support mixed types, please type-cast "
+        "both series to same dtypes.",
+    ):
         gd_data.append(gd_other)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(
+        TypeError,
+        match="cudf does not support mixed types, please type-cast "
+        "both series to same dtypes.",
+    ):
         gd_other.append(gd_data)
+
+    sr = gd_other.to_series()
+    with pytest.raises(TypeError, match="all inputs must be Index"):
+        gd_data.append([sr])
 
 
 @pytest.mark.parametrize(
