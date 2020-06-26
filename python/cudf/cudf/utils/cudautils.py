@@ -158,16 +158,17 @@ def gpu_mark_lt(arr, val, out, not_found):
             out[i] = not_found
 
 
-def find_first(arr, val, compare="eq"):
+def find_index_of_val(arr, val, mask=None, compare="eq"):
     """
-    Returns the index of the first occurrence of *val* in *arr*..
-    Or the first occurrence of *arr* *compare* *val*, if *compare* is not eq
-    Otherwise, returns -1.
+    Returns the indices of the occurrence of *val* in *arr*
+    as per *compare*, if not found it will be filled with
+    size of *arr*
 
     Parameters
     ----------
     arr : device array
     val : scalar
+    mask : mask of the array
     compare: str ('gt', 'lt', or 'eq' (default))
     """
     found = cuda.device_array_like(arr)
@@ -185,17 +186,34 @@ def find_first(arr, val, compare="eq"):
                 gpu_mark_found_int.forall(found.size)(
                     arr, val, found, arr.size
                 )
-    from cudf.core.column import as_column
 
-    found_col = as_column(found)
+    from cudf.core.column.column import as_column
+
+    return as_column(found).set_mask(mask)
+
+
+def find_first(arr, val, mask=None, compare="eq"):
+    """
+    Returns the index of the first occurrence of *val* in *arr*..
+    Or the first occurrence of *arr* *compare* *val*, if *compare* is not eq
+    Otherwise, returns -1.
+
+    Parameters
+    ----------
+    arr : device array
+    val : scalar
+    mask : mask of the array
+    compare: str ('gt', 'lt', or 'eq' (default))
+    """
+
+    found_col = find_index_of_val(arr, val, mask=mask, compare=compare)
+    found_col = found_col.find_and_replace([arr.size], [None], True)
+
     min_index = found_col.min()
-    if min_index == arr.size:
-        return -1
-    else:
-        return min_index
+    return -1 if min_index is None or np.isnan(min_index) else min_index
 
 
-def find_last(arr, val, compare="eq", sentinel_value=-1):
+def find_last(arr, val, mask=None, compare="eq"):
     """
     Returns the index of the last occurrence of *val* in *arr*.
     Or the last occurrence of *arr* *compare* *val*, if *compare* is not eq
@@ -205,29 +223,13 @@ def find_last(arr, val, compare="eq", sentinel_value=-1):
     ----------
     arr : device array
     val : scalar
+    mask : mask of the array
     compare: str ('gt', 'lt', or 'eq' (default))
-    sentinel_value : Numerical, default value
     """
-    found = cuda.device_array_like(arr)
-    if found.size > 0:
-        if compare == "gt":
-            gpu_mark_gt.forall(found.size)(arr, val, found, sentinel_value)
-        elif compare == "lt":
-            gpu_mark_lt.forall(found.size)(arr, val, found, sentinel_value)
-        else:
-            if arr.dtype in ("float32", "float64"):
-                gpu_mark_found_float.forall(found.size)(
-                    arr, val, found, sentinel_value
-                )
-            else:
-                gpu_mark_found_int.forall(found.size)(
-                    arr, val, found, sentinel_value
-                )
-    from cudf.core.column import as_column
 
-    found_col = as_column(found)
-    if sentinel_value is not None and not np.isnan(sentinel_value):
-        found_col = found_col.find_and_replace([sentinel_value], [None], True)
+    found_col = find_index_of_val(arr, val, mask=mask, compare=compare)
+    found_col = found_col.find_and_replace([arr.size], [None], True)
+
     max_index = found_col.max()
     return -1 if max_index is None or np.isnan(max_index) else max_index
 
