@@ -58,15 +58,16 @@ def test_series_init_dict_lists(data):
         [-10, -1111, 100, 11, 133],
     ],
 )
-def test_series_append_basic(data, others):
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_series_append_basic(data, others, ignore_index):
     psr = pd.Series(data)
     gsr = cudf.Series(data)
 
     other_ps = pd.Series(others)
     other_gs = cudf.Series(others)
 
-    expected = psr.append(other_ps)
-    actual = gsr.append(other_gs)
+    expected = psr.append(other_ps, ignore_index=ignore_index)
+    actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
 
 
@@ -102,15 +103,16 @@ def test_series_append_basic(data, others):
         ["+", "-", "!", "_", "="],
     ],
 )
-def test_series_append_basic_str(data, others):
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_series_append_basic_str(data, others, ignore_index):
     psr = pd.Series(data)
     gsr = cudf.Series(data)
 
     other_ps = pd.Series(others)
     other_gs = cudf.Series(others)
 
-    expected = psr.append(other_ps)
-    actual = gsr.append(other_gs)
+    expected = psr.append(other_ps, ignore_index=ignore_index)
+    actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
 
 
@@ -152,13 +154,93 @@ def test_series_append_basic_str(data, others):
         pd.Series(["+", "-", "!", "_", "="], index=[11, 22, 33, 44, 2]),
     ],
 )
-def test_series_append_series_with_index(data, others):
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_series_append_series_with_index(data, others, ignore_index):
     psr = pd.Series(data)
     gsr = cudf.Series(data)
 
     other_ps = others
     other_gs = cudf.from_pandas(others)
 
-    expected = psr.append(other_ps)
-    actual = gsr.append(other_gs)
+    expected = psr.append(other_ps, ignore_index=ignore_index)
+    actual = gsr.append(other_gs, ignore_index=ignore_index)
+    assert_eq(expected, actual)
+
+
+def test_series_append_error_mixed_types():
+    gsr = cudf.Series([1, 2, 3, 4])
+    other = cudf.Series(["a", "b", "c", "d"])
+
+    with pytest.raises(
+        TypeError,
+        match="cudf does not support mixed types, please type-cast "
+        "both series to same dtypes.",
+    ):
+        gsr.append(other)
+
+    with pytest.raises(
+        TypeError,
+        match="cudf does not support mixed types, please type-cast "
+        "both series to same dtypes.",
+    ):
+        gsr.append([gsr, other, gsr, other])
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.Series([1, 2, 3, 4], index=["a", "b", "c", "d"]),
+        pd.Series(
+            [1.0, 12.221, 12.34, 13.324, 324.3242],
+            index=[
+                "float one",
+                "float two",
+                "float three",
+                "float four",
+                "float five",
+            ],
+        ),
+        pd.Series(
+            [-10, -1111, 100, 11, 133],
+            index=["one", "two", "three", "four", "five"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "others",
+    [
+        [
+            pd.Series([10, 11, 12, 13], index=["a", "b", "c", "d"]),
+            pd.Series([12, 14, 15, 27], index=["d", "e", "z", "x"]),
+        ],
+        [
+            pd.Series([10, 11, 12, 13], index=["a", "b", "c", "d"]),
+            pd.Series([12, 14, 15, 27], index=["d", "e", "z", "x"]),
+        ]
+        * 25,
+        [
+            pd.Series(
+                [0.1, 0.002, 324.2332, 0.2342], index=["-", "+", "%", "#"]
+            ),
+            pd.Series([12, 14, 15, 27], index=["d", "e", "z", "x"]),
+        ]
+        * 46,
+        [
+            pd.Series(
+                [-10, -1111, 100, 11, 133],
+                index=["aa", "vv", "bb", "dd", "ll"],
+            )
+        ],
+    ],
+)
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_series_append_list_series_with_index(data, others, ignore_index):
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+
+    other_ps = others
+    other_gs = [cudf.from_pandas(obj) for obj in others]
+
+    expected = psr.append(other_ps, ignore_index=ignore_index)
+    actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
