@@ -82,6 +82,7 @@
 - PR #5477 Add `is_index_type` trait 
 - PR #5487 Use sorted lists instead of sets for pytest parameterization
 - PR #5491 allow build libcudf in custom dir
+- PR #5570 Add Index APIs such as `Int64Index`, `UInt64Index` and others
 - PR #5503 Change `unique_count` to `distinct_count`
 - PR #5514 `convert_datetime.cu` Small Cleanup
 - PR #5496 Rename .cu tests (zero cuda kernels) to .cpp files
@@ -134,6 +135,9 @@
 - PR #5564 Fix CudfEngine.read_metadata API in dask_cudf
 - PR #5537 Fix issue related to using `set_index` on a string series
 - PR #5561 Fix `copy_bitmask` issue with offset
+- PR #5578 Fix getattr logic in GroupBy
+- PR #5490 Fix python column view
+
 
 # cuDF 0.14.0 (Date TBD)
 
