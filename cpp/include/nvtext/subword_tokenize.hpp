@@ -49,7 +49,7 @@ struct hashed_vocabulary {
  *        Note that this is the file AFTER python/perfect_hash.py has been used
  *        for preprocessing.
  * @param mr Memory resource to allocate any returned objects.
- * @return token-ids, attention-mask, and metadata
+ * @return vocabulary hash-table elements
  */
 hashed_vocabulary load_vocabulary_file(
   std::string const& filename_hashed_vocabulary,
@@ -131,6 +131,24 @@ struct tokenizer_result {
 tokenizer_result subword_tokenize(
   cudf::strings_column_view const& strings,
   std::string const& filename_hashed_vocabulary,
+  uint32_t max_sequence_length,
+  uint32_t stride,
+  bool do_lower,
+  bool do_truncate,
+  uint32_t max_num_strings,
+  uint32_t max_num_chars,
+  uint32_t max_rows_tensor,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @copydoc subword_tokenize(cudf::strings_column_view const&, std::string const&, uint32_t,
+ * uint32_t, bool, bool, uint32_t, uint32_t, uint32_t, rmm::mr::device_memory_result*)
+ *
+ * @param vocabulary_table The vocabulary table pre-loaded into this object.
+ */
+tokenizer_result subword_tokenize(
+  cudf::strings_column_view const& strings,
+  hashed_vocabulary const& vocabulary_table,
   uint32_t max_sequence_length,
   uint32_t stride,
   bool do_lower,

@@ -36,6 +36,8 @@ namespace {
 #define SORT_BIT 22
 #define THREADS_PER_BLOCK 64
 
+// TODO: describe where these come from
+
 __device__ __forceinline__ uint32_t get_first_cp(uint32_t metadata)
 {
   return metadata & NEW_CP_MASK;

@@ -22,6 +22,9 @@
 #include <vector>
 
 namespace nvtext {
+
+struct hashed_vocabulary;
+
 namespace detail {
 
 /**
@@ -32,7 +35,7 @@ class wordpiece_tokenizer {
   /**
    * @brief Creates a full tokenizer that cleans the text and splits it into tokens.
    *
-   * @param vocab_file A path to the preprocessed hashed vocabulary file.
+   * @param vocab_table The preprocessed hashed vocabulary data.
    * @param max_num_strings Maximum number of input strings for instantiating the tokenizer.
    *        Used to allocate temporary working memory on the GPU.
    *        If the input contains a larger number of strings, behavior is undefined.
@@ -56,7 +59,7 @@ class wordpiece_tokenizer {
    *        longer than this will simply be replaced by the unknown token
    *        specified in the `vocab_file`.
    */
-  wordpiece_tokenizer(std::string const& vocab_file,
+  wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
                       uint32_t max_num_strings,
                       uint32_t max_num_chars,
                       uint32_t max_rows_final_tensor,
@@ -108,18 +111,18 @@ class wordpiece_tokenizer {
   uint32_t max_word_length;
 
   // hash table parameters
-  // hashed_vocabulary vocab_table;
-  uint32_t outer_hash_a_param{};
-  uint32_t outer_hash_b_param{};
-  uint16_t num_outer_bins{};
-  uint16_t unk_token_id{};
-  uint16_t first_tok_id{};
-  uint16_t sep_tok_id{};
-  // TODO: change these to rmm::device_uvectors
-  rmm::device_vector<uint64_t> device_hash_table;
-  rmm::device_vector<uint64_t> device_bin_coefficients;
-  rmm::device_vector<uint16_t> device_bin_offsets;
+  hashed_vocabulary const& vocab_table;
+  // uint32_t outer_hash_a_param{};
+  // uint32_t outer_hash_b_param{};
+  // uint16_t num_outer_bins{};
+  // uint16_t unk_token_id{};
+  // uint16_t first_tok_id{};
+  // uint16_t sep_tok_id{};
+  // rmm::device_vector<uint64_t> device_hash_table;
+  // rmm::device_vector<uint64_t> device_bin_coefficients;
+  // rmm::device_vector<uint16_t> device_bin_offsets;
 
+  // TODO: change these to rmm::device_uvectors
   // working memory for tokenizing
   rmm::device_vector<uint32_t> device_token_ids;
   rmm::device_vector<uint32_t> device_word_indices;

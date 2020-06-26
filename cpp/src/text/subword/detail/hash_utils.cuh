@@ -159,41 +159,5 @@ __device__ __forceinline__ int retrieve(uint64_t const key,
   return key == expected_key ? value : -1;
 }
 
-/**
- * @brief Loads the hashing information from hash_data_file.
- *
- * This file is created using the perfect_hash.py python
- * script on the bert vocabulary file.
- *
- * The file includes values from a two level hashing scheme
- * based on the FKS perfect hashing algorithm.
- *
- * This function reads the text file of values and loads them into the parameter objects.
- *
- * @param hash_data_file The path to the file containing the hashing information after the python
- *        script has been stored.
- * @param device_hash_table[out] A pointer to the flattened hash table values.
- * @param device_bin_coefficients A pointer to the data containing the hashing parameters
- *        for each hash bin on the GPU.
- * @param device_bin_offsets A pointer to the data containing the start index of each bin in
- *        the flattened hash table.
- * @param unk_tok_id The token id for unknown tokens
- * @param first_tok_id The token id for the starting of the first string
- * @param sep_tok_id The token id for string separators
- * @param outer_table_a The outer hash value parameter A
- * @param outer_table_b The outer hash value parameter B
- * @param num_bins The number of bins for the outer hash
- */
-void transfer_hash_info_to_device(const std::string hash_data_file,
-                                  rmm::device_vector<uint64_t>& device_hash_table,
-                                  rmm::device_vector<uint64_t>& device_bin_coefficients,
-                                  rmm::device_vector<uint16_t>& device_bin_offsets,
-                                  uint16_t& unk_tok_id,
-                                  uint16_t& first_tok_id,
-                                  uint16_t& sep_tok_id,
-                                  uint32_t& outer_table_a,
-                                  uint32_t& outer_table_b,
-                                  uint16_t& num_bins);
-
 }  // namespace detail
 }  // namespace nvtext

@@ -17,6 +17,7 @@
 #include <text/subword/detail/cp_data.h>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
+#include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/hash_utils.cuh>
 #include <text/subword/detail/tokenizer_utils.cuh>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
@@ -264,7 +265,7 @@ __global__ void kernel_wordpiece_tokenizer(uint32_t const* code_points,
 
 }  // namespace
 
-wordpiece_tokenizer::wordpiece_tokenizer(std::string const& vocab_file,
+wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
                                          uint32_t max_num_strings,
                                          uint32_t max_num_chars,
                                          uint32_t max_rows_final_tensor,
@@ -274,24 +275,13 @@ wordpiece_tokenizer::wordpiece_tokenizer(std::string const& vocab_file,
                                          bool do_lower_case,
                                          cudaStream_t stream,
                                          uint32_t max_word_length)
-  : max_sequence_length{max_sequence_length},
+  : vocab_table(vocab_table),
+    max_sequence_length{max_sequence_length},
     max_word_length{max_word_length},
     stride(stride),
     do_truncate(do_truncate),
     normalizer(max_num_strings, max_num_chars, do_lower_case, stream)
 {
-  // load vocab hash file into device memory
-  detail::transfer_hash_info_to_device(vocab_file,
-                                       device_hash_table,
-                                       device_bin_coefficients,
-                                       device_bin_offsets,
-                                       unk_token_id,
-                                       first_tok_id,
-                                       sep_tok_id,
-                                       outer_hash_a_param,
-                                       outer_hash_b_param,
-                                       num_outer_bins);
-
   const size_t max_new_char_total = MAX_NEW_CHARS * max_num_chars;
   device_token_ids.resize(max_new_char_total);
   const size_t device_word_indices_count = 2 * max_new_char_total;
@@ -432,13 +422,13 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
   const uint32_t num_wp_blocks = (num_words + wp_threads_per_block - 1) / wp_threads_per_block;
   detail::kernel_wordpiece_tokenizer<<<num_wp_blocks, wp_threads_per_block, 0, stream>>>(
     device_code_points,
-    device_hash_table.data().get(),
-    device_bin_coefficients.data().get(),
-    device_bin_offsets.data().get(),
-    unk_token_id,
-    outer_hash_a_param,
-    outer_hash_b_param,
-    num_outer_bins,
+    vocab_table.table->view().data<uint64_t>(),             // device_hash_table.data().get(),
+    vocab_table.bin_coefficients->view().data<uint64_t>(),  // device_bin_coefficients.data().get(),
+    vocab_table.bin_offsets->view().data<uint16_t>(),       // device_bin_offsets.data().get(),
+    vocab_table.unknown_token_id,                           // unk_token_id,
+    vocab_table.outer_hash_a,                               // outer_hash_a_param,
+    vocab_table.outer_hash_b,                               // outer_hash_b_param,
+    vocab_table.num_bins,                                   // num_outer_bins,
     device_start_word_indices,
     device_end_word_indices,
     max_word_length,

@@ -18,6 +18,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
+#include <nvtext/detail/load_hash_file.hpp>
 #include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
 
@@ -109,7 +110,7 @@ __global__ void kernel_compute_tensor_metadata(
 }  // namespace
 
 tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
-                                  std::string const& filename_hashed_vocabulary,
+                                  hashed_vocabulary const& vocab_table,
                                   uint32_t max_sequence_length,
                                   uint32_t stride,
                                   bool do_lower,
@@ -130,7 +131,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 
   // Create tokenizer
   nvtxRangePushA("create_tokenizer");
-  wordpiece_tokenizer tokenizer(filename_hashed_vocabulary,
+  wordpiece_tokenizer tokenizer(vocab_table,
                                 max_num_strings,
                                 max_num_chars,
                                 max_rows_tensor,
@@ -142,9 +143,8 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   nvtxRangePop();
 
   // Run tokenizer
-  // nvtxRangePushA("tokenize");
   auto tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
-  // nvtxRangePop();
+  // assign output components
   uint32_t const* device_token_ids = tokens.first;
   uint32_t const* device_offsets   = tokens.second;
 
@@ -229,17 +229,10 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                           std::move(tensor_metadata)};
 }
 
-hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabulary,
-                                       cudaStream_t stream,
-                                       rmm::mr::device_memory_resource* mr)
-{
-  return hashed_vocabulary{};
-}
-
 }  // namespace detail
 
 tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
-                                  std::string const& vocabulary_hashed_filename,
+                                  std::string const& filename_hashed_vocabulary,
                                   uint32_t max_sequence_length,
                                   uint32_t stride,
                                   bool do_lower,
@@ -249,9 +242,12 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t max_rows_tensor,
                                   rmm::mr::device_memory_resource* mr)
 {
+  nvtxRangePushA("load_hash");
+  hashed_vocabulary vocab_table = load_vocabulary_file(filename_hashed_vocabulary, mr);
+  nvtxRangePop();
   // CUDF_FUNC_RANGE();
   return detail::subword_tokenize(strings,
-                                  vocabulary_hashed_filename,
+                                  vocab_table,
                                   max_sequence_length,
                                   stride,
                                   do_lower,
@@ -263,10 +259,29 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   mr);
 }
 
-hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabulary,
-                                       rmm::mr::device_memory_resource* mr)
+tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
+                                  hashed_vocabulary const& vocabulary_table,
+                                  uint32_t max_sequence_length,
+                                  uint32_t stride,
+                                  bool do_lower,
+                                  bool do_truncate,
+                                  uint32_t max_num_strings,
+                                  uint32_t max_num_chars,
+                                  uint32_t max_rows_tensor,
+                                  rmm::mr::device_memory_resource* mr)
 {
-  return detail::load_vocabulary_file(filename_hashed_vocabulary, 0, mr);
+  // CUDF_FUNC_RANGE();
+  return detail::subword_tokenize(strings,
+                                  vocabulary_table,
+                                  max_sequence_length,
+                                  stride,
+                                  do_lower,
+                                  do_truncate,
+                                  max_num_strings,
+                                  max_num_chars,
+                                  max_rows_tensor,
+                                  0,
+                                  mr);
 }
 
 }  // namespace nvtext
