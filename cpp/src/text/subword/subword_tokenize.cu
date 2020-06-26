@@ -229,6 +229,13 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                           std::move(tensor_metadata)};
 }
 
+hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabulary,
+                                       cudaStream_t stream,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  return hashed_vocabulary{};
+}
+
 }  // namespace detail
 
 tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
@@ -254,6 +261,12 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   max_rows_tensor,
                                   0,
                                   mr);
+}
+
+hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabulary,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  return detail::load_vocabulary_file(filename_hashed_vocabulary, 0, mr);
 }
 
 }  // namespace nvtext

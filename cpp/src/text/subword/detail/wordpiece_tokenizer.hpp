@@ -108,6 +108,7 @@ class wordpiece_tokenizer {
   uint32_t max_word_length;
 
   // hash table parameters
+  // hashed_vocabulary vocab_table;
   uint32_t outer_hash_a_param{};
   uint32_t outer_hash_b_param{};
   uint16_t num_outer_bins{};

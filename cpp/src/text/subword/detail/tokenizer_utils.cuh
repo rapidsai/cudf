@@ -40,16 +40,16 @@ struct NotEqual {
 };
 
 /**
- * @brief Inplace update of lengths values.
+ * @brief In-place update of lengths values.
  */
-static __global__ void update_strings_lengths(uint32_t* lengths,
-                                              uint32_t const* chars_up_to_idx,
-                                              size_t num_strings)
-{
-  uint32_t sen_for_thread = threadIdx.x + blockDim.x * blockIdx.x + 1;
-  if (sen_for_thread <= num_strings)
-    lengths[sen_for_thread] = chars_up_to_idx[lengths[sen_for_thread] - 1];
-}
+struct update_strings_lengths_fn {
+  uint32_t const* d_chars_up_to_idx;
+  uint32_t* d_lengths;
+  __device__ void operator()(uint32_t idx)
+  {
+    d_lengths[idx] = d_chars_up_to_idx[d_lengths[idx] - 1];
+  }
+};
 
 }  // namespace detail
 }  // namespace nvtext

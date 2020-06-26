@@ -22,6 +22,11 @@
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
 
 #include <device_launch_parameters.h>
+#include <thrust/copy.h>
+#include <thrust/equal.h>
+#include <thrust/remove.h>
+#include <thrust/scan.h>
+#include <thrust/transform_scan.h>
 #include <cub/device/device_scan.cuh>
 #include <cub/device/device_select.cuh>
 #include <iostream>
@@ -332,6 +337,24 @@ std::pair<uint32_t*, uint32_t*> wordpiece_tokenizer::tokenize(char const* d_stri
   return std::make_pair(cps_and_offsets.first.gpu_ptr, cps_and_offsets.second.gpu_ptr);
 }
 
+// struct filter_fn {
+//  __device__ bool operator()(uint32_t const value)
+//  {
+//    return value == std::numeric_limits<uint32_t>::max();
+//  }
+//};
+//
+// struct copy_fn {
+//  __device__ bool operator()(uint32_t const value)
+//  {
+//    return value != std::numeric_limits<uint32_t>::max();
+//  }
+//};
+//
+// struct scan_fn {
+//  __device__ uint32_t operator()(uint8_t const v) { return static_cast<uint32_t>(v); }
+//};
+
 void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
                                    ptr_length_pair& offsets_and_length,
                                    cudaStream_t stream)
@@ -341,9 +364,6 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
 
   uint32_t* device_strings_offsets = offsets_and_length.gpu_ptr;
   uint32_t num_strings             = offsets_and_length.length - 1;
-
-  // Create a selection op for all device selects
-  static NotEqual select_op(std::numeric_limits<uint32_t>::max());
 
   // make device_start_word_indices and device_end_word_indices contiguous
   uint32_t* device_start_word_indices = device_word_indices.data().get();
@@ -374,6 +394,8 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
   // all values not equal to the max uint32_t and place them at the start of the array. We leverage
   // the fact that the start_word_indices and the end_word indices are contiguous to only launch one
   // device select kernel.
+  // Create a selection op for all device selects
+  static NotEqual select_op(std::numeric_limits<uint32_t>::max());
   rmm::device_vector<uint32_t> device_num_selected(1);
   cub::DeviceSelect::If(cub_temp_storage.data().get(),
                         max_cub_storage_bytes,
@@ -384,9 +406,16 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
                         select_op,
                         stream);
   CHECK_CUDA(stream);
+  // auto execpol       = rmm::exec_policy(stream);
+  // auto const new_end = thrust::remove_if(execpol->on(stream),
+  //                                       device_start_word_indices,
+  //                                       device_start_word_indices + (2 * num_code_points),
+  //                                       filter_fn{});
+  // compute new count
+  // uint32_t const num_words = thrust::distance(device_start_word_indices, new_end) / 2;
 
   // Grab the number of words which is the number of threads needed for the main word piece
-  // tokenizer kernel. The number of tokens selected out will be double the number of words since we
+  // tokenizer kernel. The number of tokens selected will be double the number of words since we
   // select from both the start and end index arrays.
   uint32_t num_words = 0;
   CUDA_TRY(cudaMemcpyAsync(&num_words,
@@ -430,6 +459,15 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
                         select_op,
                         stream);
   CHECK_CUDA(stream);
+  //{
+  //  // thrust::host_vector<uint32_t> num_selected = device_num_selected;
+  //  // thrust::device_vector<uint32_t> d_cont_ids(num_selected[0]);
+  //  thrust::copy_if(execpol->on(stream),
+  //                  device_token_ids.data().get(),
+  //                  device_token_ids.data().get() + num_code_points,
+  //                  contiguous_token_ids,  // d_cont_ids.data().get(),
+  //                  copy_fn{});
+  //}
 
   // Repurpose start word indices since it is the same size and type as the required output.
   uint32_t* token_id_counts = device_start_word_indices;
@@ -440,12 +478,21 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
                                 num_code_points,
                                 stream);
   CHECK_CUDA(stream);
+  //{
+  //  // thrust::device_vector<uint32_t> d_counts(num_code_points);
+  //  thrust::transform_inclusive_scan(execpol->on(stream),
+  //                                   device_tokens_per_word.data().get(),
+  //                                   device_tokens_per_word.data().get() + num_code_points,
+  //                                   token_id_counts,  // d_counts.data().get(),
+  //                                   scan_fn{},
+  //                                   thrust::plus<uint32_t>());
+  //}
 
-  constexpr uint16_t sen_update_num_threads = 64;
-  size_t SEN_KERNEL_BLOCKS = (num_strings + sen_update_num_threads - 1) / sen_update_num_threads;
-  update_strings_lengths<<<SEN_KERNEL_BLOCKS, sen_update_num_threads, 0, stream>>>(
-    device_strings_offsets, token_id_counts, num_strings);
-  CHECK_CUDA(stream);
+  auto execpol = rmm::exec_policy(stream);
+  thrust::for_each_n(execpol->on(stream),
+                     thrust::make_counting_iterator<uint32_t>(1),
+                     num_strings,
+                     update_strings_lengths_fn{token_id_counts, device_strings_offsets});
 
   // Grab total number of token ids from the device
   uint32_t total_token_ids = 0;

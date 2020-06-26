@@ -266,29 +266,28 @@ data_normalizer::data_normalizer(uint32_t max_num_strings,
   device_code_points.resize(max_new_char_total);
   device_chars_per_thread.resize(max_threads_on_device);
 
-  // TODO: using thrust instead would alleviate this extra processing
   // Determine temporary device storage requirements for cub
-  //  size_t temp_storage_scan_bytes    = 0;
-  //  uint32_t* device_chars_per_thread = nullptr;
-  //  cub::DeviceScan::InclusiveSum(nullptr,
-  //                                temp_storage_scan_bytes,
-  //                                device_chars_per_thread,
-  //                                device_chars_per_thread,
-  //                                max_threads_on_device,
-  //                                stream);
-  //  size_t temp_storage_select_bytes = 0;
-  //  static NotEqual select_op((1 << SORT_BIT));
-  //  cub::DeviceSelect::If(nullptr,
-  //                        temp_storage_select_bytes,
-  //                        device_code_points.data().get(),
-  //                        device_code_points.data().get(),
-  //                        device_num_selected.data().get(),
-  //                        max_new_char_total,
-  //                        select_op,
-  //                        stream);
-  //  max_cub_storage_bytes = std::max(temp_storage_scan_bytes, temp_storage_select_bytes);
-  //  cub_temp_storage.resize(max_cub_storage_bytes);
-  //  device_num_selected.resize(1);
+  size_t temp_storage_scan_bytes    = 0;
+  uint32_t* device_chars_per_thread = nullptr;
+  cub::DeviceScan::InclusiveSum(nullptr,
+                                temp_storage_scan_bytes,
+                                device_chars_per_thread,
+                                device_chars_per_thread,
+                                max_threads_on_device,
+                                stream);
+  size_t temp_storage_select_bytes = 0;
+  static NotEqual select_op((1 << SORT_BIT));
+  cub::DeviceSelect::If(nullptr,
+                        temp_storage_select_bytes,
+                        device_code_points.data().get(),
+                        device_code_points.data().get(),
+                        device_num_selected.data().get(),
+                        max_new_char_total,
+                        select_op,
+                        stream);
+  max_cub_storage_bytes = std::max(temp_storage_scan_bytes, temp_storage_select_bytes);
+  cub_temp_storage.resize(max_cub_storage_bytes);
+  device_num_selected.resize(1);
 }
 
 std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(const char* d_strings,
@@ -324,42 +323,42 @@ std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(const cha
     device_chars_per_thread.data().get());
   CHECK_CUDA(stream);
 
-  // TODO: see if thrust remove-if and inclusive_scan (below) performance is equivalent
-  // static NotEqual select_op((1 << SORT_BIT));
-  // cub::DeviceSelect::If(cub_temp_storage.data().get(),
-  //                      max_cub_storage_bytes,
-  //                      device_code_points.data().get(),
-  //                      device_code_points.data().get(),
-  //                      device_num_selected.data().get(),
-  //                      max_new_char_total,
-  //                      select_op,
-  //                      stream);
-  // CHECK_CUDA(stream);
-  auto execpol = rmm::exec_policy(stream);
-  thrust::remove_if(execpol->on(stream),
-                    device_code_points.begin(),
-                    device_code_points.begin() + max_new_char_total,
-                    [] __device__(auto value) { return value == (1 << SORT_BIT); });
+  static NotEqual select_op((1 << SORT_BIT));
+  cub::DeviceSelect::If(cub_temp_storage.data().get(),
+                        max_cub_storage_bytes,
+                        device_code_points.data().get(),
+                        device_code_points.data().get(),
+                        device_num_selected.data().get(),
+                        max_new_char_total,
+                        select_op,
+                        stream);
+  CHECK_CUDA(stream);
+  // thrust::remove_if(execpol->on(stream),
+  //                  device_code_points.begin(),
+  //                  device_code_points.begin() + max_new_char_total,
+  //                  [] __device__(auto value) { return value == (1 << SORT_BIT); });
 
   // We also need to prefix sum the number of characters up to an including the current character in
   // order to get the new strings lengths.
-  // cub::DeviceScan::InclusiveSum(cub_temp_storage.data().get(),
-  //                              max_cub_storage_bytes,
-  //                              device_chars_per_thread.data().get(),
-  //                              device_chars_per_thread.data().get(),
-  //                              threads_on_device,
-  //                              stream);
-  // CHECK_CUDA(stream);
-  thrust::inclusive_scan(execpol->on(stream),
-                         device_chars_per_thread.begin(),
-                         device_chars_per_thread.begin() + threads_on_device,
-                         device_chars_per_thread.begin());
-
-  constexpr uint16_t SENTENCE_UPDATE_THREADS = 64;
-  size_t SEN_KERNEL_BLOCKS = (num_strings + SENTENCE_UPDATE_THREADS - 1) / SENTENCE_UPDATE_THREADS;
-  update_strings_lengths<<<SEN_KERNEL_BLOCKS, SENTENCE_UPDATE_THREADS, 0, stream>>>(
-    device_strings_offsets.data().get(), device_chars_per_thread.data().get(), num_strings);
+  cub::DeviceScan::InclusiveSum(cub_temp_storage.data().get(),
+                                max_cub_storage_bytes,
+                                device_chars_per_thread.data().get(),
+                                device_chars_per_thread.data().get(),
+                                threads_on_device,
+                                stream);
   CHECK_CUDA(stream);
+  // thrust::inclusive_scan(execpol->on(stream),
+  //                       device_chars_per_thread.begin(),
+  //                       device_chars_per_thread.begin() + threads_on_device,
+  //                       device_chars_per_thread.begin());
+
+  // this is like an in-place gather
+  auto execpol = rmm::exec_policy(stream);
+  thrust::for_each_n(execpol->on(stream),
+                     thrust::make_counting_iterator<uint32_t>(1),
+                     num_strings,
+                     update_strings_lengths_fn{device_chars_per_thread.data().get(),
+                                               device_strings_offsets.data().get()});
 
   offset_and_length.gpu_ptr = device_strings_offsets.data().get();
   offset_and_length.length  = num_strings + 1;
