@@ -662,7 +662,8 @@ def get_element(Column input_column, size_type index):
 def scatter_to_table(
         Column input_column,
         Column row_labels,
-        Column column_labels
+        Column column_labels,
+        object names
 ):
     cdef column_view input_view = input_column.view()
     cdef column_view row_labels_view = row_labels.view()
@@ -682,8 +683,9 @@ def scatter_to_table(
             num_output_columns
         ))
 
-    return Table.from_table_view(
+    result = Table.from_table_view(
         c_output.second,
         owner=Column.from_unique_ptr(move(c_output.first)),
-        column_names=range(num_output_columns)
+        column_names=names
     )
+    return result

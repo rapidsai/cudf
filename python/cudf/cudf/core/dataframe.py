@@ -6203,6 +6203,11 @@ class DataFrame(Frame, Serializable):
         df.columns = self.columns
         return df
 
+    def pivot(self, index=None, columns=None, values=None):
+        return cudf.core.reshape.pivot(
+            self, index=index, columns=columns, values=values
+        )
+
 
 def from_pandas(obj, nan_as_null=None):
     """
