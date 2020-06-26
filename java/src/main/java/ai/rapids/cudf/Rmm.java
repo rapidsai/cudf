@@ -182,6 +182,8 @@ public class Rmm {
     }
     Cuda.setDevice(gpuId);
     initialize(allocationMode, logConf, poolSize);
+    // Destroy the `Logging_memory_resource` so RMM logs get flushed.
+    Runtime.getRuntime().addShutdownHook(new Thread(Rmm::shutdown));
   }
 
   /**
