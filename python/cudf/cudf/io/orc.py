@@ -78,7 +78,14 @@ def read_orc(
 
 
 @ioutils.doc_to_orc()
-def to_orc(df, fname, compression=None, enable_statistics=False):
+def to_orc(df, fname, compression=None, enable_statistics=False, **kwargs):
     """{docstring}"""
 
-    libcudf.orc.write_orc(df, fname, compression, enable_statistics)
+    path_or_buf, should_close = ioutils.get_writer_filepath_or_buffer(
+        fname, mode="wb", **kwargs
+    )
+
+    libcudf.orc.write_orc(df, path_or_buf, compression, enable_statistics)
+
+    if should_close:
+        path_or_buf.close()

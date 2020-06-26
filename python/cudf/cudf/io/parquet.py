@@ -234,14 +234,22 @@ def to_parquet(
                     + "supported by the gpu accelerated parquet writer"
                 )
 
-        return libparquet.write_parquet(
+        path_or_buf, should_close = ioutils.get_writer_filepath_or_buffer(
+            path, mode="wb", **kwargs
+        )
+
+        libparquet.write_parquet(
             df,
-            path,
+            path_or_buf,
             index,
             compression=compression,
             statistics=statistics,
             metadata_file_path=metadata_file_path,
         )
+        if should_close:
+            path_or_buf.close()
+        return
+
     else:
 
         # If index is empty set it to the expected default value of True
