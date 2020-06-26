@@ -1,3 +1,5 @@
+import random
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -673,3 +675,19 @@ def test_dataframe_assign_col():
 
     dd.assert_eq(ddf[0], pddf[0])
     dd.assert_eq(len(ddf["fold"]), len(pddf["fold"]))
+
+
+def test_dataframe_set_index():
+    random.seed(0)
+    df = cudf.datasets.randomdata(26, dtypes={"a": float, "b": int})
+    df["str"] = list("abcdefghijklmnopqrstuvwxyz")
+    pdf = df.to_pandas()
+
+    ddf = dgd.from_cudf(df, npartitions=4)
+    ddf = ddf.set_index("str")
+
+    pddf = dd.from_pandas(pdf, npartitions=4)
+    pddf = pddf.set_index("str")
+    from cudf.tests.utils import assert_eq
+
+    assert_eq(ddf.compute(), pddf.compute())
