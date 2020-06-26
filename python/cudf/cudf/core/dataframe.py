@@ -3187,7 +3187,8 @@ class DataFrame(Frame, Serializable):
 
         Examples
         --------
-        >>> df=cudf.DataFrame({"b":[3, 2, 1], "a":[2, 1, 3]}, index=[1, 3, 2])
+        >>> df = cudf.DataFrame(
+        ... {"b":[3, 2, 1], "a":[2, 1, 3]}, index=[1, 3, 2])
         >>> df.sort_index(axis=0)
            b  a
         1  3  2

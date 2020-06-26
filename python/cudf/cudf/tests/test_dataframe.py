@@ -2409,10 +2409,10 @@ def test_dataframe_sort_index(
     )
     gdf = DataFrame.from_pandas(pdf)
 
-    # ignore_index is supported in v.1.0
     expected = pdf.sort_index(
         axis=axis,
         ascending=ascending,
+        ignore_index=ignore_index,
         inplace=inplace,
         na_position=na_position,
     )
@@ -2425,12 +2425,8 @@ def test_dataframe_sort_index(
     )
 
     if inplace is True:
-        if ignore_index is True:
-            pdf = pdf.reset_index(drop=True)
         assert_eq(pdf, gdf)
     else:
-        if ignore_index is True:
-            expected = expected.reset_index(drop=True)
         assert_eq(expected, got)
 
 
