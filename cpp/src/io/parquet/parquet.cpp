@@ -300,10 +300,11 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
       ColumnChunk *col = &g->columns[j];
       int parent       = 0;  // root of schema
       for (size_t k = 0; k < col->meta_data.path_in_schema.size(); k++) {
-        auto schema = [&](auto const &e) {
+        auto schema = [&parent, &col, &k](auto const &e) {
           return e.parent_idx == parent && e.name == col->meta_data.path_in_schema[k];
         };
-        auto const it = [&] {
+        auto const it = [&cur, &md, schema] {
+          // find_if starting at (cur + 1) and then wrapping
           auto const it = std::find_if(md->schema.cbegin() + cur + 1, md->schema.cend(), schema);
           if (it != md->schema.cend()) return it;
           return std::find_if(md->schema.cbegin(), md->schema.cbegin() + cur + 1, schema);
