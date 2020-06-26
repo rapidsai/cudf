@@ -289,32 +289,24 @@ PARQUET_END_STRUCT()
  **/
 bool CompactProtocolReader::InitSchema(FileMetaData *md)
 {
-  int const final_pos = WalkSchema(md->schema);
-  if (final_pos != md->schema.size()) { return false; }
-
+  if (WalkSchema(md->schema) != md->schema.size()) return false;
   // Map columns to schema
-  for (size_t i = 0; i < md->row_groups.size(); i++) {
-    RowGroup *g = &md->row_groups[i];
-    int cur     = 0;
-    for (size_t j = 0; j < g->columns.size(); j++) {
-      ColumnChunk *col = &g->columns[j];
-      int parent       = 0;  // root of schema
-      for (size_t k = 0; k < col->meta_data.path_in_schema.size(); k++) {
-        auto schema = [&parent, &col, &k](auto const &e) {
-          return e.parent_idx == parent && e.name == col->meta_data.path_in_schema[k];
-        };
+  for (auto &g : md->row_groups) {
+    int cur = 0;
+    for (auto &col : g.columns) {
+      int parent = 0;  // root of schema
+      for (auto const &path : col.meta_data.path_in_schema) {
+        auto schema   = [&](auto const &e) { return e.parent_idx == parent && e.name == path; };
         auto const it = [&cur, &md, schema] {
           // find_if starting at (cur + 1) and then wrapping
           auto const it = std::find_if(md->schema.cbegin() + cur + 1, md->schema.cend(), schema);
           if (it != md->schema.cend()) return it;
           return std::find_if(md->schema.cbegin(), md->schema.cbegin() + cur + 1, schema);
         }();
-
         if (it == md->schema.cend()) return false;
-
-        cur             = std::distance(md->schema.cbegin(), it);
-        col->schema_idx = cur;
-        parent          = cur;
+        cur            = std::distance(md->schema.cbegin(), it);
+        col.schema_idx = cur;
+        parent         = cur;
       }
     }
   }
