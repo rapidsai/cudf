@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 
 import cudf._lib as libcudf
+import cudf.utils.dtypes as dtypeutils
 from cudf.core import Series
-from cudf.tests.utils import NUMERIC_TYPES
 
 try:
     # Numba >= 0.49
@@ -18,7 +18,9 @@ except ImportError:
     from numba import numpy_support
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES - {"int8"})
+@pytest.mark.parametrize(
+    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int8"}))
+)
 def test_generic_ptx(dtype):
 
     size = 500

@@ -2116,6 +2116,21 @@ class DataFrame(Frame, Serializable):
         See also
         --------
         DataFrame.iloc
+
+        Notes
+        -----
+        One notable difference from Pandas is when DataFrame is of
+        mixed types and result is expected to be a Series in case of Pandas.
+        cuDF will return a DataFrame as it doesn't support mixed types
+        under Series yet.
+
+        Mixed dtype single row output as a dataframe (pandas results in Series)
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":["a", "b", "c"]})
+        >>> df.loc[0]
+           a  b
+        0  1  a
         """
         return _DataFrameLocIndexer(self)
 
@@ -2184,6 +2199,21 @@ class DataFrame(Frame, Serializable):
         See also
         --------
         DataFrame.loc
+
+        Notes
+        -----
+        One notable difference from Pandas is when DataFrame is of
+        mixed types and result is expected to be a Series in case of Pandas.
+        cuDF will return a DataFrame as it doesn't support mixed types
+        under Series yet.
+
+        Mixed dtype single row output as a dataframe (pandas results in Series)
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":["a", "b", "c"]})
+        >>> df.iloc[0]
+           a  b
+        0  1  a
         """
         return _DataFrameIlocIndexer(self)
 
@@ -3220,12 +3250,12 @@ class DataFrame(Frame, Serializable):
             Type of merge to be performed.
 
             - left : use only keys from left frame, similar to a SQL left
-              outer join; preserve key order.
+              outer join.
             - right : not supported.
             - outer : use union of keys from both frames, similar to a SQL
-              full outer join; sort keys lexicographically.
+              full outer join.
             - inner: use intersection of keys from both frames, similar to
-              a SQL inner join; preserve the order of the left keys.
+              a SQL inner join.
         left_on : label or list, or array-like
             Column or index level names to join on in the left DataFrame.
             Can also be an array or list of arrays of the length of the
@@ -3239,9 +3269,8 @@ class DataFrame(Frame, Serializable):
         right_index : bool, default False
             Use the index from the right DataFrame as the join key.
         sort : bool, default False
-            Sort the join keys lexicographically in the result DataFrame.
-            If False, the order of the join keys depends on the join type
-            (see the `how` keyword).
+            Sort the resulting dataframe by the columns that were merged on,
+            starting from the left.
         suffixes: Tuple[str, str], defaults to ('_x', '_y')
             Suffixes applied to overlapping column names on the left and right
             sides
@@ -3251,6 +3280,10 @@ class DataFrame(Frame, Serializable):
         Returns
         -------
             merged : DataFrame
+
+        Notes
+        -----
+        **DataFrames merges in cuDF result in non-deterministic row ordering.**
 
         Examples
         --------

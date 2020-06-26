@@ -13,12 +13,14 @@ import cudf._lib as libcudf
 import cudf._lib.string_casting as str_cast
 from cudf._lib.column import Column
 from cudf._lib.nvtext.generate_ngrams import (
+    generate_character_ngrams as cpp_generate_character_ngrams,
     generate_ngrams as cpp_generate_ngrams,
 )
 from cudf._lib.nvtext.ngrams_tokenize import (
     ngrams_tokenize as cpp_ngrams_tokenize,
 )
 from cudf._lib.nvtext.normalize import normalize_spaces as cpp_normalize_spaces
+from cudf._lib.nvtext.replace import replace_tokens as cpp_replace_tokens
 from cudf._lib.nvtext.tokenize import (
     character_tokenize as cpp_character_tokenize,
     count_tokens as cpp_count_tokens,
@@ -839,6 +841,129 @@ class StringMethods(object):
             cpp_slice_strings(self._column, start, stop, step), **kwargs,
         )
 
+    def isinteger(self, **kwargs):
+        """
+        Check whether all characters in each string form integer.
+
+        If a string has zero characters, False is returned for
+        that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
+
+        See also
+        --------
+        isalnum
+            Check whether all characters are alphanumeric.
+
+        isalpha
+            Check whether all characters are alphabetic.
+
+        isdecimal
+            Check whether all characters are decimal.
+
+        isdigit
+            Check whether all characters are digits.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
+
+        islower
+            Check whether all characters are lowercase.
+
+        isspace
+            Check whether all characters are whitespace.
+
+        isupper
+            Check whether all characters are uppercase.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["1", "0.1", "+100", "-15", "abc"])
+        >>> s.str.isinteger()
+        0     True
+        1    False
+        2     True
+        3     True
+        4    False
+        dtype: bool
+        >>> s = cudf.Series(["this is plan text", "", "10 10"])
+        >>> s.str.isinteger()
+        0    False
+        1    False
+        2    False
+        dtype: bool
+        """
+        return self._return_or_inplace(cpp_is_integer(self._column), **kwargs)
+
+    def isfloat(self, **kwargs):
+        """
+        Check whether all characters in each string form floating value.
+
+        If a string has zero characters, False is returned for
+        that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
+
+        See also
+        --------
+        isalnum
+            Check whether all characters are alphanumeric.
+
+        isalpha
+            Check whether all characters are alphabetic.
+
+        isdecimal
+            Check whether all characters are decimal.
+
+        isdigit
+            Check whether all characters are digits.
+
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        islower
+            Check whether all characters are lowercase.
+
+        isspace
+            Check whether all characters are whitespace.
+
+        isupper
+            Check whether all characters are uppercase.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["1.1", "0.123213", "+0.123", "-100.0001", "234",
+        ... "3-"])
+        >>> s.str.isfloat()
+        0     True
+        1     True
+        2     True
+        3     True
+        4     True
+        5    False
+        dtype: bool
+        >>> s = cudf.Series(["this is plain text", "\t\n", "9.9", "9.9.9"])
+        >>> s.str.isfloat()
+        0    False
+        1    False
+        2     True
+        3    False
+        dtype: bool
+        """
+        return self._return_or_inplace(cpp_is_float(self._column), **kwargs)
+
     def isdecimal(self, **kwargs):
         """
         Check whether all characters in each string are decimal.
@@ -856,27 +981,32 @@ class StringMethods(object):
 
         See also
         --------
-        isalpha
-            Check whether all characters are alphabetic.
-
-        isnumeric
-            Check whether all characters are numeric.
-
         isalnum
             Check whether all characters are alphanumeric.
+
+        isalpha
+            Check whether all characters are alphabetic.
 
         isdigit
             Check whether all characters are digits.
 
-        isspace
-            Check whether all characters are whitespace.
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
 
+        isspace
+            Check whether all characters are whitespace.
+
         isupper
             Check whether all characters are uppercase.
-
 
         Examples
         --------
@@ -916,24 +1046,29 @@ class StringMethods(object):
         isalpha
             Check whether all characters are alphabetic.
 
-        isnumeric
-            Check whether all characters are numeric.
+        isdecimal
+            Check whether all characters are decimal.
 
         isdigit
             Check whether all characters are digits.
 
-        isdecimal
-            Check whether all characters are decimal.
+        isinteger
+            Check whether all characters are integer.
 
-        isspace
-            Check whether all characters are whitespace.
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
 
+        isspace
+            Check whether all characters are whitespace.
+
         isupper
             Check whether all characters are uppercase.
-
 
         Examples
         --------
@@ -975,23 +1110,29 @@ class StringMethods(object):
 
         See also
         --------
-        isnumeric
-            Check whether all characters are numeric.
-
         isalnum
             Check whether all characters are alphanumeric.
-
-        isdigit
-            Check whether all characters are digits.
 
         isdecimal
             Check whether all characters are decimal.
 
-        isspace
-            Check whether all characters are whitespace.
+        isdigit
+            Check whether all characters are digits.
+
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
+
+        isspace
+            Check whether all characters are whitespace.
 
         isupper
             Check whether all characters are uppercase.
@@ -1026,27 +1167,32 @@ class StringMethods(object):
 
         See also
         --------
-        isalpha
-            Check whether all characters are alphabetic.
-
-        isnumeric
-            Check whether all characters are numeric.
-
         isalnum
             Check whether all characters are alphanumeric.
+
+        isalpha
+            Check whether all characters are alphabetic.
 
         isdecimal
             Check whether all characters are decimal.
 
-        isspace
-            Check whether all characters are whitespace.
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
 
+        isspace
+            Check whether all characters are whitespace.
+
         isupper
             Check whether all characters are uppercase.
-
 
         Examples
         --------
@@ -1082,23 +1228,29 @@ class StringMethods(object):
 
         See also
         --------
-        isalpha
-            Check whether all characters are alphabetic.
-
         isalnum
             Check whether all characters are alphanumeric.
 
-        isdigit
-            Check whether all characters are digits.
+        isalpha
+            Check whether all characters are alphabetic.
 
         isdecimal
             Check whether all characters are decimal.
 
-        isspace
-            Check whether all characters are whitespace.
+        isdigit
+            Check whether all characters are digits.
+
+        isinteger
+            Check whether all characters are integer.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
+
+        isspace
+            Check whether all characters are whitespace.
 
         isupper
             Check whether all characters are uppercase.
@@ -1145,26 +1297,32 @@ class StringMethods(object):
 
         See also
         --------
-        isalpha
-            Check whether all characters are alphabetic.
-
-        isnumeric
-            Check whether all characters are numeric.
-
         isalnum
             Check whether all characters are alphanumeric.
 
-        isdigit
-            Check whether all characters are digits.
+        isalpha
+            Check whether all characters are alphabetic.
 
         isdecimal
             Check whether all characters are decimal.
 
-        isspace
-            Check whether all characters are whitespace.
+        isdigit
+            Check whether all characters are digits.
+
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
+
+        isspace
+            Check whether all characters are whitespace.
 
         Examples
         --------
@@ -1196,20 +1354,26 @@ class StringMethods(object):
 
         See also
         --------
+        isalnum
+            Check whether all characters are alphanumeric.
+
         isalpha
             Check whether all characters are alphabetic.
 
-        isnumeric
-            Check whether all characters are numeric.
-
-        isalnum
-            Check whether all characters are alphanumeric.
+        isdecimal
+            Check whether all characters are decimal.
 
         isdigit
             Check whether all characters are digits.
 
-        isdecimal
-            Check whether all characters are decimal.
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         isspace
             Check whether all characters are whitespace.
@@ -1281,22 +1445,22 @@ class StringMethods(object):
 
         See also
         --------
-            lower
-                Converts all characters to lowercase.
+        lower
+            Converts all characters to lowercase.
 
-            upper
-                Converts all characters to uppercase.
+        upper
+            Converts all characters to uppercase.
 
-            title
-                Converts first character of each word to uppercase and
-                remaining to lowercase.
+        title
+            Converts first character of each word to uppercase and
+            remaining to lowercase.
 
-            capitalize
-                Converts first character to uppercase and remaining to
-                lowercase.
+        capitalize
+            Converts first character to uppercase and remaining to
+            lowercase.
 
-            swapcase
-                Converts uppercase to lowercase and lowercase to uppercase.
+        swapcase
+            Converts uppercase to lowercase and lowercase to uppercase.
 
         Examples
         --------
@@ -2774,27 +2938,32 @@ class StringMethods(object):
 
         See also
         --------
+        isalnum
+            Check whether all characters are alphanumeric.
+
         isalpha
             Check whether all characters are alphabetic.
 
-        isnumeric
-            Check whether all characters are numeric.
-
-        isalnum
-            Check whether all characters are alphanumeric.
+        isdecimal
+            Check whether all characters are decimal.
 
         isdigit
             Check whether all characters are digits.
 
-        isdecimal
-            Check whether all characters are decimal.
+        isinteger
+            Check whether all characters are integer.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
 
         islower
             Check whether all characters are lowercase.
 
         isupper
             Check whether all characters are uppercase.
-
 
         Examples
         --------
@@ -3534,6 +3703,43 @@ class StringMethods(object):
             cpp_generate_ngrams(self._column, n, separator), **kwargs
         )
 
+    def character_ngrams(self, n=2, **kwargs):
+        """
+        Generate the n-grams from characters in a column of strings.
+
+        Parameters
+        ----------
+        n : int
+            The degree of the n-gram (number of consecutive characters).
+            Default of 2 for bigrams.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> str_series = cudf.Series(['abcd','efgh','xyz'])
+        >>> str_series.str.character_ngrams(2)
+        0    ab
+        1    bc
+        2    cd
+        3    ef
+        4    fg
+        5    gh
+        6    xy
+        7    yz
+        dtype: object
+        >>> str_series.str.character_ngrams(3)
+        0    abc
+        1    bcd
+        2    efg
+        3    fgh
+        4    xyz
+        dtype: object
+        """
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_generate_character_ngrams(self._column, n), **kwargs
+        )
+
     def ngrams_tokenize(self, n=2, delimiter=" ", separator="_", **kwargs):
         """
         Generate the n-grams using tokens from each string.
@@ -3568,6 +3774,88 @@ class StringMethods(object):
         kwargs.setdefault("retain_index", False)
         return self._return_or_inplace(
             cpp_ngrams_tokenize(self._column, n, delimiter, separator),
+            **kwargs,
+        )
+
+    def replace_tokens(self, targets, replacements, delimiter=None, **kwargs):
+        """
+        The targets tokens are searched for within each string in the series
+        and replaced with the corresponding replacements if found.
+        Tokens are identified by the delimiter character provided.
+
+        Parameters
+        ----------
+        targets : array-like, Sequence or Series
+            The tokens to search for inside each string.
+
+        replacements : array-like, Sequence, Series or str
+            The strings to replace for each found target token found.
+            Alternately, this can be a single str instance and would be
+            used as replacement for each string found.
+
+        delimiter : str
+            The character used to locate the tokens of each string.
+            Default is whitespace.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["this is me", "theme music", ""])
+        >>> targets = cudf.Series(["is", "me"])
+        >>> sr.str.replace_tokens(targets=targets, replacements="_")
+        0       this _ _
+        1    theme music
+        2
+        dtype: object
+        >>> sr = cudf.Series(["this;is;me", "theme;music", ""])
+        >>> sr.str.replace_tokens(targets=targets, replacements=":")
+        0     this;is;me
+        1    theme;music
+        2
+        dtype: object
+        """
+        if can_convert_to_column(targets):
+            targets_column = column.as_column(targets)
+        else:
+            raise TypeError(
+                f"targets should be an array-like or a Series object, "
+                f"found {type(targets)}"
+            )
+
+        if is_scalar(replacements):
+            replacements_column = column.as_column([replacements])
+        elif can_convert_to_column(replacements):
+            replacements_column = column.as_column(replacements)
+            if len(targets_column) != len(replacements_column):
+                raise ValueError(
+                    "targets and replacements should be same size"
+                    " sequences unless replacements is a string."
+                )
+        else:
+            raise TypeError(
+                f"replacements should be an str, array-like or Series object, "
+                f"found {type(replacements)}"
+            )
+
+        if delimiter is None:
+            delimiter = ""
+        elif not is_scalar(delimiter):
+            raise TypeError(
+                f"Type of delimiter should be a string,"
+                f" found {type(delimiter)}"
+            )
+
+        return self._return_or_inplace(
+            cpp_replace_tokens(
+                self._column,
+                targets_column,
+                replacements_column,
+                as_scalar(delimiter, dtype="str"),
+            ),
             **kwargs,
         )
 
@@ -4000,7 +4288,13 @@ def _get_cols_list(others):
     if (
         can_convert_to_column(others)
         and len(others) > 0
-        and (can_convert_to_column(others[0]))
+        and (
+            can_convert_to_column(
+                others.iloc[0]
+                if isinstance(others, cudf.Series)
+                else others[0]
+            )
+        )
     ):
         """
         If others is a list-like object (in our case lists & tuples)
