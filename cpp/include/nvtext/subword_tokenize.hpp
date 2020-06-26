@@ -24,9 +24,40 @@
 
 namespace nvtext {
 
-// TODO: Create API to load the vocab file and return an object
-//       Then create another API like the one below to accept this object instead of a file.
+/**
+ * @brief The vocabulary data for use with the subword_tokenize function.
+ */
+struct hashed_vocabulary {
+  uint16_t first_token_id{};
+  uint16_t separator_token_id{};
+  uint16_t unknown_token_id{};
+  uint32_t outer_hash_a{};
+  uint32_t outer_hash_b{};
+  uint16_t num_bins{};
+  std::unique_ptr<cudf::column> table;             // uint64
+  std::unique_ptr<cudf::column> bin_coefficients;  // uint64
+  std::unique_ptr<cudf::column> bin_offsets;       // uint16
+};
 
+/**
+ * @brief Load the hashed vocabulary file into device memory.
+ *
+ * The object here can be used to call the subword_tokenize without
+ * incurring the cost of loading the same file each time.
+ *
+ * @param filename_hashed_vocabulary A path to the preprocessed vocab.txt file.
+ *        Note that this is the file AFTER python/perfect_hash.py has been used
+ *        for preprocessing.
+ * @param mr Memory resource to allocate any returned objects.
+ * @return token-ids, attention-mask, and metadata
+ */
+hashed_vocabulary load_vocabulary_file(
+  std::string const& filename_hashed_vocabulary,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Result object for the subword_tokenize functions.
+ */
 struct tokenizer_result {
   /**
    * @brief The number of rows for the output token-ids.
