@@ -23,7 +23,7 @@ def test_categorical_basic():
 
     pdsr = pd.Series(cat, index=["p", "q", "r", "s", "t"])
     sr = Series(cat, index=["p", "q", "r", "s", "t"])
-    assert_eq(pdsr.cat.codes, sr.cat.codes.astype(pdsr.cat.codes.dtype))
+    assert_eq(pdsr.cat.codes, sr.cat.codes, check_dtype=False)
 
     # Test attributes
     assert_eq(pdsr.cat.categories, sr.cat.categories)

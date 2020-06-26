@@ -856,9 +856,7 @@ class ColumnBase(Column, Serializable):
 
         cats = sr.unique().astype(sr.dtype)
         label_dtype = min_unsigned_type(len(cats))
-        labels = sr.label_encoding(
-            cats=cats, dtype=label_dtype, na_sentinel=np.iinfo(label_dtype).max
-        )
+        labels = sr.label_encoding(cats=cats, dtype=label_dtype, na_sentinel=1)
 
         # columns include null index in factorization; remove:
         if self.has_nulls:

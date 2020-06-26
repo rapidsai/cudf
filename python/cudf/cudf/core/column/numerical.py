@@ -333,7 +333,9 @@ class NumericalColumn(column.ColumnBase):
         """
         found = 0
         if len(self):
-            found = cudautils.find_first(self.data_array_view, value)
+            found = cudautils.find_first(
+                self.data_array_view, value, mask=self.mask
+            )
         if found == -1 and self.is_monotonic and closest:
             if value < self.min():
                 found = 0
@@ -341,7 +343,7 @@ class NumericalColumn(column.ColumnBase):
                 found = len(self)
             else:
                 found = cudautils.find_first(
-                    self.data_array_view, value, compare="gt"
+                    self.data_array_view, value, mask=self.mask, compare="gt",
                 )
                 if found == -1:
                     raise ValueError("value not found")
@@ -356,10 +358,9 @@ class NumericalColumn(column.ColumnBase):
         if closest=True.
         """
         found = 0
-        sentinel_value = self.default_na_value()
         if len(self):
             found = cudautils.find_last(
-                self.data_array_view, value, sentinel_value=sentinel_value
+                self.data_array_view, value, mask=self.mask,
             )
         if found == -1 and self.is_monotonic and closest:
             if value < self.min():
@@ -368,10 +369,7 @@ class NumericalColumn(column.ColumnBase):
                 found = len(self) - 1
             else:
                 found = cudautils.find_last(
-                    self.data_array_view,
-                    value,
-                    compare="lt",
-                    sentinel_value=sentinel_value,
+                    self.data_array_view, value, mask=self.mask, compare="lt",
                 )
                 if found == -1:
                     raise ValueError("value not found")

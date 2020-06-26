@@ -13,7 +13,7 @@ from cudf._lib.transform import bools_to_mask
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.dtypes import CategoricalDtype
-from cudf.utils.dtypes import min_scalar_type, min_unsigned_type
+from cudf.utils.dtypes import min_signed_type, min_unsigned_type
 
 
 class CategoricalAccessor(object):
@@ -932,7 +932,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def to_pandas(self, index=None):
-        signed_dtype = min_scalar_type(len(self.categories))
+        signed_dtype = min_signed_type(len(self.categories))
         codes = self.cat().codes.astype(signed_dtype).fillna(-1).to_array()
         categories = self.categories.to_pandas()
         data = pd.Categorical.from_codes(
@@ -941,7 +941,7 @@ class CategoricalColumn(column.ColumnBase):
         return pd.Series(data, index=index)
 
     def to_arrow(self):
-        signed_codes_dtypes = min_scalar_type(len(self.categories))
+        signed_codes_dtypes = min_signed_type(len(self.categories))
         return pa.DictionaryArray.from_arrays(
             from_pandas=True,
             ordered=self.ordered,
