@@ -296,9 +296,9 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
     for (auto &col : g.columns) {
       int parent = 0;  // root of schema
       for (auto const &path : col.meta_data.path_in_schema) {
-        auto schema   = [&](auto const &e) { return e.parent_idx == parent && e.name == path; };
-        auto const it = [&cur, &md, schema] {
+        auto const it = [&cur, &md, &parent, &path] {
           // find_if starting at (cur + 1) and then wrapping
+          auto schema   = [&](auto const &e) { return e.parent_idx == parent && e.name == path; };
           auto const it = std::find_if(md->schema.cbegin() + cur + 1, md->schema.cend(), schema);
           if (it != md->schema.cend()) return it;
           return std::find_if(md->schema.cbegin(), md->schema.cbegin() + cur + 1, schema);
