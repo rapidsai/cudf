@@ -40,8 +40,11 @@ std::unique_ptr<cudf::column> token_count_fn(cudf::size_type strings_count,
                                              cudaStream_t stream)
 {
   // create output column
-  auto token_counts = cudf::make_numeric_column(
-    cudf::data_type{cudf::INT32}, strings_count, cudf::mask_state::UNALLOCATED, stream, mr);
+  auto token_counts   = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
+                                                strings_count,
+                                                cudf::mask_state::UNALLOCATED,
+                                                stream,
+                                                mr);
   auto d_token_counts = token_counts->mutable_view().data<int32_t>();
   // add the counts to the column
   thrust::transform(rmm::exec_policy(stream)->on(stream),
@@ -158,7 +161,9 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
                                                  rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = strings_column.size();
-  if (strings_count == 0) { return cudf::make_empty_column(cudf::data_type{cudf::STRING}); }
+  if (strings_count == 0) {
+    return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  }
 
   auto offsets = strings_column.offsets();
   auto offset  = cudf::detail::get_value<int32_t>(offsets, strings_column.offset(), stream);
@@ -179,14 +184,19 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
     });
 
   // no characters check -- this could happen in all-empty or all-null strings column
-  if (num_characters == 0) { return cudf::make_empty_column(cudf::data_type{cudf::STRING}); }
+  if (num_characters == 0) {
+    return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  }
 
   // create output offsets column
   // -- conditionally copy a counting iterator where
   //    the first byte of each character is located
-  auto offsets_column = cudf::make_numeric_column(
-    cudf::data_type{cudf::INT32}, num_characters + 1, cudf::mask_state::UNALLOCATED, stream, mr);
-  auto d_new_offsets = offsets_column->mutable_view().begin<int32_t>();
+  auto offsets_column = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
+                                                  num_characters + 1,
+                                                  cudf::mask_state::UNALLOCATED,
+                                                  stream,
+                                                  mr);
+  auto d_new_offsets  = offsets_column->mutable_view().begin<int32_t>();
   thrust::copy_if(
     execpol->on(stream),
     thrust::make_counting_iterator<int32_t>(0),
@@ -198,7 +208,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
     });
 
   // create the output chars column -- just a copy of the input's chars column
-  cudf::column_view chars_view(cudf::data_type{cudf::INT8}, chars_bytes, d_chars);
+  cudf::column_view chars_view(cudf::data_type{cudf::type_id::INT8}, chars_bytes, d_chars);
   auto chars_column = std::make_unique<cudf::column>(chars_view, stream, mr);
 
   // return new strings column

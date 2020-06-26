@@ -5,6 +5,7 @@
 - PR #5292 Add unsigned int type columns to libcudf
 - PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #4546 Support pandas 1.0+
 - PR #5331 Add `cudf::drop_nans`
 - PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
@@ -25,6 +26,8 @@
 - PR #5488 Add plumbings for `.str.replace_tokens`
 - PR #5502 Add Unsigned int types support in dlpack
 - PR #5497 Add `.str.isinteger` & `.str.isfloat`
+- PR #5528 Add unsigned int reading and writing support to parquet
+- PR #5510 Add support for `cudf.Index` to create Indexes
 
 ## Improvements
 
@@ -79,11 +82,18 @@
 - PR #5477 Add `is_index_type` trait 
 - PR #5487 Use sorted lists instead of sets for pytest parameterization
 - PR #5491 allow build libcudf in custom dir
+- PR #5570 Add Index APIs such as `Int64Index`, `UInt64Index` and others
 - PR #5503 Change `unique_count` to `distinct_count`
+- PR #5514 `convert_datetime.cu` Small Cleanup
 - PR #5496 Rename .cu tests (zero cuda kernels) to .cpp files
+- PR #5518 split iterator and gather tests to speedup build tests
+- PR #5526 Change `type_id` to enum class
+- PR #5559 Java APIs for missing date/time operators
+- PR #5562 Add missing join type for java
 
 ## Bug Fixes
 
+- PR #5525 Make sure to allocate bitmasks of string columns only once
 - PR #5336 Initialize conversion tables on a per-context basis
 - PR #5283 Fix strings::ipv4_to_integers overflow to negative
 - PR #5269 Explicitly require NumPy
@@ -113,11 +123,21 @@
 - PR #5459 Fix str.translate to convert table characters to UTF-8
 - PR #5480 Fix merge sort docs
 - PR #5465 Fix benchmark out of memory errors due to multiple initialization
+- PR #5473 Fix RLEv2 patched base in ORC reader
 - PR #5472 Fix str concat issue with indexed series
 - PR #5478 Fix `loc` and `iloc` doc
 - PR #5484 Ensure flat index after groupby if nlevels == 1
 - PR #5489 Fix drop_nulls/boolean_mask corruption for large columns
+- PR #5504 Remove some java assertions that are not needed
 - PR #5516 Update gpuCI image in local build script
+- PR #5523 Handle `dtype` of `Buffer` objects when not passed explicitly
+- PR #5534 Fix the java build around type_id
+- PR #5564 Fix CudfEngine.read_metadata API in dask_cudf
+- PR #5537 Fix issue related to using `set_index` on a string series
+- PR #5561 Fix `copy_bitmask` issue with offset
+- PR #5578 Fix getattr logic in GroupBy
+- PR #5490 Fix python column view
+
 
 # cuDF 0.14.0 (Date TBD)
 
@@ -392,6 +412,7 @@
 - PR #4883 Fix series get/set to match pandas
 - PR #4861 Fix to_integers illegal-memory-access with all-empty strings column
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
+- PR #4879 Fix output for `cudf.concat` with `axis=1` for pandas parity 
 - PR #4838 Fix to support empty inputs to `replace` method
 - PR #4859 JSON reader: fix data type inference for string columns
 - PR #4868 Temporary fix to skip validation on Dask related runs
@@ -434,6 +455,7 @@
 - PR #5103 Fix `read_csv` issue with names and header
 - PR #5090 Fix losing nulls while creating DataFrame from dictionary
 - PR #5089 Return false for sign-only string in libcudf is_float and is_integer
+- PR #5124 `DataFrame.rename` support for renaming indexes w/ default for `index`
 - PR #5108 Fix float-to-string convert for -0.0
 - PR #5111 Fix header not being included in legacy jit transform.
 - PR #5115 Fix hex-to-integer logic when string has prefix '0x'

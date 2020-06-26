@@ -80,7 +80,7 @@ TEST_F(TextReplaceTest, ReplaceTokensSingleRepl)
 
 TEST_F(TextReplaceTest, ReplaceTokensEmptyTest)
 {
-  auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
+  auto strings = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
   cudf::strings_column_view strings_view(strings->view());
   auto const results = nvtext::replace_tokens(strings_view, strings_view, strings_view);
   EXPECT_EQ(results->size(), 0);
@@ -89,7 +89,7 @@ TEST_F(TextReplaceTest, ReplaceTokensEmptyTest)
 
 TEST_F(TextReplaceTest, ReplaceTokensErrorTest)
 {
-  auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
+  auto strings = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
   cudf::strings_column_view strings_view(strings->view());
   cudf::test::strings_column_wrapper notnulls({"", "", ""});
   cudf::strings_column_view notnulls_view(notnulls);

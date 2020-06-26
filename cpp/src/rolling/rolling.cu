@@ -695,8 +695,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   if (preceding_window.size() == 0 || following_window.size() == 0 || input.size() == 0)
     return empty_like(input);
 
-  CUDF_EXPECTS(preceding_window.type().id() == INT32 && following_window.type().id() == INT32,
-               "preceding_window/following_window must have INT32 type");
+  CUDF_EXPECTS(preceding_window.type().id() == type_id::INT32 &&
+                 following_window.type().id() == type_id::INT32,
+               "preceding_window/following_window must have type_id::INT32 type");
 
   CUDF_EXPECTS(preceding_window.size() == input.size() && following_window.size() == input.size(),
                "preceding_window/following_window size must match input size");
@@ -819,9 +820,9 @@ namespace {
 bool is_supported_range_frame_unit(cudf::data_type const& data_type)
 {
   auto id = data_type.id();
-  return id == cudf::TIMESTAMP_DAYS || id == cudf::TIMESTAMP_SECONDS ||
-         id == cudf::TIMESTAMP_MILLISECONDS || id == cudf::TIMESTAMP_MICROSECONDS ||
-         id == cudf::TIMESTAMP_NANOSECONDS;
+  return id == cudf::type_id::TIMESTAMP_DAYS || id == cudf::type_id::TIMESTAMP_SECONDS ||
+         id == cudf::type_id::TIMESTAMP_MILLISECONDS ||
+         id == cudf::type_id::TIMESTAMP_MICROSECONDS || id == cudf::type_id::TIMESTAMP_NANOSECONDS;
 }
 
 /// Fetches multiplication factor to normalize window sizes, depending on the datatype of the
@@ -832,12 +833,12 @@ size_t multiplication_factor(cudf::data_type const& data_type)
 {
   // Assume timestamps.
   switch (data_type.id()) {
-    case cudf::TIMESTAMP_DAYS: return 1L;
-    case cudf::TIMESTAMP_SECONDS: return 24L * 60 * 60;
-    case cudf::TIMESTAMP_MILLISECONDS: return 24L * 60 * 60 * 1000;
-    case cudf::TIMESTAMP_MICROSECONDS: return 24L * 60 * 60 * 1000 * 1000;
+    case cudf::type_id::TIMESTAMP_DAYS: return 1L;
+    case cudf::type_id::TIMESTAMP_SECONDS: return 24L * 60 * 60;
+    case cudf::type_id::TIMESTAMP_MILLISECONDS: return 24L * 60 * 60 * 1000;
+    case cudf::type_id::TIMESTAMP_MICROSECONDS: return 24L * 60 * 60 * 1000 * 1000;
     default:
-      CUDF_EXPECTS(data_type.id() == cudf::TIMESTAMP_NANOSECONDS,
+      CUDF_EXPECTS(data_type.id() == cudf::type_id::TIMESTAMP_NANOSECONDS,
                    "Unexpected data-type for timestamp-based rolling window operation!");
       return 24L * 60 * 60 * 1000 * 1000 * 1000;
   }
@@ -1158,7 +1159,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
   CUDF_EXPECTS(is_supported_range_frame_unit(timestamp_column.type()),
                "Unsupported data-type for `timestamp`-based rolling window operation!");
 
-  return timestamp_column.type().id() == cudf::TIMESTAMP_DAYS
+  return timestamp_column.type().id() == cudf::type_id::TIMESTAMP_DAYS
            ? grouped_time_range_rolling_window_impl<int32_t>(input,
                                                              timestamp_column,
                                                              timestamp_order,

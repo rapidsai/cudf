@@ -50,6 +50,66 @@ GenericIndex
 .. autoclass:: GenericIndex
     :members:
 
+Int8Index
+---------
+.. currentmodule:: cudf.core.index
+.. autoclass:: Int8Index
+    :members:
+
+Int16Index
+---------
+.. currentmodule:: cudf.core.index
+.. autoclass:: Int16Index
+    :members:
+
+Int32Index
+---------
+.. currentmodule:: cudf.core.index
+.. autoclass:: Int32Index
+    :members:
+
+Int64Index
+---------
+.. currentmodule:: cudf.core.index
+.. autoclass:: Int64Index
+    :members:
+
+UInt8Index
+---------
+.. currentmodule:: cudf.core.index
+.. autoclass:: UInt8Index
+    :members:
+
+UInt16Index
+---------
+.. currentmodule:: cudf.core.index
+.. autoclass:: UInt16Index
+    :members:
+
+UInt32Index
+---------
+.. currentmodule:: cudf.core.index
+.. autoclass:: UInt32Index
+    :members:
+
+UInt64Index
+---------
+.. currentmodule:: cudf.core.index
+.. autoclass:: UInt64Index
+    :members:
+
+Float32Index
+---------
+.. currentmodule:: cudf.core.index
+.. autoclass:: Float32Index
+    :members:
+
+Float64Index
+---------
+.. currentmodule:: cudf.core.index
+.. autoclass:: Float64Index
+    :members:
+
 CategoricalIndex
 ----------------
 .. currentmodule:: cudf.core.index

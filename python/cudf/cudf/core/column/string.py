@@ -2,7 +2,6 @@
 
 import pickle
 import warnings
-from codecs import decode
 
 import numpy as np
 import pandas as pd
@@ -120,6 +119,7 @@ from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.utils import utils
+from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import can_convert_to_column, is_scalar, is_string_dtype
 
 _str_to_numeric_typecast_functions = {
@@ -454,7 +454,10 @@ class StringMethods(object):
             data = [""]
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
-            out = out.iloc[0]
+            if isinstance(out, StringColumn):
+                out = out[0]
+            else:
+                out = out.iloc[0]
         return out
 
     def join(self, sep):
@@ -3946,6 +3949,23 @@ class StringColumn(column.ColumnBase):
                 / self.base_children[0].dtype.itemsize
             )
 
+    def sum(self, dtype=None):
+        return self.str().cat()
+
+    def product(self, dtype=None):
+        raise TypeError("can't multiply sequence by non-int of type 'object'")
+
+    def mean(self, dtype=np.float64):
+        raise NotImplementedError(
+            "mean for Series of type 'object' is not yet implemented."
+        )
+
+    def var(self, ddof=1, dtype=np.float64):
+        raise TypeError("unsupported operation for object of type 'object'")
+
+    def std(self, ddof=1, dtype=np.float64):
+        raise TypeError("unsupported operation for object of type 'object'")
+
     def set_base_data(self, value):
         if value is not None:
             raise RuntimeError(
@@ -4250,18 +4270,6 @@ class StringColumn(column.ColumnBase):
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(op, type(self), type(rhs)))
 
-    def sum(self, dtype=None):
-        # Should we be raising here? Pandas can't handle the mix of strings and
-        # None and throws, but we already have a test that looks to ignore
-        # nulls and returns anyway.
-
-        # if self.null_count > 0:
-        #     raise ValueError("Cannot get sum of string column with nulls")
-
-        if len(self) == 0:
-            return ""
-        return decode(self.children[1].data.to_host_array(), encoding="utf-8")
-
     @property
     def is_unique(self):
         return len(self.unique()) == len(self)
@@ -4275,6 +4283,30 @@ class StringColumn(column.ColumnBase):
     def _mimic_inplace(self, other_col, inplace=False):
         out = super()._mimic_inplace(other_col, inplace=inplace)
         return out
+
+    @copy_docstring(column.ColumnBase.view)
+    def view(self, dtype):
+        if self.null_count > 0:
+            raise ValueError(
+                "Can not produce a view of a string column with nulls"
+            )
+        dtype = np.dtype(dtype)
+        str_byte_offset = self.base_children[0][self.offset]
+        str_end_byte_offset = self.base_children[0][self.offset + self.size]
+        char_dtype_size = self.base_children[1].dtype.itemsize
+
+        n_bytes_to_view = (
+            str_end_byte_offset - str_byte_offset
+        ) * char_dtype_size
+
+        to_view = column.build_column(
+            self.base_children[1].data,
+            dtype=self.base_children[1].dtype,
+            offset=str_byte_offset,
+            size=n_bytes_to_view,
+        )
+
+        return to_view.view(dtype)
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
