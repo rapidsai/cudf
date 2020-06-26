@@ -6325,8 +6325,9 @@ class DataFrame(Frame, Serializable):
                     "or if the Series has a name"
                 )
 
-            idx_diff = other.index.difference(self.columns)
-            current_cols = cudf.Index(self._data.names)
+            current_cols = self.columns
+            idx_diff = other.index.to_pandas().difference(current_cols)
+
             try:
                 combined_columns = current_cols.append(idx_diff)
             except TypeError:
