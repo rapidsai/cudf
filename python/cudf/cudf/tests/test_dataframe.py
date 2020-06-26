@@ -6307,3 +6307,15 @@ def test_dataframe_append_lists(df, other):
         assert_eq(
             expected, actual, check_index_type=False if gdf.empty else True
         )
+
+
+def test_dataframe_append_error():
+    df = gd.DataFrame({"a": [1, 2, 3]})
+    ps = gd.Series([1, 2, 3])
+
+    with pytest.raises(
+        TypeError,
+        match="Can only append a Series if ignore_index=True "
+        "or if the Series has a name",
+    ):
+        df.append(ps)
