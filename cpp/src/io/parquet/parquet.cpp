@@ -16,6 +16,8 @@
 
 #include "parquet.h"
 
+#include <algorithm>
+
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -287,7 +289,7 @@ PARQUET_END_STRUCT()
  **/
 bool CompactProtocolReader::InitSchema(FileMetaData *md)
 {
-  int final_pos = WalkSchema(md->schema);
+  int const final_pos = WalkSchema(md->schema);
   if (final_pos != md->schema.size()) { return false; }
 
   // Map columns to schema
@@ -298,21 +300,18 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
       ColumnChunk *col = &g->columns[j];
       int parent       = 0;  // root of schema
       for (size_t k = 0; k < col->meta_data.path_in_schema.size(); k++) {
-        bool found = false;
-        int pos = cur + 1, maxpos = (int)md->schema.size();
-        for (int l = maxpos; l > 0; --l) {
-          if (pos >= maxpos) {
-            pos = 0;  // wrap around
-          }
-          if (md->schema[pos].parent_idx == parent &&
-              md->schema[pos].name == col->meta_data.path_in_schema[k]) {
-            cur   = pos;
-            found = true;
-            break;
-          }
-          pos++;
-        }
-        if (!found) { return false; }
+        auto schema = [&](auto const &e) {
+          return e.parent_idx == parent && e.name == col->meta_data.path_in_schema[k];
+        };
+        auto const it = [&] {
+          auto const it = std::find_if(md->schema.cbegin() + cur + 1, md->schema.cend(), schema);
+          if (it != md->schema.cend()) return it;
+          return std::find_if(md->schema.cbegin(), md->schema.cbegin() + cur + 1, schema);
+        }();
+
+        if (it == md->schema.cend()) return false;
+
+        cur             = std::distance(md->schema.cbegin(), it);
         col->schema_idx = cur;
         parent          = cur;
       }
