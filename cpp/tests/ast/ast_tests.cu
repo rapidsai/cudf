@@ -46,12 +46,10 @@ TEST_F(ASTTest, BasicASTEvaluation)
   auto table_a = cudf::table_view{{a_0, a_1}};
   // auto table_b = cudf::table_view{{b_0, b_1}};
 
-  auto lhs = cudf::ast::expression_source{cudf::ast::data_source::COLUMN, 0};
-  auto rhs = cudf::ast::expression_source{cudf::ast::data_source::COLUMN, 1};
-  auto expression_add =
-    cudf::ast::binary_expression<int32_t>{cudf::ast::binary_operator::ADD, lhs, rhs};
-  auto expression_less =
-    cudf::ast::comparator_expression<int32_t>{cudf::ast::comparator::LESS, lhs, rhs};
+  auto lhs             = cudf::ast::expression_source{cudf::ast::data_source::COLUMN, 0};
+  auto rhs             = cudf::ast::expression_source{cudf::ast::data_source::COLUMN, 1};
+  auto expression_add  = cudf::ast::binary_expression{cudf::ast::binary_operator::ADD, lhs, rhs};
+  auto expression_less = cudf::ast::comparator_expression{cudf::ast::comparator::LESS, lhs, rhs};
 
   auto result_add  = cudf::ast::compute_column<int32_t>(table_a, expression_add);
   auto result_less = cudf::ast::compute_column<int32_t>(table_a, expression_less);
