@@ -795,6 +795,13 @@ class DataFrame(Frame, Serializable):
             matrix, consider using .as_matrix()"
         )
 
+    def __arrow_array__(self, type=None):
+        raise TypeError(
+            "Implicit conversion to a host PyArrow Table via __arrow_array__ "
+            "is not allowed, To explicitly construct a PyArrow Table, "
+            "consider using .to_arrow()"
+        )
+
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
         columns = [
