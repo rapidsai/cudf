@@ -83,7 +83,7 @@ class scalar {
   bool const* validity_data() const { return _is_valid.data(); }
 
  protected:
-  data_type _type{EMPTY};                ///< Logical type of value in the scalar
+  data_type _type{type_id::EMPTY};       ///< Logical type of value in the scalar
   rmm::device_scalar<bool> _is_valid{};  ///< Device bool signifying validity
 
   scalar() = default;
@@ -254,7 +254,7 @@ class string_scalar : public scalar {
  public:
   using value_type = cudf::string_view;
 
-  string_scalar() : scalar(data_type(STRING)) {}
+  string_scalar() : scalar(data_type(type_id::STRING)) {}
   ~string_scalar()                          = default;
   string_scalar(string_scalar&& other)      = default;
   string_scalar(string_scalar const& other) = default;
@@ -273,7 +273,7 @@ class string_scalar : public scalar {
                 bool is_valid                       = true,
                 cudaStream_t stream                 = 0,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : scalar(data_type(STRING), is_valid), _data(string.data(), string.size(), stream, mr)
+    : scalar(data_type(type_id::STRING), is_valid), _data(string.data(), string.size(), stream, mr)
   {
   }
 
@@ -290,7 +290,8 @@ class string_scalar : public scalar {
                 bool is_valid                       = true,
                 cudaStream_t stream                 = 0,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : scalar(data_type(STRING), is_valid), _data(source.data(), source.size_bytes(), stream, mr)
+    : scalar(data_type(type_id::STRING), is_valid),
+      _data(source.data(), source.size_bytes(), stream, mr)
   {
   }
 

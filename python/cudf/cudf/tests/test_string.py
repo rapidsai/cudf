@@ -2149,3 +2149,238 @@ def test_string_str_byte_count(data, expected):
     expected = as_index(expected, dtype="int32")
     actual = si.str.byte_count()
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (["1", "2", "3", "4", "5"], [True, True, True, True, True]),
+        (
+            ["1.1", "2.0", "3.2", "4.3", "5."],
+            [False, False, False, False, False],
+        ),
+        (
+            [".12312", "213123.", ".3223.", "323423.."],
+            [False, False, False, False],
+        ),
+        ([""], [False]),
+        (
+            ["1..1", "+2", "++3", "4++", "-5"],
+            [False, True, False, False, True],
+        ),
+        (
+            [
+                "24313345435345 ",
+                "+2632726478",
+                "++367293674326",
+                "4382493264392746.237649274692++",
+                "-578239479238469264",
+            ],
+            [False, True, False, False, True],
+        ),
+        (
+            ["2a2b", "a+b", "++a", "a.b++", "-b"],
+            [False, False, False, False, False],
+        ),
+        (
+            ["2a2b", "1+3", "9.0++a", "+", "-"],
+            [False, False, False, False, False],
+        ),
+    ],
+)
+def test_str_isinteger(data, expected):
+    sr = Series(data, dtype="str")
+    expected = Series(expected)
+    actual = sr.str.isinteger()
+    assert_eq(expected, actual)
+
+    sr = as_index(data)
+    expected = as_index(expected)
+    actual = sr.str.isinteger()
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (["1", "2", "3", "4", "5"], [True, True, True, True, True]),
+        (["1.1", "2.0", "3.2", "4.3", "5."], [True, True, True, True, True]),
+        ([""], [False]),
+        (
+            [".12312", "213123.", ".3223.", "323423.."],
+            [True, True, False, False],
+        ),
+        (
+            ["1.00.323.1", "+2.1", "++3.30", "4.9991++", "-5.3"],
+            [False, True, False, False, True],
+        ),
+        (
+            [
+                "24313345435345 ",
+                "+2632726478",
+                "++367293674326",
+                "4382493264392746.237649274692++",
+                "-578239479238469264",
+            ],
+            [False, True, False, False, True],
+        ),
+        (
+            [
+                "24313345435345.32732 ",
+                "+2632726478.3627638276",
+                "++0.326294632367293674326",
+                "4382493264392746.237649274692++",
+                "-57823947923.8469264",
+            ],
+            [False, True, False, False, True],
+        ),
+        (
+            ["2a2b", "a+b", "++a", "a.b++", "-b"],
+            [False, False, False, False, False],
+        ),
+        (
+            ["2a2b", "1+3", "9.0++a", "+", "-"],
+            [False, False, False, False, False],
+        ),
+    ],
+)
+def test_str_isfloat(data, expected):
+    sr = Series(data, dtype="str")
+    expected = Series(expected)
+    actual = sr.str.isfloat()
+    assert_eq(expected, actual)
+
+    sr = as_index(data)
+    expected = as_index(expected)
+    actual = sr.str.isfloat()
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+        ["a", "z", ".", '"', "aa", "zz"],
+        ["aa", "zz"],
+        ["z", "a", "zz", "aa"],
+        ["1", "2", "3", "4", "5"],
+        [""],
+        ["a"],
+        ["hello"],
+        ["small text", "this is a larger text......"],
+        ["👋🏻", "🔥", "🥇"],
+        ["This is 💯", "here is a calendar", "📅"],
+        ["", ".", ";", "[", "]"],
+        ["\t", ".", "\n", "\n\t", "\t\n"],
+    ],
+)
+def test_str_min(data):
+    psr = pd.Series(data)
+    sr = Series(data)
+
+    assert_eq(psr.min(), sr.min())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+        ["a", "z", ".", '"', "aa", "zz"],
+        ["aa", "zz"],
+        ["z", "a", "zz", "aa"],
+        ["1", "2", "3", "4", "5"],
+        [""],
+        ["a"],
+        ["hello"],
+        ["small text", "this is a larger text......"],
+        ["👋🏻", "🔥", "🥇"],
+        ["This is 💯", "here is a calendar", "📅"],
+        ["", ".", ";", "[", "]"],
+        ["\t", ".", "\n", "\n\t", "\t\n"],
+    ],
+)
+def test_str_max(data):
+    psr = pd.Series(data)
+    sr = Series(data)
+
+    assert_eq(psr.max(), sr.max())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+        ["a", "z", ".", '"', "aa", "zz"],
+        ["aa", "zz"],
+        ["z", "a", "zz", "aa"],
+        ["1", "2", "3", "4", "5"],
+        [""],
+        ["a"],
+        ["hello"],
+        ["small text", "this is a larger text......"],
+        ["👋🏻", "🔥", "🥇"],
+        ["This is 💯", "here is a calendar", "📅"],
+        ["", ".", ";", "[", "]"],
+        ["\t", ".", "\n", "\n\t", "\t\n"],
+    ],
+)
+def test_str_sum(data):
+    psr = pd.Series(data)
+    sr = Series(data)
+
+    assert_eq(psr.sum(), sr.sum())
+
+
+def test_str_mean():
+    sr = Series(["a", "b", "c", "d", "e"])
+
+    with pytest.raises(NotImplementedError):
+        sr.mean()
+
+
+def test_string_product():
+    psr = pd.Series(["1", "2", "3", "4", "5"])
+    sr = Series(["1", "2", "3", "4", "5"])
+    error_type = None
+    try:
+        psr.product()
+    except Exception as e:
+        error_type = type(e)
+
+    if error_type is None:
+        raise AssertionError("psr.product() should've failed")
+
+    with pytest.raises(error_type):
+        sr.product()
+
+
+def test_string_var():
+    psr = pd.Series(["1", "2", "3", "4", "5"])
+    sr = Series(["1", "2", "3", "4", "5"])
+    error_type = None
+    try:
+        psr.var()
+    except Exception as e:
+        error_type = type(e)
+
+    if error_type is None:
+        raise AssertionError("psr.var() should've failed")
+
+    with pytest.raises(error_type):
+        sr.var()
+
+
+def test_string_std():
+    psr = pd.Series(["1", "2", "3", "4", "5"])
+    sr = Series(["1", "2", "3", "4", "5"])
+    error_type = None
+    try:
+        psr.std()
+    except Exception as e:
+        error_type = type(e)
+
+    if error_type is None:
+        raise AssertionError("psr.std() should've failed")
+
+    with pytest.raises(error_type):
+        sr.std()

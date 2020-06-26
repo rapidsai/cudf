@@ -362,6 +362,74 @@ def test_dataframe_column_drop_via_attr():
     assert tuple(df.columns) == tuple("a")
 
 
+@pytest.mark.parametrize("axis", [0, "index"])
+def test_dataframe_index_rename(axis):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.rename(mapper={1: 5, 2: 6}, axis=axis)
+    got = gdf.rename(mapper={1: 5, 2: 6}, axis=axis)
+
+    assert_eq(expect, got)
+
+    expect = pdf.rename(index={1: 5, 2: 6})
+    got = gdf.rename(index={1: 5, 2: 6})
+
+    assert_eq(expect, got)
+
+    expect = pdf.rename({1: 5, 2: 6})
+    got = gdf.rename({1: 5, 2: 6})
+
+    assert_eq(expect, got)
+
+    # `pandas` can support indexes with mixed values. We throw a
+    # `NotImplementedError`.
+    with pytest.raises(NotImplementedError):
+        got = gdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
+
+
+def test_dataframe_MI_rename():
+    gdf = DataFrame(
+        {"a": np.arange(10), "b": np.arange(10), "c": np.arange(10)}
+    )
+    gdg = gdf.groupby(["a", "b"]).count()
+    pdg = gdg.to_pandas()
+
+    expect = pdg.rename(mapper={1: 5, 2: 6}, axis=0)
+    got = gdg.rename(mapper={1: 5, 2: 6}, axis=0)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("axis", [1, "columns"])
+def test_dataframe_column_rename(axis):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.rename(mapper=lambda name: 2 * name, axis=axis)
+    got = gdf.rename(mapper=lambda name: 2 * name, axis=axis)
+
+    assert_eq(expect, got)
+
+    expect = pdf.rename(columns=lambda name: 2 * name)
+    got = gdf.rename(columns=lambda name: 2 * name)
+
+    assert_eq(expect, got)
+
+    rename_mapper = {"a": "z", "b": "y", "c": "x"}
+    expect = pdf.rename(columns=rename_mapper)
+    got = gdf.rename(columns=rename_mapper)
+
+    assert_eq(expect, got)
+
+    gdf = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    rename_mapper = {"a": "z", "b": "z", "c": "z"}
+    expect = DataFrame({"z": [1, 2, 3], "z_1": [4, 5, 6], "z_2": [7, 8, 9]})
+    got = gdf.rename(columns=rename_mapper)
+
+    assert_eq(expect, got)
+
+
 def test_dataframe_pop():
     pdf = pd.DataFrame(
         {"a": [1, 2, 3], "b": ["x", "y", "z"], "c": [7.0, 8.0, 9.0]}
@@ -1943,29 +2011,6 @@ def test_series_all_valid_nan(num_elements):
     np.testing.assert_equal(sr.null_count, 0)
 
 
-def test_dataframe_rename():
-    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    gdf = DataFrame.from_pandas(pdf)
-
-    expect = pdf.rename(columns=lambda name: 2 * name)
-    got = gdf.rename(columns=lambda name: 2 * name)
-
-    assert_eq(expect, got)
-
-    rename_mapper = {"a": "z", "b": "y", "c": "x"}
-    expect = pdf.rename(columns=rename_mapper)
-    got = gdf.rename(columns=rename_mapper)
-
-    assert_eq(expect, got)
-
-    gdf = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
-    rename_mapper = {"a": "z", "b": "z", "c": "z"}
-    expect = DataFrame({"z": [1, 2, 3], "z_1": [4, 5, 6], "z_2": [7, 8, 9]})
-    got = gdf.rename(columns=rename_mapper)
-
-    assert_eq(expect, got)
-
-
 def test_series_rename():
     pds = pd.Series([1, 2, 3], name="asdf")
     gds = Series([1, 2, 3], name="asdf")
@@ -3003,6 +3048,8 @@ def test_all(data):
         [0, 1, 2, 3],
         [-2, -1, 2, 3, 5],
         [-2, -1, 0, 3, 5],
+        [0, 0, 0, 0, 0],
+        [0, 0, None, 0],
         [True, False, False],
         [True],
         [False],
@@ -3025,10 +3072,8 @@ def test_all(data):
 )
 @pytest.mark.parametrize("axis", [0, 1])
 def test_any(data, axis):
-    # Pandas treats `None` in object type columns as True for some reason, so
-    # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = pd.Series(data).replace([None], False)
+        pdata = pd.Series(data)
         gdata = Series.from_pandas(pdata)
 
         if axis == 1:
@@ -3039,7 +3084,7 @@ def test_any(data, axis):
             expected = pdata.any(axis=axis)
             assert_eq(got, expected)
     else:
-        pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
+        pdata = pd.DataFrame(data, columns=["a", "b"])
         gdata = DataFrame.from_pandas(pdata)
 
         # test bool_only
@@ -4976,7 +5021,7 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 check_dtype=False,
             )
             assert_eq(
-                expect_mask.fillna(-1), got_mask.fillna(-1), check_dtype=False,
+                expect_mask.fillna(-1), got_mask.fillna(-1), check_dtype=False
             )
     else:
         with pytest.raises(error):
@@ -5162,12 +5207,8 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
             check_dtype=False,
         )
     else:
-        assert_eq(
-            expect_where, got_where, check_dtype=False,
-        )
-        assert_eq(
-            expect_mask, got_mask, check_dtype=False,
-        )
+        assert_eq(expect_where, got_where, check_dtype=False)
+        assert_eq(expect_mask, got_mask, check_dtype=False)
 
 
 @pytest.mark.parametrize(

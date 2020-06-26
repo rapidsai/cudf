@@ -20,6 +20,7 @@ from cudf._lib.cpp.types cimport (
     type_id,
 )
 from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.cpp.column.column_view cimport column_view
 
 try:
@@ -81,8 +82,11 @@ def transform(Column input, op):
     np_dtype = np.dtype(compiled_op[1])
 
     try:
-        c_tid = np_to_cudf_types[np_dtype]
+        c_tid = <type_id> (
+            <underlying_type_t_type_id> np_to_cudf_types[np_dtype]
+        )
         c_dtype = data_type(c_tid)
+
     except KeyError:
         raise TypeError(
             "Result of window function has unsupported dtype {}"

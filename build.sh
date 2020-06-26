@@ -38,7 +38,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n
    default action (no args) is to build and install 'libcudf' then 'cudf'
    then 'dask_cudf' targets
 "
-LIB_BUILD_DIR=${REPODIR}/cpp/build
+LIB_BUILD_DIR=${LIB_BUILD_DIR:=${REPODIR}/cpp/build}
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
 BUILD_DIRS="${LIB_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR}"
@@ -144,7 +144,7 @@ if buildAll || hasArg libcudf; then
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $REPODIR/cpp
 fi
 
 if buildAll || hasArg libcudf; then

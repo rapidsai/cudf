@@ -1120,3 +1120,18 @@ def test_reset_index_after_empty_groupby():
         pdf.groupby("a").sum().reset_index(),
         gdf.groupby("a").sum().reset_index(),
     )
+
+
+def test_groupby_attribute_error():
+    err_msg = "Test error message"
+
+    class TestGroupBy(cudf.core.groupby.GroupBy):
+        @property
+        def _groupby(self):
+            raise AttributeError("Test error message")
+
+    a = cudf.DataFrame({"a": [1, 2], "b": [2, 3]})
+    gb = TestGroupBy(a, a["a"])
+
+    with pytest.raises(AttributeError, match=err_msg):
+        gb.sum()

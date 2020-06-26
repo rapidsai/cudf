@@ -13,10 +13,18 @@ from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
     GenericIndex,
+    Int64Index,
     RangeIndex,
     as_index,
 )
-from cudf.tests.utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
+from cudf.tests.utils import (
+    FLOAT_TYPES,
+    INTEGER_TYPES,
+    NUMERIC_TYPES,
+    OTHER_TYPES,
+    UNSIGNED_TYPES,
+    assert_eq,
+)
 
 
 def test_df_set_index_from_series():
@@ -59,14 +67,14 @@ def test_df_slice_empty_index():
 
 def test_index_find_label_range():
     # Monotonic Index
-    idx = GenericIndex(np.asarray([4, 5, 6, 10]))
+    idx = Int64Index(np.asarray([4, 5, 6, 10]))
     assert idx.find_label_range(4, 6) == (0, 3)
     assert idx.find_label_range(5, 10) == (1, 4)
     assert idx.find_label_range(0, 6) == (0, 3)
     assert idx.find_label_range(4, 11) == (0, 4)
 
     # Non-monotonic Index
-    idx_nm = GenericIndex(np.asarray([5, 4, 6, 10]))
+    idx_nm = Int64Index(np.asarray([5, 4, 6, 10]))
     assert idx_nm.find_label_range(4, 6) == (1, 3)
     assert idx_nm.find_label_range(5, 10) == (0, 4)
     # Last value not found
@@ -82,7 +90,7 @@ def test_index_find_label_range():
 def test_index_comparision():
     start, stop = 10, 34
     rg = RangeIndex(start, stop)
-    gi = GenericIndex(np.arange(start, stop))
+    gi = Int64Index(np.arange(start, stop))
     assert rg.equals(gi)
     assert gi.equals(rg)
     assert not rg[:-1].equals(gi)
@@ -94,13 +102,13 @@ def test_index_comparision():
 )
 def test_reductions(func):
     x = np.asarray([4, 5, 6, 10])
-    idx = GenericIndex(np.asarray([4, 5, 6, 10]))
+    idx = Int64Index(np.asarray([4, 5, 6, 10]))
 
     assert func(x) == func(idx)
 
 
 def test_name():
-    idx = GenericIndex(np.asarray([4, 5, 6, 10]), name="foo")
+    idx = Int64Index(np.asarray([4, 5, 6, 10]), name="foo")
     assert idx.name == "foo"
 
 
@@ -109,7 +117,7 @@ def test_index_immutable():
     rg = RangeIndex(start, stop)
     with pytest.raises(TypeError):
         rg[1] = 5
-    gi = GenericIndex(np.arange(start, stop))
+    gi = Int64Index(np.arange(start, stop))
     with pytest.raises(TypeError):
         gi[1] = 5
 
@@ -211,7 +219,7 @@ def test_index_rename_inplace():
 
 
 def test_index_rename_preserves_arg():
-    idx1 = GenericIndex([1, 2, 3], name="orig_name")
+    idx1 = Int64Index([1, 2, 3], name="orig_name")
 
     # this should be an entirely new object
     idx2 = idx1.rename("new_name", inplace=False)
@@ -258,7 +266,7 @@ def test_set_index_as_property():
         cudf.core.index.RangeIndex(1, 5),
         cudf.core.index.DatetimeIndex(["2001", "2003", "2003"]),
         cudf.core.index.StringIndex(["a", "b", "c"]),
-        cudf.core.index.GenericIndex([1, 2, 3]),
+        cudf.core.index.Int64Index([1, 2, 3]),
         cudf.core.index.CategoricalIndex(["a", "b", "c"]),
     ],
 )
@@ -272,20 +280,20 @@ def test_index_copy(idx, deep):
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
 def test_index_isna(idx):
     pidx = pd.Index(idx, name="idx")
-    gidx = cudf.core.index.GenericIndex(idx, name="idx")
+    gidx = cudf.core.index.Int64Index(idx, name="idx")
     assert_eq(gidx.isna().to_array(), pidx.isna())
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
 def test_index_notna(idx):
     pidx = pd.Index(idx, name="idx")
-    gidx = cudf.core.index.GenericIndex(idx, name="idx")
+    gidx = cudf.core.index.Int64Index(idx, name="idx")
     assert_eq(gidx.notna().to_array(), pidx.notna())
 
 
 def test_rangeindex_slice_attr_name():
     start, stop = 0, 10
-    rg = RangeIndex(start, stop, "myindex")
+    rg = RangeIndex(start, stop, name="myindex")
     sliced_rg = rg[0:9]
     assert_eq(rg.name, sliced_rg.name)
 
@@ -302,7 +310,7 @@ def test_from_pandas_str():
 def test_from_pandas_gen():
     idx = [2, 4, 6]
     pidx = pd.Index(idx, name="idx")
-    gidx_1 = cudf.core.index.GenericIndex(idx, name="idx")
+    gidx_1 = cudf.core.index.Int64Index(idx, name="idx")
     gidx_2 = cudf.from_pandas(pidx)
 
     assert_eq(gidx_1, gidx_2)
@@ -538,3 +546,129 @@ def test_index_to_series(data):
     gdi = cudf.from_pandas(pdi)
 
     assert_eq(pdi.to_series(), gdi.to_series())
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+@pytest.mark.parametrize("name", [1, "a", None])
+def test_index_basic(data, dtype, name):
+    pdi = pd.Index(data, dtype=dtype, name=name)
+    gdi = cudf.Index(data, dtype=dtype, name=name)
+
+    assert_eq(pdi, gdi)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
+@pytest.mark.parametrize("name", [1, "a", None])
+@pytest.mark.parametrize("dtype", INTEGER_TYPES)
+def test_integer_index_apis(data, name, dtype):
+    pindex = pd.Int64Index(data, dtype=dtype, name=name)
+    # Int8Index
+    gindex = cudf.Int8Index(data, dtype=dtype, name=name)
+
+    assert_eq(pindex, gindex)
+    assert gindex.dtype == np.dtype("int8")
+
+    # Int16Index
+    gindex = cudf.Int16Index(data, dtype=dtype, name=name)
+
+    assert_eq(pindex, gindex)
+    assert gindex.dtype == np.dtype("int16")
+
+    # Int32Index
+    gindex = cudf.Int32Index(data, dtype=dtype, name=name)
+
+    assert_eq(pindex, gindex)
+    assert gindex.dtype == np.dtype("int32")
+
+    # Int64Index
+    gindex = cudf.Int64Index(data, dtype=dtype, name=name)
+
+    assert_eq(pindex, gindex)
+    assert gindex.dtype == np.dtype("int64")
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
+@pytest.mark.parametrize("name", [1, "a", None])
+@pytest.mark.parametrize("dtype", UNSIGNED_TYPES)
+def test_unisgned_integer_index_apis(data, name, dtype):
+    pindex = pd.UInt64Index(data, dtype=dtype, name=name)
+    # UInt8Index
+    gindex = cudf.UInt8Index(data, dtype=dtype, name=name)
+
+    assert_eq(pindex, gindex)
+    assert gindex.dtype == np.dtype("uint8")
+
+    # UInt16Index
+    gindex = cudf.UInt16Index(data, dtype=dtype, name=name)
+
+    assert_eq(pindex, gindex)
+    assert gindex.dtype == np.dtype("uint16")
+
+    # UInt32Index
+    gindex = cudf.UInt32Index(data, dtype=dtype, name=name)
+
+    assert_eq(pindex, gindex)
+    assert gindex.dtype == np.dtype("uint32")
+
+    # UInt64Index
+    gindex = cudf.UInt64Index(data, dtype=dtype, name=name)
+
+    assert_eq(pindex, gindex)
+    assert gindex.dtype == np.dtype("uint64")
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
+@pytest.mark.parametrize("name", [1, "a", None])
+@pytest.mark.parametrize("dtype", FLOAT_TYPES)
+def test_float_index_apis(data, name, dtype):
+    pindex = pd.Float64Index(data, dtype=dtype, name=name)
+    # Float32Index
+    gindex = cudf.Float32Index(data, dtype=dtype, name=name)
+
+    assert_eq(pindex, gindex)
+    assert gindex.dtype == np.dtype("float32")
+
+    # Float64Index
+    gindex = cudf.Float64Index(data, dtype=dtype, name=name)
+
+    assert_eq(pindex, gindex)
+    assert gindex.dtype == np.dtype("float64")
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
+@pytest.mark.parametrize("categories", [[1, 2], None])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pd.CategoricalDtype([1, 2, 3], ordered=True),
+        pd.CategoricalDtype([1, 2, 3], ordered=False),
+        None,
+    ],
+)
+@pytest.mark.parametrize("ordered", [True, False])
+@pytest.mark.parametrize("name", [1, "a", None])
+def test_categorical_index_basic(data, categories, dtype, ordered, name):
+
+    # can't have both dtype and categories/ordered
+    if dtype is not None:
+        categories = None
+        ordered = None
+    pindex = pd.CategoricalIndex(
+        data=data,
+        categories=categories,
+        dtype=dtype,
+        ordered=ordered,
+        name=name,
+    )
+    gindex = CategoricalIndex(
+        data=data,
+        categories=categories,
+        dtype=dtype,
+        ordered=ordered,
+        name=name,
+    )
+
+    assert_eq(pindex, gindex)

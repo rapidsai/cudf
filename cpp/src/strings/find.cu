@@ -65,7 +65,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& strings,
   auto d_strings      = *strings_column;
   auto strings_count  = strings.size();
   // create output column
-  auto results      = make_numeric_column(data_type{INT32},
+  auto results      = make_numeric_column(data_type{type_id::INT32},
                                      strings_count,
                                      copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
@@ -178,7 +178,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     cudaStream_t stream)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{BOOL8});
+  if (strings_count == 0) return make_empty_column(data_type{type_id::BOOL8});
 
   CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
   if (target.size() == 0)  // empty target string returns true
@@ -193,7 +193,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create output column
-  auto results      = make_numeric_column(data_type{BOOL8},
+  auto results      = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
                                      copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
@@ -238,7 +238,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     cudaStream_t stream)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{BOOL8});
+  if (strings_count == 0) return make_empty_column(data_type{type_id::BOOL8});
 
   auto targets_count = targets.size();
   CUDF_EXPECTS(targets_count > 0, "Must include at least one search target");
@@ -248,7 +248,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create output column
-  auto results      = make_numeric_column(data_type{BOOL8},
+  auto results      = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
                                      copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
