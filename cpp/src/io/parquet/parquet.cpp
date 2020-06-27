@@ -290,23 +290,30 @@ PARQUET_END_STRUCT()
 bool CompactProtocolReader::InitSchema(FileMetaData *md)
 {
   if (WalkSchema(md->schema) != md->schema.size()) return false;
-  // Map columns to schema
-  for (auto &g : md->row_groups) {
-    int cur = 0;
-    for (auto &col : g.columns) {
+
+  /* Inside FileMetaData, there is a std::vector of RowGroups and each RowGroup contains a
+   * a std::vector of ColumnChunks. Each ColumnChunk has a member ColumnMetaData, which contains
+   * a std::vector of std::strings representing paths. The purpose of the code below is to set the
+   * schema_idx of each column of each row to it corresonding row_group. This is effectively
+   * mapping the columns to the schema.
+   */
+  for (auto &row_group : md->row_groups) {
+    int current_row_group = 0;
+    for (auto &column : row_group.columns) {
       int parent = 0;  // root of schema
-      for (auto const &path : col.meta_data.path_in_schema) {
-        auto const it = [&cur, &md, &parent, &path] {
-          // find_if starting at (cur + 1) and then wrapping
-          auto schema   = [&](auto const &e) { return e.parent_idx == parent && e.name == path; };
-          auto const it = std::find_if(md->schema.cbegin() + cur + 1, md->schema.cend(), schema);
+      for (auto const &path : column.meta_data.path_in_schema) {
+        auto const it = [&] {
+          // find_if starting at (current_row_group + 1) and then wrapping
+          auto schema = [&](auto const &e) { return e.parent_idx == parent && e.name == path; };
+          auto mid    = md->schema.cbegin() + current_row_group + 1;
+          auto it     = std::find_if(mid, md->schema.cend(), schema);
           if (it != md->schema.cend()) return it;
-          return std::find_if(md->schema.cbegin(), md->schema.cbegin() + cur + 1, schema);
+          return std::find_if(md->schema.cbegin(), mid, schema);
         }();
         if (it == md->schema.cend()) return false;
-        cur            = std::distance(md->schema.cbegin(), it);
-        col.schema_idx = cur;
-        parent         = cur;
+        current_row_group = std::distance(md->schema.cbegin(), it);
+        column.schema_idx = current_row_group;
+        parent            = current_row_group;
       }
     }
   }
