@@ -29,7 +29,7 @@ requirements:
     - rmm {{ minor_version }}.*
   run:
     - python
-    - pandas >=0.25,<0.26
+    - pandas >=1.0,<1.1.0a0
     - cupy >=6.6.0,<8.0.0a0,!=7.1.0
     - numba >=0.49.0
     - numpy
