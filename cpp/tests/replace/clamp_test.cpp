@@ -30,9 +30,9 @@ struct ClampErrorTest : public cudf::test::BaseFixture {
 
 TEST_F(ClampErrorTest, MisMatchingScalarTypes)
 {
-  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   lo->set_valid(true);
-  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT64));
+  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT64));
   hi->set_valid(true);
 
   cudf::test::fixed_width_column_wrapper<int32_t> input({1, 2, 3, 4, 5, 6});
@@ -42,9 +42,9 @@ TEST_F(ClampErrorTest, MisMatchingScalarTypes)
 
 TEST_F(ClampErrorTest, MisMatchingInputAndScalarTypes)
 {
-  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   lo->set_valid(true);
-  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   hi->set_valid(true);
 
   cudf::test::fixed_width_column_wrapper<int64_t> input({1, 2, 3, 4, 5, 6});
@@ -54,13 +54,13 @@ TEST_F(ClampErrorTest, MisMatchingInputAndScalarTypes)
 
 TEST_F(ClampErrorTest, MisMatchingReplaceScalarTypes)
 {
-  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   lo->set_valid(true);
-  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   hi->set_valid(true);
-  auto lo_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::INT64));
+  auto lo_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT64));
   lo_replace->set_valid(true);
-  auto hi_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto hi_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   hi_replace->set_valid(true);
 
   cudf::test::fixed_width_column_wrapper<int64_t> input({1, 2, 3, 4, 5, 6});
@@ -70,13 +70,13 @@ TEST_F(ClampErrorTest, MisMatchingReplaceScalarTypes)
 
 TEST_F(ClampErrorTest, InValidCase1)
 {
-  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   lo->set_valid(true);
-  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   hi->set_valid(true);
-  auto lo_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto lo_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   lo_replace->set_valid(false);
-  auto hi_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto hi_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   hi_replace->set_valid(true);
 
   cudf::test::fixed_width_column_wrapper<int64_t> input({1, 2, 3, 4, 5, 6});
@@ -86,13 +86,13 @@ TEST_F(ClampErrorTest, InValidCase1)
 
 TEST_F(ClampErrorTest, InValidCase2)
 {
-  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   lo->set_valid(true);
-  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   hi->set_valid(true);
-  auto lo_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto lo_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   lo_replace->set_valid(true);
-  auto hi_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto hi_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   hi_replace->set_valid(false);
 
   cudf::test::fixed_width_column_wrapper<int64_t> input({1, 2, 3, 4, 5, 6});
@@ -105,9 +105,9 @@ struct ClampEmptyCaseTest : public cudf::test::BaseFixture {
 
 TEST_F(ClampEmptyCaseTest, BothScalarEmptyInvalid)
 {
-  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   lo->set_valid(false);
-  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   hi->set_valid(false);
 
   cudf::test::fixed_width_column_wrapper<int32_t> input({1, 2, 3, 4, 5, 6});
@@ -119,9 +119,9 @@ TEST_F(ClampEmptyCaseTest, BothScalarEmptyInvalid)
 
 TEST_F(ClampEmptyCaseTest, EmptyInput)
 {
-  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   lo->set_valid(true);
-  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
+  auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
   hi->set_valid(true);
 
   cudf::test::fixed_width_column_wrapper<int32_t> input({});

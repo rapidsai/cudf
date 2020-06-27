@@ -59,7 +59,8 @@ std::unique_ptr<column> remove_keys_fn(
   auto execpol         = rmm::exec_policy(stream);
   rmm::device_vector<int32_t> keys_positions(keys_view.size());  // needed for remapping indices
   thrust::sequence(execpol->on(stream), keys_positions.begin(), keys_positions.end());
-  column_view keys_positions_view(data_type{INT32}, keys_view.size(), keys_positions.data().get());
+  column_view keys_positions_view(
+    data_type{type_id::INT32}, keys_view.size(), keys_positions.data().get());
 
   // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
   rmm::device_vector<int32_t> map_indices(keys_view.size(), -1);  // init -1 to identify new nulls
@@ -78,7 +79,7 @@ std::unique_ptr<column> remove_keys_fn(
     return std::move(table_keys.front());
   }();  // frees up the temporary table_keys objects
 
-  column_view indices_view(data_type{INT32},
+  column_view indices_view(data_type{type_id::INT32},
                            dictionary_column.size(),
                            dictionary_column.indices().data<int32_t>(),
                            nullptr,
@@ -86,7 +87,8 @@ std::unique_ptr<column> remove_keys_fn(
                            dictionary_column.offset());
   // create new indices column
   // Example: gather([4,0,3,1,2,2,2,4,0],[0,-1,1,-1,2]) => [2,0,-1,-1,1,1,1,2,0]
-  column_view map_indices_view(data_type{INT32}, keys_view.size(), map_indices.data().get());
+  column_view map_indices_view(
+    data_type{type_id::INT32}, keys_view.size(), map_indices.data().get());
   auto table_indices = cudf::detail::gather(table_view{{map_indices_view}},
                                             indices_view,
                                             cudf::detail::out_of_bounds_policy::NULLIFY,
@@ -152,8 +154,9 @@ std::unique_ptr<column> remove_unused_keys(
   thrust::sequence(execpol->on(stream), keys_positions.begin(), keys_positions.end());
 
   // wrap the indices for comparison with column_views
-  column_view keys_positions_view(data_type{INT32}, keys.size(), keys_positions.data().get());
-  column_view indices_view(data_type{INT32},
+  column_view keys_positions_view(
+    data_type{type_id::INT32}, keys.size(), keys_positions.data().get());
+  column_view indices_view(data_type{type_id::INT32},
                            dictionary_column.size(),
                            indices.data<int32_t>(),
                            dictionary_column.null_mask(),

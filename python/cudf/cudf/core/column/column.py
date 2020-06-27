@@ -21,7 +21,7 @@ from cudf._lib.null_mask import (
 )
 from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import as_scalar
-from cudf._lib.stream_compaction import unique_count as cpp_unique_count
+from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
@@ -385,25 +385,58 @@ class ColumnBase(Column, Serializable):
                 children=self.base_children,
             )
 
-    def view(self, newcls, **kwargs):
-        """View the underlying column data differently using a subclass of
-        ColumnBase
+    def view(self, dtype):
+        """
+        View the data underlying a column as different dtype.
+        The source column must divide evenly into the size of
+        the desired data type. Columns with nulls may only be
+        viewed as dtypes with size equal to source dtype size
 
         Parameters
         ----------
-        newcls : ColumnBase
-            The logical view to be used
-        **kwargs :
-            Additional paramters for instantiating instance of *newcls*.
-            Valid keywords are valid parameters for ``newcls.__init__``.
-            Any omitted keywords will be defaulted to the corresponding
-            attributes in ``self``.
+        dtype : NumPy dtype, string
+            The dtype to view the data as
+
         """
-        params = Column._replace_defaults(self)
-        params.update(kwargs)
-        if "mask" in kwargs and "null_count" not in kwargs:
-            del params["null_count"]
-        return newcls(**params)
+
+        dtype = np.dtype(dtype)
+
+        if dtype.kind in ("o", "u", "s"):
+            raise TypeError(
+                "Bytes viewed as str without metadata is ambiguous"
+            )
+
+        if self.dtype.itemsize == dtype.itemsize:
+            return build_column(
+                self.base_data,
+                dtype=dtype,
+                mask=self.base_mask,
+                size=self.size,
+                offset=self.offset,
+            )
+
+        else:
+            if self.null_count > 0:
+                raise ValueError(
+                    "Can not produce a view of a column with nulls"
+                )
+
+            if (self.size * self.dtype.itemsize) % dtype.itemsize:
+                raise ValueError(
+                    f"Can not divide {self.size * self.dtype.itemsize}"
+                    + f" total bytes into {dtype} with size {dtype.itemsize}"
+                )
+
+            new_buf_ptr = (
+                self.base_data.ptr + self.offset * self.dtype.itemsize
+            )
+            new_buf_size = self.size * self.dtype.itemsize
+            view_buf = Buffer(
+                data=new_buf_ptr,
+                size=new_buf_size,
+                owner=self.base_data._owner,
+            )
+            return build_column(view_buf, dtype=dtype)
 
     def element_indexing(self, index):
         """Default implementation for indexing to an element
@@ -762,7 +795,7 @@ class ColumnBase(Column, Serializable):
 
     @property
     def is_unique(self):
-        return self.unique_count() == len(self)
+        return self.distinct_count() == len(self)
 
     @property
     def is_monotonic(self):
@@ -820,11 +853,11 @@ class ColumnBase(Column, Serializable):
         col_keys = self[col_inds]
         return col_keys, col_inds
 
-    def unique_count(self, method="sort", dropna=True):
+    def distinct_count(self, method="sort", dropna=True):
         if method != "sort":
-            msg = "non sort based unique_count() not implemented yet"
+            msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
-        return cpp_unique_count(self, ignore_nulls=dropna)
+        return cpp_distinct_count(self, ignore_nulls=dropna)
 
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
@@ -964,6 +997,12 @@ class ColumnBase(Column, Serializable):
         if "mask" in header:
             mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
+
+    def min(self, dtype=None):
+        return libcudf.reduce.reduce("min", self, dtype=dtype)
+
+    def max(self, dtype=None):
+        return libcudf.reduce.reduce("max", self, dtype=dtype)
 
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
@@ -1202,9 +1241,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if dtype is not None:
             data = data.astype(dtype)
 
-    elif isinstance(arbitrary, Buffer):
+    elif type(arbitrary) is Buffer:
         if dtype is None:
             raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
+
         data = build_column(arbitrary, dtype=dtype)
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
@@ -1267,11 +1307,12 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             )
 
         elif isinstance(arbitrary, pa.NullArray):
-            new_dtype = pd.api.types.pandas_dtype(dtype)
             if type(dtype) == str and dtype == "empty":
                 new_dtype = pd.api.types.pandas_dtype(
                     arbitrary.type.to_pandas_dtype()
                 )
+            else:
+                new_dtype = pd.api.types.pandas_dtype(dtype)
 
             if is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()

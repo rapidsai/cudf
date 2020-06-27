@@ -191,12 +191,6 @@ class NumericalColumn(column.ColumnBase):
         else:
             return out
 
-    def min(self, dtype=None):
-        return libcudf.reduce.reduce("min", self, dtype=dtype)
-
-    def max(self, dtype=None):
-        return libcudf.reduce.reduce("max", self, dtype=dtype)
-
     def sum(self, dtype=None):
         return libcudf.reduce.reduce("sum", self, dtype=dtype)
 

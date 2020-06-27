@@ -50,7 +50,7 @@ namespace detail {
  */
 std::unique_ptr<column> encode(
   column_view const& column,
-  data_type indices_type              = data_type{INT32},
+  data_type indices_type              = data_type{type_id::INT32},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 

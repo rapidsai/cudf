@@ -795,6 +795,13 @@ class DataFrame(Frame, Serializable):
             matrix, consider using .as_matrix()"
         )
 
+    def __arrow_array__(self, type=None):
+        raise TypeError(
+            "Implicit conversion to a host PyArrow Table via __arrow_array__ "
+            "is not allowed, To explicitly construct a PyArrow Table, "
+            "consider using .to_arrow()"
+        )
+
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
         columns = [
@@ -1039,7 +1046,13 @@ class DataFrame(Frame, Serializable):
                 upper_rows = int(nrows / 2.0) + 1
                 lower_rows = upper_rows + (nrows % 2)
             if len(self._data.names) > ncols:
-                right_cols = len(self._data.names) - int(ncols / 2.0) - 1
+                right_cols = len(self._data.names) - int(ncols / 2.0)
+                # adjust right columns for output if multiindex.
+                right_cols = (
+                    right_cols - 1
+                    if isinstance(self.index, cudf.MultiIndex)
+                    else right_cols
+                )
                 left_cols = int(ncols / 2.0) + 1
             if right_cols > 0:
                 # Pick ncols - left_cols number of columns
@@ -2276,7 +2289,7 @@ class DataFrame(Frame, Serializable):
             raise ValueError(msg)
 
         mapper = dict(zip(old_cols, new_names))
-        self.rename(mapper=mapper, inplace=True)
+        self.rename(mapper=mapper, inplace=True, axis=1)
 
     @property
     def index(self):
@@ -2369,8 +2382,16 @@ class DataFrame(Frame, Serializable):
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
 
         if idx is not None:
-            idx = idx if isinstance(idx, Index) else as_index(idx)
-            if df.index.dtype != idx.dtype:
+            idx = as_index(idx)
+
+            if isinstance(idx, cudf.core.MultiIndex):
+                idx_dtype_match = (
+                    df.index._source_data.dtypes == idx._source_data.dtypes
+                ).all()
+            else:
+                idx_dtype_match = df.index.dtype == idx.dtype
+
+            if not idx_dtype_match:
                 cols = cols if cols is not None else list(df.columns)
                 df = DataFrame()
             else:
@@ -2786,23 +2807,60 @@ class DataFrame(Frame, Serializable):
         del self[item]
         return popped
 
-    def rename(self, mapper=None, columns=None, copy=True, inplace=False):
-        """
-        Alter column labels.
+    def rename(
+        self,
+        mapper=None,
+        index=None,
+        columns=None,
+        axis=0,
+        copy=True,
+        inplace=False,
+        level=None,
+        errors="ignore",
+    ):
+        """Alter column and index labels.
 
         Function / dict values must be unique (1-to-1). Labels not contained in
         a dict / Series will be left as-is. Extra labels listed don’t throw an
         error.
 
+        DataFrame.rename supports two calling conventions
+
+        ``(index=index_mapper, columns=columns_mapper, ...)``
+        ``(mapper, axis={0/'index' or 1/'column'}, ...)``
+
+        We highly recommend using keyword arguments to clarify your intent.
+
         Parameters
         ----------
-        mapper, columns : dict-like or function, optional
-            dict-like or functions transformations to apply to
-            the column axis' values.
+        mapper : dict-like or function, default None
+            optional dict-like or functions transformations to apply to
+            the index/column values depending on selected ``axis``.
+        index : dict-like, default None
+            Optional dict-like transformations to apply to the index axis'
+            values. Does not support functions for axis 0 yet.
+        columns : dict-like or function, default None
+            optional dict-like or functions transformations to apply to
+            the columns axis' values.
+        axis : int, default 0
+            Axis to rename with mapper.
+            0 or 'index' for index
+            1  or 'columns' for columns
         copy : boolean, default True
             Also copy underlying data
-        inplace: boolean, default False
+        inplace : boolean, default False
             Return new DataFrame.  If True, assign columns without copy
+        level : int or level name, default None
+            In case of a MultiIndex, only rename labels in the specified level.
+        errors : {'raise', 'ignore', 'warn'}, default 'ignore'
+            *Only 'ignore' supported*
+            Control raising of exceptions on invalid data for provided dtype.
+
+            -   ``raise`` : allow exceptions to be raised
+            -   ``ignore`` : suppress exceptions. On error return original
+                object.
+            -   ``warn`` : prints last exceptions as warnings and
+                return original object.
 
         Returns
         -------
@@ -2811,36 +2869,69 @@ class DataFrame(Frame, Serializable):
         Notes
         -----
         Difference from pandas:
-          * Support axis='columns' only.
-          * Not supporting: index, level
+            * Not supporting: level
 
         Rename will not overwite column names. If a list with duplicates is
         passed, column names will be postfixed with a number.
         """
-        # Pandas defaults to using columns over mapper
-        if columns:
-            mapper = columns
+        if errors != "ignore":
+            raise NotImplementedError(
+                "Only errors='ignore' is currently supported"
+            )
 
-        out = DataFrame(index=self.index)
-        if isinstance(mapper, Mapping):
+        if level:
+            raise NotImplementedError(
+                "Only level=False is currently supported"
+            )
+
+        if mapper is None and index is None and columns is None:
+            return self.copy(deep=copy)
+
+        index = mapper if index is None and axis in (0, "index") else index
+        columns = (
+            mapper if columns is None and axis in (1, "columns") else columns
+        )
+
+        if index:
+            if (
+                any(type(item) == str for item in index.values())
+                and type(self.index) != cudf.core.index.StringIndex
+            ):
+                raise NotImplementedError(
+                    "Implicit conversion of index to "
+                    "mixed type is not yet supported."
+                )
+            out = DataFrame(
+                index=self.index.replace(
+                    to_replace=list(index.keys()),
+                    replacement=list(index.values()),
+                )
+            )
+        else:
+            out = DataFrame(index=self.index)
+
+        if columns:
             postfix = 1
-            # It is possible for DataFrames with a MultiIndex columns object
-            # to have columns with the same name. The following use of
-            # _cols.items and ("_1", "_2"... allows the use of
-            # rename in this case
-            for key, col in self._data.items():
-                if key in mapper:
-                    if mapper[key] in out.columns:
-                        out_column = mapper[key] + "_" + str(postfix)
-                        postfix += 1
+            if isinstance(columns, Mapping):
+                # It is possible for DataFrames with a MultiIndex columns
+                # object to have columns with the same name. The following
+                # use of _cols.items and ("_1", "_2"... allows the use of
+                # rename in this case
+                for key, col in self._data.items():
+                    if key in columns:
+                        if columns[key] in out._data:
+                            out_column = columns[key] + "_" + str(postfix)
+                            postfix += 1
+                        else:
+                            out_column = columns[key]
+                        out[out_column] = col
                     else:
-                        out_column = mapper[key]
-                    out[out_column] = col
-                else:
-                    out[key] = col
-        elif callable(mapper):
-            for col in self._data.names:
-                out[mapper(col)] = self[col]
+                        out[key] = col
+            elif callable(columns):
+                for key, col in self._data.items():
+                    out[columns(key)] = col
+        else:
+            out._data = self._data.copy(deep=copy)
 
         if inplace:
             self._data = out._data
@@ -3061,7 +3152,16 @@ class DataFrame(Frame, Serializable):
         """
         return self.take(self.index.argsort(ascending=ascending))
 
-    def sort_values(self, by, ascending=True, na_position="last"):
+    def sort_values(
+        self,
+        by,
+        axis=0,
+        ascending=True,
+        inplace=False,
+        kind="quicksort",
+        na_position="last",
+        ignore_index=False,
+    ):
         """
 
         Sort by the values row-wise.
@@ -3076,6 +3176,8 @@ class DataFrame(Frame, Serializable):
             by.
         na_position : {‘first’, ‘last’}, default ‘last’
             'first' puts nulls at the beginning, 'last' puts nulls at the end
+        ignore_index : bool, default False
+            If True, index will not be sorted.
 
         Returns
         -------
@@ -3099,9 +3201,17 @@ class DataFrame(Frame, Serializable):
         2  2  0
         1  1  2
         """
+        if inplace:
+            raise NotImplementedError("`inplace` not currently implemented.")
+        if kind != "quicksort":
+            raise NotImplementedError("`kind` not currently implemented.")
+        if axis != 0:
+            raise NotImplementedError("`axis` not currently implemented.")
+
         # argsort the `by` column
         return self.take(
-            self[by].argsort(ascending=ascending, na_position=na_position)
+            self[by].argsort(ascending=ascending, na_position=na_position),
+            keep_index=not ignore_index,
         )
 
     def nlargest(self, n, columns, keep="first"):
