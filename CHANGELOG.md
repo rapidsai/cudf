@@ -89,6 +89,7 @@
 - PR #5518 split iterator and gather tests to speedup build tests
 - PR #5526 Change `type_id` to enum class
 - PR #5559 Java APIs for missing date/time operators
+- PR #5582 Add support for axis and other parameters to `DataFrame.sort_index` and fix other bunch of issues.
 - PR #5562 Add missing join type for java
 - PR #5591 Add `__arrow_array__` protocol and raise a descriptive error message
 
