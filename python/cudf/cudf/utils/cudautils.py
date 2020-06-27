@@ -6,6 +6,7 @@ import cupy
 import numpy as np
 from numba import cuda
 
+import cudf
 from cudf.utils.utils import (
     check_equals_float,
     check_equals_int,
@@ -187,9 +188,7 @@ def find_index_of_val(arr, val, mask=None, compare="eq"):
                     arr, val, found, arr.size
                 )
 
-    from cudf.core.column.column import as_column
-
-    return as_column(found).set_mask(mask)
+    return cudf.core.column.column.as_column(found).set_mask(mask)
 
 
 def find_first(arr, val, mask=None, compare="eq"):
