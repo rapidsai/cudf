@@ -527,11 +527,12 @@ class CategoricalAccessor(object):
                         categories=new_categories, ordered=ordered
                     ),
                 )
-            elif not self._categories_equal(new_categories, **kwargs):
+            elif not self._categories_equal(
+                new_categories, **kwargs
+            ) or not self.ordered == kwargs.get("ordered"):
                 out_col = self._set_categories(
                     self._column.categories, new_categories, **kwargs
                 )
-
         return self._return_or_inplace(out_col, **kwargs)
 
     def reorder_categories(self, new_categories, **kwargs):
@@ -617,14 +618,19 @@ class CategoricalAccessor(object):
         return self._return_or_inplace(out_col, **kwargs)
 
     def _categories_equal(self, new_categories, **kwargs):
+
         cur_categories = self._column.categories
         if len(new_categories) != len(cur_categories):
             return False
         # if order doesn't matter, sort before the equals call below
         if not kwargs.get("ordered", self.ordered):
-            cur_categories = cudf.Series(cur_categories).sort_values()
-            new_categories = cudf.Series(new_categories).sort_values()
-        return cur_categories._column.equals(new_categories._column)
+            cur_categories = cudf.Series(cur_categories).sort_values(
+                ignore_index=True
+            )
+            new_categories = cudf.Series(new_categories).sort_values(
+                ignore_index=True
+            )
+        return cur_categories.equals(new_categories)
 
     def _set_categories(self, current_categories, new_categories, **kwargs):
         """Returns a new CategoricalColumn with the categories set to the
@@ -967,26 +973,60 @@ class CategoricalColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *replacement*.
         """
+
+        # create a dataframe containing the pre-replacement categories
+        # and a copy of them to work with. The index of this dataframe
+        # represents the original ints that map to the categories
+        old_cats = cudf.DataFrame()
+        old_cats["cats"] = column.as_column(self.dtype.categories)
+        new_cats = old_cats.copy(deep=True)
+
+        # Create a column with the appropriate labels replaced
+        old_cats["cats_replace"] = old_cats["cats"].replace(
+            to_replace, replacement
+        )
+
+        # Construct the new categorical labels
+        # If a category is being replaced by an existing one, we
+        # want to map it to None. If it's totally new, we want to
+        # map it to the new label it is to be replaced by
+        dtype_replace = cudf.Series(replacement)
+        dtype_replace[dtype_replace.isin(old_cats["cats"])] = None
+        new_cats["cats"] = new_cats["cats"].replace(to_replace, dtype_replace)
+
+        # anything we mapped to None, we want to now filter out since
+        # those categories don't exist anymore
+        # Resetting the index creates a column 'index' that associates
+        # the original integers to the new labels
+        bmask = new_cats["cats"]._column.notna()
+        new_cats = cudf.DataFrame(
+            {"cats": new_cats["cats"]._column.apply_boolean_mask(bmask)}
+        ).reset_index()
+
+        # old_cats contains replaced categories and the ints that
+        # previously mapped to those categories and the index of
+        # new_cats is a RangeIndex that contains the new ints
+        catmap = old_cats.merge(
+            new_cats, left_on="cats_replace", right_on="cats", how="inner"
+        )
+
+        # The index of this frame is now the old ints, but the column
+        # named 'index', which came from the filtered categories,
+        # contains the new ints that we need to map to
+        to_replace_col = column.as_column(catmap.index).astype(
+            self.cat().codes.dtype
+        )
+        replacement_col = catmap["index"]._column.astype(
+            self.cat().codes.dtype
+        )
+
         replaced = column.as_column(self.cat().codes)
-
-        to_replace_col = column.as_column(
-            np.asarray(
-                [self._encode(val) for val in to_replace], dtype=replaced.dtype
-            )
-        )
-        replacement_col = column.as_column(
-            np.asarray(
-                [self._encode(val) for val in replacement],
-                dtype=replaced.dtype,
-            )
-        )
-
         output = libcudf.replace.replace(
             replaced, to_replace_col, replacement_col
         )
 
         return column.build_categorical_column(
-            categories=self.dtype.categories,
+            categories=new_cats["cats"],
             codes=column.as_column(output.base_data, dtype=output.dtype),
             mask=output.base_mask,
             offset=output.offset,

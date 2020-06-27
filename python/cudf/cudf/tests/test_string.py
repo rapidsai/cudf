@@ -69,11 +69,11 @@ def test_string_export(ps_gs):
 
     expect = ps
     got = gs.to_pandas()
-    pd.testing.assert_series_equal(expect, got)
+    assert_eq(expect, got)
 
     expect = np.array(ps)
     got = gs.to_array()
-    np.testing.assert_array_equal(expect, got)
+    assert_eq(expect, got)
 
     expect = pa.Array.from_pandas(ps)
     got = gs.to_arrow()
@@ -225,28 +225,19 @@ def test_string_numeric_astype(dtype):
     elif dtype.startswith("float"):
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
     elif dtype.startswith("datetime64"):
-        data = [
-            1000000000,
-            2000000000,
-            3000000000,
-            4000000000,
-            5000000000,
-            -2000000000,
-        ]
-    if dtype.startswith("datetime64"):
-        ps = pd.Series(data, dtype="datetime64[ns]")
-        gs = Series.from_pandas(ps)
-    else:
-        ps = pd.Series(data, dtype=dtype)
-        gs = Series(data, dtype=dtype)
+        # pandas rounds the output format based on the data
+        # Use numpy instead
+        # but fix '2011-01-01T00:00:00' -> '2011-01-01 00:00:00'
+        data = [1000000001, 2000000001, 3000000001, 4000000001, 5000000001]
+        ps = np.asarray(data, dtype=dtype).astype(str)
+        ps = np.array([i.replace("T", " ") for i in ps])
 
-    # Pandas datetime64 --> str typecasting returns arbitrary format depending
-    # on the data, so making it consistent unless we choose to match the
-    # behavior
-    if dtype.startswith("datetime64"):
-        expect = ps.dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-    else:
-        expect = ps.astype("str")
+    if not dtype.startswith("datetime64"):
+        ps = pd.Series(data, dtype=dtype)
+
+    gs = Series(data, dtype=dtype)
+
+    expect = pd.Series(ps.astype("str"))
     got = gs.astype("str")
 
     assert_eq(expect, got)
@@ -319,29 +310,67 @@ def test_string_len(ps_gs):
         ["f", "g", "h", "i", "j"],
         ("f", "g", "h", "i", "j"),
         pd.Series(["f", "g", "h", "i", "j"]),
-        pd.Index(["f", "g", "h", "i", "j"]),
-        (["f", "g", "h", "i", "j"], ["f", "g", "h", "i", "j"]),
-        [["f", "g", "h", "i", "j"], ["f", "g", "h", "i", "j"]],
-        (
-            pd.Series(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            pd.Series(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            ["f", "a", "b", "f", "a"],
-            pd.Index(["1", "2", "3", "4", "5"]),
-            ["f", "a", "b", "f", "a"],
+        # xref pandas-dev/#33436
+        pytest.param(
             pd.Index(["f", "g", "h", "i", "j"]),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/pull/33436"
+            ),
+        ),
+        (
+            np.array(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
         ),
         [
-            pd.Index(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            pd.Series(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            ["f", "a", "b", "f", "a"],
-            pd.Index(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            pd.Index(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
         ],
+        [
+            pd.Series(["f", "g", "h", "i", "j"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+        ],
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+        ),
+        [
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ],
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ),
+        pytest.param(
+            (
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["1", "2", "3", "4", "5"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/pull/33436"
+            ),
+        ),
+        pytest.param(
+            [
+                pd.Index(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/pull/33436"
+            ),
+        ),
     ],
 )
 @pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
@@ -360,6 +389,11 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
     pd_others = others
     if isinstance(pd_others, pd.Series):
         pd_others = pd_others.values
+    if isinstance(pd_others, (list, tuple)):
+        for elem in pd_others:
+            if isinstance(elem, (pd.Series, Series)):
+                elem.index = ps.index
+
     expect = ps.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
     got = gs.str.cat(others=others, sep=sep, na_rep=na_rep)
 
