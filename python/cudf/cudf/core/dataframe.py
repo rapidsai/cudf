@@ -44,6 +44,7 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     is_string_dtype,
+    numeric_normalize_types,
 )
 from cudf.utils.utils import OrderedColumnDict
 
@@ -283,11 +284,8 @@ class DataFrame(Frame, Serializable):
             columns = self._get_union_of_indices([d.index for d in data])
 
         series_lengths = list(map(lambda x: len(x), data))
-
+        data = numeric_normalize_types(*data)
         if series_lengths.count(series_lengths[0]) == len(series_lengths):
-            from cudf.utils.dtypes import numeric_normalize_types
-
-            data = numeric_normalize_types(*data)
             for col in range(len(data)):
                 self._data[col] = column.as_column(data[col])
 
@@ -308,11 +306,8 @@ class DataFrame(Frame, Serializable):
 
             self.columns = [*range(len(data))]
             self._index = RangeIndex(0, longest_series)
-            # import pdb;pdb.set_trace()
             transpose = self.T
-            self._data = transpose._data
-            self._index = transpose._index
-            self.columns = transpose.columns
+            self._mimic_inplace(transpose, inplace=True)
 
     def _init_from_list_like(self, data, index=None, columns=None):
         if index is None:
