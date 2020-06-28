@@ -654,12 +654,10 @@ class Index(Frame, Serializable):
             True if “other” is an Index and it has the same elements
             as calling index; False otherwise.
         """
-        if self is other:
-            return True
-        elif not isinstance(other, Index):
-            return False
-        elif len(self) != len(other):
-            return False
+        basic_equality = _check_basic_index_equality(self, other)
+
+        if basic_equality is not None:
+            return basic_equality
         elif len(self) == 1:
             val = self[0] == other[0]
             # when self is multiindex we need to checkall
@@ -1263,12 +1261,10 @@ class RangeIndex(Index):
 
     @annotate("RANGE_INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
-        if self is other:
-            return True
-        elif not isinstance(other, Index):
-            return False
-        elif len(self) != len(other):
-            return False
+        basic_equality = _check_basic_index_equality(self, other)
+
+        if basic_equality is not None:
+            return basic_equality
         elif isinstance(other, cudf.core.index.RangeIndex):
             return self._start == other._start and self._stop == other._stop
         else:
@@ -1983,14 +1979,10 @@ class CategoricalIndex(GenericIndex):
             True if “other” is an Index and it has the same elements
             as calling index; False otherwise.
         """
-        if self is other:
-            return True
-        elif not isinstance(other, Index):
-            return False
-        elif len(self) != len(other):
-            return False
-        elif not isinstance(other, Index):
-            return False
+        basic_equality = _check_basic_index_equality(self, other)
+
+        if basic_equality is not None:
+            return basic_equality
         else:
             casted_other = other
             if not is_categorical_dtype(other.dtype):
@@ -2153,3 +2145,13 @@ def _setdefault_name(values, **kwargs):
         else:
             kwargs.update({"name": values.name})
     return kwargs
+
+
+def _check_basic_index_equality(left, right):
+    if left is right:
+        return True
+    elif not isinstance(right, Index):
+        return False
+    elif len(left) != len(right):
+        return False
+    return None

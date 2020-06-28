@@ -545,9 +545,7 @@ class Series(Frame, Serializable):
             to_concat = [self]
             to_concat.extend(to_append)
         else:
-            to_concat = [self, Series(to_append)]
-
-        to_concat = [Series(obj) for obj in to_concat]
+            to_concat = [self, to_append]
 
         dtype_mismatch = False
         for obj in to_concat:
