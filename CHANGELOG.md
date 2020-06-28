@@ -5,6 +5,7 @@
 - PR #5292 Add unsigned int type columns to libcudf
 - PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #4546 Support pandas 1.0+
 - PR #5331 Add `cudf::drop_nans`
 - PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
@@ -89,7 +90,10 @@
 - PR #5518 split iterator and gather tests to speedup build tests
 - PR #5526 Change `type_id` to enum class
 - PR #5559 Java APIs for missing date/time operators
+- PR #5582 Add support for axis and other parameters to `DataFrame.sort_index` and fix other bunch of issues.
 - PR #5562 Add missing join type for java
+- PR #5584 Refactor `CompactProtocolReader::InitSchema`
+- PR #5591 Add `__arrow_array__` protocol and raise a descriptive error message
 
 ## Bug Fixes
 

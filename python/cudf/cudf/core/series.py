@@ -1867,7 +1867,7 @@ class Series(Frame, Serializable):
         """
         return self._column.as_mask()
 
-    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+    def astype(self, dtype, copy=False, errors="raise"):
         """
         Cast the Series to the given dtype
 
@@ -1884,13 +1884,11 @@ class Series(Frame, Serializable):
             values then may propagate to other cudf objects.
         errors : {'raise', 'ignore', 'warn'}, default 'raise'
             Control raising of exceptions on invalid data for provided dtype.
-
-            -   ``raise`` : allow exceptions to be raised
-            -   ``ignore`` : suppress exceptions. On error return original
-                object.
-            -   ``warn`` : prints last exceptions as warnings and
-                return original object.
-        **kwargs : extra arguments to pass on to the constructor
+            - ``raise`` : allow exceptions to be raised
+            - ``ignore`` : suppress exceptions. On error return original
+            object.
+            - ``warn`` : prints last exceptions as warnings and
+            return original object.
 
         Returns
         -------
@@ -1912,7 +1910,7 @@ class Series(Frame, Serializable):
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
         try:
-            data = self._column.astype(dtype, **kwargs)
+            data = self._column.astype(dtype)
 
             return self._copy_construct(
                 data=data.copy(deep=True) if copy else data, index=self.index
@@ -1947,7 +1945,15 @@ class Series(Frame, Serializable):
         inds = self.index.argsort(ascending=ascending)
         return self.take(inds)
 
-    def sort_values(self, ascending=True, na_position="last"):
+    def sort_values(
+        self,
+        axis=0,
+        ascending=True,
+        inplace=False,
+        kind="quicksort",
+        na_position="last",
+        ignore_index=False,
+    ):
         """
         Sort by the values.
 
@@ -1959,6 +1965,8 @@ class Series(Frame, Serializable):
             If True, sort values in ascending order, otherwise descending.
         na_position : {‘first’, ‘last’}, default ‘last’
             'first' puts nulls at the beginning, 'last' puts nulls at the end.
+        ignore_index : bool, default False
+            If True, index will not be sorted.
 
         Returns
         -------
@@ -1980,10 +1988,21 @@ class Series(Frame, Serializable):
         3    4
         1    5
         """
+
+        if inplace:
+            raise NotImplementedError("`inplace` not currently implemented.")
+        if kind != "quicksort":
+            raise NotImplementedError("`kind` not currently implemented.")
+        if axis != 0:
+            raise NotImplementedError("`axis` not currently implemented.")
+
         if len(self) == 0:
             return self
         vals, inds = self._sort(ascending=ascending, na_position=na_position)
-        index = self.index.take(inds)
+        if not ignore_index:
+            index = self.index.take(inds)
+        else:
+            index = self.index
         return vals.set_index(index)
 
     def _n_largest_or_smallest(self, largest, n, keep):

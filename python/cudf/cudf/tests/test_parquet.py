@@ -49,7 +49,7 @@ def simple_pdf(request):
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
-    del test_pdf.columns.name
+    test_pdf.columns.name = None
     test_pdf.index.name = "test_index"
 
     # Cast all the column dtypes to objects, rename them, and then cast to
@@ -93,7 +93,7 @@ def pdf(request):
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
-    del test_pdf.columns.name
+    test_pdf.columns.name = None
     test_pdf.index.name = "test_index"
 
     # Cast all the column dtypes to objects, rename them, and then cast to
@@ -127,7 +127,7 @@ def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
         dtype=dtype,
         r_idx_type="i",
     )
-    del test_pdf.columns.name
+    test_pdf.columns.name = None
 
     # Randomly but reproducibly mark subset of rows as invalid
     random.seed(1337)
@@ -183,6 +183,7 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
     got = cudf.read_parquet(parquet_file, engine=engine, columns=columns)
     if len(expect) == 0:
         expect = expect.reset_index(drop=True)
+        got = got.reset_index(drop=True)
         if "col_category" in expect.columns:
             expect["col_category"] = expect["col_category"].astype("category")
 
@@ -443,6 +444,10 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
 def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
     pdf_fname = tmpdir.join("pdf.parquet")
     gdf_fname = tmpdir.join("gdf.parquet")
+
+    if len(pdf) == 0:
+        pdf = pdf.reset_index(drop=True)
+        gdf = gdf.reset_index(drop=True)
 
     pdf.to_parquet(pdf_fname.strpath)
     gdf.to_parquet(gdf_fname.strpath, engine="pyarrow")

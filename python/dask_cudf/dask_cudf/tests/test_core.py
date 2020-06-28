@@ -522,17 +522,29 @@ def test_concat(gdf, gddf, series):
     if series:
         gdf = gdf.x
         gddf = gddf.x
-    a = (
-        cudf.concat([gdf, gdf + 1, gdf + 2])
-        .sort_values("x")
-        .reset_index(drop=True)
-    )
-    b = (
-        dd.concat([gddf, gddf + 1, gddf + 2], interleave_partitions=True)
-        .compute()
-        .sort_values("x")
-        .reset_index(drop=True)
-    )
+        a = (
+            cudf.concat([gdf, gdf + 1, gdf + 2])
+            .sort_values()
+            .reset_index(drop=True)
+        )
+        b = (
+            dd.concat([gddf, gddf + 1, gddf + 2], interleave_partitions=True)
+            .compute()
+            .sort_values()
+            .reset_index(drop=True)
+        )
+    else:
+        a = (
+            cudf.concat([gdf, gdf + 1, gdf + 2])
+            .sort_values("x")
+            .reset_index(drop=True)
+        )
+        b = (
+            dd.concat([gddf, gddf + 1, gddf + 2], interleave_partitions=True)
+            .compute()
+            .sort_values("x")
+            .reset_index(drop=True)
+        )
     dd.assert_eq(a, b)
 
 
