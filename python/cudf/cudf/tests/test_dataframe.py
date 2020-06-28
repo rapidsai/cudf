@@ -4,6 +4,7 @@ import array as arr
 import io
 import operator
 import random
+import re
 import textwrap
 
 import cupy
@@ -6141,21 +6142,25 @@ def test_cudf_isclose_different_index():
     assert_eq(expected, gd.isclose(s1, s2))
 
 
-def test_dataframe_iter_error():
+def test_dataframe_to_dict_error():
     df = gd.DataFrame({"a": [1, 2, 3], "b": [9, 5, 3]})
     with pytest.raises(
         TypeError,
-        match="Implicit conversion to a host memory via to_dict() is not "
-        "allowed, To explicitly construct a dictionary object, "
-        "consider using .to_pandas().to_dict()",
+        match=re.escape(
+            r"Implicit conversion to a host memory via to_dict() is not "
+            r"allowed, To explicitly construct a dictionary object, "
+            r"consider using .to_pandas().to_dict()"
+        ),
     ):
         df.to_dict()
 
     with pytest.raises(
         TypeError,
-        match="Implicit conversion to a host memory via to_dict() is not "
-        "allowed, To explicitly construct a dictionary object, "
-        "consider using .to_pandas().to_dict()",
+        match=re.escape(
+            r"Implicit conversion to a host memory via to_dict() is not "
+            r"allowed, To explicitly construct a dictionary object, "
+            r"consider using .to_pandas().to_dict()"
+        ),
     ):
         df["a"].to_dict()
 
