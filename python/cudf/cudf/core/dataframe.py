@@ -285,21 +285,18 @@ class DataFrame(Frame, Serializable):
         series_lengths = list(map(lambda x: len(x), data))
 
         if series_lengths.count(series_lengths[0]) == len(series_lengths):
+            from cudf.utils.dtypes import numeric_normalize_types
+
+            data = numeric_normalize_types(*data)
             for col in range(len(data)):
                 self._data[col] = column.as_column(data[col])
 
-            self.columns = columns
-            self._index = index
-            # import pdb;pdb.set_trace()
+            self.columns = index
+            self._index = columns
             transpose = self.T
-            self._data = transpose._data
-            self._index = transpose.columns
-            self.columns = transpose._index
+            self._mimic_inplace(transpose, inplace=True)
         else:
             longest_series = max(max(series_lengths), len(columns))
-            import pdb
-
-            pdb.set_trace()
             for col in range(len(data)):
                 current_col = column.as_column(data[col])
                 extra_padding = column.column_empty_like(
