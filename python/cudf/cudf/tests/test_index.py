@@ -3,6 +3,8 @@
 """
 Test related to Index
 """
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -822,26 +824,29 @@ def test_index_append(data, other):
     ],
 )
 def test_index_append_error(data, other):
-
     gd_data = cudf.core.index.as_index(data)
     gd_other = cudf.core.index.as_index(other)
 
     with pytest.raises(
         TypeError,
-        match="cudf does not support mixed types, please type-cast "
-        "both series to same dtypes.",
+        match=re.escape(
+            "cudf does not support mixed types, please type-cast "
+            "both index to same dtypes."
+        ),
     ):
         gd_data.append(gd_other)
 
     with pytest.raises(
         TypeError,
-        match="cudf does not support mixed types, please type-cast "
-        "both series to same dtypes.",
+        match=re.escape(
+            "cudf does not support mixed types, please type-cast "
+            "both index to same dtypes."
+        ),
     ):
         gd_other.append(gd_data)
 
     sr = gd_other.to_series()
-    with pytest.raises(TypeError, match="all inputs must be Index"):
+    with pytest.raises(TypeError, match=r"all inputs must be Index"):
         gd_data.append([sr])
 
 

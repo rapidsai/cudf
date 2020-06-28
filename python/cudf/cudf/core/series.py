@@ -40,6 +40,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
     min_scalar_type,
+    numeric_normalize_types,
 )
 
 
@@ -167,10 +168,6 @@ class Series(Frame, Serializable):
                 data = data.astype(dtype)
 
         if isinstance(data, dict):
-            if any(is_list_like(value) for value in data.values()):
-                raise NotImplementedError(
-                    "Nested lists are not yet supported in cudf."
-                )
             index = data.keys()
             data = column.as_column(
                 data.values(), nan_as_null=nan_as_null, dtype=dtype
@@ -551,8 +548,6 @@ class Series(Frame, Serializable):
             to_concat = [self, Series(to_append)]
 
         to_concat = [Series(obj) for obj in to_concat]
-
-        from cudf.utils.dtypes import numeric_normalize_types
 
         dtype_mismatch = False
         for obj in to_concat:

@@ -1,6 +1,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 
+import re
+
 import pandas as pd
 import pytest
 
@@ -38,7 +40,10 @@ def test_series_init_dict(data):
 )
 def test_series_init_dict_lists(data):
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape("cudf doesn't support list like data types"),
+    ):
         cudf.Series(data)
 
 

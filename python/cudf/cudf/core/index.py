@@ -23,7 +23,11 @@ from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.frame import Frame
 from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import is_categorical_dtype, is_scalar
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_scalar,
+    numeric_normalize_types,
+)
 from cudf.utils.utils import cached_property
 
 
@@ -468,8 +472,6 @@ class Index(Frame, Serializable):
         if isinstance(other, (list, tuple)):
             to_concat = [self] + list(other)
         else:
-            from cudf.core.column import numerical
-            from cudf.utils.dtypes import numeric_normalize_types
 
             this = self
             if len(other) == 0:
@@ -487,7 +489,7 @@ class Index(Frame, Serializable):
                         "both index to same dtypes."
                     )
 
-                if isinstance(self._values, numerical.NumericalColumn):
+                if isinstance(self._values, cudf.core.column.NumericalColumn):
                     if self.dtype != other.dtype:
                         this, other = numeric_normalize_types(self, other)
                 to_concat = [this, other]
@@ -670,12 +672,11 @@ class Index(Frame, Serializable):
                     other = other.astype(self.dtype)
                 except (TypeError, ValueError):
                     return False
-
-            if is_categorical_dtype(other.dtype):
+            elif self.dtype.kind != "f" and other.dtype.kind == "f":
                 return other.equals(self)
 
-            if other.dtype.kind == "f" and self.dtype.kind != "f":
-                return as_index(other).equals(self)
+            if isinstance(other, CategoricalIndex):
+                return other.equals(self)
 
             if self.dtype != other.dtype and (
                 cudf.utils.dtypes.is_string_dtype(self.dtype)
