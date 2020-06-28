@@ -296,6 +296,7 @@ def test_dataframe_drop_method():
     assert tuple(df.drop("a", axis=1).columns) == ("b", "c")
     assert tuple(df.columns) == ("a", "b", "c")
     assert tuple(df.drop(["a", "b"]).columns) == ("c",)
+    assert tuple(df.drop(["a", "a", "b"]).columns) == ("c",)
     assert tuple(df.columns) == ("a", "b", "c")
     assert tuple(df.drop(["a", "b"]).columns) == ("c",)
     assert tuple(df.columns) == ("a", "b", "c")
@@ -2392,6 +2393,105 @@ def test_dataframe_empty_sort_index():
     got = gdf.sort_index()
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("inplace", [True, False])
+@pytest.mark.parametrize("na_position", ["first", "last"])
+def test_dataframe_sort_index(
+    axis, ascending, inplace, ignore_index, na_position
+):
+    pdf = pd.DataFrame(
+        {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
+        index=[3.0, 1.0, np.nan],
+    )
+    gdf = DataFrame.from_pandas(pdf)
+
+    expected = pdf.sort_index(
+        axis=axis,
+        ascending=ascending,
+        ignore_index=ignore_index,
+        inplace=inplace,
+        na_position=na_position,
+    )
+    got = gdf.sort_index(
+        axis=axis,
+        ascending=ascending,
+        ignore_index=ignore_index,
+        inplace=inplace,
+        na_position=na_position,
+    )
+
+    if inplace is True:
+        assert_eq(pdf, gdf)
+    else:
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
+@pytest.mark.parametrize(
+    "level",
+    [
+        0,
+        "b",
+        1,
+        ["b"],
+        "a",
+        ["a", "b"],
+        ["b", "a"],
+        [0, 1],
+        [1, 0],
+        [0, 2],
+        None,
+    ],
+)
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("inplace", [True, False])
+@pytest.mark.parametrize("na_position", ["first", "last"])
+def test_dataframe_mulitindex_sort_index(
+    axis, level, ascending, inplace, ignore_index, na_position
+):
+    pdf = pd.DataFrame(
+        {
+            "b": [1.0, 3.0, np.nan],
+            "a": [1, 4, 3],
+            1: ["a", "b", "c"],
+            "e": [3, 1, 4],
+            "d": [1, 2, 8],
+        }
+    ).set_index(["b", "a", 1])
+    gdf = DataFrame.from_pandas(pdf)
+
+    # ignore_index is supported in v.1.0
+    expected = pdf.sort_index(
+        axis=axis,
+        level=level,
+        ascending=ascending,
+        inplace=inplace,
+        na_position=na_position,
+    )
+    if ignore_index is True:
+        expected = expected
+    got = gdf.sort_index(
+        axis=axis,
+        level=level,
+        ascending=ascending,
+        ignore_index=ignore_index,
+        inplace=inplace,
+        na_position=na_position,
+    )
+
+    if inplace is True:
+        if ignore_index is True:
+            pdf = pdf.reset_index(drop=True)
+        assert_eq(pdf, gdf)
+    else:
+        if ignore_index is True:
+            expected = expected.reset_index(drop=True)
+        assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("dtype", dtypes + ["category"])
@@ -6364,3 +6464,34 @@ def test_dataframe_append_error():
         "or if the Series has a name",
     ):
         df.append(ps)
+
+
+def test_cudf_arrow_array_error():
+    df = gd.DataFrame({"a": [1, 2, 3]})
+
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow Table via __arrow_array__"
+        " is not allowed, To explicitly construct a PyArrow Table, consider "
+        "using .to_arrow()",
+    ):
+        df.__arrow_array__()
+
+    sr = gd.Series([1, 2, 3])
+
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow Array via __arrow_array__"
+        " is not allowed, To explicitly construct a PyArrow Array, consider "
+        "using .to_arrow()",
+    ):
+        sr.__arrow_array__()
+
+    sr = gd.Series(["a", "b", "c"])
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow Array via __arrow_array__"
+        " is not allowed, To explicitly construct a PyArrow Array, consider "
+        "using .to_arrow()",
+    ):
+        sr.__arrow_array__()

@@ -259,7 +259,7 @@ class Index(Frame, Serializable):
         """
         return self[indices]
 
-    def argsort(self, ascending=True):
+    def argsort(self, ascending=True, **kwargs):
         """
         Return the integer indices that would sort the index.
 
@@ -274,7 +274,7 @@ class Index(Frame, Serializable):
         array : A cupy array containing Integer indices that
             would sort the index if used as an indexer.
         """
-        indices = self._values.argsort(ascending=ascending)
+        indices = self._values.argsort(ascending=ascending, **kwargs)
         return cupy.asarray(indices)
 
     @property
