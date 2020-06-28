@@ -484,7 +484,7 @@ class Index(Frame, Serializable):
                 ):
                     raise TypeError(
                         "cudf does not support mixed types, please type-cast "
-                        "both series to same dtypes."
+                        "both index to same dtypes."
                     )
 
                 if isinstance(self._values, numerical.NumericalColumn):
@@ -665,7 +665,7 @@ class Index(Frame, Serializable):
                 return val.all()
             return bool(val)
         else:
-            if self.dtype.kind in ("f") and other.dtype.kind not in ("f"):
+            if self.dtype.kind == "f" and other.dtype.kind != "f":
                 try:
                     other = other.astype(self.dtype)
                 except (TypeError, ValueError):
@@ -674,7 +674,7 @@ class Index(Frame, Serializable):
             if is_categorical_dtype(other.dtype):
                 return other.equals(self)
 
-            if other.dtype.kind in ("f") and self.dtype.kind not in ("f"):
+            if other.dtype.kind == "f" and self.dtype.kind != "f":
                 return as_index(other).equals(self)
 
             if self.dtype != other.dtype and (
