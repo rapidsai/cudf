@@ -25,7 +25,7 @@
 
 namespace cudf {
 namespace io {
-namespace datasource {
+namespace external {
 namespace kafka {
 
 /**
@@ -115,6 +115,6 @@ class kafka_consumer : public cudf::io::datasource {
 };
 
 }  // namespace kafka
-}  // namespace datasource
+}  // namespace external
 }  // namespace io
 }  // namespace cudf
