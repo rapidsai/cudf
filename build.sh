@@ -196,13 +196,10 @@ fi
 # Do not build libcudf_kafka with 'buildAll'
 if hasArg libcudf_kafka; then
 
-    echo "invoking this"
     cd ${LIB_BUILD_DIR}
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        echo "Calling install target"
         make -j${PARALLEL_LEVEL} install_libcudf_kafka VERBOSE=${VERBOSE}
     else
-        echo "trying to call make ..."
         make -j${PARALLEL_LEVEL} libcudf_kafka VERBOSE=${VERBOSE}
     fi
 

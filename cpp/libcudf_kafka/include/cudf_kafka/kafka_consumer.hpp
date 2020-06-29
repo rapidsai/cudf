@@ -25,11 +25,13 @@
 
 namespace cudf {
 namespace io {
-namespace external {
+namespace datasource {
 namespace kafka {
 
 /**
- * @brief libcudf external datasource for Apache Kafka
+ * @brief libcudf datasource for Apache Kafka
+ *
+ * @ingroup io_datasources
  **/
 class kafka_consumer : public cudf::io::datasource {
  public:
@@ -113,6 +115,6 @@ class kafka_consumer : public cudf::io::datasource {
 };
 
 }  // namespace kafka
-}  // namespace external
+}  // namespace datasource
 }  // namespace io
 }  // namespace cudf

@@ -21,7 +21,7 @@
 
 namespace cudf {
 namespace io {
-namespace external {
+namespace datasource {
 namespace kafka {
 
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
@@ -109,6 +109,6 @@ void kafka_consumer::consume_to_buffer()
 }
 
 }  // namespace kafka
-}  // namespace external
+}  // namespace datasource
 }  // namespace io
 }  // namespace cudf
