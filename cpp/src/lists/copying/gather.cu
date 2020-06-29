@@ -30,6 +30,7 @@ namespace detail {
  * the gather map needed for level N+1 (see documentation for make_gather_data for
  * the full example)
  *
+ * @code{.pseudo}
  * level N-1 offsets               : [0, 2, 5, 10], gather map[0, 2]
  *
  * level N offsets                 : [0, 2, 7]
@@ -46,6 +47,7 @@ namespace detail {
  * [0, 1, 0, 1, 2, 3, 4]
  * step 3, add base offsets to get the final sequence
  * [0, 1, 5, 6, 7, 8, 9]
+ * @endcode
  *
  */
 struct list_gatherer {

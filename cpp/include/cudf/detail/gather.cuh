@@ -108,7 +108,9 @@ template <typename Element, typename MapIterator>
 struct column_gatherer_impl {
   /**
    * @brief Type-dispatched function to gather from one column to another based
-   * on a `gather_map`. This handles fixed width type column_views only.
+   * on a `gather_map`. 
+   * 
+   * This handles fixed width type column_views only.
    *
    * @param source_column View into the column to gather from
    * @param gather_map_begin Beginning of iterator range of integral values representing the gather
