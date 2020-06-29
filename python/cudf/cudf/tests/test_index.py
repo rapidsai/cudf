@@ -138,12 +138,18 @@ def test_categorical_index():
     assert isinstance(gdf1.index, CategoricalIndex)
     assert_eq(pdf, gdf1)
     assert_eq(pdf.index, gdf1.index)
-    assert_eq(pdf.index.codes, gdf1.index.codes.to_array())
+    assert_eq(
+        pdf.index.codes,
+        gdf1.index.codes.astype(pdf.index.codes.dtype).to_array(),
+    )
 
     assert isinstance(gdf2.index, CategoricalIndex)
     assert_eq(pdf, gdf2)
     assert_eq(pdf.index, gdf2.index)
-    assert_eq(pdf.index.codes, gdf2.index.codes.to_array())
+    assert_eq(
+        pdf.index.codes,
+        gdf2.index.codes.astype(pdf.index.codes.dtype).to_array(),
+    )
 
 
 def test_pandas_as_index():
@@ -177,7 +183,12 @@ def test_pandas_as_index():
     assert_eq(pdf_datetime_index, gdf_datetime_index)
     assert_eq(pdf_category_index, gdf_category_index)
 
-    assert_eq(pdf_category_index.codes, gdf_category_index.codes.to_array())
+    assert_eq(
+        pdf_category_index.codes,
+        gdf_category_index.codes.astype(
+            pdf_category_index.codes.dtype
+        ).to_array(),
+    )
 
 
 def test_index_rename():
@@ -485,7 +496,8 @@ def test_index_where(data, condition, other, error):
             expect = ps.where(ps_condition, other=ps_other)
             got = gs.where(gs_condition, other=gs_other)
             np.testing.assert_array_equal(
-                expect.codes, got.codes.fillna(-1).to_array()
+                expect.codes,
+                got.codes.astype(expect.codes.dtype).fillna(-1).to_array(),
             )
             assert tuple(expect.categories) == tuple(got.categories)
         else:
