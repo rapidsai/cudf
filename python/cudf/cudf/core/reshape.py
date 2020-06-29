@@ -142,11 +142,21 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     typ = list(typs)[0]
 
     if len(typs) > 1:
-        raise ValueError(
-            "`concat` expects all objects to be of the same "
-            "type. Got mix of %r." % [t.__name__ for t in typs]
-        )
-    typ = list(typs)[0]
+        if len(allowed_typs - typs) == 0:
+            # This block of code will run when `objs` has
+            # both Series & DataFrame kind of inputs.
+            objs = [
+                obj
+                if isinstance(obj, DataFrame)
+                else DataFrame({obj.name: obj})
+                for obj in objs
+            ]
+            typ = DataFrame
+        else:
+            raise ValueError(
+                "`concat` cannot concatenate objects of "
+                "types: %r." % [t.__name__ for t in typs]
+            )
 
     if typ is DataFrame:
         return DataFrame._concat(objs, axis=axis, ignore_index=ignore_index)
