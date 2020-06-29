@@ -19,6 +19,7 @@
 #include <text/subword/detail/data_normalizer.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_uvector.hpp>
 #include <vector>
 
 namespace nvtext {
@@ -112,22 +113,13 @@ class wordpiece_tokenizer {
 
   // hash table parameters
   hashed_vocabulary const& vocab_table;
-  // uint32_t outer_hash_a_param{};
-  // uint32_t outer_hash_b_param{};
-  // uint16_t num_outer_bins{};
-  // uint16_t unk_token_id{};
-  // uint16_t first_tok_id{};
-  // uint16_t sep_tok_id{};
-  // rmm::device_vector<uint64_t> device_hash_table;
-  // rmm::device_vector<uint64_t> device_bin_coefficients;
-  // rmm::device_vector<uint16_t> device_bin_offsets;
 
-  // TODO: change these to rmm::device_uvectors
   // working memory for tokenizing
-  rmm::device_vector<uint32_t> device_token_ids;
-  rmm::device_vector<uint32_t> device_word_indices;
-  rmm::device_vector<uint8_t> device_tokens_per_word;
-  rmm::device_vector<size_t> cub_temp_storage;
+  rmm::device_uvector<uint32_t> device_token_ids;
+  rmm::device_uvector<uint32_t> device_word_indices;
+  rmm::device_uvector<uint8_t> device_tokens_per_word;
+  rmm::device_uvector<uint32_t> device_num_selected;
+  rmm::device_uvector<size_t> cub_temp_storage;
   size_t max_cub_storage_bytes;
 };
 

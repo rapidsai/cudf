@@ -97,14 +97,13 @@ class data_normalizer {
   codepoint_metadata_type const* d_cp_metadata;
   aux_codepoint_data_type const* d_aux_table;
 
-  // TODO: change these to rmm::device_uvectors
   // working memory for the normalization logic
-  rmm::device_vector<unsigned char> device_strings;
-  rmm::device_vector<uint32_t> device_strings_offsets;
-  rmm::device_vector<uint32_t> device_code_points;
-  rmm::device_vector<uint32_t> device_chars_per_thread;
-  rmm::device_vector<size_t> cub_temp_storage;
-  rmm::device_vector<uint32_t> device_num_selected;
+  rmm::device_uvector<unsigned char> device_strings;
+  rmm::device_uvector<uint32_t> device_strings_offsets;
+  rmm::device_uvector<uint32_t> device_code_points;
+  rmm::device_uvector<uint32_t> device_chars_per_thread;
+  rmm::device_uvector<size_t> cub_temp_storage;
+  rmm::device_uvector<uint32_t> device_num_selected;
   size_t max_cub_storage_bytes;
 };
 
