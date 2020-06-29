@@ -325,14 +325,15 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
-  std::unique_ptr<column> out;
-  if (binops::null_using_binop(op)) {
-    out = make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
-  } else {
-    auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
-    out           = make_fixed_width_column(
-      output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
-  }
+  std::unique_ptr<column> out = [&] {
+    if (binops::null_using_binop(op)) {
+      return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
+    } else {
+      auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
+      return make_fixed_width_column(
+        output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    }
+  }();
 
   // Check for 0 sized data
   if (lhs.size() == 0 || rhs.size() == 0) { return out; }
