@@ -125,3 +125,12 @@ def test_setitem_dataframe_series_inplace(df):
     gsr_a.replace(500, 501, inplace=True)
 
     assert_eq(pdf, gdf)
+
+def test_setitem_dataframe_equal_len_replace():
+    pdf = pd.DataFrame.from_dict({'a':[1,2,3], 'b':[4,5,6]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    pdf['a'][pdf['a'] > 1] = pdf['b']
+    gdf['a'][gdf['a'] > 1] = gdf['b']
+    
+    assert_eq(pdf, gdf)
