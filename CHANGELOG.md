@@ -93,6 +93,7 @@
 - PR #5562 Add missing join type for java
 - PR #5584 Refactor `CompactProtocolReader::InitSchema`
 - PR #5591 Add `__arrow_array__` protocol and raise a descriptive error message
+- PR #5603 Refactor JIT `parser.cpp`
 
 ## Bug Fixes
 
