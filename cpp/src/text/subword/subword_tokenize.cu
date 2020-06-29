@@ -23,6 +23,8 @@
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
 
 #include <device_launch_parameters.h>
+#include <thrust/for_each.h>
+#include <thrust/transform_scan.h>
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -150,48 +152,44 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 
   // Format output from tokenizer
   nvtx3::thread_range rt{"tokenizer_output"};
-  // copy log offsets to host
-  // TODO: do all of this on the GPU instead
-  std::vector<uint32_t> host_offsets(strings_count + 1);
-  CUDA_TRY(cudaMemcpyAsync(host_offsets.data(),
-                           device_offsets,
-                           sizeof(uint32_t) * host_offsets.size(),
-                           cudaMemcpyDeviceToHost,
-                           stream));
+  // each string can create 1 or more log entries
+  // compute the string-per-log offsets values by scanning over the number of tokens for each string
+  rmm::device_uvector<uint32_t> offsets_per_log(strings_count + 1, stream);
+  auto d_offsets_per_log = offsets_per_log.data();
+  auto execpol           = rmm::exec_policy(stream);
+  thrust::transform_exclusive_scan(
+    execpol->on(stream),
+    thrust::make_counting_iterator<cudf::size_type>(0),
+    thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
+    offsets_per_log.begin(),
+    [device_offsets, do_truncate, max_sequence_length, stride] __device__(cudf::size_type idx) {
+      uint32_t num_tokens = device_offsets[idx + 1] - device_offsets[idx];
+      if (do_truncate || num_tokens <= max_sequence_length) return uint32_t{1};
+      return 1 + ((num_tokens - max_sequence_length + stride - 1) / stride);
+    },
+    uint32_t{0},
+    thrust::plus<uint32_t>());
+  // last element is the total number of tokens
+  uint32_t nrows_tensor_token_ids = offsets_per_log.element(strings_count, stream);
 
-  // compute number of rows required for final tensor
-  uint32_t nrows_tensor_token_ids = 0;
-  std::vector<uint32_t> nrows_per_log(strings_count);
-  for (auto i = 0; i < strings_count; i++) {
-    uint32_t ntokens = host_offsets[i + 1] - host_offsets[i];
-    if (do_truncate || ntokens <= max_sequence_length)
-      nrows_per_log[i] = 1;
-    else {
-      ntokens -= max_sequence_length;
-      nrows_per_log[i] = 1 + (ntokens / stride);
-      if (ntokens % stride) nrows_per_log[i]++;
-    }
-    nrows_tensor_token_ids += nrows_per_log[i];
-  }
   // compute global_row to log, and global_row to within_log_row correspondence
-  std::vector<uint32_t> host_row2log(nrows_tensor_token_ids);
-  std::vector<uint32_t> host_row2row_within_log(nrows_tensor_token_ids);
-  int row_id = 0;
-  for (auto i = 0; i < strings_count; i++) {
-    for (uint32_t j = 0; j < nrows_per_log[i]; j++) {
-      host_row2log[row_id]            = i;
-      host_row2row_within_log[row_id] = j;
-      row_id++;
-    }
-  }
+  rmm::device_uvector<uint32_t> row2log(nrows_tensor_token_ids, stream);
+  auto d_row2log = row2log.data();
+  rmm::device_uvector<uint32_t> row2row_within_log(nrows_tensor_token_ids, stream);
+  auto d_row2row_within_log = row2row_within_log.data();
+  thrust::for_each_n(execpol->on(stream),
+                     thrust::make_counting_iterator<uint32_t>(0),
+                     strings_count,
+                     [d_offsets_per_log, d_row2log, d_row2row_within_log] __device__(auto idx) {
+                       uint32_t offset = d_offsets_per_log[idx];
+                       uint32_t nrows  = d_offsets_per_log[idx + 1] - offset;
+                       for (uint32_t jdx = 0; jdx < nrows; ++jdx) {
+                         d_row2log[jdx + offset]            = idx;
+                         d_row2row_within_log[jdx + offset] = jdx;
+                       }
+                     });
 
-  // copy info to GPU
-  // correspondence between each row of tensor_token_ids and log_id
-  rmm::device_vector<uint32_t> device_row2log = host_row2log;
-  // correspondence between each row of tensor_token_ids and row number within a specific log
-  rmm::device_vector<uint32_t> device_row2row_within_log = host_row2row_within_log;
-
-  // output data
+  // create output data columns
   auto tensor_token_ids = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT32},
                                                     nrows_tensor_token_ids * max_sequence_length,
                                                     cudf::mask_state::UNALLOCATED,
@@ -213,8 +211,8 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   kernel_compute_tensor_metadata<<<nrows_tensor_token_ids, max_sequence_length, 0, stream>>>(
     device_token_ids,
     device_offsets,
-    device_row2log.data().get(),
-    device_row2row_within_log.data().get(),
+    d_row2log,
+    d_row2row_within_log,
     max_sequence_length,
     stride,
     do_truncate,
