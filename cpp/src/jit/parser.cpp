@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <cctype>
 #include <cudf/utilities/error.hpp>
 #include <map>
@@ -30,36 +31,24 @@ inline bool is_white(const char c) { return c == ' ' || c == '\n' || c == '\r' |
 
 std::string ptx_parser::escape_percent(const std::string& src)
 {
-  // Since we are transforming into inline ptx we are not allowed to have
-  // register names starting with %.
-  const size_t length = src.size();
-  size_t start        = 0;
-  size_t stop         = 0;
-  while (start < length && (is_white(src[start]) || src[start] == '[')) { start++; }
-  stop = start;
-  while (stop < length && !is_white(src[stop]) && src[stop] != ']') { stop++; }
-  if (src[start] == '%') {
+  // b/c we're transforming into inline ptx we aren't allowed to have register names starting with %
+  auto f = std::find_if_not(src.begin(), src.end(), [](auto c) { return is_white(c) || c == '['; });
+  if (f != src.end() && *f == '%') {
     std::string output = src;
-    output.replace(start, 1, percent_escape);
+    output.replace(std::distance(src.begin(), f), 1, percent_escape);
     return output;
-  } else {
-    return src;
   }
+  return src;
 }
 
 std::string ptx_parser::remove_nonalphanumeric(const std::string& src)
 {
-  const size_t length = src.size();
-  size_t start        = 0;
-  size_t stop         = 0;
-  std::string output  = src;
-  while (start < length && (is_white(src[start]) || src[start] == '[')) { start++; }
-  stop = start;
-  while (stop < length && !is_white(src[stop]) && src[stop] != ']') {
-    if (!isalnum(src[stop]) && src[stop] != '_') { output[stop] = '_'; }
-    stop++;
-  }
-  return output.substr(start, stop - start);
+  std::string out = src;
+  auto f = std::find_if_not(out.begin(), out.end(), [](auto c) { return is_white(c) || c == '['; });
+  auto l = std::find_if(out.begin(), out.end(), [](auto c) { return is_white(c) || c == ']'; });
+  std::replace_if(
+    f, l, [](auto c) { return !isalnum(c) && c != '_'; }, '_');
+  return std::string(f, l);
 }
 
 std::string ptx_parser::register_type_to_contraint(const std::string& src)
