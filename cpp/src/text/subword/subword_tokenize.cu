@@ -22,7 +22,6 @@
 #include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
 
-#include <device_launch_parameters.h>
 #include <thrust/for_each.h>
 #include <thrust/transform_scan.h>
 #include <fstream>
@@ -33,6 +32,20 @@ namespace nvtext {
 namespace detail {
 namespace {
 
+/**
+ * @brief Convert tokens and row2log map to final tensor data.
+ *
+ * @param[in] token_ids Tokens from tokenizer
+ * @param[in] offsets Offsets to each string's output row of tokens
+ * @param[in] row2log String to log token counts
+ * @param[in] row2row_within_log Token counts within sub-rows of the output
+ * @param[in] max_sequence_length Maximum number of tokens in a row
+ * @param[in] stride Number of tokens in sub-rows
+ * @param[in] do_truncate True if tokens should not spill into sub-rows in the output
+ * @param[out] final_tensor Output vector of token-ids
+ * @param[out] attn_mask Identifies valid token id entries
+ * @param[out] metadata Additional data per row
+ */
 __global__ void kernel_compute_tensor_metadata(
   // input
   uint32_t const* token_ids,
@@ -47,41 +60,41 @@ __global__ void kernel_compute_tensor_metadata(
   uint32_t* attn_mask,
   uint32_t* metadata)
 {
-  uint32_t absolute_row_id      = blockIdx.x;
-  uint32_t log_id               = row2log[absolute_row_id];
-  uint32_t row_within_log       = row2row_within_log[absolute_row_id];
-  uint32_t offset_token_ids_log = offsets[log_id];
-  uint32_t n_tokens_log         = offsets[log_id + 1] - offset_token_ids_log;
-  bool last_row_of_log =
+  uint32_t const absolute_row_id      = blockIdx.x;
+  uint32_t const log_id               = row2log[absolute_row_id];
+  uint32_t const row_within_log       = row2row_within_log[absolute_row_id];
+  uint32_t const offset_token_ids_log = offsets[log_id];
+  uint32_t const n_tokens_log         = offsets[log_id + 1] - offset_token_ids_log;
+  bool const last_row_of_log =
     (absolute_row_id == gridDim.x - 1) || (row2log[absolute_row_id + 1] != log_id);
 
-  uint32_t row_offset_token_ids = offset_token_ids_log;
-  if (row_within_log) row_offset_token_ids += max_sequence_length;
-  for (int i = 1; i < row_within_log; i++) row_offset_token_ids += stride;
+  uint32_t const row_offset_token_ids =
+    offset_token_ids_log +
+    (row_within_log ? (max_sequence_length + (stride * (row_within_log - 1))) : 0);
+
+  auto const output_idx = absolute_row_id * max_sequence_length + threadIdx.x;
 
   if (row_within_log == 0) {
     if (threadIdx.x < n_tokens_log) {
       // copy token ids
-      final_tensor[absolute_row_id * max_sequence_length + threadIdx.x] =
-        token_ids[row_offset_token_ids + threadIdx.x];
-      attn_mask[absolute_row_id * max_sequence_length + threadIdx.x] = 1;
+      final_tensor[output_idx] = token_ids[row_offset_token_ids + threadIdx.x];
+      attn_mask[output_idx]    = 1;
     } else {
       // pad with 0
-      final_tensor[absolute_row_id * max_sequence_length + threadIdx.x] = 0;
-      attn_mask[absolute_row_id * max_sequence_length + threadIdx.x]    = 0;
+      final_tensor[output_idx] = 0;
+      attn_mask[output_idx]    = 0;
     }
   } else {
-    uint32_t n_replicates = max_sequence_length - stride;
+    uint32_t const n_replicates = max_sequence_length - stride;
     if ((row_offset_token_ids - n_replicates + threadIdx.x) <
         (offset_token_ids_log + n_tokens_log)) {
       // replicate elements or copy new tokens
-      final_tensor[absolute_row_id * max_sequence_length + threadIdx.x] =
-        token_ids[row_offset_token_ids - n_replicates + threadIdx.x];
-      attn_mask[absolute_row_id * max_sequence_length + threadIdx.x] = 1;
+      final_tensor[output_idx] = token_ids[row_offset_token_ids - n_replicates + threadIdx.x];
+      attn_mask[output_idx]    = 1;
     } else {
       // pad with 0
-      final_tensor[absolute_row_id * max_sequence_length + threadIdx.x] = 0;
-      attn_mask[absolute_row_id * max_sequence_length + threadIdx.x]    = 0;
+      final_tensor[output_idx] = 0;
+      attn_mask[output_idx]    = 0;
     }
   }
 
@@ -132,7 +145,6 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   auto d_chars = strings.chars().data<char>() + offset;
 
   // Create tokenizer
-  nvtxRangePushA("create_tokenizer");
   wordpiece_tokenizer tokenizer(vocab_table,
                                 max_num_strings,
                                 max_num_chars,
@@ -142,8 +154,6 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                 do_truncate,
                                 do_lower,
                                 stream);
-  nvtxRangePop();
-
   // Run tokenizer
   auto tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
   // assign output components
@@ -151,7 +161,6 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   uint32_t const* device_offsets   = tokens.second;
 
   // Format output from tokenizer
-  nvtx3::thread_range rt{"tokenizer_output"};
   // each string can create 1 or more log entries
   // compute the string-per-log offsets values by scanning over the number of tokens for each string
   rmm::device_uvector<uint32_t> offsets_per_log(strings_count + 1, stream);
@@ -240,10 +249,8 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t max_rows_tensor,
                                   rmm::mr::device_memory_resource* mr)
 {
-  nvtxRangePushA("load_hash");
+  CUDF_FUNC_RANGE();
   hashed_vocabulary vocab_table = load_vocabulary_file(filename_hashed_vocabulary, mr);
-  nvtxRangePop();
-  // CUDF_FUNC_RANGE();
   return detail::subword_tokenize(strings,
                                   vocab_table,
                                   max_sequence_length,
@@ -268,7 +275,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t max_rows_tensor,
                                   rmm::mr::device_memory_resource* mr)
 {
-  // CUDF_FUNC_RANGE();
+  CUDF_FUNC_RANGE();
   return detail::subword_tokenize(strings,
                                   vocabulary_table,
                                   max_sequence_length,

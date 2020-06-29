@@ -15,14 +15,12 @@
  */
 
 #include <text/subword/detail/cp_data.h>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 #include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/hash_utils.cuh>
 #include <text/subword/detail/tokenizer_utils.cuh>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
 
-#include <device_launch_parameters.h>
 #include <thrust/for_each.h>
 #include <thrust/transform_scan.h>
 #include <cub/device/device_scan.cuh>
@@ -277,17 +275,15 @@ wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
     max_word_length{max_word_length},
     stride(stride),
     do_truncate(do_truncate),
-    normalizer(max_num_strings, max_num_chars, do_lower_case, stream),
+    normalizer(max_num_strings, max_num_chars, stream, do_lower_case),
     device_token_ids(MAX_NEW_CHARS * max_num_chars, stream),
     device_word_indices(2 * MAX_NEW_CHARS * max_num_chars, stream),
     device_tokens_per_word(0, stream),
     device_num_selected(1, stream),
     cub_temp_storage(0, stream)
 {
-  const size_t max_new_char_total = MAX_NEW_CHARS * max_num_chars;
-  // device_token_ids.resize(max_new_char_total);
+  const size_t max_new_char_total        = MAX_NEW_CHARS * max_num_chars;
   const size_t device_word_indices_count = 2 * max_new_char_total;
-  // device_word_indices.resize(device_word_indices_count);
 
   const size_t four_byte_cp_chunks = 1 + (max_new_char_total - 1) / sizeof(uint32_t);
   const size_t rounded_num_cps     = sizeof(uint32_t) * four_byte_cp_chunks;
@@ -319,12 +315,8 @@ std::pair<uint32_t*, uint32_t*> wordpiece_tokenizer::tokenize(char const* d_stri
                                                               uint32_t num_strings,
                                                               cudaStream_t stream)
 {
-  nvtxRangePushA("normalize");
   auto cps_and_offsets = normalizer.normalize(d_strings, d_offsets, num_strings, stream);
-  nvtxRangePop();
-  nvtxRangePushA("tokenize");
   tokenize(cps_and_offsets.first, cps_and_offsets.second, stream);
-  nvtxRangePop();
   return std::make_pair(cps_and_offsets.first.gpu_ptr, cps_and_offsets.second.gpu_ptr);
 }
 

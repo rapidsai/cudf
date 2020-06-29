@@ -60,8 +60,8 @@ class data_normalizer {
    */
   data_normalizer(uint32_t max_num_strings,
                   uint32_t max_num_chars,
-                  bool do_lower_case  = true,
-                  cudaStream_t stream = 0);
+                  cudaStream_t stream,
+                  bool do_lower_case = true);
 
   /**
    * @brief Normalize a vector of strings.
@@ -93,7 +93,7 @@ class data_normalizer {
                                                         cudaStream_t stream);
 
  private:
-  bool do_lower_case;
+  bool const do_lower_case;
   codepoint_metadata_type const* d_cp_metadata;
   aux_codepoint_data_type const* d_aux_table;
 

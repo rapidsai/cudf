@@ -21,7 +21,6 @@
 #include <text/subword/detail/data_normalizer.hpp>
 #include <text/subword/detail/tokenizer_utils.cuh>
 
-#include <device_launch_parameters.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <cub/device/device_scan.cuh>
@@ -36,36 +35,66 @@ namespace {
 #define SORT_BIT 22
 #define THREADS_PER_BLOCK 64
 
-// TODO: describe where these come from
-
+/**
+ * @brief Retrieve new code point from metadata value.
+ *
+ * @param metadata Value from the codepoint_metadata table.
+ * @return The replacement character if appropriate.
+ */
 __device__ __forceinline__ uint32_t get_first_cp(uint32_t metadata)
 {
   return metadata & NEW_CP_MASK;
 }
 
+/**
+ * @brief Retrieve token category from the metadata value.
+ *
+ * Category values are 0-5:
+ * 0 - character should be padded
+ * 1 - pad character if lower-case
+ * 2 - character should be removed
+ * 3 - remove character if lower-case
+ * 4 - whitespace character -- always replace
+ * 5 - uncategorized
+ *
+ * @param metadata Value from the codepoint_metadata table.
+ * @return Category value.
+ */
 __device__ __forceinline__ uint32_t extract_token_cat(uint32_t metadata)
 {
   return (metadata >> TOKEN_CAT_SHIFT) & TOKEN_CAT_MASK;
 }
 
+/**
+ * @brief Return true if category of metadata value specifies the character should be replaced.
+ */
 __device__ __forceinline__ bool should_remove_cp(uint32_t metadata, bool lower_case)
 {
   auto const cat = extract_token_cat(metadata);
   return (cat == TOKEN_CAT_REMOVE_CHAR) || (lower_case && (cat == TOKEN_CAT_REMOVE_CHAR_IF_LOWER));
 }
 
+/**
+ * @brief Return true if category of metadata value specifies the character should be padded.
+ */
 __device__ __forceinline__ bool should_add_spaces(uint32_t metadata, bool lower_case)
 {
   auto const cat = extract_token_cat(metadata);
   return (cat == TOKEN_CAT_ADD_SPACE) || (lower_case && (cat == TOKEN_CAT_ADD_SPACE_IF_LOWER));
 }
 
+/**
+ * @brief Return true if category of metadata value specifies the character should be replaced.
+ */
 __device__ __forceinline__ bool always_replace(uint32_t metadata)
 {
   return extract_token_cat(metadata) == TOKEN_CAT_ALWAYS_REPLACE;
 }
 
-__device__ __forceinline__ uint32_t is_multi_char_transform(uint32_t metadata)
+/**
+ * @brief Returns true if metadata value includes a multi-character transform bit equal to 1.
+ */
+__device__ __forceinline__ bool is_multi_char_transform(uint32_t metadata)
 {
   return (metadata >> MULTICHAR_SHIFT) & MULTICHAR_MASK;
 }
@@ -140,6 +169,28 @@ extract_code_points_from_utf8(const unsigned char* strings, const uint32_t start
   return code_point;
 }
 
+/**
+ * @brief Normalize the characters for the strings input.
+ *
+ * Characters are replaced, padded, or removed depending on the `do_lower_case` input
+ * as well as the metadata values for each code point found in `cp_metadata`.
+ *
+ * First, each character is converted from UTF-8 to a unicode code point value.
+ * This value is then looked up in the `cp_metadata` table to determine its fate.
+ * The end result is a set of code point values for each character.
+ * The normalized set of characters make it easier for the tokenizer to identify
+ * tokens and match up token ids.
+ *
+ * @param[in] strings The input strings with characters to normalize to code point values.
+ * @param[in] device_strings_offsets Offsets to individual strings in the input vector.
+ * @param[in] total_bytes Total number of bytes in the input `strings` vector.
+ * @param[in] cp_metadata The metadata lookup table for every unicode code point value.
+ * @param[in] aux_table Aux table for mapping some multi-byte code point values.
+ * @param[in] do_lower_case True if normalization should include lower-casing.
+ * @param[in] num_strings Total number of strings in the input `strings` vector.
+ * @param[out] code_points The resulting code point values from normalization.
+ * @param[out] chars_per_thread Output number of code point values per string.
+ */
 __global__ void kernel_data_normalizer(unsigned char const* strings,
                                        uint32_t const* device_strings_offsets,
                                        size_t const total_bytes,
@@ -178,7 +229,7 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
 
       if (should_add_spaces(metadata, do_lower_case)) {
         // Need to shift all existing code-points up one
-        // TODO: see if there is algorithm for this
+        // This is a rotate right. There is no thrust equivalent at this time.
         for (int loc = num_new_chars; loc > 0; --loc) {
           replacement_code_points[loc] = replacement_code_points[loc - 1];
         }
@@ -286,8 +337,8 @@ const aux_codepoint_data_type* get_aux_codepoint_data(cudaStream_t stream)
 
 data_normalizer::data_normalizer(uint32_t max_num_strings,
                                  uint32_t max_num_chars,
-                                 bool do_lower_case,
-                                 cudaStream_t stream)
+                                 cudaStream_t stream,
+                                 bool do_lower_case)
   : do_lower_case(do_lower_case),
     device_strings(static_cast<size_t>(max_num_chars), stream),
     device_strings_offsets(static_cast<size_t>(max_num_strings + 1), stream),

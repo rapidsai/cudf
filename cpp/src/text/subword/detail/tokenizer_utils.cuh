@@ -29,11 +29,14 @@ namespace detail {
  * this struct.
  */
 struct NotEqual {
-  uint32_t val_to_omit;
+  uint32_t const val_to_omit;
 
-  __host__ __device__ __forceinline__ NotEqual(uint32_t val_to_omit) : val_to_omit(val_to_omit) {}
+  __host__ __device__ __forceinline__ NotEqual(uint32_t const val_to_omit)
+    : val_to_omit(val_to_omit)
+  {
+  }
 
-  __host__ __device__ __forceinline__ bool operator()(const uint32_t& a) const
+  __host__ __device__ __forceinline__ bool operator()(uint32_t const& a) const
   {
     return (a != val_to_omit);
   }

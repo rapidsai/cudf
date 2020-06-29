@@ -97,7 +97,8 @@ __device__ __forceinline__ uint64_t prev_sdbm_hash(uint64_t current_hash, uint32
   constexpr uint64_t mask = (1ULL << 48) - 1;
   // Multiplicative inverse of 65599 under mod 2**48
   constexpr uint64_t mod_inverse = 24320495251391;
-  uint64_t prev_hash = mul_mod_48(mod_inverse, current_hash) - mul_mod_48(mod_inverse, last_val);
+  uint64_t const prev_hash =
+    mul_mod_48(mod_inverse, current_hash) - mul_mod_48(mod_inverse, last_val);
   return prev_hash & mask;
 }
 

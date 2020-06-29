@@ -106,10 +106,10 @@ class wordpiece_tokenizer {
                 cudaStream_t stream);
 
   data_normalizer normalizer;  // removes punctuation, accents, etc
-  uint32_t max_sequence_length;
-  uint32_t stride;
-  bool do_truncate;
-  uint32_t max_word_length;
+  uint32_t const max_sequence_length;
+  uint32_t const stride;
+  bool const do_truncate;
+  uint32_t const max_word_length;
 
   // hash table parameters
   hashed_vocabulary const& vocab_table;
