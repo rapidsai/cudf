@@ -686,7 +686,7 @@ class ColumnBase(Column, Serializable):
             raise TypeError(msg)
 
         # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(True, "after")
+        sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
         sorted_indices = sorted_indices[self.null_count :]
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
@@ -922,9 +922,12 @@ class ColumnBase(Column, Serializable):
         )
         return result
 
-    def argsort(self, ascending):
-        _, inds = self.sort_by_values(ascending=ascending)
-        return inds
+    def argsort(self, ascending, na_position="last"):
+
+        sorted_indices = self.as_frame()._get_sorted_inds(
+            ascending=ascending, na_position=na_position
+        )
+        return sorted_indices
 
     @property
     def __cuda_array_interface__(self):
