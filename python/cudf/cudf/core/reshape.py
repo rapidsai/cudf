@@ -157,7 +157,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         else:
             raise ValueError(
                 "`concat` cannot concatenate objects of "
-                "types: %r." % [t.__name__ for t in typs]
+                "types: %r." % sorted([t.__name__ for t in typs])
             )
 
     if typ is DataFrame:
