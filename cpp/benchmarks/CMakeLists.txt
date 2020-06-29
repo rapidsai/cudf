@@ -191,6 +191,14 @@ set(PARQUET_WRITER_CHUNKS_BENCH_SRC
 ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH "${PARQUET_WRITER_CHUNKS_BENCH_SRC}")
 
 ###################################################################################################
+# - parquet reader benchmark ----------------------------------------------------------------------
+
+set(PARQUET_READER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_reader_benchmark.cpp")
+
+ConfigureBench(PARQUET_READER_BENCH "${PARQUET_READER_BENCH_SRC}")
+
+###################################################################################################
 # - parquet writer benchmark -----------------------------------------------------------------------------
 
 set(PARQUET_WRITER_BENCH_SRC
