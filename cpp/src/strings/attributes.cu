@@ -56,7 +56,7 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
   auto d_strings      = *strings_column;
   // create output column
   auto results = std::make_unique<cudf::column>(
-    cudf::data_type{INT32},
+    cudf::data_type{type_id::INT32},
     strings_count,
     rmm::device_buffer(strings_count * sizeof(int32_t), stream, mr),
     copy_bitmask(strings.parent(), stream, mr),  // copy the null mask
@@ -155,8 +155,8 @@ std::unique_ptr<column> code_points(
   // the total size is the number of characters in the entire column
   size_type num_characters = offsets.back();
   // create output column with no nulls
-  auto results =
-    make_numeric_column(data_type{INT32}, num_characters, mask_state::UNALLOCATED, stream, mr);
+  auto results = make_numeric_column(
+    data_type{type_id::INT32}, num_characters, mask_state::UNALLOCATED, stream, mr);
   auto results_view = results->mutable_view();
   // fill column with character code-point values
   auto d_results = results_view.data<int32_t>();

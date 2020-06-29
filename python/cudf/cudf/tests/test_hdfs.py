@@ -38,7 +38,7 @@ def pdf(scope="module"):
     df = pd.DataFrame()
     df["Integer"] = np.array([2345, 11987, 9027, 9027])
     df["Float"] = np.array([9.001, 8.343, 6, 2.781])
-    df["Integer2"] = np.array([2345, 106, 2088, 789277])
+    df["Integer2"] = np.array([2345, 106, 2088, 789277], dtype="uint64")
     df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
     df["Boolean"] = np.array([True, False, True, False])
     return df

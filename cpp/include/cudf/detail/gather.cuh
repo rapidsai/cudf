@@ -218,7 +218,7 @@ struct column_gatherer_impl<dictionary32, MapItType> {
   {
     dictionary_column_view dictionary(source_column);
     auto output_count = std::distance(gather_map_begin, gather_map_end);
-    if (output_count == 0) return make_empty_column(data_type{DICTIONARY32});
+    if (output_count == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
     // The gather could cause some keys to be abandoned -- no indices point to them.
     // In this case, we could do further work to remove the abandoned keys and
     // reshuffle the indices values.
@@ -229,7 +229,7 @@ struct column_gatherer_impl<dictionary32, MapItType> {
     auto keys_copy = std::make_unique<column>(dictionary.keys(), stream, mr);
     // create view of the indices column combined with the null mask
     // in order to call gather on it
-    column_view indices(data_type{INT32},
+    column_view indices(data_type{type_id::INT32},
                         dictionary.size(),
                         dictionary.indices().data<int32_t>(),
                         dictionary.null_mask(),
@@ -242,7 +242,7 @@ struct column_gatherer_impl<dictionary32, MapItType> {
     auto null_count = new_indices->null_count();  // get this before it goes away
     auto contents   = new_indices->release();     // new_indices will now be empty
     // build the output indices column from the contents' data component
-    auto indices_column = std::make_unique<column>(data_type{INT32},
+    auto indices_column = std::make_unique<column>(data_type{type_id::INT32},
                                                    static_cast<size_type>(output_count),
                                                    std::move(*(contents.data.release())),
                                                    rmm::device_buffer{0, stream, mr},

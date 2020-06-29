@@ -1109,3 +1109,29 @@ def test_groupby_apply_noempty_group():
         .apply(lambda x: x.iloc[[0, 1]])
         .reset_index(drop=True),
     )
+
+
+def test_reset_index_after_empty_groupby():
+    # GH #5475
+    pdf = pd.DataFrame({"a": [1, 2, 3]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").sum().reset_index(),
+        gdf.groupby("a").sum().reset_index(),
+    )
+
+
+def test_groupby_attribute_error():
+    err_msg = "Test error message"
+
+    class TestGroupBy(cudf.core.groupby.GroupBy):
+        @property
+        def _groupby(self):
+            raise AttributeError("Test error message")
+
+    a = cudf.DataFrame({"a": [1, 2], "b": [2, 3]})
+    gb = TestGroupBy(a, a["a"])
+
+    with pytest.raises(AttributeError, match=err_msg):
+        gb.sum()

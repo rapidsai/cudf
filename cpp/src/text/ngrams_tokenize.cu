@@ -142,7 +142,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   if (ngrams == 1)  // this is just a straight tokenize
     return tokenize(strings, delimiter, mr, stream);
   auto strings_count = strings.size();
-  if (strings.size() == 0) return cudf::make_empty_column(cudf::data_type{cudf::STRING});
+  if (strings.size() == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
   auto execpol        = rmm::exec_policy(stream);
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);

@@ -55,10 +55,12 @@ constexpr type_id to_type_id(parquet::Type physical,
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
   switch (logical) {
-    case parquet::UINT_8:
+    case parquet::UINT_8: return type_id::UINT8;
     case parquet::INT_8: return type_id::INT8;
-    case parquet::UINT_16:
+    case parquet::UINT_16: return type_id::UINT16;
     case parquet::INT_16: return type_id::INT16;
+    case parquet::UINT_32: return type_id::UINT32;
+    case parquet::UINT_64: return type_id::UINT64;
     case parquet::DATE: return type_id::TIMESTAMP_DAYS;
     case parquet::TIMESTAMP_MICROS:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
@@ -126,9 +128,9 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
 {
   int32_t type_width = (physical == parquet::FIXED_LEN_BYTE_ARRAY) ? length : 0;
   int32_t clock_rate = 0;
-  if (column_type_id == type_id::INT8) {
+  if (column_type_id == type_id::INT8 or column_type_id == type_id::UINT8) {
     type_width = 1;  // I32 -> I8
-  } else if (column_type_id == type_id::INT16) {
+  } else if (column_type_id == type_id::INT16 or column_type_id == type_id::UINT16) {
     type_width = 2;  // I32 -> I16
   } else if (column_type_id == type_id::INT32) {
     type_width = 4;  // str -> hash32
@@ -609,7 +611,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _selected_columns = _metadata->select_columns(options.columns, options.use_pandas_metadata);
 
   // Override output timestamp resolution if requested
-  if (options.timestamp_type.id() != EMPTY) { _timestamp_type = options.timestamp_type; }
+  if (options.timestamp_type.id() != type_id::EMPTY) { _timestamp_type = options.timestamp_type; }
 
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.strings_to_categorical;

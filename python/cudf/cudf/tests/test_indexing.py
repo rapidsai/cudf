@@ -8,9 +8,9 @@ import pytest
 import cudf
 from cudf import DataFrame, Series
 from cudf.tests import utils
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import INTEGER_TYPES, assert_eq
 
-index_dtypes = [np.int64, np.int32, np.int16, np.int8]
+index_dtypes = INTEGER_TYPES
 
 
 @pytest.fixture
@@ -90,7 +90,7 @@ def pdf_gdf_multi():
             "list[bool]",
             "numpy.array[bool]",
         ]
-        + ["numpy.array[%s]" % t.__name__ for t in index_dtypes]
+        + ["numpy.array[%s]" % np.dtype(t).type.__name__ for t in index_dtypes]
     ),
 )
 def test_series_indexing(i1, i2, i3):
@@ -902,6 +902,17 @@ def test_series_setitem_dtype(key, value):
 
 
 def test_series_setitem_datetime():
+    psr = pd.Series(["2001", "2002", "2003"], dtype="datetime64[ns]")
+    gsr = cudf.from_pandas(psr)
+
+    psr[0] = np.datetime64("2005")
+    gsr[0] = np.datetime64("2005")
+
+    assert_eq(psr, gsr)
+
+
+@pytest.mark.xfail(reason="Pandas will coerce to object datatype here")
+def test_series_setitem_datetime_coerced():
     psr = pd.Series(["2001", "2002", "2003"], dtype="datetime64[ns]")
     gsr = cudf.from_pandas(psr)
 

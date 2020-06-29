@@ -354,11 +354,16 @@ public final class Table implements AutoCloseable {
   private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols) throws CudfException;
 
+  private static native long[] fullJoin(long leftTable, int[] leftJoinCols, long rightTable,
+                                         int[] rightJoinCols) throws CudfException;
+
   private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
       int[] rightJoinCols) throws CudfException;
 
   private static native long[] leftAntiJoin(long leftTable, int[] leftJoinCols, long rightTable,
       int[] rightJoinCols) throws CudfException;
+
+  private static native long[] crossJoin(long leftTable, long rightTable) throws CudfException;
 
   private static native long[] concatenate(long[] cudfTablePointers) throws CudfException;
 
@@ -933,6 +938,17 @@ public final class Table implements AutoCloseable {
       assert valueTable.columns[i].getType() == this.getColumn(i).getType() :
           "Input and values tables' data types do not match";
     }
+  }
+
+  /**
+   * Joins two tables all of the left against all of the right. Be careful as this
+   * gets very big and you can easily use up all of the GPUs memory.
+   * @param right the right table
+   * @return the joined table.  The order of the columns returned will be left columns,
+   * right columns.
+   */
+  public Table crossJoin(Table right) {
+    return new Table(Table.crossJoin(this.nativeHandle, right.nativeHandle));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1631,6 +1647,21 @@ public final class Table implements AutoCloseable {
     public Table innerJoin(TableOperation rightJoinIndices) {
       return new Table(Table.innerJoin(operation.table.nativeHandle, operation.indices,
           rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
+    }
+
+    /**
+     * Joins two tables on the join columns that are passed in.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).fullJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
+     */
+    public Table fullJoin(TableOperation rightJoinIndices) {
+      return new Table(Table.fullJoin(operation.table.nativeHandle, operation.indices,
+              rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
     }
 
     /**

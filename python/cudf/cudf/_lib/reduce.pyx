@@ -8,6 +8,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.column cimport Column
 from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.move cimport move
 from cudf._lib.aggregation cimport make_aggregation, aggregation
 from libcpp.memory cimport unique_ptr
@@ -31,7 +32,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
     col_dtype = incol.dtype
     if reduction_op in ['sum', 'sum_of_squares', 'product']:
-        col_dtype = np.find_common_type([col_dtype], [np.int64])
+        col_dtype = np.find_common_type([col_dtype], [np.uint64])
     col_dtype = col_dtype if dtype is None else dtype
 
     cdef column_view c_incol_view = incol.view()
@@ -39,7 +40,14 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     cdef unique_ptr[aggregation] c_agg = move(make_aggregation(
         reduction_op, kwargs
     ))
-    cdef type_id tid = np_to_cudf_types[np.dtype(col_dtype)]
+    cdef type_id tid = (
+        <type_id> (
+            <underlying_type_t_type_id> (
+                np_to_cudf_types[np.dtype(col_dtype)]
+            )
+        )
+    )
+
     cdef data_type c_out_dtype = data_type(tid)
 
     # check empty case

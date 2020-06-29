@@ -16,7 +16,7 @@ from pandas.util.testing import (
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import NUMERIC_TYPES, assert_eq
 
 
 def data1():
@@ -246,9 +246,7 @@ def test_issue_165():
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 def test_typecast_from_datetime(data, dtype):
     pd_data = pd.Series(data.copy())
     np_data = np.array(pd_data)
@@ -308,9 +306,7 @@ def test_string_timstamp_typecast_to_different_datetime_resolutions(
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
-@pytest.mark.parametrize(
-    "from_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("from_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize(
     "to_dtype",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
@@ -326,9 +322,7 @@ def test_typecast_to_datetime(data, from_dtype, to_dtype):
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
-@pytest.mark.parametrize(
-    "from_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("from_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize(
     "to_dtype",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
@@ -365,7 +359,7 @@ def test_typecast_from_datetime_to_datetime(data, from_dtype, to_dtype):
 @pytest.mark.parametrize("data", [numerical_data()])
 @pytest.mark.parametrize("nulls", ["some", "all"])
 def test_to_from_pandas_nulls(data, nulls):
-    pd_data = pd.Series(data.copy())
+    pd_data = pd.Series(data.copy().astype("datetime64[ns]"))
     if nulls == "some":
         # Fill half the values with NaT
         pd_data[list(range(0, len(pd_data), 2))] = np.datetime64("nat", "ns")
@@ -422,10 +416,7 @@ def test_datetime_unique(data, nulls):
     expected = psr.unique()
     got = gsr.unique()
 
-    # convert to int64 for equivalence testing
-    np.testing.assert_array_almost_equal(
-        got.to_pandas().astype(int), expected.astype(int)
-    )
+    assert_eq(pd.Series(expected), got.to_pandas())
 
 
 @pytest.mark.parametrize(
