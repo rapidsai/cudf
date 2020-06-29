@@ -19,6 +19,10 @@
 #include <vector>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_uvector.hpp>
+
+using codepoint_metadata_type = uint32_t;
+using aux_codepoint_data_type = uint64_t;
 
 namespace nvtext {
 namespace detail {
@@ -90,13 +94,10 @@ class data_normalizer {
 
  private:
   bool do_lower_case;
+  codepoint_metadata_type const* d_cp_metadata;
+  aux_codepoint_data_type const* d_aux_table;
 
   // TODO: change these to rmm::device_uvectors
-
-  // pointers to device data needed for normalization
-  rmm::device_vector<uint32_t> device_cp_metadata;
-  rmm::device_vector<uint64_t> device_aux_table;
-
   // working memory for the normalization logic
   rmm::device_vector<unsigned char> device_strings;
   rmm::device_vector<uint32_t> device_strings_offsets;

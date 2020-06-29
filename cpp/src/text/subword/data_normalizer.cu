@@ -15,6 +15,7 @@
  */
 
 #include <text/subword/detail/cp_data.h>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/error.hpp>
 #include <text/subword/detail/codepoint_metadata.ah>
 #include <text/subword/detail/data_normalizer.hpp>
@@ -140,8 +141,6 @@ extract_code_points_from_utf8(const unsigned char* strings, const uint32_t start
   return code_point;
 }
 
-}  // namespace
-
 __global__ void kernel_data_normalizer(unsigned char const* strings,
                                        uint32_t const* device_strings_offsets,
                                        size_t const total_bytes,
@@ -205,6 +204,87 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
   BlockStore(temp_storage).Store(block_base, replacement_code_points);
 }
 
+// There are fixed lookup tables that are copied from codepoint_metadata.ah
+// to the GPU. The per-context-cache ensures there is only one copy per context.
+cudf::strings::detail::thread_safe_per_context_cache<codepoint_metadata_type> g_codepoint_metadata;
+cudf::strings::detail::thread_safe_per_context_cache<aux_codepoint_data_type> g_aux_codepoint_data;
+
+/**
+ * @brief Retrieve the code point metadata table.
+ *
+ * Build the code point metadata tables in device memory
+ * using the vector pieces from codepoint_metadata.ah
+ */
+const codepoint_metadata_type* get_codepoint_metadata(cudaStream_t stream)
+{
+  return g_codepoint_metadata.find_or_initialize([stream](void) {
+    codepoint_metadata_type* table =
+      static_cast<codepoint_metadata_type*>(rmm::mr::get_default_resource()->allocate(
+        codepoint_metadata_size * sizeof(codepoint_metadata_type), stream));
+    thrust::fill(rmm::exec_policy(stream)->on(stream),
+                 table + cp_section1_end,
+                 table + codepoint_metadata_size,
+                 codepoint_metadata_default_value);
+    CUDA_TRY(cudaMemcpyAsync(table,
+                             codepoint_metadata,
+                             cp_section1_end * sizeof(codepoint_metadata[0]),  // 1st section
+                             cudaMemcpyHostToDevice,
+                             stream));
+    CUDA_TRY(cudaMemcpyAsync(
+      table + cp_section2_begin,
+      cp_metadata_917505_917999,
+      (cp_section2_end - cp_section2_begin + 1) * sizeof(codepoint_metadata[0]),  // 2nd section
+      cudaMemcpyHostToDevice,
+      stream));
+    return table;
+  });
+}
+
+/**
+ * @brief Retrieve the aux code point data table.
+ *
+ * Build the code point metadata tables in device memory
+ * using the vector pieces from codepoint_metadata.ah
+ */
+const aux_codepoint_data_type* get_aux_codepoint_data(cudaStream_t stream)
+{
+  return g_aux_codepoint_data.find_or_initialize([stream](void) {
+    aux_codepoint_data_type* table =
+      static_cast<aux_codepoint_data_type*>(rmm::mr::get_default_resource()->allocate(
+        aux_codepoint_data_size * sizeof(aux_codepoint_data_type), stream));
+    thrust::fill(rmm::exec_policy(stream)->on(stream),
+                 table + aux_section1_end,
+                 table + aux_codepoint_data_size,
+                 aux_codepoint_default_value);
+    CUDA_TRY(cudaMemcpyAsync(table,
+                             aux_codepoint_data,
+                             aux_section1_end * sizeof(aux_codepoint_data[0]),  // 1st section
+                             cudaMemcpyHostToDevice,
+                             stream));
+    CUDA_TRY(cudaMemcpyAsync(
+      table + aux_section2_begin,
+      aux_cp_data_44032_55203,
+      (aux_section2_end - aux_section2_begin + 1) * sizeof(aux_codepoint_data[0]),  // 2nd section
+      cudaMemcpyHostToDevice,
+      stream));
+    CUDA_TRY(cudaMemcpyAsync(
+      table + aux_section3_begin,
+      aux_cp_data_70475_71099,
+      (aux_section3_end - aux_section3_begin + 1) * sizeof(aux_codepoint_data[0]),  // 3rd section
+      cudaMemcpyHostToDevice,
+      stream));
+    CUDA_TRY(cudaMemcpyAsync(
+      table + aux_section4_begin,
+      aux_cp_data_119134_119232,
+      (aux_section4_end - aux_section4_begin + 1) * sizeof(aux_codepoint_data[0]),  // 4th section
+      cudaMemcpyHostToDevice,
+      stream));
+    return table;
+  });
+}
+
+}  // namespace
+
 data_normalizer::data_normalizer(uint32_t max_num_strings,
                                  uint32_t max_num_chars,
                                  bool do_lower_case,
@@ -212,55 +292,10 @@ data_normalizer::data_normalizer(uint32_t max_num_strings,
   : do_lower_case(do_lower_case),
     device_strings_offsets(max_num_strings + 1),
     device_strings(max_num_chars),
-    device_cp_metadata(codepoint_metadata_size),
-    device_aux_table(aux_codepoint_data_size)
+    device_num_selected(1)
 {
-  // build the code point metadata tables in device memory
-  // using the vector pieces from codepoint_metadata.ah
-  auto execpol = rmm::exec_policy(stream);
-  thrust::fill(execpol->on(stream),
-               device_cp_metadata.begin() + cp_section1_end,
-               device_cp_metadata.end(),
-               codepoint_metadata_default_value);
-  CUDA_TRY(cudaMemcpyAsync(device_cp_metadata.data().get(),
-                           codepoint_metadata,
-                           cp_section1_end * sizeof(codepoint_metadata[0]),  // 1st section
-                           cudaMemcpyHostToDevice,
-                           stream));
-  CUDA_TRY(cudaMemcpyAsync(
-    device_cp_metadata.data().get() + cp_section2_begin,
-    cp_metadata_917505_917999,
-    (cp_section2_end - cp_section2_begin + 1) * sizeof(codepoint_metadata[0]),  // 2nd section
-    cudaMemcpyHostToDevice,
-    stream));
-
-  thrust::fill(execpol->on(stream),
-               device_aux_table.begin() + aux_section1_end,
-               device_aux_table.end(),
-               aux_codepoint_default_value);
-  CUDA_TRY(cudaMemcpyAsync(device_aux_table.data().get(),
-                           aux_codepoint_data,
-                           aux_section1_end * sizeof(aux_codepoint_data[0]),  // 1st section
-                           cudaMemcpyHostToDevice,
-                           stream));
-  CUDA_TRY(cudaMemcpyAsync(
-    device_aux_table.data().get() + aux_section2_begin,
-    aux_cp_data_44032_55203,
-    (aux_section2_end - aux_section2_begin + 1) * sizeof(aux_codepoint_data[0]),  // 2nd section
-    cudaMemcpyHostToDevice,
-    stream));
-  CUDA_TRY(cudaMemcpyAsync(
-    device_aux_table.data().get() + aux_section3_begin,
-    aux_cp_data_70475_71099,
-    (aux_section3_end - aux_section3_begin + 1) * sizeof(aux_codepoint_data[0]),  // 3rd section
-    cudaMemcpyHostToDevice,
-    stream));
-  CUDA_TRY(cudaMemcpyAsync(
-    device_aux_table.data().get() + aux_section4_begin,
-    aux_cp_data_119134_119232,
-    (aux_section4_end - aux_section4_begin + 1) * sizeof(aux_codepoint_data[0]),  // 4th section
-    cudaMemcpyHostToDevice,
-    stream));
+  d_cp_metadata = detail::get_codepoint_metadata(stream);
+  d_aux_table   = detail::get_aux_codepoint_data(stream);
 
   size_t max_BLOCKS               = (max_num_chars + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
   size_t max_threads_on_device    = max_BLOCKS * THREADS_PER_BLOCK;
@@ -289,7 +324,6 @@ data_normalizer::data_normalizer(uint32_t max_num_strings,
                         stream);
   max_cub_storage_bytes = std::max(temp_storage_scan_bytes, temp_storage_select_bytes);
   cub_temp_storage.resize(max_cub_storage_bytes);
-  device_num_selected.resize(1);
 }
 
 std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(const char* d_strings,
@@ -317,8 +351,8 @@ std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(const cha
     reinterpret_cast<const unsigned char*>(d_strings),
     device_strings_offsets.data().get(),
     bytes_count,
-    device_cp_metadata.data().get(),
-    device_aux_table.data().get(),
+    d_cp_metadata,
+    d_aux_table,
     do_lower_case,
     num_strings,
     device_code_points.data().get(),
