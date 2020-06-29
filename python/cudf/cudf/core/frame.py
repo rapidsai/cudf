@@ -186,17 +186,25 @@ class Frame(libcudf.table.Table):
             if 1 == first_data_column_position:
                 table_index = as_index(cols[0])
             elif first_data_column_position > 1:
-                table_index = libcudf.table.Table(data=dict(zip(
-                    indices[:first_data_column_position],
-                    cols[:first_data_column_position]
-                )))
-            tables.append(libcudf.table.Table(
-                data=dict(zip(
-                    indices[first_data_column_position:],
-                    cols[first_data_column_position:]
-                )),
-                index=table_index
-            ))
+                table_index = libcudf.table.Table(
+                    data=dict(
+                        zip(
+                            indices[:first_data_column_position],
+                            cols[:first_data_column_position],
+                        )
+                    )
+                )
+            tables.append(
+                libcudf.table.Table(
+                    data=dict(
+                        zip(
+                            indices[first_data_column_position:],
+                            cols[first_data_column_position:],
+                        )
+                    ),
+                    index=table_index,
+                )
+            )
 
         # Concatenate the Tables
         out = cls._from_table(
