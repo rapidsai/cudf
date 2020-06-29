@@ -33,7 +33,7 @@ from cudf.utils.dtypes import (
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
-    min_scalar_type,
+    min_unsigned_type,
     np_to_pa_dtype,
 )
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
@@ -887,12 +887,14 @@ class ColumnBase(Column, Serializable):
                 ordered=ordered,
             ).astype(dtype)
 
-        labels, cats = sr.factorize()
+        cats = sr.unique().astype(sr.dtype)
+        label_dtype = min_unsigned_type(len(cats))
+        labels = sr.label_encoding(cats=cats, dtype=label_dtype, na_sentinel=1)
 
         # columns include null index in factorization; remove:
         if self.has_nulls:
             cats = cats.dropna()
-            min_type = min_scalar_type(len(cats), 8)
+            min_type = min_unsigned_type(len(cats), 8)
             labels = labels - 1
             if np.dtype(min_type).itemsize < labels.dtype.itemsize:
                 labels = labels.astype(min_type)
@@ -1174,6 +1176,11 @@ def build_categorical_column(
         Indicates whether the categories are ordered
     """
 
+    codes_dtype = min_unsigned_type(len(categories))
+    codes = as_column(codes)
+    if codes.dtype != codes_dtype:
+        codes = codes.astype(codes_dtype)
+
     dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
 
     return build_column(
@@ -1183,7 +1190,7 @@ def build_categorical_column(
         size=size,
         offset=offset,
         null_count=null_count,
-        children=(as_column(codes),),
+        children=(codes,),
     )
 
 
@@ -1328,7 +1335,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
-            codes = as_column(arbitrary.indices)
+            codes_dtype = min_unsigned_type(len(arbitrary.indices))
+            codes = as_column(arbitrary.indices).astype(codes_dtype)
             if isinstance(arbitrary.dictionary, pa.NullArray):
                 categories = as_column([], dtype="object")
             else:

@@ -13,6 +13,7 @@ from cudf._lib.transform import bools_to_mask
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.dtypes import CategoricalDtype
+from cudf.utils.dtypes import min_signed_type, min_unsigned_type
 
 
 class CategoricalAccessor(object):
@@ -658,9 +659,14 @@ class CategoricalAccessor(object):
             )
 
         cur_codes = self.codes
+        max_cat_size = (
+            len(cur_cats) if len(cur_cats) > len(new_cats) else len(new_cats)
+        )
+        out_code_dtype = min_unsigned_type(max_cat_size)
+
         cur_order = cupy.arange(len(cur_codes))
-        old_codes = cupy.arange(len(cur_cats), dtype=cur_codes.dtype)
-        new_codes = cupy.arange(len(new_cats), dtype=cur_codes.dtype)
+        old_codes = cupy.arange(len(cur_cats), dtype=out_code_dtype)
+        new_codes = cupy.arange(len(new_cats), dtype=out_code_dtype)
 
         new_df = cudf.DataFrame({"new_codes": new_codes, "cats": new_cats})
         old_df = cudf.DataFrame({"old_codes": old_codes, "cats": cur_cats})
@@ -932,7 +938,8 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def to_pandas(self, index=None):
-        codes = self.cat().codes.fillna(-1).to_array()
+        signed_dtype = min_signed_type(len(self.categories))
+        codes = self.cat().codes.astype(signed_dtype).fillna(-1).to_array()
         categories = self.categories.to_pandas()
         data = pd.Categorical.from_codes(
             codes, categories=categories, ordered=self.ordered
@@ -940,10 +947,11 @@ class CategoricalColumn(column.ColumnBase):
         return pd.Series(data, index=index)
 
     def to_arrow(self):
+        signed_codes_dtypes = min_signed_type(len(self.categories))
         return pa.DictionaryArray.from_arrays(
             from_pandas=True,
             ordered=self.ordered,
-            indices=self.as_numerical.to_arrow(),
+            indices=self.as_numerical.astype(signed_codes_dtypes).to_arrow(),
             dictionary=self.categories.to_arrow(),
         )
 

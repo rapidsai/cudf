@@ -138,6 +138,7 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+option(BUILD_CUDF_KAFKA "Configure CMake to build cudf_kafka" OFF)
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
@@ -777,3 +778,72 @@ add_custom_command(OUTPUT CUDF_DOXYGEN
                    VERBATIM)
 
 add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
+
+
+####################################################################################################
+# - cudf_kafka - OFF by default due to increased number of dependencies
+if(BUILD_CUDF_KAFKA)
+
+    # cudf_kafka library
+    add_library(libcudf_kafka
+        libcudf_kafka/src/kafka_consumer.cpp
+    )
+
+    # Include paths
+    include_directories("${CMAKE_SOURCE_DIR}/libcudf_kafka/include"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/include/cudf")
+    
+    # Rename installation to proper name for later finding
+    set_target_properties(libcudf_kafka PROPERTIES OUTPUT_NAME "cudf_kafka")
+    set_target_properties(libcudf_kafka PROPERTIES BUILD_RPATH "\$ORIGIN")
+
+    ###################################################################################################
+    # cudf_kafka - librdkafka -------------------------------------------------------------------------
+
+    find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
+    find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
+
+    message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
+    message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
+
+    target_link_libraries(libcudf_kafka ${RDKAFKA++_LIBRARY})
+    include_directories("${RDKAFKA_INCLUDE}")
+
+    ###################################################################################################
+    # - cudf_kafka Install ----------------------------------------------------------------------------
+    target_link_libraries(libcudf_kafka cudf)
+
+    install(TARGETS libcudf_kafka
+            DESTINATION libcudf_kafka/lib
+            COMPONENT libcudf_kafka)
+
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/include
+            DESTINATION include
+            COMPONENT libcudf_kafka)
+
+    add_custom_target(install_libcudf_kafka
+            COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=libcudf_kafka -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+            DEPENDS libcudf_kafka)
+
+    ####################################################################################################
+    # - cudf_kafka Tests
+    if(BUILD_TESTS)
+        if(GTEST_FOUND)
+            message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+            include_directories(${GTEST_INCLUDE_DIR})
+            add_subdirectory(${CMAKE_SOURCE_DIR}/libcudf_kafka/tests)
+        else()
+            message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+        endif(GTEST_FOUND)
+    endif(BUILD_TESTS)
+        
+    message(STATUS "CUDF_KAFKA_TEST_LIST set to: ${CUDF_KAFKA_TEST_LIST}")
+
+    add_custom_target(build_tests_libcudf_kafka
+                      DEPENDS ${CUDF_KAFKA_TEST_LIST})
+
+    add_custom_target(test_libcudf_kafka
+                      COMMAND ctest
+                      DEPENDS build_tests_libcudf_kafka)
+
+endif(BUILD_CUDF_KAFKA)
