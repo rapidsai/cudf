@@ -296,6 +296,7 @@ def test_dataframe_drop_method():
     assert tuple(df.drop("a", axis=1).columns) == ("b", "c")
     assert tuple(df.columns) == ("a", "b", "c")
     assert tuple(df.drop(["a", "b"]).columns) == ("c",)
+    assert tuple(df.drop(["a", "a", "b"]).columns) == ("c",)
     assert tuple(df.columns) == ("a", "b", "c")
     assert tuple(df.drop(["a", "b"]).columns) == ("c",)
     assert tuple(df.columns) == ("a", "b", "c")
@@ -1511,13 +1512,6 @@ def test_dataframe_transpose_category(num_cols, num_rows):
     got_function = gdf.transpose()
     got_property = gdf.T
 
-    # materialize our categoricals because pandas
-    for name, col in got_function._data.items():
-        got_function[name] = col.astype(col.dtype.type)
-
-    for name, col in got_property._data.items():
-        got_property[name] = col.astype(col.dtype.type)
-
     expect = pdf.transpose()
 
     assert_eq(expect, got_function.to_pandas())
@@ -2399,6 +2393,105 @@ def test_dataframe_empty_sort_index():
     got = gdf.sort_index()
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("inplace", [True, False])
+@pytest.mark.parametrize("na_position", ["first", "last"])
+def test_dataframe_sort_index(
+    axis, ascending, inplace, ignore_index, na_position
+):
+    pdf = pd.DataFrame(
+        {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
+        index=[3.0, 1.0, np.nan],
+    )
+    gdf = DataFrame.from_pandas(pdf)
+
+    expected = pdf.sort_index(
+        axis=axis,
+        ascending=ascending,
+        ignore_index=ignore_index,
+        inplace=inplace,
+        na_position=na_position,
+    )
+    got = gdf.sort_index(
+        axis=axis,
+        ascending=ascending,
+        ignore_index=ignore_index,
+        inplace=inplace,
+        na_position=na_position,
+    )
+
+    if inplace is True:
+        assert_eq(pdf, gdf)
+    else:
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
+@pytest.mark.parametrize(
+    "level",
+    [
+        0,
+        "b",
+        1,
+        ["b"],
+        "a",
+        ["a", "b"],
+        ["b", "a"],
+        [0, 1],
+        [1, 0],
+        [0, 2],
+        None,
+    ],
+)
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("inplace", [True, False])
+@pytest.mark.parametrize("na_position", ["first", "last"])
+def test_dataframe_mulitindex_sort_index(
+    axis, level, ascending, inplace, ignore_index, na_position
+):
+    pdf = pd.DataFrame(
+        {
+            "b": [1.0, 3.0, np.nan],
+            "a": [1, 4, 3],
+            1: ["a", "b", "c"],
+            "e": [3, 1, 4],
+            "d": [1, 2, 8],
+        }
+    ).set_index(["b", "a", 1])
+    gdf = DataFrame.from_pandas(pdf)
+
+    # ignore_index is supported in v.1.0
+    expected = pdf.sort_index(
+        axis=axis,
+        level=level,
+        ascending=ascending,
+        inplace=inplace,
+        na_position=na_position,
+    )
+    if ignore_index is True:
+        expected = expected
+    got = gdf.sort_index(
+        axis=axis,
+        level=level,
+        ascending=ascending,
+        ignore_index=ignore_index,
+        inplace=inplace,
+        na_position=na_position,
+    )
+
+    if inplace is True:
+        if ignore_index is True:
+            pdf = pdf.reset_index(drop=True)
+        assert_eq(pdf, gdf)
+    else:
+        if ignore_index is True:
+            expected = expected.reset_index(drop=True)
+        assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("dtype", dtypes + ["category"])
@@ -3298,13 +3391,11 @@ def test_series_astype_numeric_to_other(dtype, as_dtype):
 def test_series_astype_string_to_other(as_dtype):
     if "datetime64" in as_dtype:
         data = ["2001-01-01", "2002-02-02", "2000-01-05"]
-        kwargs = {"format": "%Y-%m-%d"}
     else:
         data = ["1", "2", "3"]
-        kwargs = {}
     psr = pd.Series(data)
     gsr = gd.from_pandas(psr)
-    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, **kwargs))
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
 
 
 @pytest.mark.parametrize(
@@ -3315,14 +3406,30 @@ def test_series_astype_string_to_other(as_dtype):
         "datetime64[ms]",
         "datetime64[us]",
         "datetime64[ns]",
-        "str",
     ],
 )
 def test_series_astype_datetime_to_other(as_dtype):
     data = ["2001-01-01", "2002-02-02", "2001-01-05"]
     psr = pd.Series(data)
     gsr = gd.from_pandas(psr)
-    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, format="%Y-%m-%d"))
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+@pytest.mark.parametrize(
+    "inp",
+    [
+        ("datetime64[ns]", "2011-01-01 00:00:00.000000000"),
+        ("datetime64[us]", "2011-01-01 00:00:00.000000"),
+        ("datetime64[ms]", "2011-01-01 00:00:00.000"),
+        ("datetime64[s]", "2011-01-01 00:00:00"),
+    ],
+)
+def test_series_astype_datetime_to_string(inp):
+    dtype, expect = inp
+    base_date = "2011-01-01"
+    sr = Series([base_date], dtype=dtype)
+    got = sr.astype(str)[0]
+    assert expect == got
 
 
 @pytest.mark.parametrize(
@@ -3342,23 +3449,44 @@ def test_series_astype_datetime_to_other(as_dtype):
 def test_series_astype_categorical_to_other(as_dtype):
     if "datetime64" in as_dtype:
         data = ["2001-01-01", "2002-02-02", "2000-01-05", "2001-01-01"]
-        kwargs = {"format": "%Y-%m-%d"}
     else:
         data = [1, 2, 3, 1]
-        kwargs = {}
     psr = pd.Series(data, dtype="category")
     gsr = gd.from_pandas(psr)
-    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, **kwargs))
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
 
 
 @pytest.mark.parametrize("ordered", [True, False])
 def test_series_astype_to_categorical_ordered(ordered):
     psr = pd.Series([1, 2, 3, 1], dtype="category")
     gsr = gd.from_pandas(psr)
-    assert_eq(
-        psr.astype("int32", ordered=ordered),
-        gsr.astype("int32", ordered=ordered),
+
+    ordered_dtype_pd = pd.CategoricalDtype(
+        categories=[1, 2, 3], ordered=ordered
     )
+    ordered_dtype_gd = gd.CategoricalDtype.from_pandas(ordered_dtype_pd)
+    assert_eq(
+        psr.astype("int32").astype(ordered_dtype_pd).astype("int32"),
+        gsr.astype("int32").astype(ordered_dtype_gd).astype("int32"),
+    )
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_series_astype_cat_ordered_to_unordered(ordered):
+    pd_dtype = pd.CategoricalDtype(categories=[1, 2, 3], ordered=ordered)
+    pd_to_dtype = pd.CategoricalDtype(
+        categories=[1, 2, 3], ordered=not ordered
+    )
+    gd_dtype = gd.CategoricalDtype.from_pandas(pd_dtype)
+    gd_to_dtype = gd.CategoricalDtype.from_pandas(pd_to_dtype)
+
+    psr = pd.Series([1, 2, 3], dtype=pd_dtype)
+    gsr = gd.Series([1, 2, 3], dtype=gd_dtype)
+
+    expect = psr.astype(pd_to_dtype)
+    got = gsr.astype(gd_to_dtype)
+
+    assert_eq(expect, got)
 
 
 def test_series_astype_null_cases():
@@ -3383,7 +3511,7 @@ def test_series_astype_null_cases():
 
     assert_eq(
         gd.Series(data, dtype="datetime64[ms]"),
-        gd.Series(data).astype("datetime64[ms]", format="%Y-%m-%d"),
+        gd.Series(data).astype("datetime64[ms]"),
     )
 
     # categorical to other
@@ -3399,9 +3527,7 @@ def test_series_astype_null_cases():
 
     assert_eq(
         gd.Series(data, dtype="datetime64[ms]"),
-        gd.Series(data, dtype="category").astype(
-            "datetime64[ms]", format="%Y-%m-%d"
-        ),
+        gd.Series(data, dtype="category").astype("datetime64[ms]"),
     )
 
     # string to other
@@ -3416,7 +3542,7 @@ def test_series_astype_null_cases():
             dtype="datetime64[ms]",
         ),
         gd.Series(["2001-01-01", "2001-02-01", None, "2001-03-01"]).astype(
-            "datetime64[ms]", format="%Y-%m-%d"
+            "datetime64[ms]"
         ),
     )
 
@@ -3426,13 +3552,14 @@ def test_series_astype_null_cases():
     )
 
     # datetime to other
-    data = ["2001-01-01", "2001-02-01", None, "2001-03-01"]
-
+    data = [
+        "2001-01-01 00:00:00.000000",
+        "2001-02-01 00:00:00.000000",
+        None,
+        "2001-03-01 00:00:00.000000",
+    ]
     assert_eq(
-        gd.from_pandas(pd.Series(data)),
-        gd.from_pandas(pd.Series(data, dtype="datetime64[ns]")).astype(
-            "str", format="%Y-%m-%d"
-        ),
+        Series(data), Series(data, dtype="datetime64[us]").astype("str"),
     )
 
     assert_eq(
@@ -4024,11 +4151,17 @@ def test_isin_dataframe(data, values):
         with pytest.raises(TypeError):
             gdf.isin(values)
     else:
-        expected = pdf.isin(values)
+        try:
+            expected = pdf.isin(values)
+        except ValueError as e:
+            if str(e) == "Lengths must match.":
+                # xref https://github.com/pandas-dev/pandas/issues/34256
+                pytest.xfail(
+                    "https://github.com/pandas-dev/pandas/issues/34256"
+                )
         if isinstance(values, (pd.DataFrame, pd.Series)):
             values = gd.from_pandas(values)
         got = gdf.isin(values)
-
         assert_eq(got, expected)
 
 
@@ -4158,16 +4291,12 @@ def test_df_astype_string_to_other(as_dtype):
         # change None to "NaT" after this issue is fixed:
         # https://github.com/rapidsai/cudf/issues/5117
         data = ["2001-01-01", "2002-02-02", "2000-01-05", None]
-        kwargs = {"format": "%Y-%m-%d"}
     elif as_dtype == "int32":
         data = [1, 2, 3]
-        kwargs = {}
     elif as_dtype == "category":
         data = ["1", "2", "3", None]
-        kwargs = {}
     elif "float" in as_dtype:
         data = [1.0, 2.0, 3.0, np.nan]
-        kwargs = {}
 
     insert_data = Series.from_pandas(pd.Series(data, dtype="str"))
     expect_data = Series(data, dtype=as_dtype)
@@ -4181,7 +4310,7 @@ def test_df_astype_string_to_other(as_dtype):
     expect["foo"] = expect_data
     expect["bar"] = expect_data
 
-    got = gdf.astype(as_dtype, **kwargs)
+    got = gdf.astype(as_dtype)
     assert_eq(expect, got)
 
 
@@ -4197,7 +4326,12 @@ def test_df_astype_string_to_other(as_dtype):
     ],
 )
 def test_df_astype_datetime_to_other(as_dtype):
-    data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
+    data = [
+        "1991-11-20 00:00:00.000",
+        "2004-12-04 00:00:00.000",
+        "2016-09-13 00:00:00.000",
+        None,
+    ]
 
     gdf = DataFrame()
     expect = DataFrame()
@@ -4222,7 +4356,7 @@ def test_df_astype_datetime_to_other(as_dtype):
         expect["foo"] = Series(data, dtype=as_dtype)
         expect["bar"] = Series(data, dtype=as_dtype)
 
-    got = gdf.astype(as_dtype, format="%Y-%m-%d")
+    got = gdf.astype(as_dtype)
 
     assert_eq(expect, got)
 
@@ -4243,16 +4377,14 @@ def test_df_astype_datetime_to_other(as_dtype):
 def test_df_astype_categorical_to_other(as_dtype):
     if "datetime64" in as_dtype:
         data = ["2001-01-01", "2002-02-02", "2000-01-05", "2001-01-01"]
-        kwargs = {"format": "%Y-%m-%d"}
     else:
         data = [1, 2, 3, 1]
-        kwargs = {}
     psr = pd.Series(data, dtype="category")
     pdf = pd.DataFrame()
     pdf["foo"] = psr
     pdf["bar"] = psr
     gdf = DataFrame.from_pandas(pdf)
-    assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype, **kwargs))
+    assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype))
 
 
 @pytest.mark.parametrize("ordered", [True, False])
@@ -4263,9 +4395,14 @@ def test_df_astype_to_categorical_ordered(ordered):
     pdf["bar"] = psr
     gdf = DataFrame.from_pandas(pdf)
 
+    ordered_dtype_pd = pd.CategoricalDtype(
+        categories=[1, 2, 3], ordered=ordered
+    )
+    ordered_dtype_gd = gd.CategoricalDtype.from_pandas(ordered_dtype_pd)
+
     assert_eq(
-        gdf.astype("int32", ordered=ordered),
-        gdf.astype("int32", ordered=ordered),
+        pdf.astype(ordered_dtype_pd).astype("int32"),
+        gdf.astype(ordered_dtype_gd).astype("int32"),
     )
 
 
@@ -4965,14 +5102,19 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
         if pd.api.types.is_categorical_dtype(expect_where):
             np.testing.assert_array_equal(
                 expect_where.cat.codes,
-                got_where.cat.codes.fillna(-1).to_array(),
+                got_where.cat.codes.astype(expect_where.cat.codes.dtype)
+                .fillna(-1)
+                .to_array(),
             )
             assert tuple(expect_where.cat.categories) == tuple(
                 got_where.cat.categories
             )
 
             np.testing.assert_array_equal(
-                expect_mask.cat.codes, got_mask.cat.codes.fillna(-1).to_array()
+                expect_mask.cat.codes,
+                got_mask.cat.codes.astype(expect_mask.cat.codes.dtype)
+                .fillna(-1)
+                .to_array(),
             )
             assert tuple(expect_mask.cat.categories) == tuple(
                 got_mask.cat.categories
@@ -5410,20 +5552,28 @@ def test_dataframe_init_1d_list(data):
     ],
 )
 def test_dataframe_init_from_arrays_cols(data, cols, index):
+
+    gd_data = data
+    if isinstance(data, cupy.core.ndarray):
+        # pandas can't handle cupy arrays in general
+        pd_data = data.get()
+    else:
+        pd_data = data
+
     # verify with columns & index
-    pdf = pd.DataFrame(data, columns=cols, index=index)
-    gdf = DataFrame(data, columns=cols, index=index)
+    pdf = pd.DataFrame(pd_data, columns=cols, index=index)
+    gdf = DataFrame(gd_data, columns=cols, index=index)
 
     assert_eq(pdf, gdf, check_dtype=False)
 
     # verify with columns
-    pdf = pd.DataFrame(data, columns=cols)
-    gdf = DataFrame(data, columns=cols)
+    pdf = pd.DataFrame(pd_data, columns=cols)
+    gdf = DataFrame(gd_data, columns=cols)
 
     assert_eq(pdf, gdf, check_dtype=False)
 
-    pdf = pd.DataFrame(data)
-    gdf = DataFrame(data)
+    pdf = pd.DataFrame(pd_data)
+    gdf = DataFrame(gd_data)
 
     assert_eq(pdf, gdf, check_dtype=False)
 
@@ -5994,3 +6144,34 @@ def test_cudf_isclose_different_index():
         [False, True, True, False, True, False], index=s1.index
     )
     assert_eq(expected, gd.isclose(s1, s2))
+
+
+def test_cudf_arrow_array_error():
+    df = gd.DataFrame({"a": [1, 2, 3]})
+
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow Table via __arrow_array__"
+        " is not allowed, To explicitly construct a PyArrow Table, consider "
+        "using .to_arrow()",
+    ):
+        df.__arrow_array__()
+
+    sr = gd.Series([1, 2, 3])
+
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow Array via __arrow_array__"
+        " is not allowed, To explicitly construct a PyArrow Array, consider "
+        "using .to_arrow()",
+    ):
+        sr.__arrow_array__()
+
+    sr = gd.Series(["a", "b", "c"])
+    with pytest.raises(
+        TypeError,
+        match="Implicit conversion to a host PyArrow Array via __arrow_array__"
+        " is not allowed, To explicitly construct a PyArrow Array, consider "
+        "using .to_arrow()",
+    ):
+        sr.__arrow_array__()

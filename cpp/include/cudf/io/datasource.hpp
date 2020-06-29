@@ -177,6 +177,27 @@ class datasource {
    * @return bool True if there is data, False otherwise
    */
   virtual bool is_empty() const { return size() == 0; }
+
+  /**
+   * @brief Implementation for non owning buffer where datasource holds buffer until destruction.
+   *
+   * @param[in] data Address of the buffer source data
+   * @param[in] size Bytes of the buffer size
+   **/
+  class non_owning_buffer : public buffer {
+   public:
+    non_owning_buffer() : _data(0), _size(0) {}
+
+    non_owning_buffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
+
+    size_t size() const override { return _size; }
+
+    const uint8_t* data() const override { return _data; }
+
+   private:
+    uint8_t* const _data;
+    size_t const _size;
+  };
 };
 
 }  // namespace io

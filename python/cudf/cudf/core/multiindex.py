@@ -20,21 +20,77 @@ class MultiIndex(Index):
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
 
-    Properties
-    ---
-    levels: Labels for each category in the index hierarchy.
-    codes: Assignment of individual items into the categories of the hierarchy.
-    names: Name for each level
+    Parameters
+    ----------
+    levels : sequence of arrays
+        The unique labels for each level.
+    labels : sequence of arrays
+        labels is depreciated, please use levels
+    codes: sequence of arrays
+        Integers for each level designating which label at each location.
+    sortorder : optional int
+        Not yet supported
+    names: optional sequence of objects
+        Names for each of the index levels.
+    copy : bool, default False
+        Copy the levels and codes.
+    verify_integrity : bool, default True
+        Check that the levels/codes are consistent and valid.
+        Not yet supported
+
+    Returns
+    -------
+    MultiIndex
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.MultiIndex(
+    ... levels=[[1, 2], ['blue', 'red']], codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+    MultiIndex(levels=[0    1
+    1    2
+    dtype: int64, 0    blue
+    1     red
+    dtype: object],
+    codes=   0  1
+    0  0  1
+    1  0  0
+    2  1  1
+    3  1  0)
+
     """
 
     def __new__(
-        cls, levels=None, codes=None, labels=None, names=None, **kwargs
-    ):
+        cls,
+        levels=None,
+        codes=None,
+        sortorder=None,
+        labels=None,
+        names=None,
+        dtype=None,
+        copy=False,
+        name=None,
+        **kwargs,
+    ) -> "MultiIndex":
         from cudf.core.series import Series
         from cudf import DataFrame
 
-        out = Frame().__new__(cls)
+        if sortorder is not None:
+            raise NotImplementedError("sortorder is not yet supported")
+
+        if name is not None:
+            raise NotImplementedError(
+                "Use `names`, `name` is not yet supported"
+            )
+
+        out = Frame.__new__(cls)
         super(Index, out).__init__()
+
+        if copy:
+            if isinstance(codes, DataFrame):
+                codes = codes.copy()
+            if len(levels) > 0 and isinstance(levels[0], Series):
+                levels = [level.copy() for level in levels]
 
         out._name = None
 
@@ -69,14 +125,7 @@ class MultiIndex(Index):
             return out
 
         # name setup
-        if isinstance(
-            names,
-            (
-                Sequence,
-                pd.core.indexes.frozen.FrozenNDArray,
-                pd.core.indexes.frozen.FrozenList,
-            ),
-        ):
+        if isinstance(names, (Sequence, pd.core.indexes.frozen.FrozenList,),):
             if sum(x is None for x in names) > 1:
                 column_names = list(range(len(codes)))
             else:
@@ -90,7 +139,7 @@ class MultiIndex(Index):
             raise ValueError("Must pass non-zero number of levels/codes")
 
         if not isinstance(codes, DataFrame) and not isinstance(
-            codes[0], (Sequence, pd.core.indexes.frozen.FrozenNDArray)
+            codes[0], (Sequence, np.ndarray)
         ):
             raise TypeError("Codes is not a Sequence of sequences")
 
@@ -254,6 +303,22 @@ class MultiIndex(Index):
         """Dimension of the data. For MultiIndex ndim is always 2.
         """
         return 2
+
+    def _get_level_label(self, level):
+        """ Get name of the level.
+
+        Parameters
+        ----------
+        level : int or level name
+            if level is name, it will be returned as it is
+            else if level is index of the level, then level
+            label will be returned as per the index.
+        """
+
+        if level in self._data.names:
+            return level
+        else:
+            return self._data.names[level]
 
     def isin(self, values, level=None):
         """Return a boolean array where the index values are in values.
@@ -483,7 +548,9 @@ class MultiIndex(Index):
     def _get_row_major(self, df, row_tuple):
         from cudf import Series
 
-        if pd.api.types.is_bool_dtype(row_tuple):
+        if pd.api.types.is_bool_dtype(
+            list(row_tuple) if isinstance(row_tuple, tuple) else row_tuple
+        ):
             return df[row_tuple]
 
         valid_indices = self._get_valid_indices_by_tuple(
@@ -807,8 +874,8 @@ class MultiIndex(Index):
             )
         return self._is_monotonic_decreasing
 
-    def argsort(self, ascending=True):
-        return self._source_data.argsort(ascending=ascending)
+    def argsort(self, ascending=True, **kwargs):
+        return self._source_data.argsort(ascending=ascending, **kwargs)
 
     def unique(self):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())
