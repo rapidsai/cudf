@@ -324,20 +324,18 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
                                    ptr_length_pair& offsets_and_length,
                                    cudaStream_t stream)
 {
-  uint32_t* device_code_points = cp_and_length.gpu_ptr;
-  size_t num_code_points       = cp_and_length.length;
-
+  uint32_t* device_code_points     = cp_and_length.gpu_ptr;
+  size_t const num_code_points     = cp_and_length.length;
   uint32_t* device_strings_offsets = offsets_and_length.gpu_ptr;
-  uint32_t num_strings             = offsets_and_length.length - 1;
+  uint32_t const num_strings       = offsets_and_length.length - 1;
 
   // make device_start_word_indices and device_end_word_indices contiguous
   uint32_t* device_start_word_indices = device_word_indices.data();
   uint32_t* device_end_word_indices   = device_start_word_indices + num_code_points;
 
-  uint32_t total_threads               = num_code_points;
-  constexpr uint32_t threads_per_block = 64;
-  uint32_t num_blocks = (total_threads + threads_per_block - 1) / threads_per_block;
-  detail::init_data_and_mark_word_start_and_ends<<<num_blocks, threads_per_block, 0, stream>>>(
+  uint32_t const total_threads = num_code_points;
+  uint32_t const num_blocks    = (total_threads + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+  detail::init_data_and_mark_word_start_and_ends<<<num_blocks, THREADS_PER_BLOCK, 0, stream>>>(
     device_code_points,
     device_start_word_indices,
     device_end_word_indices,
@@ -346,8 +344,8 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
     device_tokens_per_word.data());
   CHECK_CUDA(stream);
 
-  uint32_t word_split_blocks = (num_strings + threads_per_block - 1) / threads_per_block;
-  detail::mark_string_start_and_ends<<<word_split_blocks, threads_per_block, 0, stream>>>(
+  uint32_t const word_split_blocks = (num_strings + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+  detail::mark_string_start_and_ends<<<word_split_blocks, THREADS_PER_BLOCK, 0, stream>>>(
     device_code_points,
     device_strings_offsets,
     device_start_word_indices,
@@ -360,7 +358,7 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
   // the fact that the start_word_indices and the end_word indices are contiguous to only launch one
   // device select kernel.
   // Create a selection op for all device selects
-  static NotEqual select_op(std::numeric_limits<uint32_t>::max());
+  NotEqual const select_op(std::numeric_limits<uint32_t>::max());
   cub::DeviceSelect::If(cub_temp_storage.data(),
                         max_cub_storage_bytes,
                         device_start_word_indices,  // input
@@ -382,9 +380,8 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
   // We need to change the end_word_indices pointer after the selection is complete
   device_end_word_indices = device_start_word_indices + num_words;
 
-  const uint32_t wp_threads_per_block = 64;
-  const uint32_t num_wp_blocks = (num_words + wp_threads_per_block - 1) / wp_threads_per_block;
-  detail::kernel_wordpiece_tokenizer<<<num_wp_blocks, wp_threads_per_block, 0, stream>>>(
+  uint32_t const num_wp_blocks = (num_words + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+  detail::kernel_wordpiece_tokenizer<<<num_wp_blocks, THREADS_PER_BLOCK, 0, stream>>>(
     device_code_points,
     vocab_table.table->view().data<uint64_t>(),             // device_hash_table.data().get(),
     vocab_table.bin_coefficients->view().data<uint64_t>(),  // device_bin_coefficients.data().get(),
@@ -424,8 +421,8 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
                                 stream);
   CHECK_CUDA(stream);
 
-  auto execpol = rmm::exec_policy(stream);
-  thrust::for_each_n(execpol->on(stream),
+  // Update the device_strings_offsets using the token_id_counts
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                      thrust::make_counting_iterator<uint32_t>(1),
                      num_strings,
                      update_strings_lengths_fn{token_id_counts, device_strings_offsets});

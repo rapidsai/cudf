@@ -136,13 +136,13 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   cudaStream_t stream,
                                   rmm::mr::device_memory_resource* mr)
 {
-  auto strings_count = strings.size();
-  auto offsets       = strings.offsets();
-  auto d_offsets     = offsets.data<uint32_t>() + strings.offset();
-  auto offset        = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);
-  auto chars_bytes =
+  auto const strings_count = strings.size();
+  auto const offsets       = strings.offsets();
+  auto const d_offsets     = offsets.data<uint32_t>() + strings.offset();
+  auto const offset        = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);
+  auto const chars_bytes =
     cudf::detail::get_value<int32_t>(offsets, strings.offset() + strings_count, stream) - offset;
-  auto d_chars = strings.chars().data<char>() + offset;
+  auto const d_chars = strings.chars().data<char>() + offset;
 
   // Create tokenizer
   wordpiece_tokenizer tokenizer(vocab_table,
@@ -155,7 +155,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                 do_lower,
                                 stream);
   // Run tokenizer
-  auto tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
+  auto const tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
   // assign output components
   uint32_t const* device_token_ids = tokens.first;
   uint32_t const* device_offsets   = tokens.second;
@@ -165,7 +165,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   // compute the string-per-log offsets values by scanning over the number of tokens for each string
   rmm::device_uvector<uint32_t> offsets_per_log(strings_count + 1, stream);
   auto d_offsets_per_log = offsets_per_log.data();
-  auto execpol           = rmm::exec_policy(stream);
+  auto const execpol     = rmm::exec_policy(stream);
   thrust::transform_exclusive_scan(
     execpol->on(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -179,7 +179,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
     uint32_t{0},
     thrust::plus<uint32_t>());
   // last element is the total number of tokens
-  uint32_t nrows_tensor_token_ids = offsets_per_log.element(strings_count, stream);
+  uint32_t const nrows_tensor_token_ids = offsets_per_log.element(strings_count, stream);
 
   // compute global_row to log, and global_row to within_log_row correspondence
   rmm::device_uvector<uint32_t> row2log(nrows_tensor_token_ids, stream);

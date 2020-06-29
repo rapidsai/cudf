@@ -22,6 +22,8 @@
 namespace nvtext {
 namespace detail {
 
+#define THREADS_PER_BLOCK 128
+
 /**
  * @brief A selection op for cub to get elements from an array not equal to a certain value.
  *

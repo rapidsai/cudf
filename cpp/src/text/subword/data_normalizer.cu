@@ -33,7 +33,6 @@ namespace detail {
 namespace {
 
 #define SORT_BIT 22
-#define THREADS_PER_BLOCK 64
 
 /**
  * @brief Retrieve new code point from metadata value.
@@ -350,9 +349,9 @@ data_normalizer::data_normalizer(uint32_t max_num_strings,
   d_cp_metadata = detail::get_codepoint_metadata(stream);
   d_aux_table   = detail::get_aux_codepoint_data(stream);
 
-  size_t max_BLOCKS               = (max_num_chars + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-  size_t max_threads_on_device    = max_BLOCKS * THREADS_PER_BLOCK;
-  const size_t max_new_char_total = MAX_NEW_CHARS * max_threads_on_device;
+  size_t const max_BLOCKS            = (max_num_chars + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+  size_t const max_threads_on_device = max_BLOCKS * THREADS_PER_BLOCK;
+  size_t const max_new_char_total    = MAX_NEW_CHARS * max_threads_on_device;
   device_code_points.resize(max_new_char_total, stream);
   device_chars_per_thread.resize(max_threads_on_device, stream);
 
@@ -366,7 +365,7 @@ data_normalizer::data_normalizer(uint32_t max_num_strings,
                                 max_threads_on_device,
                                 stream);
   size_t temp_storage_select_bytes = 0;
-  static NotEqual select_op((1 << SORT_BIT));
+  NotEqual const select_op((1 << SORT_BIT));
   cub::DeviceSelect::If(nullptr,
                         temp_storage_select_bytes,
                         device_code_points.data(),
@@ -388,17 +387,17 @@ std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(const cha
   ptr_length_pair offset_and_length;
 
   // copy offsets to working memory
-  size_t num_offsets = std::min(size_t{num_strings + 1}, device_strings_offsets.size());
+  size_t const num_offsets = std::min(size_t{num_strings + 1}, device_strings_offsets.size());
   CUDA_TRY(cudaMemcpyAsync(device_strings_offsets.data(),
                            d_offsets,
                            sizeof(uint32_t) * num_offsets,
                            cudaMemcpyDeviceToDevice,
                            stream));
-  uint32_t bytes_count = device_strings_offsets.element(num_offsets - 1, stream);
+  uint32_t const bytes_count = device_strings_offsets.element(num_offsets - 1, stream);
 
-  size_t BLOCKS                   = (bytes_count + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-  const size_t max_new_char_total = MAX_NEW_CHARS * BLOCKS * THREADS_PER_BLOCK;
-  size_t threads_on_device        = BLOCKS * THREADS_PER_BLOCK;
+  size_t const BLOCKS             = (bytes_count + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+  size_t const max_new_char_total = MAX_NEW_CHARS * BLOCKS * THREADS_PER_BLOCK;
+  size_t const threads_on_device  = BLOCKS * THREADS_PER_BLOCK;
 
   kernel_data_normalizer<<<BLOCKS, THREADS_PER_BLOCK, 0, stream>>>(
     reinterpret_cast<const unsigned char*>(d_strings),
@@ -412,7 +411,7 @@ std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(const cha
     device_chars_per_thread.data());
   CHECK_CUDA(stream);
 
-  static NotEqual select_op((1 << SORT_BIT));
+  NotEqual const select_op((1 << SORT_BIT));
   cub::DeviceSelect::If(cub_temp_storage.data(),
                         max_cub_storage_bytes,
                         device_code_points.data(),
@@ -434,7 +433,7 @@ std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(const cha
   CHECK_CUDA(stream);
 
   // this is like an in-place gather
-  auto execpol = rmm::exec_policy(stream);
+  auto const execpol = rmm::exec_policy(stream);
   thrust::for_each_n(
     execpol->on(stream),
     thrust::make_counting_iterator<uint32_t>(1),
