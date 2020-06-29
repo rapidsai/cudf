@@ -394,6 +394,96 @@ template <>
 struct is_unary_logical_operator_impl<ast_operator::NOT> : std::true_type {
 };
 
+/*
+
+template <ast_operator op>
+struct binop {
+};
+
+template <>
+struct binop<ast_operator::ADD> {
+  template <typename T>
+  __device__ T operator()(T const& lhs, T const& rhs)
+  {
+    return lhs + rhs;
+  }
+};
+
+template <>
+struct binop<ast_operator::SUB> {
+  template <typename T>
+  __device__ T operator()(T const& lhs, T const& rhs)
+  {
+    return lhs - rhs;
+  }
+};
+
+template <typename F, typename... Ts>
+__device__ decltype(auto) binop_dispatcher(ast_operator op, F&& f, Ts&&... args)
+{
+  switch (op) {
+    case ast_operator::ADD:
+      return f.template operator()<binary_operator::ADD>(std::forward<Ts>(args)...);
+    case ast_operator::SUB:
+      return f.template operator()<binary_operator::SUB>(std::forward<Ts>(args)...);
+    default: return 0;  // TODO: Error handling
+  }
+}
+
+template <typename T>
+struct do_binop {
+  template <binary_operator OP>
+  __device__ T operator()(T const& lhs, T const& rhs)
+  {
+    return binop<OP>{}(lhs, rhs);
+  }
+};
+
+template <comparator>
+struct compareop {
+};
+
+template <>
+struct compareop<comparator::LESS> {
+  template <typename T>
+  __device__ bool operator()(T const& lhs, T const& rhs)
+  {
+    return lhs < rhs;
+  }
+};
+
+template <>
+struct compareop<comparator::GREATER> {
+  template <typename T>
+  __device__ bool operator()(T const& lhs, T const& rhs)
+  {
+    return lhs > rhs;
+  }
+};
+
+template <typename F, typename... Ts>
+__device__ decltype(auto) compareop_dispatcher(comparator op, F&& f, Ts&&... args)
+{
+  switch (op) {
+    case comparator::LESS:
+      return f.template operator()<comparator::LESS>(std::forward<Ts>(args)...);
+    case comparator::GREATER:
+      return f.template operator()<comparator::GREATER>(std::forward<Ts>(args)...);
+    default: return false;  // TODO: Error handling
+  }
+}
+
+template <typename T>
+struct do_compareop {
+  template <comparator OP>
+  __device__ bool operator()(T const& lhs, T const& rhs)
+  {
+    return compareop<OP>{}(lhs, rhs);
+  }
+};
+
+*/
+
 }  // namespace ast
 
 }  // namespace cudf
