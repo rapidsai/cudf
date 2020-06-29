@@ -3,7 +3,7 @@
 import os
 import urllib
 import warnings
-from io import BytesIO, TextIOWrapper
+from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 
 import fsspec
 import fsspec.implementations.local
@@ -973,7 +973,7 @@ def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
         Mode in which file is opened
     Returns
     -------
-    filepath_or_buffer : str, [TODO]
+    filepath_or_buffer : str,
         Filepath string or in-memory buffer of data
     should_close : bool
         Whether filepath_or_buffer should be closed after IO
@@ -989,6 +989,12 @@ def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
             filepath_or_buffer = fsspec.open(
                 path_or_data, mode=mode or "w", **(storage_options)
             ).open()
+            # Not necessary that all openFile objects inherit from IOBase
+            if not isinstance(filepath_or_buffer, IOBase):
+                if "b" in mode:
+                    filepath_or_buffer = BufferedWriter(filepath_or_buffer)
+                else:
+                    filepath_or_buffer = TextIOWrapper(filepath_or_buffer)
             return filepath_or_buffer, True
 
     return path_or_data, False
