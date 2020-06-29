@@ -206,18 +206,8 @@ std::string ptx_parser::parse_instruction(const std::string& src)
 
 std::string ptx_parser::parse_statement(const std::string& src)
 {
-  // First find the first non-white charactor.
-  const size_t length = src.size();
-  size_t start        = 0;
-  while (start < length && is_white(src[start])) { start++; }
-
-  if (start == length) {
-    // got nothing
-    return " \n";
-  } else {
-    // instruction
-    return parse_instruction(std::string(src, start, length - start));
-  }
+  auto f = std::find_if(src.cbegin(), src.cend(), [](auto c) { return is_white(c); });
+  return f == src.cend() ? " \n" : parse_instruction(std::string(f, src.cend()));
 }
 
 std::vector<std::string> ptx_parser::parse_function_body(const std::string& src)
