@@ -42,15 +42,17 @@ void PQ_read(benchmark::State& state)
     state.range(2) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
 
   int64_t const col_bytes = total_bytes / num_cols;
+  std::vector<char> out_buffer;
+  out_buffer.reserve(total_bytes);
 
   auto const tbl  = create_random_table<T>(num_cols, col_bytes, true);
   auto const view = tbl->view();
 
   cudf_io::write_parquet_args write_args{
-    cudf_io::sink_info("bench.parquet"), view, nullptr, compression};
+    cudf_io::sink_info(&out_buffer), view, nullptr, compression};
   cudf_io::write_parquet(write_args);
 
-  cudf_io::read_parquet_args read_args{cudf_io::source_info("bench.parquet")};
+  cudf_io::read_parquet_args read_args{cudf_io::source_info(out_buffer.data(), out_buffer.size())};
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
