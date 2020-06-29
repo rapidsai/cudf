@@ -217,7 +217,8 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
   cudf::size_type size = std::distance(begin, end);
-  thrust::host_vector<ElementTo> elements(size);
+  thrust::host_vector<ElementTo> elements;
+  elements.reserve(size);
   fixed_width_type_converter<ElementFrom, ElementTo>{}(begin, end, elements.begin());
   return rmm::device_buffer{elements.data(), size * sizeof(ElementTo)};
 }
