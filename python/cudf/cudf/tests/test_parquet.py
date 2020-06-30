@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import os
 import random
@@ -707,7 +707,7 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
         gdf.to_parquet(dir1, partition_cols=cols)
 
 
-def test_write_cudf(tmpdir, pdf):
+def test_write_read_cudf(tmpdir, pdf):
     file_path = tmpdir.join("cudf.parquet")
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category"])
