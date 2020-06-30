@@ -344,7 +344,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampDaysScalar(JNIEn
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDurationScalar(JNIEnv *env, jclass,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDurationTimeScalar(JNIEnv *env, jclass,
                                                                       jint jdtype_id,
                                                                       jlong value,
                                                                       jboolean is_valid) {

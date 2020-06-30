@@ -79,7 +79,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case DURATION_MILLISECONDS:
     case DURATION_NANOSECONDS:
     case DURATION_SECONDS:
-      return new Scalar(type, makeDurationScalar(type.nativeId, 0, false));
+      return new Scalar(type, makeDurationTimeScalar(type.nativeId, 0, false));
     default:
       throw new IllegalArgumentException("Unexpected type: " + type);
     }
@@ -237,7 +237,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         }
         return fromDurationDay(intValue);
       } else {
-        return new Scalar(type, makeDurationScalar(type.nativeId, value, true));
+        return new Scalar(type, makeDurationTimeScalar(type.nativeId, value, true));
       }
     } else {
       throw new IllegalArgumentException("type is not a timestamp: " + type);
@@ -296,7 +296,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeFloat64Scalar(double value, boolean isValid);
   private static native long makeStringScalar(byte[] value, boolean isValid);
   private static native long makeDurationDaysScalar(int value, boolean isValid);
-  private static native long makeDurationScalar(int dtype, long value, boolean isValid);
+  private static native long makeDurationTimeScalar(int dtype, long value, boolean isValid);
   private static native long makeTimestampDaysScalar(int value, boolean isValid);
   private static native long makeTimestampTimeScalar(int dtypeNativeId, long value, boolean isValid);
 
