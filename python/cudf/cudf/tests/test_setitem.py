@@ -132,9 +132,7 @@ def test_setitem_dataframe_equal_len_replace(replace_data):
     pdf = pd.DataFrame.from_dict({'a':[1,2,3,4,5]})
     gdf = DataFrame.from_pandas(pdf)
 
-    replace_data = replace_data.to_pandas() if hasattr(replace_data, 'to_pandas') else replace_data
-
-    pdf['a'][pdf['a'] > 1] = replace_data
+    pdf['a'][pdf['a'] > 1] = replace_data.to_pandas() if hasattr(replace_data, 'to_pandas') else replace_data
     gdf['a'][gdf['a'] > 1] = replace_data
 
     assert_eq(pdf.astype('float'), gdf.astype('float'))
