@@ -26,6 +26,15 @@ cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
             device_buffer&& data
         ) except +
 
+        column(
+            data_type dtype,
+            size_type size,
+            device_buffer data,
+            device_buffer mask,
+            size_type null_count,
+            vector[unique_ptr[column]] children
+        )
+
         size_type size() except +
         size_type null_count() except +
         bool has_nulls() except +

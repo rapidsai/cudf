@@ -37,3 +37,5 @@ cdef class Column:
     cdef Column from_column_view(column_view, object)
 
     cdef size_type compute_null_count(self) except? 0
+
+    cdef unique_ptr[column] release(self) except *

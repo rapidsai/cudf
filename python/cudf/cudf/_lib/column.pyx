@@ -16,6 +16,7 @@ from libcpp.pair cimport pair
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.vector cimport vector
+from cython.operator cimport dereference
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
@@ -108,9 +109,7 @@ cdef class Column:
         if value is not None and not isinstance(value, Buffer):
             raise TypeError("Expected a Buffer or None for data, got " +
                             type(value).__name__)
-
         self._data = None
-
         self._base_data = value
 
     @property
@@ -518,3 +517,48 @@ cdef class Column:
         )
 
         return result
+
+    cdef unique_ptr[column] release(self) except *:
+        cdef DeviceBuffer data
+        cdef DeviceBuffer mask
+        cdef device_buffer c_data
+        cdef device_buffer c_mask
+
+        if self._base_data is not None:
+            if type(self._base_data._owner) is DeviceBuffer:
+                data = self._base_data._owner
+                c_data = data.c_release()
+
+        if self.has_nulls:
+            if self._base_mask is not None:
+                if type(self._base_mask._owner) is DeviceBuffer:
+                    mask = self._base_mask._owner
+                    c_mask = mask.c_release()
+
+        cdef vector[unique_ptr[column]] children
+
+        cdef Column c
+        for c in self._base_children:
+            children.push_back(move(c.release()))
+
+        self._size = 0
+
+        cdef libcudf_types.type_id tid = <libcudf_types.type_id> (
+            <underlying_type_t_type_id> (
+                np_to_cudf_types[np.dtype(self.dtype)]
+            )
+        )
+        cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
+        cdef libcudf_types.size_type size = self.size
+        cdef libcudf_types.size_type null_count = self.null_count
+
+        return make_unique[column](
+            dtype,
+            size,
+            move(c_data),
+            move(c_mask),
+            null_count,
+            move(children))
+
+    def py_release(self):
+        self.release()
