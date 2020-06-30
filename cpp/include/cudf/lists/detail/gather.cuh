@@ -162,7 +162,7 @@ gather_data make_gather_data(
   auto dst_offsets_c = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
   mutable_column_view dst_offsets_v = dst_offsets_c->mutable_view();
-  int32_t* dst_offsets            = dst_offsets_v.data<int32_t>();
+  int32_t* dst_offsets              = dst_offsets_v.data<int32_t>();
 
   // generate the compacted outgoing offsets.
   auto count_iter = thrust::make_counting_iterator<int32_t>(0);
@@ -196,8 +196,7 @@ gather_data make_gather_data(
   }
   bool can_recycle = prev_base_offsets.capacity() >= static_cast<size_t>(output_count);
   rmm::device_uvector<int32_t> base_offsets =
-    can_recycle ? std::move(prev_base_offsets)
-                : rmm::device_uvector<int32_t>(output_count, stream);
+    can_recycle ? std::move(prev_base_offsets) : rmm::device_uvector<int32_t>(output_count, stream);
   if (!can_recycle) { prev_base_offsets.release(); }
 
   // generate the base offsets
