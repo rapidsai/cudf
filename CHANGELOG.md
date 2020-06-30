@@ -29,6 +29,7 @@
 - PR #5497 Add `.str.isinteger` & `.str.isfloat`
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
+- PR #5607 Add Jaba bindings for duration types
 
 ## Improvements
 
