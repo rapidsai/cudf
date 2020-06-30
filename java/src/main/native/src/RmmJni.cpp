@@ -396,16 +396,16 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
       case 1: // File
       {
         cudf::jni::native_jstring path(env, jpath);
-        log_result.reset(
-            new logging_resource_adaptor<base_tracking_resource_adaptor>(resource, path.get()));
+        log_result.reset(new logging_resource_adaptor<base_tracking_resource_adaptor>(
+            resource, path.get(), /*auto_flush=*/true));
       } break;
       case 2: // stdout
-        log_result.reset(
-            new logging_resource_adaptor<base_tracking_resource_adaptor>(resource, std::cout));
+        log_result.reset(new logging_resource_adaptor<base_tracking_resource_adaptor>(
+            resource, std::cout, /*auto_flush=*/true));
         break;
       case 3: // stderr
-        log_result.reset(
-            new logging_resource_adaptor<base_tracking_resource_adaptor>(resource, std::cerr));
+        log_result.reset(new logging_resource_adaptor<base_tracking_resource_adaptor>(
+            resource, std::cerr, /*auto_flush=*/true));
         break;
     }
 
