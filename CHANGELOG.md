@@ -142,6 +142,7 @@
 - PR #5564 Fix CudfEngine.read_metadata API in dask_cudf
 - PR #5537 Fix issue related to using `set_index` on a string series
 - PR #5561 Fix `copy_bitmask` issue with offset
+- PR #5609 Fix loc and iloc issue with column like input
 - PR #5578 Fix getattr logic in GroupBy
 - PR #5490 Fix python column view
 
