@@ -199,11 +199,6 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
         if "col_category" in got.columns:
             got = got.drop("col_category")
 
-        if "col_str" in expect.columns:
-            expect = expect.drop(columns=["col_str"])
-        if "col_str" in got.columns:
-            got = got.drop("col_str")
-
     assert_eq(expect, got, check_categorical=False)
 
 
@@ -332,10 +327,6 @@ def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
         pdf = pdf.drop(columns=["col_category"])
     if "col_category" in gdf.columns:
         gdf = gdf.drop("col_category")
-    if "col_str" in pdf.columns:
-        pdf = pdf.drop(columns=["col_str"])
-    if "col_str" in gdf.columns:
-        gdf = gdf.drop("col_str")
 
     assert_eq(pdf.reset_index(drop=True), gdf, check_categorical=False)
 
