@@ -300,6 +300,10 @@ def test_dataframe_loc(scalar, step):
 
     # loc with list like indexing
     assert_eq(df.loc[[0]], pdf.loc[[0]])
+    # loc with column like indexing
+    assert_eq(df.loc[cudf.Series([0])], pdf.loc[pd.Series([0])])
+    assert_eq(df.loc[cudf.Series([0])._column], pdf.loc[pd.Series([0])])
+    assert_eq(df.loc[cudf.Series([0])._column], pdf.loc[pd.Series([0])])
 
 
 def test_dataframe_loc_duplicate_index_scalar():
@@ -572,6 +576,13 @@ def test_dataframe_iloc(nelem):
     assert_eq(gdf.iloc[0], gdf.iat[0])
     assert_eq(gdf.iloc[1], gdf.iat[1])
     assert_eq(gdf.iloc[nelem - 1], gdf.iat[nelem - 1])
+
+    # iloc with list like indexing
+    assert_eq(gdf.iloc[[0]], pdf.iloc[[0]])
+    # iloc with column like indexing
+    assert_eq(gdf.iloc[cudf.Series([0])], pdf.iloc[pd.Series([0])])
+    assert_eq(gdf.iloc[cudf.Series([0])._column], pdf.iloc[pd.Series([0])])
+    assert_eq(gdf.iloc[cudf.Series([0])._column], pdf.iloc[pd.Series([0])])
 
 
 @pytest.mark.xfail(raises=AssertionError, reason="Series.index are different")
