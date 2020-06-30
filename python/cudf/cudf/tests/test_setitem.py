@@ -126,11 +126,15 @@ def test_setitem_dataframe_series_inplace(df):
 
     assert_eq(pdf, gdf)
 
-def test_setitem_dataframe_equal_len_replace():
-    pdf = pd.DataFrame.from_dict({'a':[1,2,3], 'b':[4,5,6]})
+@pytest.mark.parametrize('replace_data', [[100,200,300,400,500], Series([100,200,300,400,500]), Series([100,200,300,400,500], index=[2,3,4,5,6])])
+def test_setitem_dataframe_equal_len_replace(replace_data):
+
+    pdf = pd.DataFrame.from_dict({'a':[1,2,3,4,5]})
     gdf = DataFrame.from_pandas(pdf)
 
-    pdf['a'][pdf['a'] > 1] = pdf['b']
-    gdf['a'][gdf['a'] > 1] = gdf['b']
-    
-    assert_eq(pdf, gdf)
+    replace_data = replace_data.to_pandas() if hasattr(replace_data, 'to_pandas') else replace_data
+
+    pdf['a'][pdf['a'] > 1] = replace_data
+    gdf['a'][gdf['a'] > 1] = replace_data
+
+    assert_eq(pdf.astype('float'), gdf.astype('float'))
