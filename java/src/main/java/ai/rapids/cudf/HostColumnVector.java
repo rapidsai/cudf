@@ -376,8 +376,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public final int getInt(long index) {
-    assert type == DType.INT32 || type == DType.UINT32 || type == DType.TIMESTAMP_DAYS
-        || type == DType.DURATION_DAYS;
+    assert type.isBackedByInt();
     assertsForGet(index);
     return offHeap.data.getInt(index * type.sizeInBytes);
   }
@@ -406,8 +405,7 @@ public final class HostColumnVector implements AutoCloseable {
    */
   public final long getLong(long index) {
     // Timestamps with time values are stored as longs
-    assert type == DType.INT64 || type == DType.UINT64 || type.hasTimeResolution()
-        || (type.isDurationType() && type != DType.DURATION_DAYS);
+    assert type.isBackedByLong();
     assertsForGet(index);
     return offHeap.data.getLong(index * type.sizeInBytes);
   }
@@ -1075,8 +1073,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public final Builder append(int value) {
-      assert (type == DType.INT32 || type == DType.UINT32 || type == DType.TIMESTAMP_DAYS
-          || type == DType.DURATION_DAYS);
+      assert type.isBackedByInt();
       assert currentIndex < rows;
       data.setInt(currentIndex * type.sizeInBytes, value);
       currentIndex++;
@@ -1084,8 +1081,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public final Builder append(long value) {
-      assert type == DType.INT64 || type == DType.UINT64 || type.hasTimeResolution()
-          || (type.isDurationType() && type != DType.DURATION_DAYS);
+      assert type.isBackedByLong();
       assert currentIndex < rows;
       data.setLong(currentIndex * type.sizeInBytes, value);
       currentIndex++;
@@ -1173,8 +1169,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public Builder appendArray(int... values) {
-      assert (type == DType.INT32 || type == DType.UINT32 || type == DType.TIMESTAMP_DAYS
-          || type == DType.DURATION_DAYS);
+      assert type.isBackedByInt();
       assert (values.length + currentIndex) <= rows;
       data.setInts(currentIndex * type.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;
@@ -1182,8 +1177,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public Builder appendArray(long... values) {
-      assert type == DType.INT64 || type == DType.UINT64 || type.hasTimeResolution()
-          || (type.isDurationType() && type != DType.DURATION_DAYS);
+      assert type.isBackedByLong();
       assert (values.length + currentIndex) <= rows;
       data.setLongs(currentIndex * type.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;

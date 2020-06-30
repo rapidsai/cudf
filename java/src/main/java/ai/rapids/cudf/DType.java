@@ -86,6 +86,14 @@ public enum DType {
     return TIME_RESOLUTION.contains(this);
   }
 
+  public boolean isBackedByInt() {
+    return ints.contains(this);
+  }
+
+  public boolean isBackedByLong() {
+    return longs.contains(this);
+  }
+
   /**
    * Returns true for duration types
    */
@@ -134,5 +142,25 @@ public enum DType {
       DType.DURATION_MILLISECONDS,
       DType.DURATION_NANOSECONDS,
       DType.DURATION_SECONDS
+  );
+
+  private static final EnumSet<DType> longs = EnumSet.of(
+      DType.INT64,
+      DType.UINT64,
+      DType.DURATION_SECONDS,
+      DType.DURATION_MILLISECONDS,
+      DType.DURATION_MICROSECONDS,
+      DType.DURATION_NANOSECONDS,
+      DType.TIMESTAMP_SECONDS,
+      DType.TIMESTAMP_MILLISECONDS,
+      DType.TIMESTAMP_MICROSECONDS,
+      DType.TIMESTAMP_NANOSECONDS
+  );
+
+  private static final EnumSet<DType> ints = EnumSet.of(
+      DType.INT32,
+      DType.UINT32,
+      DType.DURATION_DAYS,
+      DType.TIMESTAMP_DAYS
   );
 }
