@@ -163,10 +163,11 @@ std::unique_ptr<column> is_hex(strings_column_view const& strings,
                     [d_column] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;
                       auto const d_str = d_column.element<string_view>(idx);
-                      auto begin       = d_str.begin();
-                      auto end         = d_str.end();
+                      if (d_str.empty()) return false;
+                      auto begin = d_str.begin();
+                      auto end   = d_str.end();
                       if (*begin == '0') ++begin;
-                      if (*begin == 'x' || *begin == 'X') ++begin;
+                      if ((begin < end) && (*begin == 'x' || *begin == 'X')) ++begin;
                       return (thrust::distance(begin, end) > 0) &&
                              thrust::all_of(thrust::seq, begin, end, [] __device__(auto chr) {
                                return (chr >= '0' && chr <= '9') || (chr >= 'A' && chr <= 'F') ||

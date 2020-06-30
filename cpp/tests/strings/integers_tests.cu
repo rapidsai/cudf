@@ -203,13 +203,13 @@ TEST_F(StringsConvertTest, HexToInteger)
 TEST_F(StringsConvertTest, IsHex)
 {
   std::vector<const char*> h_strings{
-    "1234", nullptr, "98BEEF", "1a5", "CAFE", "2face", "0xAABBCCDD", "112233445566", "XYZ", ""};
+    "", "1234", nullptr, "98BEEF", "1a5", "CAFE", "2face", "0xAABBCCDD", "112233445566", "XYZ"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::fixed_width_column_wrapper<bool> expected({1, 0, 1, 1, 1, 1, 1, 1, 0, 0},
-                                                        {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> expected({0, 1, 0, 1, 1, 1, 1, 1, 1, 0},
+                                                        {1, 1, 0, 1, 1, 1, 1, 1, 1, 1});
   auto results = cudf::strings::is_hex(cudf::strings_column_view(strings));
   cudf::test::expect_columns_equal(*results, expected);
 }
