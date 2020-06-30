@@ -32,6 +32,7 @@
 
 ## Improvements
 
+- PR #5605 Automatically flush RMM allocate/free logs in JNI
 - PR #5486 Link Boost libraries statically in the Java build
 - PR #5479 Link Arrow libraries statically
 - PR #5414 Use new release of Thrust/CUB in the JNI build
