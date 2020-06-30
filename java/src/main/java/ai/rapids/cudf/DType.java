@@ -54,11 +54,12 @@ public enum DType {
    */
   TIMESTAMP_NANOSECONDS(8, 16, "timestamp[ns]"),
 
-  DURATION_DAYS(4, 17, "NO IDEA"),
-  DURATION_SECONDS(8, 18, "NO IDEA"),
-  DURATION_MILLISECONDS(8, 19, "NO IDEA"),
-  DURATION_MICROSECONDS(8, 20, "NO IDEA"),
-  DURATION_NANOSECONDS(8, 21, "NO IDEA"),
+  //We currently don't have mappings for duration type to I/O files
+  DURATION_DAYS(4, 17, "int32"),
+  DURATION_SECONDS(8, 18, "int64"),
+  DURATION_MILLISECONDS(8, 19, "int64"),
+  DURATION_MICROSECONDS(8, 20, "int64"),
+  DURATION_NANOSECONDS(8, 21, "int64"),
   //DICTIONARY32(4, 22, "NO IDEA"),
 
   STRING(0, 23, "str");

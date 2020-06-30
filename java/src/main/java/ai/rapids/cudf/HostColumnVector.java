@@ -640,7 +640,38 @@ public final class HostColumnVector implements AutoCloseable {
   /**
    * Create a new vector from the given values.
    */
-  public static HostColumnVector fromDurationDaysInInts(int... values) {
+  public static HostColumnVector durationNanosecondsFromLongs(long... values) {
+    return build(DType.DURATION_NANOSECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static HostColumnVector durationMicrosecondsFromLongs(long... values) {
+    return build(DType.DURATION_MICROSECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static HostColumnVector durationMillisecondsFromLongs(long... values) {
+    return build(DType.DURATION_MILLISECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static HostColumnVector durationSecondsFromLongs(long... values) {
+    return build(DType.DURATION_SECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static HostColumnVector durationDaysFromInts(int... values) {
     return build(DType.DURATION_DAYS, values.length, (b) -> b.appendArray(values));
   }
 
@@ -810,7 +841,43 @@ public final class HostColumnVector implements AutoCloseable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    */
-  public static HostColumnVector fromDurationDaysInBoxedInts(Integer... values) {
+  public static HostColumnVector durationNanosecondsFromBoxedLongs(Long... values) {
+    return build(DType.DURATION_NANOSECONDS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static HostColumnVector durationMicrosecondsFromBoxedLongs(Long... values) {
+    return build(DType.DURATION_MICROSECONDS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static HostColumnVector durationMillisecondsFromBoxedLongs(Long... values) {
+    return build(DType.DURATION_MILLISECONDS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static HostColumnVector durationSecondsFromBoxedLongs(Long... values) {
+    return build(DType.DURATION_SECONDS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static HostColumnVector durationDaysFromBoxedInts(Integer... values) {
     return build(DType.DURATION_DAYS, values.length, (b) -> b.appendBoxed(values));
   }
 

@@ -2331,8 +2331,13 @@ public class ColumnVectorTest extends CudfTestBase {
 
     try (ColumnVector durationDays = ColumnVector.durationDaysFromBoxedInts(days)) {
       HostColumnVector hc = durationDays.copyToHost();
-      for (int i = 0; i < 7; i++) {
-        assertEquals(days[i], hc.getInt(i));
+      assertTrue(hc.hasNulls());
+      assertEquals(DType.DURATION_DAYS, hc.getType());
+      for (int i = 0; i < days.length; i++) {
+        assertEquals(days[i] == null, hc.isNull(i));
+        if (!hc.isNull(i)) {
+          assertEquals(days[i], hc.getInt(i));
+        }
       }
     }
   }
@@ -2343,8 +2348,13 @@ public class ColumnVectorTest extends CudfTestBase {
 
     try (ColumnVector durationSeconds = ColumnVector.durationSecondsFromBoxedLongs(secs)) {
       HostColumnVector hc = durationSeconds.copyToHost();
-      for (int i = 0 ; i < 7 ; i++) {
-        assertEquals(secs[i], hc.getLong(i));
+      assertTrue(hc.hasNulls());
+      assertEquals(DType.DURATION_SECONDS, hc.getType());
+      for (int i = 0 ; i < secs.length ; i++) {
+        assertEquals(secs[i] == null, hc.isNull(i));
+        if (!hc.isNull(i)) {
+          assertEquals(secs[i], hc.getLong(i));
+        }
       }
     }
   }
@@ -2354,10 +2364,15 @@ public class ColumnVectorTest extends CudfTestBase {
     Long[] ms = {12342340230L, 12112340L, 2230233L, 1L, -1L, 0L, Long.MAX_VALUE, null,
         Long.MIN_VALUE};
 
-    try (ColumnVector durationSeconds = ColumnVector.durationMilliSecondsFromBoxedLongs(ms)) {
-      HostColumnVector hc = durationSeconds.copyToHost();
-      for (int i = 0 ; i < 7 ; i++) {
-        assertEquals(ms[i], hc.getLong(i));
+    try (ColumnVector durationMs = ColumnVector.durationMilliSecondsFromBoxedLongs(ms)) {
+      HostColumnVector hc = durationMs.copyToHost();
+      assertTrue(hc.hasNulls());
+      assertEquals(DType.DURATION_MILLISECONDS, hc.getType());
+      for (int i = 0 ; i < ms.length ; i++) {
+        assertEquals(ms[i] == null, hc.isNull(i));
+        if (!hc.isNull(i)) {
+          assertEquals(ms[i], hc.getLong(i));
+        }
       }
     }
   }
@@ -2367,23 +2382,33 @@ public class ColumnVectorTest extends CudfTestBase {
     Long[] us = {1234234230L, 132350L, 289877803L, 1L, -1L, 0L, Long.MAX_VALUE, null,
         Long.MIN_VALUE};
 
-    try (ColumnVector durationSeconds = ColumnVector.durationMicroSecondsFromBoxedLongs(us)) {
-      HostColumnVector hc = durationSeconds.copyToHost();
-      for (int i = 0 ; i < 7 ; i++) {
-        assertEquals(us[i], hc.getLong(i));
+    try (ColumnVector durationUs = ColumnVector.durationMicroSecondsFromBoxedLongs(us)) {
+      HostColumnVector hc = durationUs.copyToHost();
+      assertTrue(hc.hasNulls());
+      assertEquals(DType.DURATION_MICROSECONDS, hc.getType());
+      for (int i = 0 ; i < us.length ; i++) {
+        assertEquals(us[i] == null, hc.isNull(i));
+        if (!hc.isNull(i)) {
+          assertEquals(us[i], hc.getLong(i));
+        }
       }
     }
   }
 
   @Test
   void testCreateDurationNanoseconds() {
-    Long[] us = {1234234230L, 198832350L, 289877803L, 1L, -1L, 0L, Long.MAX_VALUE, null,
+    Long[] ns = {1234234230L, 198832350L, 289877803L, 1L, -1L, 0L, Long.MAX_VALUE, null,
         Long.MIN_VALUE};
 
-    try (ColumnVector durationSeconds = ColumnVector.durationNanoSecondsFromBoxedLongs(us)) {
-      HostColumnVector hc = durationSeconds.copyToHost();
-      for (int i = 0 ; i < 7 ; i++) {
-        assertEquals(us[i], hc.getLong(i));
+    try (ColumnVector durationNs = ColumnVector.durationNanoSecondsFromBoxedLongs(ns)) {
+      HostColumnVector hc = durationNs.copyToHost();
+      assertTrue(hc.hasNulls());
+      assertEquals(DType.DURATION_NANOSECONDS, hc.getType());
+      for (int i = 0 ; i < ns.length ; i++) {
+        assertEquals(ns[i] == null, hc.isNull(i));
+        if (!hc.isNull(i)) {
+          assertEquals(ns[i], hc.getLong(i));
+        }
       }
     }
   }
