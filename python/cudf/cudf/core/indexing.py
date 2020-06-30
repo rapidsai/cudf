@@ -121,6 +121,9 @@ class _SeriesLocIndexer(object):
 
     def __setitem__(self, key, value):
         key = self._loc_to_iloc(key)
+        if isinstance(value, (pd.Series, cudf.Series)):
+            value = cudf.Series(value)
+            value = value._align_to_index(self._sr.index, how='right')
         self._sr.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
