@@ -286,36 +286,21 @@ std::string ptx_parser::parse_param_list(const std::string& src)
 
 std::string ptx_parser::parse_function_header(const std::string& src)
 {
-  const size_t length = src.size();
-  size_t start        = 0;
-  size_t stop         = 0;
+  // Essentially we only need the information inside the two pairs of parentheses.
+  auto f = [&] {
+    auto i = std::find_if_not(src.cbegin(), src.cend(), [](auto c) { return is_white(c); });
+    if (*i == '(')  // This function has a return type
+      // First Pass: output param list
+      i = std::find_if_not(std::next(i), src.cend(), [](auto c) { return c == ')'; });
+    // The function name
+    i = std::find_if_not(std::next(i), src.cend(), [](auto c) { return is_white(c) || c == '('; });
+    // Second Pass: input param list
+    return std::next(std::find_if(i, src.cend(), [](auto c) { return c == '('; }));
+  }();
 
-  // Essentially we only need the information inside the two pairs of
-  // parentices.
-  while (start < length && is_white(src[start])) { start++; }
+  auto l = std::find_if(f, src.cend(), [](auto c) { return c == ')'; });
 
-  if (src[start] == '(') {  // This function has a return type
-    // First Pass: output param list
-    while (start < length && src[start] != '(') { start++; }
-    start++;
-    stop = start;
-    while (stop < length && src[stop] != ')') { stop++; }
-    stop++;
-  }
-
-  start = stop;
-  // The function name
-  while (start < length && is_white(src[start])) { start++; }
-  stop = start;
-  while (stop < length && !is_white(src[stop]) && src[stop] != '(') { stop++; }
-
-  start = stop;
-  // Second Pass: input param list
-  while (start < length && src[start] != '(') { start++; }
-  start++;
-  stop = start;
-  while (stop < length && src[stop] != ')') { stop++; }
-  std::string input_arg = parse_param_list(std::string(src, start, stop - start));
+  auto const input_arg = parse_param_list(std::string(f, l));
   return "\n__device__ __inline__ void " + function_name + "(" + input_arg + "){" + "\n";
 }
 
