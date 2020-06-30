@@ -707,6 +707,18 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
         gdf.to_parquet(dir1, partition_cols=cols)
 
 
+def test_write_cudf(tmpdir, pdf):
+    file_path = tmpdir.join("cudf.parquet")
+    if "col_category" in pdf.columns:
+        pdf = pdf.drop(columns=["col_category"])
+
+    gdf = cudf.from_pandas(pdf)
+    gdf.to_parquet(file_path)
+    gdf = cudf.read_parquet(file_path)
+
+    assert_eq(gdf, pdf, check_index_type=False if pdf.empty else True)
+
+
 def test_write_cudf_read_pandas_pyarrow(tmpdir, pdf):
     cudf_path = tmpdir.join("cudf.parquet")
     pandas_path = tmpdir.join("pandas.parquet")

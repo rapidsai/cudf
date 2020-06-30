@@ -207,6 +207,11 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
         for col in meta['columns']:
             cols_dtype_map[col['name']] = col['numpy_type']
 
+        if not column_names:
+            column_names = [o['name'] for o in meta['columns']]
+            if index_col in cols_dtype_map:
+                column_names.remove(index_col)
+
         for col in column_names:
             df._data[col] = cudf.core.column.column_empty(
                 row_count=0,
