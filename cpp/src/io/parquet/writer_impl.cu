@@ -134,6 +134,26 @@ class parquet_column_view {
         _physical_type = Type::INT64;
         _stats_dtype   = statistics_dtype::dtype_int64;
         break;
+      case cudf::type_id::UINT8:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::UINT_8;
+        _stats_dtype    = statistics_dtype::dtype_int8;
+        break;
+      case cudf::type_id::UINT16:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::UINT_16;
+        _stats_dtype    = statistics_dtype::dtype_int16;
+        break;
+      case cudf::type_id::UINT32:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::UINT_32;
+        _stats_dtype    = statistics_dtype::dtype_int32;
+        break;
+      case cudf::type_id::UINT64:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::UINT_64;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
       case cudf::type_id::FLOAT32:
         _physical_type = Type::FLOAT;
         _stats_dtype   = statistics_dtype::dtype_float32;

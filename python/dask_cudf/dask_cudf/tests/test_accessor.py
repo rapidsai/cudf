@@ -121,8 +121,7 @@ def test_categorical_basic(data):
 
     assert tuple(pdsr.cat.categories) == tuple(dsr.cat.categories)
 
-    np.testing.assert_array_equal(pdsr.cat.codes.data, result.to_array())
-    np.testing.assert_array_equal(pdsr.cat.codes.dtype, dsr.cat.codes.dtype)
+    np.testing.assert_array_equal(pdsr.cat.codes.values, result.to_array())
 
     string = str(result)
     expect_str = """

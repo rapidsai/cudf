@@ -23,7 +23,7 @@ def test_categorical_basic():
 
     pdsr = pd.Series(cat, index=["p", "q", "r", "s", "t"])
     sr = Series(cat, index=["p", "q", "r", "s", "t"])
-    assert_eq(pdsr.cat.codes, sr.cat.codes)
+    assert_eq(pdsr.cat.codes, sr.cat.codes, check_dtype=False)
 
     # Test attributes
     assert_eq(pdsr.cat.categories, sr.cat.categories)
@@ -50,14 +50,14 @@ def test_categorical_integer():
     pdsr = pd.Series(cat)
     sr = Series(cat)
     np.testing.assert_array_equal(
-        cat.codes, sr.cat.codes.fillna(-1).to_array()
+        cat.codes, sr.cat.codes.astype(cat.codes.dtype).fillna(-1).to_array()
     )
     assert sr.null_count == 2
 
     np.testing.assert_array_equal(
-        pdsr.cat.codes.values, sr.cat.codes.fillna(-1).to_array()
+        pdsr.cat.codes.values,
+        sr.cat.codes.astype(pdsr.cat.codes.dtype).fillna(-1).to_array(),
     )
-    np.testing.assert_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
 
     string = str(sr)
     expect_str = """
@@ -144,7 +144,7 @@ def test_categorical_binary_add():
 
     with pytest.raises(TypeError) as raises:
         pdsr + pdsr
-    raises.match(r"Series cannot perform the operation \+")
+    raises.match("unsupported operand")
 
     with pytest.raises(TypeError) as raises:
         sr + sr
@@ -317,7 +317,6 @@ def test_categorical_empty():
     np.testing.assert_array_equal(
         pdsr.cat.codes.values, sr.cat.codes.to_array()
     )
-    np.testing.assert_array_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
 
 
 def test_categorical_set_categories():
@@ -603,12 +602,28 @@ def test_categorical_dtype(categories, ordered):
 @pytest.mark.parametrize(
     ("data", "expected"),
     [
-        (gd.Series([1]), np.int8),
-        (gd.Series([1, None]), np.int8),
-        (gd.Series(list(range(np.iinfo(np.int8).max))), np.int8),
-        (gd.Series(list(range(np.iinfo(np.int8).max)) + [None]), np.int8),
-        (gd.Series(list(range(np.iinfo(np.int16).max))), np.int16),
-        (gd.Series(list(range(np.iinfo(np.int16).max)) + [None]), np.int16),
+        (gd.Series([1]), np.uint8),
+        (gd.Series([1, None]), np.uint8),
+        (gd.Series(np.arange(np.iinfo(np.int8).max)), np.uint8),
+        (
+            gd.Series(np.append(np.arange(np.iinfo(np.int8).max), [None])),
+            np.uint8,
+        ),
+        (gd.Series(np.arange(np.iinfo(np.int16).max)), np.uint16),
+        (
+            gd.Series(np.append(np.arange(np.iinfo(np.int16).max), [None])),
+            np.uint16,
+        ),
+        (gd.Series(np.arange(np.iinfo(np.uint8).max)), np.uint8),
+        (
+            gd.Series(np.append(np.arange(np.iinfo(np.uint8).max), [None])),
+            np.uint8,
+        ),
+        (gd.Series(np.arange(np.iinfo(np.uint16).max)), np.uint16),
+        (
+            gd.Series(np.append(np.arange(np.iinfo(np.uint16).max), [None])),
+            np.uint16,
+        ),
     ],
 )
 def test_astype_dtype(data, expected):
@@ -634,7 +649,9 @@ def test_add_categories(data, add):
 
     expected = pds.cat.add_categories(add)
     actual = gds.cat.add_categories(add)
-    assert_eq(expected.cat.codes, actual.cat.codes)
+    assert_eq(
+        expected.cat.codes, actual.cat.codes.astype(expected.cat.codes.dtype)
+    )
 
     # Need to type-cast pandas object to str due to mixed-type
     # support in "object"
