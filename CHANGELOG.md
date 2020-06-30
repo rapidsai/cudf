@@ -96,6 +96,7 @@
 - PR #5562 Add missing join type for java
 - PR #5584 Refactor `CompactProtocolReader::InitSchema`
 - PR #5591 Add `__arrow_array__` protocol and raise a descriptive error message
+- PR #5601 Instantiate Table instances in `Frame._concat` to avoid `DF.insert()` overhead
 
 ## Bug Fixes
 
