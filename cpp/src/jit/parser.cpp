@@ -212,18 +212,14 @@ std::string ptx_parser::parse_statement(const std::string& src)
 
 std::vector<std::string> ptx_parser::parse_function_body(const std::string& src)
 {
-  const size_t length = src.size();
-  size_t start        = 0;
-  size_t stop         = 0;
-
+  auto f = src.cbegin();
+  auto l = src.cbegin();
   std::vector<std::string> statements;
 
-  while (stop < length) {
-    stop = start;
-    while (stop < length && src[stop] != ';') { stop++; }
-    statements.push_back(parse_statement(std::string(src, start, stop - start)));
-    stop++;
-    start = stop;
+  while (l < src.cend()) {
+    l = std::find_if(l, src.cend(), [](auto c) { return c == ';'; });
+    statements.push_back(parse_statement(std::string(f, l)));
+    f = ++l;
   }
   return statements;
 }
