@@ -238,7 +238,7 @@ def to_parquet(
             path, mode="wb", **kwargs
         )
 
-        libparquet.write_parquet(
+        write_parquet_res = libparquet.write_parquet(
             df,
             path_or_buf,
             index,
@@ -248,7 +248,8 @@ def to_parquet(
         )
         if should_close:
             path_or_buf.close()
-        return
+
+        return write_parquet_res
 
     else:
 
