@@ -303,7 +303,7 @@ def test_dataframe_loc(scalar, step):
     # loc with column like indexing
     assert_eq(df.loc[cudf.Series([0])], pdf.loc[pd.Series([0])])
     assert_eq(df.loc[cudf.Series([0])._column], pdf.loc[pd.Series([0])])
-    assert_eq(df.loc[cudf.Series([0])._column], pdf.loc[pd.Series([0])])
+    assert_eq(df.loc[np.array([0])], pdf.loc[np.array([0])])
 
 
 def test_dataframe_loc_duplicate_index_scalar():
@@ -582,7 +582,7 @@ def test_dataframe_iloc(nelem):
     # iloc with column like indexing
     assert_eq(gdf.iloc[cudf.Series([0])], pdf.iloc[pd.Series([0])])
     assert_eq(gdf.iloc[cudf.Series([0])._column], pdf.iloc[pd.Series([0])])
-    assert_eq(gdf.iloc[cudf.Series([0])._column], pdf.iloc[pd.Series([0])])
+    assert_eq(gdf.iloc[np.array([0])], pdf.loc[np.array([0])])
 
 
 @pytest.mark.xfail(raises=AssertionError, reason="Series.index are different")
