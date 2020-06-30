@@ -19,24 +19,17 @@ from cudf._lib.column cimport Column
 
 def subword_tokenize(
     Column strings,
-    hash_file,
-    max_sequence_length=64,
-    stride=48,
-    do_lower=True,
-    do_truncate=False,
-    max_num_strings=100,
-    max_num_chars=100000,
-    max_rows_tensor=500
+    string hash_file,
+    uint32_t max_sequence_length=64,
+    uint32_t stride=48,
+    bool do_lower=True,
+    bool do_truncate=False,
+    uint32_t max_num_strings=100,
+    uint32_t max_num_chars=100000,
+    uint32_t max_rows_tensor=500
 ):
     cdef column_view c_strings = strings.view()
     cdef string c_hash_file = hash_file.encode()
-    cdef uint32_t c_max_sequence_length = max_sequence_length
-    cdef uint32_t c_stride = stride
-    cdef bool c_do_lower = do_lower
-    cdef bool c_do_truncate = do_truncate
-    cdef uint32_t c_max_num_strings = max_num_strings
-    cdef uint32_t c_max_num_chars = max_num_chars
-    cdef uint32_t c_max_rows_tensor = max_rows_tensor
     cdef cpp_tokenizer_result c_result
 
     with nogil:
@@ -44,13 +37,13 @@ def subword_tokenize(
             cpp_subword_tokenize(
                 c_strings,
                 c_hash_file,
-                c_max_sequence_length,
-                c_stride,
-                c_do_lower,
-                c_do_truncate,
-                c_max_num_strings,
-                c_max_num_chars,
-                c_max_rows_tensor
+                max_sequence_length,
+                stride,
+                do_lower,
+                do_truncate,
+                max_num_strings,
+                max_num_chars,
+                max_rows_tensor
             )
         )
 
