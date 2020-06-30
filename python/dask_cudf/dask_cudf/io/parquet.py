@@ -2,6 +2,7 @@
 
 import warnings
 from functools import partial
+from io import BufferedWriter, IOBase
 
 import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
@@ -114,12 +115,15 @@ class CudfEngine(ArrowEngine):
                 **kwargs,
             )
         else:
-            md = df.to_parquet(
-                fs.sep.join([path, filename]),
-                compression=compression,
-                metadata_file_path=filename if return_metadata else None,
-                **kwargs,
-            )
+            with fs.open(fs.sep.join([path, filename]), mode="wb") as out_file:
+                if not isinstance(out_file, IOBase):
+                    out_file = BufferedWriter(out_file)
+                md = df.to_parquet(
+                    out_file,
+                    compression=compression,
+                    metadata_file_path=filename if return_metadata else None,
+                    **kwargs,
+                )
         # Return the schema needed to write the metadata
         if return_metadata:
             return [{"meta": md}]
@@ -141,7 +145,7 @@ class CudfEngine(ArrowEngine):
                 else _meta[0]
             )
             with fs.open(metadata_path, "wb") as fil:
-                _meta.tofile(fil)
+                fil.write(_meta.tobytes())
 
 
 def read_parquet(
