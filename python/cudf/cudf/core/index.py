@@ -683,10 +683,7 @@ class Index(Frame, Serializable):
                 return False
 
             result = self == other
-            if isinstance(result, bool):
-                return result
-            else:
-                return result._values.all()
+            return result._values.all()
 
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
@@ -1993,10 +1990,7 @@ class CategoricalIndex(GenericIndex):
                 return False
 
             result = self._values == casted_other._values
-            if isinstance(result, bool):
-                return result
-            else:
-                return result._values.all()
+            return result
 
 
 class StringIndex(GenericIndex):
