@@ -101,14 +101,22 @@ def test_concat_errors():
     df, df2, gdf, gdf2 = make_frames()
 
     # No objs
-    with pytest.raises(
-        ValueError, match="Need at least one object to concatenate"
-    ):
-        gd.concat([])
+    try:
+        pd.concat([])
+    except Exception as e:
+        with pytest.raises(type(e), match=e.__str__()):
+            gd.concat([])
+    else:
+        raise AssertionError("Expected pd.concat to fail for empty input")
 
     # All None
-    with pytest.raises(ValueError, match="All objects passed were None"):
-        gd.concat([None, None])
+    try:
+        pd.concat([None, None])
+    except Exception as e:
+        with pytest.raises(type(e), match=e.__str__()):
+            gd.concat([None, None])
+    else:
+        raise AssertionError("Expected pd.concat to fail for all None input")
 
     # Mismatched types
     with pytest.raises(
@@ -122,7 +130,8 @@ def test_concat_errors():
 
     # Unknown type
     with pytest.raises(
-        ValueError, match=re.escape("Unknown type <class 'str'>")
+        ValueError,
+        match=re.escape("cannot concatenate object of type <class 'str'>"),
     ):
         gd.concat(["bar", "foo"])
 
@@ -130,6 +139,7 @@ def test_concat_errors():
     gdf3 = gdf2.copy()
     del gdf3["z"]
     gdf4 = gdf2.set_index("z")
+
     with pytest.raises(ValueError, match="All columns must be the same type"):
         gd.concat([gdf3, gdf4])
 
@@ -321,11 +331,12 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     try:
         pd.concat([ps1, ps2], axis=1)
     except Exception as e:
-        e_msg = str(e)
-        e_type = type(e)
-
-    with pytest.raises(e_type, match=e_msg):
-        gd.concat([s1, s2], axis=1)
+        with pytest.raises(type(e), match=e.__str__()):
+            gd.concat([s1, s2], axis=1)
+    else:
+        raise AssertionError(
+            "Expected pd.concat to fail for different index when axis=1"
+        )
 
 
 def test_concat_duplicate_columns():
