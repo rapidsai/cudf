@@ -54,7 +54,8 @@ public enum DType {
    */
   TIMESTAMP_NANOSECONDS(8, 16, "timestamp[ns]"),
 
-  //We currently don't have mappings for duration type to I/O files
+  //We currently don't have mappings for duration type to I/O files, and these
+  //simpleNames might change in future when we do
   DURATION_DAYS(4, 17, "int32"),
   DURATION_SECONDS(8, 18, "int64"),
   DURATION_MILLISECONDS(8, 19, "int64"),
