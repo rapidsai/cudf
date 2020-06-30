@@ -54,11 +54,11 @@ public enum DType {
    */
   TIMESTAMP_NANOSECONDS(8, 16, "timestamp[ns]"),
 
-  //DURATION_DAYS(4, 17, "NO IDEA"),q
-  //DURATION_SECONDS(8, 18, "NO IDEA"),
-  //DURATION_MILLISECONDS(8, 19, "NO IDEA"),
-  //DURATION_MICROSECONDS(8, 20, "NO IDEA"),
-  //DURATION_NANOSECONDS(8, 21, "NO IDEA"),
+  DURATION_DAYS(4, 17, "NO IDEA"),
+  DURATION_SECONDS(8, 18, "NO IDEA"),
+  DURATION_MILLISECONDS(8, 19, "NO IDEA"),
+  DURATION_MICROSECONDS(8, 20, "NO IDEA"),
+  DURATION_NANOSECONDS(8, 21, "NO IDEA"),
   //DICTIONARY32(4, 22, "NO IDEA"),
 
   STRING(0, 23, "str");
@@ -83,6 +83,13 @@ public enum DType {
    */
   public boolean hasTimeResolution() {
     return TIME_RESOLUTION.contains(this);
+  }
+
+  /**
+   * Returns true for duration types
+   */
+  public boolean isDurationType() {
+    return DURATION_TYPE.contains(this);
   }
 
   public int getNativeId() {
@@ -119,4 +126,12 @@ public enum DType {
       DType.TIMESTAMP_MILLISECONDS,
       DType.TIMESTAMP_MICROSECONDS,
       DType.TIMESTAMP_NANOSECONDS);
+
+  private static final EnumSet<DType> DURATION_TYPE = EnumSet.of(
+      DType.DURATION_DAYS,
+      DType.DURATION_MICROSECONDS,
+      DType.DURATION_MILLISECONDS,
+      DType.DURATION_NANOSECONDS,
+      DType.DURATION_SECONDS
+  );
 }

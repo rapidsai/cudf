@@ -376,7 +376,8 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public final int getInt(long index) {
-    assert type == DType.INT32 || type == DType.UINT32 || type == DType.TIMESTAMP_DAYS;
+    assert type == DType.INT32 || type == DType.UINT32 || type == DType.TIMESTAMP_DAYS
+        || type == DType.DURATION_DAYS;
     assertsForGet(index);
     return offHeap.data.getInt(index * type.sizeInBytes);
   }
@@ -405,7 +406,8 @@ public final class HostColumnVector implements AutoCloseable {
    */
   public final long getLong(long index) {
     // Timestamps with time values are stored as longs
-    assert type == DType.INT64 || type == DType.UINT64 || type.hasTimeResolution();
+    assert type == DType.INT64 || type == DType.UINT64 || type.hasTimeResolution()
+        || (type.isDurationType() && type != DType.DURATION_DAYS);
     assertsForGet(index);
     return offHeap.data.getLong(index * type.sizeInBytes);
   }
@@ -638,6 +640,13 @@ public final class HostColumnVector implements AutoCloseable {
   /**
    * Create a new vector from the given values.
    */
+  public static HostColumnVector fromDurationDaysInInts(int... values) {
+    return build(DType.DURATION_DAYS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
   public static HostColumnVector fromInts(int... values) {
     return build(DType.INT32, values.length, (b) -> b.appendArray(values));
   }
@@ -794,6 +803,15 @@ public final class HostColumnVector implements AutoCloseable {
    */
   public static HostColumnVector fromBoxedUnsignedShorts(Short... values) {
     return build(DType.UINT16, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static HostColumnVector fromDurationDaysInBoxedInts(Integer... values) {
+    return build(DType.DURATION_DAYS, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -990,7 +1008,8 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public final Builder append(int value) {
-      assert (type == DType.INT32 || type == DType.UINT32 || type == DType.TIMESTAMP_DAYS);
+      assert (type == DType.INT32 || type == DType.UINT32 || type == DType.TIMESTAMP_DAYS
+          || type == DType.DURATION_DAYS);
       assert currentIndex < rows;
       data.setInt(currentIndex * type.sizeInBytes, value);
       currentIndex++;
@@ -998,9 +1017,8 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public final Builder append(long value) {
-      assert type == DType.INT64 || type == DType.UINT64 || type == DType.TIMESTAMP_MILLISECONDS ||
-          type == DType.TIMESTAMP_MICROSECONDS || type == DType.TIMESTAMP_NANOSECONDS ||
-          type == DType.TIMESTAMP_SECONDS;
+      assert type == DType.INT64 || type == DType.UINT64 || type.hasTimeResolution()
+          || (type.isDurationType() && type != DType.DURATION_DAYS);
       assert currentIndex < rows;
       data.setLong(currentIndex * type.sizeInBytes, value);
       currentIndex++;
@@ -1088,7 +1106,8 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public Builder appendArray(int... values) {
-      assert (type == DType.INT32 || type == DType.UINT32 || type == DType.TIMESTAMP_DAYS);
+      assert (type == DType.INT32 || type == DType.UINT32 || type == DType.TIMESTAMP_DAYS
+          || type == DType.DURATION_DAYS);
       assert (values.length + currentIndex) <= rows;
       data.setInts(currentIndex * type.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;
@@ -1096,9 +1115,8 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public Builder appendArray(long... values) {
-      assert type == DType.INT64 || type == DType.UINT64 || type == DType.TIMESTAMP_MILLISECONDS ||
-          type == DType.TIMESTAMP_MICROSECONDS || type == DType.TIMESTAMP_NANOSECONDS ||
-          type == DType.TIMESTAMP_SECONDS;
+      assert type == DType.INT64 || type == DType.UINT64 || type.hasTimeResolution()
+          || (type.isDurationType() && type != DType.DURATION_DAYS);
       assert (values.length + currentIndex) <= rows;
       data.setLongs(currentIndex * type.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;

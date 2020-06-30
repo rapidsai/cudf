@@ -2981,8 +2981,29 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new vector from the given values.
    */
+  public static ColumnVector durationSecondsFromLongs(long... values) {
+    return build(DType.DURATION_SECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
   public static ColumnVector timestampSecondsFromLongs(long... values) {
     return build(DType.TIMESTAMP_SECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static ColumnVector durationDaysFromInts(int... values) {
+    return build(DType.DURATION_DAYS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static ColumnVector durationMilliSecondsFromLongs(long... values) {
+    return build(DType.DURATION_MILLISECONDS, values.length, (b) -> b.appendArray(values));
   }
 
   /**
@@ -2995,8 +3016,22 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new vector from the given values.
    */
+  public static ColumnVector durationMicroSecondsFromLongs(long... values) {
+    return build(DType.DURATION_MICROSECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
   public static ColumnVector timestampMicroSecondsFromLongs(long... values) {
     return build(DType.TIMESTAMP_MICROSECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static ColumnVector durationNanoSecondsFromLongs(long... values) {
+    return build(DType.DURATION_NANOSECONDS, values.length, (b) -> b.appendArray(values));
   }
 
   /**
@@ -3142,8 +3177,35 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    */
+  public static ColumnVector durationDaysFromBoxedInts(Integer... values) {
+    return build(DType.DURATION_DAYS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static ColumnVector durationSecondsFromBoxedLongs(Long... values) {
+    return build(DType.DURATION_SECONDS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
   public static ColumnVector timestampSecondsFromBoxedLongs(Long... values) {
     return build(DType.TIMESTAMP_SECONDS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static ColumnVector durationMilliSecondsFromBoxedLongs(Long... values) {
+    return build(DType.DURATION_MILLISECONDS, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -3160,8 +3222,26 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    */
+  public static ColumnVector durationMicroSecondsFromBoxedLongs(Long... values) {
+    return build(DType.DURATION_MICROSECONDS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
   public static ColumnVector timestampMicroSecondsFromBoxedLongs(Long... values) {
     return build(DType.TIMESTAMP_MICROSECONDS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static ColumnVector durationNanoSecondsFromBoxedLongs(Long... values) {
+    return build(DType.DURATION_NANOSECONDS, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**

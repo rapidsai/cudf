@@ -603,6 +603,15 @@ public class ColumnVectorTest extends CudfTestBase {
         case STRING:
           s = Scalar.fromString("hello, world!");
           break;
+        case DURATION_DAYS:
+          s = Scalar.fromDurationDay(3);
+          break;
+        case DURATION_SECONDS:
+        case DURATION_MILLISECONDS:
+        case DURATION_MICROSECONDS:
+        case DURATION_NANOSECONDS:
+          s = Scalar.durationFromLong(type, 21313);
+          break;
         case EMPTY:
           continue;
         default:
@@ -737,6 +746,36 @@ public class ColumnVectorTest extends CudfTestBase {
           String v = "hello, world!";
           s = Scalar.fromString(v);
           expected = ColumnVector.fromStrings(v, v, v, v);
+          break;
+        }
+        case DURATION_DAYS: {
+          int v = 13;
+          s = Scalar.fromDurationDay(v);
+          expected = ColumnVector.durationDaysFromInts(v, v, v, v);
+          break;
+        }
+        case DURATION_MICROSECONDS: {
+          long v = 1123123123L;
+          s = Scalar.durationFromLong(type, v);
+          expected = ColumnVector.durationMicroSecondsFromLongs(v, v, v, v);
+          break;
+        }
+        case DURATION_MILLISECONDS: {
+          long v = 11212432423L;
+          s = Scalar.durationFromLong(type, v);
+          expected = ColumnVector.durationMilliSecondsFromLongs(v, v, v, v);
+          break;
+        }
+        case DURATION_NANOSECONDS: {
+          long v = 12353245343L;
+          s = Scalar.durationFromLong(type, v);
+          expected = ColumnVector.durationNanoSecondsFromLongs(v, v, v, v);
+          break;
+        }
+        case DURATION_SECONDS: {
+          long v = 132342321123L;
+          s = Scalar.durationFromLong(type, v);
+          expected = ColumnVector.durationSecondsFromLongs(v, v, v, v);
           break;
         }
         case EMPTY:
@@ -2284,6 +2323,68 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, isDouble);
       assertColumnsAreEqual(expectedFloats, floats);
       assertColumnsAreEqual(expectedDoubles, doubles);
+    }
+  }
+  @Test
+  void testCreateDurationDays() {
+    Integer[] days = {100, 10, 23, 1, -1, 0, Integer.MAX_VALUE, null, Integer.MIN_VALUE};
+
+    try (ColumnVector durationDays = ColumnVector.durationDaysFromBoxedInts(days)) {
+      HostColumnVector hc = durationDays.copyToHost();
+      for (int i = 0; i < 7; i++) {
+        assertEquals(days[i], hc.getInt(i));
+      }
+    }
+  }
+
+  @Test
+  void testCreateDurationSeconds() {
+    Long[] secs = {10230L, 10L, 203L, 1L, -1L, 0L, Long.MAX_VALUE, null, Long.MIN_VALUE};
+
+    try (ColumnVector durationSeconds = ColumnVector.durationSecondsFromBoxedLongs(secs)) {
+      HostColumnVector hc = durationSeconds.copyToHost();
+      for (int i = 0 ; i < 7 ; i++) {
+        assertEquals(secs[i], hc.getLong(i));
+      }
+    }
+  }
+
+  @Test
+  void testCreateDurationMilliseconds() {
+    Long[] ms = {12342340230L, 12112340L, 2230233L, 1L, -1L, 0L, Long.MAX_VALUE, null,
+        Long.MIN_VALUE};
+
+    try (ColumnVector durationSeconds = ColumnVector.durationMilliSecondsFromBoxedLongs(ms)) {
+      HostColumnVector hc = durationSeconds.copyToHost();
+      for (int i = 0 ; i < 7 ; i++) {
+        assertEquals(ms[i], hc.getLong(i));
+      }
+    }
+  }
+
+  @Test
+  void testCreateDurationMicroseconds() {
+    Long[] us = {1234234230L, 132350L, 289877803L, 1L, -1L, 0L, Long.MAX_VALUE, null,
+        Long.MIN_VALUE};
+
+    try (ColumnVector durationSeconds = ColumnVector.durationMicroSecondsFromBoxedLongs(us)) {
+      HostColumnVector hc = durationSeconds.copyToHost();
+      for (int i = 0 ; i < 7 ; i++) {
+        assertEquals(us[i], hc.getLong(i));
+      }
+    }
+  }
+
+  @Test
+  void testCreateDurationNanoseconds() {
+    Long[] us = {1234234230L, 198832350L, 289877803L, 1L, -1L, 0L, Long.MAX_VALUE, null,
+        Long.MIN_VALUE};
+
+    try (ColumnVector durationSeconds = ColumnVector.durationNanoSecondsFromBoxedLongs(us)) {
+      HostColumnVector hc = durationSeconds.copyToHost();
+      for (int i = 0 ; i < 7 ; i++) {
+        assertEquals(us[i], hc.getLong(i));
+      }
     }
   }
 }

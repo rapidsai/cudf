@@ -73,6 +73,13 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return new Scalar(type, makeTimestampTimeScalar(type.nativeId, 0, false));
     case STRING:
       return new Scalar(type, makeStringScalar(null, false));
+    case DURATION_DAYS:
+      return new Scalar(type, makeDurationDaysScalar(0, false));
+    case DURATION_MICROSECONDS:
+    case DURATION_MILLISECONDS:
+    case DURATION_NANOSECONDS:
+    case DURATION_SECONDS:
+      return new Scalar(type, makeDurationScalar(type.nativeId, 0, false));
     default:
       throw new IllegalArgumentException("Unexpected type: " + type);
     }
@@ -131,6 +138,17 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return Scalar.fromNull(DType.UINT16);
     }
     return Scalar.fromUnsignedShort(value.shortValue());
+  }
+
+  public static Scalar fromDurationDay(int value) {
+    return new Scalar(DType.DURATION_DAYS, makeDurationDaysScalar(value, true));
+  }
+
+  public static Scalar fromDurationDay(Integer value) {
+    if (value == null) {
+      return Scalar.fromNull(DType.DURATION_DAYS);
+    }
+    return Scalar.fromDurationDay(value.intValue());
   }
 
   public static Scalar fromInt(int value) {
@@ -210,6 +228,22 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return Scalar.timestampDaysFromInt(value.intValue());
   }
 
+  public static Scalar durationFromLong(DType type, long value) {
+    if (type.isDurationType()) {
+      if (type == DType.DURATION_DAYS) {
+        int intValue = (int)value;
+        if (value != intValue) {
+          throw new IllegalArgumentException("value too large for type " + type + ": " + value);
+        }
+        return fromDurationDay(intValue);
+      } else {
+        return new Scalar(type, makeDurationScalar(type.nativeId, value, true));
+      }
+    } else {
+      throw new IllegalArgumentException("type is not a timestamp: " + type);
+    }
+  }
+
   public static Scalar timestampFromLong(DType type, long value) {
     if (type.isTimestamp()) {
       if (type == DType.TIMESTAMP_DAYS) {
@@ -261,6 +295,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeFloat32Scalar(float value, boolean isValid);
   private static native long makeFloat64Scalar(double value, boolean isValid);
   private static native long makeStringScalar(byte[] value, boolean isValid);
+  private static native long makeDurationDaysScalar(int value, boolean isValid);
+  private static native long makeDurationScalar(int dtype, long value, boolean isValid);
   private static native long makeTimestampDaysScalar(int value, boolean isValid);
   private static native long makeTimestampTimeScalar(int dtypeNativeId, long value, boolean isValid);
 
