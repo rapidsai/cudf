@@ -194,9 +194,9 @@ class parquet_column_view {
         _ts_scale       = -1000;
         break;
       case cudf::type_id::STRING:
-        _physical_type = Type::BYTE_ARRAY;
-        //_converted_type = ConvertedType::UTF8; // TBD
-        _stats_dtype = statistics_dtype::dtype_string;
+        _physical_type  = Type::BYTE_ARRAY;
+        _converted_type = ConvertedType::UTF8;
+        _stats_dtype    = statistics_dtype::dtype_string;
         break;
       default:
         _physical_type = UNDEFINED_TYPE;

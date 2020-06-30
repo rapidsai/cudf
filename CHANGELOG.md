@@ -144,6 +144,7 @@
 - PR #5609 Fix loc and iloc issue with column like input
 - PR #5578 Fix getattr logic in GroupBy
 - PR #5490 Fix python column view
+- PR #5608 Fix issue related to string types being represented as binary types
 
 
 # cuDF 0.14.0 (Date TBD)
