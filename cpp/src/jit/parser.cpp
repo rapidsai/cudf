@@ -217,7 +217,7 @@ std::vector<std::string> ptx_parser::parse_function_body(const std::string& src)
   std::vector<std::string> statements;
 
   while (l < src.cend()) {
-    l = std::find_if(l, src.cend(), [](auto c) { return c == ';'; });
+    l = std::find(l, src.cend(), ';');
     statements.push_back(parse_statement(std::string(f, l)));
     f = ++l;
   }
@@ -295,10 +295,10 @@ std::string ptx_parser::parse_function_header(const std::string& src)
     // The function name
     i = std::find_if_not(std::next(i), src.cend(), [](auto c) { return is_white(c) || c == '('; });
     // Second Pass: input param list
-    return std::next(std::find_if(i, src.cend(), [](auto c) { return c == '('; }));
+    return std::next(std::find(i, src.cend(), '('));
   }();
 
-  auto l = std::find_if(f, src.cend(), [](auto c) { return c == ')'; });
+  auto l = std::find(f, src.cend(), ')');
 
   auto const input_arg = parse_param_list(std::string(f, l));
   return "\n__device__ __inline__ void " + function_name + "(" + input_arg + "){" + "\n";
