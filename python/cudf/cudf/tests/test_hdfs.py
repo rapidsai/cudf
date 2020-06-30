@@ -85,8 +85,7 @@ def test_write_csv(pdf, hdfs, test_url):
 
     assert hdfs.exists(f"{basedir}/test_csv_writer.csv")
     with hdfs.open(f"{basedir}/test_csv_writer.csv", mode="rb") as f:
-        got = pd.read_csv(f)
-
+        got = pd.read_csv(f, dtype=dict(pdf.dtypes))
     assert_eq(pdf, got)
 
 
@@ -189,6 +188,8 @@ def test_read_orc(datadir, hdfs, test_url):
 
 @pytest.mark.parametrize("test_url", [False, True])
 def test_write_orc(pdf, hdfs, test_url):
+    # Orc writer doesn't support writing unsigned ints
+    pdf["Integer2"] = pdf["Integer2"].astype("int64")
     gdf = cudf.from_pandas(pdf)
     if test_url:
         hd_fpath = "hdfs://{}:{}{}/test_orc_writer.orc".format(
