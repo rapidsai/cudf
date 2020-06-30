@@ -78,16 +78,16 @@ class expression {
 
 class abstract_visitor {
  public:
-  virtual cudf::size_type visit(const literal* expr)             = 0;
-  virtual cudf::size_type visit(const column_reference* expr)    = 0;
-  virtual cudf::size_type visit(const operator_expression* expr) = 0;
+  virtual cudf::size_type visit(literal const& expr)             = 0;
+  virtual cudf::size_type visit(column_reference const& expr)    = 0;
+  virtual cudf::size_type visit(operator_expression const& expr) = 0;
 };
 
 class literal : public expression {
  public:
-  literal(const cudf::scalar& value) : value(std::cref(value)) {}
+  literal(std::reference_wrapper<const cudf::scalar> value) : value(std::cref(value)) {}
   std::reference_wrapper<const cudf::scalar> get_value() const { return this->value; }
-  cudf::size_type accept(abstract_visitor& visitor) const override { return visitor.visit(this); }
+  cudf::size_type accept(abstract_visitor& visitor) const override { return visitor.visit(*this); }
   cudf::data_type get_data_type() const { return this->get_value().get().type(); }
 
  private:
@@ -121,7 +121,7 @@ class column_reference : public expression {
   }
   // TODO: Fetch value for a given table and row
 
-  cudf::size_type accept(abstract_visitor& visitor) const override { return visitor.visit(this); }
+  cudf::size_type accept(abstract_visitor& visitor) const override { return visitor.visit(*this); }
 
  private:
   cudf::size_type column_index;
@@ -131,7 +131,7 @@ class column_reference : public expression {
 class operator_expression : public expression {
  public:
   ast_operator get_operator() const { return this->op; }
-  virtual std::vector<std::shared_ptr<expression>> get_operands() const = 0;
+  virtual std::vector<std::reference_wrapper<const expression>> get_operands() const = 0;
 
  protected:
   operator_expression(ast_operator op) : op(op) {}
@@ -141,36 +141,38 @@ class operator_expression : public expression {
 class binary_expression : public operator_expression {
  public:
   binary_expression(ast_operator op,
-                    std::shared_ptr<expression> left,
-                    std::shared_ptr<expression> right)
+                    std::reference_wrapper<const expression> left,
+                    std::reference_wrapper<const expression> right)
     : operator_expression(op), left(left), right(right)
   {
   }
-  std::shared_ptr<expression> get_left() const { return this->left; }
-  std::shared_ptr<expression> get_right() const { return this->right; }
-  std::vector<std::shared_ptr<expression>> get_operands() const override
+  std::reference_wrapper<const expression> get_left() const { return this->left; }
+  std::reference_wrapper<const expression> get_right() const { return this->right; }
+  std::vector<std::reference_wrapper<const expression>> get_operands() const override
   {
-    return std::vector<std::shared_ptr<expression>>{this->get_left(), this->get_right()};
+    return std::vector<std::reference_wrapper<const expression>>{this->get_left(),
+                                                                 this->get_right()};
   }
-  cudf::size_type accept(abstract_visitor& visitor) const override { return visitor.visit(this); }
+  cudf::size_type accept(abstract_visitor& visitor) const override { return visitor.visit(*this); }
 
  private:
-  const std::shared_ptr<expression> left;
-  const std::shared_ptr<expression> right;
+  std::reference_wrapper<const expression> left;
+  std::reference_wrapper<const expression> right;
 };
 
 class linearizer : public abstract_visitor {
  public:
-  linearizer(std::vector<cudf::table_view> tables) : node_counter(0) {}
+  linearizer(cudf::table_view tables) : node_counter(0) {}
 
-  cudf::size_type visit(const literal* expr) override
+  cudf::size_type visit(literal const& expr) override
   {
     std::cout << "visiting literal value" << std::endl;
 
     // Resolve node type
-    auto data_type = expr->get_data_type();
+    auto data_type = expr.get_data_type();
     // Push node type
-    this->literals.push_back(expr->get_value());
+    // TODO: Use scalar device view
+    this->literals.push_back(expr.get_value());
     // TODO: Push literal
     // Push data reference
     auto source = detail::device_data_reference{
@@ -183,28 +185,27 @@ class linearizer : public abstract_visitor {
     return index;
   }
 
-  cudf::size_type visit(const column_reference* expr) override
+  cudf::size_type visit(column_reference const& expr) override
   {
     std::cout << "visiting column reference" << std::endl;
     // TODO: Resolve node type
-    auto data_type = expr->get_data_type()
-                     // TODO: Push node type
-                     // Push data reference
-                     auto source =
-      detail::device_data_reference{detail::device_data_reference_type::COLUMN,
-                                    expr->get_column_index(),
-                                    expr->get_table_source()};
+    auto data_type = cudf::data_type(cudf::type_id::EMPTY);
+    // auto data_type = expr.get_data_type();
+    // TODO: Push node type
+    // Push data reference
+    auto source = detail::device_data_reference{
+      detail::device_data_reference_type::COLUMN, expr.get_column_index(), expr.get_table_source()};
     this->add_source(data_type, source);
     auto index = this->node_counter;
     this->node_counter++;
     return index;
   }
 
-  cudf::size_type visit(const operator_expression* expr) override
+  cudf::size_type visit(operator_expression const& expr) override
   {
     std::cout << "visiting operator_expression" << std::endl;
-    auto op                             = expr->get_operator();
-    auto operand_data_reference_indices = this->visit_operands(expr->get_operands());
+    auto op                             = expr.get_operator();
+    auto operand_data_reference_indices = this->visit_operands(expr.get_operands());
     std::cout << "visited operands" << std::endl;
     // TODO: Resolve types
     // TODO: Validate types of operand data references match
@@ -253,14 +254,13 @@ class linearizer : public abstract_visitor {
   std::vector<std::reference_wrapper<const scalar>> get_literals() const { return this->literals; }
 
  private:
-  std::vector<cudf::size_type> visit_operands(std::vector<std::shared_ptr<expression>> operands)
+  std::vector<cudf::size_type> visit_operands(
+    std::vector<std::reference_wrapper<const expression>> operands)
   {
     auto operand_data_reference_indices = std::vector<cudf::size_type>();
     for (auto& operand : operands) {
-      if (operand != nullptr) {
-        auto operand_data_reference_index = operand->accept(*this);
-        operand_data_reference_indices.push_back(operand_data_reference_index);
-      }
+      auto operand_data_reference_index = operand.get().accept(*this);
+      operand_data_reference_indices.push_back(operand_data_reference_index);
     }
     return operand_data_reference_indices;
   }
@@ -415,13 +415,13 @@ __global__ void compute_column_kernel(table_device_view table,
 
 std::unique_ptr<column> compute_column(
   table_view const& table,
-  std::shared_ptr<expression> expr,
+  std::reference_wrapper<const expression> expr,
   cudaStream_t stream                 = 0,  // TODO use detail API
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   // Linearize the AST
-  auto expr_linearizer = linearizer();
-  expr->accept(expr_linearizer);
+  auto expr_linearizer = linearizer(table);
+  expr.get().accept(expr_linearizer);
   auto expr_data_type = expr_linearizer.get_root_data_type();
   std::cout << "LINEARIZER INFO:" << std::endl;
   std::cout << "Node counter: " << expr_linearizer.get_node_counter() << std::endl;
