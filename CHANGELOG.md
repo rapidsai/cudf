@@ -143,6 +143,7 @@
 - PR #5561 Fix `copy_bitmask` issue with offset
 - PR #5578 Fix getattr logic in GroupBy
 - PR #5490 Fix python column view
+- PR #5608 Fix issue related to string types being represented as binary types
 
 
 # cuDF 0.14.0 (Date TBD)
