@@ -164,10 +164,12 @@ std::unique_ptr<column> is_hex(strings_column_view const& strings,
                       if (d_column.is_null(idx)) return false;
                       auto const d_str = d_column.element<string_view>(idx);
                       if (d_str.empty()) return false;
-                      auto begin = d_str.begin();
+                      auto const starts_with_0x = [](auto const& sv) {
+                        return sv.length() > 1 && (sv.substr(0, 2) == string_view("0x", 2) ||
+                                                   sv.substr(0, 2) == string_view("0X", 2));
+                      };
+                      auto begin = d_str.begin() + (starts_with_0x(d_str) ? 2 : 0);
                       auto end   = d_str.end();
-                      if (*begin == '0') ++begin;
-                      if ((begin < end) && (*begin == 'x' || *begin == 'X')) ++begin;
                       return (thrust::distance(begin, end) > 0) &&
                              thrust::all_of(thrust::seq, begin, end, [] __device__(auto chr) {
                                return (chr >= '0' && chr <= '9') || (chr >= 'A' && chr <= 'F') ||
