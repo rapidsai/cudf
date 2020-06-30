@@ -716,25 +716,28 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
         gdf.to_parquet(dir1, partition_cols=cols)
 
 
-def test_write_cudf_read_pandas_pyarrow(pdf):
+def test_write_cudf_read_pandas_pyarrow(tmpdir, pdf):
+    cudf_path = tmpdir.join("cudf.parquet")
+    pandas_path = tmpdir.join("pandas.parquet")
+
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category"])
 
     df = cudf.from_pandas(pdf)
 
-    df.to_parquet("cudf.parquet")
-    pdf.to_parquet("pandas.parquet")
+    df.to_parquet(cudf_path)
+    pdf.to_parquet(pandas_path)
 
-    cudf_res = pd.read_parquet("cudf.parquet")
-    pd_res = pd.read_parquet("pandas.parquet")
+    cudf_res = pd.read_parquet(cudf_path)
+    pd_res = pd.read_parquet(pandas_path)
 
     assert_eq(pd_res, cudf_res, check_index_type=False if pdf.empty else True)
 
     cudf_res = pa.parquet.read_table(
-        "cudf.parquet", use_pandas_metadata=True
+        cudf_path, use_pandas_metadata=True
     ).to_pandas()
     pd_res = pa.parquet.read_table(
-        "pandas.parquet", use_pandas_metadata=True
+        pandas_path, use_pandas_metadata=True
     ).to_pandas()
 
     assert_eq(cudf_res, pd_res, check_index_type=False if pdf.empty else True)
