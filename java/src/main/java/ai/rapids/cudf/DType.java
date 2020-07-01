@@ -87,12 +87,34 @@ public enum DType {
     return TIME_RESOLUTION.contains(this);
   }
 
+  /**
+   * Returns true if this type is backed by int type
+   * Namely this method will return true for the following types
+   *       DType.INT32,
+   *       DType.UINT32,
+   *       DType.DURATION_DAYS,
+   *       DType.TIMESTAMP_DAYS
+   */
   public boolean isBackedByInt() {
-    return ints.contains(this);
+    return INTS.contains(this);
   }
 
+  /**
+   * Returns true if this type is backed by long type
+   * Namely this method will return true for the following types
+   *       DType.INT64,
+   *       DType.UINT64,
+   *       DType.DURATION_SECONDS,
+   *       DType.DURATION_MILLISECONDS,
+   *       DType.DURATION_MICROSECONDS,
+   *       DType.DURATION_NANOSECONDS,
+   *       DType.TIMESTAMP_SECONDS,
+   *       DType.TIMESTAMP_MILLISECONDS,
+   *       DType.TIMESTAMP_MICROSECONDS,
+   *       DType.TIMESTAMP_NANOSECONDS
+   */
   public boolean isBackedByLong() {
-    return longs.contains(this);
+    return LONGS.contains(this);
   }
 
   /**
@@ -145,7 +167,7 @@ public enum DType {
       DType.DURATION_SECONDS
   );
 
-  private static final EnumSet<DType> longs = EnumSet.of(
+  private static final EnumSet<DType> LONGS = EnumSet.of(
       DType.INT64,
       DType.UINT64,
       DType.DURATION_SECONDS,
@@ -158,7 +180,7 @@ public enum DType {
       DType.TIMESTAMP_NANOSECONDS
   );
 
-  private static final EnumSet<DType> ints = EnumSet.of(
+  private static final EnumSet<DType> INTS = EnumSet.of(
       DType.INT32,
       DType.UINT32,
       DType.DURATION_DAYS,

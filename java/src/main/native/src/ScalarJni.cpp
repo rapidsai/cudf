@@ -345,9 +345,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampDaysScalar(JNIEn
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDurationTimeScalar(JNIEnv *env, jclass,
-                                                                      jint jdtype_id,
-                                                                      jlong value,
-                                                                      jboolean is_valid) {
+                                                                          jint jdtype_id,
+                                                                          jlong value,
+                                                                          jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
     auto dtype_id = static_cast<cudf::type_id>(jdtype_id);

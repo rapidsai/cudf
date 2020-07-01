@@ -140,15 +140,15 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return Scalar.fromUnsignedShort(value.shortValue());
   }
 
-  public static Scalar fromDurationDay(int value) {
+  public static Scalar durationDayFromInt(int value) {
     return new Scalar(DType.DURATION_DAYS, makeDurationDaysScalar(value, true));
   }
 
-  public static Scalar fromDurationDay(Integer value) {
+  public static Scalar durationDayFromInt(Integer value) {
     if (value == null) {
       return Scalar.fromNull(DType.DURATION_DAYS);
     }
-    return Scalar.fromDurationDay(value.intValue());
+    return Scalar.durationDayFromInt(value.intValue());
   }
 
   public static Scalar fromInt(int value) {
@@ -235,7 +235,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         if (value != intValue) {
           throw new IllegalArgumentException("value too large for type " + type + ": " + value);
         }
-        return fromDurationDay(intValue);
+        return durationDayFromInt(intValue);
       } else {
         return new Scalar(type, makeDurationTimeScalar(type.nativeId, value, true));
       }

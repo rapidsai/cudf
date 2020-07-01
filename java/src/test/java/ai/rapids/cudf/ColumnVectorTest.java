@@ -604,7 +604,7 @@ public class ColumnVectorTest extends CudfTestBase {
           s = Scalar.fromString("hello, world!");
           break;
         case DURATION_DAYS:
-          s = Scalar.fromDurationDay(3);
+          s = Scalar.durationDayFromInt(3);
           break;
         case DURATION_SECONDS:
         case DURATION_MILLISECONDS:
@@ -750,7 +750,7 @@ public class ColumnVectorTest extends CudfTestBase {
         }
         case DURATION_DAYS: {
           int v = 13;
-          s = Scalar.fromDurationDay(v);
+          s = Scalar.durationDayFromInt(v);
           expected = ColumnVector.durationDaysFromInts(v, v, v, v);
           break;
         }

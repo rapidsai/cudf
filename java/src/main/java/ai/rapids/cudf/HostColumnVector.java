@@ -642,7 +642,6 @@ public final class HostColumnVector implements AutoCloseable {
     return build(DType.DURATION_NANOSECONDS, values.length, (b) -> b.appendArray(values));
   }
 
-
   /**
    * Create a new vector from the given values.
    */
@@ -650,14 +649,12 @@ public final class HostColumnVector implements AutoCloseable {
     return build(DType.DURATION_MICROSECONDS, values.length, (b) -> b.appendArray(values));
   }
 
-
   /**
    * Create a new vector from the given values.
    */
   public static HostColumnVector durationMillisecondsFromLongs(long... values) {
     return build(DType.DURATION_MILLISECONDS, values.length, (b) -> b.appendArray(values));
   }
-
 
   /**
    * Create a new vector from the given values.
