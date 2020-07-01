@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import datetime as dt
+import re
 
 import cupy as cp
 import numpy as np
@@ -641,18 +642,13 @@ def test_to_datetime_errors(data):
     else:
         gd_data = pd_data
 
-    exception_type = None
     try:
         pd.to_datetime(pd_data)
     except Exception as e:
-
-        exception_type = type(e)
-
-    if exception_type is None:
-        raise TypeError("Was expecting `pd.to_datetime` to fail")
-
-    with pytest.raises(exception_type):
-        cudf.to_datetime(gd_data)
+        with pytest.raises(type(e), match=re.escape(str(e))):
+            cudf.to_datetime(gd_data)
+    else:
+        raise AssertionError("Was expecting `pd.to_datetime` to fail")
 
 
 def test_to_datetime_not_implemented():
@@ -814,14 +810,10 @@ def test_str_null_to_datetime():
     psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
     gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
 
-    error_type = None
     try:
         psr.astype("datetime64[s]")
-    except Exception as e:
-        error_type = type(e)
-
-    if error_type is None:
-        raise Exception("Expected psr.astype('datetime64[s]') to fail")
-
-    with pytest.raises(ValueError):
-        gsr.astype("datetime64[s]")
+    except Exception:
+        with pytest.raises(ValueError):
+            gsr.astype("datetime64[s]")
+    else:
+        raise AssertionError("Expected psr.astype('datetime64[s]') to fail")
