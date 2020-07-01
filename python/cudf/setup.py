@@ -46,6 +46,7 @@ extensions = [
         include_dirs=[
             "../../cpp/include/cudf",
             "../../cpp/include",
+            "../../cpp/libcudf_kafka/include/cudf_kafka",
             os.path.join(CUDF_ROOT, "include"),
             os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
             os.path.join(
@@ -61,7 +62,7 @@ extensions = [
             pa.get_library_dirs()
             + [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
         ),
-        libraries=["cudf"] + pa.get_libraries(),
+        libraries=["cudf", "cudf_kafka"] + pa.get_libraries(),
         language="c++",
         extra_compile_args=["-std=c++14"],
     )

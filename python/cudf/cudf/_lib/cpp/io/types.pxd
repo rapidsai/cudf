@@ -68,6 +68,7 @@ cdef extern from "cudf/io/types.hpp" \
         source_info(const string filepath) except +
         source_info(const char* host_buffer, size_t size) except +
         source_info(const shared_ptr[CRandomAccessFile] arrow_file) except +
+        source_info(datasource *source) except +
 
     cdef cppclass sink_info:
         io_type type
@@ -85,4 +86,10 @@ cdef extern from "cudf/io/data_sink.hpp" \
         namespace "cudf::io" nogil:
 
     cdef cppclass data_sink:
+        pass
+
+cdef extern from "cudf/io/datasource.hpp" \
+        namespace "cudf::io" nogil:
+
+    cdef cppclass datasource:
         pass

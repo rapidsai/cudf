@@ -2,10 +2,13 @@
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
+from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.string cimport string
-from cudf._lib.cpp.io.types cimport source_info, sink_info, data_sink, io_type
+from cudf._lib.cpp.io.types cimport source_info, datasource, sink_info, \
+    data_sink, io_type
+from cudf._lib.io.kafka cimport kafka_consumer
 
 import codecs
 import errno
@@ -16,6 +19,8 @@ import os
 # with the appropriate type and source values
 cdef source_info make_source_info(src) except*:
     cdef const unsigned char[::1] buf
+    cdef kafka_consumer *consumer
+    cdef map[string, string] kafka_confs
     empty_buffer = False
     if isinstance(src, bytes):
         if (len(src) > 0):
@@ -33,6 +38,17 @@ cdef source_info make_source_info(src) except*:
             return source_info(<string> str(src).encode())
         # If source expected to be a file, raise FileNotFoundError
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), src)
+    elif isinstance(src, cudf.io.kafka.KafkaSource):
+        for key, value in src.kafka_configs.items():
+            kafka_confs[str.encode(key)] = str.encode(value)
+        consumer = new kafka_consumer(kafka_confs,
+                                      src.topic.encode(),
+                                      src.partition,
+                                      src.start_offset,
+                                      src.end_offset,
+                                      src.batch_timeout,
+                                      src.delimiter.encode())
+        return source_info(<datasource *>consumer)
     else:
         raise TypeError("Unrecognized input type: {}".format(type(src)))
     if empty_buffer is False:

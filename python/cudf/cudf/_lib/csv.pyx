@@ -311,7 +311,8 @@ def read_csv(
     cudf.io.csv.read_csv
     """
 
-    if not isinstance(filepath_or_buffer, (BytesIO, StringIO, bytes)):
+    if not isinstance(filepath_or_buffer, (BytesIO, StringIO, bytes,
+                                           cudf.io.kafka.KafkaSource)):
         if not os.path.isfile(filepath_or_buffer):
             raise FileNotFoundError(
                 errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
