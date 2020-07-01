@@ -36,6 +36,97 @@ struct gather_data {
 };
 
 /**
+ * @copydoc cudf::make_gather_data(cudf::lists_column_view const& source_column,
+ *                                 MapItType gather_map,
+ *                                 size_type gather_map_size,
+ *                                 cudaStream_t stream,
+ *                                 rmm::mr::device_memory_resource* mr)
+ *
+ * @param prev_base_offsets The buffer backing the base offsets used in the gather map. If
+ *                          this buffer is not empty, the function will attempt to reuse the
+ *                          buffer if it is large enough.
+ */
+template <bool NullifyOutOfBounds, typename MapItType>
+gather_data make_gather_data(cudf::lists_column_view const& source_column,
+                             MapItType gather_map,
+                             size_type gather_map_size,
+                             cudaStream_t stream,
+                             rmm::mr::device_memory_resource* mr,
+                             rmm::device_uvector<int32_t> prev_base_offsets)
+{
+  // size of the gather map is the # of output rows
+  size_type output_count = gather_map_size;
+  size_type offset_count = output_count + 1;
+
+  // offsets of the source column
+  int32_t const* src_offsets{source_column.offsets().data<int32_t>()};
+  size_type const src_size = source_column.size();
+
+  // outgoing offsets.  these will persist as output from the entire gather operation
+  auto dst_offsets_c = cudf::make_fixed_width_column(
+    data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
+  mutable_column_view dst_offsets_v = dst_offsets_c->mutable_view();
+  int32_t* dst_offsets              = dst_offsets_v.data<int32_t>();
+
+  // generate the compacted outgoing offsets.
+  auto count_iter = thrust::make_counting_iterator<int32_t>(0);
+  thrust::transform_exclusive_scan(
+    rmm::exec_policy(stream)->on(stream),
+    count_iter,
+    count_iter + offset_count,
+    dst_offsets,
+    [gather_map, output_count, src_offsets, src_size] __device__(int32_t index) -> int32_t {
+      int32_t offset_index = index < output_count ? gather_map[index] : 0;
+
+      // if this is an invalid index, this will be a NULL list
+      if (NullifyOutOfBounds && ((offset_index < 0) || (offset_index >= src_size))) { return 0; }
+
+      // the length of this list
+      return src_offsets[offset_index + 1] - src_offsets[offset_index];
+    },
+    0,
+    thrust::plus<int32_t>());
+
+  // For each span of offsets (each output row) we need to know the original offset value to build
+  // the gather map for the next level.  This data is temporary and will only be needed until the
+  // next level of recursion is done using it.
+  //
+  // Additional optimization. If the "prev_base_offsets" buffer we have been passed is large enough
+  // to be used again, re-use it instead of allocating new memory. If it isn't big enough, release
+  // it.
+  if (prev_base_offsets.capacity() > 0) {
+    // reset size (but leave capacity)
+    prev_base_offsets.resize(0, stream);
+  }
+  bool can_recycle = prev_base_offsets.capacity() >= static_cast<size_t>(output_count);
+  rmm::device_uvector<int32_t> base_offsets =
+    can_recycle ? std::move(prev_base_offsets) : rmm::device_uvector<int32_t>(output_count, stream);
+  if (!can_recycle) { prev_base_offsets.release(); }
+
+  // generate the base offsets
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    gather_map,
+                    gather_map + offset_count,
+                    base_offsets.data(),
+                    [src_offsets, output_count, src_size] __device__(int32_t index) {
+                      // if this is an invalid index, this will be a NULL list
+                      if (NullifyOutOfBounds && ((index < 0) || (index >= src_size))) { return 0; }
+                      return src_offsets[index];
+                    });
+
+  // Retrieve size of the resulting gather map for level N+1 (the last offset)
+  size_type child_gather_map_size = 0;
+  CUDA_TRY(cudaMemcpyAsync(&child_gather_map_size,
+                           dst_offsets + output_count,
+                           sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
+
+  return {std::move(dst_offsets_c), std::move(base_offsets), child_gather_map_size};
+}
+
+/**
  * @brief Generates the data needed to create a `gather_map` for the next level of
  * recursion in a hierarchy of list columns.
  *
@@ -135,91 +226,25 @@ struct gather_data {
  * @param gather_map_size Size of the gather map.
  * @param stream CUDA stream on which to execute kernels
  * @param mr Memory resource to use for all allocations
- * @param prev_base_offsets (optional) The buffer backing the base offsets used in the gather map.
  *
  * @returns The gather_data struct needed to construct the gather map for the
  *          next level of recursion.
  *
  */
 template <bool NullifyOutOfBounds, typename MapItType>
-gather_data make_gather_data(
-  cudf::lists_column_view const& source_column,
-  MapItType gather_map,
-  size_type gather_map_size,
-  cudaStream_t stream,
-  rmm::mr::device_memory_resource* mr,
-  rmm::device_uvector<int32_t> prev_base_offsets = rmm::device_uvector<int32_t>{})
+gather_data make_gather_data(cudf::lists_column_view const& source_column,
+                             MapItType gather_map,
+                             size_type gather_map_size,
+                             cudaStream_t stream,
+                             rmm::mr::device_memory_resource* mr)
 {
-  // size of the gather map is the # of output rows
-  size_type output_count = gather_map_size;
-  size_type offset_count = output_count + 1;
-
-  // offsets of the source column
-  int32_t const* src_offsets{source_column.offsets().data<int32_t>()};
-  size_type const src_size = source_column.size();
-
-  // outgoing offsets.  these will persist as output from the entire gather operation
-  auto dst_offsets_c = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
-  mutable_column_view dst_offsets_v = dst_offsets_c->mutable_view();
-  int32_t* dst_offsets              = dst_offsets_v.data<int32_t>();
-
-  // generate the compacted outgoing offsets.
-  auto count_iter = thrust::make_counting_iterator<int32_t>(0);
-  thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream)->on(stream),
-    count_iter,
-    count_iter + offset_count,
-    dst_offsets,
-    [gather_map, output_count, src_offsets, src_size] __device__(int32_t index) -> int32_t {
-      int32_t offset_index = index < output_count ? gather_map[index] : 0;
-
-      // if this is an invalid index, this will be a NULL list
-      if (NullifyOutOfBounds && ((offset_index < 0) || (offset_index >= src_size))) { return 0; }
-
-      // the length of this list
-      return src_offsets[offset_index + 1] - src_offsets[offset_index];
-    },
-    0,
-    thrust::plus<int32_t>());
-
-  // For each span of offsets (each output row) we need to know the original offset value to build
-  // the gather map for the next level.  This data is temporary and will only be needed until the
-  // next level of recursion is done using it.
-  //
-  // Additional optimization. If the "prev_base_offsets" buffer we have been passed is large enough
-  // to be used again, re-use it instead of allocating new memory. If it isn't big enough, release
-  // it.
-  if (prev_base_offsets.capacity() > 0) {
-    // reset size (but leave capacity)
-    prev_base_offsets.resize(0, stream);
-  }
-  bool can_recycle = prev_base_offsets.capacity() >= static_cast<size_t>(output_count);
-  rmm::device_uvector<int32_t> base_offsets =
-    can_recycle ? std::move(prev_base_offsets) : rmm::device_uvector<int32_t>(output_count, stream);
-  if (!can_recycle) { prev_base_offsets.release(); }
-
-  // generate the base offsets
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
-                    gather_map,
-                    gather_map + offset_count,
-                    base_offsets.data(),
-                    [src_offsets, output_count, src_size] __device__(int32_t index) {
-                      // if this is an invalid index, this will be a NULL list
-                      if (NullifyOutOfBounds && ((index < 0) || (index >= src_size))) { return 0; }
-                      return src_offsets[index];
-                    });
-
-  // Retrieve size of the resulting gather map for level N+1 (the last offset)
-  size_type child_gather_map_size = 0;
-  CUDA_TRY(cudaMemcpyAsync(&child_gather_map_size,
-                           dst_offsets + output_count,
-                           sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
-
-  return {std::move(dst_offsets_c), std::move(base_offsets), child_gather_map_size};
+  return make_gather_data<NullifyOutOfBounds, MapItType>(
+    source_column,
+    gather_map,
+    gather_map_size,
+    stream,
+    mr,
+    rmm::device_uvector<int32_t>{0, stream, mr});
 }
 
 /**
