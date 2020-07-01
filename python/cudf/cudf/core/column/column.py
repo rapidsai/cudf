@@ -904,7 +904,7 @@ class ColumnBase(Column, Serializable):
             codes=labels._column,
             mask=self.mask,
             ordered=ordered,
-        ).astype(dtype)
+        )
 
     def as_numerical_column(self, dtype, **kwargs):
         raise NotImplementedError
