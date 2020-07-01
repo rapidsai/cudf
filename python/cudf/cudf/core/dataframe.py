@@ -6339,6 +6339,8 @@ class DataFrame(Frame, Serializable):
         sort : bool, default False
             Sort columns ordering if the columns of
             `self` and `other` are not aligned.
+        verify_integrity : bool, default False
+            This Parameter is currently not supported.
 
         Returns
         -------
