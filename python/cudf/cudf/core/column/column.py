@@ -884,8 +884,8 @@ class ColumnBase(Column, Serializable):
                 categories=dtype.categories,
                 codes=labels._column,
                 mask=self.mask,
-                ordered=ordered,
-            ).astype(dtype)
+                ordered=dtype.ordered,
+            )
 
         cats = sr.unique().astype(sr.dtype)
         label_dtype = min_unsigned_type(len(cats))
