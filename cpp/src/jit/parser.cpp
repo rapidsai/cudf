@@ -226,22 +226,17 @@ std::vector<std::string> ptx_parser::parse_function_body(const std::string& src)
 
 std::string ptx_parser::parse_param(const std::string& src)
 {
-  const size_t length = src.size();
-  size_t start        = 0;
-  size_t stop         = 0;
+  auto i = 0;
+  auto f = src.cbegin();
+  auto l = src.cbegin();
 
-  std::string name;
-
-  int item_count = 0;
-  while (stop < length) {
-    while (start < length && is_white(src[start])) { start++; }
-    stop = start;
-    while (stop < length && !is_white(src[stop])) { stop++; }
-    item_count++;
-    if (item_count == 3) { name = remove_nonalphanumeric(std::string(src, start, stop - start)); }
-    start = stop;
+  while (std::distance(src.cbegin(), l) < src.size() && i <= 3) {
+    f = std::find_if_not(f, src.end(), [](auto c) { return is_white(c); });
+    l = std::find_if(f, src.end(), [](auto c) { return is_white(c); });
+    if (++i == 3) return remove_nonalphanumeric(std::string(f, l));
+    f = l;
   }
-  return name;
+  return "";
 }
 
 std::string ptx_parser::parse_param_list(const std::string& src)
