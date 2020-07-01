@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import warnings
+from io import BufferedWriter, IOBase
 
 import pyarrow.parquet as pq
 from fsspec.core import get_fs_token_paths
@@ -111,17 +112,20 @@ def write_to_dataset(
             full_path = fs.sep.join([prefix, outfile])
             write_df = sub_df.copy(deep=False)
             write_df.drop(columns=partition_cols, inplace=True)
-            if return_metadata:
-                metadata.append(
-                    write_df.to_parquet(
-                        full_path,
-                        index=preserve_index,
-                        metadata_file_path=fs.sep.join([subdir, outfile]),
-                        **kwargs,
+            with fs.open(full_path, mode="wb") as fil:
+                if not isinstance(fil, IOBase):
+                    fil = BufferedWriter(fil)
+                if return_metadata:
+                    metadata.append(
+                        write_df.to_parquet(
+                            fil,
+                            index=preserve_index,
+                            metadata_file_path=fs.sep.join([subdir, outfile]),
+                            **kwargs,
+                        )
                     )
-                )
-            else:
-                write_df.to_parquet(full_path, index=preserve_index, **kwargs)
+                else:
+                    write_df.to_parquet(fil, index=preserve_index, **kwargs)
 
     else:
         outfile = guid() + ".parquet"
