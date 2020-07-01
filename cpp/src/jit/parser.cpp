@@ -206,7 +206,7 @@ std::string ptx_parser::parse_instruction(const std::string& src)
 
 std::string ptx_parser::parse_statement(const std::string& src)
 {
-  auto f = std::find_if(src.cbegin(), src.cend(), [](auto c) { return is_white(c); });
+  auto f = std::find_if_not(src.cbegin(), src.cend(), [](auto c) { return is_white(c); });
   return f == src.cend() ? " \n" : parse_instruction(std::string(f, src.cend()));
 }
 
