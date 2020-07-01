@@ -129,10 +129,10 @@ struct gather_data {
  * @endcode
  *
  * @tparam MapItType Iterator type to access the incoming column.
+ * @tparam NullifyOutOfBounds Nullify values in `gather_map` that are out of bounds
  * @param source_column View into the column to gather from
  * @param gather_map Iterator access to the gather map for `source_column` map
  * @param gather_map_size Size of the gather map.
- * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
  * @param stream CUDA stream on which to execute kernels
  * @param mr Memory resource to use for all allocations
  * @param prev_base_offsets (optional) The buffer backing the base offsets used in the gather map.
@@ -156,7 +156,7 @@ gather_data make_gather_data(
 
   // offsets of the source column
   int32_t const* src_offsets{source_column.offsets().data<int32_t>()};
-  int src_size = source_column.size();
+  size_type const src_size = source_column.size();
 
   // outgoing offsets.  these will persist as output from the entire gather operation
   auto dst_offsets_c = cudf::make_fixed_width_column(
@@ -242,8 +242,9 @@ std::unique_ptr<column> gather_list_nested(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Gather a leaf column from a hierarchy of list columns. The recursion
- * terminates here.
+ * @brief Gather a leaf column from a hierarchy of list columns.
+ *
+ * The recursion terminates here.
  *
  * @param column View into the column to gather from
  * @param gd The gather_data needed to construct a gather map iterator for this level

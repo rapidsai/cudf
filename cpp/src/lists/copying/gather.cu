@@ -114,7 +114,6 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
   // leaf.  so we have to generate the bitmask ourselves.
   // TODO : it might make sense to expose a gather() function that takes a column_view and
   // returns a column that does this work correctly.
-  rmm::device_buffer null_mask{0, stream, mr};
   size_type null_count = column.null_count();
   if (null_count > 0) {
     auto list_cdv = column_device_view::create(column);
