@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import os
 from io import BytesIO
 
@@ -132,10 +134,38 @@ def test_write_parquet(pdf, hdfs, test_url):
     with hdfs.open(f"{basedir}/test_parquet_writer.parquet", mode="rb") as f:
         got = pd.read_parquet(f)
 
-    # Strings written by cuDF are interpreted as byte strings by pandas
-    # https://github.com/rapidsai/cudf/issues/5593
-    got["String"] = got["String"].str.decode("utf-8")
     assert_eq(pdf, got)
+
+
+@pytest.mark.xfail(
+    reason="Writing string columns with parition_cols is incorrect"
+)
+@pytest.mark.parametrize("test_url", [False, True])
+def test_write_parquet_partitioned(tmpdir, pdf, hdfs, test_url):
+    pdf.to_parquet(
+        path=tmpdir.join("pandas_parquet_writer_partitioned.parquet"),
+        index=False,
+        partition_cols=["Integer", "Boolean"],
+    )
+    gdf = cudf.from_pandas(pdf)
+    if test_url:
+        hd_fpath = "hdfs://{}:{}{}/test_parquet_partitioned.parquet".format(
+            host, port, basedir
+        )
+    else:
+        hd_fpath = "hdfs://{}/test_parquet_partitioned.parquet".format(basedir)
+    # Clear data written from previous runs
+    hdfs.rm(f"{basedir}/test_parquet_partitioned.parquet", recursive=True)
+    gdf.to_parquet(
+        hd_fpath, index=False, partition_cols=["Integer", "Boolean"]
+    )
+
+    assert hdfs.exists(f"{basedir}/test_parquet_partitioned.parquet")
+    got = pd.read_parquet(hd_fpath)
+    expect = pd.read_parquet(
+        tmpdir.join("pandas_parquet_writer_partitioned.parquet")
+    )
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("test_url", [False, True])

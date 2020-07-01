@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import os
 from contextlib import contextmanager
 from io import BytesIO
@@ -102,7 +104,7 @@ def test_read_parquet(pdf):
     fname = "test_parquet_reader.parquet"
     bname = "parquet"
     buffer = BytesIO()
-    pdf.to_parquet(fname=buffer)
+    pdf.to_parquet(path=buffer)
     buffer.seek(0)
     with s3_context(bname, {fname: buffer}):
         got = cudf.read_parquet("s3://{}/{}".format(bname, fname))
@@ -119,10 +121,6 @@ def test_write_parquet(pdf):
         assert s3fs.exists("s3://{}/{}".format(bname, fname))
 
         got = pd.read_parquet("s3://{}/{}".format(bname, fname))
-
-    # Strings written by cuDF are interpreted as byte strings by pandas
-    # https://github.com/rapidsai/cudf/issues/5593
-    got["String"] = got["String"].str.decode("utf-8")
 
     assert_eq(pdf, got)
 

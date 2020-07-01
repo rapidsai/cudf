@@ -244,7 +244,7 @@ def to_parquet(
 
         write_parquet_res = libparquet.write_parquet(
             df,
-            path=path,
+            path=path_or_buf,
             index=index,
             compression=compression,
             statistics=statistics,
