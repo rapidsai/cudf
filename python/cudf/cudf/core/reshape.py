@@ -164,7 +164,9 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             objs, axis=axis, ignore_index=ignore_index, sort=sort
         )
     elif typ is Series:
-        return Series._concat(objs, axis=axis)
+        return Series._concat(
+            objs, axis=axis, index=None if ignore_index else True
+        )
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, Index):

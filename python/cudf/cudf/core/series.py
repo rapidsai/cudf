@@ -547,28 +547,7 @@ class Series(Frame, Serializable):
         else:
             to_concat = [self, to_append]
 
-        dtype_mismatch = False
-        for obj in to_concat:
-            if not dtype_mismatch and self.dtype != obj.dtype:
-                dtype_mismatch = True
-
-            if (self.dtype == "object" and obj.dtype != "object") or (
-                obj.dtype == "object" and self.dtype != "object"
-            ):
-                raise TypeError(
-                    "cudf does not support mixed types, please type-cast "
-                    "both series to same dtypes."
-                )
-
-        if dtype_mismatch:
-            to_concat = numeric_normalize_types(*to_concat)
-
-        if ignore_index:
-            index = None
-        else:
-            index = True
-
-        return Series._concat(to_concat, index=index)
+        return cudf.concat(to_concat, ignore_index=ignore_index)
 
     def reindex(self, index=None, copy=True):
         """Return a Series that conforms to a new index
@@ -1551,6 +1530,43 @@ class Series(Frame, Serializable):
             [name] = names
         else:
             name = None
+
+        if len(objs) > 1:
+            dtype_mismatch = False
+            for obj in objs[1:]:
+                if (
+                    obj.null_count == len(obj)
+                    or len(obj) == 0
+                    or is_categorical_dtype(obj.dtype)
+                    or is_categorical_dtype(objs[0].dtype)
+                ):
+                    continue
+
+                if (
+                    not dtype_mismatch
+                    and (
+                        not isinstance(
+                            objs[0]._column, cudf.core.column.CategoricalColumn
+                        )
+                        and not isinstance(
+                            obj._column, cudf.core.column.CategoricalColumn
+                        )
+                    )
+                    and objs[0].dtype != obj.dtype
+                ):
+                    dtype_mismatch = True
+
+                if (objs[0].dtype == "object" and obj.dtype != "object") or (
+                    obj.dtype == "object" and objs[0].dtype != "object"
+                ):
+                    raise TypeError(
+                        "cudf does not support mixed types, please type-cast "
+                        "both series to same dtypes."
+                    )
+
+            if dtype_mismatch:
+                objs = numeric_normalize_types(*objs)
+
         col = ColumnBase._concat([o._column for o in objs])
         return cls(data=col, index=index, name=name)
 

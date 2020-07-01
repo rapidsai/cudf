@@ -187,22 +187,22 @@ def test_series_append():
     a1 = np.arange(10, dtype=np.float64)
     series = Series(a1)
     # Add new buffer
-    a2 = np.arange(5)
+    a2 = Series(np.arange(5))
     series = series.append(a2)
     assert len(series) == 15
     np.testing.assert_equal(series.to_array(), np.hstack([a1, a2]))
 
     # Ensure appending to previous buffer
-    a3 = np.arange(3)
+    a3 = Series(np.arange(3))
     series = series.append(a3)
     assert len(series) == 18
     a4 = np.hstack([a1, a2, a3])
     np.testing.assert_equal(series.to_array(), a4)
 
     # Appending different dtype
-    a5 = np.array([1, 2, 3], dtype=np.int32)
-    a6 = np.array([4.5, 5.5, 6.5], dtype=np.float64)
-    series = Series(a5).append(a6)
+    a5 = Series(np.array([1, 2, 3], dtype=np.int32))
+    a6 = Series(np.array([4.5, 5.5, 6.5], dtype=np.float64))
+    series = a5.append(a6)
     np.testing.assert_equal(series.to_array(), np.hstack([a5, a6]))
     series = Series(a6).append(a5)
     np.testing.assert_equal(series.to_array(), np.hstack([a6, a5]))
@@ -982,7 +982,7 @@ def test_dataframe_concat_different_column_types():
         gd.concat([df1, df2])
 
     df2 = gd.Series(["a string"])
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         gd.concat([df1, df2])
 
 
