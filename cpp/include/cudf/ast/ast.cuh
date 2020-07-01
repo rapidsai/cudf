@@ -15,11 +15,14 @@
  */
 #pragma once
 
+#include <algorithm>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <functional>
+#include <iterator>
 #include "cudf/column/column_factories.hpp"
 #include "cudf/table/table_device_view.cuh"
 #include "cudf/types.hpp"
@@ -45,6 +48,7 @@ enum class device_data_reference_type {
 
 struct device_data_reference {
   device_data_reference_type reference_type;  // Source of data
+  cudf::data_type data_type;                  // Type of data
   cudf::size_type
     data_index;  // The column index of a table, index of a literal, or index of an intermediate
   table_reference table_reference = table_reference::LEFT;
@@ -119,7 +123,6 @@ class column_reference : public expression {
     }();
     return table.column(this->get_column_index()).type();
   }
-  // TODO: Fetch value for a given table and row
 
   cudf::size_type accept(abstract_visitor& visitor) const override { return visitor.visit(*this); }
 
@@ -162,7 +165,7 @@ class binary_expression : public operator_expression {
 
 class linearizer : public abstract_visitor {
  public:
-  linearizer(cudf::table_view tables) : node_counter(0) {}
+  linearizer(cudf::table_view table) : table(table), node_counter(0) {}
 
   cudf::size_type visit(literal const& expr) override
   {
@@ -170,16 +173,15 @@ class linearizer : public abstract_visitor {
 
     // Resolve node type
     auto data_type = expr.get_data_type();
-    // Push node type
-    // TODO: Use scalar device view
+    // TODO: Use scalar device view (?)
+    // Push literal
+    auto literal_index = cudf::size_type(this->literals.size());
     this->literals.push_back(expr.get_value());
-    // TODO: Push literal
     // Push data reference
     auto source = detail::device_data_reference{
-      detail::device_data_reference_type::LITERAL,
-      0  // TODO: Use correct index
-    };
-    this->add_source(data_type, source);
+      detail::device_data_reference_type::LITERAL, data_type, literal_index};
+    this->data_references.push_back(source);
+    // Increment counter
     auto index = this->node_counter;
     this->node_counter++;
     return index;
@@ -188,14 +190,15 @@ class linearizer : public abstract_visitor {
   cudf::size_type visit(column_reference const& expr) override
   {
     std::cout << "visiting column reference" << std::endl;
-    // TODO: Resolve node type
-    auto data_type = cudf::data_type(cudf::type_id::EMPTY);
-    // auto data_type = expr.get_data_type();
-    // TODO: Push node type
+    // Resolve node type
+    auto data_type = expr.get_data_type(this->table);
     // Push data reference
-    auto source = detail::device_data_reference{
-      detail::device_data_reference_type::COLUMN, expr.get_column_index(), expr.get_table_source()};
-    this->add_source(data_type, source);
+    auto source = detail::device_data_reference{detail::device_data_reference_type::COLUMN,
+                                                data_type,
+                                                expr.get_column_index(),
+                                                expr.get_table_source()};
+    this->data_references.push_back(source);
+    // Increment counter
     auto index = this->node_counter;
     this->node_counter++;
     return index;
@@ -207,20 +210,38 @@ class linearizer : public abstract_visitor {
     auto op                             = expr.get_operator();
     auto operand_data_reference_indices = this->visit_operands(expr.get_operands());
     std::cout << "visited operands" << std::endl;
-    // TODO: Resolve types
-    // TODO: Validate types of operand data references match
-    auto input_type = cudf::data_type(cudf::type_id::EMPTY);
-    // TODO: Resolve type for this operator expression
-    auto data_type = cudf::data_type(cudf::type_id::EMPTY);
+    // Resolve operand types
+    auto operand_types = std::vector<cudf::data_type>();
+    std::transform(operand_data_reference_indices.cbegin(),
+                   operand_data_reference_indices.cend(),
+                   std::back_inserter(operand_types),
+                   [this](cudf::size_type data_reference_index) -> cudf::data_type {
+                     return this->get_data_references()[data_reference_index].data_type;
+                   });
+    // Validate types of operand data references match
+    if (std::adjacent_find(operand_types.cbegin(), operand_types.cend(), std::not_equal_to<>()) !=
+        operand_types.cend()) {
+      CUDF_FAIL("An AST operator expression was provided non-matching operand types.");
+    }
+    // Resolve node type
+    auto data_type = [&] {
+      auto x = cudf::ast::ast_operator::ADD;
+      if (cudf::ast::is_arithmetic_operator<cudf::ast::ast_operator::ADD>()) {
+        return operand_types.at(0);
+      } else {
+        return cudf::data_type(cudf::type_id::EMPTY);
+      }
+    }();
     // Push operator
     this->operators.push_back(op);
     // Push data reference
     auto source = detail::device_data_reference{
       detail::device_data_reference_type::INTERMEDIATE,
+      data_type,
       0  // TODO: Use correct index -- potentially reuse indices
     };
-    this->add_source(data_type, source);
-    // TODO: Push operand_data_reference_indices to global reference list
+    this->data_references.push_back(source);
+    // Increment counter
     auto index = this->node_counter;
     this->node_counter++;
     // Insert source indices from all operands (sources) and operator (destination)
@@ -234,14 +255,13 @@ class linearizer : public abstract_visitor {
 
   cudf::data_type get_root_data_type() const
   {
-    if (this->node_data_types.size() == 0) {
+    if (this->get_data_references().size() == 0) {
       return cudf::data_type(cudf::type_id::EMPTY);
     } else {
-      return this->node_data_types.back();
+      return this->get_data_references().back().data_type;
     }
   }
   cudf::size_type get_node_counter() const { return this->node_counter; }
-  std::vector<cudf::data_type> get_node_data_types() const { return this->node_data_types; }
   std::vector<detail::device_data_reference> get_data_references() const
   {
     return this->data_references;
@@ -264,14 +284,9 @@ class linearizer : public abstract_visitor {
     }
     return operand_data_reference_indices;
   }
-  void add_source(cudf::data_type data_type, detail::device_data_reference source)
-  {
-    this->node_data_types.push_back(data_type);
-    this->data_references.push_back(source);
-  }
   // State information about the "linearized" GPU execution plan
+  cudf::table_view table;
   cudf::size_type node_counter;
-  std::vector<cudf::data_type> node_data_types;
   std::vector<detail::device_data_reference> data_references;
   std::vector<ast_operator> operators;
   std::vector<cudf::size_type> operator_source_indices;
@@ -425,8 +440,6 @@ std::unique_ptr<column> compute_column(
   auto expr_data_type = expr_linearizer.get_root_data_type();
   std::cout << "LINEARIZER INFO:" << std::endl;
   std::cout << "Node counter: " << expr_linearizer.get_node_counter() << std::endl;
-  std::cout << "Number of node data types: " << expr_linearizer.get_node_data_types().size()
-            << std::endl;
   std::cout << "Number of data references: " << expr_linearizer.get_data_references().size()
             << std::endl;
   std::cout << "Number of operators: " << expr_linearizer.get_operators().size() << std::endl;
