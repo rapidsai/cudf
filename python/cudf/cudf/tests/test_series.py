@@ -3,6 +3,7 @@
 
 import re
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -249,3 +250,33 @@ def test_series_append_list_series_with_index(data, others, ignore_index):
     expected = psr.append(other_ps, ignore_index=ignore_index)
     actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
+
+
+def test_series_append_existing_buffers():
+    a1 = np.arange(10, dtype=np.float64)
+    gs = cudf.Series(a1)
+
+    # Add new buffer
+    a2 = cudf.Series(np.arange(5))
+    gs = gs.append(a2)
+    assert len(gs) == 15
+    np.testing.assert_equal(gs.to_array(), np.hstack([a1, a2.to_array()]))
+
+    # Ensure appending to previous buffer
+    a3 = cudf.Series(np.arange(3))
+    gs = gs.append(a3)
+    assert len(gs) == 18
+    a4 = np.hstack([a1, a2.to_array(), a3.to_array()])
+    np.testing.assert_equal(gs.to_array(), a4)
+
+    # Appending different dtype
+    a5 = cudf.Series(np.array([1, 2, 3], dtype=np.int32))
+    a6 = cudf.Series(np.array([4.5, 5.5, 6.5], dtype=np.float64))
+    gs = a5.append(a6)
+    np.testing.assert_equal(
+        gs.to_array(), np.hstack([a5.to_array(), a6.to_array()])
+    )
+    gs = cudf.Series(a6).append(a5)
+    np.testing.assert_equal(
+        gs.to_array(), np.hstack([a6.to_array(), a5.to_array()])
+    )
