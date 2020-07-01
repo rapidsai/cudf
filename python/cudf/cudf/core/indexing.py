@@ -8,6 +8,8 @@ import cudf
 from cudf._lib.nvtx import annotate
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_column_like,
+    is_list_like,
     is_scalar,
     to_cudf_compatible_scalar,
 )
@@ -196,8 +198,10 @@ class _DataFrameIndexer(object):
             if type(arg[0]) is slice:
                 if not is_scalar(arg[1]):
                     return False
-            elif pd.api.types.is_list_like(arg[0]) and (
-                pd.api.types.is_list_like(arg[1]) or type(arg[1]) is slice
+            elif (is_list_like(arg[0]) or is_column_like(arg[0])) and (
+                is_list_like(arg[1])
+                or is_column_like(arg[0])
+                or type(arg[1]) is slice
             ):
                 return False
             else:
@@ -218,7 +222,7 @@ class _DataFrameIndexer(object):
                 # Multiindex indexing with a slice
                 if any(isinstance(v, slice) for v in arg):
                     return False
-            if not pd.api.types.is_list_like(arg[1]):
+            if not (is_list_like(arg[1]) or is_column_like(arg[1])):
                 return True
         return False
 

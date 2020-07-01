@@ -50,7 +50,22 @@ def _align_objs(objs, how="outer"):
         return [obj.reindex(index) for obj in objs], False
 
 
-def concat(objs, axis=0, ignore_index=False, sort=False):
+def _normalize_series_and_dataframe(objs, axis):
+    sr_name = 0
+    for idx, o in enumerate(objs):
+        if isinstance(o, Series):
+            if axis == 1:
+                name = o.name
+                if name is None:
+                    name = sr_name
+                    sr_name += 1
+            else:
+                name = sr_name
+
+            objs[idx] = o.to_frame(name=name)
+
+
+def concat(objs, axis=0, ignore_index=False, sort=None):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
     Parameters
@@ -70,7 +85,7 @@ def concat(objs, axis=0, ignore_index=False, sort=False):
     """
 
     if not objs:
-        raise ValueError("Need at least one object to concatenate")
+        raise ValueError("No objects to concatenate")
 
     objs = [obj for obj in objs if obj is not None]
 
@@ -99,15 +114,7 @@ def concat(objs, axis=0, ignore_index=False, sort=False):
 
         assert typs.issubset(allowed_typs)
         df = DataFrame()
-
-        sr_name = 0
-        for idx, o in enumerate(objs):
-            if isinstance(o, Series):
-                name = o.name
-                if name is None:
-                    name = sr_name
-                    sr_name += 1
-                objs[idx] = o.to_frame(name=name)
+        _normalize_series_and_dataframe(objs, axis=axis)
 
         objs, match_index = _align_objs(objs)
 
@@ -141,11 +148,16 @@ def concat(objs, axis=0, ignore_index=False, sort=False):
     typ = list(typs)[0]
 
     if len(typs) > 1:
-        raise ValueError(
-            "`concat` expects all objects to be of the same "
-            "type. Got mix of %r." % [t.__name__ for t in typs]
-        )
-    typ = list(typs)[0]
+        if allowed_typs == typs:
+            # This block of code will run when `objs` has
+            # both Series & DataFrame kind of inputs.
+            _normalize_series_and_dataframe(objs, axis=axis)
+            typ = DataFrame
+        else:
+            raise ValueError(
+                "`concat` cannot concatenate objects of "
+                "types: %r." % sorted([t.__name__ for t in typs])
+            )
 
     if typ is DataFrame:
         return DataFrame._concat(
@@ -158,7 +170,7 @@ def concat(objs, axis=0, ignore_index=False, sort=False):
     elif issubclass(typ, Index):
         return Index._concat(objs)
     else:
-        raise ValueError("Unknown type %r" % typ)
+        raise ValueError(f"cannot concatenate object of type {typ}")
 
 
 def melt(
