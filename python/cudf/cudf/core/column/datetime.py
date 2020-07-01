@@ -288,7 +288,7 @@ def infer_format(element, **kwargs):
 
     element_parts = element.split(".")
     if len(element_parts) != 2:
-        raise ValueError("Unable to infer the timestamp format from the data")
+        raise ValueError("Given date string not likely a datetime.")
 
     # There is possibility that the element is of following format
     # '00:00:03.333333 2016-01-01'
