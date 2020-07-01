@@ -519,6 +519,12 @@ cdef class Column:
         return result
 
     cdef unique_ptr[column] release(self) except *:
+
+        if self.offset:
+            raise TypeError(
+                "Cannot call `release()` on a column with non-zero offset"
+            )
+
         cdef DeviceBuffer data
         cdef DeviceBuffer mask
         cdef device_buffer c_data
@@ -541,8 +547,6 @@ cdef class Column:
         for c in self._base_children:
             children.push_back(move(c.release()))
 
-        self._size = 0
-
         cdef libcudf_types.type_id tid = <libcudf_types.type_id> (
             <underlying_type_t_type_id> (
                 np_to_cudf_types[np.dtype(self.dtype)]
@@ -559,6 +563,3 @@ cdef class Column:
             move(c_mask),
             null_count,
             move(children))
-
-    def py_release(self):
-        self.release()

@@ -13,7 +13,8 @@ from setuptools.extension import Extension
 
 install_requires = ["numba", "cython"]
 
-cython_files = ["cudf/**/*.pyx"]
+cython_lib = ["cudf/_lib/**/*.pyx"]
+cython_tests = ["cudf/tests/**/*.pyx"]
 
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
 if not CUDA_HOME:
@@ -39,33 +40,62 @@ try:
 except Exception:
     nthreads = 0
 
-extensions = [
-    Extension(
-        "*",
-        sources=cython_files,
-        include_dirs=[
-            "../../cpp/include/cudf",
-            "../../cpp/include",
-            os.path.join(CUDF_ROOT, "include"),
-            os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
-            os.path.join(
-                os.path.dirname(sysconfig.get_path("include")),
-                "libcudf/libcudacxx",
-            ),
-            os.path.dirname(sysconfig.get_path("include")),
-            np.get_include(),
-            pa.get_include(),
-            cuda_include_dir,
-        ],
-        library_dirs=(
-            pa.get_library_dirs()
-            + [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
-        ),
-        libraries=["cudf"] + pa.get_libraries(),
-        language="c++",
-        extra_compile_args=["-std=c++14"],
-    )
+include_dirs = [
+    "../../cpp/include/cudf",
+    "../../cpp/include",
+    os.path.join(CUDF_ROOT, "include"),
+    os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
+    os.path.join(
+        os.path.dirname(sysconfig.get_path("include")), "libcudf/libcudacxx",
+    ),
+    os.path.dirname(sysconfig.get_path("include")),
+    np.get_include(),
+    pa.get_include(),
+    cuda_include_dir,
 ]
+library_dirs = pa.get_library_dirs() + [
+    get_python_lib(),
+    os.path.join(os.sys.prefix, "lib"),
+]
+libraries = ["cudf"] + pa.get_libraries()
+
+extensions = cythonize(
+    [
+        Extension(
+            "*",
+            sources=cython_lib,
+            include_dirs=include_dirs,
+            library_dirs=library_dirs,
+            libraries=libraries,
+            language="c++",
+            extra_compile_args=["-std=c++14"],
+        )
+    ],
+    nthreads=nthreads,
+    compiler_directives=dict(
+        profile=False, language_level=3, embedsignature=True
+    ),
+)
+
+
+extensions += cythonize(
+    [
+        Extension(
+            "*",
+            sources=cython_tests,
+            include_dirs=include_dirs,
+            library_dirs=library_dirs,
+            libraries=libraries,
+            language="c++",
+            extra_compile_args=["-std=c++14"],
+        )
+    ],
+    nthreads=nthreads,
+    compiler_directives=dict(
+        profile=True, language_level=3, embedsignature=True, binding=True
+    ),
+)
+
 
 setup(
     name="cudf",
@@ -85,13 +115,7 @@ setup(
     ],
     # Include the separately-compiled shared library
     setup_requires=["cython"],
-    ext_modules=cythonize(
-        extensions,
-        nthreads=nthreads,
-        compiler_directives=dict(
-            profile=False, language_level=3, embedsignature=True
-        ),
-    ),
+    ext_modules=extensions,
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
         find_packages(include=["cudf._lib*", "cudf._cuda*"]), ["*.pxd"],
