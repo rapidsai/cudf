@@ -219,7 +219,7 @@ def to_parquet(
         if partition_cols:
             write_to_dataset(
                 df,
-                path,
+                root_path=path,
                 partition_cols=partition_cols,
                 preserve_index=index,
                 **kwargs,
@@ -236,8 +236,8 @@ def to_parquet(
 
         return libparquet.write_parquet(
             df,
-            path,
-            index,
+            path=path,
+            index=index,
             compression=compression,
             statistics=statistics,
             metadata_file_path=metadata_file_path,
@@ -250,7 +250,11 @@ def to_parquet(
 
         pa_table = df.to_arrow(preserve_index=index)
         return pq.write_to_dataset(
-            pa_table, path, partition_cols=partition_cols, *args, **kwargs
+            pa_table,
+            root_path=path,
+            partition_cols=partition_cols,
+            *args,
+            **kwargs,
         )
 
 
