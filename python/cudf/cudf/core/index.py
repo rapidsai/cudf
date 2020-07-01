@@ -539,20 +539,24 @@ class Index(Frame, Serializable):
         >>> idx1.difference(idx2, sort=False)
         Int64Index([2, 1], dtype='int64')
         """
-        if self.equals(other):
-            if cudf.utils.dtypes.is_string_dtype(self.dtype):
-                return StringIndex([], dtype=self.dtype)
-            else:
-                return self[:0]
+
+        other = as_index(other)
 
         if self.dtype != other.dtype and (
             cudf.utils.dtypes.is_string_dtype(self.dtype)
             or cudf.utils.dtypes.is_string_dtype(other.dtype)
         ):
-            difference = self
+            if self.equals(other):
+                if cudf.utils.dtypes.is_string_dtype(self.dtype):
+                    return StringIndex([], dtype=self.dtype)
+                else:
+                    return self[:0]
+            else:
+                difference = self
         else:
-            drop_mask = ~self.isin(other)
-            difference = self[drop_mask]
+            difference = self.join(other, how="leftanti")
+            if self.dtype != other.dtype:
+                difference = difference.astype(self.dtype)
 
         if sort is None:
             _, inds = difference._values.sort_by_values()
