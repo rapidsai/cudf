@@ -529,12 +529,71 @@ class Series(Frame, Serializable):
 
         Parameters
         ----------
-        other : ``Series`` or array-like object
-        ignore_index : boolean, default False. If true, the index is reset.
+        to_append : Series or list/tuple of Series
+            Series to append with self.
+        ignore_index : boolean, default False.
+            If True, do not use the index.
+        verify_integrity : bool, default False
+            This Parameter is currently not supported.
 
         Returns
         -------
-        A new Series equivalent to self concatenated with other
+        Series
+            A new concatenated series
+
+        See Also
+        --------
+        concat : General function to concatenate DataFrame or Series objects.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s1 = cudf.Series([1, 2, 3])
+        >>> s2 = cudf.Series([4, 5, 6])
+        >>> s1
+        0    1
+        1    2
+        2    3
+        dtype: int64
+        >>> s2
+        0    4
+        1    5
+        2    6
+        dtype: int64
+        >>> s1.append(s2)
+        0    1
+        1    2
+        2    3
+        0    4
+        1    5
+        2    6
+        dtype: int64
+
+        >>> s3 = cudf.Series([4, 5, 6], index=[3, 4, 5])
+        >>> s3
+        3    4
+        4    5
+        5    6
+        dtype: int64
+        >>> s1.append(s3)
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        dtype: int64
+
+        With `ignore_index` set to True:
+
+        >>> s1.append(s2, ignore_index=True)
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        dtype: int64
         """
         if verify_integrity not in (None, False):
             raise NotImplementedError(
