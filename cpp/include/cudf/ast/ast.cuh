@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <thrust/device_vector.h>
 #include <algorithm>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/scalar/scalar.hpp>
@@ -23,10 +24,12 @@
 #include <cudf/utilities/error.hpp>
 #include <functional>
 #include <iterator>
+#include "cudf/column/column_device_view.cuh"
 #include "cudf/column/column_factories.hpp"
 #include "cudf/table/table_device_view.cuh"
 #include "cudf/types.hpp"
 #include "operators.cuh"
+#include "thrust/detail/raw_pointer_cast.h"
 
 namespace cudf {
 
@@ -417,10 +420,38 @@ __global__ void compute_column_kernel(table_device_view table,
     output.element<Element>(row_index) = evaluate_expression<Element>(expr, table, row_index);
   }
 }
+*/
 
-template <typename Element>
+__device__ void evaluate_row_expression(table_device_view table,
+                                        detail::device_data_reference* data_references,
+                                        // scalar* literals,
+                                        ast_operator* operators,
+                                        cudf::size_type* operator_source_indices,
+                                        cudf::size_type num_operators,
+                                        cudf::size_type row_index,
+                                        mutable_column_device_view output)
+{
+  if (row_index % 1000 == 0) { printf("Hi thread, %i operators\n", num_operators); }
+  cudf::size_type operator_source_index(0);
+  for (cudf::size_type operator_index(0); operator_index < num_operators; operator_index++) {
+    // Execute operator
+  }
+  output.element<bool>(row_index) = false;
+  /*
+  const Element lhs = resolve_data_source<Element>(
+    expr.lhs, left_table, right_table, left_row_index, right_row_index);
+  const Element rhs = resolve_data_source<Element>(
+    expr.rhs, left_table, right_table, left_row_index, right_row_index);
+  return compareop_dispatcher(expr.op, do_compareop<Element>{}, lhs, rhs);
+  */
+}
+
 __global__ void compute_column_kernel(table_device_view table,
-                                      comparator_expression expr,
+                                      detail::device_data_reference* data_references,
+                                      // scalar* literals,
+                                      ast_operator* operators,
+                                      cudf::size_type* operator_source_indices,
+                                      cudf::size_type num_operators,
                                       mutable_column_device_view output)
 {
   const cudf::size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
@@ -428,10 +459,17 @@ __global__ void compute_column_kernel(table_device_view table,
   const auto num_rows             = table.num_rows();
 
   for (cudf::size_type row_index = start_idx; row_index < num_rows; row_index += stride) {
-    output.element<bool>(row_index) = evaluate_expression<Element>(expr, table, row_index);
+    evaluate_row_expression(table,
+                            data_references,
+                            // literals,
+                            operators,
+                            operator_source_indices,
+                            num_operators,
+                            row_index,
+                            output);
+    // output.element<bool>(row_index) = evaluate_expression<Element>(expr, table, row_index);
   }
 }
-*/
 
 std::unique_ptr<column> compute_column(
   table_view const& table,
@@ -442,14 +480,28 @@ std::unique_ptr<column> compute_column(
   // Linearize the AST
   auto expr_linearizer = linearizer(table);
   expr.get().accept(expr_linearizer);
+  auto data_references         = expr_linearizer.get_data_references();
+  auto literals                = expr_linearizer.get_literals();
+  auto operators               = expr_linearizer.get_operators();
+  auto num_operators           = cudf::size_type(operators.size());
+  auto operator_source_indices = expr_linearizer.get_operator_source_indices();
+  auto expr_data_type          = expr_linearizer.get_root_data_type();
+
+  // Create device data
+  auto device_data_references =
+    thrust::device_vector<detail::device_data_reference>(data_references);
+  // TODO: Literals
+  // auto device_literals = thrust::device_vector<const scalar>();
+  auto device_operators = thrust::device_vector<cudf::ast::ast_operator>(operators);
+  auto device_operator_source_indices =
+    thrust::device_vector<cudf::size_type>(operator_source_indices);
 
   // Output linearizer info
   std::cout << "LINEARIZER INFO:" << std::endl;
   std::cout << "Node counter: " << expr_linearizer.get_node_counter() << std::endl;
-  std::cout << "Number of data references: " << expr_linearizer.get_data_references().size()
-            << std::endl;
+  std::cout << "Number of data references: " << data_references.size() << std::endl;
   std::cout << "Data references: ";
-  for (auto dr : expr_linearizer.get_data_references()) {
+  for (auto dr : data_references) {
     switch (dr.reference_type) {
       case detail::device_data_reference_type::COLUMN: std::cout << "C"; break;
       case detail::device_data_reference_type::LITERAL: std::cout << "L"; break;
@@ -458,18 +510,15 @@ std::unique_ptr<column> compute_column(
     std::cout << dr.data_index << ", ";
   }
   std::cout << std::endl;
-  std::cout << "Number of operators: " << expr_linearizer.get_operators().size() << std::endl;
-  std::cout << "Number of operator source indices: "
-            << expr_linearizer.get_operator_source_indices().size() << std::endl;
-  std::cout << "Number of literals: " << expr_linearizer.get_literals().size() << std::endl;
+  std::cout << "Number of operators: " << num_operators << std::endl;
+  std::cout << "Number of operator source indices: " << operator_source_indices.size() << std::endl;
+  std::cout << "Number of literals: " << literals.size() << std::endl;
   std::cout << "Operator source indices: ";
-  auto operator_source_indices = expr_linearizer.get_operator_source_indices();
   for (auto v : operator_source_indices) { std::cout << v << ", "; }
   std::cout << std::endl;
 
   auto table_device   = table_device_view::create(table, stream);
   auto table_num_rows = table.num_rows();
-  auto expr_data_type = expr_linearizer.get_root_data_type();
   auto output_column =
     make_fixed_width_column(expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
   std::cout << "Created output." << std::endl;
@@ -478,10 +527,15 @@ std::unique_ptr<column> compute_column(
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   cudf::detail::grid_1d config(table_num_rows, block_size);
-  /*
-  compute_column_kernel<Element><<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
-    *table_device, expr, *mutable_output_device);
-  */
+
+  compute_column_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+    *table_device,
+    thrust::raw_pointer_cast(device_data_references.data()),
+    // device_literals,
+    thrust::raw_pointer_cast(device_operators.data()),
+    thrust::raw_pointer_cast(device_operator_source_indices.data()),
+    num_operators,
+    *mutable_output_device);
   return output_column;
 }
 
