@@ -477,6 +477,9 @@ class Index(Frame, Serializable):
             if len(other) == 0:
                 # short-circuit and return a copy
                 to_concat = [self]
+
+            other = as_index(other)
+
             if len(self) == 0:
                 to_concat = [other]
 
