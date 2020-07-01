@@ -432,9 +432,17 @@ __device__ void evaluate_row_expression(table_device_view table,
                                         mutable_column_device_view output)
 {
   if (row_index % 1000 == 0) { printf("Hi thread, %i operators\n", num_operators); }
-  cudf::size_type operator_source_index(0);
+  auto operator_source_index = cudf::size_type(0);
   for (cudf::size_type operator_index(0); operator_index < num_operators; operator_index++) {
     // Execute operator
+    auto const& op = operators[operator_index];
+    if (true)  // TODO: Need to use is_binary_operator<op>())
+    {
+      auto lhs_data_ref    = data_references[operator_source_indices[operator_source_index]];
+      auto rhs_data_ref    = data_references[operator_source_indices[operator_source_index + 1]];
+      auto output_data_ref = data_references[operator_source_indices[operator_source_index + 2]];
+      operator_source_index += 3;
+    }
   }
   output.element<bool>(row_index) = false;
   /*

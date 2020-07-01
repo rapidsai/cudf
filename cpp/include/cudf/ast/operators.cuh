@@ -394,8 +394,6 @@ template <>
 struct is_unary_logical_operator_impl<ast_operator::NOT> : std::true_type {
 };
 
-/*
-
 template <ast_operator op>
 struct binop {
 };
@@ -423,22 +421,23 @@ __device__ decltype(auto) binop_dispatcher(ast_operator op, F&& f, Ts&&... args)
 {
   switch (op) {
     case ast_operator::ADD:
-      return f.template operator()<binary_operator::ADD>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::ADD>(std::forward<Ts>(args)...);
     case ast_operator::SUB:
-      return f.template operator()<binary_operator::SUB>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::SUB>(std::forward<Ts>(args)...);
     default: return 0;  // TODO: Error handling
   }
 }
 
 template <typename T>
 struct do_binop {
-  template <binary_operator OP>
+  template <ast_operator OP>
   __device__ T operator()(T const& lhs, T const& rhs)
   {
     return binop<OP>{}(lhs, rhs);
   }
 };
 
+/*
 template <comparator>
 struct compareop {
 };
@@ -481,7 +480,6 @@ struct do_compareop {
     return compareop<OP>{}(lhs, rhs);
   }
 };
-
 */
 
 }  // namespace ast
