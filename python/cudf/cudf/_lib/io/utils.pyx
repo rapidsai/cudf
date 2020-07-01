@@ -14,6 +14,7 @@ import codecs
 import errno
 import io
 import os
+import cudf
 
 # Converts the Python source input to libcudf++ IO source_info
 # with the appropriate type and source values
