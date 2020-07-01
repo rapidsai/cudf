@@ -165,7 +165,7 @@ class binary_expression : public operator_expression {
 
 class linearizer : public abstract_visitor {
  public:
-  linearizer(cudf::table_view table) : table(table), node_counter(0) {}
+  linearizer(cudf::table_view table) : table(table), node_counter(0), intermediate_counter(0) {}
 
   cudf::size_type visit(literal const& expr) override
   {
@@ -207,7 +207,7 @@ class linearizer : public abstract_visitor {
   cudf::size_type visit(operator_expression const& expr) override
   {
     std::cout << "visiting operator_expression" << std::endl;
-    auto op                             = expr.get_operator();
+    const auto op                       = expr.get_operator();
     auto operand_data_reference_indices = this->visit_operands(expr.get_operands());
     std::cout << "visited operands" << std::endl;
     // Resolve operand types
@@ -224,22 +224,26 @@ class linearizer : public abstract_visitor {
       CUDF_FAIL("An AST operator expression was provided non-matching operand types.");
     }
     // Resolve node type
+    auto data_type = operand_types.at(0);
+    /* TODO: Need to fix. Can't support comparators yet.
     auto data_type = [&] {
-      auto x = cudf::ast::ast_operator::ADD;
-      if (cudf::ast::is_arithmetic_operator<cudf::ast::ast_operator::ADD>()) {
+      const ast_operator oper = op;
+      if (cudf::ast::is_arithmetic_operator<oper>()) {
         return operand_types.at(0);
       } else {
         return cudf::data_type(cudf::type_id::EMPTY);
       }
     }();
+    */
     // Push operator
     this->operators.push_back(op);
     // Push data reference
     auto source = detail::device_data_reference{
       detail::device_data_reference_type::INTERMEDIATE,
       data_type,
-      0  // TODO: Use correct index -- potentially reuse indices
+      this->intermediate_counter  // TODO: Reuse indices
     };
+    this->intermediate_counter++;
     this->data_references.push_back(source);
     // Increment counter
     auto index = this->node_counter;
@@ -287,6 +291,7 @@ class linearizer : public abstract_visitor {
   // State information about the "linearized" GPU execution plan
   cudf::table_view table;
   cudf::size_type node_counter;
+  cudf::size_type intermediate_counter;
   std::vector<detail::device_data_reference> data_references;
   std::vector<ast_operator> operators;
   std::vector<cudf::size_type> operator_source_indices;
@@ -437,11 +442,22 @@ std::unique_ptr<column> compute_column(
   // Linearize the AST
   auto expr_linearizer = linearizer(table);
   expr.get().accept(expr_linearizer);
-  auto expr_data_type = expr_linearizer.get_root_data_type();
+
+  // Output linearizer info
   std::cout << "LINEARIZER INFO:" << std::endl;
   std::cout << "Node counter: " << expr_linearizer.get_node_counter() << std::endl;
   std::cout << "Number of data references: " << expr_linearizer.get_data_references().size()
             << std::endl;
+  std::cout << "Data references: ";
+  for (auto dr : expr_linearizer.get_data_references()) {
+    switch (dr.reference_type) {
+      case detail::device_data_reference_type::COLUMN: std::cout << "C"; break;
+      case detail::device_data_reference_type::LITERAL: std::cout << "L"; break;
+      case detail::device_data_reference_type::INTERMEDIATE: std::cout << "I";
+    }
+    std::cout << dr.data_index << ", ";
+  }
+  std::cout << std::endl;
   std::cout << "Number of operators: " << expr_linearizer.get_operators().size() << std::endl;
   std::cout << "Number of operator source indices: "
             << expr_linearizer.get_operator_source_indices().size() << std::endl;
@@ -451,20 +467,18 @@ std::unique_ptr<column> compute_column(
   for (auto v : operator_source_indices) { std::cout << v << ", "; }
   std::cout << std::endl;
 
-  auto table_device = table_device_view::create(table, stream);
-  // auto expr_data_type = cudf::data_type(cudf::type_to_id<Element>());
+  auto table_device   = table_device_view::create(table, stream);
   auto table_num_rows = table.num_rows();
-  // TODO: Remove this assignment below, temporary hack
-  expr_data_type = cudf::data_type(cudf::type_id::INT32);
+  auto expr_data_type = expr_linearizer.get_root_data_type();
   auto output_column =
     make_fixed_width_column(expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
   std::cout << "Created output." << std::endl;
-  /*
   auto block_size = 1024;  // TODO dynamically determine block size, use shared memory
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   cudf::detail::grid_1d config(table_num_rows, block_size);
+  /*
   compute_column_kernel<Element><<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
     *table_device, expr, *mutable_output_device);
   */
