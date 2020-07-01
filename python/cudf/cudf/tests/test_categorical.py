@@ -675,14 +675,16 @@ def test_add_categories_error(data, add):
     pds = pd.Series(data, dtype="category")
     gds = gd.Series(data, dtype="category")
 
-    error_type = None
     try:
         pds.cat.add_categories(add)
     except Exception as e:
-        error_type = type(e)
-
-    with pytest.raises(error_type):
-        gds.cat.add_categories(add)
+        with pytest.raises(type(e)):
+            gds.cat.add_categories(add)
+    else:
+        raise AssertionError(
+            f"Expected pandas .cat.add_categories to"
+            f" fail for {pds} and {add} inputs"
+        )
 
 
 def test_add_categories_mixed_error():

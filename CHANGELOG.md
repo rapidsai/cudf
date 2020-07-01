@@ -30,6 +30,7 @@
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
 - PR #5607 Add Java bindings for duration types
+- PR #5612 Add `is_hex` strings API
 
 ## Improvements
 
@@ -97,6 +98,7 @@
 - PR #5584 Refactor `CompactProtocolReader::InitSchema`
 - PR #5591 Add `__arrow_array__` protocol and raise a descriptive error message
 - PR #5601 Instantiate Table instances in `Frame._concat` to avoid `DF.insert()` overhead
+- PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
 
 ## Bug Fixes
 
@@ -142,8 +144,10 @@
 - PR #5564 Fix CudfEngine.read_metadata API in dask_cudf
 - PR #5537 Fix issue related to using `set_index` on a string series
 - PR #5561 Fix `copy_bitmask` issue with offset
+- PR #5609 Fix loc and iloc issue with column like input
 - PR #5578 Fix getattr logic in GroupBy
 - PR #5490 Fix python column view
+- PR #5608 Fix issue related to string types being represented as binary types
 
 
 # cuDF 0.14.0 (Date TBD)
