@@ -967,14 +967,13 @@ def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
     ----------
     path_or_data : str, file-like object, bytes, ByteIO
         Path to data or the data itself.
-    compression : str
-        Type of compression algorithm for the content
     mode : str
         Mode in which file is opened
+
     Returns
     -------
     filepath_or_buffer : str,
-        Filepath string or in-memory buffer of data
+        Filepath string or buffer of data
     should_close : bool
         Whether filepath_or_buffer should be closed after IO
     """

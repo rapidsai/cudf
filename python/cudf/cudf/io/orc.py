@@ -43,7 +43,7 @@ def read_orc(
     from cudf import DataFrame
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        filepath_or_buffer, None, **kwargs
+        path_or_data=filepath_or_buffer, compression=None, **kwargs
     )
     if compression is not None:
         ValueError("URL content-encoding decompression is not supported")
@@ -82,7 +82,7 @@ def to_orc(df, fname, compression=None, enable_statistics=False, **kwargs):
     """{docstring}"""
 
     path_or_buf, should_close = ioutils.get_writer_filepath_or_buffer(
-        fname, mode="wb", **kwargs
+        path_or_data=fname, mode="wb", **kwargs
     )
 
     libcudf.orc.write_orc(df, path_or_buf, compression, enable_statistics)

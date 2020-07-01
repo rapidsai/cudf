@@ -47,7 +47,10 @@ def read_csv(
     """{docstring}"""
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        filepath_or_buffer, compression, (BytesIO, StringIO), **kwargs
+        path_or_data=filepath_or_buffer,
+        compression=compression,
+        iotypes=(BytesIO, StringIO),
+        **kwargs,
     )
     return libcudf.csv.read_csv(
         filepath_or_buffer,
@@ -105,7 +108,7 @@ def to_csv(
         raise ValueError("path/filename not provided")
 
     path_or_buf, should_close = ioutils.get_writer_filepath_or_buffer(
-        path, mode="w", **kwargs
+        path_or_data=path, mode="w", **kwargs
     )
 
     if index:
