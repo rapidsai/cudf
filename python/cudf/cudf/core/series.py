@@ -2153,10 +2153,24 @@ class Series(Frame, Serializable):
         """
         from cudf import DataFrame
 
+        def _return_sentinel_series():
+            return Series(
+                utils.scalar_broadcast_to(
+                    na_sentinel, size=len(self), dtype=dtype
+                ),
+                index=self.index,
+                name=None,
+            )
+
         if dtype is None:
             dtype = min_scalar_type(len(cats), 8)
 
         cats = column.as_column(cats)
+        if (self.dtype == "object" and cats.dtype != "object") or (
+            self.dtype != "object" and cats.dtype == "object"
+        ):
+            return _return_sentinel_series()
+
         try:
             # Where there is a type-cast from string to numeric types,
             # there is a possibility for ValueError when strings
@@ -2166,13 +2180,7 @@ class Series(Frame, Serializable):
             # encoded values of cats in self.
             cats = cats.astype(self.dtype)
         except ValueError:
-            return Series(
-                utils.scalar_broadcast_to(
-                    na_sentinel, size=len(self), dtype=dtype
-                ),
-                index=self.index,
-                name=None,
-            )
+            return _return_sentinel_series()
 
         order = column.as_column(cupy.arange(len(self)))
         codes = column.as_column(cupy.arange(len(cats), dtype=dtype))
