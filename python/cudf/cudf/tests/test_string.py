@@ -2087,9 +2087,37 @@ def test_string_int_to_ipv4():
 
 
 def test_string_isipv4():
-    gsr = Series(["", None, "1...1", "141.168.0.1", "127.0.0.1", "1.255.0.1"])
+    gsr = Series(
+        [
+            "",
+            None,
+            "1...1",
+            "141.168.0.1",
+            "127.0.0.1",
+            "1.255.0.1",
+            "256.27.28.26",
+            "25.257.28.26",
+            "25.27.258.26",
+            "25.27.28.256",
+            "-1.0.0.0",
+        ]
+    )
     got = gsr.str.isipv4()
-    expected = Series([False, None, False, True, True, True])
+    expected = Series(
+        [
+            False,
+            None,
+            False,
+            True,
+            True,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+        ]
+    )
     assert_eq(expected, got)
 
 
