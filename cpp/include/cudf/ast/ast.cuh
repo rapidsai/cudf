@@ -305,9 +305,10 @@ class linearizer : public abstract_visitor {
 };
 
 template <typename Element>
-__device__ Element resolve_data_source(detail::device_data_reference device_data_reference,
-                                       table_device_view const& table,
-                                       cudf::size_type row_index)
+__device__ Element resolve_input_data_reference(detail::device_data_reference device_data_reference,
+                                                table_device_view const& table,
+                                                std::int64_t* thread_intermediate_storage,
+                                                cudf::size_type row_index)
 {
   switch (device_data_reference.reference_type) {
     case detail::device_data_reference_type::COLUMN: {
@@ -319,8 +320,8 @@ __device__ Element resolve_data_source(detail::device_data_reference device_data
       return static_cast<Element>(0);
     }
     case detail::device_data_reference_type::INTERMEDIATE: {
-      // TODO: Fetch and return intermediate.
-      return static_cast<Element>(0);
+      return *reinterpret_cast<Element*>(
+        &thread_intermediate_storage[device_data_reference.data_index]);
     }
     default: {
       // TODO: Error
@@ -329,7 +330,31 @@ __device__ Element resolve_data_source(detail::device_data_reference device_data
   }
 }
 
+template <typename Element>
+__device__ Element* resolve_output_data_reference(
+  detail::device_data_reference device_data_reference,
+  table_device_view const& table,
+  std::int64_t* thread_intermediate_storage,
+  cudf::size_type row_index)
+{
+  switch (device_data_reference.reference_type) {
+    case detail::device_data_reference_type::COLUMN: {
+      // TODO: Support output columns?
+      return nullptr;
+    }
+    case detail::device_data_reference_type::INTERMEDIATE: {
+      return reinterpret_cast<Element*>(
+        &thread_intermediate_storage[device_data_reference.data_index]);
+    }
+    default: {
+      // TODO: Error
+      return nullptr;
+    }
+  }
+}
+
 /*
+// TODO: Resolve data sources for two tables
 template <typename Element>
 __device__ Element resolve_data_source(detail::device_data_reference device_data_reference,
                                        table_device_view const& left_table,
@@ -364,53 +389,64 @@ __device__ Element resolve_data_source(detail::device_data_reference device_data
 */
 
 struct typed_binop_dispatch {
-  // template <typename Element, std::enable_if_t<cudf::is_numeric<Element>()>* = nullptr>
-  template <typename Element>
+  template <typename Element, std::enable_if_t<cudf::is_numeric<Element>()>* = nullptr>
   __device__ void operator()(ast_operator op,
                              table_device_view const& table,
+                             std::int64_t* thread_intermediate_storage,
                              cudf::size_type row_index,
                              detail::device_data_reference lhs,
                              detail::device_data_reference rhs,
                              detail::device_data_reference output)
   {
-    if (row_index % 1000 == 0) { printf("operating!\n"); }
-    // auto typed_lhs    = resolve_data_source<Element>(lhs, table, row_index);
-    // auto typed_rhs    = resolve_data_source<Element>(rhs, table, row_index);
-    // auto typed_output = resolve_data_source<Element>(output, table, row_index);
-    // typed_output = ast_operator_dispatcher_numeric(op, do_binop<Element>{}, typed_lhs,
-    // typed_rhs);
+    auto typed_lhs =
+      resolve_input_data_reference<Element>(lhs, table, thread_intermediate_storage, row_index);
+    auto typed_rhs =
+      resolve_input_data_reference<Element>(rhs, table, thread_intermediate_storage, row_index);
+    auto typed_output =
+      resolve_output_data_reference<Element>(output, table, thread_intermediate_storage, row_index);
+    *typed_output = ast_operator_dispatcher_numeric(op, do_binop<Element>{}, typed_lhs, typed_rhs);
+    if (row_index == 0) {
+      printf("lhs index %i = %f, rhs index %i = %f, output index %i = %f\n",
+             lhs.data_index,
+             float(typed_lhs),
+             rhs.data_index,
+             float(typed_rhs),
+             output.data_index,
+             float(*typed_output));
+    }
   }
 
-  /*
   template <typename Element, std::enable_if_t<!cudf::is_numeric<Element>()>* = nullptr>
   __device__ void operator()(ast_operator op,
                              table_device_view const& table,
+                             std::int64_t* thread_intermediate_storage,
                              cudf::size_type row_index,
                              detail::device_data_reference lhs,
                              detail::device_data_reference rhs,
                              detail::device_data_reference output)
   {
-    if (row_index % 1000 == 0) { printf("operating on invalid type!\n"); }
     // TODO: How else to make this compile? Need a template to match unsupported types, or prevent
     // the compiler from attempting to compile unsupported types here.
   }
-  */
 };
 
 __device__ void operate(ast_operator op,
                         table_device_view const& table,
+                        std::int64_t* thread_intermediate_storage,
                         cudf::size_type row_index,
                         detail::device_data_reference lhs,
                         detail::device_data_reference rhs,
                         detail::device_data_reference output)
 {
-  if (row_index % 1000 == 0) { printf("dispatching operator!\n"); }
-  if (is_numeric(lhs.data_type)) {
-    type_dispatcher(lhs.data_type, typed_binop_dispatch{}, op, table, row_index, lhs, rhs, output);
-  } else {
-    // TODO: Support additional types, see comment on typed_binop_dispatch
-  }
-  if (row_index % 1000 == 0) { printf("done operating!\n"); }
+  type_dispatcher(lhs.data_type,
+                  typed_binop_dispatch{},
+                  op,
+                  table,
+                  thread_intermediate_storage,
+                  row_index,
+                  lhs,
+                  rhs,
+                  output);
 }
 
 __device__ void evaluate_row_expression(table_device_view const& table,
@@ -420,15 +456,9 @@ __device__ void evaluate_row_expression(table_device_view const& table,
                                         cudf::size_type* operator_source_indices,
                                         cudf::size_type num_operators,
                                         cudf::size_type row_index,
-                                        std::int64_t* intermediate_storage,
+                                        std::int64_t* thread_intermediate_storage,
                                         mutable_column_device_view output)
 {
-  if (row_index % 1000 == 0) {
-    printf("Hi thread, %i operators\n", num_operators);
-    for (int i = 0; i < 3; i++) {
-      printf("Accessing data reference %i: %i\n", i, data_references[i].data_index);
-    }
-  }
   auto operator_source_index = cudf::size_type(0);
   for (cudf::size_type operator_index(0); operator_index < num_operators; operator_index++) {
     // Execute operator
@@ -437,20 +467,27 @@ __device__ void evaluate_row_expression(table_device_view const& table,
       auto lhs_data_ref    = data_references[operator_source_indices[operator_source_index]];
       auto rhs_data_ref    = data_references[operator_source_indices[operator_source_index + 1]];
       auto output_data_ref = data_references[operator_source_indices[operator_source_index + 2]];
-      if (row_index % 1000 == 0) {
+      if (row_index == 0) {
+        printf("Operator id %i is ", operator_index);
         switch (op) {
           case ast_operator::ADD: printf("ADDing "); break;
           case ast_operator::SUB: printf("SUBtracting "); break;
           case ast_operator::MUL: printf("MULtiplying "); break;
           default: break;
         }
-        printf("lhs index %i, ", operator_source_indices[operator_source_index]);
-        printf("rhs index %i, ", operator_source_indices[operator_source_index + 1]);
+        printf("lhs index %i and ", operator_source_indices[operator_source_index]);
+        printf("rhs index %i to ", operator_source_indices[operator_source_index + 1]);
         printf("output index %i.\n", operator_source_indices[operator_source_index + 2]);
       }
 
       operator_source_index += 3;
-      operate(op, table, row_index, lhs_data_ref, rhs_data_ref, output_data_ref);
+      operate(op,
+              table,
+              thread_intermediate_storage,
+              row_index,
+              lhs_data_ref,
+              rhs_data_ref,
+              output_data_ref);
     } else {
       // TODO: Support ternary operator
       // Assume operator is unary
@@ -476,12 +513,14 @@ __global__ void compute_column_kernel(table_device_view table,
                                       ast_operator* operators,
                                       cudf::size_type* operator_source_indices,
                                       cudf::size_type num_operators,
+                                      cudf::size_type num_intermediates,
                                       mutable_column_device_view output)
 {
   extern __shared__ std::int64_t intermediate_storage[];
-  const cudf::size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
-  const cudf::size_type stride    = blockDim.x * gridDim.x;
-  const auto num_rows             = table.num_rows();
+  auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
+  const cudf::size_type start_idx  = threadIdx.x + blockIdx.x * blockDim.x;
+  const cudf::size_type stride     = blockDim.x * gridDim.x;
+  const auto num_rows              = table.num_rows();
 
   for (cudf::size_type row_index = start_idx; row_index < num_rows; row_index += stride) {
     evaluate_row_expression(table,
@@ -491,7 +530,7 @@ __global__ void compute_column_kernel(table_device_view table,
                             operator_source_indices,
                             num_operators,
                             row_index,
-                            intermediate_storage,
+                            thread_intermediate_storage,
                             output);
     // output.element<bool>(row_index) = evaluate_expression<Element>(expr, table, row_index);
   }
@@ -553,8 +592,9 @@ std::unique_ptr<column> compute_column(
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   cudf::detail::grid_1d config(table_num_rows, block_size);
-  auto shmem_size_per_block = sizeof(std::int64_t) * expr_linearizer.get_intermediate_counter() *
-                              config.num_threads_per_block;
+  auto num_intermediates = expr_linearizer.get_intermediate_counter();
+  auto shmem_size_per_block =
+    sizeof(std::int64_t) * num_intermediates * config.num_threads_per_block;
   std::cout << "Requesting " << shmem_size_per_block << " bytes of shared memory." << std::endl;
 
   compute_column_kernel<<<config.num_blocks,
@@ -566,6 +606,7 @@ std::unique_ptr<column> compute_column(
                                     thrust::raw_pointer_cast(device_operators.data()),
                                     thrust::raw_pointer_cast(device_operator_source_indices.data()),
                                     num_operators,
+                                    num_intermediates,
                                     *mutable_output_device);
   return output_column;
 }

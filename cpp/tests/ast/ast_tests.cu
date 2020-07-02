@@ -52,7 +52,7 @@ TEST_F(ASTTest, BasicASTEvaluation)
 
   auto col_ref_a_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
   auto col_ref_a_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
-  // auto col_ref_a_2   = cudf::ast::column_reference(2, cudf::ast::table_reference::LEFT);
+  auto col_ref_a_2 = cudf::ast::column_reference(2, cudf::ast::table_reference::LEFT);
   // auto literal_value = cudf::numeric_scalar<int32_t>(42);
   // auto literal       = cudf::ast::literal(literal_value);
   auto expression_add =
@@ -60,18 +60,18 @@ TEST_F(ASTTest, BasicASTEvaluation)
   // auto expression_less =
   //   cudf::ast::binary_expression(cudf::ast::ast_operator::LESS, col_ref_a_0, col_ref_a_1);
 
-  // auto expression_tree_1_1 =
-  //   cudf::ast::binary_expression(cudf::ast::ast_operator::ADD, col_ref_a_0, col_ref_a_1);
+  auto expression_tree_1_1 =
+    cudf::ast::binary_expression(cudf::ast::ast_operator::ADD, col_ref_a_0, col_ref_a_1);
 
-  // auto expression_tree_1_2 =
-  //   cudf::ast::binary_expression(cudf::ast::ast_operator::SUB, col_ref_a_2, literal);
+  auto expression_tree_1_2 =
+    cudf::ast::binary_expression(cudf::ast::ast_operator::SUB, col_ref_a_2, col_ref_a_0);
 
-  // auto expression_tree_1 = cudf::ast::binary_expression(
-  //   cudf::ast::ast_operator::MUL, expression_tree_1_1, expression_tree_1_2);
+  auto expression_tree_1 = cudf::ast::binary_expression(
+    cudf::ast::ast_operator::MUL, expression_tree_1_1, expression_tree_1_2);
 
   auto result_add = cudf::ast::compute_column(table_a, expression_add);
   // auto result_less   = cudf::ast::compute_column(table_a, expression_less);
-  // auto result_tree_1 = cudf::ast::compute_column(table_a, expression_tree_1);
+  auto result_tree_1 = cudf::ast::compute_column(table_a, expression_tree_1);
 
   // cudf::test::expect_columns_equal(expect_add, result_add->view(), true);
   // cudf::test::expect_columns_equal(expect_less, result_less->view(), true);
