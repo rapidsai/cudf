@@ -880,6 +880,12 @@ class ColumnBase(Column, Serializable):
         # Re-label self w.r.t. the provided categories
         if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
             labels = sr.label_encoding(cats=dtype.categories)
+            if "ordered" in kwargs:
+                warnings.warn(
+                    "Ignoring the `ordered` parameters passed in `**kwargs`, "
+                    "will be using ordered parameter of CategoricalDtype"
+                )
+
             return build_categorical_column(
                 categories=dtype.categories,
                 codes=labels._column,
