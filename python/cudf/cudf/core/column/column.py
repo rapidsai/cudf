@@ -1576,7 +1576,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
         )
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
-        cudf_dtype = np.dtype('int64')
+        cudf_dtype = arbitrary._data.dtype
 
         data = Buffer(arbitrary._data.view('|u1'))
         data = as_column(data, dtype=cudf_dtype)
