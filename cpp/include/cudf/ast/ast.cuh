@@ -438,12 +438,17 @@ __device__ void evaluate_row_expression(table_device_view table,
   for (cudf::size_type operator_index(0); operator_index < num_operators; operator_index++) {
     // Execute operator
     auto const& op = operators[operator_index];
-    if (true)  // TODO: Need to use is_binary_operator<op>())
-    {
+    if (is_binary_operator(op)) {
       auto lhs_data_ref    = data_references[operator_source_indices[operator_source_index]];
       auto rhs_data_ref    = data_references[operator_source_indices[operator_source_index + 1]];
       auto output_data_ref = data_references[operator_source_indices[operator_source_index + 2]];
       operator_source_index += 3;
+    } else {
+      // Assume operator is unary
+      // TODO: Support ternary operator
+      auto input_data_ref  = data_references[operator_source_indices[operator_source_index]];
+      auto output_data_ref = data_references[operator_source_indices[operator_source_index + 1]];
+      operator_source_index += 2;
     }
   }
   output.element<bool>(row_index) = false;
