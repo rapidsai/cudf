@@ -105,7 +105,8 @@ class literal : public expression {
 
 class column_reference : public expression {
  public:
-  column_reference(cudf::size_type column_index, table_reference table_source)
+  column_reference(cudf::size_type column_index,
+                   table_reference table_source = table_reference::LEFT)
     : column_index(column_index), table_source(table_source)
   {
   }
@@ -605,21 +606,25 @@ std::unique_ptr<column> compute_column(
   for (auto v : operator_source_indices) { std::cout << v << ", "; }
   std::cout << std::endl;
 
+  // Create table device view
   auto table_device   = table_device_view::create(table, stream);
   auto table_num_rows = table.num_rows();
+
+  // Prepare output column
   auto output_column =
     make_fixed_width_column(expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
-  std::cout << "Created output." << std::endl;
-  auto block_size = 1024;  // TODO dynamically determine block size, use shared memory
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
+  // Configure kernel parameters
+  auto block_size = 1024;  // TODO: Dynamically determine block size
   cudf::detail::grid_1d config(table_num_rows, block_size);
   auto num_intermediates = expr_linearizer.get_intermediate_counter();
   auto shmem_size_per_block =
     sizeof(std::int64_t) * num_intermediates * config.num_threads_per_block;
   std::cout << "Requesting " << shmem_size_per_block << " bytes of shared memory." << std::endl;
 
+  // Execute the kernel
   compute_column_kernel<<<config.num_blocks,
                           config.num_threads_per_block,
                           shmem_size_per_block,

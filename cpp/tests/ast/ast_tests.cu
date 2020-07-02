@@ -58,13 +58,13 @@ TEST_F(ASTTest, BasicASTEvaluation)
   auto table_b = cudf::table_view{{b_0, b_1}};
   auto table_c = cudf::table_view{{c_0, c_1, c_2}};
 
-  auto col_ref_a_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
-  auto col_ref_a_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
-  auto col_ref_a_2 = cudf::ast::column_reference(2, cudf::ast::table_reference::LEFT);
+  auto col_ref_a_0 = cudf::ast::column_reference(0);
+  auto col_ref_a_1 = cudf::ast::column_reference(1);
+  auto col_ref_a_2 = cudf::ast::column_reference(2);
 
-  auto col_ref_c_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
-  auto col_ref_c_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
-  auto col_ref_c_2 = cudf::ast::column_reference(2, cudf::ast::table_reference::LEFT);
+  auto col_ref_c_0 = cudf::ast::column_reference(0);
+  auto col_ref_c_1 = cudf::ast::column_reference(1);
+  auto col_ref_c_2 = cudf::ast::column_reference(2);
   // auto literal_value = cudf::numeric_scalar<int32_t>(42);
   // auto literal       = cudf::ast::literal(literal_value);
   auto expression_add =
