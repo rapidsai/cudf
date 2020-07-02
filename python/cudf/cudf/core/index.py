@@ -1990,8 +1990,7 @@ class CategoricalIndex(GenericIndex):
         else:
             casted_other = other
             if not is_categorical_dtype(other.dtype):
-                casted_other = other.astype("category")
-                casted_other = casted_other.astype(self.dtype)
+                casted_other = other.astype(self.dtype)
 
             if self.dtype != casted_other.dtype:
                 return False
