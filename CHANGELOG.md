@@ -30,6 +30,7 @@
 - PR #5497 Add `.str.isinteger` & `.str.isfloat`
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
+- PR #5536 Parquet reader - add support for multiple sources
 - PR #5607 Add Java bindings for duration types
 - PR #5612 Add `is_hex` strings API
 

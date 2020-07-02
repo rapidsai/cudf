@@ -52,7 +52,7 @@ class CudfEngine(ArrowEngine):
                 path,
                 engine="cudf",
                 columns=columns,
-                row_group=row_group,
+                row_groups=row_group,
                 strings_to_categorical=strings_to_cats,
                 **kwargs.get("read", {}),
             )
@@ -62,7 +62,7 @@ class CudfEngine(ArrowEngine):
                     f,
                     engine="cudf",
                     columns=columns,
-                    row_group=row_group,
+                    row_groups=row_group,
                     strings_to_categorical=strings_to_cats,
                     **kwargs.get("read", {}),
                 )
