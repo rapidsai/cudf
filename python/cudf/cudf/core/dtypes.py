@@ -1,6 +1,7 @@
 import pickle
 
 import pandas as pd
+import pyarrow as pa
 from pandas.api.extensions import ExtensionDtype
 
 import cudf
@@ -103,3 +104,37 @@ class CategoricalDtype(ExtensionDtype):
             categories_header, categories_frames
         )
         return cls(categories=categories, ordered=ordered)
+
+
+class ListDtype:
+    def __init__(self, value_type):
+        if isinstance(value_type, ListDtype):
+            self._typ = pa.list_(value_type._typ)
+        else:
+            self._typ = pa.list_(pa.from_numpy_dtype(value_type))
+
+    @property
+    def value_type(self):
+        if isinstance(self._typ.value_type, pa.ListType):
+            return ListDtype.from_arrow(self._typ.value_type)
+        else:
+            return self._typ.value_type.to_pandas_dtype()
+
+    @property
+    def name(self):
+        return "list"
+
+    @classmethod
+    def from_arrow(cls, typ):
+        obj = object.__new__(cls)
+        obj._typ = typ
+        return obj
+
+    def to_arrow(self):
+        return self._typ
+
+    def __eq__(self, other):
+        return self._typ.equals(other._typ)
+
+    def __repr__(self):
+        return f"ListDtype({self.value_type})"
