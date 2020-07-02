@@ -33,13 +33,13 @@ namespace detail {
 namespace {
 
 // used to index values in a timeparts array
-enum timestamp_parse_component {
-  TP_DAY       = 0,
-  TP_HOUR      = 1,
-  TP_MINUTE    = 2,
-  TP_SECOND    = 3,
-  TP_SUBSECOND = 4,
-  TP_ARRAYSIZE = 5
+enum duration_parse_component {
+  DU_DAY       = 0,
+  DU_HOUR      = 1,
+  DU_MINUTE    = 2,
+  DU_SECOND    = 3,
+  DU_SUBSECOND = 4,
+  DU_ARRAYSIZE = 5
 };
 
 enum class format_char_type : int8_t {
@@ -48,7 +48,7 @@ enum class format_char_type : int8_t {
 };
 
 /**
- * @brief Represents a format specifier or literal from a timestamp format string.
+ * @brief Represents a format specifier or literal from a duration format string.
  *
  * Created by the format_compiler when parsing a format string.
  */
@@ -68,11 +68,11 @@ struct alignas(4) format_item {
 };
 
 /**
- * @brief The format_compiler parses a timestamp format string into a vector of
+ * @brief The format_compiler parses a duration format string into a vector of
  * format_items.
  *
- * The vector of format_items are used when parsing a string into timestamp
- * components and when formatting a string from timestamp components.
+ * The vector of format_items are used when parsing a string into duration
+ * components and when formatting a string from duration components.
  */
 struct format_compiler {
   std::string format;
@@ -101,7 +101,7 @@ struct format_compiler {
         items.push_back(format_item::new_delimiter(ch));
         continue;
       }
-      CUDF_EXPECTS(length > 0, "Unfinished specifier in timestamp format");
+      CUDF_EXPECTS(length > 0, "Unfinished specifier in duration format");
 
       ch = *str++;
       length--;
@@ -134,10 +134,10 @@ struct format_compiler {
   //int8_t subsecond_precision() const { return specifier_lengths.at('f'); }
 };
 
-__device__ void dissect_duration(int64_t timestamp, int32_t* timeparts, type_id units)
+__device__ void dissect_duration(int64_t duration, int32_t* timeparts, type_id units)
 {
   if (units == type_id::DURATION_DAYS) {
-    timeparts[TP_DAY] = static_cast<int32_t>(timestamp);
+    timeparts[DU_DAY] = static_cast<int32_t>(duration);
     return;
   }
 
@@ -163,26 +163,26 @@ __device__ void dissect_duration(int64_t timestamp, int32_t* timeparts, type_id 
 
   int64_t seconds{0};
   if (units == type_id::DURATION_SECONDS) {
-    seconds = timestamp;
+    seconds = duration;
   } else if (units == type_id::DURATION_MILLISECONDS) {
-    seconds                 = scale_time(timestamp, 1000);  // TODO scale_time or timestamp/1000;
-    timeparts[TP_SUBSECOND] = modulo_time(timestamp, 1000);   // * 1000 * 1000;
+    seconds                 = scale_time(duration, 1000);  // TODO scale_time or duration/1000;
+    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000);   // * 1000 * 1000;
   } else if (units == type_id::DURATION_MICROSECONDS) {
-    seconds                 = scale_time(timestamp, 1000 * 1000);  // TODO above
-    timeparts[TP_SUBSECOND] = modulo_time(timestamp, 1000 * 1000);   // * 1000;
+    seconds                 = scale_time(duration, 1000 * 1000);  // TODO above
+    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000 * 1000);   // * 1000;
   } else if (units == type_id::DURATION_NANOSECONDS) {
-    seconds                 = scale_time(timestamp, 1000 * 1000 * 1000);  // TODO above
-    timeparts[TP_SUBSECOND] = modulo_time(timestamp, 1000 * 1000 * 1000);
+    seconds                 = scale_time(duration, 1000 * 1000 * 1000);  // TODO above
+    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000 * 1000 * 1000);
   }
-  timeparts[TP_DAY]    = scale_time(seconds, 24 * 60 * 60);
-  timeparts[TP_HOUR]   = modulo_time(scale_time(seconds, 60 * 60), 24);
-  timeparts[TP_MINUTE] = modulo_time(scale_time(seconds, 60), 60);
-  timeparts[TP_SECOND] = modulo_time(seconds, 60);
+  timeparts[DU_DAY]    = scale_time(seconds, 24 * 60 * 60);
+  timeparts[DU_HOUR]   = modulo_time(scale_time(seconds, 60 * 60), 24);
+  timeparts[DU_MINUTE] = modulo_time(scale_time(seconds, 60), 60);
+  timeparts[DU_SECOND] = modulo_time(seconds, 60);
 }
 
 template <typename T>
 struct duration_to_string_size_fn {
-  const column_device_view d_timestamps;
+  const column_device_view d_durations;
   const format_item* d_format_items;
   size_type items_count;
   type_id type;
@@ -191,25 +191,25 @@ struct duration_to_string_size_fn {
   __device__ int8_t format_length(char format_char, int32_t* timeparts)
   {
     switch (format_char) {
-      case 'd': return count_digits(timeparts[TP_DAY]); break;
-      case '+': return timeparts[TP_DAY] < 0 ? 1 : 0; break;
-      case 'H': return count_digits(timeparts[TP_HOUR]); break;
-      case 'M': return count_digits(timeparts[TP_MINUTE]); break;
-      case 'S': return count_digits(timeparts[TP_SECOND]); break;
+      case 'd': return count_digits(timeparts[DU_DAY]); break;
+      case '+': return timeparts[DU_DAY] < 0 ? 1 : 0; break;
+      case 'H': return count_digits(timeparts[DU_HOUR]); break;
+      case 'M': return count_digits(timeparts[DU_MINUTE]); break;
+      case 'S': return count_digits(timeparts[DU_SECOND]); break;
       // TODO:  multiples of 3. (  + 2) / 3 * 3 (pandas needs this<6, isoformat doesn't)
       // TODO: include dot only if non-zero.
       // us specifier for pandas
-      case 'u': return count_digits(timeparts[TP_SUBSECOND])>0 ? 6 : 0; break;
-      case 'f': return count_digits(timeparts[TP_SUBSECOND]); break;
+      case 'u': return count_digits(timeparts[DU_SUBSECOND])>0 ? 6 : 0; break;
+      case 'f': return count_digits(timeparts[DU_SUBSECOND]); break;
       default: return 2;
     }
   }
 
   __device__ size_type operator()(size_type idx)
   {
-    if (d_timestamps.is_null(idx)) return 0;
-    auto duration                   = d_timestamps.element<T>(idx);
-    int32_t timeparts[TP_ARRAYSIZE] = {0};  // days, hours, minutes, seconds, subseconds(9)
+    if (d_durations.is_null(idx)) return 0;
+    auto duration                   = d_durations.element<T>(idx);
+    int32_t timeparts[DU_ARRAYSIZE] = {0};  // days, hours, minutes, seconds, subseconds(9)
     dissect_duration(duration.count(), timeparts, type);
     size_type string_length{0};
     for (auto i = 0; i < items_count; i++) {
@@ -231,18 +231,18 @@ template <typename T>
 struct duration_to_string_fn : public duration_to_string_size_fn<T> {
   const int32_t* d_offsets;
   char* d_chars;
-  using duration_to_string_size_fn<T>::d_timestamps;
+  using duration_to_string_size_fn<T>::d_durations;
   using duration_to_string_size_fn<T>::d_format_items;
   using duration_to_string_size_fn<T>::items_count;
   using duration_to_string_size_fn<T>::type;
 
-  duration_to_string_fn(const column_device_view d_timestamps,
+  duration_to_string_fn(const column_device_view d_durations,
                         const format_item* d_format_items,
                         size_type items_count,
                         type_id type,
                         const int32_t* d_offsets,
                         char* d_chars)
-    : duration_to_string_size_fn<T>{d_timestamps, d_format_items, items_count, type},
+    : duration_to_string_size_fn<T>{d_durations, d_format_items, items_count, type},
       d_offsets(d_offsets),
       d_chars(d_chars)
   {
@@ -291,19 +291,19 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
       // special logic for each specifier
       switch (item.value) {
         case 'd':  // days
-          ptr = int2str(ptr, item.length, timeparts[TP_DAY]);
+          ptr = int2str(ptr, item.length, timeparts[DU_DAY]);
           break;
         case '+':  // + if day is negative
-          if(timeparts[TP_DAY]<0) *ptr++='+';
+          if(timeparts[DU_DAY]<0) *ptr++='+';
           break;
         case 'H':  // 24-hour
-          ptr = int2str(ptr, item.length, timeparts[TP_HOUR]);
+          ptr = int2str(ptr, item.length, timeparts[DU_HOUR]);
           break;
         case 'M':  // minute
-          ptr = int2str(ptr, item.length, timeparts[TP_MINUTE]);
+          ptr = int2str(ptr, item.length, timeparts[DU_MINUTE]);
           break;
         case 'S':  // second
-          ptr = int2str(ptr, item.length, timeparts[TP_SECOND]);
+          ptr = int2str(ptr, item.length, timeparts[DU_SECOND]);
           break;
         case 'f':  // sub-second
         {
@@ -314,7 +314,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
             if (units == type_id::DURATION_NANOSECONDS) return 9;
             return 0;
           }();
-          int2str(subsecond_digits, digits, timeparts[TP_SUBSECOND]);
+          int2str(subsecond_digits, digits, timeparts[DU_SUBSECOND]);
           ptr = copy_and_increment(ptr, subsecond_digits, item.length);
           break;
         }
@@ -327,9 +327,9 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
 
   __device__ void operator()(size_type idx)
   {
-    if (d_timestamps.is_null(idx)) return;
-    auto duration                   = d_timestamps.template element<T>(idx);
-    int32_t timeparts[TP_ARRAYSIZE] = {0};  // days, hours, minutes, seconds, subseconds(9)
+    if (d_durations.is_null(idx)) return;
+    auto duration                   = d_durations.template element<T>(idx);
+    int32_t timeparts[DU_ARRAYSIZE] = {0};  // days, hours, minutes, seconds, subseconds(9)
     dissect_duration(duration.count(), timeparts, type);
     // convert to characters
     format_from_parts(timeparts, d_chars + d_offsets[idx]);
