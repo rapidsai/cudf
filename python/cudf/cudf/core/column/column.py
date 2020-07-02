@@ -37,6 +37,7 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
 )
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
+from cudf._lib.transform import bools_to_mask
 
 
 class ColumnBase(Column, Serializable):
@@ -1574,6 +1575,16 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         data = as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
         )
+    elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
+        cudf_dtype = np.dtype('int64')
+
+        data = Buffer(arbitrary._data.view('|u1'))
+        data = as_column(data, dtype=cudf_dtype)
+
+        mask = arbitrary._mask
+        mask = bools_to_mask(as_column(mask).binary_operator('eq', np.bool_(False)))
+
+        data = data.set_mask(mask)
 
     else:
         try:
