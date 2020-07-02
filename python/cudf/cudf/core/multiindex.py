@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import numbers
 import pickle
@@ -765,7 +765,20 @@ class MultiIndex(Index):
     def _concat(cls, objs):
         from cudf import DataFrame, MultiIndex
 
-        source_data = [o._source_data for o in objs]
+        source_data = []
+        for o in objs:
+            if not isinstance(o, MultiIndex):
+                raise TypeError(
+                    "all objects should be of type "
+                    "MultiIndex for MultiIndex concatenation"
+                )
+            source_data.append(o._source_data)
+
+        if len(source_data) > 1:
+            for index, obj in enumerate(source_data[1:]):
+                obj.columns = source_data[0].columns
+                source_data[index + 1] = obj
+
         source_data = DataFrame._concat(source_data)
         names = [None for x in source_data.columns]
         objs = list(filter(lambda o: o.names is not None, objs))
@@ -903,24 +916,27 @@ class MultiIndex(Index):
 
     def append(self, other):
         """
-        Append a collection of Index options together
+        Append a collection of MultiIndex objects together
 
         Parameters
         ----------
-        other : Index or list/tuple of indices
+        other : MultiIndex or list/tuple of MultiIndex objects
 
         Returns
         -------
         appended : Index
+
+        Examples
+        --------
+        TODO: PREM: Add examples here
         """
         if isinstance(other, (list, tuple)):
-            other = [
-                o.to_pandas() if hasattr(o, "to_pandas") else o for o in other
-            ]
-        elif hasattr(other, "to_pandas"):
-            other = other.to_pandas()
+            to_concat = [self]
+            to_concat.extend(other)
+        else:
+            to_concat = [self, other]
 
-        return cudf.from_pandas(self.to_pandas().append(other))
+        return MultiIndex._concat(to_concat)
 
     def nan_to_num(*args, **kwargs):
         return args[0]
