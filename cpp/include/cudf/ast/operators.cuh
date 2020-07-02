@@ -604,51 +604,6 @@ struct do_binop {
   }
 };
 
-/*
-template <comparator>
-struct compareop {
-};
-
-template <>
-struct compareop<comparator::LESS> {
-  template <typename T>
-  __device__ bool operator()(T const& lhs, T const& rhs)
-  {
-    return lhs < rhs;
-  }
-};
-
-template <>
-struct compareop<comparator::GREATER> {
-  template <typename T>
-  __device__ bool operator()(T const& lhs, T const& rhs)
-  {
-    return lhs > rhs;
-  }
-};
-
-template <typename F, typename... Ts>
-__device__ decltype(auto) compareop_dispatcher(comparator op, F&& f, Ts&&... args)
-{
-  switch (op) {
-    case comparator::LESS:
-      return f.template operator()<comparator::LESS>(std::forward<Ts>(args)...);
-    case comparator::GREATER:
-      return f.template operator()<comparator::GREATER>(std::forward<Ts>(args)...);
-    default: return false;  // TODO: Error handling
-  }
-}
-
-template <typename T>
-struct do_compareop {
-  template <comparator OP>
-  __device__ bool operator()(T const& lhs, T const& rhs)
-  {
-    return compareop<OP>{}(lhs, rhs);
-  }
-};
-*/
-
 }  // namespace ast
 
 }  // namespace cudf
