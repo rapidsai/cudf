@@ -6431,8 +6431,8 @@ class DataFrame(Frame, Serializable):
             current_cols = self.columns
             combined_columns = other.index.to_pandas()
             if not self.empty:
-                combined_columns = combined_columns.union(
-                    current_cols, sort=False
+                combined_columns = current_cols.union(
+                    combined_columns, sort=False
                 )
 
             if sort:

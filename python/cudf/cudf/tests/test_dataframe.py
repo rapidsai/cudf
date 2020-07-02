@@ -6188,15 +6188,16 @@ def test_cudf_isclose_different_index():
         ),
     ],
 )
-def test_dataframe_append_dataframe(df, other):
+@pytest.mark.parametrize("sort", [False, True])
+def test_dataframe_append_dataframe(df, other, sort):
     pdf = df
     other_pd = other
 
     gdf = gd.from_pandas(df)
     other_gd = gd.from_pandas(other)
 
-    expected = pdf.append(other_pd, sort=True)
-    actual = gdf.append(other_gd, sort=True)
+    expected = pdf.append(other_pd, sort=sort)
+    actual = gdf.append(other_gd, sort=sort)
 
     if expected.shape != df.shape:
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
@@ -6233,12 +6234,19 @@ def test_dataframe_append_dataframe(df, other):
     "other",
     [
         pd.Series([10, 11, 23, 234, 13]),
-        pd.Series([10, 11, 23, 234, 13], index=[11, 12, 13, 44, 33]),
+        pytest.param(
+            pd.Series([10, 11, 23, 234, 13], index=[11, 12, 13, 44, 33]),
+            marks=pytest.mark.xfail(
+                reason="pandas bug: "
+                "https://github.com/pandas-dev/pandas/issues/35092"
+            ),
+        ),
         {1: 1},
         {0: 10, 1: 100, 2: 102},
     ],
 )
-def test_dataframe_append_series_dict(df, other):
+@pytest.mark.parametrize("sort", [False, True])
+def test_dataframe_append_series_dict(df, other, sort):
     pdf = df
     other_pd = other
 
@@ -6248,8 +6256,8 @@ def test_dataframe_append_series_dict(df, other):
     else:
         other_gd = other
 
-    expected = pdf.append(other_pd, ignore_index=True, sort=True)
-    actual = gdf.append(other_gd, ignore_index=True, sort=True)
+    expected = pdf.append(other_pd, ignore_index=True, sort=sort)
+    actual = gdf.append(other_gd, ignore_index=True, sort=sort)
 
     if expected.shape != df.shape:
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
@@ -6355,7 +6363,8 @@ def test_dataframe_append_series_dict(df, other):
         ],
     ],
 )
-def test_dataframe_append_dataframe_lists(df, other):
+@pytest.mark.parametrize("sort", [False, True])
+def test_dataframe_append_dataframe_lists(df, other, sort):
     pdf = df
     other_pd = other
 
@@ -6364,8 +6373,8 @@ def test_dataframe_append_dataframe_lists(df, other):
         gd.from_pandas(o) if isinstance(o, pd.DataFrame) else o for o in other
     ]
 
-    expected = pdf.append(other_pd, sort=True)
-    actual = gdf.append(other_gd, sort=True)
+    expected = pdf.append(other_pd, sort=sort)
+    actual = gdf.append(other_gd, sort=sort)
 
     if expected.shape != df.shape:
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
@@ -6414,7 +6423,8 @@ def test_dataframe_append_dataframe_lists(df, other):
         [[0.23, 0.00023, -10.00, 100, 200, 1000232, 1232.32323]],
     ],
 )
-def test_dataframe_append_lists(df, other):
+@pytest.mark.parametrize("sort", [False, True])
+def test_dataframe_append_lists(df, other, sort):
     pdf = df
     other_pd = other
 
@@ -6423,8 +6433,8 @@ def test_dataframe_append_lists(df, other):
         gd.from_pandas(o) if isinstance(o, pd.DataFrame) else o for o in other
     ]
 
-    expected = pdf.append(other_pd, sort=True)
-    actual = gdf.append(other_gd, sort=True)
+    expected = pdf.append(other_pd, sort=sort)
+    actual = gdf.append(other_gd, sort=sort)
 
     if expected.shape != df.shape:
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
