@@ -44,16 +44,27 @@ TEST_F(ASTTest, BasicASTEvaluation)
   auto b_0 = column_wrapper<int32_t>{2, 1, 5};
   auto b_1 = column_wrapper<int32_t>{7, 0, 4};
 
+  auto c_0 = column_wrapper<double>{0.15, 0.37, 4.2, 21.3};
+  auto c_1 = column_wrapper<double>{0.0, -42.0, 1.0, 98.6};
+  auto c_2 = column_wrapper<double>{0.6, std::numeric_limits<double>::infinity(), 0.999, 1.0};
+
   auto expect_add    = column_wrapper<int32_t>{13, 27, 21, 50};
   auto expect_less   = column_wrapper<bool>{true, false, true, false};
   auto expect_tree_1 = column_wrapper<int32_t>{-78, 1242, 21, -7450};
+  auto expect_tree_2 =
+    column_wrapper<double>{0.6, std::numeric_limits<double>::infinity(), -3.201, -2099.18};
 
   auto table_a = cudf::table_view{{a_0, a_1, a_2}};
   auto table_b = cudf::table_view{{b_0, b_1}};
+  auto table_c = cudf::table_view{{c_0, c_1, c_2}};
 
   auto col_ref_a_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
   auto col_ref_a_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
   auto col_ref_a_2 = cudf::ast::column_reference(2, cudf::ast::table_reference::LEFT);
+
+  auto col_ref_c_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto col_ref_c_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto col_ref_c_2 = cudf::ast::column_reference(2, cudf::ast::table_reference::LEFT);
   // auto literal_value = cudf::numeric_scalar<int32_t>(42);
   // auto literal       = cudf::ast::literal(literal_value);
   auto expression_add =
@@ -70,13 +81,21 @@ TEST_F(ASTTest, BasicASTEvaluation)
   auto expression_tree_1 = cudf::ast::binary_expression(
     cudf::ast::ast_operator::MUL, expression_tree_1_1, expression_tree_1_2);
 
+  auto expression_tree_2_1 =
+    cudf::ast::binary_expression(cudf::ast::ast_operator::MUL, col_ref_c_0, col_ref_c_1);
+
+  auto expression_tree_2 =
+    cudf::ast::binary_expression(cudf::ast::ast_operator::SUB, col_ref_c_2, expression_tree_2_1);
+
   auto result_add = cudf::ast::compute_column(table_a, expression_add);
   // auto result_less   = cudf::ast::compute_column(table_a, expression_less);
   auto result_tree_1 = cudf::ast::compute_column(table_a, expression_tree_1);
+  auto result_tree_2 = cudf::ast::compute_column(table_c, expression_tree_2);
 
   cudf::test::expect_columns_equal(expect_add, result_add->view(), true);
   // cudf::test::expect_columns_equal(expect_less, result_less->view(), true);
   cudf::test::expect_columns_equal(expect_tree_1, result_tree_1->view(), true);
+  cudf::test::expect_columns_equal(expect_tree_2, result_tree_2->view(), true);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
