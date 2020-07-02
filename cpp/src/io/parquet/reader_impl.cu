@@ -444,7 +444,7 @@ class aggregate_metadata {
 
     return selection;
   }
-};  // namespace parquet
+};
 
 void reader::impl::read_column_chunks(
   std::vector<rmm::device_buffer> &page_data,
