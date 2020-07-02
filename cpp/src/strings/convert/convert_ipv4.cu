@@ -227,21 +227,22 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
                       if (d_column.is_null(idx)) return false;
                       auto const d_str = d_column.element<string_view>(idx);
                       if (d_str.empty()) return false;
-                      auto const ch = *(d_str.begin());
-                      if (ch < '0' || ch > '9') return false;
-                      int ipv_idx  = 0;
-                      int ip_value = 0;
+                      constexpr int max_ip = 255;  // values must be in [0,255]
+                      int ip_vals[4]       = {-1, -1, -1, -1};
+                      int ipv_idx          = 0;
                       for (auto const ch : d_str) {
-                        if (ch == '.') {
-                          if (++ipv_idx > 3) return false;
-                          ip_value = 0;
-                        } else if ((ch >= '0') && (ch <= '9')) {
-                          ip_value = (ip_value * 10) + static_cast<int>(ch - '0');
-                          if (ip_value > 255) return false;
-                        } else
+                        if ((ch >= '0') && (ch <= '9')) {
+                          auto const ip_val    = ip_vals[ipv_idx];
+                          int const new_ip_val = static_cast<int>(ch - '0') +  // compute new value
+                                                 (ip_val < 0 ? 0 : (10 * ip_val));
+                          if (new_ip_val > max_ip) return false;
+                          ip_vals[ipv_idx] = new_ip_val;
+                        } else if (ch != '.' || (++ipv_idx > 3))
                           return false;
                       }
-                      return true;
+                      // final check for any missing values
+                      return ip_vals[0] >= 0 && ip_vals[1] >= 0 && ip_vals[2] >= 0 &&
+                             ip_vals[3] >= 0;
                     });
   results->set_null_count(strings.null_count());
   return results;
