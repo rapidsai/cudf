@@ -1138,6 +1138,16 @@ def build_column(
             children=children,
             null_count=null_count,
         )
+    elif dtype is cudf.core.dtypes.ListDtype:
+        return cudf.core.column.ListsColumn(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
+        )
     else:
         return cudf.core.column.NumericalColumn(
             data=data,
