@@ -342,52 +342,38 @@ std::string ptx_parser::parse()
 
   input_arg_list.clear();
   // Go directly to the .func mark
-  const size_t length = no_comments.size();
-  size_t start        = no_comments.find(".func") + 5;
-  if (start == length + 5) {
+  size_t offset = no_comments.find(".func");
+  if (offset == no_comments.size()) {
     printf("No function (.func) found in the input ptx code.\n");
     exit(1);
   }
-  size_t stop = start;
-  while (stop < length && no_comments[stop] != '{') { stop++; }
 
-  std::string function_header = std::string(no_comments, start, stop - start);
+  auto f = no_comments.cbegin() + offset + 5;  // length of '.func'
+  auto l = std::find(f, no_comments.cend(), '{');
 
-  stop++;
-  start = stop;
+  auto const fn_header = std::string(f, l);
 
-  int bra_count = 0;
-  while (stop < length) {
-    if (no_comments[stop] == '{') bra_count++;
-    if (no_comments[stop] == '}') {
-      if (bra_count == 0) {
-        break;
-      } else {
-        bra_count--;
-      }
+  f = ++l;
+
+  // find matching } to first found {
+  l = std::find_if(f, no_comments.cend(), [brace_count = 0](auto c) mutable {
+    if (c == '{') ++brace_count;
+    if (c == '}') {
+      if (brace_count == 0) return true;
+      --brace_count;
     }
-    stop++;
-  }
+    return false;
+  });
 
-  std::vector<std::string> function_body_output =
-    parse_function_body(std::string(no_comments, start, stop - start));
+  auto const fn_body_output   = parse_function_body(std::string(f, l));
+  auto const fn_header_output = parse_function_header(fn_header);
+  std::string final_output    = fn_header_output + "\n asm volatile (\"{\");";
 
-  std::string function_header_output = parse_function_header(function_header);
+  for (auto const& line : fn_body_output)
+    final_output += line.find("ret;") != std::string::npos ? "  asm volatile (\"bra RETTGT;\");\n"
+                                                           : "  " + line + "\n";
 
-  std::string final_output = function_header_output + "\n";
-  final_output += " asm volatile (\"{\");";
-  for (int i = 0; i < function_body_output.size(); i++) {
-    if (function_body_output[i].find("ret;") != std::string::npos) {
-      final_output += "  asm volatile (\"bra RETTGT;\");\n";
-      continue;
-    }
-    final_output += "  " + function_body_output[i] + "\n";
-  }
-  final_output += " asm volatile (\"RETTGT:}\");";
-
-  final_output += "}";
-
-  return final_output;
+  return final_output + " asm volatile (\"RETTGT:}\");}";
 }
 
 ptx_parser::ptx_parser(const std::string& ptx_,
