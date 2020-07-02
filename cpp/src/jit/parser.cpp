@@ -302,36 +302,21 @@ std::string ptx_parser::parse_function_header(const std::string& src)
 
 std::string remove_comments(const std::string& src)
 {
-  // Remove the comments in the input ptx code.
-  size_t start       = 0;
-  size_t stop        = 0;
-  std::string output = src;
-  while (start < output.size() - 1) {
-    if (output[start] == '/' && output[start + 1] == '*') {
-      stop = start + 2;
-      while (stop < output.size() - 1) {
-        if (output[stop] == '*' && output[stop + 1] == '/') {
-          stop += 2;
-          break;
-        } else {
-          stop++;
-        }
-      }
-      output.erase(start, stop - start);
-    } else if (output[start] == '/' && output[start + 1] == '/') {
-      stop = start + 2;
-      while (stop < output.size()) {
-        if (output[stop] == '\n') {
-          // stop += 1; // Keep the newline here.
-          break;
-        } else {
-          stop++;
-        }
-      }
-      output.erase(start, stop - start);
-    } else {
-      start++;
-    }
+  std::string output;
+  auto in_singleline_comment = false;
+  auto in_multiline_comment  = 0;
+  for (int i = 0; i < src.size(); ++i) {
+    char const a = i != 0 ? src[i - 1] : '?';               // prior char
+    char const b = src[i];                                  // current char
+    char const c = i + 1 != src.size() ? src[i + 1] : '?';  // next char
+
+    if (b == '/' && c == '/') in_singleline_comment = true;
+    if (b == '/' && c == '*') ++in_multiline_comment;
+    if (b == '\n') in_singleline_comment = false;
+
+    if (not(in_singleline_comment or in_multiline_comment)) output += b;
+
+    if (a == '*' && b == '/') --in_multiline_comment;
   }
   return output;
 }
