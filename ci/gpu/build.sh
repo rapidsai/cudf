@@ -68,7 +68,7 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "rapids-build-env=$MINOR_VERSION.*" \
               "rapids-notebook-env=$MINOR_VERSION.*"
 
-# https://docs.rapids.ai/maintainers/depmgmt/ 
+# https://docs.rapids.ai/maintainers/depmgmt/
 # conda remove -f rapids-build-env rapids-notebook-env
 # conda install "your-pkg=1.0.0"
 
@@ -95,6 +95,17 @@ if [[ ${BUILD_MODE} == "pull-request" ]]; then
     $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests
 else
     $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests -l
+fi
+
+################################################################################
+# BUILD - Build libcudf_kafka from source
+################################################################################
+
+logger "Build libcudf_kafka..."
+if [[ ${BUILD_MODE} == "pull-request" ]]; then
+    $WORKSPACE/build.sh clean libcudf_kafka tests
+else
+    $WORKSPACE/build.sh clean libcudf_kafka tests -l
 fi
 
 ################################################################################

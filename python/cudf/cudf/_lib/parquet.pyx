@@ -190,6 +190,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     index_col = ''
     cdef map[string, string] user_data = c_out_table.metadata.user_data
     json_str = user_data[b'pandas'].decode('utf-8')
+    meta = None
     if json_str != "":
         meta = json.loads(json_str)
         if 'index_columns' in meta and len(meta['index_columns']) > 0:
@@ -199,6 +200,22 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         Table.from_unique_ptr(move(c_out_table.tbl),
                               column_names=column_names)
     )
+
+    if df.empty and meta is not None:
+        cols_dtype_map = {}
+        for col in meta['columns']:
+            cols_dtype_map[col['name']] = col['numpy_type']
+
+        if not column_names:
+            column_names = [o['name'] for o in meta['columns']]
+            if index_col in cols_dtype_map:
+                column_names.remove(index_col)
+
+        for col in column_names:
+            df._data[col] = cudf.core.column.column_empty(
+                row_count=0,
+                dtype=np.dtype(cols_dtype_map[col])
+            )
 
     # Set the index column
     if index_col is not '' and isinstance(index_col, str):

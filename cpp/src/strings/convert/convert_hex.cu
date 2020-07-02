@@ -27,6 +27,7 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/logical.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -141,6 +142,44 @@ std::unique_ptr<column> hex_to_integers(
   return results;
 }
 
+std::unique_ptr<column> is_hex(strings_column_view const& strings,
+                               cudaStream_t stream,
+                               rmm::mr::device_memory_resource* mr)
+{
+  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto d_column       = *strings_column;
+  // create output column
+  auto results   = make_numeric_column(data_type{type_id::BOOL8},
+                                     strings.size(),
+                                     copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
+  auto d_results = results->mutable_view().data<bool>();
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(strings.size()),
+                    d_results,
+                    [d_column] __device__(size_type idx) {
+                      if (d_column.is_null(idx)) return false;
+                      auto const d_str = d_column.element<string_view>(idx);
+                      if (d_str.empty()) return false;
+                      auto const starts_with_0x = [](auto const& sv) {
+                        return sv.length() > 1 && (sv.substr(0, 2) == string_view("0x", 2) ||
+                                                   sv.substr(0, 2) == string_view("0X", 2));
+                      };
+                      auto begin = d_str.begin() + (starts_with_0x(d_str) ? 2 : 0);
+                      auto end   = d_str.end();
+                      return (thrust::distance(begin, end) > 0) &&
+                             thrust::all_of(thrust::seq, begin, end, [] __device__(auto chr) {
+                               return (chr >= '0' && chr <= '9') || (chr >= 'A' && chr <= 'F') ||
+                                      (chr >= 'a' && chr <= 'f');
+                             });
+                    });
+  results->set_null_count(strings.null_count());
+  return results;
+}
+
 }  // namespace detail
 
 // external API
@@ -150,6 +189,13 @@ std::unique_ptr<column> hex_to_integers(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::hex_to_integers(strings, output_type, mr);
+}
+
+std::unique_ptr<column> is_hex(strings_column_view const& strings,
+                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_hex(strings, 0, mr);
 }
 
 }  // namespace strings

@@ -1047,15 +1047,13 @@ def test_raise_data_error():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
 
-    # we have to test that Pandas does this too:
     try:
         pdf.groupby("a").mean()
     except Exception as e:
-        typ = type(e)
-        msg = str(e)
-
-    with pytest.raises(typ, match=msg):
-        gdf.groupby("a").mean()
+        with pytest.raises(type(e), match=e.__str__()):
+            gdf.groupby("a").mean()
+    else:
+        raise AssertionError("Expected pandas groupby to fail")
 
 
 def test_drop_unsupported_multi_agg():
@@ -1120,3 +1118,18 @@ def test_reset_index_after_empty_groupby():
         pdf.groupby("a").sum().reset_index(),
         gdf.groupby("a").sum().reset_index(),
     )
+
+
+def test_groupby_attribute_error():
+    err_msg = "Test error message"
+
+    class TestGroupBy(cudf.core.groupby.GroupBy):
+        @property
+        def _groupby(self):
+            raise AttributeError("Test error message")
+
+    a = cudf.DataFrame({"a": [1, 2], "b": [2, 3]})
+    gb = TestGroupBy(a, a["a"])
+
+    with pytest.raises(AttributeError, match=err_msg):
+        gb.sum()

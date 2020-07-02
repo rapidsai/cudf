@@ -14,7 +14,7 @@ from cudf.io import write_to_dataset
 class CudfEngine(ArrowEngine):
     @staticmethod
     def read_metadata(*args, **kwargs):
-        meta, stats, parts = ArrowEngine.read_metadata(*args, **kwargs)
+        meta, stats, parts, index = ArrowEngine.read_metadata(*args, **kwargs)
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
@@ -28,7 +28,7 @@ class CudfEngine(ArrowEngine):
             else:
                 new_meta[col] = as_column(meta[col])
 
-        return (new_meta, stats, parts)
+        return (new_meta, stats, parts, index)
 
     @staticmethod
     def read_partition(
