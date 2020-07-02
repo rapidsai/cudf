@@ -407,13 +407,18 @@ struct is_unary_logical_operator_trait_impl<ast_operator::NOT> : std::true_type 
 };
 
 // Trait dispatcher
-template <typename F>
-CUDA_HOST_DEVICE_CALLABLE decltype(auto) ast_operator_trait_dispatcher(ast_operator op, F&& f)
+template <typename Functor, typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher(ast_operator op,
+                                                                           Functor&& f,
+                                                                           Ts&&... args)
 {
   switch (op) {
-    case ast_operator::ADD: return f.template operator()<ast_operator::ADD>();
-    case ast_operator::SUB: return f.template operator()<ast_operator::SUB>();
-    case ast_operator::MUL: return f.template operator()<ast_operator::MUL>();
+    case ast_operator::ADD:
+      return f.template operator()<ast_operator::ADD>(std::forward<Ts>(args)...);
+    case ast_operator::SUB:
+      return f.template operator()<ast_operator::SUB>(std::forward<Ts>(args)...);
+    case ast_operator::MUL:
+      return f.template operator()<ast_operator::MUL>(std::forward<Ts>(args)...);
     default: return false;  // TODO: Error handling?
   }
 }
@@ -430,7 +435,7 @@ struct is_binary_arithmetic_operator_impl {
 };
 CUDA_HOST_DEVICE_CALLABLE bool is_binary_arithmetic_operator(ast_operator op)
 {
-  return ast_operator_trait_dispatcher(op, is_binary_arithmetic_operator_impl{});
+  return ast_operator_dispatcher(op, is_binary_arithmetic_operator_impl{});
 }
 
 struct is_unary_arithmetic_operator_impl {
@@ -442,7 +447,7 @@ struct is_unary_arithmetic_operator_impl {
 };
 CUDA_HOST_DEVICE_CALLABLE bool is_unary_arithmetic_operator(ast_operator op)
 {
-  return ast_operator_trait_dispatcher(op, is_unary_arithmetic_operator_impl{});
+  return ast_operator_dispatcher(op, is_unary_arithmetic_operator_impl{});
 }
 
 struct is_binary_comparator_impl {
@@ -454,7 +459,7 @@ struct is_binary_comparator_impl {
 };
 CUDA_HOST_DEVICE_CALLABLE bool is_binary_comparator(ast_operator op)
 {
-  return ast_operator_trait_dispatcher(op, is_binary_comparator_impl{});
+  return ast_operator_dispatcher(op, is_binary_comparator_impl{});
 }
 
 struct is_unary_comparator_impl {
@@ -466,7 +471,7 @@ struct is_unary_comparator_impl {
 };
 CUDA_HOST_DEVICE_CALLABLE bool is_unary_comparator(ast_operator op)
 {
-  return ast_operator_trait_dispatcher(op, is_unary_comparator_impl{});
+  return ast_operator_dispatcher(op, is_unary_comparator_impl{});
 }
 
 struct is_binary_logical_operator_impl {
@@ -478,7 +483,7 @@ struct is_binary_logical_operator_impl {
 };
 CUDA_HOST_DEVICE_CALLABLE bool is_binary_logical_operator(ast_operator op)
 {
-  return ast_operator_trait_dispatcher(op, is_binary_logical_operator_impl{});
+  return ast_operator_dispatcher(op, is_binary_logical_operator_impl{});
 }
 
 struct is_unary_logical_operator_impl {
@@ -490,7 +495,7 @@ struct is_unary_logical_operator_impl {
 };
 CUDA_HOST_DEVICE_CALLABLE bool is_unary_logical_operator(ast_operator op)
 {
-  return ast_operator_trait_dispatcher(op, is_unary_logical_operator_impl{});
+  return ast_operator_dispatcher(op, is_unary_logical_operator_impl{});
 }
 
 // Arithmetic operators accept element type(s) and return an element
@@ -544,6 +549,15 @@ struct binop<ast_operator::SUB> {
   __device__ T operator()(T const& lhs, T const& rhs)
   {
     return lhs - rhs;
+  }
+};
+
+template <>
+struct binop<ast_operator::MUL> {
+  template <typename T>
+  __device__ T operator()(T const& lhs, T const& rhs)
+  {
+    return lhs * rhs;
   }
 };
 

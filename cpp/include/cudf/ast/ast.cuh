@@ -359,6 +359,21 @@ __device__ Element resolve_data_source(detail::device_data_reference device_data
   }
 }
 
+struct typed_binop_dispatch {
+  template <typename Element>
+  void operator()(ast_operator op,
+                  detail::device_data_reference lhs,
+                  detail::device_data_reference rhs,
+                  table_device_view const& table,
+                  cudf::size_type row_index,
+                  detail::device_data_reference output)
+  {
+    auto typed_lhs    = resolve_data_source<Element>(lhs, table, row_index);
+    auto typed_rhs    = resolve_data_source<Element>(rhs, table, row_index);
+    auto typed_output = resolve_data_source<Element>(output, table, row_index);
+  }
+};
+
 /*
 template <typename Element>
 __device__ Element evaluate_expression(binary_expression expr,
