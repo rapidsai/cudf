@@ -260,6 +260,19 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /**
+   * Returns a duration scalar based on the type parameter.
+   * @param type - dtype of scalar to be returned
+   * @param value - corresponding value for the scalar
+   * @return - Scalar of the respective type
+   */
+  public static Scalar durationFromLong(DType type, Long value) {
+    if (value == null) {
+      return Scalar.fromNull(type);
+    }
+    return Scalar.durationFromLong(type, value.longValue());
+  }
+
   public static Scalar timestampFromLong(DType type, long value) {
     if (type.isTimestamp()) {
       if (type == DType.TIMESTAMP_DAYS) {
