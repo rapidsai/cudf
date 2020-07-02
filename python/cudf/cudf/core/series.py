@@ -2239,32 +2239,54 @@ class Series(Frame, Serializable):
         Parameters
         ----------
         values : sequence of input values
-        dtype: numpy.dtype; optional
-               Specifies the output dtype.  If `None` is given, the
-               smallest possible integer dtype (starting with np.int8)
-               is used.
-        na_sentinel : number
+        dtype : numpy.dtype; optional
+            Specifies the output dtype.  If `None` is given, the
+            smallest possible integer dtype (starting with np.int8)
+            is used.
+        na_sentinel : number, default -1
             Value to indicate missing category.
 
         Returns
         -------
         A sequence of encoded labels with value between 0 and n-1 classes(cats)
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3, 4, 10])
+        >>> s.label_encoding([2, 3])
+        0   -1
+        1    0
+        2    1
+        3   -1
+        4   -1
+        dtype: int8
+
+        `na_sentinel` parameter can be used to
+        control the value when there is no encoding.
+
+        >>> s.label_encoding([2, 3], na_sentinel=10)
+        0    10
+        1     0
+        2     1
+        3    10
+        4    10
+        dtype: int8
+
+        When none of `cats` values exist in s, entire
+        Series will be `na_sentinel`.
+
+        >>> s.label_encoding(['a', 'b', 'c'])
+        0   -1
+        1   -1
+        2   -1
+        3   -1
+        4   -1
+        dtype: int8
         """
         from cudf import DataFrame
 
-        if dtype is None:
-            dtype = min_scalar_type(len(cats), 8)
-
-        cats = column.as_column(cats)
-        try:
-            # Where there is a type-cast from string to numeric types,
-            # there is a possibility for ValueError when strings
-            # are having non-numeric values, in such cases we have
-            # to catch the exception and return encoded labels
-            # with na_sentinel values as there would be no corresponding
-            # encoded values of cats in self.
-            cats = cats.astype(self.dtype)
-        except ValueError:
+        def _return_sentinel_series():
             return Series(
                 utils.scalar_broadcast_to(
                     na_sentinel, size=len(self), dtype=dtype
@@ -2272,6 +2294,24 @@ class Series(Frame, Serializable):
                 index=self.index,
                 name=None,
             )
+
+        if dtype is None:
+            dtype = min_scalar_type(len(cats), 8)
+
+        cats = column.as_column(cats)
+        if (self.dtype == "object" and cats.dtype != "object") or (
+            self.dtype != "object" and cats.dtype == "object"
+        ):
+            return _return_sentinel_series()
+
+        try:
+            # Where there is a type-cast failure, we have
+            # to catch the exception and return encoded labels
+            # with na_sentinel values as there would be no corresponding
+            # encoded values of cats in self.
+            cats = cats.astype(self.dtype)
+        except ValueError:
+            return _return_sentinel_series()
 
         order = column.as_column(cupy.arange(len(self)))
         codes = column.as_column(cupy.arange(len(cats), dtype=dtype))
@@ -2304,7 +2344,7 @@ class Series(Frame, Serializable):
         cats = self.unique().astype(self.dtype)
 
         name = self.name  # label_encoding mutates self.name
-        labels = self.label_encoding(cats=cats)
+        labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
         self.name = name
 
         return labels, cats
