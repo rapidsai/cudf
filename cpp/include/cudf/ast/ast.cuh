@@ -269,6 +269,7 @@ class linearizer : public abstract_visitor {
     }
   }
   cudf::size_type get_node_counter() const { return this->node_counter; }
+  cudf::size_type get_intermediate_counter() const { return this->intermediate_counter; }
   std::vector<detail::device_data_reference> get_data_references() const
   {
     return this->data_references;
@@ -429,6 +430,7 @@ __device__ void evaluate_row_expression(table_device_view table,
                                         cudf::size_type* operator_source_indices,
                                         cudf::size_type num_operators,
                                         cudf::size_type row_index,
+                                        std::int64_t* intermediate_storage,
                                         mutable_column_device_view output)
 {
   if (row_index % 1000 == 0) { printf("Hi thread, %i operators\n", num_operators); }
@@ -462,6 +464,7 @@ __global__ void compute_column_kernel(table_device_view table,
                                       cudf::size_type num_operators,
                                       mutable_column_device_view output)
 {
+  extern __shared__ std::int64_t intermediate_storage[];
   const cudf::size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
   const cudf::size_type stride    = blockDim.x * gridDim.x;
   const auto num_rows             = table.num_rows();
@@ -474,6 +477,7 @@ __global__ void compute_column_kernel(table_device_view table,
                             operator_source_indices,
                             num_operators,
                             row_index,
+                            intermediate_storage,
                             output);
     // output.element<bool>(row_index) = evaluate_expression<Element>(expr, table, row_index);
   }
@@ -535,15 +539,20 @@ std::unique_ptr<column> compute_column(
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   cudf::detail::grid_1d config(table_num_rows, block_size);
+  auto shmem_size_per_block = sizeof(std::int64_t) * expr_linearizer.get_intermediate_counter() *
+                              config.num_threads_per_block;
+  std::cout << "Requesting " << shmem_size_per_block << " bytes of shared memory." << std::endl;
 
-  compute_column_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
-    *table_device,
-    thrust::raw_pointer_cast(device_data_references.data()),
-    // device_literals,
-    thrust::raw_pointer_cast(device_operators.data()),
-    thrust::raw_pointer_cast(device_operator_source_indices.data()),
-    num_operators,
-    *mutable_output_device);
+  compute_column_kernel<<<config.num_blocks,
+                          config.num_threads_per_block,
+                          shmem_size_per_block,
+                          stream>>>(*table_device,
+                                    thrust::raw_pointer_cast(device_data_references.data()),
+                                    // device_literals,
+                                    thrust::raw_pointer_cast(device_operators.data()),
+                                    thrust::raw_pointer_cast(device_operator_source_indices.data()),
+                                    num_operators,
+                                    *mutable_output_device);
   return output_column;
 }
 

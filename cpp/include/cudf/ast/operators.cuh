@@ -15,7 +15,9 @@
  */
 #pragma once
 
+#include <cudf/types.hpp>
 #include <type_traits>
+#include <utility>
 
 namespace cudf {
 
@@ -89,90 +91,96 @@ enum class ast_operator {
   IS_NULL,  ///< Unary comparator returning whether the value is null
 };
 
+/*
+ * Default all traits to false.
+ */
 template <ast_operator op, typename = void>
-struct is_binary_arithmetic_operator_impl : std::false_type {
+struct is_binary_arithmetic_operator_trait_impl : std::false_type {
 };
 
 template <ast_operator op, typename = void>
-struct is_unary_arithmetic_operator_impl : std::false_type {
+struct is_unary_arithmetic_operator_trait_impl : std::false_type {
 };
 
 template <ast_operator op, typename = void>
-struct is_binary_comparator_impl : std::false_type {
+struct is_binary_comparator_trait_impl : std::false_type {
 };
 
 template <ast_operator op, typename = void>
-struct is_unary_comparator_impl : std::false_type {
+struct is_unary_comparator_trait_impl : std::false_type {
 };
 
 template <ast_operator op, typename = void>
-struct is_binary_logical_operator_impl : std::false_type {
+struct is_binary_logical_operator_trait_impl : std::false_type {
 };
 
 template <ast_operator op, typename = void>
-struct is_unary_logical_operator_impl : std::false_type {
+struct is_unary_logical_operator_trait_impl : std::false_type {
 };
 
+/*
+ * Define templated operator traits.
+ */
 template <ast_operator op>
-constexpr inline bool is_binary_arithmetic_operator()
+CUDA_HOST_DEVICE_CALLABLE constexpr bool is_binary_arithmetic_operator()
 {
-  return is_binary_arithmetic_operator_impl<op>::value;
+  return is_binary_arithmetic_operator_trait_impl<op>::value;
 }
 
 template <ast_operator op>
-constexpr inline bool is_unary_arithmetic_operator()
+CUDA_HOST_DEVICE_CALLABLE constexpr bool is_unary_arithmetic_operator()
 {
-  return is_unary_arithmetic_operator_impl<op>::value;
+  return is_unary_arithmetic_operator_trait_impl<op>::value;
 }
 
 template <ast_operator op>
-constexpr inline bool is_binary_comparator()
+CUDA_HOST_DEVICE_CALLABLE constexpr bool is_binary_comparator()
 {
-  return is_binary_comparator_impl<op>::value;
+  return is_binary_comparator_trait_impl<op>::value;
 }
 
 template <ast_operator op>
-constexpr inline bool is_unary_comparator()
+CUDA_HOST_DEVICE_CALLABLE constexpr bool is_unary_comparator()
 {
-  return is_unary_comparator_impl<op>::value;
+  return is_unary_comparator_trait_impl<op>::value;
 }
 
 template <ast_operator op>
-constexpr inline bool is_binary_logical_operator()
+CUDA_HOST_DEVICE_CALLABLE constexpr bool is_binary_logical_operator()
 {
-  return is_binary_logical_operator_impl<op>::value;
+  return is_binary_logical_operator_trait_impl<op>::value;
 }
 
 template <ast_operator op>
-constexpr inline bool is_unary_logical_operator()
+CUDA_HOST_DEVICE_CALLABLE constexpr bool is_unary_logical_operator()
 {
-  return is_unary_logical_operator_impl<op>::value;
+  return is_unary_logical_operator_trait_impl<op>::value;
 }
 
 // Math operators accept element type(s) and return an element
 template <ast_operator op>
-constexpr inline bool is_arithmetic_operator()
+CUDA_HOST_DEVICE_CALLABLE constexpr bool is_arithmetic_operator()
 {
   return is_binary_arithmetic_operator<op>() || is_unary_arithmetic_operator<op>();
 }
 
 // Comparators accept element type(s) and return a boolean
 template <ast_operator op>
-constexpr inline bool is_comparator()
+CUDA_HOST_DEVICE_CALLABLE constexpr bool is_comparator()
 {
   return is_binary_comparator<op>() || is_unary_comparator<op>();
 }
 
 // Logical accept boolean(s) and return a boolean
 template <ast_operator op>
-constexpr inline bool is_logical_operator()
+CUDA_HOST_DEVICE_CALLABLE constexpr bool is_logical_operator()
 {
   return is_binary_logical_operator<op>() || is_unary_logical_operator<op>();
 }
 
 // Binary operators accept two inputs
 template <ast_operator op>
-constexpr inline bool is_binary_operator()
+CUDA_HOST_DEVICE_CALLABLE constexpr bool is_binary_operator()
 {
   return is_binary_arithmetic_operator<op>() || is_binary_comparator<op>() ||
          is_binary_logical_operator<op>();
@@ -180,219 +188,342 @@ constexpr inline bool is_binary_operator()
 
 // Unary operators accept one input
 template <ast_operator op>
-constexpr inline bool is_unary_operator()
+CUDA_HOST_DEVICE_CALLABLE constexpr bool is_unary_operator()
 {
   return is_unary_arithmetic_operator<op>() || is_unary_comparator<op>() ||
          is_unary_logical_operator<op>();
 }
 
+/*
+ * Define traits for each operator.
+ */
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::ADD> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::ADD> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::SUB> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::SUB> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::MUL> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::MUL> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::DIV> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::DIV> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::TRUE_DIV> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::TRUE_DIV> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::FLOOR_DIV> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::FLOOR_DIV> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::MOD> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::MOD> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::PYMOD> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::PYMOD> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::POW> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::POW> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::BITWISE_AND> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::BITWISE_AND> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::BITWISE_OR> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::BITWISE_OR> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::BITWISE_XOR> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::BITWISE_XOR> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::COALESCE> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::COALESCE> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::SHIFT_LEFT> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::SHIFT_LEFT> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::SHIFT_RIGHT> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::SHIFT_RIGHT> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::SHIFT_RIGHT_UNSIGNED> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::SHIFT_RIGHT_UNSIGNED>
+  : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::LOG_BASE> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::LOG_BASE> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::ATAN2> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::ATAN2> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::PMOD> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::PMOD> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::NULL_MAX> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::NULL_MAX> : std::true_type {
 };
 
 template <>
-struct is_binary_arithmetic_operator_impl<ast_operator::NULL_MIN> : std::true_type {
+struct is_binary_arithmetic_operator_trait_impl<ast_operator::NULL_MIN> : std::true_type {
 };
 
 template <>
-struct is_binary_comparator_impl<ast_operator::EQUAL> : std::true_type {
+struct is_binary_comparator_trait_impl<ast_operator::EQUAL> : std::true_type {
 };
 
 template <>
-struct is_binary_comparator_impl<ast_operator::NOT_EQUAL> : std::true_type {
+struct is_binary_comparator_trait_impl<ast_operator::NOT_EQUAL> : std::true_type {
 };
 
 template <>
-struct is_binary_comparator_impl<ast_operator::LESS> : std::true_type {
+struct is_binary_comparator_trait_impl<ast_operator::LESS> : std::true_type {
 };
 
 template <>
-struct is_binary_comparator_impl<ast_operator::GREATER> : std::true_type {
+struct is_binary_comparator_trait_impl<ast_operator::GREATER> : std::true_type {
 };
 
 template <>
-struct is_binary_comparator_impl<ast_operator::LESS_EQUAL> : std::true_type {
+struct is_binary_comparator_trait_impl<ast_operator::LESS_EQUAL> : std::true_type {
 };
 
 template <>
-struct is_binary_comparator_impl<ast_operator::GREATER_EQUAL> : std::true_type {
+struct is_binary_comparator_trait_impl<ast_operator::GREATER_EQUAL> : std::true_type {
 };
 
 template <>
-struct is_binary_comparator_impl<ast_operator::NULL_EQUALS> : std::true_type {
+struct is_binary_comparator_trait_impl<ast_operator::NULL_EQUALS> : std::true_type {
 };
 
 template <>
-struct is_binary_logical_operator_impl<ast_operator::LOGICAL_AND> : std::true_type {
+struct is_binary_logical_operator_trait_impl<ast_operator::LOGICAL_AND> : std::true_type {
 };
 
 template <>
-struct is_binary_logical_operator_impl<ast_operator::LOGICAL_OR> : std::true_type {
+struct is_binary_logical_operator_trait_impl<ast_operator::LOGICAL_OR> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::SIN> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::SIN> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::COS> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::COS> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::TAN> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::TAN> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::ARCSIN> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::ARCSIN> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::ARCCOS> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::ARCCOS> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::ARCTAN> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::ARCTAN> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::SINH> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::SINH> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::COSH> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::COSH> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::TANH> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::TANH> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::ARCSINH> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::ARCSINH> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::ARCCOSH> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::ARCCOSH> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::ARCTANH> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::ARCTANH> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::EXP> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::EXP> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::LOG> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::LOG> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::SQRT> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::SQRT> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::CBRT> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::CBRT> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::CEIL> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::CEIL> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::FLOOR> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::FLOOR> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::ABS> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::ABS> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::RINT> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::RINT> : std::true_type {
 };
 
 template <>
-struct is_unary_arithmetic_operator_impl<ast_operator::BIT_INVERT> : std::true_type {
+struct is_unary_arithmetic_operator_trait_impl<ast_operator::BIT_INVERT> : std::true_type {
 };
 
 template <>
-struct is_unary_logical_operator_impl<ast_operator::NOT> : std::true_type {
+struct is_unary_logical_operator_trait_impl<ast_operator::NOT> : std::true_type {
 };
+
+// Trait dispatcher
+template <typename F>
+CUDA_HOST_DEVICE_CALLABLE decltype(auto) ast_operator_trait_dispatcher(ast_operator op, F&& f)
+{
+  switch (op) {
+    case ast_operator::ADD: return f.template operator()<ast_operator::ADD>();
+    case ast_operator::SUB: return f.template operator()<ast_operator::SUB>();
+    case ast_operator::MUL: return f.template operator()<ast_operator::MUL>();
+    default: return false;  // TODO: Error handling?
+  }
+}
+
+/*
+ * Define operator-dispatched traits.
+ */
+struct is_binary_arithmetic_operator_impl {
+  template <ast_operator op>
+  CUDA_HOST_DEVICE_CALLABLE bool operator()()
+  {
+    return is_binary_arithmetic_operator<op>();
+  }
+};
+CUDA_HOST_DEVICE_CALLABLE bool is_binary_arithmetic_operator(ast_operator op)
+{
+  return ast_operator_trait_dispatcher(op, is_binary_arithmetic_operator_impl{});
+}
+
+struct is_unary_arithmetic_operator_impl {
+  template <ast_operator op>
+  CUDA_HOST_DEVICE_CALLABLE bool operator()()
+  {
+    return is_unary_arithmetic_operator<op>();
+  }
+};
+CUDA_HOST_DEVICE_CALLABLE bool is_unary_arithmetic_operator(ast_operator op)
+{
+  return ast_operator_trait_dispatcher(op, is_unary_arithmetic_operator_impl{});
+}
+
+struct is_binary_comparator_impl {
+  template <ast_operator op>
+  CUDA_HOST_DEVICE_CALLABLE bool operator()()
+  {
+    return is_binary_comparator<op>();
+  }
+};
+CUDA_HOST_DEVICE_CALLABLE bool is_binary_comparator(ast_operator op)
+{
+  return ast_operator_trait_dispatcher(op, is_binary_comparator_impl{});
+}
+
+struct is_unary_comparator_impl {
+  template <ast_operator op>
+  CUDA_HOST_DEVICE_CALLABLE bool operator()()
+  {
+    return is_unary_comparator<op>();
+  }
+};
+CUDA_HOST_DEVICE_CALLABLE bool is_unary_comparator(ast_operator op)
+{
+  return ast_operator_trait_dispatcher(op, is_unary_comparator_impl{});
+}
+
+struct is_binary_logical_operator_impl {
+  template <ast_operator op>
+  CUDA_HOST_DEVICE_CALLABLE bool operator()()
+  {
+    return is_binary_logical_operator<op>();
+  }
+};
+CUDA_HOST_DEVICE_CALLABLE bool is_binary_logical_operator(ast_operator op)
+{
+  return ast_operator_trait_dispatcher(op, is_binary_logical_operator_impl{});
+}
+
+struct is_unary_logical_operator_impl {
+  template <ast_operator op>
+  CUDA_HOST_DEVICE_CALLABLE bool operator()()
+  {
+    return is_unary_logical_operator<op>();
+  }
+};
+CUDA_HOST_DEVICE_CALLABLE bool is_unary_logical_operator(ast_operator op)
+{
+  return ast_operator_trait_dispatcher(op, is_unary_logical_operator_impl{});
+}
+
+// Arithmetic operators accept element type(s) and return an element
+CUDA_HOST_DEVICE_CALLABLE bool is_arithmetic_operator(ast_operator op)
+{
+  return is_binary_arithmetic_operator(op) || is_unary_arithmetic_operator(op);
+}
+
+// Comparators accept element type(s) and return a boolean
+CUDA_HOST_DEVICE_CALLABLE bool is_comparator(ast_operator op)
+{
+  return is_binary_comparator(op) || is_unary_comparator(op);
+}
+
+// Logical accept boolean(s) and return a boolean
+CUDA_HOST_DEVICE_CALLABLE bool is_logical_operator(ast_operator op)
+{
+  return is_binary_logical_operator(op) || is_unary_logical_operator(op);
+}
+
+// Binary operators accept two inputs
+CUDA_HOST_DEVICE_CALLABLE bool is_binary_operator(ast_operator op)
+{
+  return is_binary_arithmetic_operator(op) || is_binary_comparator(op) ||
+         is_binary_logical_operator(op);
+}
+
+// Unary operators accept one input
+CUDA_HOST_DEVICE_CALLABLE bool is_unary_operator(ast_operator op)
+{
+  return is_unary_arithmetic_operator(op) || is_unary_comparator(op) ||
+         is_unary_logical_operator(op);
+}
 
 template <ast_operator op>
 struct binop {
