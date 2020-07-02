@@ -6429,12 +6429,15 @@ class DataFrame(Frame, Serializable):
                 )
 
             current_cols = self.columns
-            idx_diff = other.index.to_pandas().difference(current_cols)
+            combined_columns = other.index.to_pandas()
+            if not self.empty:
+                combined_columns = combined_columns.union(
+                    current_cols, sort=False
+                )
 
-            try:
-                combined_columns = current_cols.append(idx_diff)
-            except TypeError:
-                combined_columns = current_cols.astype("str").append(idx_diff)
+            if sort:
+                combined_columns = combined_columns.sort_values()
+
             other = other.reindex(combined_columns, copy=False).to_frame().T
             if not current_cols.equals(combined_columns):
                 self = self.reindex(columns=combined_columns)
