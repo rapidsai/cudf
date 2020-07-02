@@ -449,6 +449,28 @@ __device__ void operate(ast_operator op,
                   output);
 }
 
+struct output_copy_functor {
+  template <typename Element, std::enable_if_t<cudf::is_numeric<Element>()>* = nullptr>
+  __device__ void operator()(mutable_column_device_view output_column,
+                             table_device_view const& table,
+                             std::int64_t* thread_intermediate_storage,
+                             cudf::size_type row_index,
+                             detail::device_data_reference expression_output)
+  {
+    output_column.element<Element>(row_index) = resolve_input_data_reference<Element>(
+      expression_output, table, thread_intermediate_storage, row_index);
+  };
+  template <typename Element, std::enable_if_t<!cudf::is_numeric<Element>()>* = nullptr>
+  __device__ void operator()(mutable_column_device_view output_column,
+                             table_device_view const& table,
+                             std::int64_t* thread_intermediate_storage,
+                             cudf::size_type row_index,
+                             detail::device_data_reference expression_output){
+    // TODO: How else to make this compile? Need a template to match unsupported types, or prevent
+    // the compiler from attempting to compile unsupported types here.
+  };
+};
+
 __device__ void evaluate_row_expression(table_device_view const& table,
                                         detail::device_data_reference* data_references,
                                         // scalar* literals,
@@ -497,14 +519,15 @@ __device__ void evaluate_row_expression(table_device_view const& table,
       // TODO: Unary operations
     }
   }
-  // output.element<bool>(row_index) = false;
-  /*
-  const Element lhs = resolve_data_source<Element>(
-    expr.lhs, left_table, right_table, left_row_index, right_row_index);
-  const Element rhs = resolve_data_source<Element>(
-    expr.rhs, left_table, right_table, left_row_index, right_row_index);
-  return compareop_dispatcher(expr.op, do_compareop<Element>{}, lhs, rhs);
-  */
+  // Copy from last data reference to output column
+  auto expression_output = data_references[operator_source_indices[operator_source_index - 1]];
+  type_dispatcher(expression_output.data_type,
+                  output_copy_functor{},
+                  output,
+                  table,
+                  thread_intermediate_storage,
+                  row_index,
+                  expression_output);
 }
 
 __global__ void compute_column_kernel(table_device_view table,

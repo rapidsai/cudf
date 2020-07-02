@@ -44,8 +44,9 @@ TEST_F(ASTTest, BasicASTEvaluation)
   auto b_0 = column_wrapper<int32_t>{2, 1, 5};
   auto b_1 = column_wrapper<int32_t>{7, 0, 4};
 
-  auto expect_add  = column_wrapper<int32_t>{13, 27, 21, 50};
-  auto expect_less = column_wrapper<bool>{true, false, true, false};
+  auto expect_add    = column_wrapper<int32_t>{13, 27, 21, 50};
+  auto expect_less   = column_wrapper<bool>{true, false, true, false};
+  auto expect_tree_1 = column_wrapper<int32_t>{-78, 1242, 21, -7450};
 
   auto table_a = cudf::table_view{{a_0, a_1, a_2}};
   auto table_b = cudf::table_view{{b_0, b_1}};
@@ -73,8 +74,9 @@ TEST_F(ASTTest, BasicASTEvaluation)
   // auto result_less   = cudf::ast::compute_column(table_a, expression_less);
   auto result_tree_1 = cudf::ast::compute_column(table_a, expression_tree_1);
 
-  // cudf::test::expect_columns_equal(expect_add, result_add->view(), true);
+  cudf::test::expect_columns_equal(expect_add, result_add->view(), true);
   // cudf::test::expect_columns_equal(expect_less, result_less->view(), true);
+  cudf::test::expect_columns_equal(expect_tree_1, result_tree_1->view(), true);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
