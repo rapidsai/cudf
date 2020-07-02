@@ -91,7 +91,10 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
 
     # Return for single object
     if len(objs) == 1:
-        return objs[0]
+        result = objs[0]
+        if ignore_index:
+            result._index = cudf.RangeIndex(len(result))
+        return result
 
     if len(objs) == 0:
         raise ValueError("All objects passed were None")

@@ -6419,9 +6419,14 @@ class DataFrame(Frame, Serializable):
                 "verify_integrity parameter is not supported yet."
             )
 
-        if isinstance(other, (cudf.Series, dict)):
-            if isinstance(other, dict):
-                other = Series(other)
+        if isinstance(other, dict):
+            if not ignore_index:
+                raise TypeError("Can only append a dict if ignore_index=True")
+            other = DataFrame(other)
+            result = cudf.concat([self, other], ignore_index=False, sort=sort)
+            result._index = RangeIndex(start=0, stop=len(result))
+            return result
+        elif isinstance(other, cudf.Series):
             if other.name is None and not ignore_index:
                 raise TypeError(
                     "Can only append a Series if ignore_index=True "
@@ -6454,12 +6459,13 @@ class DataFrame(Frame, Serializable):
         else:
             to_concat = [self, other]
         to_concat = [
-            obj
-            for obj in to_concat
-            if isinstance(obj, Frame) and not obj.empty
+            obj for obj in to_concat if isinstance(obj, Frame) and len(obj)
         ]
         if len(to_concat) == 0:
-            return self.copy()
+            result = self.copy()
+            if ignore_index and len(self) != 0:
+                result._index = RangeIndex(len(result))
+            return result
 
         return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
 
