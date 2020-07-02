@@ -882,8 +882,8 @@ class ColumnBase(Column, Serializable):
             labels = sr.label_encoding(cats=dtype.categories)
             if "ordered" in kwargs:
                 warnings.warn(
-                    "Ignoring the `ordered` parameters passed in `**kwargs`, "
-                    "will be using ordered parameter of CategoricalDtype"
+                    "Ignoring the `ordered` parameter passed in `**kwargs`, "
+                    "will be using `ordered` parameter of CategoricalDtype"
                 )
 
             return build_categorical_column(
