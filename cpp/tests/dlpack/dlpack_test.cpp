@@ -223,7 +223,11 @@ template <typename T>
 class DLPackNumericTests : public BaseFixture {
 };
 
-TYPED_TEST_CASE(DLPackNumericTests, NumericTypes);
+// The list of supported types comes from DLDataType_to_data_type() in cpp/src/dlpack/dlpack.cpp
+// TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5353
+using SupportedTypes =
+  cudf::test::RemoveIf<cudf::test::ContainedIn<cudf::test::Types<bool>>, cudf::test::NumericTypes>;
+TYPED_TEST_CASE(DLPackNumericTests, SupportedTypes);
 
 TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 {

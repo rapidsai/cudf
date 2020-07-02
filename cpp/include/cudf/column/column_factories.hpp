@@ -154,6 +154,64 @@ std::unique_ptr<column> make_timestamp_column(
 
 /**
  * @brief Construct column with sufficient uninitialized storage
+ * to hold `size` elements of the specified duration `data_type` with an
+ * optional null mask.
+ *
+ * @note `null_count()` is determined by the requested null mask `state`
+ *
+ * @throws std::bad_alloc if device memory allocation fails
+ * @throws cudf::logic_error if `type` is not a duration type
+ *
+ * @param[in] type The desired duration element type
+ * @param[in] size The number of elements in the column
+ * @param[in] state Optional, controls allocation/initialization of the
+ * column's null mask. By default, no null mask is allocated.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> make_duration_column(
+  data_type type,
+  size_type size,
+  mask_state state                    = mask_state::UNALLOCATED,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Construct column with sufficient uninitialized storage
+ * to hold `size` elements of the specified duration `data_type` with a
+ * null mask.
+ *
+ * @note null_count is optional and will be computed if not provided.
+ *
+ * @throws std::bad_alloc if device memory allocation fails
+ * @throws cudf::logic_error if `type` is not a duration type
+ *
+ * @param[in] type The desired duration element type
+ * @param[in] size The number of elements in the column
+ * @param[in] null_mask Null mask to use for this column.
+ * @param[in] null_count Optional number of nulls in the null_mask.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ */
+template <typename B>
+std::unique_ptr<column> make_duration_column(
+  data_type type,
+  size_type size,
+  B&& null_mask,
+  size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
+  CUDF_EXPECTS(is_duration(type), "Invalid, non-duration type.");
+  return std::make_unique<column>(type,
+                                  size,
+                                  rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+                                  std::forward<B>(null_mask),
+                                  null_count);
+}
+
+/**
+ * @brief Construct column with sufficient uninitialized storage
  * to hold `size` elements of the specified fixed width `data_type` with an optional
  * null mask.
  *
@@ -205,6 +263,8 @@ std::unique_ptr<column> make_fixed_width_column(
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
   if (is_timestamp(type)) {
     return make_timestamp_column(type, size, std::forward<B>(null_mask), null_count, stream, mr);
+  } else if (is_duration(type)) {
+    return make_duration_column(type, size, std::forward<B>(null_mask), null_count, stream, mr);
   }
   return make_numeric_column(type, size, std::forward<B>(null_mask), null_count, stream, mr);
 }
@@ -372,6 +432,71 @@ std::unique_ptr<column> make_strings_column(
   size_type num_strings,
   std::unique_ptr<column> offsets_column,
   std::unique_ptr<column> chars_column,
+  size_type null_count,
+  rmm::device_buffer&& null_mask,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Constructs a LIST type column given offsets column, child column,
+ * and null mask and null count.
+ *
+ * The columns and mask are moved into the resulting lists column.
+ *
+ *
+ * List columns are structured similarly to strings columns.  They contain
+ * a set of offsets which represents the lengths of the lists in each row, and
+ * a "child" column of data that is referenced by the offsets.  Since lists
+ * are a nested type, the child column may itself be further nested.
+ *
+ * When child column at depth N+1 is itself a list, the offsets column at
+ * depth N references the offsets column for depth N+1.  When the child column at depth
+ * N+1 is a leaf type (int, float, etc), the offsets column at depth N references
+ * the data for depth N+1.
+ *
+ * @code{.pseudo}
+ * Example:
+ * List<int>
+ * input:              {{1, 2}, {3, 4, 5}}
+ * offsets (depth 0)   {0, 2, 5}
+ * data    (depth 0)
+ * offsets (depth 1)
+ * data    (depth 1)   {1, 2, 3, 4, 5}
+ * @endcode
+ *
+ * @code{.pseudo}
+ * Example:
+ * List<List<int>>
+ * input:              { {{1, 2}}, {{3, 4, 5}, {6, 7}} }
+ * offsets (depth 0)   {0, 1, 3}
+ * data    (depth 0)
+ * offsets (depth 1)   {0, 2, 5, 7}
+ * data    (depth 1)
+ * offsets (depth 2)
+ * data    (depth 1)   {1, 2, 3, 4, 5, 6, 7}
+ * @endcode
+ *
+ * @param num_lists The number of lists the column represents.
+ * @param offsets_column The column of offset values for this column. Each value should represent
+ *                       the starting offset into the child elements that corresponds to the
+ *                       beginning of the row, with the first row starting at 0. The length of row
+ *                       N can be determined by subtracting offsets[N+1] - offsets[N]. The total
+ * number of offsets should be 1 longer than the # of rows in the column.
+ * @param child_column The column of nested data referenced by the lists represented by the
+ *                     offsets_column. Note: the child column may itself be
+ *                     further nested.
+ * @param null_count The number of null list entries.
+ * @param null_mask The bits specifying the null lists in device memory.
+ *                  Arrow format for nulls is used for interpeting this bitmask.
+ * @param stream Optional stream for use with all memory allocation
+ *               and device kernels
+ * @param mr Optional resource to use for device memory
+ *           allocation of the column's `null_mask` and children.
+ */
+std::unique_ptr<cudf::column> make_lists_column(
+  size_type num_lists,
+  std::unique_ptr<column> offsets_column,
+  std::unique_ptr<column> child_column,
   size_type null_count,
   rmm::device_buffer&& null_mask,
   cudaStream_t stream                 = 0,

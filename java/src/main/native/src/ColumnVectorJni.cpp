@@ -38,6 +38,7 @@
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
+#include <cudf/strings/padding.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/split/split.hpp>
@@ -138,9 +139,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
       cudf::fill_in_place(mut_view, 0, row_count, *scalar_val);
     } else if (dtype.id() == cudf::type_id::STRING) {
       // create a string column of all empty strings to fill (cheapest string column to create)
-      auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, row_count + 1,
+      auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, row_count + 1,
                                                cudf::mask_state::UNALLOCATED);
-      auto data = cudf::make_empty_column(cudf::data_type{cudf::INT8});
+      auto data = cudf::make_empty_column(cudf::data_type{cudf::type_id::INT8});
       auto mask_buffer = cudf::create_null_mask(row_count, cudf::mask_state::UNALLOCATED);
       auto str_col = cudf::make_strings_column(row_count, std::move(offsets), std::move(data), 0,
                                                std::move(mask_buffer));
@@ -562,6 +563,42 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_second(JNIEnv *env, jcl
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_weekDay(JNIEnv *env, jclass,
+                                                                 jlong input_ptr) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+    std::unique_ptr<cudf::column> output = cudf::datetime::extract_weekday(*input);
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_lastDayOfMonth(JNIEnv *env, jclass,
+                                                                        jlong input_ptr) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+    std::unique_ptr<cudf::column> output = cudf::datetime::last_day_of_month(*input);
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_dayOfYear(JNIEnv *env, jclass,
+                                                                   jlong input_ptr) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+    std::unique_ptr<cudf::column> output = cudf::datetime::day_of_year(*input);
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, jobject j_object,
                                                                 jlong handle, jint type) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
@@ -572,35 +609,43 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, job
     std::unique_ptr<cudf::column> result;
     if (n_data_type.id() == cudf::type_id::STRING) {
       switch (column->type().id()) {
-        case cudf::type_id::BOOL8: result = cudf::strings::from_booleans(*column); break;
+        case cudf::type_id::BOOL8:
+          result = cudf::strings::from_booleans(*column);
+          break;
         case cudf::type_id::FLOAT32:
-        case cudf::type_id::FLOAT64: result = cudf::strings::from_floats(*column); break;
+        case cudf::type_id::FLOAT64:
+          result = cudf::strings::from_floats(*column);
+          break;
         case cudf::type_id::INT8:
+        case cudf::type_id::UINT8:
         case cudf::type_id::INT16:
+        case cudf::type_id::UINT16:
         case cudf::type_id::INT32:
-        case cudf::type_id::INT64: result = cudf::strings::from_integers(*column); break;
+        case cudf::type_id::UINT32:
+        case cudf::type_id::INT64:
+        case cudf::type_id::UINT64:
+          result = cudf::strings::from_integers(*column);
+          break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
     } else if (column->type().id() == cudf::type_id::STRING) {
       switch (n_data_type.id()) {
-        case cudf::type_id::BOOL8: result = cudf::strings::to_booleans(*column); break;
-        case cudf::type_id::FLOAT32:
-          result = cudf::strings::to_floats(*column, cudf::data_type{cudf::type_id::FLOAT32});
+        case cudf::type_id::BOOL8:
+          result = cudf::strings::to_booleans(*column);
           break;
+        case cudf::type_id::FLOAT32:
         case cudf::type_id::FLOAT64:
-          result = cudf::strings::to_floats(*column, cudf::data_type{cudf::type_id::FLOAT64});
+          result = cudf::strings::to_floats(*column, n_data_type);
           break;
         case cudf::type_id::INT8:
-          result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT8});
-          break;
+        case cudf::type_id::UINT8:
         case cudf::type_id::INT16:
-          result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT16});
-          break;
+        case cudf::type_id::UINT16:
         case cudf::type_id::INT32:
-          result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT32});
-          break;
+        case cudf::type_id::UINT32:
         case cudf::type_id::INT64:
-          result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT64});
+        case cudf::type_id::UINT64:
+          result = cudf::strings::to_integers(*column, n_data_type);
           break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
@@ -688,7 +733,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_transform(JNIEnv *env, 
     cudf::jni::native_jstring n_j_udf(env, j_udf);
     std::string n_udf(n_j_udf.get());
     std::unique_ptr<cudf::column> result =
-        cudf::transform(*column, n_udf, cudf::data_type(cudf::INT32), j_is_ptx);
+        cudf::transform(*column, n_udf, cudf::data_type(cudf::type_id::INT32), j_is_ptx);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -946,6 +991,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplaceWithBackre
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_zfill(
+    JNIEnv *env,
+    jclass,
+    jlong column_view,
+    jint j_width) {
+
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, j_width, "width is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::size_type width = reinterpret_cast<cudf::size_type>(j_width);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::zfill(scv, width);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringStrip(JNIEnv *env, jclass,
                                                                      jlong column_view,
                                                                      jint strip_type,
@@ -1021,16 +1086,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
       j_null_count = 0;
     }
 
-    if (n_type == cudf::STRING) {
+    if (n_type == cudf::type_id::STRING) {
       JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
       // This must be kept in sync with how string columns are created
       // offsets are always the first child
       // data is the second child
 
       cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
-      cudf::column_view offsets_column(cudf::data_type{cudf::INT32}, size + 1, offsets);
-      cudf::column_view data_column(cudf::data_type{cudf::INT8}, j_data_size, data);
-      ret.reset(new cudf::column_view(cudf::data_type{cudf::STRING}, size, nullptr, valid,
+      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
+      cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8}, j_data_size, data);
+      ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, size, nullptr, valid,
                                       j_null_count, 0, {offsets_column, data_column}));
     } else {
       ret.reset(new cudf::column_view(n_data_type, size, data, valid, j_null_count));
@@ -1048,7 +1113,7 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeTypeId(JNIEnv *
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-    return column->type().id();
+    return static_cast<jint>(column->type().id());
   }
   CATCH_STD(env, 0);
 }
@@ -1095,7 +1160,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeDataPoint
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jlongArray ret(env, 2);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-    if (column->type().id() == cudf::STRING) {
+    if (column->type().id() == cudf::type_id::STRING) {
       if (column->size() > 0) {
         cudf::strings_column_view view = cudf::strings_column_view(*column);
         cudf::column_view data_view = view.chars();
@@ -1120,7 +1185,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeOffsetsPo
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jlongArray ret(env, 2);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-    if (column->type().id() == cudf::STRING) {
+    if (column->type().id() == cudf::type_id::STRING) {
       if (column->size() > 0) {
         cudf::strings_column_view view = cudf::strings_column_view(*column);
         cudf::column_view offsets_view = view.offsets();
@@ -1280,14 +1345,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeStringCudfColumnHos
     }
 
     std::unique_ptr<cudf::column> offsets = cudf::make_numeric_column(
-        cudf::data_type{cudf::INT32}, size + 1, cudf::mask_state::UNALLOCATED);
+        cudf::data_type{cudf::type_id::INT32}, size + 1, cudf::mask_state::UNALLOCATED);
     auto offsets_view = offsets->mutable_view();
     JNI_CUDA_TRY(env, 0,
                  cudaMemcpyAsync(offsets_view.data<int32_t>(), host_offsets,
                                  (size + 1) * sizeof(int32_t), cudaMemcpyHostToDevice));
 
     std::unique_ptr<cudf::column> data = cudf::make_numeric_column(
-        cudf::data_type{cudf::INT8}, n_data_size, cudf::mask_state::UNALLOCATED);
+        cudf::data_type{cudf::type_id::INT8}, n_data_size, cudf::mask_state::UNALLOCATED);
     auto data_view = data->mutable_view();
     JNI_CUDA_TRY(env, 0,
                  cudaMemcpyAsync(data_view.data<int8_t>(), n_char_data, n_data_size,

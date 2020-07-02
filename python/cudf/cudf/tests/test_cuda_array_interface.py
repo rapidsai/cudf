@@ -10,26 +10,10 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.tests.utils import assert_eq
-
-basic_dtypes = [
-    np.dtype("int8"),
-    np.dtype("int16"),
-    np.dtype("int32"),
-    np.dtype("int64"),
-    np.dtype("float32"),
-    np.dtype("float64"),
-]
-string_dtypes = [np.dtype("str")]
-datetime_dtypes = [
-    np.dtype("datetime64[ns]"),
-    np.dtype("datetime64[us]"),
-    np.dtype("datetime64[ms]"),
-    np.dtype("datetime64[s]"),
-]
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
-@pytest.mark.parametrize("dtype", basic_dtypes + datetime_dtypes)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("module", ["cupy", "numba"])
 def test_cuda_array_interface_interop_in(dtype, module):
     np_data = np.arange(10).astype(dtype)
@@ -37,7 +21,7 @@ def test_cuda_array_interface_interop_in(dtype, module):
     expectation = does_not_raise()
     if module == "cupy":
         module_constructor = cupy.array
-        if dtype in datetime_dtypes:
+        if dtype in DATETIME_TYPES:
             expectation = pytest.raises(ValueError)
     elif module == "numba":
         module_constructor = cuda.to_device
@@ -57,13 +41,11 @@ def test_cuda_array_interface_interop_in(dtype, module):
         assert_eq(pd_data, gdf["test"])
 
 
-@pytest.mark.parametrize(
-    "dtype", basic_dtypes + datetime_dtypes + string_dtypes
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["str"])
 @pytest.mark.parametrize("module", ["cupy", "numba"])
 def test_cuda_array_interface_interop_out(dtype, module):
     expectation = does_not_raise()
-    if dtype in string_dtypes:
+    if dtype == "str":
         expectation = pytest.raises(NotImplementedError)
     if module == "cupy":
         module_constructor = cupy.asarray
@@ -90,7 +72,7 @@ def test_cuda_array_interface_interop_out(dtype, module):
         assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", basic_dtypes + datetime_dtypes)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("module", ["cupy", "numba"])
 def test_cuda_array_interface_interop_out_masked(dtype, module):
     expectation = does_not_raise()
@@ -121,7 +103,7 @@ def test_cuda_array_interface_interop_out_masked(dtype, module):
         module_data = module_constructor(cudf_data)  # noqa: F841
 
 
-@pytest.mark.parametrize("dtype", basic_dtypes + datetime_dtypes)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("nulls", ["all", "some", "bools", "none"])
 @pytest.mark.parametrize("mask_type", ["bits", "bools"])
 def test_cuda_array_interface_as_column(dtype, nulls, mask_type):

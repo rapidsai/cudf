@@ -60,7 +60,8 @@ std::unique_ptr<cudf::column> sort(strings_column_view strings,
                });
 
   // create a column_view as a wrapper of these indices
-  column_view indices_view(data_type{INT32}, num_strings, indices.data().get(), nullptr, 0);
+  column_view indices_view(
+    data_type{type_id::INT32}, num_strings, indices.data().get(), nullptr, 0);
   // now build a new strings column from the indices
   auto table_sorted = cudf::detail::gather(table_view{{strings.parent()}},
                                            indices_view,

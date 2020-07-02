@@ -50,9 +50,9 @@ class scalar_device_view_base {
   __device__ void set_valid(bool is_valid) noexcept { *_is_valid = is_valid; }
 
  protected:
-  data_type _type{EMPTY};  ///< Value data type
-  bool* _is_valid{};       ///< Pointer to device memory containing
-                           ///< boolean representing validity of the value.
+  data_type _type{type_id::EMPTY};  ///< Value data type
+  bool* _is_valid{};                ///< Pointer to device memory containing
+                                    ///< boolean representing validity of the value.
 
   scalar_device_view_base(data_type type, bool* is_valid) : _type(type), _is_valid(is_valid) {}
 
@@ -167,6 +167,18 @@ class timestamp_scalar_device_view : public detail::fixed_width_scalar_device_vi
 };
 
 /**
+ * @brief A type of scalar_device_view that stores a pointer to a duration value
+ */
+template <typename T>
+class duration_scalar_device_view : public detail::fixed_width_scalar_device_view<T> {
+ public:
+  duration_scalar_device_view(data_type type, T* data, bool* is_valid)
+    : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
+  {
+  }
+};
+
+/**
  * @brief Get the device view of a numeric_scalar
  */
 template <typename T>
@@ -190,6 +202,15 @@ template <typename T>
 auto get_scalar_device_view(timestamp_scalar<T>& s)
 {
   return timestamp_scalar_device_view<T>(s.type(), s.data(), s.validity_data());
+}
+
+/**
+ * @brief Get the device view of a duration_scalar
+ */
+template <typename T>
+auto get_scalar_device_view(duration_scalar<T>& s)
+{
+  return duration_scalar_device_view<T>(s.type(), s.data(), s.validity_data());
 }
 
 }  // namespace cudf

@@ -16,14 +16,23 @@
 
 #include <cudf/types.hpp>
 
+#include <algorithm>
+#include <cctype>
+#include <string>
+
 namespace cudf {
 namespace io {
 /**
  * @copydoc cudf::io:convert_string_to_dtype
  *
  **/
-data_type convert_string_to_dtype(const std::string &dtype)
+data_type convert_string_to_dtype(const std::string& dtype_in)
 {
+  std::string dtype = dtype_in;
+  // first, convert to all lower-case
+  std::transform(dtype_in.begin(), dtype_in.end(), dtype.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
   if (dtype == "str") return data_type(cudf::type_id::STRING);
   if (dtype == "timestamp[s]") return data_type(cudf::type_id::TIMESTAMP_SECONDS);
   // backwards compat: "timestamp" defaults to milliseconds
@@ -40,6 +49,10 @@ data_type convert_string_to_dtype(const std::string &dtype)
   if (dtype == "short" || dtype == "int16") return data_type(cudf::type_id::INT16);
   if (dtype == "int" || dtype == "int32") return data_type(cudf::type_id::INT32);
   if (dtype == "long" || dtype == "int64") return data_type(cudf::type_id::INT64);
+  if (dtype == "uint8") return data_type(cudf::type_id::UINT8);
+  if (dtype == "uint16") return data_type(cudf::type_id::UINT16);
+  if (dtype == "uint32") return data_type(cudf::type_id::UINT32);
+  if (dtype == "uint64") return data_type(cudf::type_id::UINT64);
 
   return data_type(cudf::type_id::EMPTY);
 }

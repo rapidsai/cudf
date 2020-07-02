@@ -176,8 +176,13 @@ class DataFrame(_Frame, dd.core.DataFrame):
         pre_sorted = sorted
         del sorted
 
-        if divisions == "quantile" or isinstance(
-            divisions, (cudf.DataFrame, cudf.Series)
+        if (
+            divisions == "quantile"
+            or isinstance(divisions, (cudf.DataFrame, cudf.Series))
+            or (
+                isinstance(other, str)
+                and cudf.utils.dtypes.is_string_dtype(self[other].dtype)
+            )
         ):
 
             # Let upstream-dask handle "pre-sorted" case

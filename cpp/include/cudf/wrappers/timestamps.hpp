@@ -45,6 +45,7 @@ struct timestamp : time_point<Duration> {
    *
    * @param other The `timestamp` to copy
    */
+  // TODO: This explict truncation is intended?
   template <class FromDuration>
   inline constexpr explicit timestamp(time_point<FromDuration> const& other)
     : time_point<Duration>(simt::std::chrono::duration_cast<Duration>(other.time_since_epoch())){};

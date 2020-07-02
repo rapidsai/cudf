@@ -29,6 +29,26 @@
 
 namespace cudf {
 namespace detail {
+
+/**
+ * @brief Convert a scatter map into a gather map.
+ *
+ * The caller is expected to use the output map on a subsequent gather_bitmask()
+ * function using the PASSTHROUGH op since the resulting map may contain index
+ * values outside the target's range.
+ *
+ * First, the gather-map is initialized with invalid entries.
+ * The gather_rows is used since it should always be outside the target size.
+ *
+ * Then, the `output[scatter_map[i]] = i`.
+ *
+ * @tparam MapIterator Iterator type of the input scatter map.
+ * @param scatter_map_begin Beginning of scatter map.
+ * @param scatter_map_end End of the scatter map.
+ * @param gather_rows Number of rows in the output map.
+ * @param stream Stream used for CUDA kernel calls.
+ * @return Output gather map.
+ */
 template <typename MapIterator>
 auto scatter_to_gather(MapIterator scatter_map_begin,
                        MapIterator scatter_map_end,
@@ -37,13 +57,13 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 {
   using MapValueType = typename thrust::iterator_traits<MapIterator>::value_type;
 
-  static_assert(std::is_signed<MapValueType>::value,
-                "Need different invalid index if unsigned index types are added");
-  auto const invalid_index = static_cast<MapValueType>(-1);
+  // The gather_map is initialized with gather_rows value to identify pass-through entries
+  // when calling the gather_bitmask() which applies a pass-through whenever it finds a
+  // value outside the range of the target column.
+  // We'll use the gather_rows value for this since it should always be outside the valid range.
+  auto gather_map = rmm::device_vector<size_type>(gather_rows, gather_rows);
 
   // Convert scatter map to a gather map
-  auto gather_map = rmm::device_vector<MapValueType>(gather_rows, invalid_index);
-
   thrust::scatter(
     rmm::exec_policy(stream)->on(stream),
     thrust::make_counting_iterator<MapValueType>(0),
@@ -105,7 +125,7 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
                                      cudaStream_t stream) const
   {
     if (target_in.size() == 0)  // empty begets empty
-      return make_empty_column(data_type{DICTIONARY32});
+      return make_empty_column(data_type{type_id::DICTIONARY32});
     if (source_in.size() == 0)  // no input, just make a copy
       return std::make_unique<column>(target_in, stream, mr);
 
@@ -131,7 +151,7 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
     auto const output_size = new_indices->size();        // record these
     auto const null_count  = new_indices->null_count();  // before the release
     auto contents          = new_indices->release();
-    auto indices_column    = std::make_unique<column>(data_type{INT32},
+    auto indices_column    = std::make_unique<column>(data_type{type_id::INT32},
                                                    static_cast<size_type>(output_size),
                                                    std::move(*(contents.data.release())),
                                                    rmm::device_buffer{0, stream, mr},

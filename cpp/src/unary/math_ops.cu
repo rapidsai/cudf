@@ -183,9 +183,14 @@ struct DeviceFloor {
 
 struct DeviceAbs {
   template <typename T>
-  __device__ T operator()(T data)
+  std::enable_if_t<std::is_signed<T>::value, T> __device__ operator()(T data)
   {
     return std::abs(data);
+  }
+  template <typename T>
+  std::enable_if_t<!std::is_signed<T>::value, T> __device__ operator()(T data)
+  {
+    return data;
   }
 };
 
@@ -371,8 +376,9 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceAbs>{}, input, op, mr, stream);
     case cudf::unary_op::RINT:
-      CUDF_EXPECTS((input.type().id() == FLOAT32) or (input.type().id() == FLOAT64),
-                   "rint expects floating point values");
+      CUDF_EXPECTS(
+        (input.type().id() == type_id::FLOAT32) or (input.type().id() == type_id::FLOAT64),
+        "rint expects floating point values");
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceRInt>{}, input, op, mr, stream);
     case cudf::unary_op::BIT_INVERT:

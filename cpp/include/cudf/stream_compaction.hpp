@@ -102,6 +102,81 @@ std::unique_ptr<table> drop_nulls(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
+ * @brief Filters a table to remove NANs with threshold count.
+ *
+ * Filters the rows of the `input` considering specified columns indicated in
+ * `keys` for NANs. These key columns must be of floating-point type.
+ *
+ * Given an input table_view, row `i` from the input columns is copied to
+ * the output if the same row `i` of @p keys has at least @p keep_threshold
+ * non-NAN elements.
+ *
+ * This operation is stable: the input order is preserved in the output.
+ *
+ * @code{.pseudo}
+ *          input   {col1: {1.0, 2.0, 3.0, NAN},
+ *                   col2: {4.0, null, NAN, NAN},
+ *                   col3: {7.0, NAN, NAN, NAN}}
+ *          keys = {0, 1, 2} // All columns
+ *          keep_threshold = 2
+ *
+ *          output {col1: {1.0, 2.0}
+ *                  col2: {4.0, null}
+ *                  col3: {7.0, NAN}}
+ * @endcode
+ *
+ * @note if @p input.num_rows() is zero, or @p keys is empty,
+ * there is no error, and an empty `table` is returned
+ *
+ * @throws cudf::logic_error if The `keys` columns are not floating-point type.
+ *
+ * @param[in] input The input `table_view` to filter.
+ * @param[in] keys  vector of indices representing key columns from `input`
+ * @param[in] keep_threshold The minimum number of non-NAN elements in a row
+ *                           required to keep the row.
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
+ * @return Table containing all rows of the `input` with at least @p
+ * keep_threshold non-NAN elements in @p keys.
+ */
+std::unique_ptr<table> drop_nans(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  cudf::size_type keep_threshold,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Filters a table to remove NANs.
+ *
+ * Filters the rows of the `input` considering specified columns indicated in
+ * `keys` for NANs. These key columns must be of floating-point type.
+ *
+ * @code{.pseudo}
+ *          input   {col1: {1.0, 2.0, 3.0, NAN},
+ *                   col2: {4.0, null, NAN, NAN},
+ *                   col3: {null, NAN, NAN, NAN}}
+ *          keys = {0, 1, 2} // All columns
+ *          keep_threshold = 2
+ *
+ *          output {col1: {1.0}
+ *                  col2: {4.0}
+ *                  col3: {null}}
+ * @endcode
+ *
+ * Same as drop_nans but defaults keep_threshold to the number of columns in
+ * @p keys.
+ *
+ * @param[in] input The input `table_view` to filter.
+ * @param[in] keys  vector of indices representing key columns from `input`
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
+ * @return Table containing all rows of the `input` without NANs in the columns
+ * of @p keys.
+ */
+std::unique_ptr<table> drop_nans(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
  * @brief Filters `input` using `boolean_mask` of boolean values as a mask.
  *
  * Given an input `table_view` and a mask `column_view`, an element `i` from
@@ -113,10 +188,10 @@ std::unique_ptr<table> drop_nulls(
  * is returned.
  *
  * @throws cudf::logic_error if The `input` size  and `boolean_mask` size mismatches.
- * @throws cudf::logic_error if `boolean_mask` is not `BOOL8` type.
+ * @throws cudf::logic_error if `boolean_mask` is not `type_id::BOOL8` type.
  *
  * @param[in] input The input table_view to filter
- * @param[in] boolean_mask A nullable column_view of type BOOL8 used
+ * @param[in] boolean_mask A nullable column_view of type type_id::BOOL8 used
  * as a mask to filter the `input`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Table containing copy of all rows of @p input passing
@@ -180,9 +255,22 @@ std::unique_ptr<table> drop_duplicates(
  *
  * @return number of unique elements
  */
-cudf::size_type unique_count(column_view const& input,
-                             null_policy null_handling,
-                             nan_policy nan_handling);
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling);
+
+/**
+ * @brief Count the unique rows in a table.
+ *
+ *
+ * @param[in] input Table whose unique rows will be counted.
+ * @param[in] nulls_equal flag to denote if null elements should be considered equal
+ * nulls are not equal if null_equality::UNEQUAL
+ *
+ * @return number of unique rows in the table
+ */
+cudf::size_type distinct_count(table_view const& input,
+                               null_equality nulls_equal = null_equality::EQUAL);
 
 /** @} */
 }  // namespace cudf

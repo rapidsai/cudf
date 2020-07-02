@@ -848,6 +848,42 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoin(JNIEnv *env, jc
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullJoin(JNIEnv *env, jclass clazz,
+                                                                jlong left_table,
+                                                                jintArray left_col_join_indices,
+                                                                jlong right_table,
+                                                                jintArray right_col_join_indices) {
+  JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
+  JNI_NULL_CHECK(env, left_col_join_indices, "left_col_join_indices is null", NULL);
+  JNI_NULL_CHECK(env, right_table, "right_table is null", NULL);
+  JNI_NULL_CHECK(env, right_col_join_indices, "right_col_join_indices is null", NULL);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *n_left_table = reinterpret_cast<cudf::table_view *>(left_table);
+    cudf::table_view *n_right_table = reinterpret_cast<cudf::table_view *>(right_table);
+    cudf::jni::native_jintArray left_join_cols_arr(env, left_col_join_indices);
+    std::vector<cudf::size_type> left_join_cols(
+        left_join_cols_arr.data(), left_join_cols_arr.data() + left_join_cols_arr.size());
+    cudf::jni::native_jintArray right_join_cols_arr(env, right_col_join_indices);
+    std::vector<cudf::size_type> right_join_cols(
+        right_join_cols_arr.data(), right_join_cols_arr.data() + right_join_cols_arr.size());
+
+    int dedupe_size = left_join_cols.size();
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> dedupe(dedupe_size);
+    for (int i = 0; i < dedupe_size; i++) {
+      dedupe[i].first = left_join_cols[i];
+      dedupe[i].second = right_join_cols[i];
+    }
+
+    std::unique_ptr<cudf::table> result =
+        cudf::full_join(*n_left_table, *n_right_table, left_join_cols, right_join_cols, dedupe);
+
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, NULL);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoin(
     JNIEnv *env, jclass, jlong left_table, jintArray left_col_join_indices, jlong right_table,
     jintArray right_col_join_indices) {
@@ -904,6 +940,25 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoin(
 
     std::unique_ptr<cudf::table> result = cudf::left_anti_join(
         *n_left_table, *n_right_table, left_join_cols, right_join_cols, return_cols);
+
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_crossJoin(JNIEnv *env, jclass clazz,
+                                                                 jlong left_table,
+                                                                 jlong right_table) {
+  JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
+  JNI_NULL_CHECK(env, right_table, "right_table is null", NULL);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *n_left_table = reinterpret_cast<cudf::table_view *>(left_table);
+    cudf::table_view *n_right_table = reinterpret_cast<cudf::table_view *>(right_table);
+
+    std::unique_ptr<cudf::table> result =
+        cudf::cross_join(*n_left_table, *n_right_table);
 
     return cudf::jni::convert_table_for_return(env, result);
   }

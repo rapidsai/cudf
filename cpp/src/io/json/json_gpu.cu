@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/trie.cuh>
 
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf/lists/list_view.cuh>
@@ -225,6 +226,23 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
   return milli * 1000000;
 }
+
+// The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for json
+#ifndef DURATION_DECODE_VALUE
+#define DURATION_DECODE_VALUE(Type)                                   \
+  template <>                                                         \
+  __inline__ __device__ Type decode_value(                            \
+    const char *data, long start, long end, ParseOptions const &opts) \
+  {                                                                   \
+    return Type{};                                                    \
+  }
+#endif
+DURATION_DECODE_VALUE(duration_D)
+DURATION_DECODE_VALUE(duration_s)
+DURATION_DECODE_VALUE(duration_ms)
+DURATION_DECODE_VALUE(duration_us)
+DURATION_DECODE_VALUE(duration_ns)
 
 // The purpose of these is merely to allow compilation ONLY
 template <>
@@ -450,7 +468,7 @@ __global__ void convert_json_to_columns_kernel(const char *data,
     if (start <= field_data_last &&
         !serializedTrieContains(opts.naValuesTrie, data + start, field_end - start)) {
       // Type dispatcher does not handle strings
-      if (dtypes[col].id() == STRING) {
+      if (dtypes[col].id() == type_id::STRING) {
         auto str_list           = static_cast<string_pair *>(output_columns[col]);
         str_list[rec_id].first  = data + start;
         str_list[rec_id].second = field_data_last - start + 1;
@@ -472,7 +490,7 @@ __global__ void convert_json_to_columns_kernel(const char *data,
           atomicAdd(&num_valid_fields[col], 1);
         }
       }
-    } else if (dtypes[col].id() == STRING) {
+    } else if (dtypes[col].id() == type_id::STRING) {
       auto str_list           = static_cast<string_pair *>(output_columns[col]);
       str_list[rec_id].first  = nullptr;
       str_list[rec_id].second = 0;

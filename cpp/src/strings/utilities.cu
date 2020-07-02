@@ -18,13 +18,12 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/error.hpp>
+#include <unordered_map>
 #include "./utilities.cuh"
 #include "./utilities.hpp"
 #include "char_types/char_cases.h"
 #include "char_types/char_flags.h"
 
-#include <rmm/rmm.h>
-#include <rmm/rmm_api.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
@@ -98,7 +97,7 @@ std::unique_ptr<cudf::column> child_chars_from_string_vector(
 
   // create column
   auto chars_column =
-    make_numeric_column(data_type{INT8}, bytes, mask_state::UNALLOCATED, stream, mr);
+    make_numeric_column(data_type{type_id::INT8}, bytes, mask_state::UNALLOCATED, stream, mr);
   // get it's view
   auto d_chars = chars_column->mutable_view().data<int8_t>();
   thrust::for_each_n(execpol->on(stream),
@@ -120,14 +119,15 @@ std::unique_ptr<column> create_chars_child_column(cudf::size_type strings_count,
                                                   cudaStream_t stream)
 {
   CUDF_EXPECTS(null_count <= strings_count, "Invalid null count");
-  return make_numeric_column(data_type{INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
+  return make_numeric_column(
+    data_type{type_id::INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
 }
 
 //
 std::unique_ptr<column> make_empty_strings_column(rmm::mr::device_memory_resource* mr,
                                                   cudaStream_t stream)
 {
-  return std::make_unique<column>(data_type{STRING},
+  return std::make_unique<column>(data_type{type_id::STRING},
                                   0,
                                   rmm::device_buffer{0, stream, mr},  // data
                                   rmm::device_buffer{0, stream, mr},
@@ -142,14 +142,50 @@ __device__ character_flags_table_type
 __device__ character_cases_table_type character_cases_table[sizeof(g_character_cases_table)];
 __device__ special_case_mapping character_special_case_mappings[sizeof(g_special_case_mappings)];
 
-// initialization mutexes
-std::mutex g_flags_table_mutex;
-std::mutex g_cases_table_mutex;
-std::mutex g_special_case_mappings_mutex;
+// This template is a thin wrapper around per-context singleton objects.
+// It maintains a single object for each CUDA context.
+template <typename TableType>
+class per_context_cache {
+ public:
+  // Find an object cached for a current CUDA context.
+  // If there is no object available in the cache, it calls the initializer
+  // `init` to create a new one and cache it for later uses.
+  template <typename Initializer>
+  TableType* find_or_initialize(const Initializer& init)
+  {
+    CUcontext c;
+    cuCtxGetCurrent(&c);
+    auto finder = cache_.find(c);
+    if (finder == cache_.end()) {
+      TableType* result = init();
+      cache_[c]         = result;
+      return result;
+    } else
+      return finder->second;
+  }
 
-character_flags_table_type* d_character_codepoint_flags = nullptr;
-character_cases_table_type* d_character_cases_table     = nullptr;
-special_case_mapping* d_special_case_mappings           = nullptr;
+ private:
+  std::unordered_map<CUcontext, TableType*> cache_;
+};
+
+// This template is a thread-safe version of per_context_cache.
+template <typename TableType>
+class thread_safe_per_context_cache : public per_context_cache<TableType> {
+ public:
+  template <typename Initializer>
+  TableType* find_or_initialize(const Initializer& init)
+  {
+    std::lock_guard<std::mutex> guard(mutex);
+    return per_context_cache<TableType>::find_or_initialize(init);
+  }
+
+ private:
+  std::mutex mutex;
+};
+
+thread_safe_per_context_cache<character_flags_table_type> d_character_codepoint_flags;
+thread_safe_per_context_cache<character_cases_table_type> d_character_cases_table;
+thread_safe_per_context_cache<special_case_mapping> d_special_case_mappings;
 
 }  // namespace
 
@@ -158,13 +194,13 @@ special_case_mapping* d_special_case_mappings           = nullptr;
  */
 const character_flags_table_type* get_character_flags_table()
 {
-  std::lock_guard<std::mutex> guard(g_flags_table_mutex);
-  if (!d_character_codepoint_flags) {
+  return d_character_codepoint_flags.find_or_initialize([&](void) {
+    character_flags_table_type* table = nullptr;
     CUDA_TRY(cudaMemcpyToSymbol(
       character_codepoint_flags, g_character_codepoint_flags, sizeof(g_character_codepoint_flags)));
-    CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_codepoint_flags, character_codepoint_flags));
-  }
-  return d_character_codepoint_flags;
+    CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_codepoint_flags));
+    return table;
+  });
 }
 
 /**
@@ -172,13 +208,13 @@ const character_flags_table_type* get_character_flags_table()
  */
 const character_cases_table_type* get_character_cases_table()
 {
-  std::lock_guard<std::mutex> guard(g_cases_table_mutex);
-  if (!d_character_cases_table) {
+  return d_character_cases_table.find_or_initialize([&](void) {
+    character_cases_table_type* table = nullptr;
     CUDA_TRY(cudaMemcpyToSymbol(
       character_cases_table, g_character_cases_table, sizeof(g_character_cases_table)));
-    CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_cases_table, character_cases_table));
-  }
-  return d_character_cases_table;
+    CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_cases_table));
+    return table;
+  });
 }
 
 /**
@@ -186,14 +222,13 @@ const character_cases_table_type* get_character_cases_table()
  */
 const special_case_mapping* get_special_case_mapping_table()
 {
-  std::lock_guard<std::mutex> guard(g_special_case_mappings_mutex);
-  if (!d_special_case_mappings) {
+  return d_special_case_mappings.find_or_initialize([&](void) {
+    special_case_mapping* table = nullptr;
     CUDA_TRY(cudaMemcpyToSymbol(
       character_special_case_mappings, g_special_case_mappings, sizeof(g_special_case_mappings)));
-    CUDA_TRY(
-      cudaGetSymbolAddress((void**)&d_special_case_mappings, character_special_case_mappings));
-  }
-  return d_special_case_mappings;
+    CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_special_case_mappings));
+    return table;
+  });
 }
 
 }  // namespace detail

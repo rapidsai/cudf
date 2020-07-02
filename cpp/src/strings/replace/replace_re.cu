@@ -52,26 +52,27 @@ struct replace_regex_fn {
   reprog_device prog;
   string_view const d_repl;
   size_type maxrepl;
-  const int32_t* d_offsets{};  // these are null when
-  char* d_chars{};             // only computing size
+  int32_t* d_offsets{};
+  char* d_chars{};
 
-  __device__ size_type operator()(size_type idx)
+  __device__ void operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) return 0;
+    if (d_strings.is_null(idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
+    }
     u_char data1[stack_size];
     u_char data2[stack_size];
     prog.set_stack_mem(data1, data2);
-    string_view d_str = d_strings.element<string_view>(idx);
-    auto mxn          = maxrepl;
-    auto nchars       = d_str.length();      // number of characters in input string
-    auto nbytes       = d_str.size_bytes();  // number of bytes in input string
-    if (mxn < 0) mxn = nchars;               // max possible replaces for this string
-    const char* in_ptr = d_str.data();       // input pointer (i)
-    char* out_ptr      = nullptr;            // running output pointer (o)
-    if (d_offsets) out_ptr = d_chars + d_offsets[idx];
-    size_type lpos  = 0;
-    size_type begin = 0;
-    size_type end   = nchars;  // working vars
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();                  // number of characters in input string
+    auto nbytes       = d_str.size_bytes();              // number of bytes in input string
+    auto mxn          = maxrepl < 0 ? nchars : maxrepl;  // max possible replaces for this string
+    auto in_ptr       = d_str.data();                    // input pointer (i)
+    auto out_ptr      = d_chars ? d_chars + d_offsets[idx] : nullptr;  // output pointer (o)
+    size_type lpos    = 0;
+    size_type begin   = 0;
+    size_type end     = nchars;  // working vars
     // copy input to output replacing strings as we go
     while (mxn-- > 0)  // maximum number of replaces
     {
@@ -91,7 +92,8 @@ struct replace_regex_fn {
     }
     if (out_ptr)                                                  // copy the remainder
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);  // o:bbbbrrrrrreeee
-    return nbytes;
+    else
+      d_offsets[idx] = nbytes;
   }
 };
 
@@ -148,7 +150,7 @@ std::unique_ptr<column> replace_re(
                             null_count,
                             mr,
                             stream);
-  //
+
   return make_strings_column(strings_count,
                              std::move(children.first),
                              std::move(children.second),

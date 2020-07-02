@@ -54,8 +54,7 @@ std::unique_ptr<cudf::table> cross_join(
   }
 
   // Repeat left table
-  numeric_scalar<size_type> num_repeats = right.num_rows();
-  auto left_repeated                    = detail::repeat(left, num_repeats, mr, stream);
+  auto left_repeated = detail::repeat(left, right.num_rows(), mr, stream);
 
   // Tile right table
   auto right_tiled = detail::tile(right, left.num_rows(), stream, mr);

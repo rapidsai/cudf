@@ -25,10 +25,12 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
+#include <type_traits>
 
 using namespace ::cudf::io;
 
@@ -350,6 +352,23 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
   return milli * 1000000;
 }
+
+// The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for json
+#ifndef DURATION_DECODE_VALUE
+#define DURATION_DECODE_VALUE(Type)                                   \
+  template <>                                                         \
+  __inline__ __device__ Type decode_value(                            \
+    const char *data, long start, long end, ParseOptions const &opts) \
+  {                                                                   \
+    return Type{};                                                    \
+  }
+#endif
+DURATION_DECODE_VALUE(duration_D)
+DURATION_DECODE_VALUE(duration_s)
+DURATION_DECODE_VALUE(duration_ms)
+DURATION_DECODE_VALUE(duration_us)
+DURATION_DECODE_VALUE(duration_ns)
 
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for csv

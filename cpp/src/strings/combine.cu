@@ -49,7 +49,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   // check all columns are of type string
   CUDF_EXPECTS(std::all_of(strings_columns.begin(),
                            strings_columns.end(),
-                           [](auto c) { return c.type().id() == STRING; }),
+                           [](auto c) { return c.type().id() == type_id::STRING; }),
                "All columns must be of type string");
   if (num_columns == 1)  // single strings column returns a copy
     return std::make_unique<column>(*(strings_columns.begin()), stream, mr);
@@ -195,7 +195,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
 
   // build offsets column (only 1 string so 2 offset entries)
   auto offsets_column =
-    make_numeric_column(data_type{INT32}, 2, mask_state::UNALLOCATED, stream, mr);
+    make_numeric_column(data_type{type_id::INT32}, 2, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
   // set the first entry to 0 and the last entry to bytes
   int32_t new_offsets[] = {0, bytes};
@@ -208,7 +208,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
   // build null mask
   // only one entry so it is either all valid or all null
   size_type null_count = 0;
-  rmm::device_buffer null_mask;  // init to null null-mask
+  rmm::device_buffer null_mask{0, stream, mr};  // init to null null-mask
   if (strings.null_count() == strings_count && !narep.is_valid()) {
     null_mask  = create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr);
     null_count = 1;
@@ -257,7 +257,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   // Check if all columns are of type string
   CUDF_EXPECTS(std::all_of(strings_columns.begin(),
                            strings_columns.end(),
-                           [](auto c) { return c.type().id() == STRING; }),
+                           [](auto c) { return c.type().id() == type_id::STRING; }),
                "All columns must be of type string");
 
   auto strings_count = strings_columns.num_rows();

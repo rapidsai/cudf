@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 project(CUDA_DATAFRAME VERSION 0.15.0 LANGUAGES C CXX CUDA)
 
@@ -138,6 +138,7 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+option(BUILD_CUDF_KAFKA "Configure CMake to build cudf_kafka" OFF)
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
@@ -162,6 +163,12 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
 ###################################################################################################
+# - third party dependencies-----------------------------------------------------------------------
+# add third party dependencies using CMake FetchContent
+
+add_subdirectory(thirdparty)
+
+###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
 
 if("$ENV{CONDA_BUILD}" STREQUAL "1")
@@ -179,28 +186,53 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
-message(STATUS "BUILDING ARROW")
-include(ConfigureArrow)
+option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
 
-if(ARROW_FOUND)
+if(ARROW_STATIC_LIB)
+  message(STATUS "BUILDING ARROW")
+  include(ConfigureArrow)
+
+  if(ARROW_FOUND)
     message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
-else()
+  else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
-endif(ARROW_FOUND)
+  endif(ARROW_FOUND)
+
+  add_library(arrow STATIC IMPORTED ${ARROW_LIB})
+  add_library(arrow_cuda STATIC IMPORTED ${ARROW_CUDA_LIB})
+else()
+  find_path(ARROW_INCLUDE_DIR "arrow"
+      HINTS "$ENV{ARROW_ROOT}/include")
+
+  find_library(ARROW_LIB "arrow"
+      NAMES libarrow
+      HINTS "$ENV{ARROW_ROOT}/lib" "$ENV{ARROW_ROOT}/build")
+
+  find_library(ARROW_CUDA_LIB "arrow_cuda"
+      NAMES libarrow_cuda
+      HINTS "$ENV{ARROW_ROOT}/lib" "$ENV{ARROW_ROOT}/build")
+
+  message(STATUS "ARROW: ARROW_INCLUDE_DIR set to ${ARROW_INCLUDE_DIR}")
+  message(STATUS "ARROW: ARROW_LIB set to ${ARROW_LIB}")
+  message(STATUS "ARROW: ARROW_CUDA_LIB set to ${ARROW_CUDA_LIB}")
+
+  add_library(arrow SHARED IMPORTED ${ARROW_LIB})
+  add_library(arrow_cuda SHARED IMPORTED ${ARROW_CUDA_LIB})
+endif(ARROW_STATIC_LIB)
+
+if(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
+  set_target_properties(arrow PROPERTIES IMPORTED_LOCATION ${ARROW_LIB})
+  set_target_properties(arrow_cuda PROPERTIES IMPORTED_LOCATION ${ARROW_CUDA_LIB})
+endif(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
 
 ###################################################################################################
-# - clone libcu++ ------------------------------------------------------------------------------------
-
-message(STATUS "Installing libcu++")
-execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                COMMAND git clone --branch cudf --recurse-submodules
-                        https://github.com/rapidsai/thirdparty-freestanding.git libcudacxx)
+# - copy libcu++ ------------------------------------------------------------------------------------
 
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx/include")
 
-file(INSTALL ${CMAKE_BINARY_DIR}/libcudacxx/include/        DESTINATION include/libcudacxx)
-file(INSTALL ${CMAKE_BINARY_DIR}/libcudacxx/libcxx/include/ DESTINATION include/libcxx/include)
+file(INSTALL ${LIBCUDACXX_INCLUDE_DIR} DESTINATION ${CMAKE_BINARY_DIR}/include/libcudacxx/)
+file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/libcxx/include/)
 
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
@@ -296,14 +328,12 @@ if(BUILD_TESTS)
         message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
         include_directories(${GTEST_INCLUDE_DIR})
         add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
-        add_subdirectory(${CMAKE_SOURCE_DIR}/custrings/tests)
     else()
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
     endif(GTEST_FOUND)
 endif(BUILD_TESTS)
 
 message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
-message(STATUS "NVSTRINGS_TEST_LIST set to: ${NVSTRINGS_TEST_LIST}")
 
 ###################################################################################################
 # - add google benchmark --------------------------------------------------------------------------
@@ -327,6 +357,11 @@ message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
+include_directories("${CUB_INCLUDE_DIR}"
+                    "${THRUST_INCLUDE_DIR}"
+                    "${JITIFY_INCLUDE_DIR}"
+                    "${LIBCUDACXX_INCLUDE_DIR}")
+
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
 endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
@@ -335,11 +370,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_BINARY_DIR}/include/jit"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cub"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${ARROW_INCLUDE_DIR}"
-                    "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
@@ -355,7 +386,6 @@ endif(CONDA_INCLUDE_DIRS)
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}")
 
@@ -365,50 +395,6 @@ endif(CONDA_LINK_DIRS)
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
-
-add_library(libNVStrings
-            custrings/strings/NVStrings.cu
-            custrings/strings/NVStringsImpl.cu
-            custrings/strings/array.cu
-            custrings/strings/attrs.cu
-            custrings/strings/case.cu
-            custrings/strings/combine.cu
-            custrings/strings/convert.cu
-            custrings/strings/count.cu
-            custrings/strings/datetime.cu
-            custrings/strings/extract.cu
-            custrings/strings/extract_record.cu
-            custrings/strings/find.cu
-            custrings/strings/findall.cu
-            custrings/strings/findall_record.cu
-            custrings/strings/modify.cu
-            custrings/strings/pad.cu
-            custrings/strings/replace.cu
-            custrings/strings/replace_backref.cu
-            custrings/strings/replace_multi.cu
-            custrings/strings/split.cu
-            custrings/strings/strip.cu
-            custrings/strings/substr.cu
-            custrings/strings/urlencode.cu
-            custrings/util.cu
-            custrings/regex/regexec.cpp
-            custrings/regex/regcomp.cpp)
-
-add_library(libNVCategory
-            custrings/category/NVCategory.cu
-            custrings/category/numeric_category.cu
-            custrings/category/numeric_category_int.cu
-            custrings/category/numeric_category_long.cu
-            custrings/category/numeric_category_float.cu
-            custrings/category/numeric_category_double.cu)
-
-add_library(libNVText
-            custrings/text/NVText.cu
-            custrings/text/edit_distance.cu
-            custrings/text/ngram.cu
-            custrings/text/stemmer.cu
-            custrings/text/tokens.cu
-            custrings/util.cu)
 
 add_library(cudf
             src/comms/ipc/ipc.cpp
@@ -433,6 +419,7 @@ add_library(cudf
             src/transform/bools_to_mask.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
+            src/stream_compaction/drop_nans.cu
             src/stream_compaction/drop_duplicates.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
@@ -571,10 +558,14 @@ add_library(cudf
             src/strings/substring.cu
             src/strings/translate.cu
             src/strings/utilities.cu
+            src/lists/lists_column_factories.cu
+            src/lists/lists_column_view.cu
+            src/lists/copying/concatenate.cu
             src/text/generate_ngrams.cu
             src/text/normalize.cu
             src/text/tokenize.cu
             src/text/ngrams_tokenize.cu
+            src/text/replace.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
             src/dictionary/add_keys.cu
@@ -604,24 +595,14 @@ add_library(cudf
             src/aggregation/result_cache.cpp
 )
 
-# Rename installation to proper names for later finding
-set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
-set_target_properties(libNVCategory PROPERTIES OUTPUT_NAME "NVCategory")
-set_target_properties(libNVText PROPERTIES OUTPUT_NAME "NVText")
-
 # Override RPATH for cudf
 set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
-
-# Override RPATH for nvstrings
-set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")
-set_target_properties(libNVCategory PROPERTIES BUILD_RPATH "\$ORIGIN")
-set_target_properties(libNVText PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
 
 # Creates executable stringify and uses it to convert types.h to c-str for use in JIT code
-add_executable(stringify "${CMAKE_SOURCE_DIR}/thirdparty/jitify/stringify.cpp")
+add_executable(stringify "${JITIFY_INCLUDE_DIR}/stringify.cpp")
 execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND ${CMAKE_COMMAND} -E make_directory
         ${CMAKE_BINARY_DIR}/include/jit
@@ -656,22 +637,22 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/utilities/bit.hpp
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/timestamps.hpp
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/details/__config
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/limits
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/cfloat
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/chrono
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/ctime
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/ratio
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/type_traits
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/version
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/__config
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/__undef_macros
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/cfloat
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/chrono
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/ctime
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/limits
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/ratio
-                                   ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/libcxx/include/type_traits
+                                   ${LIBCUDACXX_INCLUDE_DIR}/details/__config
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/limits
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/cfloat
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/chrono
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/ctime
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/ratio
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/type_traits
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/version
+                                   ${LIBCXX_INCLUDE_DIR}/__config
+                                   ${LIBCXX_INCLUDE_DIR}/__undef_macros
+                                   ${LIBCXX_INCLUDE_DIR}/cfloat
+                                   ${LIBCXX_INCLUDE_DIR}/chrono
+                                   ${LIBCXX_INCLUDE_DIR}/ctime
+                                   ${LIBCXX_INCLUDE_DIR}/limits
+                                   ${LIBCXX_INCLUDE_DIR}/ratio
+                                   ${LIBCXX_INCLUDE_DIR}/type_traits
 
                    # stringified headers are placed underneath the bin include jit directory and end in ".jit"
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
@@ -679,22 +660,22 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/utilities/bit.hpp > ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ../src/rolling/rolling_jit_detail.hpp > ${CMAKE_BINARY_DIR}/include/rolling_jit_detail.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/details/__config libcudacxx_details_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/limits libcudacxx_simt_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/cfloat libcudacxx_simt_cfloat > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cfloat.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/chrono libcudacxx_simt_chrono > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/chrono.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/ctime libcudacxx_simt_ctime > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ctime.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/ratio libcudacxx_simt_ratio > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ratio.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/type_traits libcudacxx_simt_type_traits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/type_traits.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/version libcudacxx_simt_version > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/version.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/__config libcxx_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__config.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/__undef_macros libcxx_undef_macros > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__undef_macros.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/cfloat libcxx_cfloat > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cfloat.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/chrono libcxx_chrono > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/chrono.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/ctime libcxx_ctime > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ctime.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/limits libcxx_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/limits.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/ratio libcxx_ratio > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ratio.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/libcxx/include/type_traits libcxx_type_traits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/details/__config libcudacxx_details_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/limits libcudacxx_simt_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/cfloat libcudacxx_simt_cfloat > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cfloat.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/chrono libcudacxx_simt_chrono > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/chrono.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/ctime libcudacxx_simt_ctime > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ctime.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/ratio libcudacxx_simt_ratio > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ratio.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/type_traits libcudacxx_simt_type_traits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/type_traits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/version libcudacxx_simt_version > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/version.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/__config libcxx_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__config.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/__undef_macros libcxx_undef_macros > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__undef_macros.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/cfloat libcxx_cfloat > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cfloat.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/chrono libcxx_chrono > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/chrono.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/ctime libcxx_ctime > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ctime.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/limits libcxx_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/limits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/ratio libcxx_ratio > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ratio.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/type_traits libcxx_type_traits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit
                    )
 
 add_custom_target(stringify_run DEPENDS
@@ -743,39 +724,11 @@ endif(HT_DEFAULT_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-# Get all the symbols from the Arrow CUDA Library for Cython
-set(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
-
-# link targets for NVStrings
-target_link_libraries(libNVStrings rmm ${CUDART_LIBRARY} cuda)
-target_link_libraries(libNVCategory libNVStrings rmm ${CUDART_LIBRARY} cuda)
-target_link_libraries(libNVText libNVStrings rmm ${CUDART_LIBRARY} cuda)
-
 # link targets for cuDF
-target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
-
-# install targets for NVStrings
-install(TARGETS libNVStrings
-        DESTINATION lib
-        COMPONENT nvstrings)
-
-install(TARGETS libNVCategory
-        DESTINATION lib
-        COMPONENT nvstrings)
-
-install(TARGETS libNVText
-        DESTINATION lib
-        COMPONENT nvstrings)
-
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/nvstrings
-        DESTINATION include
-        COMPONENT nvstrings)
-
-add_custom_target(nvstrings
-                  DEPENDS libNVStrings libNVCategory libNVText)
 
 # install targets for cuDF
 install(TARGETS cudf
@@ -801,37 +754,18 @@ if(BUILD_TESTS)
     add_dependencies(install_cudf cudftestutil)
 endif(BUILD_TESTS)
 
-add_custom_target(install_nvstrings
-                  COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=nvstrings -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
-                  DEPENDS nvstrings)
-
 add_custom_target(build_tests_cudf
                   DEPENDS ${CUDF_TEST_LIST})
 
-add_custom_target(build_tests_nvstrings
-                  DEPENDS ${NVSTRINGS_TEST_LIST})
-
 add_custom_target(test_cudf
-                  COMMAND ctest -E "NVSTRINGS"
+                  COMMAND ctest
                   DEPENDS build_tests_cudf)
-
-add_custom_target(test_nvstrings
-                  COMMAND ctest -R "NVSTRINGS"
-                  DEPENDS build_tests_nvstrings)
 
 add_custom_target(build_benchmarks_cudf
                   DEPENDS ${BENCHMARK_LIST})
 
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------
-
-# doc targets for nvstrings
-add_custom_command(OUTPUT NVSTRINGS_DOXYGEN
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/custrings/doxygen
-                   COMMAND doxygen Doxyfile
-                   VERBATIM
-)
-add_custom_target(docs_nvstrings DEPENDS NVSTRINGS_DOXYGEN)
 
 # doc targets for cuDF
 add_custom_command(OUTPUT CUDF_DOXYGEN
@@ -840,3 +774,72 @@ add_custom_command(OUTPUT CUDF_DOXYGEN
                    VERBATIM)
 
 add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
+
+
+####################################################################################################
+# - cudf_kafka - OFF by default due to increased number of dependencies
+if(BUILD_CUDF_KAFKA)
+
+    # cudf_kafka library
+    add_library(libcudf_kafka
+        libcudf_kafka/src/kafka_consumer.cpp
+    )
+
+    # Include paths
+    include_directories("${CMAKE_SOURCE_DIR}/libcudf_kafka/include"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/include/cudf")
+    
+    # Rename installation to proper name for later finding
+    set_target_properties(libcudf_kafka PROPERTIES OUTPUT_NAME "cudf_kafka")
+    set_target_properties(libcudf_kafka PROPERTIES BUILD_RPATH "\$ORIGIN")
+
+    ###################################################################################################
+    # cudf_kafka - librdkafka -------------------------------------------------------------------------
+
+    find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
+    find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
+
+    message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
+    message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
+
+    target_link_libraries(libcudf_kafka ${RDKAFKA++_LIBRARY})
+    include_directories("${RDKAFKA_INCLUDE}")
+
+    ###################################################################################################
+    # - cudf_kafka Install ----------------------------------------------------------------------------
+    target_link_libraries(libcudf_kafka cudf)
+
+    install(TARGETS libcudf_kafka
+            DESTINATION libcudf_kafka/lib
+            COMPONENT libcudf_kafka)
+
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/include
+            DESTINATION include
+            COMPONENT libcudf_kafka)
+
+    add_custom_target(install_libcudf_kafka
+            COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=libcudf_kafka -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+            DEPENDS libcudf_kafka)
+
+    ####################################################################################################
+    # - cudf_kafka Tests
+    if(BUILD_TESTS)
+        if(GTEST_FOUND)
+            message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+            include_directories(${GTEST_INCLUDE_DIR})
+            add_subdirectory(${CMAKE_SOURCE_DIR}/libcudf_kafka/tests)
+        else()
+            message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+        endif(GTEST_FOUND)
+    endif(BUILD_TESTS)
+        
+    message(STATUS "CUDF_KAFKA_TEST_LIST set to: ${CUDF_KAFKA_TEST_LIST}")
+
+    add_custom_target(build_tests_libcudf_kafka
+                      DEPENDS ${CUDF_KAFKA_TEST_LIST})
+
+    add_custom_target(test_libcudf_kafka
+                      COMMAND ctest
+                      DEPENDS build_tests_libcudf_kafka)
+
+endif(BUILD_CUDF_KAFKA)

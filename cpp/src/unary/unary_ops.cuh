@@ -34,7 +34,7 @@ struct launcher {
   {
     std::unique_ptr<cudf::column> output = [&] {
       if (op == cudf::unary_op::NOT) {
-        auto type = cudf::data_type{cudf::BOOL8};
+        auto type = cudf::data_type{cudf::type_id::BOOL8};
         auto size = input.size();
 
         return std::make_unique<column>(type,
