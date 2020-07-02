@@ -2086,6 +2086,13 @@ def test_string_int_to_ipv4():
     assert_eq(expected, got)
 
 
+def test_string_isipv4():
+    gsr = Series(["", None, "1...1", "141.168.0.1", "127.0.0.1", "1.255.0.1"])
+    got = gsr.str.isipv4()
+    expected = Series([False, None, False, True, True, True])
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize(
     "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int64", "uint64"}))
 )
