@@ -23,6 +23,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <strings/utilities.cuh>
 
+#include <thrust/count.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -204,6 +205,48 @@ std::unique_ptr<column> integers_to_ipv4(
                              mr);
 }
 
+std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
+                                cudaStream_t stream,
+                                rmm::mr::device_memory_resource* mr)
+{
+  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto d_column       = *strings_column;
+  // create output column
+  auto results   = make_numeric_column(data_type{type_id::BOOL8},
+                                     strings.size(),
+                                     copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
+  auto d_results = results->mutable_view().data<bool>();
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(strings.size()),
+                    d_results,
+                    [d_column] __device__(size_type idx) {
+                      if (d_column.is_null(idx)) return false;
+                      auto const d_str = d_column.element<string_view>(idx);
+                      if (d_str.empty()) return false;
+                      auto const ch = *(d_str.begin());
+                      if (ch < '0' || ch > '9') return false;
+                      int ipv_idx  = 0;
+                      int ip_value = 0;
+                      for (auto const ch : d_str) {
+                        if (ch == '.') {
+                          if (++ipv_idx > 3) return false;
+                          ip_value = 0;
+                        } else if ((ch >= '0') && (ch <= '9')) {
+                          ip_value = (ip_value * 10) + static_cast<int>(ch - '0');
+                          if (ip_value > 255) return false;
+                        } else
+                          return false;
+                      }
+                      return true;
+                    });
+  results->set_null_count(strings.null_count());
+  return results;
+}
+
 }  // namespace detail
 
 // external API
@@ -213,6 +256,13 @@ std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
 {
   CUDF_FUNC_RANGE();
   return detail::integers_to_ipv4(integers, mr);
+}
+
+std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
+                                rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_ipv4(strings, 0, mr);
 }
 
 }  // namespace strings
