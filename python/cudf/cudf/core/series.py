@@ -2245,7 +2245,7 @@ class Series(Frame, Serializable):
         cats = self.unique().astype(self.dtype)
 
         name = self.name  # label_encoding mutates self.name
-        labels = self.label_encoding(cats=cats)
+        labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
         self.name = name
 
         return labels, cats
