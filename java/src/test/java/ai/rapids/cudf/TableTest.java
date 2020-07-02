@@ -129,11 +129,16 @@ public class TableTest extends CudfTestBase {
           case INT32: // fall through
           case UINT32: // fall through
           case TIMESTAMP_DAYS:
+          case DURATION_DAYS:
             assertEquals(expected.getInt(expectedRow), cv.getInt(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
           case INT64: // fall through
           case UINT64: // fall through
+          case DURATION_MICROSECONDS: // fall through
+          case DURATION_MILLISECONDS: // fall through
+          case DURATION_NANOSECONDS: // fall through
+          case DURATION_SECONDS: // fall through
           case TIMESTAMP_MICROSECONDS: // fall through
           case TIMESTAMP_MILLISECONDS: // fall through
           case TIMESTAMP_NANOSECONDS: // fall through

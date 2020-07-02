@@ -312,58 +312,34 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
 
-    def repartition_by_hash(
-        self,
-        columns=None,
-        npartitions=None,
-        max_branch=None,
-        ignore_index=True,
-        **kwargs,
-    ):
-        """Repartition a dask_cudf DataFrame by hashing.
-
-        Warning: By default, index will be ignored/dropped.
-
-        Parameter
-        ---------
-        columns : list, default None
-            List of columns (by name) to be used for hashing. If None,
-            all columns will be used.
-        npartitions : int, default None
-            Number of output partitions. If None, the output partitions
-            are chosen to match self.npartitions.
-        max_branch : int or False, default None
-            Passed to `rearrange_by_hash` - If False, single-stage shuffling
-            will be used (no matter the number of partitions).
-        ignore_index : bool, default True
-            Ignore the index values while shuffling data into new
-            partitions. This can boost performance significantly.
-        kwargs : dict
-            Other `repartition` arguments.  Ignored.
-        """
-        npartitions = npartitions or self.npartitions
-        columns = columns or [col for col in self.columns]
-
-        return sorting.rearrange_by_hash(
-            self,
-            columns,
-            npartitions,
-            max_branch=max_branch,
-            ignore_index=ignore_index,
-        )
-
     def repartition(self, *args, **kwargs):
         """ Wraps dask.dataframe DataFrame.repartition method.
-        Uses repartition_by_hash if `columns=` is specified.
+        Uses DataFrame.shuffle if `columns=` is specified.
         """
         columns = kwargs.pop("columns", None)
         if columns:
             warnings.warn(
-                "Repartitioning by column hash. Divisions will lost. "
+                "The column argument will be removed from repartition in "
+                " future versions of dask_cudf. Use DataFrame.shuffle().",
+                DeprecationWarning,
+            )
+            warnings.warn(
+                "Rearranging data by column hash. Divisions will lost. "
                 "Set ignore_index=False to preserve Index values."
             )
-            return self.repartition_by_hash(columns=columns, **kwargs)
+            ignore_index = kwargs.pop("ignore_index", True)
+            return self.shuffle(
+                on=columns, ignore_index=ignore_index, **kwargs
+            )
         return super().repartition(*args, **kwargs)
+
+    def shuffle(self, *args, **kwargs):
+        """ Wraps dask.dataframe DataFrame.shuffle method
+        """
+        shuffle_arg = kwargs.pop("shuffle", None)
+        if shuffle_arg and shuffle_arg != "tasks":
+            raise ValueError("dask_cudf does not support disk-based shuffle.")
+        return super().shuffle(*args, shuffle="tasks", **kwargs)
 
 
 def sum_of_squares(x):
