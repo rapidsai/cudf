@@ -4,7 +4,7 @@ import pyarrow as pa
 import cudf
 
 a = pa.ListArray.from_pandas(
-    pd.Series([[[1, 2], [3]], [[3, 4], None], [[5, 6]]])
+    pd.Series([[["a", None], ["c"]], [["d", "e"], None], [["f", "g"]]])
 )
 
-x = cudf.core.column.ListsColumn.from_arrow(a)
+x = cudf.core.column.ListColumn.from_arrow(a)

@@ -42,10 +42,7 @@ class ListColumn(ColumnBase):
 
     @classmethod
     def from_arrow(cls, array):
-        buffers = array.buffers()
-        nlevels = len(buffers) / 2
-
-        if nlevels == 1:
+        if array.type.num_children == 0:
             return cudf.core.column.as_column(array)
         else:
             _, _, mask, _, _ = buffers_from_pyarrow(array)
