@@ -406,11 +406,11 @@ template <>
 struct is_unary_logical_operator_trait_impl<ast_operator::NOT> : std::true_type {
 };
 
-// Trait dispatcher
+// Operator dispatchers
 template <typename Functor, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher(ast_operator op,
-                                                                           Functor&& f,
-                                                                           Ts&&... args)
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher_logical(ast_operator op,
+                                                                                   Functor&& f,
+                                                                                   Ts&&... args)
 {
   switch (op) {
     case ast_operator::ADD:
@@ -420,6 +420,28 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher(ast_o
     case ast_operator::MUL:
       return f.template operator()<ast_operator::MUL>(std::forward<Ts>(args)...);
     default: return false;  // TODO: Error handling?
+  }
+}
+
+template <typename Functor, typename T0, typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher_numeric(ast_operator op,
+                                                                                   Functor&& f,
+                                                                                   T0 arg0,
+                                                                                   Ts&&... args)
+{
+  // We capture the first argument's type in T0 so we can construct a "default" value of the correct
+  // (matching) type.
+  switch (op) {
+    case ast_operator::ADD:
+      return f.template operator()<ast_operator::ADD>(std::forward<T0>(arg0),
+                                                      std::forward<Ts>(args)...);
+    case ast_operator::SUB:
+      return f.template operator()<ast_operator::SUB>(std::forward<T0>(arg0),
+                                                      std::forward<Ts>(args)...);
+    case ast_operator::MUL:
+      return f.template operator()<ast_operator::MUL>(std::forward<T0>(arg0),
+                                                      std::forward<Ts>(args)...);
+    default: return T0(0);  // TODO: Error handling?
   }
 }
 
@@ -435,7 +457,7 @@ struct is_binary_arithmetic_operator_impl {
 };
 CUDA_HOST_DEVICE_CALLABLE bool is_binary_arithmetic_operator(ast_operator op)
 {
-  return ast_operator_dispatcher(op, is_binary_arithmetic_operator_impl{});
+  return ast_operator_dispatcher_logical(op, is_binary_arithmetic_operator_impl{});
 }
 
 struct is_unary_arithmetic_operator_impl {
@@ -447,7 +469,7 @@ struct is_unary_arithmetic_operator_impl {
 };
 CUDA_HOST_DEVICE_CALLABLE bool is_unary_arithmetic_operator(ast_operator op)
 {
-  return ast_operator_dispatcher(op, is_unary_arithmetic_operator_impl{});
+  return ast_operator_dispatcher_logical(op, is_unary_arithmetic_operator_impl{});
 }
 
 struct is_binary_comparator_impl {
@@ -459,7 +481,7 @@ struct is_binary_comparator_impl {
 };
 CUDA_HOST_DEVICE_CALLABLE bool is_binary_comparator(ast_operator op)
 {
-  return ast_operator_dispatcher(op, is_binary_comparator_impl{});
+  return ast_operator_dispatcher_logical(op, is_binary_comparator_impl{});
 }
 
 struct is_unary_comparator_impl {
@@ -471,7 +493,7 @@ struct is_unary_comparator_impl {
 };
 CUDA_HOST_DEVICE_CALLABLE bool is_unary_comparator(ast_operator op)
 {
-  return ast_operator_dispatcher(op, is_unary_comparator_impl{});
+  return ast_operator_dispatcher_logical(op, is_unary_comparator_impl{});
 }
 
 struct is_binary_logical_operator_impl {
@@ -483,7 +505,7 @@ struct is_binary_logical_operator_impl {
 };
 CUDA_HOST_DEVICE_CALLABLE bool is_binary_logical_operator(ast_operator op)
 {
-  return ast_operator_dispatcher(op, is_binary_logical_operator_impl{});
+  return ast_operator_dispatcher_logical(op, is_binary_logical_operator_impl{});
 }
 
 struct is_unary_logical_operator_impl {
@@ -495,7 +517,7 @@ struct is_unary_logical_operator_impl {
 };
 CUDA_HOST_DEVICE_CALLABLE bool is_unary_logical_operator(ast_operator op)
 {
-  return ast_operator_dispatcher(op, is_unary_logical_operator_impl{});
+  return ast_operator_dispatcher_logical(op, is_unary_logical_operator_impl{});
 }
 
 // Arithmetic operators accept element type(s) and return an element
