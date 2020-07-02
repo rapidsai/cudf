@@ -18,6 +18,7 @@
 #include <cctype>
 #include <cudf/utilities/error.hpp>
 #include <map>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -348,32 +349,33 @@ std::string ptx_parser::parse()
     exit(1);
   }
 
-  auto f = no_comments.cbegin() + offset + 5;  // length of '.func'
+  auto f = no_comments.cbegin() + offset + 5;  // 5 = length of ".func"
   auto l = std::find(f, no_comments.cend(), '{');
 
-  auto const fn_header = std::string(f, l);
-
-  f = ++l;
-
-  // find matching } to first found {
-  l = std::find_if(f, no_comments.cend(), [brace_count = 0](auto c) mutable {
+  auto f2 = std::next(l);
+  auto l2 = std::find_if(f2, no_comments.cend(), [brace_count = 0](auto c) mutable {
     if (c == '{') ++brace_count;
     if (c == '}') {
-      if (brace_count == 0) return true;
+      if (brace_count == 0) return true;  // find matching } to first found {
       --brace_count;
     }
     return false;
   });
 
-  auto const fn_body_output   = parse_function_body(std::string(f, l));
+  auto const fn_header        = std::string(f, l);
   auto const fn_header_output = parse_function_header(fn_header);
-  std::string final_output    = fn_header_output + "\n asm volatile (\"{\");";
+  auto const fn_body_output   = parse_function_body(std::string(f2, l2));
 
-  for (auto const& line : fn_body_output)
-    final_output += line.find("ret;") != std::string::npos ? "  asm volatile (\"bra RETTGT;\");\n"
+  return std::accumulate(
+           fn_body_output.cbegin(),
+           fn_body_output.cend(),
+           fn_header_output + "\n asm volatile (\"{\");",
+           [](auto&& acc, auto const& line) -> std::string&& {
+             acc += line.find("ret;") != std::string::npos ? "  asm volatile (\"bra RETTGT;\");\n"
                                                            : "  " + line + "\n";
-
-  return final_output + " asm volatile (\"RETTGT:}\");}";
+             return std::move(acc);
+           }) +
+         " asm volatile (\"RETTGT:}\");}";
 }
 
 ptx_parser::ptx_parser(const std::string& ptx_,
