@@ -81,11 +81,11 @@ struct format_compiler {
 
   std::map<char, int8_t> specifier_lengths = {{'d', -1},
                                               {'+', -1},
-                                              {'H', 2},
-                                              {'M', 2},
-                                              {'S', 2},
+                                              {'H', -1},
+                                              {'M', -1},
+                                              {'S', -1},
                                               {'u', -1},
-                                              {'f', 9}};  // TODO: -1 or 9?
+                                              {'f', 6}};  // TODO: -1 or 9?
 
   format_compiler(const char* format, type_id units) : format(format), units(units) {}
 
@@ -111,7 +111,8 @@ struct format_compiler {
         continue;
       }
       if (ch >= '0' && ch <= '9') {
-        CUDF_EXPECTS(*str == 'f', "precision not supported for specifier: " + std::string(1, *str));
+        CUDF_EXPECTS(*str == 'H' || *str == 'M' || *str == 'S' || *str == 'f',
+                     "precision not supported for specifier: " + std::string(1, *str));
         specifier_lengths[*str] = static_cast<int8_t>(ch - '0');
         ch                      = *str++;
         length--;
@@ -165,13 +166,13 @@ __device__ void dissect_duration(int64_t duration, int32_t* timeparts, type_id u
   if (units == type_id::DURATION_SECONDS) {
     seconds = duration;
   } else if (units == type_id::DURATION_MILLISECONDS) {
-    seconds                 = scale_time(duration, 1000);  // TODO scale_time or duration/1000;
-    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000);   // * 1000 * 1000;
+    seconds = simt::std::chrono::floor<cudf::duration_s>(cudf::duration_ms(duration)).count();
+    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000);  // * 1000 * 1000;
   } else if (units == type_id::DURATION_MICROSECONDS) {
-    seconds                 = scale_time(duration, 1000 * 1000);  // TODO above
-    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000 * 1000);   // * 1000;
+    seconds = simt::std::chrono::floor<cudf::duration_s>(cudf::duration_us(duration)).count();
+    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000 * 1000);  // * 1000;
   } else if (units == type_id::DURATION_NANOSECONDS) {
-    seconds                 = scale_time(duration, 1000 * 1000 * 1000);  // TODO above
+    seconds = simt::std::chrono::floor<cudf::duration_s>(cudf::duration_ns(duration)).count();
     timeparts[DU_SUBSECOND] = modulo_time(duration, 1000 * 1000 * 1000);
   }
   timeparts[DU_DAY]    = scale_time(seconds, 24 * 60 * 60);
@@ -413,7 +414,7 @@ std::unique_ptr<column> from_durations(
   column_view const& durations,
   std::string const& format,
   // "%d days %H:%M:%S.%6f",
-  //"P%YY%MM%DDT%HH%MM%SS" is_iso_format() for skipping leading zeros.
+  //"P%YY%MM%DDT%HH%MM%SS" is_iso_format() for no padding zeros for HMS and no trailing zeros for subseconds.
   // TODO
   // common for all: check if non-zero days,
   // per item: non-zero subseconds present. 1(.)+(width 3/6/9 based on non-zero ms/us/ns)

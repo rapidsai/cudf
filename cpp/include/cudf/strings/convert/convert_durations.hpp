@@ -119,7 +119,7 @@ std::unique_ptr<column> to_durations(
  */
 std::unique_ptr<column> from_durations(
   column_view const& durations,
-  std::string const& format           = "%d days %H:%M:%S",
+  std::string const& format           = "%d days %+%2H:%2M:%2S",
   //"P%YY%MM%DDT%HH%MM%SS" is_iso_format() for skipping leading zeros.
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
