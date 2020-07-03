@@ -622,7 +622,7 @@ class hash_join_impl : public cudf::hash_join {
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-    rmm::mr::device_memory_resource* mr) override
+    rmm::mr::device_memory_resource* mr) const override
   {
     CUDF_FUNC_RANGE();
     return compute_hash_join<join_kind::INNER_JOIN>(probe, probe_on, columns_in_common, mr);
@@ -632,7 +632,7 @@ class hash_join_impl : public cudf::hash_join {
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-    rmm::mr::device_memory_resource* mr) override
+    rmm::mr::device_memory_resource* mr) const override
   {
     CUDF_FUNC_RANGE();
     return compute_hash_join<join_kind::LEFT_JOIN>(probe, probe_on, columns_in_common, mr);
@@ -642,7 +642,7 @@ class hash_join_impl : public cudf::hash_join {
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-    rmm::mr::device_memory_resource* mr) override
+    rmm::mr::device_memory_resource* mr) const override
   {
     CUDF_FUNC_RANGE();
     return compute_hash_join<join_kind::LEFT_JOIN>(probe, probe_on, columns_in_common, mr);
@@ -655,7 +655,7 @@ class hash_join_impl : public cudf::hash_join {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0)
+    cudaStream_t stream = 0) const
   {
     CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
     CUDF_EXPECTS(probe.num_rows() < MAX_JOIN_SIZE,
@@ -693,7 +693,7 @@ class hash_join_impl : public cudf::hash_join {
 
   template <join_kind JoinKind>
   std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_join_indices(
-    cudf::table_view const& probe, cudaStream_t stream)
+    cudf::table_view const& probe, cudaStream_t stream) const
   {
     // Trivial left join case - exit early
     if (!_hash_table && BaseJoinKind == join_kind::LEFT_JOIN) {
@@ -707,8 +707,8 @@ class hash_join_impl : public cudf::hash_join {
   }
 };
 
-std::unique_ptr<hash_join> hash_join::create(cudf::table_view const& build_table,
-                                             std::vector<size_type> const& build_on)
+std::unique_ptr<const hash_join> hash_join::create(cudf::table_view const& build_table,
+                                                   std::vector<size_type> const& build_on)
 {
   return std::make_unique<hash_join_impl>(build_table, build_on);
 }
