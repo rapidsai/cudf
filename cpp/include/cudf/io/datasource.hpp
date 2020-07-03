@@ -23,6 +23,7 @@
 
 #include <memory>
 
+#include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
@@ -71,10 +72,9 @@ class datasource {
   /**
    * @brief Creates a source from a memory buffer.
    *
-   * @param[in] data Pointer to the input data host buffer
-   * @param[in] size Size of the buffer in bytes
+   * @param[in] buffer Host buffer object
    */
-  static std::unique_ptr<datasource> create(const char* data, size_t size);
+  static std::unique_ptr<datasource> create(host_buffer const& buffer);
 
   /**
    * @brief Creates a source from a from an Arrow file.
@@ -90,6 +90,22 @@ class datasource {
    * @param[in] source Non-owning pointer to the datasource object
    */
   static std::unique_ptr<datasource> create(datasource* source);
+
+  /**
+   * @brief Creates a vector of datasources, one per element in the input vector.
+   *
+   * @param[in] args vector of parameters
+   */
+  template <typename T>
+  static std::vector<std::unique_ptr<datasource>> create(std::vector<T> const& args)
+  {
+    std::vector<std::unique_ptr<datasource>> sources;
+    sources.reserve(args.size());
+    std::transform(args.cbegin(), args.cend(), std::back_inserter(sources), [](auto const& arg) {
+      return datasource::create(arg);
+    });
+    return sources;
+  }
 
   /**
    * @brief Base class destructor
@@ -177,6 +193,27 @@ class datasource {
    * @return bool True if there is data, False otherwise
    */
   virtual bool is_empty() const { return size() == 0; }
+
+  /**
+   * @brief Implementation for non owning buffer where datasource holds buffer until destruction.
+   *
+   * @param[in] data Address of the buffer source data
+   * @param[in] size Bytes of the buffer size
+   **/
+  class non_owning_buffer : public buffer {
+   public:
+    non_owning_buffer() : _data(0), _size(0) {}
+
+    non_owning_buffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
+
+    size_t size() const override { return _size; }
+
+    const uint8_t* data() const override { return _data; }
+
+   private:
+    uint8_t* const _data;
+    size_t const _size;
+  };
 };
 
 }  // namespace io

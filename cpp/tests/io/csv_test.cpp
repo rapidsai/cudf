@@ -845,7 +845,7 @@ TEST_F(CsvReaderTest, StringInference)
   const auto result = cudf_io::read_csv(in_args);
 
   EXPECT_EQ(result.tbl->num_columns(), 1);
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::STRING);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
 }
 
 TEST_F(CsvReaderTest, SkipRowsXorSkipFooter)
@@ -1117,17 +1117,6 @@ TEST_F(CsvReaderTest, EmptyFileWithWriter)
 }
 
 class TestSource : public cudf::io::datasource {
-  class TestBuffer : public buffer {
-    uint8_t* const _data;
-    size_t const _size;
-
-   public:
-    TestBuffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
-
-    virtual size_t size() const override { return _size; }
-    virtual const uint8_t* data() const override { return _data; }
-  };
-
  public:
   std::string const str;
 
@@ -1135,7 +1124,7 @@ class TestSource : public cudf::io::datasource {
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     size = std::min(size, str.size() - offset);
-    return std::make_unique<TestBuffer>((uint8_t*)str.data() + offset, size);
+    return std::make_unique<non_owning_buffer>((uint8_t*)str.data() + offset, size);
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override

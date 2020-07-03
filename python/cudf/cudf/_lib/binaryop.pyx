@@ -13,6 +13,7 @@ from cudf._lib.replace import replace_nulls
 from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types cimport underlying_type_t_type_id
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.scalar.scalar cimport scalar
@@ -173,7 +174,14 @@ def binaryop(lhs, rhs, op, dtype):
     cdef binary_operator c_op = <binary_operator> (
         <underlying_type_t_binary_operator> op
     )
-    cdef type_id tid = np_to_cudf_types[np.dtype(dtype)]
+    cdef type_id tid = (
+        <type_id> (
+            <underlying_type_t_type_id> (
+                np_to_cudf_types[np.dtype(dtype)]
+            )
+        )
+    )
+
     cdef data_type c_dtype = data_type(tid)
 
     if isinstance(lhs, Scalar) or np.isscalar(lhs) or lhs is None:
@@ -222,7 +230,13 @@ def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):
     cdef column_view c_lhs = lhs.view()
     cdef column_view c_rhs = rhs.view()
 
-    cdef type_id tid = np_to_cudf_types[np.dtype(dtype)]
+    cdef type_id tid = (
+        <type_id> (
+            <underlying_type_t_type_id> (
+                np_to_cudf_types[np.dtype(dtype)]
+            )
+        )
+    )
     cdef data_type c_dtype = data_type(tid)
 
     cdef string cpp_str = udf_ptx.encode("UTF-8")

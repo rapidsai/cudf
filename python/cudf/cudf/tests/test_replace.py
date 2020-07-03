@@ -22,6 +22,11 @@ def test_series_replace():
     sr4 = sr3.replace("one", "two")
     pd.testing.assert_series_equal(sr4.to_pandas(), psr4)
 
+    psr5 = psr3.replace("one", "five")
+    sr5 = sr3.replace("one", "five")
+
+    pd.testing.assert_series_equal(sr5.to_pandas(), psr5)
+
     # List input
     a6 = np.array([5, 6, 2, 3, 4])
     sr6 = sr1.replace([0, 1], [5, 6])

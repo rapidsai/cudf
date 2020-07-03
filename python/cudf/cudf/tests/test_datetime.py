@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import datetime as dt
+import re
 
 import cupy as cp
 import numpy as np
@@ -359,7 +360,7 @@ def test_typecast_from_datetime_to_datetime(data, from_dtype, to_dtype):
 @pytest.mark.parametrize("data", [numerical_data()])
 @pytest.mark.parametrize("nulls", ["some", "all"])
 def test_to_from_pandas_nulls(data, nulls):
-    pd_data = pd.Series(data.copy())
+    pd_data = pd.Series(data.copy().astype("datetime64[ns]"))
     if nulls == "some":
         # Fill half the values with NaT
         pd_data[list(range(0, len(pd_data), 2))] = np.datetime64("nat", "ns")
@@ -416,10 +417,7 @@ def test_datetime_unique(data, nulls):
     expected = psr.unique()
     got = gsr.unique()
 
-    # convert to int64 for equivalence testing
-    np.testing.assert_array_almost_equal(
-        got.to_pandas().astype(int), expected.astype(int)
-    )
+    assert_eq(pd.Series(expected), got.to_pandas())
 
 
 @pytest.mark.parametrize(
@@ -644,18 +642,13 @@ def test_to_datetime_errors(data):
     else:
         gd_data = pd_data
 
-    exception_type = None
     try:
         pd.to_datetime(pd_data)
     except Exception as e:
-
-        exception_type = type(e)
-
-    if exception_type is None:
-        raise TypeError("Was expecting `pd.to_datetime` to fail")
-
-    with pytest.raises(exception_type):
-        cudf.to_datetime(gd_data)
+        with pytest.raises(type(e), match=re.escape(str(e))):
+            cudf.to_datetime(gd_data)
+    else:
+        raise AssertionError("Was expecting `pd.to_datetime` to fail")
 
 
 def test_to_datetime_not_implemented():
@@ -817,14 +810,10 @@ def test_str_null_to_datetime():
     psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
     gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
 
-    error_type = None
     try:
         psr.astype("datetime64[s]")
-    except Exception as e:
-        error_type = type(e)
-
-    if error_type is None:
-        raise Exception("Expected psr.astype('datetime64[s]') to fail")
-
-    with pytest.raises(ValueError):
-        gsr.astype("datetime64[s]")
+    except Exception:
+        with pytest.raises(ValueError):
+            gsr.astype("datetime64[s]")
+    else:
+        raise AssertionError("Expected psr.astype('datetime64[s]') to fail")

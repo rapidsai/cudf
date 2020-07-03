@@ -176,8 +176,12 @@ class Merge(object):
             lsuffix, rsuffix = suffixes
         for name in same_named_columns:
             if name not in no_suffix_cols:
-                self.lhs.rename({name: f"{name}{lsuffix}"}, inplace=True)
-                self.rhs.rename({name: f"{name}{rsuffix}"}, inplace=True)
+                self.lhs.rename(
+                    {name: f"{name}{lsuffix}"}, inplace=True, axis=1
+                )
+                self.rhs.rename(
+                    {name: f"{name}{rsuffix}"}, inplace=True, axis=1
+                )
                 if left_on and name in left_on:
                     left_on[left_on.index(name)] = f"{name}{lsuffix}"
                 if right_on and name in right_on:

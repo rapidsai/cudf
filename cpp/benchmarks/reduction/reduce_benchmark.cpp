@@ -44,7 +44,7 @@ void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::aggregation> co
   cudf::data_type output_dtype =
     (agg->kind == cudf::aggregation::MEAN || agg->kind == cudf::aggregation::VARIANCE ||
      agg->kind == cudf::aggregation::STD)
-      ? cudf::data_type{cudf::FLOAT64}
+      ? cudf::data_type{cudf::type_id::FLOAT64}
       : input_column.type();
 
   for (auto _ : state) {

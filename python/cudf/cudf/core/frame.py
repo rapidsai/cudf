@@ -182,16 +182,29 @@ class Frame(libcudf.table.Table):
         # names with their integer positions in the `cols` list
         tables = []
         for cols in columns:
-            table_cols = cols[first_data_column_position:]
-            table_names = indices[first_data_column_position:]
-            table = cls(data=dict(zip(table_names, table_cols)))
+            table_index = None
             if 1 == first_data_column_position:
-                table._index = as_index(cols[0])
+                table_index = as_index(cols[0])
             elif first_data_column_position > 1:
-                index_cols = cols[:first_data_column_position]
-                index_names = indices[:first_data_column_position]
-                table._index = cls(data=dict(zip(index_names, index_cols)))
-            tables.append(table)
+                table_index = libcudf.table.Table(
+                    data=dict(
+                        zip(
+                            indices[:first_data_column_position],
+                            cols[:first_data_column_position],
+                        )
+                    )
+                )
+            tables.append(
+                libcudf.table.Table(
+                    data=dict(
+                        zip(
+                            indices[first_data_column_position:],
+                            cols[first_data_column_position:],
+                        )
+                    ),
+                    index=table_index,
+                )
+            )
 
         # Concatenate the Tables
         out = cls._from_table(
@@ -1180,6 +1193,13 @@ class Frame(libcudf.table.Table):
             host array, consider using .to_array()"
         )
 
+    def __arrow_array__(self, type=None):
+        raise TypeError(
+            "Implicit conversion to a host PyArrow Array via __arrow_array__ "
+            "is not allowed, To explicitly construct a PyArrow Array, "
+            "consider using .to_arrow()"
+        )
+
     def drop_duplicates(
         self,
         subset=None,
@@ -1254,7 +1274,8 @@ class Frame(libcudf.table.Table):
                     # Do not change the copy_data[name]
                     pass
 
-        result = self._from_table(Frame(copy_data, self.index))
+            result = self._from_table(Frame(copy_data, self._index))
+
         return result
 
     def _copy_categories(self, other, include_index=True):

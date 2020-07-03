@@ -377,7 +377,7 @@ static auto numeric_to_string_precise(T value)
 
 std::string get_nested_type_str(cudf::column_view const& view)
 {
-  if (view.type().id() == cudf::LIST) {
+  if (view.type().id() == cudf::type_id::LIST) {
     lists_column_view lcv(view);
     return cudf::jit::get_type_name(view.type()) + "<" +
            (lcv.size() > 0 ? get_nested_type_str(lcv.child()) : "") + ">";
@@ -458,7 +458,7 @@ struct column_view_printer {
     cudf::dictionary_column_view dictionary(col);
     if (col.size() == 0) return;
     std::vector<std::string> keys    = to_strings(dictionary.keys());
-    std::vector<std::string> indices = to_strings({cudf::data_type{cudf::INT32},
+    std::vector<std::string> indices = to_strings({cudf::data_type{cudf::type_id::INT32},
                                                    dictionary.size(),
                                                    dictionary.indices().head<int32_t>(),
                                                    dictionary.null_mask(),

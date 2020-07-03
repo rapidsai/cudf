@@ -17,6 +17,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp cimport bool
 
 from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
+from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.move cimport move
 
 from cudf._lib.cpp.wrappers.timestamps cimport (
@@ -87,7 +88,7 @@ cdef class Scalar:
         device scalar.
         """
         cdef libcudf_types.data_type cdtype = self.c_value.get()[0].type()
-        return cudf_to_np_types[cdtype.id()]
+        return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
 
     @property
     def value(self):

@@ -118,7 +118,7 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
 
   cudf::size_type const strings_count = strings.size();
-  if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::STRING});
+  if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
   auto strings_column      = cudf::column_device_view::create(strings.parent(), stream);
   auto targets_column      = cudf::column_device_view::create(targets.parent(), stream);

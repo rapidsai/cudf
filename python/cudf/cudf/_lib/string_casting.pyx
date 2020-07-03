@@ -7,6 +7,7 @@ from cudf._lib.move cimport move
 from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types cimport underlying_type_t_type_id
 
 from cudf.core.column.column import as_column
 
@@ -28,7 +29,8 @@ from cudf._lib.cpp.strings.convert.convert_floats cimport (
 from cudf._lib.cpp.strings.convert.convert_integers cimport (
     to_integers as cpp_to_integers,
     from_integers as cpp_from_integers,
-    hex_to_integers as cpp_hex_to_integers
+    hex_to_integers as cpp_hex_to_integers,
+    is_hex as cpp_is_hex
 )
 from cudf._lib.cpp.strings.convert.convert_ipv4 cimport (
     ipv4_to_integers as cpp_ipv4_to_integers,
@@ -61,7 +63,11 @@ def floating_to_string(Column input_col):
 def string_to_floating(Column input_col, object out_type):
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
-    cdef type_id tid = np_to_cudf_types[out_type]
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[out_type]
+        )
+    )
     cdef data_type c_out_type = data_type(tid)
     with nogil:
         c_result = move(
@@ -150,7 +156,11 @@ def integer_to_string(Column input_col):
 def string_to_integer(Column input_col, object out_type):
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
-    cdef type_id tid = np_to_cudf_types[out_type]
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[out_type]
+        )
+    )
     cdef data_type c_out_type = data_type(tid)
     with nogil:
         c_result = move(
@@ -540,7 +550,11 @@ def timestamp2int(
     if input_col.size == 0:
         return as_column([], dtype=kwargs.get('dtype'))
     cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = np_to_cudf_types[kwargs.get('dtype')]
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[kwargs.get('dtype')]
+        )
+    )
     cdef data_type out_type = data_type(tid)
     cdef string c_timestamp_format = kwargs.get('format').encode('UTF-8')
     cdef unique_ptr[column] c_result
@@ -616,7 +630,11 @@ def htoi(Column input_col, **kwargs):
     """
 
     cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = np_to_cudf_types[kwargs.get('dtype', np.dtype("int64"))]
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[kwargs.get('dtype', np.dtype("int64"))]
+        )
+    )
     cdef data_type c_out_type = data_type(tid)
 
     cdef unique_ptr[column] c_result
@@ -624,5 +642,21 @@ def htoi(Column input_col, **kwargs):
         c_result = move(
             cpp_hex_to_integers(input_column_view,
                                 c_out_type))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def is_hex(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that have hex characters.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    with nogil:
+        c_result = move(cpp_is_hex(
+            source_view
+        ))
 
     return Column.from_unique_ptr(move(c_result))
