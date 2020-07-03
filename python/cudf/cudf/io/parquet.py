@@ -9,6 +9,7 @@ from pyarrow.compat import guid
 import cudf
 import cudf._lib.parquet as libparquet
 from cudf.utils import ioutils
+from cudf.utils.dtypes import is_list_like
 
 
 def _get_partition_groups(df, partition_cols, preserve_index=False):
@@ -164,8 +165,7 @@ def read_parquet(
     filepath_or_buffer,
     engine="cudf",
     columns=None,
-    row_group=None,
-    row_group_count=None,
+    row_groups=None,
     skip_rows=None,
     num_rows=None,
     strings_to_categorical=False,
@@ -175,18 +175,35 @@ def read_parquet(
 ):
     """{docstring}"""
 
-    filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        filepath_or_buffer, None, **kwargs
-    )
-    if compression is not None:
-        raise ValueError("URL content-encoding decompression is not supported")
+    # Multiple sources are passed as a list. If a single source is passed,
+    # wrap it in a list for unified processing downstream.
+    if not is_list_like(filepath_or_buffer):
+        filepath_or_buffer = [filepath_or_buffer]
+
+    # a list of row groups per source should be passed. make the list of
+    # lists that is expected for multiple sources
+    if row_groups is not None:
+        if not is_list_like(row_groups):
+            row_groups = [[row_groups]]
+        elif not is_list_like(row_groups[0]):
+            row_groups = [row_groups]
+
+    filepaths_or_buffers = []
+    for source in filepath_or_buffer:
+        tmp_source, compression = ioutils.get_filepath_or_buffer(
+            source, None, **kwargs
+        )
+        if compression is not None:
+            raise ValueError(
+                "URL content-encoding decompression is not supported"
+            )
+        filepaths_or_buffers.append(tmp_source)
 
     if engine == "cudf":
         return libparquet.read_parquet(
-            filepath_or_buffer,
+            filepaths_or_buffers,
             columns=columns,
-            row_group=row_group,
-            row_group_count=row_group_count,
+            row_groups=row_groups,
             skip_rows=skip_rows,
             num_rows=num_rows,
             strings_to_categorical=strings_to_categorical,
@@ -194,10 +211,11 @@ def read_parquet(
         )
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
-        pa_table = pq.read_pandas(
-            filepath_or_buffer, columns=columns, *args, **kwargs
+        return cudf.DataFrame.from_arrow(
+            pq.ParquetDataset(filepaths_or_buffers).read_pandas(
+                columns=columns, *args, **kwargs
+            )
         )
-        return cudf.DataFrame.from_arrow(pa_table)
 
 
 @ioutils.doc_to_parquet()
@@ -219,7 +237,7 @@ def to_parquet(
         if partition_cols:
             write_to_dataset(
                 df,
-                path,
+                root_path=path,
                 partition_cols=partition_cols,
                 preserve_index=index,
                 **kwargs,
@@ -236,8 +254,8 @@ def to_parquet(
 
         return libparquet.write_parquet(
             df,
-            path,
-            index,
+            path=path,
+            index=index,
             compression=compression,
             statistics=statistics,
             metadata_file_path=metadata_file_path,
@@ -250,7 +268,11 @@ def to_parquet(
 
         pa_table = df.to_arrow(preserve_index=index)
         return pq.write_to_dataset(
-            pa_table, path, partition_cols=partition_cols, *args, **kwargs
+            pa_table,
+            root_path=path,
+            partition_cols=partition_cols,
+            *args,
+            **kwargs,
         )
 
 

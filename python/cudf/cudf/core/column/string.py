@@ -904,6 +904,45 @@ class StringMethods(object):
         """
         return self._return_or_inplace(cpp_is_integer(self._column), **kwargs)
 
+    def ishex(self, **kwargs):
+        """
+        Check whether all characters in each string form a hex integer.
+
+        If a string has zero characters, False is returned for
+        that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
+
+        See also
+        --------
+        isdecimal
+            Check whether all characters are decimal.
+
+        isdigit
+            Check whether all characters are digits.
+
+        isnumeric
+            Check whether all characters are numeric.
+
+        isfloat
+            Check whether all characters are float.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["", "123DEF", "0x2D3", "-15", "abc"])
+        >>> s.str.ishex()
+        0    False
+        1     True
+        2     True
+        3    False
+        4     True
+        dtype: bool
+        """
+        return self._return_or_inplace(str_cast.is_hex(self._column), **kwargs)
+
     def isfloat(self, **kwargs):
         """
         Check whether all characters in each string form floating value.

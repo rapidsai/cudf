@@ -5,11 +5,13 @@
 - PR #5292 Add unsigned int type columns to libcudf
 - PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #5318 Support/leverage DataFrame.shuffle in dask_cudf
 - PR #4546 Support pandas 1.0+
 - PR #5331 Add `cudf::drop_nans`
 - PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
+- PR #3504 Add External Kafka Datasource
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5397 Add internal implementation of nested loop equijoins.
 - PR #5303 Add slice_strings functionality using delimiter string
@@ -28,6 +30,9 @@
 - PR #5497 Add `.str.isinteger` & `.str.isfloat`
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
+- PR #5536 Parquet reader - add support for multiple sources
+- PR #5607 Add Java bindings for duration types
+- PR #5612 Add `is_hex` strings API
 
 ## Improvements
 
@@ -82,6 +87,7 @@
 - PR #5477 Add `is_index_type` trait 
 - PR #5487 Use sorted lists instead of sets for pytest parameterization
 - PR #5491 allow build libcudf in custom dir
+- PR #5501 Adding only unsigned types support for categorical column codes
 - PR #5570 Add Index APIs such as `Int64Index`, `UInt64Index` and others
 - PR #5503 Change `unique_count` to `distinct_count`
 - PR #5514 `convert_datetime.cu` Small Cleanup
@@ -94,6 +100,8 @@
 - PR #5584 Refactor `CompactProtocolReader::InitSchema`
 - PR #5591 Add `__arrow_array__` protocol and raise a descriptive error message
 - PR #5635 Ad cuIO reader benchmarks for CSV, ORC and Parquet
+- PR #5601 Instantiate Table instances in `Frame._concat` to avoid `DF.insert()` overhead
+- PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
 
 ## Bug Fixes
 
@@ -139,8 +147,11 @@
 - PR #5564 Fix CudfEngine.read_metadata API in dask_cudf
 - PR #5537 Fix issue related to using `set_index` on a string series
 - PR #5561 Fix `copy_bitmask` issue with offset
+- PR #5609 Fix loc and iloc issue with column like input
 - PR #5578 Fix getattr logic in GroupBy
 - PR #5490 Fix python column view
+- PR #5608 Fix issue related to string types being represented as binary types
+- PR #5619 Fix issue related to typecasting when using a `CategoricalDtype`
 
 
 # cuDF 0.14.0 (Date TBD)
