@@ -178,6 +178,96 @@ get_left_join_indices_complement(rmm::device_vector<size_type>& right_indices,
   return std::make_pair(std::move(left_invalid_indices), std::move(right_indices_complement));
 }
 
+std::unique_ptr<multimap_type> build_join_hash_table(table_device_view build_table,
+                                                     cudaStream_t stream)
+{
+  CUDF_EXPECTS(0 != build_table.num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != build_table.num_rows(), "Build side table has no rows");
+
+  const size_type build_table_num_rows{build_table.num_rows()};
+  size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
+  auto hash_table              = multimap_type::create(hash_table_size,
+                                          true,
+                                          multimap_type::hasher(),
+                                          multimap_type::key_equal(),
+                                          multimap_type::allocator_type(),
+                                          stream);
+
+  row_hash hash_build{build_table};
+  rmm::device_scalar<int> failure(0, 0);
+  constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
+  detail::grid_1d config(build_table_num_rows, block_size);
+  build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, 0>>>(
+    *hash_table, hash_build, build_table_num_rows, failure.data());
+  // Check error code from the kernel
+  if (failure.value() == 1) { CUDF_FAIL("Hash Table insert failure."); }
+
+  return hash_table;
+}
+
+template <join_kind JoinKind>
+std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_join_hash_table(
+  table_device_view build_table,
+  table_device_view probe_table,
+  multimap_type const& hash_table,
+  bool flip_join_indices,
+  cudaStream_t stream)
+{
+  size_type estimated_size = estimate_join_output_size<JoinKind, multimap_type>(
+    build_table, probe_table, hash_table, stream);
+
+  // If the estimated output size is zero, return immediately
+  if (estimated_size == 0) {
+    return std::make_pair(rmm::device_vector<size_type>{}, rmm::device_vector<size_type>{});
+  }
+
+  // Because we are approximating the number of joined elements, our approximation
+  // might be incorrect and we might have underestimated the number of joined elements.
+  // As such we will need to de-allocate memory and re-allocate memory to ensure
+  // that the final output is correct.
+  rmm::device_scalar<size_type> write_index(0, stream);
+  size_type join_size{0};
+
+  rmm::device_vector<size_type> left_indices;
+  rmm::device_vector<size_type> right_indices;
+  auto current_estimated_size = estimated_size;
+  do {
+    left_indices.resize(estimated_size);
+    right_indices.resize(estimated_size);
+
+    constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
+    detail::grid_1d config(probe_table.num_rows(), block_size);
+    write_index.set_value(0);
+
+    row_hash hash_probe{probe_table};
+    row_equality equality{probe_table, build_table};
+    const auto& join_output_l =
+      flip_join_indices ? right_indices.data().get() : left_indices.data().get();
+    const auto& join_output_r =
+      flip_join_indices ? left_indices.data().get() : right_indices.data().get();
+    probe_hash_table<JoinKind, multimap_type, hash_value_type, block_size, DEFAULT_JOIN_CACHE_SIZE>
+      <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(*hash_table,
+                                                                       build_table,
+                                                                       probe_table,
+                                                                       hash_probe,
+                                                                       equality,
+                                                                       join_output_l,
+                                                                       join_output_r,
+                                                                       write_index.data(),
+                                                                       estimated_size);
+
+    CHECK_CUDA(stream);
+
+    join_size              = write_index.value();
+    current_estimated_size = estimated_size;
+    estimated_size *= 2;
+  } while ((current_estimated_size < join_size));
+
+  left_indices.resize(join_size);
+  right_indices.resize(join_size);
+  return std::make_pair(std::move(left_indices), std::move(right_indices));
+}
+
 /**
  * @brief Computes the base join operation between two tables and returns the
  * output indices of left and right table as a combined table, i.e. if full
@@ -196,20 +286,31 @@ get_left_join_indices_complement(rmm::device_vector<size_type>& right_indices,
  */
 template <join_kind JoinKind>
 std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> get_base_join_indices(
-  table_view const& left, table_view const& right, cudaStream_t stream)
+  table_view const& build, table_view const& probe, bool flip_join_indices, cudaStream_t stream)
 {
-  CUDF_EXPECTS(0 != left.num_columns(), "Selected left dataset is empty");
-  CUDF_EXPECTS(0 != right.num_columns(), "Selected right dataset is empty");
-  CUDF_EXPECTS(std::equal(std::cbegin(left),
-                          std::cend(left),
-                          std::cbegin(right),
-                          std::cend(right),
-                          [](const auto& l, const auto& r) { return l.type() == r.type(); }),
+  CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != probe.num_columns(), "Selected probe dataset is empty");
+  CUDF_EXPECTS(build.num_rows() <= probe.num_rows(), "Build dataset is bigger than probe dataset");
+  CUDF_EXPECTS(std::equal(std::cbegin(build),
+                          std::cend(build),
+                          std::cbegin(probe),
+                          std::cend(probe),
+                          [](const auto& b, const auto& p) { return b.type() == p.type(); }),
                "Mismatch in joining column data types");
 
   constexpr join_kind BaseJoinKind =
     (JoinKind == join_kind::FULL_JOIN) ? join_kind::LEFT_JOIN : JoinKind;
-  return get_base_hash_join_indices<BaseJoinKind>(left, right, false, stream);
+
+  // Trivial left join case - exit early
+  if (0 == build.num_rows() && BaseJoinKind == join_kind::LEFT_JOIN) {
+    return get_trivial_left_join_indices(probe, flip_join_indices, stream);
+  }
+
+  auto build_table = table_device_view::create(build, stream);
+  auto hash_table  = build_join_hash_table(*build_table, stream);
+
+  auto probe_table = table_device_view::create(probe, stream);
+  return probe_join_hash_table(*build_table, *probe_table, *hash_table, flip_join_indices, stream);
 }
 
 /**
@@ -426,11 +527,21 @@ std::unique_ptr<table> join_call_compute_df(
     return get_empty_joined_table(left, right, columns_in_common);
   }
 
-  auto joined_indices =
-    get_base_join_indices<JoinKind>(left.select(left_on), right.select(right_on), stream);
+  auto build             = right.select(right_on);
+  auto probe             = left.select(left_on);
+  bool flip_join_indices = false;
+
+  // The `right` table is always used for building the hash map. We want to build the hash map
+  // on the smaller table. Thus, if `left` is smaller than `right`, swap `left/right`.
+  if (JoinKind == join_kind::INNER_JOIN && right.num_rows() > left.num_rows()) {
+    std::swap(build, probe);
+    flip_join_indices = true;
+  }
+
+  auto joined_indices = get_base_join_indices<JoinKind>(build, probe, flip_join_indices, stream);
 
   return construct_join_output_df<JoinKind>(
-    left, right, joined_indices, columns_in_common, mr, stream);
+    probe, _build, joined_indices, columns_in_common, mr, stream);
 }
 
 }  // namespace detail
@@ -472,6 +583,134 @@ std::unique_ptr<table> full_join(
   CUDF_FUNC_RANGE();
   return detail::join_call_compute_df<::cudf::detail::join_kind::FULL_JOIN>(
     left, right, left_on, right_on, columns_in_common, mr);
+}
+
+class hash_join_impl : public cudf::hash_join {
+ public:
+  hash_join_impl()                      = delete;
+  hash_join_impl(hash_join_impl const&) = delete;
+  hash_join_impl(hash_join_impl&&)      = delete;
+  hash_join_impl& operator=(hash_join_impl const&) = delete;
+  hash_join_impl& operator=(hash_join_impl&&) = delete;
+
+ private:
+  table_view _build, _build_selected;
+  std::vector<size_type> _build_on;
+  std::unique_ptr<table_device_view> _build_table;
+  std::unique_ptr<multimap_type> _hash_table;
+
+ public:
+  explicit hash_join_impl(cudf::table_view const& build, std::vector<size_type> const& build_on)
+    : _build(build),
+      _build_selected(build.select(build_on)),
+      _build_on(build_on),
+      _hash_table(nullptr)
+  {
+    CUDF_EXPECTS(0 != _build.num_columns(), "Hash join build table is empty");
+    CUDF_EXPECTS(_build.num_rows() < MAX_JOIN_SIZE,
+                 "Hash join build column size is too big for hash join");
+
+    if (0 == _build_on.size() || 0 == build.num_rows()) { return; }
+
+    _build_table = table_device_view::create(_build_selected, 0);
+    _hash_table  = build_join_hash_table(_build_table, 0)
+  }
+
+  ~hash_join_impl() {}
+
+  std::unique_ptr<cudf::table> inner_join(
+    cudf::table_view const& probe,
+    std::vector<size_type> const& probe_on,
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    rmm::mr::device_memory_resource* mr) override
+  {
+    CUDF_FUNC_RANGE();
+    return compute_hash_join<join_kind::INNER_JOIN>(probe, probe_on, columns_in_common, mr);
+  }
+
+  std::unique_ptr<cudf::table> left_join(
+    cudf::table_view const& probe,
+    std::vector<size_type> const& probe_on,
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    rmm::mr::device_memory_resource* mr) override
+  {
+    CUDF_FUNC_RANGE();
+    return compute_hash_join<join_kind::LEFT_JOIN>(probe, probe_on, columns_in_common, mr);
+  }
+
+  std::unique_ptr<cudf::table> full_join(
+    cudf::table_view const& probe,
+    std::vector<size_type> const& probe_on,
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    rmm::mr::device_memory_resource* mr) override
+  {
+    CUDF_FUNC_RANGE();
+    return compute_hash_join<join_kind::LEFT_JOIN>(probe, probe_on, columns_in_common, mr);
+  }
+
+ private:
+  template <join_kind JoinKind>
+  std::enable_if_t<JoinKind != join_kind::FULL_JOIN, std::unique_ptr<table>> compute_hash_join(
+    cudf::table_view const& probe,
+    std::vector<size_type> const& probe_on,
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0)
+  {
+    CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
+    CUDF_EXPECTS(probe.num_rows() < MAX_JOIN_SIZE,
+                 "Hash join probe column size is too big for hash join");
+    CUDF_EXPECTS(_build_on.size() == probe_on.size(),
+                 "Mismatch in number of columns to be joined on");
+
+    CUDF_EXPECTS(std::all_of(columns_in_common.begin(),
+                             columns_in_common.end(),
+                             [&_build_on, &probe_on](auto p) {
+                               size_t b = std::find(_build_on.begin(), _build_on.end(), p.first) -
+                                          _build_on.begin();
+                               size_t p = std::find(probe_on.begin(), probe_on.end(), p.second) -
+                                          probe_on.begin();
+                               return (b != _build_on.size()) && (p != probe_on.size()) && (b == p);
+                             }),
+                 "Invalid values passed to columns_in_common");
+
+    if (is_trivial_join(probe, _build, probe_on, _build_on, JoinKind)) {
+      return get_empty_joined_table(probe, _build, columns_in_common);
+    }
+
+    CUDF_EXPECTS(std::equal(std::cbegin(_build),
+                            std::cend(_build),
+                            std::cbegin(probe),
+                            std::cend(probe),
+                            [](const auto& b, const auto& p) { return b.type() == p.type(); }),
+                 "Mismatch in joining column data types");
+
+    auto joined_indices = probe_join_indices<JoinKind>(probe.select(probe_on), stream);
+
+    return construct_join_output_df<JoinKind>(
+      probe, right, joined_indices, columns_in_common, mr, stream);
+  }
+
+  template <join_kind JoinKind>
+  std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_join_indices(
+    cudf::table_view const& probe, cudaStream_t stream)
+  {
+    // Trivial left join case - exit early
+    if (!_hash_table && BaseJoinKind == join_kind::LEFT_JOIN) {
+      return get_trivial_left_join_indices(probe, flip_join_indices, stream);
+    }
+
+    CUDF_EXPECTS(_hash_table, "Hash table of hash join is null.");
+
+    auto probe_table = table_device_view::create(probe, stream);
+    return probe_join_hash_table(*_build_table, *probe_table, *_hash_table, false, stream);
+  }
+};
+
+std::unique_ptr<hash_join> hash_join::create(cudf::table_view const& build_table,
+                                             std::vector<size_type> const& build_on)
+{
+  return std::make_unique<hash_join_impl>(build_table, build_on);
 }
 
 }  // namespace cudf

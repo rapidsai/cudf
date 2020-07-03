@@ -354,5 +354,34 @@ std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& right,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+class hash_join {
+ public:
+  virtual ~hash_join() = default;
+
+  virtual cudf::size_type get_output_size(
+    cudf::table_view const& probe_table,
+    std::vector<size_type> const& probe_on,
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) = 0;
+  virtual std::unique_ptr<cudf::table> inner_join(
+    cudf::table_view const& probe_table,
+    std::vector<size_type> const& probe_on,
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) = 0;
+  virtual std::unique_ptr<cudf::table> left_join(
+    cudf::table_view const& probe_table,
+    std::vector<size_type> const& probe_on,
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) = 0;
+  virtual std::unique_ptr<cudf::table> full_join(
+    cudf::table_view const& probe_table,
+    std::vector<size_type> const& probe_on,
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) = 0;
+
+  static std::unique_ptr<hash_join> create(cudf::table_view const& build_table,
+                                           std::vector<size_type> const& build_on);
+};
+
 /** @} */  // end of group
 }  // namespace cudf

@@ -165,7 +165,7 @@ size_type estimate_join_output_size(table_device_view build_table,
  * @return Join output indices vector pair
  */
 inline std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
-get_trivial_left_join_indices(table_view const& left, cudaStream_t stream)
+get_trivial_left_join_indices(table_view const& left, bool flip_join_indices, cudaStream_t stream)
 {
   rmm::device_vector<size_type> left_indices(left.num_rows());
   thrust::sequence(
@@ -175,120 +175,7 @@ get_trivial_left_join_indices(table_view const& left, cudaStream_t stream)
                right_indices.begin(),
                right_indices.end(),
                JoinNoneValue);
-  return std::make_pair(std::move(left_indices), std::move(right_indices));
-}
-
-/**
- * @brief Computes the join operation between two tables and returns the
- * output indices of left and right table as a combined table
- *
- * @tparam JoinKind The type of join to be performed
- *
- * @param left  Table of left columns to join
- * @param right Table of right columns to join
- * @param flip_join_indices Flag that indicates whether the left and right
- * tables have been flipped, meaning the output indices should also be flipped
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return Join output indices vector pair
- */
-template <join_kind JoinKind>
-std::enable_if_t<(JoinKind == join_kind::INNER_JOIN || JoinKind == join_kind::LEFT_JOIN),
-                 std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>>
-get_base_hash_join_indices(table_view const& left,
-                           table_view const& right,
-                           bool flip_join_indices,
-                           cudaStream_t stream)
-{
-  // The `right` table is always used for building the hash map. We want to build the hash map
-  // on the smaller table. Thus, if `left` is smaller than `right`, swap `left/right`.
-  if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
-    return get_base_hash_join_indices<JoinKind>(right, left, true, stream);
-  }
-  // Trivial left join case - exit early
-  if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
-    return get_trivial_left_join_indices(left, stream);
-  }
-
-  auto build_table = table_device_view::create(right, stream);
-  const size_type build_table_num_rows{build_table->num_rows()};
-
-  // Probe with the left table
-  auto probe_table = table_device_view::create(left, stream);
-
-  size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
-
-  auto hash_table = multimap_type::create(hash_table_size,
-                                          true,
-                                          multimap_type::hasher(),
-                                          multimap_type::key_equal(),
-                                          multimap_type::allocator_type(),
-                                          stream);
-
-  // build the hash table
-  if (build_table_num_rows > 0) {
-    row_hash hash_build{*build_table};
-    rmm::device_scalar<int> failure(0, stream);
-    constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-    detail::grid_1d config(build_table_num_rows, block_size);
-    build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
-      *hash_table, hash_build, build_table_num_rows, failure.data());
-    // Check error code from the kernel
-    if (failure.value() == 1) { CUDF_FAIL("Hash Table insert failure."); }
-  }
-
-  size_type estimated_size = estimate_join_output_size<JoinKind, multimap_type>(
-    *build_table, *probe_table, *hash_table, stream);
-
-  // If the estimated output size is zero, return immediately
-  if (estimated_size == 0) {
-    return std::make_pair(rmm::device_vector<size_type>{}, rmm::device_vector<size_type>{});
-  }
-
-  // Because we are approximating the number of joined elements, our approximation
-  // might be incorrect and we might have underestimated the number of joined elements.
-  // As such we will need to de-allocate memory and re-allocate memory to ensure
-  // that the final output is correct.
-  rmm::device_scalar<size_type> write_index(0, stream);
-  size_type join_size{0};
-
-  rmm::device_vector<size_type> left_indices;
-  rmm::device_vector<size_type> right_indices;
-  auto current_estimated_size = estimated_size;
-  do {
-    left_indices.resize(estimated_size);
-    right_indices.resize(estimated_size);
-
-    constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-    detail::grid_1d config(probe_table->num_rows(), block_size);
-    write_index.set_value(0);
-
-    row_hash hash_probe{*probe_table};
-    row_equality equality{*probe_table, *build_table};
-    const auto& join_output_l =
-      flip_join_indices ? right_indices.data().get() : left_indices.data().get();
-    const auto& join_output_r =
-      flip_join_indices ? left_indices.data().get() : right_indices.data().get();
-    probe_hash_table<JoinKind, multimap_type, block_size, DEFAULT_JOIN_CACHE_SIZE>
-      <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(*hash_table,
-                                                                       *build_table,
-                                                                       *probe_table,
-                                                                       hash_probe,
-                                                                       equality,
-                                                                       join_output_l,
-                                                                       join_output_r,
-                                                                       write_index.data(),
-                                                                       estimated_size);
-
-    CHECK_CUDA(stream);
-
-    join_size              = write_index.value();
-    current_estimated_size = estimated_size;
-    estimated_size *= 2;
-  } while ((current_estimated_size < join_size));
-
-  left_indices.resize(join_size);
-  right_indices.resize(join_size);
+  if (flip_join_indices) std::swap(left_indices, right_indices);
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 
