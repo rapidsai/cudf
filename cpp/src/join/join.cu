@@ -186,7 +186,8 @@ std::unique_ptr<multimap_type> build_join_hash_table(table_device_view build_tab
 
   const size_type build_table_num_rows{build_table.num_rows()};
   size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
-  auto hash_table              = multimap_type::create(hash_table_size,
+
+  auto hash_table = multimap_type::create(hash_table_size,
                                           true,
                                           multimap_type::hasher(),
                                           multimap_type::key_equal(),
@@ -246,7 +247,7 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_jo
     const auto& join_output_r =
       flip_join_indices ? left_indices.data().get() : right_indices.data().get();
     probe_hash_table<JoinKind, multimap_type, hash_value_type, block_size, DEFAULT_JOIN_CACHE_SIZE>
-      <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(*hash_table,
+      <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(hash_table,
                                                                        build_table,
                                                                        probe_table,
                                                                        hash_probe,
@@ -541,7 +542,7 @@ std::unique_ptr<table> join_call_compute_df(
   auto joined_indices = get_base_join_indices<JoinKind>(build, probe, flip_join_indices, stream);
 
   return construct_join_output_df<JoinKind>(
-    probe, _build, joined_indices, columns_in_common, mr, stream);
+    probe, build, joined_indices, columns_in_common, mr, stream);
 }
 
 }  // namespace detail
@@ -678,14 +679,15 @@ class hash_join_impl : public cudf::hash_join {
       return get_empty_joined_table(probe, _build, columns_in_common);
     }
 
-    CUDF_EXPECTS(std::equal(std::cbegin(_build),
-                            std::cend(_build),
-                            std::cbegin(probe),
-                            std::cend(probe),
+    auto probe_selected = probe.select(probe_on);
+    CUDF_EXPECTS(std::equal(std::cbegin(_build_selected),
+                            std::cend(_build_selected),
+                            std::cbegin(probe_selected),
+                            std::cend(probe_selected),
                             [](const auto& b, const auto& p) { return b.type() == p.type(); }),
                  "Mismatch in joining column data types");
 
-    auto joined_indices = probe_join_indices<JoinKind>(probe.select(probe_on), stream);
+    auto joined_indices = probe_join_indices<JoinKind>(probe_selected, stream);
 
     return construct_join_output_df<JoinKind>(
       probe, right, joined_indices, columns_in_common, mr, stream);
@@ -707,10 +709,10 @@ class hash_join_impl : public cudf::hash_join {
   }
 };
 
-std::unique_ptr<const hash_join> hash_join::create(cudf::table_view const& build_table,
+std::unique_ptr<const hash_join> hash_join::create(cudf::table_view const& build,
                                                    std::vector<size_type> const& build_on)
 {
-  return std::make_unique<hash_join_impl>(build_table, build_on);
+  return std::make_unique<hash_join_impl>(build, build_on);
 }
 
 }  // namespace cudf
