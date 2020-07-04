@@ -212,6 +212,7 @@ std::unique_ptr<cudf::table> left_join(
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
  * `left(including common columns)+right(excluding common columns)`.
  */
+
 std::unique_ptr<cudf::table> full_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
@@ -354,28 +355,115 @@ std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& right,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Hash join that builds hash map in creation and probes results in proceeding `*_join`
+ * member functions.
+ *
+ * This class enables the hash join scheme that builds hash map once, and probes as many times as
+ * needed.
+ */
 class hash_join {
  public:
-  virtual ~hash_join() = default;
+  /**
+   * @brief Instantiate a hash join instance and build the internal hash map used for preceding
+   * probe calls.
+   *
+   * @param build The build table, from which the hash map is built.
+   * @param build_on The column indices from `build` to join on.
+   * @return Hash join instance.
+   */
+  static std::unique_ptr<const hash_join> create(cudf::table_view const& build,
+                                                 std::vector<size_type> const& build_on);
 
+  /**
+   * @brief Side of the probe table in the joined table. Only applicable for inner join.
+   */
+  enum class probe_output_side { LEFT, RIGHT };
+
+  /**
+   * @brief Perform an inner join by probing in the internal hash map.
+   *
+   * It is able to specify which side in the joined table the `probe` portion is on.
+   * More specification @see inner_join() for details.
+   *
+   * @param probe The probe table, from which the tuples are probed.
+   * @param probe_on The column indices from `probe` to join on.
+   * @param columns_in_common is a vector of pairs of column indices into
+   * `build` and `probe`, respectively, that are "in common". For "common"
+   * columns, only a single output column will be produced, which is gathered
+   * from `probe_on` columns or `build_on` columns if `probe_output_side` is LEFT or RIGHT.
+   * Else, for every column in `probe_on` and `build_on`,
+   * an output column will be produced. For each of these pairs (P, B), P
+   * should exist in `probe_on` and B should exist in `build_on`.
+   * @param probe_output_side @see probe_output_side
+   * @param mr Device memory resource used to allocate the returned table and columns' device memory
+   *
+   * @return Result of joining `build` and `probe` tables on the columns
+   * specified by `build_on` and `probe_on`. The resulting table will be joined columns of
+   * `probe(including common columns)+build(excluding common columns)` if `probe_output_side` is
+   * LEFT, `build(including common columns)+probe(excluding common columns)` if `probe_output_side`
+   * is RIGHT,
+   */
   virtual std::unique_ptr<cudf::table> inner_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
+    hash_join::ProbeOutputSide probe_output_side = hash_join::PROBE_OUTPUT_LEFT,
+    rmm::mr::device_memory_resource* mr          = rmm::mr::get_default_resource()) const = 0;
+
+  /**
+   * @brief Perform a left join by probing in the internal hash map.
+   *
+   * More specification @see left_join() for details.
+   *
+   * @param probe The probe table, from which the tuples are probed.
+   * @param probe_on The column indices from `probe` to join on.
+   * @param columns_in_common is a vector of pairs of column indices into
+   * `build` and `probe`, respectively, that are "in common". For "common"
+   * columns, only a single output column will be produced, which is gathered
+   * from `probe_on` columns. Else, for every column in `probe_on` and `build_on`,
+   * an output column will be produced. For each of these pairs (P, B), P
+   * should exist in `probe_on` and B should exist in `build_on`.
+   * @param probe_output_side @see probe_output_side
+   * @param mr Device memory resource used to allocate the returned table and columns' device memory
+   *
+   * @return Result of joining `build` and `probe` tables on the columns
+   * specified by `build_on` and `probe_on`. The resulting table will be joined columns of
+   * `probe(including common columns)+build(excluding common columns)`.
+   */
   virtual std::unique_ptr<cudf::table> left_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
+
+  /**
+   * @brief Perform a full join by probing in the internal hash map.
+   *
+   * More specification @see full_join() for details.
+   *
+   * @param probe The probe table, from which the tuples are probed.
+   * @param probe_on The column indices from `probe` to join on.
+   * @param columns_in_common is a vector of pairs of column indices into
+   * `build` and `probe`, respectively, that are "in common". For "common"
+   * columns, only a single output column will be produced, which is gathered
+   * from `probe_on` columns. Else, for every column in `probe_on` and `build_on`,
+   * an output column will be produced. For each of these pairs (P, B), P
+   * should exist in `probe_on` and B should exist in `build_on`.
+   * @param probe_output_side @see probe_output_side
+   * @param mr Device memory resource used to allocate the returned table and columns' device memory
+   *
+   * @return Result of joining `build` and `probe` tables on the columns
+   * specified by `build_on` and `probe_on`. The resulting table will be joined columns of
+   * `probe(including common columns)+build(excluding common columns)`.
+   */
   virtual std::unique_ptr<cudf::table> full_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
 
-  static std::unique_ptr<const hash_join> create(cudf::table_view const& build,
-                                                 std::vector<size_type> const& build_on);
+  virtual ~hash_join() = default;
 };
 
 /** @} */  // end of group
