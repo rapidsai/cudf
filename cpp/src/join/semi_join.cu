@@ -47,26 +47,29 @@ namespace detail {
  * @throws cudf::logic_error if number of returned columns is 0
  * @throws cudf::logic_error if number of elements in `right_on` and `left_on` are not equal
  *
- * @param[in] left             The left table
- * @param[in] right            The right table
- * @param[in] left_on          The column indices from `left` to join on.
- *                             The column from `left` indicated by `left_on[i]`
- *                             will be compared against the column from `right`
- *                             indicated by `right_on[i]`.
- * @param[in] right_on         The column indices from `right` to join on.
- *                             The column from `right` indicated by `right_on[i]`
- *                             will be compared against the column from `left`
- *                             indicated by `left_on[i]`.
- * @param[in] return_columns   A vector of column indices from `left` to
- *                             include in the returned table.
- * @param[in] mr               Device memory resource to used to allocate the returned table's
- *                             device memory
- * @param[in] stream           CUDA stream used for device memory operations and kernel launches.
- * @tparam    join_kind        Indicates whether to do LEFT_SEMI_JOIN or LEFT_ANTI_JOIN
+ * @param[in] left                The left table
+ * @param[in] right               The right table
+ * @param[in] left_on             The column indices from `left` to join on.
+ *                                The column from `left` indicated by `left_on[i]`
+ *                                will be compared against the column from `right`
+ *                                indicated by `right_on[i]`.
+ * @param[in] right_on            The column indices from `right` to join on.
+ *                                The column from `right` indicated by `right_on[i]`
+ *                                will be compared against the column from `left`
+ *                                indicated by `left_on[i]`.
+ * @param[in] return_columns      A vector of column indices from `left` to
+ *                                include in the returned table.
+ * @param[in] compare_nulls_equal A bool that controls whether null join-key values
+ *                                should match (as per Pandas semantics),
+ *                                or not (as per SQL semantics)
+ * @param[in] mr                  Device memory resource to used to allocate the returned table's
+ *                                device memory
+ * @param[in] stream              CUDA stream used for device memory operations and kernel launches.
+ * @tparam    join_kind           Indicates whether to do LEFT_SEMI_JOIN or LEFT_ANTI_JOIN
  *
- * @returns                    Result of joining `left` and `right` tables on the columns
- *                             specified by `left_on` and `right_on`. The resulting table
- *                             will contain `return_columns` from `left` that match in right.
+ * @returns                       Result of joining `left` and `right` tables on the columns
+ *                                specified by `left_on` and `right_on`. The resulting table
+ *                                will contain `return_columns` from `left` that match in right.
  */
 template <join_kind JoinKind>
 std::unique_ptr<cudf::table> left_semi_anti_join(
@@ -75,6 +78,7 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
+  bool compare_nulls_equal,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0)
 {
@@ -100,12 +104,12 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   auto right_rows_d            = table_device_view::create(right.select(right_on), stream);
   size_t const hash_table_size = compute_hash_table_size(right.num_rows());
   row_hash hash_build{*right_rows_d};
-  row_equality equality_build{*right_rows_d, *right_rows_d};
+  row_equality equality_build{*right_rows_d, *right_rows_d, compare_nulls_equal};
 
   // Going to join it with left table
   auto left_rows_d = table_device_view::create(left.select(left_on), stream);
   row_hash hash_probe{*left_rows_d};
-  row_equality equality_probe{*left_rows_d, *right_rows_d};
+  row_equality equality_probe{*left_rows_d, *right_rows_d, compare_nulls_equal};
 
   auto hash_table_ptr = hash_table_type::create(hash_table_size,
                                                 std::numeric_limits<bool>::max(),
@@ -152,11 +156,12 @@ std::unique_ptr<cudf::table> left_semi_join(cudf::table_view const& left,
                                             std::vector<cudf::size_type> const& left_on,
                                             std::vector<cudf::size_type> const& right_on,
                                             std::vector<cudf::size_type> const& return_columns,
+                                            bool compare_nulls_equal,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_SEMI_JOIN>(
-    left, right, left_on, right_on, return_columns, mr, 0);
+    left, right, left_on, right_on, return_columns, compare_nulls_equal, mr, 0);
 }
 
 std::unique_ptr<cudf::table> left_anti_join(cudf::table_view const& left,
@@ -164,11 +169,12 @@ std::unique_ptr<cudf::table> left_anti_join(cudf::table_view const& left,
                                             std::vector<cudf::size_type> const& left_on,
                                             std::vector<cudf::size_type> const& right_on,
                                             std::vector<cudf::size_type> const& return_columns,
+                                            bool compare_nulls_equal,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_ANTI_JOIN>(
-    left, right, left_on, right_on, return_columns, mr, 0);
+    left, right, left_on, right_on, return_columns, compare_nulls_equal, mr, 0);
 }
 
 }  // namespace cudf

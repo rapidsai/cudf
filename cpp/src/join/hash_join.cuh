@@ -45,6 +45,8 @@ namespace detail {
  * @param probe_table The left hand table
  * @param hash_table A hash table built on the build table that maps the index
  * of every row to the hash value of that row.
+ * @param compare_nulls_equal is a bool that controls whether null join-key values
+ * should match (as per Pandas semantics), or not (as per SQL semantics)
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return An estimate of the size of the output of the join operation
@@ -53,6 +55,7 @@ template <join_kind JoinKind, typename multimap_type>
 size_type estimate_join_output_size(table_device_view build_table,
                                     table_device_view probe_table,
                                     multimap_type const& hash_table,
+                                    bool compare_nulls_equal,
                                     cudaStream_t stream)
 {
   const size_type build_table_num_rows{build_table.num_rows()};
@@ -111,7 +114,7 @@ size_type estimate_join_output_size(table_device_view build_table,
     size_estimate.set_value(0);
 
     row_hash hash_probe{probe_table};
-    row_equality equality{probe_table, build_table};
+    row_equality equality{probe_table, build_table, compare_nulls_equal};
     // Probe the hash table without actually building the output to simply
     // find what the size of the output will be.
     compute_join_output_size<JoinKind, multimap_type, block_size>
@@ -198,12 +201,13 @@ std::enable_if_t<(JoinKind == join_kind::INNER_JOIN || JoinKind == join_kind::LE
 get_base_hash_join_indices(table_view const& left,
                            table_view const& right,
                            bool flip_join_indices,
+                           bool compare_nulls_equal,
                            cudaStream_t stream)
 {
   // The `right` table is always used for building the hash map. We want to build the hash map
   // on the smaller table. Thus, if `left` is smaller than `right`, swap `left/right`.
   if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
-    return get_base_hash_join_indices<JoinKind>(right, left, true, stream);
+    return get_base_hash_join_indices<JoinKind>(right, left, true, compare_nulls_equal, stream);
   }
   // Trivial left join case - exit early
   if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
@@ -238,7 +242,7 @@ get_base_hash_join_indices(table_view const& left,
   }
 
   size_type estimated_size = estimate_join_output_size<JoinKind, multimap_type>(
-    *build_table, *probe_table, *hash_table, stream);
+    *build_table, *probe_table, *hash_table, compare_nulls_equal, stream);
 
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
@@ -264,7 +268,7 @@ get_base_hash_join_indices(table_view const& left,
     write_index.set_value(0);
 
     row_hash hash_probe{*probe_table};
-    row_equality equality{*probe_table, *build_table};
+    row_equality equality{*probe_table, *build_table, compare_nulls_equal};
     const auto& join_output_l =
       flip_join_indices ? right_indices.data().get() : left_indices.data().get();
     const auto& join_output_r =

@@ -76,6 +76,8 @@ namespace cudf {
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.  For each of these pairs (L, R), L
  * should exist in `left_on` and R should exist in `right_on`.
+ * @param[in] compare_nulls_equal is a bool that controls whether null join-key values
+ * should match (as per Pandas semantics), or not (as per SQL semantics)
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return Result of joining `left` and `right` tables on the columns
@@ -88,6 +90,7 @@ std::unique_ptr<cudf::table> inner_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  bool compare_nulls_equal = true,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -141,6 +144,8 @@ std::unique_ptr<cudf::table> inner_join(
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.  For each of these pairs (L, R), L
  * should exist in `left_on` and R should exist in `right_on`.
+ * @param[in] compare_nulls_equal is a bool that controls whether null join-key values
+ * should match (as per Pandas semantics), or not (as per SQL semantics)
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return Result of joining `left` and `right` tables on the columns
@@ -153,6 +158,7 @@ std::unique_ptr<cudf::table> left_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  bool compare_nulls_equal = true,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -206,6 +212,8 @@ std::unique_ptr<cudf::table> left_join(
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.  For each of these pairs (L, R), L
  * should exist in `left_on` and R should exist in `right_on`.
+ * @param[in] compare_nulls_equal is a bool that controls whether null join-key values
+ * should match (as per Pandas semantics), or not (as per SQL semantics)
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return Result of joining `left` and `right` tables on the columns
@@ -218,6 +226,7 @@ std::unique_ptr<cudf::table> full_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  bool compare_nulls_equal = true,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 /**
  * @brief Performs a left semi join on the specified columns of two
@@ -246,20 +255,23 @@ std::unique_ptr<cudf::table> full_join(
  * @throw cudf::logic_error if the number of returned columns is 0
  * @throw cudf::logic_error if the number of elements in `left_on` and `right_on` are not equal
  *
- * @param[in] left             The left table
- * @param[in] right            The right table
- * @param[in] left_on          The column indices from `left` to join on.
- *                             The column from `left` indicated by `left_on[i]`
- *                             will be compared against the column from `right`
- *                             indicated by `right_on[i]`.
- * @param[in] right_on         The column indices from `right` to join on.
- *                             The column from `right` indicated by `right_on[i]`
- *                             will be compared against the column from `left`
- *                             indicated by `left_on[i]`.
- * @param[in] return_columns   A vector of column indices from `left` to
- *                             include in the returned table.
- * @param[in] mr               Device memory resource used to allocate the returned table's device
- *                             memory
+ * @param[in] left                The left table
+ * @param[in] right               The right table
+ * @param[in] left_on             The column indices from `left` to join on.
+ *                                The column from `left` indicated by `left_on[i]`
+ *                                will be compared against the column from `right`
+ *                                indicated by `right_on[i]`.
+ * @param[in] right_on            The column indices from `right` to join on.
+ *                                The column from `right` indicated by `right_on[i]`
+ *                                will be compared against the column from `left`
+ *                                indicated by `left_on[i]`.
+ * @param[in] return_columns      A vector of column indices from `left` to
+ *                                include in the returned table.
+ * @param[in] compare_nulls_equal A bool that controls whether null join-key values
+ *                                should match (as per Pandas semantics),
+ *                                or not (as per SQL semantics)
+ * @param[in] mr                  Device memory resource used to allocate the returned table's
+ *                                device memory
  *
  * @return                     Result of joining `left` and `right` tables on the columns
  *                             specified by `left_on` and `right_on`. The resulting table
@@ -271,6 +283,7 @@ std::unique_ptr<cudf::table> left_semi_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
+  bool compare_nulls_equal = true,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -300,24 +313,27 @@ std::unique_ptr<cudf::table> left_semi_join(
  * @throw cudf::logic_error if the number of returned columns is 0
  * @throw cudf::logic_error if the number of elements in `left_on` and `right_on` are not equal
  *
- * @param[in] left             The left table
- * @param[in] right            The right table
- * @param[in] left_on          The column indices from `left` to join on.
- *                             The column from `left` indicated by `left_on[i]`
- *                             will be compared against the column from `right`
- *                             indicated by `right_on[i]`.
- * @param[in] right_on         The column indices from `right` to join on.
- *                             The column from `right` indicated by `right_on[i]`
- *                             will be compared against the column from `left`
- *                             indicated by `left_on[i]`.
- * @param[in] return_columns   A vector of column indices from `left` to
- *                             include in the returned table.
- * @param[in] mr               Device memory resource used to allocate the returned table's device
- *                             memory
+ * @param[in] left                The left table
+ * @param[in] right               The right table
+ * @param[in] left_on             The column indices from `left` to join on.
+ *                                The column from `left` indicated by `left_on[i]`
+ *                                will be compared against the column from `right`
+ *                                indicated by `right_on[i]`.
+ * @param[in] right_on            The column indices from `right` to join on.
+ *                                The column from `right` indicated by `right_on[i]`
+ *                                will be compared against the column from `left`
+ *                                indicated by `left_on[i]`.
+ * @param[in] return_columns      A vector of column indices from `left` to
+ *                                include in the returned table.
+ * @param[in] compare_nulls_equal A bool that controls whether null join-key values
+ *                                should match (as per Pandas semantics),
+ *                                or not (as per SQL semantics)
+ * @param[in] mr                  Device memory resource used to allocate the returned table's
+ *                                device memory
  *
- * @return                     Result of joining `left` and `right` tables on the columns
- *                             specified by `left_on` and `right_on`. The resulting table
- *                             will contain `return_columns` from `left` that match in right.
+ * @return                        Result of joining `left` and `right` tables on the columns
+ *                                specified by `left_on` and `right_on`. The resulting table
+ *                                will contain `return_columns` from `left` that match in right.
  */
 std::unique_ptr<cudf::table> left_anti_join(
   cudf::table_view const& left,
@@ -325,6 +341,7 @@ std::unique_ptr<cudf::table> left_anti_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
+  bool compare_nulls_equal = true,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**

@@ -38,6 +38,8 @@ namespace detail {
  * @param left The left hand table
  * @param right The right hand table
  * @param JoinKind The type of join to be performed
+ * @param compare_nulls_equal is a bool that controls whether null join-key values
+ * should match (as per Pandas semantics), or not (as per SQL semantics)
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return An estimate of the size of the output of the join operation
@@ -45,6 +47,7 @@ namespace detail {
 size_type estimate_nested_loop_join_output_size(table_device_view left,
                                                 table_device_view right,
                                                 join_kind JoinKind,
+                                                bool compare_nulls_equal,
                                                 cudaStream_t stream)
 {
   const size_type left_num_rows{left.num_rows()};
@@ -85,7 +88,7 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
 
   size_estimate.set_value(0);
 
-  row_equality equality{left, right};
+  row_equality equality{left, right, compare_nulls_equal};
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
   compute_nested_loop_join_output_size<block_size><<<numBlocks * num_sms, block_size, 0, stream>>>(
@@ -106,6 +109,8 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
  * @param flip_join_indices Flag that indicates whether the left and right
  * tables have been flipped, meaning the output indices should also be flipped
  * @param JoinKind The type of join to be performed
+ * @param compare_nulls_equal is a bool that controls whether null join-key values
+ * should match (as per Pandas semantics), or not (as per SQL semantics)
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return Join output indices vector pair
@@ -115,12 +120,13 @@ get_base_nested_loop_join_indices(table_view const& left,
                                   table_view const& right,
                                   bool flip_join_indices,
                                   join_kind JoinKind,
+                                  bool compare_nulls_equal,
                                   cudaStream_t stream)
 {
   // The `right` table is always used for the inner loop. We want to use the smaller table
   // for the inner loop. Thus, if `left` is smaller than `right`, swap `left/right`.
   if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
-    return get_base_nested_loop_join_indices(right, left, true, JoinKind, stream);
+    return get_base_nested_loop_join_indices(right, left, true, JoinKind, compare_nulls_equal, stream);
   }
   // Trivial left join case - exit early
   if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
@@ -131,7 +137,7 @@ get_base_nested_loop_join_indices(table_view const& left,
   auto right_table = table_device_view::create(right, stream);
 
   size_type estimated_size =
-    estimate_nested_loop_join_output_size(*left_table, *right_table, JoinKind, stream);
+    estimate_nested_loop_join_output_size(*left_table, *right_table, JoinKind, compare_nulls_equal, stream);
 
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
@@ -156,7 +162,7 @@ get_base_nested_loop_join_indices(table_view const& left,
     detail::grid_1d config(left_table->num_rows(), block_size);
     write_index.set_value(0);
 
-    row_equality equality{*left_table, *right_table};
+    row_equality equality{*left_table, *right_table, compare_nulls_equal};
     const auto& join_output_l =
       flip_join_indices ? right_indices.data().get() : left_indices.data().get();
     const auto& join_output_r =
