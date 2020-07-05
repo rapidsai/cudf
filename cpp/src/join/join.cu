@@ -178,8 +178,7 @@ get_left_join_indices_complement(rmm::device_vector<size_type>& right_indices,
   return std::make_pair(std::move(left_invalid_indices), std::move(right_indices_complement));
 }
 
-std::unique_ptr<multimap_type> build_join_hash_table(cudf::table_device_view build_table,
-                                                     cudaStream_t stream)
+auto build_join_hash_table(cudf::table_device_view build_table, cudaStream_t stream)
 {
   CUDF_EXPECTS(0 != build_table.num_columns(), "Selected build dataset is empty");
   CUDF_EXPECTS(0 != build_table.num_rows(), "Build side table has no rows");
@@ -246,7 +245,7 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_jo
       flip_join_indices ? right_indices.data().get() : left_indices.data().get();
     const auto& join_output_r =
       flip_join_indices ? left_indices.data().get() : right_indices.data().get();
-    probe_hash_table<JoinKind, multimap_type, hash_value_type, block_size, DEFAULT_JOIN_CACHE_SIZE>
+    probe_hash_table<JoinKind, multimap_type, block_size, DEFAULT_JOIN_CACHE_SIZE>
       <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(hash_table,
                                                                        build_table,
                                                                        probe_table,
@@ -311,7 +310,8 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> get_base
   auto hash_table  = build_join_hash_table(*build_table, stream);
 
   auto probe_table = cudf::table_device_view::create(probe, stream);
-  return probe_join_hash_table(*build_table, *probe_table, *hash_table, flip_join_indices, stream);
+  return probe_join_hash_table<BaseJoinKind>(
+    *build_table, *probe_table, *hash_table, flip_join_indices, stream);
 }
 
 /**
@@ -556,8 +556,7 @@ class hash_join_impl : public cudf::hash_join {
  private:
   cudf::table_view _build, _build_selected;
   std::vector<size_type> _build_on;
-  std::unique_ptr<cudf::table_device_view> _build_table;
-  std::unique_ptr<multimap_type> _hash_table;
+  std::unique_ptr<multimap_type, std::function<void(multimap_type*)>> _hash_table;
 
  public:
   explicit hash_join_impl(cudf::table_view const& build, std::vector<size_type> const& build_on)
@@ -573,8 +572,8 @@ class hash_join_impl : public cudf::hash_join {
 
     if (0 == _build_on.size() || 0 == build.num_rows()) { return; }
 
-    _build_table = cudf::table_device_view::create(_build_selected, 0);
-    _hash_table  = build_join_hash_table(_build_table, 0)
+    auto build_table = cudf::table_device_view::create(_build_selected);
+    _hash_table      = build_join_hash_table(*build_table, 0);
   }
 
   std::unique_ptr<cudf::table> inner_join(
@@ -627,16 +626,17 @@ class hash_join_impl : public cudf::hash_join {
     CUDF_EXPECTS(_build_on.size() == probe_on.size(),
                  "Mismatch in number of columns to be joined on");
 
-    CUDF_EXPECTS(std::all_of(columns_in_common.begin(),
-                             columns_in_common.end(),
-                             [&_build_on, &probe_on](auto p) {
-                               size_t b = std::find(_build_on.begin(), _build_on.end(), p.first) -
-                                          _build_on.begin();
-                               size_t p = std::find(probe_on.begin(), probe_on.end(), p.second) -
-                                          probe_on.begin();
-                               return (b != _build_on.size()) && (p != probe_on.size()) && (b == p);
-                             }),
-                 "Invalid values passed to columns_in_common");
+    CUDF_EXPECTS(
+      std::all_of(columns_in_common.begin(),
+                  columns_in_common.end(),
+                  [this, &probe_on](auto pair) {
+                    size_t b =
+                      std::find(_build_on.begin(), _build_on.end(), pair.first) - _build_on.begin();
+                    size_t p =
+                      std::find(probe_on.begin(), probe_on.end(), pair.second) - probe_on.begin();
+                    return (b != _build_on.size()) && (p != probe_on.size()) && (b == p);
+                  }),
+      "Invalid values passed to columns_in_common");
 
     if (is_trivial_join(probe, _build, probe_on, _build_on, JoinKind)) {
       return get_empty_joined_table(probe, _build, columns_in_common);
@@ -659,8 +659,8 @@ class hash_join_impl : public cudf::hash_join {
                     actual_columns_in_common.end(),
                     [](auto& pair) { std::swap(pair.first, pair.second); });
     }
-    return construct_join_output_df<JoinKind>(probe_output_left ? probe : build,
-                                              probe_output_left ? build : probe,
+    return construct_join_output_df<JoinKind>(probe_output_left ? probe : _build,
+                                              probe_output_left ? _build : probe,
                                               joined_indices,
                                               actual_columns_in_common,
                                               mr,
@@ -672,15 +672,16 @@ class hash_join_impl : public cudf::hash_join {
     cudf::table_view const& probe, bool flip_join_indices, cudaStream_t stream) const
   {
     // Trivial left join case - exit early
-    if (!_hash_table && BaseJoinKind == join_kind::LEFT_JOIN) {
+    if (!_hash_table && JoinKind == join_kind::LEFT_JOIN) {
       return get_trivial_left_join_indices(probe, flip_join_indices, stream);
     }
 
     CUDF_EXPECTS(_hash_table, "Hash table of hash join is null.");
 
+    auto build_table = cudf::table_device_view::create(_build_selected, stream);
     auto probe_table = cudf::table_device_view::create(probe, stream);
-    return probe_join_hash_table(
-      *_build_table, *probe_table, *_hash_table, flip_join_indices, stream);
+    return probe_join_hash_table<JoinKind>(
+      *build_table, *probe_table, *_hash_table, flip_join_indices, stream);
   }
 };
 
@@ -717,8 +718,7 @@ std::unique_ptr<table> left_join(
 {
   CUDF_FUNC_RANGE();
   auto hash_join = cudf::hash_join::create(right, right_on);
-  return hash_join->left_join(
-    left, left_on, columns_in_common, cudf::hash_join::probe_output_side::LEFT, mr);
+  return hash_join->left_join(left, left_on, columns_in_common, mr);
 }
 
 std::unique_ptr<table> full_join(
@@ -731,15 +731,14 @@ std::unique_ptr<table> full_join(
 {
   CUDF_FUNC_RANGE();
   auto hash_join = cudf::hash_join::create(right, right_on);
-  return hash_join->full_join(
-    left, left_on, columns_in_common, cudf::hash_join::probe_output_side::LEFT, mr);
+  return hash_join->full_join(left, left_on, columns_in_common, mr);
 }
 
 std::unique_ptr<const hash_join> hash_join::create(cudf::table_view const& build,
                                                    std::vector<size_type> const& build_on)
 {
   CUDF_FUNC_RANGE();
-  return std::make_unique<hash_join_impl>(build, build_on);
+  return std::make_unique<cudf::detail::hash_join_impl>(build, build_on);
 }
 
 }  // namespace cudf

@@ -408,8 +408,8 @@ class hash_join {
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-    hash_join::ProbeOutputSide probe_output_side = hash_join::PROBE_OUTPUT_LEFT,
-    rmm::mr::device_memory_resource* mr          = rmm::mr::get_default_resource()) const = 0;
+    probe_output_side probe_output_side = hash_join::probe_output_side::LEFT,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
 
   /**
    * @brief Perform a left join by probing in the internal hash map.

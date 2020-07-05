@@ -124,7 +124,7 @@ get_base_nested_loop_join_indices(table_view const& left,
   }
   // Trivial left join case - exit early
   if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
-    return get_trivial_left_join_indices(left, stream);
+    return get_trivial_left_join_indices(left, false, stream);
   }
 
   auto left_table  = table_device_view::create(left, stream);
