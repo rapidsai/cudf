@@ -6423,8 +6423,9 @@ class DataFrame(Frame, Serializable):
             if not ignore_index:
                 raise TypeError("Can only append a dict if ignore_index=True")
             other = DataFrame(other)
-            result = cudf.concat([self, other], ignore_index=False, sort=sort)
-            result._index = RangeIndex(start=0, stop=len(result))
+            result = cudf.concat(
+                [self, other], ignore_index=ignore_index, sort=sort
+            )
             return result
         elif isinstance(other, cudf.Series):
             if other.name is None and not ignore_index:
