@@ -486,7 +486,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
 
     read_arg.columns = n_filter_col_names.as_cpp_vector();
 
-    read_arg.row_group = -1;
     read_arg.skip_rows = -1;
     read_arg.num_rows = -1;
     read_arg.strings_to_categorical = false;
