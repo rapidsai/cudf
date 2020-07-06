@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -7,9 +6,9 @@ import pyarrow as pa
 import pytest
 
 import cudf
-import cudf.utils.dtypes as dtypeutils
 from cudf.core.column.column import as_column
 from cudf.tests.utils import assert_eq
+from cudf.utils import dtypes as dtypeutils
 
 dtypes = sorted(
     list(

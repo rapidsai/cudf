@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 import warnings
 from distutils.version import LooseVersion
 
@@ -8,7 +7,7 @@ import pandas as pd
 from tlz import partition_all
 
 import dask
-import dask.dataframe as dd
+from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
 from dask.compatibility import apply
 from dask.context import _globals
@@ -19,10 +18,10 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
-import cudf
-import cudf._lib as libcudf
-
 from dask_cudf import sorting
+
+import cudf
+from cudf import _lib as libcudf
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
