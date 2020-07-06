@@ -355,10 +355,10 @@ std::unique_ptr<cudf::table> cross_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Hash join that builds hash map in creation and probes results in proceeding `*_join`
+ * @brief Hash join that builds hash table in creation and probes results in proceeding `*_join`
  * member functions.
  *
- * This class enables the hash join scheme that builds hash map once, and probes as many times as
+ * This class enables the hash join scheme that builds hash table once, and probes as many times as
  * needed (possibly in parallel).
  */
 class hash_join {
@@ -369,7 +369,7 @@ class hash_join {
   enum class probe_output_side { LEFT, RIGHT };
 
   /**
-   * @brief Performs an inner join by probing in the internal hash map.
+   * @brief Performs an inner join by probing in the internal hash table.
    *
    * Given that it is sometimes desired to choose the small table to be the `build` side for an
    * inner join (which is automatically done in cudf::innner_join()), it is handy to be able to
@@ -391,8 +391,9 @@ class hash_join {
    * Else, for every column in `probe_on` and `build_on`,
    * an output column will be produced. For each of these pairs (P, B), P
    * should exist in `probe_on` and B should exist in `build_on`.
-   * @param probe_output_side @see probe_output_side
-   * @param mr Device memory resource used to allocate the returned table and columns' device memory
+   * @param probe_output_side @see probe_output_side.
+   * @param mr Device memory resource used to allocate the returned table and columns' device
+   * memory.
    *
    * @return Result of joining `build` and `probe` tables on the columns
    * specified by `build_on` and `probe_on`. The resulting table will be joined columns of
@@ -408,7 +409,7 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
 
   /**
-   * @brief Performs a left join by probing in the internal hash map.
+   * @brief Performs a left join by probing in the internal hash table.
    *
    * More details please @see cudf::left_join().
    *
@@ -420,8 +421,9 @@ class hash_join {
    * from `probe_on` columns. Else, for every column in `probe_on` and `build_on`,
    * an output column will be produced. For each of these pairs (P, B), P
    * should exist in `probe_on` and B should exist in `build_on`.
-   * @param probe_output_side @see probe_output_side
-   * @param mr Device memory resource used to allocate the returned table and columns' device memory
+   * @param probe_output_side @see probe_output_side.
+   * @param mr Device memory resource used to allocate the returned table and columns' device
+   * memory.
    *
    * @return Result of joining `build` and `probe` tables on the columns
    * specified by `build_on` and `probe_on`. The resulting table will be joined columns of
@@ -434,7 +436,7 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
 
   /**
-   * @brief Performs a full join by probing in the internal hash map.
+   * @brief Performs a full join by probing in the internal hash table.
    *
    * More details please @see cudf::full_join().
    *
@@ -446,8 +448,9 @@ class hash_join {
    * from `probe_on` columns. Else, for every column in `probe_on` and `build_on`,
    * an output column will be produced. For each of these pairs (P, B), P
    * should exist in `probe_on` and B should exist in `build_on`.
-   * @param probe_output_side @see probe_output_side
-   * @param mr Device memory resource used to allocate the returned table and columns' device memory
+   * @param probe_output_side @see cudf::hash_join::probe_output_side.
+   * @param mr Device memory resource used to allocate the returned table and columns' device
+   * memory.
    *
    * @return Result of joining `build` and `probe` tables on the columns
    * specified by `build_on` and `probe_on`. The resulting table will be joined columns of
@@ -460,10 +463,10 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
 
   /**
-   * @brief Instantiates a hash join instance and build the internal hash map used for preceding
+   * @brief Instantiates a hash join instance and build the internal hash table used for preceding
    * probe calls.
    *
-   * @param build The build table, from which the hash map is built.
+   * @param build The build table, from which the hash table is built.
    * @param build_on The column indices from `build` to join on.
    * @return Hash join instance.
    */

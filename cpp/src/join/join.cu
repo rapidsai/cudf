@@ -32,7 +32,7 @@ std::unique_ptr<table> inner_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  // The `right` table is always used for building the hash map. We want to build the hash map
+  // The `right` table is always used for building the hash table. We want to build the hash table
   // on the smaller table. Thus, if `left` is smaller than `right`, swap `left/right`.
   if (right.num_rows() > left.num_rows()) {
     auto hash_join = cudf::hash_join::create(left, left_on);

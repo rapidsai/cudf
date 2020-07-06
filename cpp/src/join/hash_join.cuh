@@ -160,7 +160,9 @@ size_type estimate_join_output_size(table_device_view build_table,
  * are returned with their corresponding right indices being set to
  * JoinNoneValue, i.e. -1.
  *
- * @param left  Table of left columns to join
+ * @param left Table of left columns to join
+ * @param flip_join_indices Flag that indicates whether the left and right
+ * tables have been flipped, meaning the output indices should also be flipped
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return Join output indices vector pair
@@ -194,6 +196,18 @@ class hash_join_impl : public cudf::hash_join {
   std::unique_ptr<multimap_type, std::function<void(multimap_type*)>> _hash_table;
 
  public:
+  /**
+   * @brief Constructor that internally builds the hash table based on the given `build` table and
+   * column indices specified by `build_on` for preceding probe calls.
+   *
+   * @throw cudf::logic_error if the number of columns in `build` table is 0.
+   * @throw cudf::logic_error if the number of rows in `build` table exceeds MAX_JOIN_SIZE.
+   * @throw std::out_of_range if elements of `build_on` exceed the number of columns in the `build`
+   * table.
+   *
+   * @param build The build table, from which the hash table is built.
+   * @param build_on The column indices from `build` to join on.
+   */
   explicit hash_join_impl(cudf::table_view const& build, std::vector<size_type> const& build_on);
 
   std::unique_ptr<cudf::table> inner_join(
@@ -216,6 +230,45 @@ class hash_join_impl : public cudf::hash_join {
     rmm::mr::device_memory_resource* mr) const override;
 
  private:
+  /**
+   * @brief Performs hash join by probing the columns provided in `probe` as per
+   * the joining indices given in `probe_on` and creates a single table.
+   *
+   * @throw cudf::logic_error if `columns_in_common` contains a pair of indices
+   * (`P`, `B`) where `P` does not exist in `probe_on` or `B` does not exist in
+   * `_build_on`.
+   * @throw cudf::logic_error if `columns_in_common` contains a pair of indices
+   * (`P`, `B`) such that the location of `P` within `probe_on` is not equal to
+   * the location of `B` within `_build_on`.
+   * @throw cudf::logic_error if the number of elements in `probe_on` and
+   * `_build_on` are not equal.
+   * @throw cudf::logic_error if the number of columns in `probe` is 0.
+   * @throw cudf::logic_error if the number of rows in `probe` table exceeds MAX_JOIN_SIZE.
+   * @throw std::out_of_range if elements of `probe_on` exceed the number of columns in the `probe`
+   * table.
+   * @throw cudf::logic_error if types do not match between joining columns.
+   *
+   * @tparam JoinKind The type of join to be performed.
+   *
+   * @param probe The probe table.
+   * @param probe_on The column's indices from `probe` to join on.
+   * Column `i` from `probe_on` will be compared against column `i` of `_build_on`.
+   * @param columns_in_common is a vector of pairs of column indices into
+   * `_build` and `probe`, respectively, that are "in common". For "common"
+   * columns, only a single output column will be produced, which is gathered
+   * from `probe_on` columns. Else, for every column in `probe_on` and `_build_on`,
+   * an output column will be produced. For each of these pairs (P, B), P
+   * should exist in `probe_on` and B should exist in `_build_on`.
+   * @param probe_output_side @see cudf::hash_join::probe_output_side.
+   * @param mr Device memory resource used to allocate the returned table's device memory.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   *
+   * @return Result of joining `_build` and `probe` tables on the columns
+   * specified by `_build_on` and `probe_on`. The resulting table will be joined columns of
+   * `probe(including common columns)+_build(excluding common columns)` if `probe_output_side` is
+   * LEFT, `_build(including common columns)+probe(excluding common columns)` if `probe_output_side`
+   * is RIGHT,
+   */
   template <join_kind JoinKind>
   std::unique_ptr<table> compute_hash_join(
     cudf::table_view const& probe,
@@ -225,6 +278,22 @@ class hash_join_impl : public cudf::hash_join {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0) const;
 
+  /**
+   * @brief Probes the `_hash_table` built from `_build` for tuples in `probe_table`,
+   * and returns the output indices of `build_table` and `probe_table` as a combined table,
+   * i.e. if full join is specified as the join type then left join is called.
+   *
+   * @throw cudf::logic_error if hash table is null.
+   *
+   * @tparam JoinKind The type of join to be performed.
+   *
+   * @param probe_table Table of probe side columns to join.
+   * @param flip_join_indices Flag that indicates whether the left (probe) and right (build)
+   * tables have been flipped, meaning the output indices should also be flipped.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   *
+   * @return Join output indices vector pair.
+   */
   template <join_kind JoinKind>
   std::enable_if_t<JoinKind != join_kind::FULL_JOIN,
                    std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>>
