@@ -14,22 +14,18 @@
  * limitations under the License.
  */
 
-#define SHIFT_FOR_NEW_CP 0
-#define NEW_CP_MASK 0x1fffff
+constexpr uint32_t NEW_CP_MASK = 0x1fffff;
 
-#define BYTES_LESS_1_SHIFT 21
-#define BYTES_LESS_1_MASK 0x3
+constexpr uint32_t MULTICHAR_SHIFT = 23;
+constexpr uint32_t MULTICHAR_MASK  = 1;
 
-#define MULTICHAR_SHIFT 23
-#define MULTICHAR_MASK 1
+constexpr uint32_t TOKEN_CAT_SHIFT                = 24;
+constexpr uint32_t TOKEN_CAT_MASK                 = 7;
+constexpr uint32_t TOKEN_CAT_ADD_SPACE            = 0;
+constexpr uint32_t TOKEN_CAT_ADD_SPACE_IF_LOWER   = 1;
+constexpr uint32_t TOKEN_CAT_REMOVE_CHAR          = 2;
+constexpr uint32_t TOKEN_CAT_REMOVE_CHAR_IF_LOWER = 3;
+constexpr uint32_t TOKEN_CAT_ALWAYS_REPLACE       = 4;
 
-#define TOKEN_CAT_SHIFT 24
-#define TOKEN_CAT_MASK 7
-#define TOKEN_CAT_ADD_SPACE 0
-#define TOKEN_CAT_ADD_SPACE_IF_LOWER 1
-#define TOKEN_CAT_REMOVE_CHAR 2
-#define TOKEN_CAT_REMOVE_CHAR_IF_LOWER 3
-#define TOKEN_CAT_ALWAYS_REPLACE 4
-
-#define SPACE_CODE_POINT 32
-#define MAX_NEW_CHARS 3
+constexpr uint32_t SPACE_CODE_POINT = 32;
+constexpr uint32_t MAX_NEW_CHARS    = 3;
