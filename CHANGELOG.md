@@ -148,7 +148,6 @@
 - PR #5490 Fix python column view
 - PR #5613 Fix assigning an equal length object into a masked out Series
 - PR #5608 Fix issue related to string types being represented as binary types
-- PR #5613 Fix assigning an equal length object into a masked out Series
 
 
 # cuDF 0.14.0 (Date TBD)
