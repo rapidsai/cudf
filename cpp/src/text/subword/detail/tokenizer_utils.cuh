@@ -22,7 +22,7 @@
 namespace nvtext {
 namespace detail {
 
-#define THREADS_PER_BLOCK 128
+constexpr int THREADS_PER_BLOCK = 64;
 
 /**
  * @brief A selection op for cub to get elements from an array not equal to a certain value.
@@ -33,15 +33,9 @@ namespace detail {
 struct NotEqual {
   uint32_t const val_to_omit;
 
-  __host__ __device__ __forceinline__ NotEqual(uint32_t const val_to_omit)
-    : val_to_omit(val_to_omit)
-  {
-  }
+  __host__ __device__ NotEqual(uint32_t const val_to_omit) : val_to_omit(val_to_omit) {}
 
-  __host__ __device__ __forceinline__ bool operator()(uint32_t const& a) const
-  {
-    return (a != val_to_omit);
-  }
+  __host__ __device__ bool operator()(uint32_t const& a) const { return (a != val_to_omit); }
 };
 
 /**
