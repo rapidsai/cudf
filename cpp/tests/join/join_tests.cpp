@@ -44,7 +44,7 @@ enum class join_kind { INNER, LEFT, FULL };
 
 template <
   join_kind JoinKind,
-  std::enable_if_t<JoinKind == INNER, ProbeOutputSide> probe_output_side = ProbeOutputSide::LEFT>
+  std::enable_if_t<JoinKind == join_kind::INNER, ProbeOutputSide> probe_output_side = ProbeOutputSide::LEFT>
 inline auto probe(cudf::hash_join const& hash_join,
                   Table const& probe,
                   std::vector<cudf::size_type> const& probe_on,
@@ -53,7 +53,7 @@ inline auto probe(cudf::hash_join const& hash_join,
   return hash_join->inner_join(probe, probe_on, columns_in_common, probe_output_side);
 }
 
-template <join_kind JoinKind, typename = std::enable_if_t<JoinKind != INNER, void>>
+template <join_kind JoinKind, typename = std::enable_if_t<JoinKind != join_kind::INNER, void>>
 inline auto probe(cudf::hash_join const& hash_join,
                   Table const& probe,
                   std::vector<cudf::size_type> const& probe_on,
