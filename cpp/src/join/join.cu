@@ -596,7 +596,7 @@ class hash_join_impl : public cudf::hash_join {
   {
     CUDF_FUNC_RANGE();
     return compute_hash_join<join_kind::LEFT_JOIN>(
-      probe, probe_on, columns_in_common, cudf::hash_join::probe_output_side::RIGHT, mr);
+      probe, probe_on, columns_in_common, cudf::hash_join::probe_output_side::LEFT, mr);
   }
 
   std::unique_ptr<cudf::table> full_join(
