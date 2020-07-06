@@ -270,6 +270,9 @@ class DataFrame(Frame, Serializable):
         self._index = as_index(index)
         data = list(itertools.zip_longest(*data))
 
+        if columns is not None and len(data) == 0:
+            data = [[]] * len(columns)
+
         for col_name, col in enumerate(data):
             self._data[col_name] = column.as_column(col)
 
