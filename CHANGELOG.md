@@ -102,6 +102,7 @@
 - PR #5601 Instantiate Table instances in `Frame._concat` to avoid `DF.insert()` overhead
 - PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
 - PR #5603 Refactor JIT `parser.cpp`
+- PR #5643 Update `isort` to 5.0.4
 
 ## Bug Fixes
 

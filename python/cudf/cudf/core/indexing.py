@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import cupy
 import numpy as np
 import pandas as pd
@@ -270,11 +269,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     @annotate("LOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
-        from cudf.core.dataframe import DataFrame
-        from cudf.core.column import column
-        from cudf.core.index import as_index
-        from cudf import MultiIndex
         from uuid import uuid4
+
+        from cudf import MultiIndex
+        from cudf.core.column import column
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.index import as_index
 
         # Step 1: Gather columns
         if isinstance(arg, tuple):

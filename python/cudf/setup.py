@@ -6,10 +6,11 @@ from distutils.sysconfig import get_python_lib
 
 import numpy as np
 import pyarrow as pa
-import versioneer
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
+
+import versioneer
 
 install_requires = ["numba", "cython"]
 

@@ -1,6 +1,5 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
-
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf.utils import ioutils
 
 
