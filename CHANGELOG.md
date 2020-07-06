@@ -36,7 +36,7 @@
 
 ## Improvements
 
-- PR #5632 Switch JNI code to use `pool_memory_resource` from CNMeM
+- PR #5632 Switch JNI code to use `pool_memory_resource` instead of CNMeM
 - PR #5486 Link Boost libraries statically in the Java build
 - PR #5479 Link Arrow libraries statically
 - PR #5414 Use new release of Thrust/CUB in the JNI build
