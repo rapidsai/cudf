@@ -300,6 +300,19 @@ def min_signed_type(x, min_size=8):
     return np.int64(x).dtype
 
 
+def min_unsigned_type(x, min_size=8):
+    """
+    Return the smallest *unsigned* integer dtype
+    that can represent the integer ``x``
+    """
+    for int_dtype in np.sctypes["uint"]:
+        if (np.dtype(int_dtype).itemsize * 8) >= min_size:
+            if 0 <= x <= np.iinfo(int_dtype).max:
+                return int_dtype
+    # resort to using `uint64` and let numpy raise appropriate exception:
+    return np.uint64(x).dtype
+
+
 def min_column_type(x, expected_type):
     """
     Return the smallest dtype which can represent all
