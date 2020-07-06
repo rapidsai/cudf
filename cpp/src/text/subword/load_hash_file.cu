@@ -19,6 +19,7 @@
 #include <nvtext/detail/load_hash_file.hpp>
 
 #include <stdint.h>
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -85,10 +86,11 @@ hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabu
   uint64_t hash_table_length = std::stoull(line);
   std::vector<uint64_t> table(hash_table_length);
 
-  for (uint32_t i = 0; i < hash_table_length; ++i) {
+  std::generate(table.begin(), table.end(), [&hash_file]() {
+    std::string line;
     std::getline(hash_file, line);
-    table[i] = std::stoull(line);
-  }
+    return std::stoull(line);
+  });
 
   std::getline(hash_file, line);
   result.unknown_token_id = std::stoi(line);
