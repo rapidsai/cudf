@@ -29,22 +29,17 @@ namespace strings {
  * @brief Returns a new duration column converting a strings column into
  * durations using the provided format pattern.
  *
- * The format pattern can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z"
+ * The format pattern can include the following specifiers: "%d,%+,%H,%M,%S,%u,%f"
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
- * | %%d | Day of the month: 01-31 |
- * | %%m | Month of the year: 01-12 |
- * | %%y | Year without century: 00-99 |
- * | %%Y | Year with century: 0001-9999 |
+ * | %%d | Days: -2,147,483,648-2,147,483,647 |
+ * | %%+ | Optional '+' sign for hours in case of negative days: + |
  * | %%H | 24-hour of the day: 00-23 |
- * | %%I | 12-hour of the day: 01-12 |
  * | %%M | Minute of the hour: 00-59|
  * | %%S | Second of the minute: 00-59 |
- * | %%f | 6-digit microsecond: 000000-999999 |
- * | %%z | UTC offset with format ±HHMM Example +0500 |
- * | %%j | Day of the year: 001-366 |
- * | %%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
+ * | %%u | 6-digit microsecond: 000000-999999 |
+ * | %%f | 9-digit nanosecond: 000000000-999999999 |
  *
  * Other specifiers are not currently supported.
  *
@@ -81,19 +76,13 @@ std::unique_ptr<column> to_durations(
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
- * | %%d | Day of the month: 01-31 |
- * | %%m | Month of the year: 01-12 |
- * | %%y | Year without century: 00-99 |
- * | %%Y | Year with century: 0001-9999 |
+ * | %%d | Days: -2,147,483,648-2,147,483,647 |
+ * | %%+ | Optional '+' sign for hours in case of negative days: + |
  * | %%H | 24-hour of the day: 00-23 |
- * | %%I | 12-hour of the day: 01-12 |
  * | %%M | Minute of the hour: 00-59|
  * | %%S | Second of the minute: 00-59 |
- * | %%f | 6-digit microsecond: 000000-999999 |
- * | %%z | Always outputs "+0000" |
- * | %%Z | Always outputs "UTC" |
- * | %%j | Day of the year: 001-366 |
- * | %%p | Only 'AM' or 'PM' |
+ * | %%u | 6-digit microsecond: 000000-999999 |
+ * | %%f | 9-digit nanosecond: 000000000-999999999 |
  *
  * No checking is done for invalid formats or invalid timestamp values.
  * All timestamps values are formatted to UTC.
@@ -113,13 +102,13 @@ std::unique_ptr<column> to_durations(
  *
  * @param timestamps Timestamp values to convert.
  * @param format The string specifying output format.
- *        Default format is "%Y-%m-%dT%H:%M:%SZ".
+ *        Default format is ""%d days %+%H:%M:%S".
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with formatted timestamps.
  */
 std::unique_ptr<column> from_durations(
   column_view const& durations,
-  std::string const& format           = "%d days %+%2H:%2M:%2S",
+  std::string const& format           = "%d days %+%H:%M:%S",
   //"P%YY%MM%DDT%HH%MM%SS" is_iso_format() for skipping leading zeros.
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
