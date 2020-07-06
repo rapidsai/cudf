@@ -80,12 +80,12 @@ struct format_compiler {
   rmm::device_vector<format_item> d_items;
 
   std::map<char, int8_t> specifier_lengths = {{'d', -1},
-                                              {'+', -1},
-                                              {'H', -1},
-                                              {'M', -1},
-                                              {'S', -1},
-                                              {'u', -1},
-                                              {'f', 6}};  // TODO: -1 or 9?
+                                              {'+', -1}, //only for negative days
+                                              {'H', 2},
+                                              {'M', 2},
+                                              {'S', 2},
+                                              {'u', -1}, //0 or 6.
+                                              {'f', -1}};  //0 or <=9 without trialing zeros
 
   format_compiler(const char* format, type_id units) : format(format), units(units) {}
 
@@ -94,6 +94,12 @@ struct format_compiler {
     std::vector<format_item> items;
     const char* str = format.c_str();
     auto length     = format.length();
+    const bool is_isoformat = str[0]=='P';
+    if(is_isoformat) {
+      specifier_lengths['H']=-1;
+      specifier_lengths['M']=-1;
+      specifier_lengths['S']=-1;
+    }
     while (length > 0) {
       char ch = *str++;
       length--;
@@ -111,8 +117,7 @@ struct format_compiler {
         continue;
       }
       if (ch >= '0' && ch <= '9') {
-        CUDF_EXPECTS(*str == 'H' || *str == 'M' || *str == 'S' || *str == 'f',
-                     "precision not supported for specifier: " + std::string(1, *str));
+        CUDF_EXPECTS(*str == 'f', "precision not supported for specifier: " + std::string(1, *str));
         specifier_lengths[*str] = static_cast<int8_t>(ch - '0');
         ch                      = *str++;
         length--;
@@ -189,7 +194,26 @@ struct duration_to_string_size_fn {
   type_id type;
   // TODO: add boolean for isoformat
 
-  __device__ int8_t format_length(char format_char, int32_t* timeparts)
+  __device__ int8_t countTrailingZeros(int n) const
+  {
+    int8_t zeros = 0;
+    if ((n % 100000000) == 0) {
+      zeros += 8;
+      n /= 100000000;
+    }
+    if ((n % 10000) == 0) {
+      zeros += 4;
+      n /= 10000;
+    }
+    if ((n % 100) == 0) {
+      zeros += 2;
+      n /= 100;
+    }
+    if ((n % 10) == 0) { zeros++; }
+    return zeros;
+  }
+
+  __device__ int8_t format_length(char format_char, int32_t const * const timeparts) const
   {
     switch (format_char) {
       case 'd': return count_digits(timeparts[DU_DAY]); break;
@@ -197,11 +221,20 @@ struct duration_to_string_size_fn {
       case 'H': return count_digits(timeparts[DU_HOUR]); break;
       case 'M': return count_digits(timeparts[DU_MINUTE]); break;
       case 'S': return count_digits(timeparts[DU_SECOND]); break;
-      // TODO:  multiples of 3. (  + 2) / 3 * 3 (pandas needs this<6, isoformat doesn't)
       // TODO: include dot only if non-zero.
-      // us specifier for pandas
-      case 'u': return count_digits(timeparts[DU_SUBSECOND])>0 ? 6 : 0; break;
-      case 'f': return count_digits(timeparts[DU_SUBSECOND]); break;
+      //0 or 6 digits for pandas.
+      case 'u': return (timeparts[DU_SUBSECOND]==0) ? 0 : 6; break;
+      //0 or ns without trailing zeros
+       //TODO count digits without trailing zeros!
+      case 'f':
+        return (timeparts[DU_SUBSECOND] == 0) ? 0 :
+        [units = type] {
+          if (units == type_id::DURATION_MILLISECONDS) return 3;
+          if (units == type_id::DURATION_MICROSECONDS) return 6;
+          if (units == type_id::DURATION_NANOSECONDS) return 9;
+          return 0;
+        }() - countTrailingZeros(timeparts[DU_SUBSECOND]);//3/6/9-trailing_zeros.
+        break;
       default: return 2;
     }
   }
@@ -275,7 +308,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
       *str++ = '-';
       min_digits--;
     }
-    digits_idx = std::max(digits_idx, min_digits);
+    digits_idx = std::max(digits_idx, min_digits); //TODO FIXME fixed_digits size, not min_digits
     // digits are backwards, reverse the string into the output
     while (digits_idx-- > 0) *str++ = digits[digits_idx];
     return str;
@@ -306,6 +339,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
         case 'S':  // second
           ptr = int2str(ptr, item.length, timeparts[DU_SECOND]);
           break;
+        case 'u':
         case 'f':  // sub-second
         {
           char subsecond_digits[] = "000000000";  // 9 max digits
@@ -316,7 +350,10 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
             return 0;
           }();
           int2str(subsecond_digits, digits, timeparts[DU_SUBSECOND]);
-          ptr = copy_and_increment(ptr, subsecond_digits, item.length);
+          ptr = copy_and_increment(
+            ptr,
+            subsecond_digits,
+            item.length > 0 ? item.length : duration_to_string_size_fn<T>::format_length(item.value, timeparts));
           break;
         }
         default:  // ignore everything else
