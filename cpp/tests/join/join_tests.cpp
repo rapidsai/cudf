@@ -128,8 +128,15 @@ TEST_F(JoinTest, InvalidCommonColumnIndices)
 
   EXPECT_THROW(cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}), cudf::logic_error);
 
-  EXPECT_THROW(build_once_probe_parallel<join_kind::INNER, false>(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}, t0), cudf::logic_error);
-  EXPECT_THROW(build_once_probe_parallel<join_kind::INNER, false, ProbeOutputSide::RIGHT>(t1, t0, {0, 1}, {0, 1}, {{1, 0}, {0, 1}}, t1), cudf::logic_error);
+  auto build_probe_inner_1 = [&] {
+    build_once_probe_parallel<join_kind::INNER, false>(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}, {});
+  };
+auto build_probe_inner_2 = [&] {
+  build_once_probe_parallel<join_kind::INNER, false, ProbeOutputSide::RIGHT>(t1, t0, {0, 1}, {0, 1}, {{1, 0}, {0, 1}}, {});
+};
+
+  EXPECT_THROW(build_probe_inner_1, cudf::logic_error);
+  EXPECT_THROW(build_probe_inner_2, cudf::logic_error);
 }
 
 TEST_F(JoinTest, FullJoinNoCommon)
