@@ -245,7 +245,7 @@ std::string ptx_parser::parse_param_list(const std::string& src)
   auto l = src.begin();
 
   auto item_count = 0;
-  std::string output{};
+  std::string output;
 
   while (l < src.end()) {
     l = std::find(l, src.end(), ',');
