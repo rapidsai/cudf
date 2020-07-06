@@ -126,7 +126,7 @@ cdef read_orc_args make_read_orc_args(filepath_or_buffer,
                                       bool decimals_as_float,
                                       size_type force_decimal_scale) except*:
     cdef read_orc_args args = read_orc_args(
-        make_source_info(filepath_or_buffer)
+        make_source_info([filepath_or_buffer])
     )
     args.stripe = stripe
     args.stripe_count = stripe_count

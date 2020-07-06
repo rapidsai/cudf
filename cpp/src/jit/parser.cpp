@@ -18,7 +18,6 @@
 #include <cctype>
 #include <cudf/utilities/error.hpp>
 #include <map>
-#include <numeric>
 #include <string>
 #include <vector>
 
@@ -242,38 +241,37 @@ std::string ptx_parser::parse_param(const std::string& src)
 
 std::string ptx_parser::parse_param_list(const std::string& src)
 {
-  const size_t length = src.size();
-  size_t start        = 0;
-  size_t stop         = 0;
+  auto f = src.begin();
+  auto l = src.begin();
 
-  std::string output;
+  auto item_count = 0;
+  std::string output{};
 
-  int item_count = 0;
-  std::string first_name;
-  std::string arg_type;
-  while (stop < length) {
-    while (stop < length && src[stop] != ',') { stop++; }
-    std::string name = parse_param(std::string(src, start, stop - start));
-    if (pointer_arg_list.find(item_count) != pointer_arg_list.end()) {
-      if (item_count == 0) {
-        output += output_arg_type + "* " + name;
+  while (l < src.end()) {
+    l = std::find(l, src.end(), ',');
+
+    output += [&, name = parse_param(std::string(f, l))] {
+      if (pointer_arg_list.find(item_count) != pointer_arg_list.end()) {
+        if (item_count == 0) {
+          return output_arg_type + "* " + name;
+        } else {
+          // On a 64-bit machine inside the PTX function body a pointer is
+          // literally just a uint_64 so here is doesn't make sense to
+          // have the type of the pointer. Thus we will just use void* here.
+          return ",\n  const void* " + name;
+        }
       } else {
-        // On a 64-bit machine inside the PTX function body a pointer is
-        // literally just a uint_64 so here is doesn't make sense to
-        // have the type of the pointer. Thus we will just use void* here.
-        output += ",\n  const void* " + name;
+        if (input_arg_list.count(name)) {
+          return ", \n  " + input_arg_list[name] + " " + name;
+        } else {
+          // This parameter isn't used in the function body so we just pretend
+          // it's an int. After being inlined they are gone anyway.
+          return ", \n  int " + name;
+        }
       }
-    } else {
-      if (input_arg_list.count(name)) {
-        output += ", \n  " + input_arg_list[name] + " " + name;
-      } else {
-        // This parameter isn't used in the function body so we just pretend
-        // it's an int. After being inlined they are gone anyway.
-        output += ", \n  int " + name;
-      }
-    }
-    stop++;
-    start = stop;
+    }();
+
+    f = ++l;
     item_count++;
   }
 
@@ -347,20 +345,15 @@ std::string ptx_parser::parse()
     return false;
   });
 
-  auto const fn_header        = std::string(f, l);
-  auto const fn_header_output = parse_function_header(fn_header);
-  auto const fn_body_output   = parse_function_body(std::string(f2, l2));
+  auto const fn_body_output   = parse_function_body(std::string(f2, l2));  // TODO wtf - order?
+  auto const fn_header_output = parse_function_header(std::string(f, l));
 
-  return std::accumulate(
-           fn_body_output.cbegin(),
-           fn_body_output.cend(),
-           fn_header_output + "\n asm volatile (\"{\");",
-           [](auto&& acc, auto const& line) -> std::string&& {
-             acc += line.find("ret;") != std::string::npos ? "  asm volatile (\"bra RETTGT;\");\n"
+  // Don't use std::accumulate until C++20 when rvalue references are supported
+  auto final_output = fn_header_output + "\n asm volatile (\"{\");";
+  for (auto const& line : fn_body_output)
+    final_output += line.find("ret;") != std::string::npos ? "  asm volatile (\"bra RETTGT;\");\n"
                                                            : "  " + line + "\n";
-             return std::move(acc);
-           }) +
-         " asm volatile (\"RETTGT:}\");}";
+  return final_output + " asm volatile (\"RETTGT:}\");}";
 }
 
 ptx_parser::ptx_parser(const std::string& ptx_,
