@@ -151,6 +151,7 @@
 - PR #5490 Fix python column view
 - PR #5608 Fix issue related to string types being represented as binary types
 - PR #5619 Fix issue related to typecasting when using a `CategoricalDtype`
+- PR #5644 Fix issue related to Dataframe init when passing in `columns`
 
 
 # cuDF 0.14.0 (Date TBD)
