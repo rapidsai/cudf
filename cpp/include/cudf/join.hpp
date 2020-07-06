@@ -360,21 +360,10 @@ std::unique_ptr<cudf::table> cross_join(
  * member functions.
  *
  * This class enables the hash join scheme that builds hash map once, and probes as many times as
- * needed.
+ * needed (possibly in parallel).
  */
 class hash_join {
  public:
-  /**
-   * @brief Instantiate a hash join instance and build the internal hash map used for preceding
-   * probe calls.
-   *
-   * @param build The build table, from which the hash map is built.
-   * @param build_on The column indices from `build` to join on.
-   * @return Hash join instance.
-   */
-  static std::unique_ptr<const hash_join> create(cudf::table_view const& build,
-                                                 std::vector<size_type> const& build_on);
-
   /**
    * @brief Side of the probe table in the joined table. Only applicable for inner join.
    */
@@ -470,6 +459,17 @@ class hash_join {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
+
+  /**
+   * @brief Instantiate a hash join instance and build the internal hash map used for preceding
+   * probe calls.
+   *
+   * @param build The build table, from which the hash map is built.
+   * @param build_on The column indices from `build` to join on.
+   * @return Hash join instance.
+   */
+  static std::unique_ptr<const hash_join> create(cudf::table_view const& build,
+                                                 std::vector<size_type> const& build_on);
 
   virtual ~hash_join() = default;
 };
