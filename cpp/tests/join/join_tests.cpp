@@ -104,8 +104,8 @@ TEST_F(JoinTest, InvalidCommonColumnIndices)
 
   EXPECT_THROW(cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}), cudf::logic_error);
 
-  EXPECT_THROW(build_once_probe_parallel<join_kind::INNER, false>(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}, {}, cudf::hash_join::probe_output_side::LEFT), cudf::logic_error);
-  EXPECT_THROW(build_once_probe_parallel<join_kind::INNER, false>(t1, t0, {0, 1}, {0, 1}, {{1, 0}, {0, 1}}, {}, cudf::hash_join::probe_output_side::RIGHT), cudf::logic_error);
+  EXPECT_THROW(build_once_probe_parallel<join_kind::INNER, false>(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}, Table{}, cudf::hash_join::probe_output_side::LEFT), cudf::logic_error);
+  EXPECT_THROW(build_once_probe_parallel<join_kind::INNER, false>(t1, t0, {0, 1}, {0, 1}, {{1, 0}, {0, 1}}, Table{}, cudf::hash_join::probe_output_side::RIGHT), cudf::logic_error);
 }
 
 TEST_F(JoinTest, FullJoinNoCommon)
@@ -801,9 +801,9 @@ TEST_F(JoinTest, InnerJoinCornerCase)
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 
-  build_once_probe_parallel<join_kind::INNER>(t0, t1, {0}, {0}, {{0, 0}}, sorted_gold, cudf::hash_join::probe_output_side::LEFT);
+  build_once_probe_parallel<join_kind::INNER>(t0, t1, {0}, {0}, {{0, 0}}, *sorted_gold, cudf::hash_join::probe_output_side::LEFT);
   build_once_probe_parallel<join_kind::INNER>(
-    t1, t0, {0}, {0}, {{0, 0}}, sorted_gold, cudf::hash_join::probe_output_side::RIGHT);
+    t1, t0, {0}, {0}, {{0, 0}}, *sorted_gold, cudf::hash_join::probe_output_side::RIGHT);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
