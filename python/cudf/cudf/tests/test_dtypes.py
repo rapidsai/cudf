@@ -1,8 +1,10 @@
+import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import CategoricalDtype, ListDtype
 from cudf.tests.utils import assert_eq
 
 
@@ -78,3 +80,37 @@ def test_sr_list_dtypes(data):
     if isinstance(data, pd.Series):
         with expectation:
             cudf.Series.from_pandas(data)
+
+
+@pytest.mark.parametrize(
+    "value_type",
+    [
+        int,
+        "int32",
+        np.int32,
+        "datetime64[ms]",
+        "datetime64[ns]",
+        "str",
+        "object",
+    ],
+)
+def test_list_dtype_pyarrow_round_trip(value_type):
+    pa_type = pa.list_(cudf.utils.dtypes.np_to_pa_dtype(np.dtype(value_type)))
+    expect = pa_type
+    got = ListDtype.from_arrow(expect).to_arrow()
+    assert expect.equals(got)
+
+
+def test_dtype_eq():
+    lhs = ListDtype("int32")
+    rhs = ListDtype("int32")
+    assert lhs == rhs
+    rhs = ListDtype("int64")
+    assert lhs != rhs
+
+
+def test_nested_dtype():
+    dt = ListDtype(ListDtype("int32"))
+    expect = ListDtype("int32")
+    got = dt.value_type
+    assert expect == got
