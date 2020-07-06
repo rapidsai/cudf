@@ -41,7 +41,29 @@ class Frame(libcudf.table.Table):
 
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
-        objs = [f.copy(deep=False) for f in objs]
+        empty_counter = 0
+
+        all_empty = False
+        some_empty = False
+        result_index_length = 0
+
+        for i, obj in enumerate(objs):
+            objs[i] = obj.copy(deep=False)
+            if ignore_index:
+                # If ignore_index is true and all the dataframes are
+                # empty but have index set, we'd actually want to
+                # let the concat happen with index present but
+                # later remove the index, which means setting a RangeIndex.
+                if obj.shape[1] == 0:
+                    empty_counter += 1
+                    if len(obj) > 0:
+                        some_empty = True
+                        result_index_length += len(obj)
+
+        if empty_counter == len(objs) and some_empty:
+            all_empty = True
+        else:
+            all_empty = False
 
         from cudf.core.column.column import (
             build_categorical_column,
@@ -117,7 +139,8 @@ class Frame(libcudf.table.Table):
                 for cols in list_of_columns:
                     # If column not in this df, fill with an all-null column
                     if idx >= len(cols) or cols[idx] is None:
-                        n = len(next(filter(lambda x: x is not None, cols)))
+                        filtered_cols = [x for x in cols if x is not None]
+                        n = len(filtered_cols[0])
                         cols[idx] = column_empty(n, dtype, masked=True)
                     else:
                         # If column is categorical, rebase the codes with the
@@ -156,9 +179,21 @@ class Frame(libcudf.table.Table):
         # Combine the index and table columns for each Frame into a
         # list of [...index_cols, ...table_cols]. If a table is
         # missing a column, that list will have None in the slot instead
+
         columns = [
-            ([] if ignore_index else list(f._index._data.columns))
-            + [f._data[name] if name in f._data else None for name in names]
+            (
+                []
+                if (ignore_index and not some_empty)
+                else list(f._index._data.columns)
+            )
+            + [
+                f._data[name]
+                if name in f._data
+                else column_empty(len(f), masked=True)
+                if (ignore_index and not some_empty)
+                else None
+                for name in names
+            ]
             for i, f in enumerate(objs)
         ]
 
@@ -212,6 +247,9 @@ class Frame(libcudf.table.Table):
         out = cls._from_table(
             libcudf.concat.concat_tables(tables, ignore_index=ignore_index)
         )
+
+        if all_empty:
+            out._index = cudf.RangeIndex(result_index_length)
 
         # Reassign the categories for any categorical table cols
         reassign_categories(
