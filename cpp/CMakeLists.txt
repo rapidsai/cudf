@@ -127,7 +127,6 @@ endif(CMAKE_CUDA_LINEINFO)
 # Debug options
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     message(STATUS "Building with debugging flags")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -Xcompiler -rdynamic")
 endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 # To apply RUNPATH to transitive dependencies (this is a temporary solution)
@@ -401,6 +400,7 @@ add_library(cudf
             src/merge/merge.cu
             src/partitioning/round_robin.cu
             src/join/join.cu
+            src/join/hash_join.cu
             src/join/cross_join.cu
             src/join/semi_join.cu
             src/sort/is_sorted.cu

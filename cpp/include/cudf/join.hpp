@@ -383,8 +383,16 @@ class hash_join {
   /**
    * @brief Perform an inner join by probing in the internal hash map.
    *
-   * It is able to specify which side in the joined table the `probe` portion is on.
-   * More specification @see inner_join() for details.
+   * Given that it is sometimes desired to choose the small table to be the build side for an inner
+   * join (which is automatically done in cudf::innner_join()), it is handy to be able to specify
+   * which side in the joined table the `probe` portion is on. That is, one can check whether to use
+   * `left` or `right` table to be the build side by comparing their row counts ahead of `hash_join`
+   * object, but still preserve the logical order of the `left`/`right` in the joined table. For
+   * instance, if the `left` table is the small one (and thus the build side), specifying the
+   * probe_output_side to RIGHT will output the `right` table (probe side) on the right side in the
+   * joined table.
+   *
+   * More details please @see cudf::inner_join().
    *
    * @param probe The probe table, from which the tuples are probed.
    * @param probe_on The column indices from `probe` to join on.
@@ -414,7 +422,7 @@ class hash_join {
   /**
    * @brief Perform a left join by probing in the internal hash map.
    *
-   * More specification @see left_join() for details.
+   * More details please @see cudf::left_join().
    *
    * @param probe The probe table, from which the tuples are probed.
    * @param probe_on The column indices from `probe` to join on.
@@ -440,7 +448,7 @@ class hash_join {
   /**
    * @brief Perform a full join by probing in the internal hash map.
    *
-   * More specification @see full_join() for details.
+   * More details please @see cudf::full_join().
    *
    * @param probe The probe table, from which the tuples are probed.
    * @param probe_on The column indices from `probe` to join on.
