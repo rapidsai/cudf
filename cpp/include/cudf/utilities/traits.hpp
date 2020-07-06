@@ -25,6 +25,8 @@
 
 #include <type_traits>
 
+#include <cuda_runtime_api.h>
+
 namespace cudf {
 
 /**
@@ -540,6 +542,7 @@ struct is_convertible<cudf::detail::timestamp<Duration1>, cudf::detail::timestam
 
 }  // namespace cudf
 
+#if (CUDART_VERSION == 10000)
 namespace std {
 // This specialization is required due to an nvcc bug. This works in 10.1.
 // We can remove this once the build pipeline removes 10.0.
@@ -548,3 +551,4 @@ struct is_trivially_copyable<cudf::detail::timestamp<Duration>>
   : std::is_trivially_copyable<cudf::detail::time_point<Duration>> {
 };
 }  // namespace std
+#endif
