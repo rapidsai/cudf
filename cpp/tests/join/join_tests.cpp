@@ -27,6 +27,7 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
+#include "cudf/types.hpp"
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
@@ -278,7 +279,7 @@ TEST_F(JoinTest, FullJoinOnNulls)
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
 
-  result            = cudf::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, false);
+  result            = cudf::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
   result_sort_order = cudf::sorted_order(result->view());
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -452,7 +453,7 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
 
-  result            = cudf::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, false);
+  result            = cudf::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
   result_sort_order = cudf::sorted_order(result->view());
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -607,7 +608,7 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
 
-  result            = cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, false);
+  result            = cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
   result_sort_order = cudf::sorted_order(result->view());
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
