@@ -346,16 +346,14 @@ std::string ptx_parser::parse()
     return false;
   });
 
-  auto const fn_header        = std::string(f, l);
   auto const fn_body_output   = parse_function_body(std::string(f2, l2));  // TODO wtf - order?
-  auto const fn_header_output = parse_function_header(fn_header);
-  std::string final_output    = fn_header_output + "\n asm volatile (\"{\");";
+  auto const fn_header_output = parse_function_header(std::string(f, l));
 
-  // TODO add comment about not using std::accumulate
+  // Don't use std::accumulate until C++20 when rvalue references are supported
+  auto final_output = fn_header_output + "\n asm volatile (\"{\");";
   for (auto const& line : fn_body_output)
     final_output += line.find("ret;") != std::string::npos ? "  asm volatile (\"bra RETTGT;\");\n"
                                                            : "  " + line + "\n";
-
   return final_output + " asm volatile (\"RETTGT:}\");}";
 }
 
