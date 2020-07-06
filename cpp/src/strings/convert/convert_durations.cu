@@ -80,25 +80,25 @@ struct format_compiler {
   rmm::device_vector<format_item> d_items;
 
   std::map<char, int8_t> specifier_lengths = {{'d', -1},
-                                              {'+', -1}, //only for negative days
+                                              {'+', -1},  // only for negative days
                                               {'H', 2},
                                               {'M', 2},
                                               {'S', 2},
-                                              {'u', -1}, //0 or 6.
-                                              {'f', -1}};  //0 or <=9 without trialing zeros
+                                              {'u', -1},   // 0 or 6.
+                                              {'f', -1}};  // 0 or <=9 without trialing zeros
 
   format_compiler(const char* format, type_id units) : format(format), units(units) {}
 
   format_item const* compile_to_device()
   {
     std::vector<format_item> items;
-    const char* str = format.c_str();
-    auto length     = format.length();
-    const bool is_isoformat = str[0]=='P';
-    if(is_isoformat) {
-      specifier_lengths['H']=-1;
-      specifier_lengths['M']=-1;
-      specifier_lengths['S']=-1;
+    const char* str         = format.c_str();
+    auto length             = format.length();
+    const bool is_isoformat = str[0] == 'P';
+    if (is_isoformat) {
+      specifier_lengths['H'] = -1;
+      specifier_lengths['M'] = -1;
+      specifier_lengths['S'] = -1;
     }
     while (length > 0) {
       char ch = *str++;
@@ -137,7 +137,6 @@ struct format_compiler {
 
   // these calls are only valid after compile_to_device is called
   size_type items_count() const { return static_cast<size_type>(d_items.size()); }
-  //int8_t subsecond_precision() const { return specifier_lengths.at('f'); }
 };
 
 __device__ void dissect_duration(int64_t duration, int32_t* timeparts, type_id units)
@@ -172,13 +171,13 @@ __device__ void dissect_duration(int64_t duration, int32_t* timeparts, type_id u
     seconds = duration;
   } else if (units == type_id::DURATION_MILLISECONDS) {
     seconds = simt::std::chrono::floor<cudf::duration_s>(cudf::duration_ms(duration)).count();
-    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000);  // * 1000 * 1000;
+    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000L);
   } else if (units == type_id::DURATION_MICROSECONDS) {
     seconds = simt::std::chrono::floor<cudf::duration_s>(cudf::duration_us(duration)).count();
-    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000 * 1000);  // * 1000;
+    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000L * 1000);
   } else if (units == type_id::DURATION_NANOSECONDS) {
     seconds = simt::std::chrono::floor<cudf::duration_s>(cudf::duration_ns(duration)).count();
-    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000 * 1000 * 1000);
+    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000L * 1000 * 1000);
   }
   timeparts[DU_DAY]    = scale_time(seconds, 24 * 60 * 60);
   timeparts[DU_HOUR]   = modulo_time(scale_time(seconds, 60 * 60), 24);
@@ -192,9 +191,8 @@ struct duration_to_string_size_fn {
   const format_item* d_format_items;
   size_type items_count;
   type_id type;
-  // TODO: add boolean for isoformat
 
-  __device__ int8_t countTrailingZeros(int n) const
+  __device__ int8_t count_trailing_zeros(int n) const
   {
     int8_t zeros = 0;
     if ((n % 100000000) == 0) {
@@ -213,7 +211,7 @@ struct duration_to_string_size_fn {
     return zeros;
   }
 
-  __device__ int8_t format_length(char format_char, int32_t const * const timeparts) const
+  __device__ int8_t format_length(char format_char, int32_t const* const timeparts) const
   {
     switch (format_char) {
       case 'd': return count_digits(timeparts[DU_DAY]); break;
@@ -222,18 +220,16 @@ struct duration_to_string_size_fn {
       case 'M': return count_digits(timeparts[DU_MINUTE]); break;
       case 'S': return count_digits(timeparts[DU_SECOND]); break;
       // TODO: include dot only if non-zero.
-      //0 or 6 digits for pandas.
-      case 'u': return (timeparts[DU_SUBSECOND]==0) ? 0 : 6; break;
-      //0 or ns without trailing zeros
-       //TODO count digits without trailing zeros!
+      // 0 or 6 digits for pandas.
+      case 'u': return (timeparts[DU_SUBSECOND] == 0) ? 0 : 6; break;
+      // 0 or ns without trailing zeros
       case 'f':
-        return (timeparts[DU_SUBSECOND] == 0) ? 0 :
-        [units = type] {
+        return (timeparts[DU_SUBSECOND] == 0) ? 0 : [units = type] {
           if (units == type_id::DURATION_MILLISECONDS) return 3;
           if (units == type_id::DURATION_MICROSECONDS) return 6;
           if (units == type_id::DURATION_NANOSECONDS) return 9;
           return 0;
-        }() - countTrailingZeros(timeparts[DU_SUBSECOND]);//3/6/9-trailing_zeros.
+        }() - count_trailing_zeros(timeparts[DU_SUBSECOND]);  // 3/6/9-trailing_zeros.
         break;
       default: return 2;
     }
@@ -296,8 +292,8 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     }
     bool is_negative = (value < 0);
 
-    char digits[MAX_DIGITS]  = {'0', '0', '0', '0', '0', '0', '0', '0', '0', '0'};
-    int digits_idx           = 0;
+    char digits[MAX_DIGITS] = {'0', '0', '0', '0', '0', '0', '0', '0', '0', '0'};
+    int digits_idx          = 0;
     while (value != 0) {
       assert(digits_idx < MAX_DIGITS);
       digits[digits_idx++] = '0' + std::abs(value % 10);
@@ -308,7 +304,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
       *str++ = '-';
       min_digits--;
     }
-    digits_idx = std::max(digits_idx, min_digits); //TODO FIXME fixed_digits size, not min_digits
+    digits_idx = std::max(digits_idx, min_digits);  // TODO FIXME fixed_digits size, not min_digits
     // digits are backwards, reverse the string into the output
     while (digits_idx-- > 0) *str++ = digits[digits_idx];
     return str;
@@ -328,7 +324,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
           ptr = int2str(ptr, item.length, timeparts[DU_DAY]);
           break;
         case '+':  // + if day is negative
-          if(timeparts[DU_DAY]<0) *ptr++='+';
+          if (timeparts[DU_DAY] < 0) *ptr++ = '+';
           break;
         case 'H':  // 24-hour
           ptr = int2str(ptr, item.length, timeparts[DU_HOUR]);
@@ -353,7 +349,8 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
           ptr = copy_and_increment(
             ptr,
             subsecond_digits,
-            item.length > 0 ? item.length : duration_to_string_size_fn<T>::format_length(item.value, timeparts));
+            item.length > 0 ? item.length
+                            : duration_to_string_size_fn<T>::format_length(item.value, timeparts));
           break;
         }
         default:  // ignore everything else
@@ -391,8 +388,8 @@ struct dispatch_from_durations_fn {
     auto d_format_items = compiler.compile_to_device();
 
     size_type strings_count = durations.size();
-    auto column   = column_device_view::create(durations, stream);
-    auto d_column = *column;
+    auto column             = column_device_view::create(durations, stream);
+    auto d_column           = *column;
 
     // copy null mask
     rmm::device_buffer null_mask = copy_bitmask(durations, stream, mr);
@@ -447,22 +444,17 @@ struct dispatch_from_durations_fn {
 
 }  // namespace
 
-std::unique_ptr<column> from_durations(
-  column_view const& durations,
-  std::string const& format,
-  // "%d days %H:%M:%S.%6f",
-  //"P%YY%MM%DDT%HH%MM%SS" is_iso_format() for no padding zeros for HMS and no trailing zeros for subseconds.
-  // TODO
-  // common for all: check if non-zero days,
-  // per item: non-zero subseconds present. 1(.)+(width 3/6/9 based on non-zero ms/us/ns)
-  // P%YY%MM%DDT%HH%MM%S%fS
-  cudaStream_t stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> from_durations(column_view const& durations,
+                                       std::string const& format,
+                                       // TODO // common for all: check if non-zero days
+                                       cudaStream_t stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = durations.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
-  return type_dispatcher(durations.type(), dispatch_from_durations_fn{}, durations, format, mr, stream);
+  return type_dispatcher(
+    durations.type(), dispatch_from_durations_fn{}, durations, format, mr, stream);
 }
 
 }  // namespace detail
