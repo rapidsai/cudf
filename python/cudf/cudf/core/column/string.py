@@ -3973,19 +3973,21 @@ class StringMethods(object):
         >>> tokens, masks, metadata =
                ser.str.subword_tokenize("bert_hash_table.txt")
         """
-        return self._return_or_inplace(
-            cpp_subword_tokenize(
-                self._column,
-                hash_file,
-                max_length,
-                stride,
-                do_lower,
-                do_truncate,
-                max_num_strings,
-                max_num_chars,
-                max_rows_tensor,
-            ),
-            **kwargs,
+        tokens, masks, metadata = cpp_subword_tokenize(
+            self._column,
+            hash_file,
+            max_length,
+            stride,
+            do_lower,
+            do_truncate,
+            max_num_strings,
+            max_num_chars,
+            max_rows_tensor,
+        )
+        return (
+            cudf.Series(tokens),
+            cudf.Series(masks),
+            cudf.Series(metadata),
         )
 
 

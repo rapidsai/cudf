@@ -19,7 +19,7 @@ from cudf._lib.column cimport Column
 
 def subword_tokenize(
     Column strings,
-    string hash_file,
+    object   hash_file,
     uint32_t max_sequence_length=64,
     uint32_t stride=48,
     bool do_lower=True,
@@ -29,7 +29,7 @@ def subword_tokenize(
     uint32_t max_rows_tensor=500
 ):
     cdef column_view c_strings = strings.view()
-    cdef string c_hash_file = hash_file.encode()
+    cdef string c_hash_file = <string>str(hash_file).encode()
     cdef cpp_tokenizer_result c_result
 
     with nogil:
