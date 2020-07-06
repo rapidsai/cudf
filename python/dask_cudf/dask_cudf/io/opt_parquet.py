@@ -124,18 +124,12 @@ def _read_partition(part, index, columns, strings_to_cats):
     if isinstance(index, list):
         columns += index
 
-    if row_groups:
-        df = cudf.io.read_parquet(
-            path,
-            row_group=row_groups[0],
-            row_group_count=len(row_groups),
-            columns=columns,
-            strings_to_cats=strings_to_cats,
-        )
-    else:
-        df = cudf.io.read_parquet(
-            path, columns=columns, strings_to_cats=strings_to_cats
-        )
+    df = cudf.io.read_parquet(
+        path,
+        row_groups=row_groups,
+        columns=columns,
+        strings_to_cats=strings_to_cats,
+    )
 
     if index and (index[0] in df.columns):
         df = df.set_index(index[0])
