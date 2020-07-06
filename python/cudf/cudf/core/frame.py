@@ -50,10 +50,10 @@ class Frame(libcudf.table.Table):
         for i, obj in enumerate(objs):
             objs[i] = obj.copy(deep=False)
             if ignore_index:
-                # If ignore_index is true and all the dataframes are
-                # empty but have index set, we'd actually want to
-                # let the concat happen with index present but
-                # later remove the index, which means setting a RangeIndex.
+                # If ignore_index is true and determining if
+                # all/some objs are empty(and have index).
+                # If all objects are empty(and have index), we
+                # should set the index separately using RangeIndex.
                 if obj.shape[1] == 0:
                     empty_counter += 1
                     if len(obj) > 0:
