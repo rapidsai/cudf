@@ -126,6 +126,10 @@ class ListDtype:
     def name(self):
         return "list"
 
+    @property
+    def type(self):
+        return list
+
     @classmethod
     def from_arrow(cls, typ):
         obj = object.__new__(cls)
