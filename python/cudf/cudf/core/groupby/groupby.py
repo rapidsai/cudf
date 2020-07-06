@@ -64,9 +64,19 @@ class GroupBy(Serializable):
             raise
 
     def __iter__(self):
-        group_names, offsets, grouped_values = self._grouped()
+        group_names, offsets, grouped_keys, grouped_values = self._grouped()
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
+
+    @cached_property
+    def groups(self):
+        """
+        Returns a dictionary mapping group keys to row labels.
+        """
+        group_names, offsets, _, _ = self._grouped()
+        return dict(
+            zip(group_names.to_pandas(), self.obj.index._split(offsets[1:-1]))
+        )
 
     def size(self):
         """
@@ -245,7 +255,7 @@ class GroupBy(Serializable):
         grouped_values = self.obj.__class__._from_table(grouped_values)
         grouped_values._copy_categories(self.obj)
         group_names = grouped_keys.unique()
-        return (group_names, offsets, grouped_values)
+        return (group_names, offsets, grouped_keys, grouped_values)
 
     def _agg_func_name_with_args(self, func_name, *args, **kwargs):
         """
@@ -334,7 +344,7 @@ class GroupBy(Serializable):
         """
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
-        _, offsets, grouped_values = self._grouped()
+        _, offsets, _, grouped_values = self._grouped()
         chunks = [
             grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
         ]
@@ -477,7 +487,7 @@ class GroupBy(Serializable):
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
 
-        _, offsets, grouped_values = self._grouped()
+        _, offsets, _, grouped_values = self._grouped()
         kwargs.update({"chunks": offsets})
         return grouped_values.apply_chunks(function, **kwargs)
 

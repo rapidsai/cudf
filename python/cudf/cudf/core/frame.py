@@ -815,6 +815,14 @@ class Frame(libcudf.table.Table):
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 
+    def _split(self, splits, keep_index=True):
+        result = libcudf.copying.table_split(
+            self, splits, keep_index=keep_index
+        )
+
+        result = [self.__class__._from_table(tbl) for tbl in result]
+        return result
+
     def _partition(self, scatter_map, npartitions, keep_index=True):
 
         output_table, output_offsets = libcudf.partitioning.partition(
@@ -827,11 +835,7 @@ class Frame(libcudf.table.Table):
         # TODO: Remove this after the above issue is fixed.
         output_offsets = output_offsets[1:-1]
 
-        result = libcudf.copying.table_split(
-            output_table, output_offsets, keep_index=keep_index
-        )
-
-        result = [self.__class__._from_table(tbl) for tbl in result]
+        result = output_table._split(output_offsets, keep_index=keep_index)
 
         for frame in result:
             frame._copy_categories(self, include_index=keep_index)
