@@ -76,7 +76,7 @@ void build_once_probe_parallel(
 
   for (const auto& result : results) {
     if (sort_result) {
-      auto result_sorted_order = cudf::sorted_order(result->view()) : result;
+      auto result_sorted_order = cudf::sorted_order(result->view());
       auto sorted_result     = cudf::gather(result->view(), *result_sorted_order);
       cudf::test::expect_tables_equal(gold, *sorted_result);
     } else {
@@ -104,8 +104,8 @@ TEST_F(JoinTest, InvalidCommonColumnIndices)
 
   EXPECT_THROW(cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}), cudf::logic_error);
 
-  EXPECT_THROW(build_once_probe_parallel<join_kind::INNER>(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}, {});
-  EXPECT_THROW(build_once_probe_parallel<join_kind::INNER, cudf::hash_join::probe_output_side::RIGHT>(t1, t0, {0, 1}, {0, 1}, {{1, 0}, {0, 1}}, {});
+  EXPECT_THROW(build_once_probe_parallel<join_kind::INNER>(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}, {}), cudf::logic_error);
+  EXPECT_THROW(build_once_probe_parallel<join_kind::INNER, cudf::hash_join::probe_output_side::RIGHT>(t1, t0, {0, 1}, {0, 1}, {{1, 0}, {0, 1}}, {}), cudf::logic_error);
 }
 
 TEST_F(JoinTest, FullJoinNoCommon)
