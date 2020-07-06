@@ -33,12 +33,12 @@ namespace detail {
 namespace {
 
 /**
- * @brief Convert tokens and row2log map to final tensor data.
+ * @brief Convert tokens and row2tensor map to final tensor data.
  *
  * @param[in] token_ids Tokens from tokenizer
  * @param[in] offsets Offsets to each string's output row of tokens
- * @param[in] row2log String to log token counts
- * @param[in] row2row_within_log Token counts within sub-rows of the output
+ * @param[in] row2tensor String to tensor token counts
+ * @param[in] row2row_within_tensor Token counts within sub-rows of the output
  * @param[in] max_sequence_length Maximum number of tokens in a row
  * @param[in] stride Number of tokens in sub-rows
  * @param[in] do_truncate True if tokens should not spill into sub-rows in the output
@@ -50,8 +50,8 @@ __global__ void kernel_compute_tensor_metadata(
   // input
   uint32_t const* token_ids,
   uint32_t const* offsets,
-  uint32_t const* row2log,
-  uint32_t const* row2row_within_log,
+  uint32_t const* row2tensor,
+  uint32_t const* row2row_within_tensor,
   uint32_t max_sequence_length,
   uint32_t stride,
   bool do_truncate,
@@ -60,22 +60,22 @@ __global__ void kernel_compute_tensor_metadata(
   uint32_t* attn_mask,
   uint32_t* metadata)
 {
-  uint32_t const absolute_row_id      = blockIdx.x;
-  uint32_t const log_id               = row2log[absolute_row_id];
-  uint32_t const row_within_log       = row2row_within_log[absolute_row_id];
-  uint32_t const offset_token_ids_log = offsets[log_id];
-  uint32_t const n_tokens_log         = offsets[log_id + 1] - offset_token_ids_log;
-  bool const last_row_of_log =
-    (absolute_row_id == gridDim.x - 1) || (row2log[absolute_row_id + 1] != log_id);
+  uint32_t const absolute_row_id         = blockIdx.x;
+  uint32_t const tensor_id               = row2tensor[absolute_row_id];
+  uint32_t const row_within_tensor       = row2row_within_tensor[absolute_row_id];
+  uint32_t const offset_token_ids_tensor = offsets[tensor_id];
+  uint32_t const n_tokens_tensor         = offsets[tensor_id + 1] - offset_token_ids_tensor;
+  bool const last_row_of_tensor =
+    (absolute_row_id == gridDim.x - 1) || (row2tensor[absolute_row_id + 1] != tensor_id);
 
   uint32_t const row_offset_token_ids =
-    offset_token_ids_log +
-    (row_within_log ? (max_sequence_length + (stride * (row_within_log - 1))) : 0);
+    offset_token_ids_tensor +
+    (row_within_tensor ? (max_sequence_length + (stride * (row_within_tensor - 1))) : 0);
 
   auto const output_idx = absolute_row_id * max_sequence_length + threadIdx.x;
 
-  if (row_within_log == 0) {
-    if (threadIdx.x < n_tokens_log) {
+  if (row_within_tensor == 0) {
+    if (threadIdx.x < n_tokens_tensor) {
       // copy token ids
       final_tensor[output_idx] = token_ids[row_offset_token_ids + threadIdx.x];
       attn_mask[output_idx]    = 1;
@@ -87,7 +87,7 @@ __global__ void kernel_compute_tensor_metadata(
   } else {
     uint32_t const n_replicates = max_sequence_length - stride;
     if ((row_offset_token_ids - n_replicates + threadIdx.x) <
-        (offset_token_ids_log + n_tokens_log)) {
+        (offset_token_ids_tensor + n_tokens_tensor)) {
       // replicate elements or copy new tokens
       final_tensor[output_idx] = token_ids[row_offset_token_ids - n_replicates + threadIdx.x];
       attn_mask[output_idx]    = 1;
@@ -100,18 +100,18 @@ __global__ void kernel_compute_tensor_metadata(
 
   // write metadata
   if (threadIdx.x == 0) {
-    metadata[absolute_row_id * 3] = log_id;
-    if (row_within_log == 0)
+    metadata[absolute_row_id * 3] = tensor_id;
+    if (row_within_tensor == 0)
       metadata[absolute_row_id * 3 + 1] = 0;
     else
       metadata[absolute_row_id * 3 + 1] = (max_sequence_length - stride) / 2;
-    if (last_row_of_log) {
-      if (n_tokens_log < max_sequence_length)
-        metadata[absolute_row_id * 3 + 2] = n_tokens_log - 1;
+    if (last_row_of_tensor) {
+      if (n_tokens_tensor < max_sequence_length)
+        metadata[absolute_row_id * 3 + 2] = n_tokens_tensor - 1;
       else {
         if (!do_truncate)
           metadata[absolute_row_id * 3 + 2] =
-            (max_sequence_length - stride) + (n_tokens_log - max_sequence_length) % stride - 1;
+            (max_sequence_length - stride) + (n_tokens_tensor - max_sequence_length) % stride - 1;
         else
           // truncate
           metadata[absolute_row_id * 3 + 2] = (max_sequence_length - 1);
@@ -128,7 +128,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   hashed_vocabulary const& vocab_table,
                                   uint32_t max_sequence_length,
                                   uint32_t stride,
-                                  bool do_lower,
+                                  bool do_lower_case,
                                   bool do_truncate,
                                   uint32_t max_num_strings,
                                   uint32_t max_num_chars,
@@ -152,7 +152,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                 max_sequence_length,
                                 stride,
                                 do_truncate,
-                                do_lower,
+                                do_lower_case,
                                 stream);
   // Run tokenizer
   auto const tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
@@ -161,16 +161,17 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   uint32_t const* device_offsets   = tokens.second;
 
   // Format output from tokenizer
-  // each string can create 1 or more log entries
-  // compute the string-per-log offsets values by scanning over the number of tokens for each string
-  rmm::device_uvector<uint32_t> offsets_per_log(strings_count + 1, stream);
-  auto d_offsets_per_log = offsets_per_log.data();
-  auto const execpol     = rmm::exec_policy(stream);
+  // each string can create 1 or more tensor entries
+  // compute the string-per-tensor offsets values by scanning over the number of tokens for each
+  // string
+  rmm::device_uvector<uint32_t> offsets_per_tensor(strings_count + 1, stream);
+  auto d_offsets_per_tensor = offsets_per_tensor.data();
+  auto const execpol        = rmm::exec_policy(stream);
   thrust::transform_exclusive_scan(
     execpol->on(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
-    offsets_per_log.begin(),
+    offsets_per_tensor.begin(),
     [device_offsets, do_truncate, max_sequence_length, stride] __device__(cudf::size_type idx) {
       uint32_t num_tokens = device_offsets[idx + 1] - device_offsets[idx];
       if (do_truncate || num_tokens <= max_sequence_length) return uint32_t{1};
@@ -179,24 +180,25 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
     uint32_t{0},
     thrust::plus<uint32_t>());
   // last element is the total number of tokens
-  uint32_t const nrows_tensor_token_ids = offsets_per_log.element(strings_count, stream);
+  uint32_t const nrows_tensor_token_ids = offsets_per_tensor.element(strings_count, stream);
 
-  // compute global_row to log, and global_row to within_log_row correspondence
-  rmm::device_uvector<uint32_t> row2log(nrows_tensor_token_ids, stream);
-  auto d_row2log = row2log.data();
-  rmm::device_uvector<uint32_t> row2row_within_log(nrows_tensor_token_ids, stream);
-  auto d_row2row_within_log = row2row_within_log.data();
-  thrust::for_each_n(execpol->on(stream),
-                     thrust::make_counting_iterator<uint32_t>(0),
-                     strings_count,
-                     [d_offsets_per_log, d_row2log, d_row2row_within_log] __device__(auto idx) {
-                       uint32_t offset = d_offsets_per_log[idx];
-                       uint32_t nrows  = d_offsets_per_log[idx + 1] - offset;
-                       for (uint32_t jdx = 0; jdx < nrows; ++jdx) {
-                         d_row2log[jdx + offset]            = idx;
-                         d_row2row_within_log[jdx + offset] = jdx;
-                       }
-                     });
+  // compute global_row to tensor, and global_row to within_tensor_row correspondence
+  rmm::device_uvector<uint32_t> row2tensor(nrows_tensor_token_ids, stream);
+  auto d_row2tensor = row2tensor.data();
+  rmm::device_uvector<uint32_t> row2row_within_tensor(nrows_tensor_token_ids, stream);
+  auto d_row2row_within_tensor = row2row_within_tensor.data();
+  thrust::for_each_n(
+    execpol->on(stream),
+    thrust::make_counting_iterator<uint32_t>(0),
+    strings_count,
+    [d_offsets_per_tensor, d_row2tensor, d_row2row_within_tensor] __device__(auto idx) {
+      uint32_t offset = d_offsets_per_tensor[idx];
+      uint32_t nrows  = d_offsets_per_tensor[idx + 1] - offset;
+      for (uint32_t jdx = 0; jdx < nrows; ++jdx) {
+        d_row2tensor[jdx + offset]            = idx;
+        d_row2row_within_tensor[jdx + offset] = jdx;
+      }
+    });
 
   // create output data columns
   auto tensor_token_ids = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT32},
@@ -220,8 +222,8 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   kernel_compute_tensor_metadata<<<nrows_tensor_token_ids, max_sequence_length, 0, stream>>>(
     device_token_ids,
     device_offsets,
-    d_row2log,
-    d_row2row_within_log,
+    d_row2tensor,
+    d_row2row_within_tensor,
     max_sequence_length,
     stride,
     do_truncate,
@@ -242,7 +244,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   std::string const& filename_hashed_vocabulary,
                                   uint32_t max_sequence_length,
                                   uint32_t stride,
-                                  bool do_lower,
+                                  bool do_lower_case,
                                   bool do_truncate,
                                   uint32_t max_num_strings,
                                   uint32_t max_num_chars,
@@ -255,7 +257,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   vocab_table,
                                   max_sequence_length,
                                   stride,
-                                  do_lower,
+                                  do_lower_case,
                                   do_truncate,
                                   max_num_strings,
                                   max_num_chars,
@@ -268,7 +270,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   hashed_vocabulary const& vocabulary_table,
                                   uint32_t max_sequence_length,
                                   uint32_t stride,
-                                  bool do_lower,
+                                  bool do_lower_case,
                                   bool do_truncate,
                                   uint32_t max_num_strings,
                                   uint32_t max_num_chars,
@@ -280,7 +282,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   vocabulary_table,
                                   max_sequence_length,
                                   stride,
-                                  do_lower,
+                                  do_lower_case,
                                   do_truncate,
                                   max_num_strings,
                                   max_num_chars,
