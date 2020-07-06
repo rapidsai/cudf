@@ -43,7 +43,7 @@ using namespace cudf::io::parquet;
 using namespace cudf::io;
 
 // Forward declarations
-class metadata;
+class aggregate_metadata;
 
 /**
  * @brief Implementation for Parquet reader
@@ -51,13 +51,13 @@ class metadata;
 class reader::impl {
  public:
   /**
-   * @brief Constructor from a dataset source with reader options.
+   * @brief Constructor from an array of dataset sources with reader options.
    *
-   * @param source Dataset source
+   * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<datasource> source,
+  explicit impl(std::vector<std::unique_ptr<datasource>> &&sources,
                 reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
@@ -66,18 +66,14 @@ class reader::impl {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read
-   * @param row_group Row group index to select
-   * @param max_rowgroup_count Max number of consecutive row groups if greater than 0
-   * @param row_group_indices if non-null, indices of rowgroups to read [max_rowgroup_count]
+   * @param row_group_indices TODO
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with metadata
    */
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
-                           size_type row_group,
-                           size_type max_rowgroup_count,
-                           const size_type *row_group_indices,
+                           std::vector<std::vector<size_type>> const &row_group_indices,
                            cudaStream_t stream);
 
  private:
@@ -97,6 +93,7 @@ class reader::impl {
                           size_t begin_chunk,
                           size_t end_chunk,
                           const std::vector<size_t> &column_chunk_offsets,
+                          std::vector<size_type> const &chunk_source_map,
                           cudaStream_t stream);
 
   /**
@@ -154,8 +151,8 @@ class reader::impl {
 
  private:
   rmm::mr::device_memory_resource *_mr = nullptr;
-  std::unique_ptr<datasource> _source;
-  std::unique_ptr<metadata> _metadata;
+  std::vector<std::unique_ptr<datasource>> _sources;
+  std::unique_ptr<aggregate_metadata> _metadata;
 
   std::vector<std::pair<int, std::string>> _selected_columns;
   bool _strings_to_categorical = false;
