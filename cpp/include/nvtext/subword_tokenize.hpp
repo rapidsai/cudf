@@ -133,7 +133,7 @@ tokenizer_result subword_tokenize(
   std::string const& filename_hashed_vocabulary,
   uint32_t max_sequence_length,
   uint32_t stride,
-  bool do_lower,
+  bool do_lower_case,
   bool do_truncate,
   uint32_t max_num_strings,
   uint32_t max_num_chars,
@@ -141,8 +141,11 @@ tokenizer_result subword_tokenize(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @copydoc subword_tokenize(cudf::strings_column_view const&, std::string const&, uint32_t,
- * uint32_t, bool, bool, uint32_t, uint32_t, uint32_t, rmm::mr::device_memory_result*)
+ * @copydoc subword_tokenize()
+ *
+ * This function differs from the one above by only the hashed vocabulary parameter.
+ * The file can be pre-loaded using the @ref load_vocabulary_file API and then
+ * passed in place of the file name in a call to this API.
  *
  * @param vocabulary_table The vocabulary table pre-loaded into this object.
  */
@@ -151,7 +154,7 @@ tokenizer_result subword_tokenize(
   hashed_vocabulary const& vocabulary_table,
   uint32_t max_sequence_length,
   uint32_t stride,
-  bool do_lower,
+  bool do_lower_case,
   bool do_truncate,
   uint32_t max_num_strings,
   uint32_t max_num_chars,
