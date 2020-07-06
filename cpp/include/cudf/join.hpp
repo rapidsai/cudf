@@ -369,7 +369,7 @@ class hash_join {
   enum class probe_output_side { LEFT, RIGHT };
 
   /**
-   * @brief Perform an inner join by probing in the internal hash map.
+   * @brief Performs an inner join by probing in the internal hash map.
    *
    * Given that it is sometimes desired to choose the small table to be the `build` side for an
    * inner join (which is automatically done in cudf::innner_join()), it is handy to be able to
@@ -408,7 +408,7 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
 
   /**
-   * @brief Perform a left join by probing in the internal hash map.
+   * @brief Performs a left join by probing in the internal hash map.
    *
    * More details please @see cudf::left_join().
    *
@@ -434,7 +434,7 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
 
   /**
-   * @brief Perform a full join by probing in the internal hash map.
+   * @brief Performs a full join by probing in the internal hash map.
    *
    * More details please @see cudf::full_join().
    *
@@ -460,7 +460,7 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
 
   /**
-   * @brief Instantiate a hash join instance and build the internal hash map used for preceding
+   * @brief Instantiates a hash join instance and build the internal hash map used for preceding
    * probe calls.
    *
    * @param build The build table, from which the hash map is built.
