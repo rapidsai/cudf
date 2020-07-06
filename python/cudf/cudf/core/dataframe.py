@@ -270,7 +270,9 @@ class DataFrame(Frame, Serializable):
         data = list(itertools.zip_longest(*data))
 
         if columns is not None and len(data) == 0:
-            data = [[]] * len(columns)
+            data = [
+                cudf.core.column.column_empty(row_count=0, dtype=None)
+            ] * len(columns)
 
         for col_name, col in enumerate(data):
             self._data[col_name] = column.as_column(col)
@@ -299,7 +301,8 @@ class DataFrame(Frame, Serializable):
                 # Hence only assign `data` with `columns` as keys
                 # and their values as empty columns.
                 data = dict.fromkeys(
-                    extra_cols, cudf.core.column.column_empty(0, dtype=None)
+                    extra_cols,
+                    cudf.core.column.column_empty(row_count=0, dtype=None),
                 )
 
         data, index = self._align_input_series_indices(data, index=index)
