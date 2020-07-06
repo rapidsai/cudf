@@ -546,7 +546,7 @@ class ColumnBase(Column, Serializable):
                     )
                 key = column.as_column(cupy.arange(len(self)))[key]
                 if hasattr(value, "__len__") and len(value) == len(self):
-                    value = column.as_column(value[key])
+                    value = column.as_column(value)[key]
             nelem = len(key)
 
         if is_scalar(value):
