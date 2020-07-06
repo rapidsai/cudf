@@ -127,6 +127,7 @@ endif(CMAKE_CUDA_LINEINFO)
 # Debug options
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     message(STATUS "Building with debugging flags")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -Xcompiler -rdynamic")
 endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
 # To apply RUNPATH to transitive dependencies (this is a temporary solution)
