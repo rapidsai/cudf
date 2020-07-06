@@ -606,13 +606,13 @@ class hash_join_impl : public cudf::hash_join {
     rmm::mr::device_memory_resource* mr) const override
   {
     CUDF_FUNC_RANGE();
-    return compute_hash_join<join_kind::LEFT_JOIN>(
+    return compute_hash_join<join_kind::FULL_JOIN>(
       probe, probe_on, columns_in_common, cudf::hash_join::probe_output_side::LEFT, mr);
   }
 
  private:
   template <join_kind JoinKind>
-  std::enable_if_t<JoinKind != join_kind::FULL_JOIN, std::unique_ptr<table>> compute_hash_join(
+  std::unique_ptr<table> compute_hash_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
@@ -652,7 +652,10 @@ class hash_join_impl : public cudf::hash_join {
 
     bool probe_output_left{probe_output_side == cudf::hash_join::probe_output_side::LEFT};
 
-    auto joined_indices = probe_join_indices<JoinKind>(probe_selected, !probe_output_left, stream);
+    constexpr join_kind ProbeJoinKind =
+      (JoinKind == join_kind::FULL_JOIN) ? join_kind::LEFT_JOIN : JoinKind;
+    auto joined_indices =
+      probe_join_indices<ProbeJoinKind>(probe_selected, !probe_output_left, stream);
     auto actual_columns_in_common = columns_in_common;
     if (!probe_output_left) {
       std::for_each(actual_columns_in_common.begin(),
@@ -668,8 +671,11 @@ class hash_join_impl : public cudf::hash_join {
   }
 
   template <join_kind JoinKind>
-  std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_join_indices(
-    cudf::table_view const& probe, bool flip_join_indices, cudaStream_t stream) const
+  std::enable_if_t<JoinKind != join_kind::FULL_JOIN,
+                   std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>>
+  probe_join_indices(cudf::table_view const& probe,
+                     bool flip_join_indices,
+                     cudaStream_t stream) const
   {
     // Trivial left join case - exit early
     if (!_hash_table && JoinKind == join_kind::LEFT_JOIN) {
