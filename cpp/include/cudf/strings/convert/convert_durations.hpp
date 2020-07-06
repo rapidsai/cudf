@@ -44,23 +44,23 @@ namespace strings {
  * Other specifiers are not currently supported.
  *
  * Invalid formats are not checked. If the string contains unexpected
- * or insufficient characters, that output row entry's timestamp value is undefined.
+ * or insufficient characters, that output row entry's duration value is undefined.
  *
  * Any null string entry will result in a corresponding null row in the output column.
  *
- * The resulting time units are specified by the `timestamp_type` parameter.
+ * The resulting time units are specified by the `duration_type` parameter.
  * The time units are independent of the number of digits parsed by the "%f" specifier.
  * The "%f" supports a precision value to read the numeric digits. Specify the
  * precision with a single integer value (1-9) as follows:
  * use "%3f" for milliseconds, "%6f" for microseconds and "%9f" for nanoseconds.
  *
- * @throw cudf::logic_error if timestamp_type is not a timestamp type.
+ * @throw cudf::logic_error if duration_type is not a duration type.
  *
  * @param strings Strings instance for this operation.
- * @param timestamp_type The timestamp type used for creating the output column.
- * @param format String specifying the timestamp format in strings.
+ * @param duration_type The duration type used for creating the output column.
+ * @param format String specifying the duration format in strings.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New datetime column.
+ * @return New duration column.
  */
 std::unique_ptr<column> to_durations(
   strings_column_view const& strings,
@@ -72,7 +72,7 @@ std::unique_ptr<column> to_durations(
  * @brief Returns a new strings column converting a duration column into
  * strings using the provided format pattern.
  *
- * The format pattern can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z,%Z"
+ * The format pattern can include the following specifiers: "%d,%+,%H,%M,%S,%u,%f"
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
@@ -84,8 +84,12 @@ std::unique_ptr<column> to_durations(
  * | %%u | 6-digit microsecond: 000000-999999 |
  * | %%f | 9-digit nanosecond: 000000000-999999999 |
  *
- * No checking is done for invalid formats or invalid timestamp values.
- * All timestamps values are formatted to UTC.
+ * Any format string starting with letter 'P' is considered iso format.
+ * https://en.wikipedia.org/wiki/ISO_8601#Durations
+ * For ISO format, the leading zeros are not present for all specifiers and
+ * trailing zeros are not present for "%f" specifier.
+ *
+ * No checking is done for invalid formats or invalid duration values.
  *
  * Any null input entry will result in a corresponding null entry in the output column.
  *
@@ -97,19 +101,19 @@ std::unique_ptr<column> to_durations(
  * If the precision is higher than the units, then zeroes are padded to the right of
  * the subsecond value.
  * If the precision is lower than the units, the subsecond value may be truncated.
+ * If the precision is not specified, trailing zeros will be truncated.
  *
- * @throw cudf::logic_error if `timestamps` column parameter is not a timestamp type.
+ * @throw cudf::logic_error if `durations` column parameter is not a duration type.
  *
- * @param timestamps Timestamp values to convert.
+ * @param durations Duration values to convert.
  * @param format The string specifying output format.
  *        Default format is ""%d days %+%H:%M:%S".
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column with formatted timestamps.
+ * @return New strings column with formatted durations.
  */
 std::unique_ptr<column> from_durations(
   column_view const& durations,
   std::string const& format           = "%d days %+%H:%M:%S",
-  //"P%YY%MM%DDT%HH%MM%SS" is_iso_format() for skipping leading zeros.
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of doxygen group
