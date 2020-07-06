@@ -17,6 +17,7 @@ from cudf.utils.dtypes import (
     min_signed_type,
     np_to_pa_dtype,
     numeric_normalize_types,
+    _pd_nullable_dtypes_to_cudf_dtypes,
 )
 
 
@@ -162,17 +163,19 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.unary.cast(self, dtype)
 
     def to_pandas(self, index=None):
-        if self.has_nulls and self.dtype == np.bool:
-            # Boolean series in Pandas that contains None/NaN is of dtype
-            # `np.object`, which is not natively supported in GDF.
-            ret = self.astype(np.int8).fillna(-1).to_array()
-            ret = pd.Series(ret, index=index)
-            ret = ret.where(ret >= 0, other=None)
-            ret.replace(to_replace=1, value=True, inplace=True)
-            ret.replace(to_replace=0, value=False, inplace=True)
-            return ret
-        else:
-            return pd.Series(self.to_array(fillna="pandas"), index=index)
+        host_dtype = {
+            v: k for k, v in _pd_nullable_dtypes_to_cudf_dtypes.items()
+        }[self.dtype]
+        host_data = pd.Series(
+            self.data_array_view.copy_to_host(), dtype=host_dtype
+        )
+        if self.has_nulls:
+            host_mask = cudautils.expand_mask_bits(
+                len(host_data), self.mask_array_view
+            ).copy_to_host()
+            host_data[host_mask == False] = pd.NA
+        host_data.index = index
+        return host_data
 
     def to_arrow(self):
         mask = None
