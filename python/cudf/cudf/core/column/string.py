@@ -4180,7 +4180,7 @@ class StringColumn(column.ColumnBase):
         pd_series = self.to_arrow().to_pandas()
         if index is not None:
             pd_series.index = index
-        return pd_series
+        return pd_series.astype(pd.StringDtype())
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
