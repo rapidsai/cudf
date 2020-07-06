@@ -15,6 +15,7 @@
  */
 
 #include <text/subword/detail/cp_data.h>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/error.hpp>
 #include <text/subword/detail/codepoint_metadata.ah>
@@ -40,10 +41,7 @@ namespace {
  * @param metadata Value from the codepoint_metadata table.
  * @return The replacement character if appropriate.
  */
-__device__ __forceinline__ uint32_t get_first_cp(uint32_t metadata)
-{
-  return metadata & NEW_CP_MASK;
-}
+__device__ uint32_t get_first_cp(uint32_t metadata) { return metadata & NEW_CP_MASK; }
 
 /**
  * @brief Retrieve token category from the metadata value.
@@ -59,7 +57,7 @@ __device__ __forceinline__ uint32_t get_first_cp(uint32_t metadata)
  * @param metadata Value from the codepoint_metadata table.
  * @return Category value.
  */
-__device__ __forceinline__ uint32_t extract_token_cat(uint32_t metadata)
+__device__ uint32_t extract_token_cat(uint32_t metadata)
 {
   return (metadata >> TOKEN_CAT_SHIFT) & TOKEN_CAT_MASK;
 }
@@ -67,7 +65,7 @@ __device__ __forceinline__ uint32_t extract_token_cat(uint32_t metadata)
 /**
  * @brief Return true if category of metadata value specifies the character should be replaced.
  */
-__device__ __forceinline__ bool should_remove_cp(uint32_t metadata, bool lower_case)
+__device__ bool should_remove_cp(uint32_t metadata, bool lower_case)
 {
   auto const cat = extract_token_cat(metadata);
   return (cat == TOKEN_CAT_REMOVE_CHAR) || (lower_case && (cat == TOKEN_CAT_REMOVE_CHAR_IF_LOWER));
@@ -76,7 +74,7 @@ __device__ __forceinline__ bool should_remove_cp(uint32_t metadata, bool lower_c
 /**
  * @brief Return true if category of metadata value specifies the character should be padded.
  */
-__device__ __forceinline__ bool should_add_spaces(uint32_t metadata, bool lower_case)
+__device__ bool should_add_spaces(uint32_t metadata, bool lower_case)
 {
   auto const cat = extract_token_cat(metadata);
   return (cat == TOKEN_CAT_ADD_SPACE) || (lower_case && (cat == TOKEN_CAT_ADD_SPACE_IF_LOWER));
@@ -85,7 +83,7 @@ __device__ __forceinline__ bool should_add_spaces(uint32_t metadata, bool lower_
 /**
  * @brief Return true if category of metadata value specifies the character should be replaced.
  */
-__device__ __forceinline__ bool always_replace(uint32_t metadata)
+__device__ bool always_replace(uint32_t metadata)
 {
   return extract_token_cat(metadata) == TOKEN_CAT_ALWAYS_REPLACE;
 }
@@ -93,7 +91,7 @@ __device__ __forceinline__ bool always_replace(uint32_t metadata)
 /**
  * @brief Returns true if metadata value includes a multi-character transform bit equal to 1.
  */
-__device__ __forceinline__ bool is_multi_char_transform(uint32_t metadata)
+__device__ bool is_multi_char_transform(uint32_t metadata)
 {
   return (metadata >> MULTICHAR_SHIFT) & MULTICHAR_MASK;
 }
@@ -102,10 +100,7 @@ __device__ __forceinline__ bool is_multi_char_transform(uint32_t metadata)
  * @brief Returns true if the byte passed in could be a valid head byte for
  * a utf8 character. That is, not binary `10xxxxxx`
  */
-__device__ __forceinline__ bool is_head_byte(unsigned char utf8_byte)
-{
-  return (utf8_byte >> 6) != 2;
-}
+__device__ bool is_head_byte(unsigned char utf8_byte) { return (utf8_byte >> 6) != 2; }
 
 /**
  * @brief Converts a UTF-8 character into a unicode code point value.
@@ -121,14 +116,17 @@ __device__ __forceinline__ bool is_head_byte(unsigned char utf8_byte)
  * @param start_byte_for_thread Which byte to start analyzing
  * @return New code point value for this byte.
  */
-__device__ __forceinline__ uint32_t
-extract_code_points_from_utf8(const unsigned char* strings, const uint32_t start_byte_for_thread)
+__device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
+                                                  size_t const total_bytes,
+                                                  uint32_t const start_byte_for_thread)
 {
-  constexpr uint8_t max_utf8_blocks_for_char = 4;
-  uint8_t utf8_blocks[max_utf8_blocks_for_char];
+  constexpr uint8_t max_utf8_blocks_for_char    = 4;
+  uint8_t utf8_blocks[max_utf8_blocks_for_char] = {0};
 
 #pragma unroll
-  for (int i = 0; i < max_utf8_blocks_for_char; ++i) {
+  for (int i = 0; i < std::min(static_cast<size_t>(max_utf8_blocks_for_char),
+                               total_bytes - start_byte_for_thread);
+       ++i) {
     utf8_blocks[i] = strings[start_byte_for_thread + i];
   }
 
@@ -207,7 +205,7 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
   uint32_t num_new_chars         = 0;
 
   if (char_for_thread < total_bytes) {
-    auto const code_point = extract_code_points_from_utf8(strings, char_for_thread);
+    auto const code_point = extract_code_points_from_utf8(strings, total_bytes, char_for_thread);
     auto const metadata   = cp_metadata[code_point];
 
     if (is_head_byte(strings[char_for_thread]) && !should_remove_cp(metadata, do_lower_case)) {
@@ -253,19 +251,16 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
   BlockStore(temp_storage).Store(block_base, replacement_code_points);
 }
 
-// There are fixed lookup tables that are copied from codepoint_metadata.ah
-// to the GPU. The per-context-cache ensures there is only one copy per context.
-cudf::strings::detail::thread_safe_per_context_cache<codepoint_metadata_type> g_codepoint_metadata;
-cudf::strings::detail::thread_safe_per_context_cache<aux_codepoint_data_type> g_aux_codepoint_data;
-
 /**
  * @brief Retrieve the code point metadata table.
  *
- * Build the code point metadata tables in device memory
+ * Build the code point metadata table in device memory
  * using the vector pieces from codepoint_metadata.ah
  */
 const codepoint_metadata_type* get_codepoint_metadata(cudaStream_t stream)
 {
+  static cudf::strings::detail::thread_safe_per_context_cache<codepoint_metadata_type>
+    g_codepoint_metadata;
   return g_codepoint_metadata.find_or_initialize([stream](void) {
     codepoint_metadata_type* table =
       static_cast<codepoint_metadata_type*>(rmm::mr::get_default_resource()->allocate(
@@ -292,11 +287,13 @@ const codepoint_metadata_type* get_codepoint_metadata(cudaStream_t stream)
 /**
  * @brief Retrieve the aux code point data table.
  *
- * Build the code point metadata tables in device memory
+ * Build the aux code point data table in device memory
  * using the vector pieces from codepoint_metadata.ah
  */
 const aux_codepoint_data_type* get_aux_codepoint_data(cudaStream_t stream)
 {
+  static cudf::strings::detail::thread_safe_per_context_cache<aux_codepoint_data_type>
+    g_aux_codepoint_data;
   return g_aux_codepoint_data.find_or_initialize([stream](void) {
     aux_codepoint_data_type* table =
       static_cast<aux_codepoint_data_type*>(rmm::mr::get_default_resource()->allocate(
@@ -349,8 +346,8 @@ data_normalizer::data_normalizer(uint32_t max_num_strings,
   d_cp_metadata = detail::get_codepoint_metadata(stream);
   d_aux_table   = detail::get_aux_codepoint_data(stream);
 
-  size_t const max_BLOCKS            = (max_num_chars + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-  size_t const max_threads_on_device = max_BLOCKS * THREADS_PER_BLOCK;
+  cudf::detail::grid_1d grid{static_cast<cudf::size_type>(max_num_chars), THREADS_PER_BLOCK};
+  size_t const max_threads_on_device = grid.num_threads_per_block * grid.num_blocks;
   size_t const max_new_char_total    = MAX_NEW_CHARS * max_threads_on_device;
   device_code_points.resize(max_new_char_total, stream);
   device_chars_per_thread.resize(max_threads_on_device, stream);
@@ -395,11 +392,11 @@ std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(const cha
                            stream));
   uint32_t const bytes_count = device_strings_offsets.element(num_offsets - 1, stream);
 
-  size_t const BLOCKS             = (bytes_count + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-  size_t const max_new_char_total = MAX_NEW_CHARS * BLOCKS * THREADS_PER_BLOCK;
-  size_t const threads_on_device  = BLOCKS * THREADS_PER_BLOCK;
+  cudf::detail::grid_1d grid{static_cast<cudf::size_type>(bytes_count), THREADS_PER_BLOCK, 1};
+  size_t const threads_on_device  = grid.num_threads_per_block * grid.num_blocks;
+  size_t const max_new_char_total = MAX_NEW_CHARS * threads_on_device;
 
-  kernel_data_normalizer<<<BLOCKS, THREADS_PER_BLOCK, 0, stream>>>(
+  kernel_data_normalizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
     reinterpret_cast<const unsigned char*>(d_strings),
     device_strings_offsets.data(),
     bytes_count,

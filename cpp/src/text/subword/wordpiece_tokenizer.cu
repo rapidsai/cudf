@@ -15,6 +15,7 @@
  */
 
 #include <text/subword/detail/cp_data.h>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/utilities/error.hpp>
 #include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/hash_utils.cuh>
@@ -380,8 +381,9 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
   // We need to change the end_word_indices pointer after the selection is complete
   device_end_word_indices = device_start_word_indices + num_words;
 
-  uint32_t const num_wp_blocks = (num_words + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-  detail::kernel_wordpiece_tokenizer<<<num_wp_blocks, THREADS_PER_BLOCK, 0, stream>>>(
+  // uint32_t const num_wp_blocks = (num_words + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+  cudf::detail::grid_1d grid{static_cast<cudf::size_type>(num_words), THREADS_PER_BLOCK};
+  detail::kernel_wordpiece_tokenizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
     device_code_points,
     vocab_table.table->view().data<uint64_t>(),             // device_hash_table.data().get(),
     vocab_table.bin_coefficients->view().data<uint64_t>(),  // device_bin_coefficients.data().get(),
