@@ -42,29 +42,29 @@ struct JoinTest : public cudf::test::BaseFixture {
 
 enum class join_kind { INNER, LEFT, FULL };
 
-template <
-  join_kind JoinKind,
-  typename std::enable_if_t<JoinKind == join_kind::INNER, ProbeOutputSide> probe_output_side = ProbeOutputSide::LEFT>
-auto probe(cudf::hash_join const& hash_join,
-                  Table const& probe,
-                  std::vector<cudf::size_type> const& probe_on,
-                  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common)
-{
-  return hash_join->inner_join(probe, probe_on, columns_in_common, probe_output_side);
-}
-
-template <join_kind JoinKind, typename = std::enable_if_t<JoinKind != join_kind::INNER, void>>
-auto probe(cudf::hash_join const& hash_join,
-                  Table const& probe,
-                  std::vector<cudf::size_type> const& probe_on,
-                  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common)
-{
-  if (JoinKind == LEFT) {
-    return hash_join->left_join(probe, probe_on, columns_in_common);
-  } else {
-    return hash_join->full_join(probe, probe_on, columns_in_common);
-  }
-}
+//template <
+//  join_kind JoinKind,
+//  typename std::enable_if_t<JoinKind == join_kind::INNER, ProbeOutputSide> probe_output_side = ProbeOutputSide::LEFT>
+//auto probe(cudf::hash_join const& hash_join,
+//                  Table const& probe,
+//                  std::vector<cudf::size_type> const& probe_on,
+//                  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common)
+//{
+//  return hash_join->inner_join(probe, probe_on, columns_in_common, probe_output_side);
+//}
+//
+//template <join_kind JoinKind, typename = std::enable_if_t<JoinKind != join_kind::INNER, void>>
+//auto probe(cudf::hash_join const& hash_join,
+//                  Table const& probe,
+//                  std::vector<cudf::size_type> const& probe_on,
+//                  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common)
+//{
+//  if (JoinKind == LEFT) {
+//    return hash_join->left_join(probe, probe_on, columns_in_common);
+//  } else {
+//    return hash_join->full_join(probe, probe_on, columns_in_common);
+//  }
+//}
 
 template <join_kind JoinKind,
           bool sort_result                  = true,
@@ -86,7 +86,13 @@ void build_once_probe_parallel(
     probe_threads.push_back(std::async(
       std::launch::async,
       [&](size_t idx) {
-        probe<JoinKind, probe_output_side>(hash_join, left, left_on, columns_in_common);
+        if (JoinKind == join_kind::INNER) {
+          results[idx] = hash_join->inner_join(left, left_on, columns_in_common, probe_output_side);
+        } else if (JoinKind == join_kind::LEFT) {
+          results[idx] = hash_join->left_join(left, left_on, columns_in_common);
+        } else if (JoinKind == join_kind::FULL) {
+          results[idx] = hash_join->full_join(left, left_on, columns_in_common);
+        }
       },
       i));
   }
