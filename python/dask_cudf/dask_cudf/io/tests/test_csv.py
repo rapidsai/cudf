@@ -7,11 +7,11 @@ import pandas as pd
 import pytest
 
 import dask
-import dask.dataframe as dd
-
-import cudf
+from dask import dataframe as dd
 
 import dask_cudf
+
+import cudf
 
 
 def test_csv_roundtrip(tmp_path):

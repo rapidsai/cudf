@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 from __future__ import division, print_function
 
 import inspect
@@ -22,7 +21,7 @@ from pandas.api.types import is_dict_like
 from pandas.io.formats.printing import pprint_thing
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
 from cudf.core import column
@@ -6172,35 +6171,35 @@ class DataFrame(Frame, Serializable):
     @ioutils.doc_to_parquet()
     def to_parquet(self, path, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.parquet as pq
+        from cudf.io import parquet as pq
 
         return pq.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
     def to_feather(self, path, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.feather as feather
+        from cudf.io import feather as feather
 
         feather.to_feather(self, path, *args, **kwargs)
 
     @ioutils.doc_to_json()
     def to_json(self, path_or_buf=None, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.json as json
+        from cudf.io import json as json
 
         return json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
 
     @ioutils.doc_to_hdf()
     def to_hdf(self, path_or_buf, key, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.hdf as hdf
+        from cudf.io import hdf as hdf
 
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        import cudf.io.dlpack as dlpack
+        from cudf.io import dlpack as dlpack
 
         return dlpack.to_dlpack(self)
 
@@ -6217,7 +6216,7 @@ class DataFrame(Frame, Serializable):
         chunksize=None,
     ):
         """{docstring}"""
-        import cudf.io.csv as csv
+        from cudf.io import csv as csv
 
         return csv.to_csv(
             self,
@@ -6234,7 +6233,7 @@ class DataFrame(Frame, Serializable):
     @ioutils.doc_to_orc()
     def to_orc(self, fname, compression=None, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.orc as orc
+        from cudf.io import orc as orc
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 

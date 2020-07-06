@@ -8,7 +8,7 @@ import pandas as pd
 from pandas.api.types import is_dtype_equal
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
@@ -61,9 +61,11 @@ class Frame(libcudf.table.Table):
         else:
             all_empty_except_index = False
 
+        from cudf.core.column.column import (
+            build_categorical_column,
+            column_empty,
+        )
         from cudf.core.index import as_index
-        from cudf.core.column.column import column_empty
-        from cudf.core.column.column import build_categorical_column
 
         # Create a dictionary of the common, non-null columns
         def get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
@@ -1775,8 +1777,9 @@ class Frame(libcudf.table.Table):
 
 
 def _get_replacement_values(to_replace, replacement, col_name, column):
-    from cudf.utils import utils
     from pandas.api.types import is_dict_like
+
+    from cudf.utils import utils
 
     all_nan = False
 
