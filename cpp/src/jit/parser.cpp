@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <cctype>
 #include <cudf/utilities/error.hpp>
 #include <map>
@@ -32,34 +33,23 @@ std::string ptx_parser::escape_percent(const std::string& src)
 {
   // Since we are transforming into inline ptx we are not allowed to have
   // register names starting with %.
-  const size_t length = src.size();
-  size_t start        = 0;
-  size_t stop         = 0;
-  while (start < length && (is_white(src[start]) || src[start] == '[')) { start++; }
-  stop = start;
-  while (stop < length && !is_white(src[stop]) && src[stop] != ']') { stop++; }
-  if (src[start] == '%') {
+  auto f = std::find_if_not(src.begin(), src.end(), [](auto c) { return is_white(c) || c == '['; });
+  if (f != src.end() && *f == '%') {
     std::string output = src;
-    output.replace(start, 1, percent_escape);
+    output.replace(std::distance(src.begin(), f), 1, percent_escape);
     return output;
-  } else {
-    return src;
   }
+  return src;
 }
 
 std::string ptx_parser::remove_nonalphanumeric(const std::string& src)
 {
-  const size_t length = src.size();
-  size_t start        = 0;
-  size_t stop         = 0;
-  std::string output  = src;
-  while (start < length && (is_white(src[start]) || src[start] == '[')) { start++; }
-  stop = start;
-  while (stop < length && !is_white(src[stop]) && src[stop] != ']') {
-    if (!isalnum(src[stop]) && src[stop] != '_') { output[stop] = '_'; }
-    stop++;
-  }
-  return output.substr(start, stop - start);
+  std::string out = src;
+  auto f = std::find_if_not(out.begin(), out.end(), [](auto c) { return is_white(c) || c == '['; });
+  auto l = std::find_if(out.begin(), out.end(), [](auto c) { return is_white(c) || c == ']'; });
+  std::replace_if(
+    f, l, [](auto c) { return !isalnum(c) && c != '_'; }, '_');
+  return std::string(f, l);
 }
 
 std::string ptx_parser::register_type_to_contraint(const std::string& src)
@@ -217,92 +207,72 @@ std::string ptx_parser::parse_instruction(const std::string& src)
 
 std::string ptx_parser::parse_statement(const std::string& src)
 {
-  // First find the first non-white charactor.
-  const size_t length = src.size();
-  size_t start        = 0;
-  while (start < length && is_white(src[start])) { start++; }
-
-  if (start == length) {
-    // got nothing
-    return " \n";
-  } else {
-    // instruction
-    return parse_instruction(std::string(src, start, length - start));
-  }
+  auto f = std::find_if_not(src.cbegin(), src.cend(), [](auto c) { return is_white(c); });
+  return f == src.cend() ? " \n" : parse_instruction(std::string(f, src.cend()));
 }
 
 std::vector<std::string> ptx_parser::parse_function_body(const std::string& src)
 {
-  const size_t length = src.size();
-  size_t start        = 0;
-  size_t stop         = 0;
-
+  auto f = src.cbegin();
+  auto l = src.cbegin();
   std::vector<std::string> statements;
 
-  while (stop < length) {
-    stop = start;
-    while (stop < length && src[stop] != ';') { stop++; }
-    statements.push_back(parse_statement(std::string(src, start, stop - start)));
-    stop++;
-    start = stop;
+  while (l < src.cend()) {
+    l = std::find(l, src.cend(), ';');
+    statements.push_back(parse_statement(std::string(f, l)));
+    f = ++l;
   }
   return statements;
 }
 
 std::string ptx_parser::parse_param(const std::string& src)
 {
-  const size_t length = src.size();
-  size_t start        = 0;
-  size_t stop         = 0;
+  auto i = 0;
+  auto f = src.cbegin();
+  auto l = src.cbegin();
 
-  std::string name;
-
-  int item_count = 0;
-  while (stop < length) {
-    while (start < length && is_white(src[start])) { start++; }
-    stop = start;
-    while (stop < length && !is_white(src[stop])) { stop++; }
-    item_count++;
-    if (item_count == 3) { name = remove_nonalphanumeric(std::string(src, start, stop - start)); }
-    start = stop;
+  while (std::distance(src.cbegin(), l) < src.size() && i <= 3) {
+    f = std::find_if_not(f, src.end(), [](auto c) { return is_white(c); });
+    l = std::find_if(f, src.end(), [](auto c) { return is_white(c); });
+    if (++i == 3) return remove_nonalphanumeric(std::string(f, l));
+    f = l;
   }
-  return name;
+  return "";
 }
 
 std::string ptx_parser::parse_param_list(const std::string& src)
 {
-  const size_t length = src.size();
-  size_t start        = 0;
-  size_t stop         = 0;
+  auto f = src.begin();
+  auto l = src.begin();
 
-  std::string output;
+  auto item_count = 0;
+  std::string output{};
 
-  int item_count = 0;
-  std::string first_name;
-  std::string arg_type;
-  while (stop < length) {
-    while (stop < length && src[stop] != ',') { stop++; }
-    std::string name = parse_param(std::string(src, start, stop - start));
-    if (pointer_arg_list.find(item_count) != pointer_arg_list.end()) {
-      if (item_count == 0) {
-        output += output_arg_type + "* " + name;
+  while (l < src.end()) {
+    l = std::find(l, src.end(), ',');
+
+    output += [&, name = parse_param(std::string(f, l))] {
+      if (pointer_arg_list.find(item_count) != pointer_arg_list.end()) {
+        if (item_count == 0) {
+          return output_arg_type + "* " + name;
+        } else {
+          // On a 64-bit machine inside the PTX function body a pointer is
+          // literally just a uint_64 so here is doesn't make sense to
+          // have the type of the pointer. Thus we will just use void* here.
+          return ",\n  const void* " + name;
+        }
       } else {
-        // On a 64-bit machine inside the PTX function body a pointer is
-        // literally just a uint_64 so here is doesn't make sense to
-        // have the type of the pointer. Thus we will just use void* here.
-        output += ",\n  const void* " + name;
+        if (input_arg_list.count(name)) {
+          return ", \n  " + input_arg_list[name] + " " + name;
+        } else {
+          // This parameter isn't used in the function body so we just pretend
+          // it's an int. After being inlined they are gone anyway.
+          return ", \n  int " + name;
+        }
       }
-    } else {
-      if (input_arg_list.count(name)) {
-        output += ", \n  " + input_arg_list[name] + " " + name;
-      } else {
-        // This parameter isn't used in the function body so we just pretend
-        // it's an int. After being inlined they are gone anyway.
-        output += ", \n  int " + name;
-      }
-    }
-    stop++;
-    start = stop;
+    }();
+
+    f = ++l;
     item_count++;
   }
 
@@ -311,71 +281,41 @@ std::string ptx_parser::parse_param_list(const std::string& src)
 
 std::string ptx_parser::parse_function_header(const std::string& src)
 {
-  const size_t length = src.size();
-  size_t start        = 0;
-  size_t stop         = 0;
+  // Essentially we only need the information inside the two pairs of parentheses.
+  auto f = [&] {
+    auto i = std::find_if_not(src.cbegin(), src.cend(), [](auto c) { return is_white(c); });
+    if (*i == '(')  // This function has a return type
+      // First Pass: output param list
+      i = std::find_if_not(std::next(i), src.cend(), [](auto c) { return c == ')'; });
+    // The function name
+    i = std::find_if_not(std::next(i), src.cend(), [](auto c) { return is_white(c) || c == '('; });
+    // Second Pass: input param list
+    return std::next(std::find(i, src.cend(), '('));
+  }();
 
-  // Essentially we only need the information inside the two pairs of
-  // parentices.
-  while (start < length && is_white(src[start])) { start++; }
+  auto l = std::find(f, src.cend(), ')');
 
-  if (src[start] == '(') {  // This function has a return type
-    // First Pass: output param list
-    while (start < length && src[start] != '(') { start++; }
-    start++;
-    stop = start;
-    while (stop < length && src[stop] != ')') { stop++; }
-    stop++;
-  }
-
-  start = stop;
-  // The function name
-  while (start < length && is_white(src[start])) { start++; }
-  stop = start;
-  while (stop < length && !is_white(src[stop]) && src[stop] != '(') { stop++; }
-
-  start = stop;
-  // Second Pass: input param list
-  while (start < length && src[start] != '(') { start++; }
-  start++;
-  stop = start;
-  while (stop < length && src[stop] != ')') { stop++; }
-  std::string input_arg = parse_param_list(std::string(src, start, stop - start));
+  auto const input_arg = parse_param_list(std::string(f, l));
   return "\n__device__ __inline__ void " + function_name + "(" + input_arg + "){" + "\n";
 }
 
 std::string remove_comments(const std::string& src)
 {
-  // Remove the comments in the input ptx code.
-  size_t start       = 0;
-  size_t stop        = 0;
-  std::string output = src;
-  while (start < output.size() - 1) {
-    if (output[start] == '/' && output[start + 1] == '*') {
-      stop = start + 2;
-      while (stop < output.size() - 1) {
-        if (output[stop] == '*' && output[stop + 1] == '/') {
-          stop += 2;
-          break;
-        } else {
-          stop++;
-        }
-      }
-      output.erase(start, stop - start);
-    } else if (output[start] == '/' && output[start + 1] == '/') {
-      stop = start + 2;
-      while (stop < output.size()) {
-        if (output[stop] == '\n') {
-          // stop += 1; // Keep the newline here.
-          break;
-        } else {
-          stop++;
-        }
-      }
-      output.erase(start, stop - start);
-    } else {
-      start++;
-    }
+  std::string output;
+  auto in_singleline_comment = false;
+  auto in_multiline_comment  = 0;
+  for (int i = 0; i < src.size(); ++i) {
+    char const a = i != 0 ? src[i - 1] : '?';               // prior char
+    char const b = src[i];                                  // current char
+    char const c = i + 1 != src.size() ? src[i + 1] : '?';  // next char
+
+    if (b == '/' && c == '/') in_singleline_comment = true;
+    if (b == '/' && c == '*') ++in_multiline_comment;
+    if (b == '\n') in_singleline_comment = false;
+
+    if (not(in_singleline_comment or in_multiline_comment)) output += b;
+
+    if (a == '*' && b == '/') --in_multiline_comment;
   }
   return output;
 }
@@ -387,52 +327,34 @@ std::string ptx_parser::parse()
 
   input_arg_list.clear();
   // Go directly to the .func mark
-  const size_t length = no_comments.size();
-  size_t start        = no_comments.find(".func") + 5;
-  if (start == length + 5) {
+  size_t offset = no_comments.find(".func");
+  if (offset == no_comments.size()) {
     printf("No function (.func) found in the input ptx code.\n");
     exit(1);
   }
-  size_t stop = start;
-  while (stop < length && no_comments[stop] != '{') { stop++; }
 
-  std::string function_header = std::string(no_comments, start, stop - start);
+  auto f = no_comments.cbegin() + offset + 5;  // 5 = length of ".func"
+  auto l = std::find(f, no_comments.cend(), '{');
 
-  stop++;
-  start = stop;
-
-  int bra_count = 0;
-  while (stop < length) {
-    if (no_comments[stop] == '{') bra_count++;
-    if (no_comments[stop] == '}') {
-      if (bra_count == 0) {
-        break;
-      } else {
-        bra_count--;
-      }
+  auto f2 = std::next(l);
+  auto l2 = std::find_if(f2, no_comments.cend(), [brace_count = 0](auto c) mutable {
+    if (c == '{') ++brace_count;
+    if (c == '}') {
+      if (brace_count == 0) return true;  // find matching } to first found {
+      --brace_count;
     }
-    stop++;
-  }
+    return false;
+  });
 
-  std::vector<std::string> function_body_output =
-    parse_function_body(std::string(no_comments, start, stop - start));
+  auto const fn_body_output   = parse_function_body(std::string(f2, l2));  // TODO wtf - order?
+  auto const fn_header_output = parse_function_header(std::string(f, l));
 
-  std::string function_header_output = parse_function_header(function_header);
-
-  std::string final_output = function_header_output + "\n";
-  final_output += " asm volatile (\"{\");";
-  for (int i = 0; i < function_body_output.size(); i++) {
-    if (function_body_output[i].find("ret;") != std::string::npos) {
-      final_output += "  asm volatile (\"bra RETTGT;\");\n";
-      continue;
-    }
-    final_output += "  " + function_body_output[i] + "\n";
-  }
-  final_output += " asm volatile (\"RETTGT:}\");";
-
-  final_output += "}";
-
-  return final_output;
+  // Don't use std::accumulate until C++20 when rvalue references are supported
+  auto final_output = fn_header_output + "\n asm volatile (\"{\");";
+  for (auto const& line : fn_body_output)
+    final_output += line.find("ret;") != std::string::npos ? "  asm volatile (\"bra RETTGT;\");\n"
+                                                           : "  " + line + "\n";
+  return final_output + " asm volatile (\"RETTGT:}\");}";
 }
 
 ptx_parser::ptx_parser(const std::string& ptx_,
