@@ -296,9 +296,12 @@ class DataFrame(Frame, Serializable):
             else:
                 # if keys is empty,
                 # it means that none of the actual keys in `data`
-                # matches `columns` hence only update `data`
-                # with `columns` as keys with empty columns.
-                data.update({key: [] for key in extra_cols})
+                # matches with `columns`.
+                # Hence only assign `data` with `columns` as keys
+                # and their values as empty columns.
+                data = dict.fromkeys(
+                    extra_cols, cudf.core.column.column_empty(0, dtype=None)
+                )
 
         data, index = self._align_input_series_indices(data, index=index)
 
