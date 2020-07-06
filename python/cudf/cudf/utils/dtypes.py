@@ -29,6 +29,19 @@ _np_pa_dtypes = {
     np.str_: pa.string(),
 }
 
+_pd_nullable_dtypes_to_cudf_dtypes = {
+    pd.StringDtype(): np.dtype('object'),
+    pd.UInt8Dtype(): np.dtype('uint8'),
+    pd.UInt16Dtype(): np.dtype('uint16'),
+    pd.UInt32Dtype(): np.dtype('uint32'),
+    pd.UInt64Dtype(): np.dtype('uint64'),
+    pd.Int8Dtype(): np.dtype('int8'),
+    pd.Int16Dtype(): np.dtype('int16'),
+    pd.Int32Dtype(): np.dtype('int32'),
+    pd.Int64Dtype(): np.dtype('int64'),
+    pd.BooleanDtype(): np.dtype('bool')
+}
+
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
 UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
 INTEGER_TYPES = SIGNED_INTEGER_TYPES | UNSIGNED_TYPES
@@ -352,6 +365,8 @@ def check_cast_unsupported_dtype(dtype):
 
     if isinstance(dtype, pd.core.arrays.numpy_.PandasDtype):
         dtype = dtype.numpy_dtype
+    elif isinstance(dtype, pd.api.extensions.ExtensionDtype):
+        dtype = np.dtype(_pd_nullable_dtypes_to_cudf_dtypes[dtype])
     else:
         dtype = np.dtype(dtype)
 
