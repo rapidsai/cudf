@@ -135,8 +135,8 @@ auto build_probe_inner_2 = [&] {
   build_once_probe_parallel<join_kind::INNER, false, ProbeOutputSide::RIGHT>(t1, t0, {0, 1}, {0, 1}, {{1, 0}, {0, 1}}, {});
 };
 
-  EXPECT_THROW(build_probe_inner_1, cudf::logic_error);
-  EXPECT_THROW(build_probe_inner_2, cudf::logic_error);
+  EXPECT_THROW(build_probe_inner_1(), cudf::logic_error);
+  EXPECT_THROW(build_probe_inner_2(), cudf::logic_error);
 }
 
 TEST_F(JoinTest, FullJoinNoCommon)
