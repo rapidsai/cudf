@@ -53,10 +53,10 @@ class data_normalizer {
    * @param max_num_chars Maximum number of characters for instantiating the normalizer.
    *        Used to allocate temporary working memory on device.
    *        If the input contains a larger number of characters, behavior is undefined.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param do_lower_case If true, the normalizer will convert uppercase characters in the
    *        input stream to lower case and strip accents from those characters.
    *        If false, accented and uppercase characters are not transformed.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   data_normalizer(uint32_t max_num_strings,
                   uint32_t max_num_chars,
@@ -82,10 +82,10 @@ class data_normalizer {
    * @param d_offsets A vector of byte offsets to the beginning of individual strings in
    *        the `d_strings` parameter.
    * @param num_strings The number of strings identified in `d_strings`.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return Two pointers to GPU data along with their lengths. The first is a pointer
    *         to the code points array and the second is a pointer to the offsets
    *         used to locate the code points for each string.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::pair<ptr_length_pair, ptr_length_pair> normalize(const char* d_strings,
                                                         const uint32_t* d_offsets,
