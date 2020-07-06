@@ -28,6 +28,8 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
+#include <future>
+
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 using strcol_wrapper = cudf::test::strings_column_wrapper;
@@ -41,14 +43,14 @@ enum class join_kind { INNER, LEFT, FULL };
 
 template <join_kind JoinKind,
           std::enable_if_t<JoinKind == join_kind::INNER, cudf::hash_join::probe_output_side>
-            probe_output_side = cudf::hash_join::probe_output_size::LEFT,
+            probe_output_side = cudf::hash_join::probe_output_side::LEFT,
           bool sort_result    = true,
           size_t parallelism  = 8>
 void build_once_probe_parallel(
   Table const& left,
   Table const& right,
-  std::vector<size_type> const& left_on,
-  std::vector<size_type> const& right_on,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
   Table const& gold)
 {
@@ -56,7 +58,7 @@ void build_once_probe_parallel(
 
   std::vector<std::future<void>> probe_threads(parallelism);
   std::vector<std::unique_ptr<Table>> results(parallelism);
-  for (size_t i = 0; i < parrallelism; i++) {
+  for (size_t i = 0; i < parallelism; i++) {
     probe_threads.push_back(std::async(
       std::launch::async,
       [&](size_t idx) {
@@ -72,13 +74,13 @@ void build_once_probe_parallel(
   }
   for (auto& t : probe_threads) { t.wait(); }
 
-  for (const& result : results) {
+  for (const auto& result : results) {
     if (sort_result) {
-      auto result_sort_order = cudf::sorted_order(result->view()) : result;
-      auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
-      cudf::test::expect_tables_equal(*gold, *sorted_result);
+      auto result_sorted_order = cudf::sorted_order(result->view()) : result;
+      auto sorted_result     = cudf::gather(result->view(), *result_sorted_order);
+      cudf::test::expect_tables_equal(gold, *sorted_result);
     } else {
-      cudf::test::expect_tables_equal(*gold, *result);
+      cudf::test::expect_tables_equal(gold, *result);
     }
   }
 }
