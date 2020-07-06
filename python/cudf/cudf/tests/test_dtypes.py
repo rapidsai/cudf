@@ -1,4 +1,6 @@
+import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -78,3 +80,22 @@ def test_sr_list_dtypes(data):
     if isinstance(data, pd.Series):
         with expectation:
             cudf.Series.from_pandas(data)
+
+
+@pytest.mark.parametrize(
+    "value_type",
+    [
+        int,
+        "int32",
+        np.int32,
+        "datetime64[ms]",
+        "datetime64[ns]",
+        "str",
+        "object",
+    ],
+)
+def test_list_dtype_pyarrow_round_trip(value_type):
+    pa_type = pa.list_(cudf.utils.dtypes.np_to_pa_dtype(np.dtype(value_type)))
+    expect = pa_type
+    got = cudf.core.dtypes.ListDtype.from_arrow(expect).to_arrow()
+    assert expect.equals(got)

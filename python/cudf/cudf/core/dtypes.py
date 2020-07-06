@@ -1,5 +1,6 @@
 import pickle
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.extensions import ExtensionDtype
@@ -111,14 +112,15 @@ class ListDtype:
         if isinstance(value_type, ListDtype):
             self._typ = pa.list_(value_type._typ)
         else:
-            self._typ = pa.list_(pa.from_numpy_dtype(value_type))
+            value_type = cudf.utils.dtypes.np_to_pa_dtype(np.dtype(value_type))
+            self._typ = pa.list_(value_type)
 
     @property
     def value_type(self):
         if isinstance(self._typ.value_type, pa.ListType):
             return ListDtype.from_arrow(self._typ.value_type)
         else:
-            return self._typ.value_type.to_pandas_dtype()
+            return np.dtype(self._typ.value_type.to_pandas_dtype()).name
 
     @property
     def name(self):
