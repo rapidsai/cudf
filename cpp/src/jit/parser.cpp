@@ -18,7 +18,6 @@
 #include <cctype>
 #include <cudf/utilities/error.hpp>
 #include <map>
-#include <numeric>
 #include <string>
 #include <vector>
 
@@ -348,19 +347,16 @@ std::string ptx_parser::parse()
   });
 
   auto const fn_header        = std::string(f, l);
+  auto const fn_body_output   = parse_function_body(std::string(f2, l2));  // TODO wtf - order?
   auto const fn_header_output = parse_function_header(fn_header);
-  auto const fn_body_output   = parse_function_body(std::string(f2, l2));
+  std::string final_output    = fn_header_output + "\n asm volatile (\"{\");";
 
-  return std::accumulate(
-           fn_body_output.cbegin(),
-           fn_body_output.cend(),
-           fn_header_output + "\n asm volatile (\"{\");",
-           [](auto&& acc, auto const& line) -> std::string&& {
-             acc += line.find("ret;") != std::string::npos ? "  asm volatile (\"bra RETTGT;\");\n"
+  // TODO add comment about not using std::accumulate
+  for (auto const& line : fn_body_output)
+    final_output += line.find("ret;") != std::string::npos ? "  asm volatile (\"bra RETTGT;\");\n"
                                                            : "  " + line + "\n";
-             return std::move(acc);
-           }) +
-         " asm volatile (\"RETTGT:}\");}";
+
+  return final_output + " asm volatile (\"RETTGT:}\");}";
 }
 
 ptx_parser::ptx_parser(const std::string& ptx_,
