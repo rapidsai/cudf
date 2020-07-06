@@ -284,12 +284,18 @@ class DataFrame(Frame, Serializable):
             # not in `columns`
             keys = [key for key in data.keys() if key in columns]
             data = {key: data[key] for key in keys}
+            extra_cols = [col for col in columns if col not in data.keys()]
             if keys:
                 # if keys is non-empty,
                 # add null columns for all values
                 # in `columns` that don't exist in `keys`:
-                extra_cols = [col for col in columns if col not in data.keys()]
                 data.update({key: None for key in extra_cols})
+            else:
+                # if keys is empty,
+                # it means that none of the actual keys in `data`
+                # matches `columns` hence only update `data`
+                # with `columns` as keys with empty columns.
+                data.update({key: [] for key in extra_cols})
 
         data, index = self._align_input_series_indices(data, index=index)
 
@@ -4992,11 +4998,12 @@ class DataFrame(Frame, Serializable):
         """
         Construct a DataFrame from a list of Columns
         """
-        return cls(
-            data=dict(zip(range(len(cols)), cols)),
-            index=index,
-            columns=columns,
-        )
+        if columns is not None:
+            data = dict(zip(columns, cols))
+        else:
+            data = dict(zip(range(len(cols)), cols))
+
+        return cls(data=data, index=index,)
 
     def quantile(
         self,
