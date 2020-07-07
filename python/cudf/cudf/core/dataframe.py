@@ -272,7 +272,8 @@ class DataFrame(Frame, Serializable):
         if columns is not None and len(data) == 0:
             data = [
                 cudf.core.column.column_empty(row_count=0, dtype=None)
-            ] * len(columns)
+                for _ in columns
+            ]
 
         for col_name, col in enumerate(data):
             self._data[col_name] = column.as_column(col)
