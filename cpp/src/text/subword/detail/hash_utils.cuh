@@ -90,6 +90,8 @@ __device__ uint64_t sdbm_hash(uint32_t const* sequence_start,
  * returns the `sdbm_hash("do")` where it is assumed cp returns the unicode code point for a
  * given letter.
  *
+ * @param current_hash The current value used to compute the previous sdbm.
+ * @param last_val Last value used in the hash sequence.
  * @return The hash value before that new value was added.
  */
 __device__ uint64_t prev_sdbm_hash(uint64_t current_hash, uint32_t last_val)
@@ -110,6 +112,10 @@ __device__ uint64_t prev_sdbm_hash(uint64_t current_hash, uint32_t last_val)
  * Algorithm is `((a*k + b) % PRIME) % table_size` where @ref PRIME is globally defined
  * as 281474976710677
  *
+ * @param key Value to hash
+ * @param a Outer table first constant
+ * @param b Outer table second constant
+ * @param table_size Number of bins in the hash table.
  * @return The computed hash value.
  */
 __device__ uint32_t hash(uint64_t key, uint64_t a, uint64_t b, uint32_t table_size)
