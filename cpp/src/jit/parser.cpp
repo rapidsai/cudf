@@ -229,7 +229,7 @@ std::string ptx_parser::parse_param(const std::string& src)
   auto f = src.cbegin();
 
   while (f < src.cend() && i <= 3) {
-    f = std::find_if_not(f, src.cend(), [](auto c) { return is_white(c); });
+    f      = std::find_if_not(f, src.cend(), [](auto c) { return is_white(c); });
     auto l = std::find_if(f, src.cend(), [](auto c) { return is_white(c); });
     if (++i == 3) return remove_nonalphanumeric(std::string(f, l));
     f = l;
@@ -280,7 +280,7 @@ std::string ptx_parser::parse_function_header(const std::string& src)
   // Essentially we only need the information inside the two pairs of parentheses.
   auto f = [&] {
     auto i = std::find_if_not(src.cbegin(), src.cend(), [](auto c) { return is_white(c); });
-    if (*i == '(')  // This function has a return type
+    if (i != src.cend() && *i == '(')  // This function has a return type
       // First Pass: output param list
       i = std::find_if_not(std::next(i), src.cend(), [](auto c) { return c == ')'; });
     // The function name
