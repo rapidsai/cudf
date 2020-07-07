@@ -229,7 +229,7 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
                       if (d_str.empty()) return false;
                       constexpr int max_ip = 255;  // values must be in [0,255]
                       int ip_vals[4]       = {-1, -1, -1, -1};
-                      int ipv_idx          = 0;
+                      int ipv_idx          = 0;  // index into ip_vals
                       for (auto const ch : d_str) {
                         if ((ch >= '0') && (ch <= '9')) {
                           auto const ip_val    = ip_vals[ipv_idx];
@@ -237,7 +237,9 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
                                                  (ip_val < 0 ? 0 : (10 * ip_val));
                           if (new_ip_val > max_ip) return false;
                           ip_vals[ipv_idx] = new_ip_val;
-                        } else if (ch != '.' || (++ipv_idx > 3))
+                        }
+                        // here ipv_idx is incremented only when ch=='.'
+                        else if (ch != '.' || (++ipv_idx > 3))
                           return false;
                       }
                       // final check for any missing values
