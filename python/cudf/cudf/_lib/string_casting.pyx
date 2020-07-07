@@ -29,7 +29,8 @@ from cudf._lib.cpp.strings.convert.convert_floats cimport (
 from cudf._lib.cpp.strings.convert.convert_integers cimport (
     to_integers as cpp_to_integers,
     from_integers as cpp_from_integers,
-    hex_to_integers as cpp_hex_to_integers
+    hex_to_integers as cpp_hex_to_integers,
+    is_hex as cpp_is_hex
 )
 from cudf._lib.cpp.strings.convert.convert_ipv4 cimport (
     ipv4_to_integers as cpp_ipv4_to_integers,
@@ -641,5 +642,21 @@ def htoi(Column input_col, **kwargs):
         c_result = move(
             cpp_hex_to_integers(input_column_view,
                                 c_out_type))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def is_hex(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that have hex characters.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    with nogil:
+        c_result = move(cpp_is_hex(
+            source_view
+        ))
 
     return Column.from_unique_ptr(move(c_result))

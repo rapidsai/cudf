@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -99,30 +101,55 @@ def test_concat_errors():
     df, df2, gdf, gdf2 = make_frames()
 
     # No objs
-    with pytest.raises(ValueError):
-        gd.concat([])
+    try:
+        pd.concat([])
+    except Exception as e:
+        with pytest.raises(type(e), match=e.__str__()):
+            gd.concat([])
+    else:
+        raise AssertionError("Expected pd.concat to fail for empty input")
 
     # All None
-    with pytest.raises(ValueError):
-        gd.concat([None, None])
+    try:
+        pd.concat([None, None])
+    except Exception as e:
+        with pytest.raises(type(e), match=e.__str__()):
+            gd.concat([None, None])
+    else:
+        raise AssertionError("Expected pd.concat to fail for all None input")
 
     # Mismatched types
-    with pytest.raises(ValueError):
-        gd.concat([gdf, gdf.x])
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "`concat` cannot concatenate objects of "
+            "types: ['DataFrame', 'RangeIndex', 'Series']."
+        ),
+    ):
+        gd.concat([gdf, gdf.index, gdf.x])
 
     # Unknown type
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match=re.escape("cannot concatenate object of type <class 'str'>"),
+    ):
         gd.concat(["bar", "foo"])
 
     # Mismatched index dtypes
     gdf3 = gdf2.copy()
     del gdf3["z"]
     gdf4 = gdf2.set_index("z")
-    with pytest.raises(ValueError):
+
+    with pytest.raises(ValueError, match="All columns must be the same type"):
         gd.concat([gdf3, gdf4])
 
     # Bad axis value
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            '`axis` must be 0 / "index"' ' or 1 / "columns", got: None'
+        ),
+    ):
         gd.concat([gdf, gdf2], axis="bad_value")
 
 
@@ -304,11 +331,12 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     try:
         pd.concat([ps1, ps2], axis=1)
     except Exception as e:
-        e_msg = str(e)
-        e_type = type(e)
-
-    with pytest.raises(e_type, match=e_msg):
-        gd.concat([s1, s2], axis=1)
+        with pytest.raises(type(e), match=e.__str__()):
+            gd.concat([s1, s2], axis=1)
+    else:
+        raise AssertionError(
+            "Expected pd.concat to fail for different index when axis=1"
+        )
 
 
 def test_concat_duplicate_columns():
@@ -339,3 +367,102 @@ def test_concat_mixed_input():
     assert_eq(pd.concat([pdf1, None]), gd.concat([gdf1, None]))
     assert_eq(pd.concat([None, pdf2]), gd.concat([None, gdf2]))
     assert_eq(pd.concat([None, pdf2, pdf1]), gd.concat([None, gdf2, gdf1]))
+
+
+@pytest.mark.parametrize(
+    "objs",
+    [
+        [pd.Series([1, 2, 3]), pd.DataFrame({"a": [1, 2]})],
+        [pd.Series([1, 2, 3]), pd.DataFrame({"a": []})],
+        [pd.Series([]), pd.DataFrame({"a": []})],
+        [pd.Series([]), pd.DataFrame({"a": [1, 2]})],
+        [pd.Series([1, 2, 3.0, 1.2], name="abc"), pd.DataFrame({"a": [1, 2]})],
+        [
+            pd.Series(
+                [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
+            ),
+            pd.DataFrame({"a": [1, 2]}),
+        ],
+        [
+            pd.Series(
+                [1, 2, 3.0, 1.2], name="abc", index=["a", "b", "c", "d"]
+            ),
+            pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
+        ],
+        [
+            pd.Series(
+                [1, 2, 3.0, 1.2, 8, 100],
+                name="New name",
+                index=["a", "b", "c", "d", "e", "f"],
+            ),
+            pd.DataFrame(
+                {"a": [1, 2, 4, 10, 11, 12]},
+                index=["a", "b", "c", "d", "e", "f"],
+            ),
+        ],
+        [
+            pd.Series(
+                [1, 2, 3.0, 1.2, 8, 100],
+                name="New name",
+                index=["a", "b", "c", "d", "e", "f"],
+            ),
+            pd.DataFrame(
+                {"a": [1, 2, 4, 10, 11, 12]},
+                index=["a", "b", "c", "d", "e", "f"],
+            ),
+        ]
+        * 7,
+    ],
+)
+def test_concat_series_dataframe_input(objs):
+    pd_objs = objs
+    gd_objs = [gd.from_pandas(obj) for obj in objs]
+
+    expected = pd.concat(pd_objs)
+    actual = gd.concat(gd_objs)
+
+    assert_eq(
+        expected.fillna(-1),
+        actual.fillna(-1),
+        check_dtype=False,
+        check_index_type=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "objs",
+    [
+        [
+            pd.Series(["a", "b", "c", "d"]),
+            pd.Series(["1", "2", "3", "4"]),
+            pd.DataFrame({"first col": ["10", "11", "12", "13"]}),
+        ],
+        [
+            pd.Series(["a", "b", "c", "d"]),
+            pd.Series(["1", "2", "3", "4"]),
+            pd.DataFrame(
+                {
+                    "first col": ["10", "11", "12", "13"],
+                    "second col": ["a", "b", "c", "d"],
+                }
+            ),
+        ],
+        [
+            pd.Series(["a", "b", "c"]),
+            pd.Series(["1", "2", "3", "4"]),
+            pd.DataFrame(
+                {
+                    "first col": ["10", "11", "12", "13"],
+                    "second col": ["a", "b", "c", "d"],
+                }
+            ),
+        ],
+    ],
+)
+def test_concat_series_dataframe_input_str(objs):
+    pd_objs = objs
+    gd_objs = [gd.from_pandas(obj) for obj in objs]
+
+    expected = pd.concat(pd_objs)
+    actual = gd.concat(gd_objs)
+    assert_eq(expected, actual, check_dtype=False, check_index_type=False)

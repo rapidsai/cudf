@@ -1,5 +1,4 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
-
 import numbers
 import pickle
 import warnings
@@ -72,8 +71,8 @@ class MultiIndex(Index):
         name=None,
         **kwargs,
     ) -> "MultiIndex":
-        from cudf.core.series import Series
         from cudf import DataFrame
+        from cudf.core.series import Series
 
         if sortorder is not None:
             raise NotImplementedError("sortorder is not yet supported")
@@ -172,7 +171,7 @@ class MultiIndex(Index):
             else:
                 level = DataFrame({name: out._levels[i]})
 
-            import cudf._lib as libcudf
+            from cudf import _lib as libcudf
 
             source_data[name] = libcudf.copying.gather(
                 level, codes._data.columns[0]
@@ -423,9 +422,7 @@ class MultiIndex(Index):
     def _compute_validity_mask(self, index, row_tuple, max_length):
         """ Computes the valid set of indices of values in the lookup
         """
-        from cudf import DataFrame
-        from cudf import Series
-        from cudf import concat
+        from cudf import DataFrame, Series, concat
 
         lookup = DataFrame()
         for idx, row in enumerate(row_tuple):
@@ -484,8 +481,7 @@ class MultiIndex(Index):
         return self._compute_validity_mask(index, row_tuple, max_length)
 
     def _index_and_downcast(self, result, index, index_key):
-        from cudf import DataFrame
-        from cudf import Series
+        from cudf import DataFrame, Series
 
         if isinstance(index_key, (numbers.Number, slice)):
             index_key = [index_key]
@@ -621,8 +617,9 @@ class MultiIndex(Index):
 
     def take(self, indices):
         from collections.abc import Sequence
-        from cudf import Series
         from numbers import Integral
+
+        from cudf import Series
 
         if isinstance(indices, (Integral, Sequence)):
             indices = np.array(indices)
