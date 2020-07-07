@@ -6194,3 +6194,29 @@ def test_dataframe_empty(df):
     gdf = gd.from_pandas(pdf)
 
     assert_eq(pdf.empty, gdf.empty)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [1],
+        {"a": [10, 11, 12]},
+        {
+            "a": [10, 11, 12],
+            "another column name": [12, 22, 34],
+            "xyz": [0, 10, 11],
+        },
+    ],
+)
+@pytest.mark.parametrize("columns", [["a"], ["another column name"], None])
+def test_dataframe_init_with_columns(data, columns):
+    pdf = pd.DataFrame(data, columns=columns)
+    gdf = gd.DataFrame(data, columns=columns)
+
+    assert_eq(
+        pdf,
+        gdf,
+        check_index_type=False if len(pdf.index) == 0 else True,
+        check_dtype=False if pdf.empty and len(pdf.columns) else True,
+    )
