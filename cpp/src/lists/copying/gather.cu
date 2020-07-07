@@ -54,16 +54,15 @@ struct list_gatherer {
   typedef size_type argument_type;
   typedef size_type result_type;
 
-  size_type offset_count;
+  size_t offset_count;
   size_type const* base_offsets;
   size_type const* offsets;
 
   list_gatherer(gather_data const& gd)
+    : offset_count{gd.base_offsets.size()},
+      base_offsets{gd.base_offsets.data()},
+      offsets{gd.offsets->mutable_view().data<size_type>()}
   {
-    offset_count            = gd.base_offsets.size();
-    base_offsets            = gd.base_offsets.data();
-    mutable_column_view mcv = gd.offsets->mutable_view();
-    offsets                 = mcv.data<size_type>();
   }
 
   __device__ result_type operator()(argument_type index)

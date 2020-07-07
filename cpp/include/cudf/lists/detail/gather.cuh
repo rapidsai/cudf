@@ -17,6 +17,7 @@
 
 #include <thrust/transform_scan.h>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <rmm/device_uvector.hpp>
 
@@ -30,8 +31,16 @@ namespace detail {
  * @ref make_gather_data
  */
 struct gather_data {
+  // The offsets column from our parent list (level N)
   std::unique_ptr<column> offsets;
+  // For each offset in the above offsets column, the original offset value
+  // prior to being gathered.
+  // Example:
+  // If the offsets[3] == 6  (representing row 3 of the new column)
+  // And the original value it was itself gathered from was 15, then
+  // base_offsets[3] == 15
   rmm::device_uvector<int32_t> base_offsets;
+  // size of the gather map that will be generated from this data
   size_type gather_map_size;
 };
 
@@ -42,9 +51,9 @@ struct gather_data {
  *                                 cudaStream_t stream,
  *                                 rmm::mr::device_memory_resource* mr)
  *
- * @param prev_base_offsets The buffer backing the base offsets used in the gather map. If
- *                          this buffer is not empty, the function will attempt to reuse the
- *                          buffer if it is large enough.
+ * @param prev_base_offsets The buffer backing the base offsets used in the gather map. We can
+ *                          free this buffer before allocating the new one to keep peak memory
+ *                          usage down.
  */
 template <bool NullifyOutOfBounds, typename MapItType>
 gather_data make_gather_data(cudf::lists_column_view const& source_column,
@@ -66,7 +75,6 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
   auto dst_offsets_c = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
   mutable_column_view dst_offsets_v = dst_offsets_c->mutable_view();
-  int32_t* dst_offsets              = dst_offsets_v.data<int32_t>();
 
   // generate the compacted outgoing offsets.
   auto count_iter = thrust::make_counting_iterator<int32_t>(0);
@@ -74,7 +82,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
     rmm::exec_policy(stream)->on(stream),
     count_iter,
     count_iter + offset_count,
-    dst_offsets,
+    dst_offsets_v.begin<int32_t>(),
     [gather_map, output_count, src_offsets, src_size] __device__(int32_t index) -> int32_t {
       int32_t offset_index = index < output_count ? gather_map[index] : 0;
 
@@ -87,23 +95,13 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
     0,
     thrust::plus<int32_t>());
 
-  // For each span of offsets (each output row) we need to know the original offset value to build
-  // the gather map for the next level.  This data is temporary and will only be needed until the
-  // next level of recursion is done using it.
-  //
-  // Additional optimization. If the "prev_base_offsets" buffer we have been passed is large enough
-  // to be used again, re-use it instead of allocating new memory. If it isn't big enough, release
-  // it.
-  if (prev_base_offsets.capacity() > 0) {
-    // reset size (but leave capacity)
-    prev_base_offsets.resize(0, stream);
-  }
-  bool can_recycle = prev_base_offsets.capacity() >= static_cast<size_t>(output_count);
-  rmm::device_uvector<int32_t> base_offsets =
-    can_recycle ? std::move(prev_base_offsets) : rmm::device_uvector<int32_t>(output_count, stream);
-  if (!can_recycle) { prev_base_offsets.release(); }
+  // now that we are doing using the gather_map, we can release the underlying prev_base_offsets.
+  // we will do it before allocating the new buffer (instead of letting the destructor clear it up
+  // at the end of the function) to keep peak memory usage down
+  prev_base_offsets.release();
 
   // generate the base offsets
+  rmm::device_uvector<int32_t> base_offsets = rmm::device_uvector<int32_t>(output_count, stream);
   thrust::transform(rmm::exec_policy(stream)->on(stream),
                     gather_map,
                     gather_map + offset_count,
@@ -115,13 +113,8 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
                     });
 
   // Retrieve size of the resulting gather map for level N+1 (the last offset)
-  size_type child_gather_map_size = 0;
-  CUDA_TRY(cudaMemcpyAsync(&child_gather_map_size,
-                           dst_offsets + output_count,
-                           sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  size_type child_gather_map_size =
+    cudf::detail::get_value<size_type>(dst_offsets_c->view(), output_count, stream);
 
   return {std::move(dst_offsets_c), std::move(base_offsets), child_gather_map_size};
 }

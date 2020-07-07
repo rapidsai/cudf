@@ -338,16 +338,22 @@ struct column_gatherer_impl<list_view, MapItRoot> {
       auto child = lists::detail::gather_list_nested(list.child(), gd, stream, mr);
 
       // return the final column
-      return make_lists_column(
-        gather_map_size, std::move(gd.offsets), std::move(child), 0, rmm::device_buffer{});
+      return make_lists_column(gather_map_size,
+                               std::move(gd.offsets),
+                               std::move(child),
+                               0,
+                               rmm::device_buffer{0, stream, mr});
     }
 
     // it's a leaf.  do a regular gather
     auto child = lists::detail::gather_list_leaf(list.child(), gd, stream, mr);
 
     // assemble final column
-    return make_lists_column(
-      gather_map_size, std::move(gd.offsets), std::move(child), 0, rmm::device_buffer{});
+    return make_lists_column(gather_map_size,
+                             std::move(gd.offsets),
+                             std::move(child),
+                             0,
+                             rmm::device_buffer{0, stream, mr});
   }
 };
 
