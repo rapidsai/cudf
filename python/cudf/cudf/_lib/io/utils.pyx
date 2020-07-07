@@ -45,16 +45,17 @@ cdef source_info make_source_info(list src) except*:
     # Otherwise src is expected to be a numeric fd, string path, or PathLike.
     # TODO (ptaylor): Might need to update this check if accepted input types
     #                 change when UCX and/or cuStreamz support is added.
-    elif isinstance(src, cudf.io.kafka.KafkaSource):
-        for key, value in src.kafka_configs.items():
+    elif isinstance(src[0], cudf.io.kafka.KafkaSource):
+        kafka_src = src[0]
+        for key, value in kafka_src.kafka_configs.items():
             kafka_confs[str.encode(key)] = str.encode(value)
         consumer = new kafka_consumer(kafka_confs,
-                                      src.topic.encode(),
-                                      src.partition,
-                                      src.start_offset,
-                                      src.end_offset,
-                                      src.batch_timeout,
-                                      src.delimiter.encode())
+                                      kafka_src.topic.encode(),
+                                      kafka_src.partition,
+                                      kafka_src.start_offset,
+                                      kafka_src.end_offset,
+                                      kafka_src.batch_timeout,
+                                      kafka_src.delimiter.encode())
         return source_info(<datasource *>consumer)
     elif isinstance(src[0], (int, float, complex, basestring, os.PathLike)):
         # If source is a file, return source_info where type=FILEPATH

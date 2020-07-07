@@ -92,9 +92,9 @@ conda list
 
 logger "Build libcudf..."
 if [[ ${BUILD_MODE} == "pull-request" ]]; then
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests
+    $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka benchmarks tests
 else
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests -l
+    $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka benchmarks tests -l
 fi
 
 ################################################################################
