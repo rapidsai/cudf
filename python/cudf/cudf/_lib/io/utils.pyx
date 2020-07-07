@@ -15,7 +15,7 @@ import codecs
 import errno
 import io
 import os
-from cudf.io.kafka import KafkaDatasource
+import cudf
 
 # Converts the Python source input to libcudf++ IO source_info
 # with the appropriate type and source values
@@ -45,17 +45,19 @@ cdef source_info make_source_info(list src) except*:
     # Otherwise src is expected to be a numeric fd, string path, or PathLike.
     # TODO (ptaylor): Might need to update this check if accepted input types
     #                 change when UCX and/or cuStreamz support is added.
-    elif isinstance(src[0], KafkaDatasource):
-        kafka_src = src[0]
-        for key, value in kafka_src.kafka_configs.items():
+    elif isinstance(src[0], cudf.io.kafka.KafkaDatasource):
+        for key, value in src[0].kafka_configs.items():
             kafka_confs[str.encode(key)] = str.encode(value)
         consumer = new kafka_consumer(kafka_confs,
-                                      kafka_src.topic.encode(),
-                                      kafka_src.partition,
-                                      kafka_src.start_offset,
-                                      kafka_src.end_offset,
-                                      kafka_src.batch_timeout,
-                                      kafka_src.delimiter.encode())
+                                      src[0].topic.encode(),
+                                      src[0].partition,
+                                      src[0].start_offset,
+                                      src[0].end_offset,
+                                      src[0].batch_timeout,
+                                      src[0].delimiter.encode())
+        # I want a unique_ptr here, only a raw pointer is accepted however,
+        # probably best to move this logic up the stack and think
+        # about a "pool" of kafka connections
         return source_info(<datasource *>consumer)
     elif isinstance(src[0], (int, float, complex, basestring, os.PathLike)):
         # If source is a file, return source_info where type=FILEPATH
