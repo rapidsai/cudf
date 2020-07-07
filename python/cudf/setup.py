@@ -62,6 +62,7 @@ extensions = [
         library_dirs=(
             pa.get_library_dirs()
             + [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
+            + os.path.join(os.path.join(os.sys.prefix, "libcudf_kafka"), "lib")
         ),
         libraries=["cudf", "cudf_kafka"] + pa.get_libraries(),
         language="c++",
