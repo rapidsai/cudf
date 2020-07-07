@@ -269,6 +269,12 @@ class DataFrame(Frame, Serializable):
         self._index = as_index(index)
         data = list(itertools.zip_longest(*data))
 
+        if columns is not None and len(data) == 0:
+            data = [
+                cudf.core.column.column_empty(row_count=0, dtype=None)
+                for _ in columns
+            ]
+
         for col_name, col in enumerate(data):
             self._data[col_name] = column.as_column(col)
 
@@ -283,12 +289,22 @@ class DataFrame(Frame, Serializable):
             # not in `columns`
             keys = [key for key in data.keys() if key in columns]
             data = {key: data[key] for key in keys}
+            extra_cols = [col for col in columns if col not in data.keys()]
             if keys:
                 # if keys is non-empty,
                 # add null columns for all values
                 # in `columns` that don't exist in `keys`:
-                extra_cols = [col for col in columns if col not in data.keys()]
                 data.update({key: None for key in extra_cols})
+            else:
+                # if keys is empty,
+                # it means that none of the actual keys in `data`
+                # matches with `columns`.
+                # Hence only assign `data` with `columns` as keys
+                # and their values as empty columns.
+                data = {
+                    key: cudf.core.column.column_empty(row_count=0, dtype=None)
+                    for key in extra_cols
+                }
 
         data, index = self._align_input_series_indices(data, index=index)
 
@@ -4991,11 +5007,12 @@ class DataFrame(Frame, Serializable):
         """
         Construct a DataFrame from a list of Columns
         """
-        return cls(
-            data=dict(zip(range(len(cols)), cols)),
-            index=index,
-            columns=columns,
-        )
+        if columns is not None:
+            data = dict(zip(columns, cols))
+        else:
+            data = dict(zip(range(len(cols)), cols))
+
+        return cls(data=data, index=index,)
 
     def quantile(
         self,
