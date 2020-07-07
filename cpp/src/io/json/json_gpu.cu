@@ -19,6 +19,7 @@
 
 #include <rmm/device_buffer.hpp>
 
+#include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/trie.cuh>
 
 #include <cudf/utilities/bit.hpp>
@@ -663,8 +664,10 @@ __global__ void gpu_collect_field_names(const char *data,
       st       = POST_NAME;
       auto idx = atomicAdd(names_cnt, 1);
       if (nullptr != names_info) {
-        names_info->hashes.element<uint32_t>(idx)  = idx;
-        names_info->lengths.element<uint16_t>(idx) = pos - last_name_start;
+        auto len = pos - last_name_start;
+        names_info->hashes.element<uint32_t>(idx) =
+          MurmurHash3_32<cudf::string_view>{}(cudf::string_view(data + last_name_start, len));
+        names_info->lengths.element<uint16_t>(idx) = len;
         names_info->offsets.element<uint64_t>(idx) = last_name_start;
       }
     } else if (st == POST_NAME && data[pos] == opts.quotechar) {
