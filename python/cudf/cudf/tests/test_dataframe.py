@@ -6197,6 +6197,23 @@ def test_dataframe_empty(df):
 
 
 @pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series(),
+        pd.Series(index=[100, 10, 1, 0]),
+        pd.Series([]),
+        pd.Series(["a", "b", "c", "d"]),
+        pd.Series(["a", "b", "c", "d"], index=[0, 1, 10, 11]),
+    ],
+)
+def test_series_empty(ps):
+    ps = ps
+    gs = gd.from_pandas(ps)
+
+    assert_eq(ps.empty, gs.empty)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [],
