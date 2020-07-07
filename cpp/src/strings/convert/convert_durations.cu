@@ -19,17 +19,11 @@
 
 #include <map>
 #include <vector>
-#include "cudf/utilities/traits.hpp"
 
 namespace cudf {
 namespace strings {
 namespace detail {
 
-// algo
-// split internal rep to D,H,M,S,ns
-// ask struct {int64_t, int8_t, int8_t, int8_t, int64_t}, then type specific function to convert.
-// reuse conver_integers.cu code for size, string_conversion for days.
-// move functions int->str, str->int to .cuh file, & reuse
 namespace {
 
 // used to index values in a timeparts array
@@ -84,8 +78,8 @@ struct format_compiler {
                                               {'H', 2},
                                               {'M', 2},
                                               {'S', 2},
-                                              {'u', -1},   // 0 or 6.
-                                              {'f', -1}};  // 0 or <=9 without trialing zeros
+                                              {'u', -1},   // 0 or 6+1(dot)
+                                              {'f', -1}};  // 0 or <=9+1(dot) without trialing zeros
 
   format_compiler(const char* format, type_id units) : format(format), units(units) {}
 
@@ -118,7 +112,7 @@ struct format_compiler {
       }
       if (ch >= '0' && ch <= '9') {
         CUDF_EXPECTS(*str == 'f', "precision not supported for specifier: " + std::string(1, *str));
-        specifier_lengths[*str] = static_cast<int8_t>(ch - '0');
+        specifier_lengths[*str] = static_cast<int8_t>(ch - '0')+1;
         ch                      = *str++;
         length--;
       }
@@ -221,13 +215,13 @@ struct duration_to_string_size_fn {
       case 'S': return count_digits(timeparts[DU_SECOND]); break;
       // TODO: include dot only if non-zero.
       // 0 or 6 digits for pandas.
-      case 'u': return (timeparts[DU_SUBSECOND] == 0) ? 0 : 6; break;
+      case 'u': return (timeparts[DU_SUBSECOND] == 0) ? 0 : 6+1; break;
       // 0 or ns without trailing zeros
       case 'f':
         return (timeparts[DU_SUBSECOND] == 0) ? 0 : [units = type] {
-          if (units == type_id::DURATION_MILLISECONDS) return 3;
-          if (units == type_id::DURATION_MICROSECONDS) return 6;
-          if (units == type_id::DURATION_NANOSECONDS) return 9;
+          if (units == type_id::DURATION_MILLISECONDS) return 3+1;
+          if (units == type_id::DURATION_MICROSECONDS) return 6+1;
+          if (units == type_id::DURATION_NANOSECONDS) return 9+1;
           return 0;
         }() - count_trailing_zeros(timeparts[DU_SUBSECOND]);  // 3/6/9-trailing_zeros.
         break;
@@ -338,14 +332,14 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
         case 'u':
         case 'f':  // sub-second
         {
-          char subsecond_digits[] = "000000000";  // 9 max digits
+          char subsecond_digits[] = ".000000000";  // 9 max digits
           const int digits        = [units = type] {
             if (units == type_id::DURATION_MILLISECONDS) return 3;
             if (units == type_id::DURATION_MICROSECONDS) return 6;
             if (units == type_id::DURATION_NANOSECONDS) return 9;
             return 0;
           }();
-          int2str(subsecond_digits, digits, timeparts[DU_SUBSECOND]);
+          int2str(subsecond_digits+1, digits, timeparts[DU_SUBSECOND]);
           ptr = copy_and_increment(
             ptr,
             subsecond_digits,
