@@ -344,7 +344,8 @@ std::string ptx_parser::parse()
     return false;
   });
 
-  auto const fn_body_output   = parse_function_body(std::string(f2, l2));  // TODO wtf - order?
+  // DO NOT CHANGE ORDER - parse_function_body must be called before parse_function_header
+  auto const fn_body_output   = parse_function_body(std::string(f2, l2));
   auto const fn_header_output = parse_function_header(std::string(f, l));
 
   // Don't use std::accumulate until C++20 when rvalue references are supported
