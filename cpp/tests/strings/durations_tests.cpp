@@ -91,8 +91,16 @@ TEST_F(StringsDurationsTest, ISOFormatDaysOnly)
 TEST_F(StringsDurationsTest, ISOFormatSubseconds)
 {
   using T = cudf::duration_ns;
-  cudf::test::fixed_width_column_wrapper<T> durations{
-    T{0L},  T{7000000000L}, T{11L}, T{10L}, T{17716L}, T{18321L}, T{16798L}, T{15258L}, T{15258000L}, T{-70672L}};
+  cudf::test::fixed_width_column_wrapper<T> durations{T{0L},
+                                                      T{7000000000L},
+                                                      T{11L},
+                                                      T{10L},
+                                                      T{17716L},
+                                                      T{18321L},
+                                                      T{16798L},
+                                                      T{15258L},
+                                                      T{15258000L},
+                                                      T{-70672L}};
   // fully isoformat compliant.
   auto results = cudf::strings::from_durations(durations, "P%dDT%HH%MM%S%fS");
   cudf::test::strings_column_wrapper expected{"P0DT0H0M0S",
@@ -133,11 +141,11 @@ TEST_F(StringsDurationsTest, FromDurationSubseconds)
                                                                          ms{-6106017600047}};
   auto results = cudf::strings::from_durations(durations_ms, "%d days %+%H:%M:%S%3f");
   cudf::test::strings_column_wrapper expected_ms_3f{"-1 days +23:59:00.000",
-                                                 "17716 days 12:00:00.123",
-                                                 "18321 days 00:01:01.007",
-                                                 "16798 days 23:02:02.420",
-                                                 "15258 days 03:03:03.999",
-                                                 "-70672 days +11:59:59.953"};
+                                                    "17716 days 12:00:00.123",
+                                                    "18321 days 00:01:01.007",
+                                                    "16798 days 23:02:02.420",
+                                                    "15258 days 03:03:03.999",
+                                                    "-70672 days +11:59:59.953"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_ms_3f);
 
   results = cudf::strings::from_durations(durations_ms, "%d days %+%H:%M:%S%6f");
@@ -151,11 +159,11 @@ TEST_F(StringsDurationsTest, FromDurationSubseconds)
 
   results = cudf::strings::from_durations(durations_ms, "%d days %+%H:%M:%S%f");
   cudf::test::strings_column_wrapper expected_ms{"-1 days +23:59:00",
-                                                    "17716 days 12:00:00.123",
-                                                    "18321 days 00:01:01.007",
-                                                    "16798 days 23:02:02.42",
-                                                    "15258 days 03:03:03.999",
-                                                    "-70672 days +11:59:59.953"};
+                                                 "17716 days 12:00:00.123",
+                                                 "18321 days 00:01:01.007",
+                                                 "16798 days 23:02:02.42",
+                                                 "15258 days 03:03:03.999",
+                                                 "-70672 days +11:59:59.953"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_ms);
 
   using ns = cudf::duration_ns;
@@ -166,10 +174,10 @@ TEST_F(StringsDurationsTest, FromDurationSubseconds)
                                                                          ns{-6106017600047047047}};
   results = cudf::strings::from_durations(durations_ns, "%d days %+%H:%M:%S%9f");
   cudf::test::strings_column_wrapper expected_ns_9f{"17716 days 12:00:00.123456789",
-                                                 "18321 days 00:01:01.007008009",
-                                                 "16798 days 23:02:02.421310209",
-                                                 "15258 days 03:03:03.999777550",
-                                                 "-70672 days +11:59:59.952952953"};
+                                                    "18321 days 00:01:01.007008009",
+                                                    "16798 days 23:02:02.421310209",
+                                                    "15258 days 03:03:03.999777550",
+                                                    "-70672 days +11:59:59.952952953"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_ns_9f);
 
   results = cudf::strings::from_durations(durations_ns, "%d days %+%H:%M:%S%6f");
