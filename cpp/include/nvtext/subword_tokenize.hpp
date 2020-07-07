@@ -45,6 +45,8 @@ struct hashed_vocabulary {
  * The object here can be used to call the subword_tokenize without
  * incurring the cost of loading the same file each time.
  *
+ * @throw cudf::logic_error if the `filename_hashed_vocabulary` could not be opened.
+ *
  * @param filename_hashed_vocabulary A path to the preprocessed vocab.txt file.
  *        Note that this is the file AFTER python/perfect_hash.py has been used
  *        for preprocessing.
@@ -100,6 +102,10 @@ struct tokenizer_result {
  * Essentially each string is converted into one or more vectors of token-ids
  * in the output column. The total number of these vectors x `max_sequence_length`
  * is the size of the output column.
+ *
+ * @throw cudf::logic_error if `stride > max_sequence_length`
+ * @throw cudf::logic_error if `max_sequence_length * max_rows_tensor` is
+ *        larger than the max value for cudf::size_type
  *
  * @param strings The input strings to tokenize.
  * @param filename_hashed_vocabulary A path to the preprocessed vocab.txt file.
