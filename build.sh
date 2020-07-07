@@ -152,6 +152,21 @@ if buildAll || hasArg libcudf || hasArg libcudf_kafka; then
           -DBUILD_CUDF_KAFKA=${BUILD_LIBCUDF_KAFKA} $REPODIR/cpp
 fi
 
+# Do not build libcudf_kafka with 'buildAll'
+if hasArg libcudf_kafka; then
+
+    cd ${LIB_BUILD_DIR}
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        make -j${PARALLEL_LEVEL} install_libcudf_kafka VERBOSE=${VERBOSE}
+    else
+        make -j${PARALLEL_LEVEL} libcudf_kafka VERBOSE=${VERBOSE}
+    fi
+
+    if [[ ${BUILD_TESTS} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_tests_libcudf_kafka VERBOSE=${VERBOSE}
+    fi
+fi
+
 if buildAll || hasArg libcudf; then
 
     cd ${LIB_BUILD_DIR}
@@ -190,20 +205,5 @@ if buildAll || hasArg dask_cudf; then
         python setup.py install --single-version-externally-managed --record=record.txt
     else
         python setup.py build_ext --inplace
-    fi
-fi
-
-# Do not build libcudf_kafka with 'buildAll'
-if hasArg libcudf_kafka; then
-
-    cd ${LIB_BUILD_DIR}
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        make -j${PARALLEL_LEVEL} install_libcudf_kafka VERBOSE=${VERBOSE}
-    else
-        make -j${PARALLEL_LEVEL} libcudf_kafka VERBOSE=${VERBOSE}
-    fi
-
-    if [[ ${BUILD_TESTS} == "ON" ]]; then
-        make -j${PARALLEL_LEVEL} build_tests_libcudf_kafka VERBOSE=${VERBOSE}
     fi
 fi
