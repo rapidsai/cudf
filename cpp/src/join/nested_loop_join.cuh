@@ -135,8 +135,8 @@ get_base_nested_loop_join_indices(table_view const& left,
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
 
-  size_type estimated_size =
-    estimate_nested_loop_join_output_size(*left_table, *right_table, JoinKind, compare_nulls, stream);
+  size_type estimated_size = estimate_nested_loop_join_output_size(
+    *left_table, *right_table, JoinKind, compare_nulls, stream);
 
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {

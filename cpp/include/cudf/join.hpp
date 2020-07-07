@@ -90,7 +90,7 @@ std::unique_ptr<cudf::table> inner_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-  null_equality compare_nulls = null_equality::EQUAL,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -158,7 +158,7 @@ std::unique_ptr<cudf::table> left_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-  null_equality compare_nulls = null_equality::EQUAL,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -226,7 +226,7 @@ std::unique_ptr<cudf::table> full_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-  null_equality compare_nulls = null_equality::EQUAL,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 /**
  * @brief Performs a left semi join on the specified columns of two
@@ -281,7 +281,7 @@ std::unique_ptr<cudf::table> left_semi_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
-  null_equality compare_nulls = null_equality::EQUAL,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -337,7 +337,7 @@ std::unique_ptr<cudf::table> left_anti_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
-  null_equality compare_nulls = null_equality::EQUAL,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**

@@ -431,8 +431,8 @@ std::unique_ptr<table> join_call_compute_df(
     return get_empty_joined_table(left, right, columns_in_common);
   }
 
-  auto joined_indices =
-    get_base_join_indices<JoinKind>(left.select(left_on), right.select(right_on), compare_nulls, stream);
+  auto joined_indices = get_base_join_indices<JoinKind>(
+    left.select(left_on), right.select(right_on), compare_nulls, stream);
 
   return construct_join_output_df<JoinKind>(
     left, right, joined_indices, columns_in_common, mr, stream);
