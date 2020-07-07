@@ -334,24 +334,29 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
   uint32_t* device_start_word_indices = device_word_indices.data();
   uint32_t* device_end_word_indices   = device_start_word_indices + num_code_points;
 
-  uint32_t const total_threads = num_code_points;
-  uint32_t const num_blocks    = (total_threads + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-  detail::init_data_and_mark_word_start_and_ends<<<num_blocks, THREADS_PER_BLOCK, 0, stream>>>(
-    device_code_points,
-    device_start_word_indices,
-    device_end_word_indices,
-    num_code_points,
-    device_token_ids.data(),
-    device_tokens_per_word.data());
+  cudf::detail::grid_1d const grid_init{static_cast<cudf::size_type>(num_code_points),
+                                        THREADS_PER_BLOCK};
+  detail::init_data_and_mark_word_start_and_ends<<<grid_init.num_blocks,
+                                                   grid_init.num_threads_per_block,
+                                                   0,
+                                                   stream>>>(device_code_points,
+                                                             device_start_word_indices,
+                                                             device_end_word_indices,
+                                                             num_code_points,
+                                                             device_token_ids.data(),
+                                                             device_tokens_per_word.data());
   CHECK_CUDA(stream);
 
-  uint32_t const word_split_blocks = (num_strings + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-  detail::mark_string_start_and_ends<<<word_split_blocks, THREADS_PER_BLOCK, 0, stream>>>(
-    device_code_points,
-    device_strings_offsets,
-    device_start_word_indices,
-    device_end_word_indices,
-    num_strings);
+  cudf::detail::grid_1d const grid_mark{static_cast<cudf::size_type>(num_strings),
+                                        THREADS_PER_BLOCK};
+  detail::mark_string_start_and_ends<<<grid_mark.num_blocks,
+                                       grid_mark.num_threads_per_block,
+                                       0,
+                                       stream>>>(device_code_points,
+                                                 device_strings_offsets,
+                                                 device_start_word_indices,
+                                                 device_end_word_indices,
+                                                 num_strings);
   CHECK_CUDA(stream);
 
   // Now start_word_indices has the word starts scattered throughout the array. We need to select
@@ -381,8 +386,7 @@ void wordpiece_tokenizer::tokenize(ptr_length_pair& cp_and_length,
   // We need to change the end_word_indices pointer after the selection is complete
   device_end_word_indices = device_start_word_indices + num_words;
 
-  // uint32_t const num_wp_blocks = (num_words + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-  cudf::detail::grid_1d grid{static_cast<cudf::size_type>(num_words), THREADS_PER_BLOCK};
+  cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(num_words), THREADS_PER_BLOCK};
   detail::kernel_wordpiece_tokenizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
     device_code_points,
     vocab_table.table->view().data<uint64_t>(),             // device_hash_table.data().get(),
