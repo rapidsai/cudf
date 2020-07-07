@@ -744,20 +744,6 @@ class Series(Frame, Serializable):
         else:
             return NotImplemented
 
-    @property
-    def empty(self):
-        """
-        Indicator whether Series is empty.
-
-        True if Series is entirely empty (no items).
-
-        Returns
-        -------
-        out : bool
-            If Series is empty, return True, if not return False.
-        """
-        return super().empty
-
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             return self.iloc[arg]
