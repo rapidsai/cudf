@@ -139,9 +139,10 @@ class Frame(libcudf.table.Table):
                 for cols in list_of_columns:
                     # If column not in this df, fill with an all-null column
                     if idx >= len(cols) or cols[idx] is None:
-                        filtered_cols = [x for x in cols if x is not None]
-                        n = len(filtered_cols[0])
-                        cols[idx] = column_empty(n, dtype, masked=True)
+                        n = len(next(x for x in cols if x is not None))
+                        cols[idx] = column_empty(
+                            row_count=n, dtype=dtype, masked=True
+                        )
                     else:
                         # If column is categorical, rebase the codes with the
                         # combined categories, and cast the new codes to the
