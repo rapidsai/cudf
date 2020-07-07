@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+
 #include <io/utilities/parsing_utils.cuh>
 
 namespace cudf {
@@ -72,6 +73,30 @@ void detect_data_types(ColumnInfo *column_infos,
                        const uint64_t *rec_starts,
                        cudf::size_type num_records,
                        cudaStream_t stream = 0);
+
+/**
+ * @brief TODO
+ *
+ * @param[in] data Input data buffer
+ * @param[in] data_size Size of the data buffer, in bytes
+ * @param[in] opts A set of parsing options
+ * @param[in] num_columns The number of columns of input data
+ * @param[in] rec_starts The start the input data of interest
+ * @param[in] num_records The number of lines/rows of input data
+ * @param[out] names_cnt TODO
+ * @param[out] names_info TODO
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ *
+ * @returns void
+ **/
+void collect_field_names(const char *data,
+                         size_t data_size,
+                         const ParseOptions &options,
+                         const uint64_t *rec_starts,
+                         cudf::size_type num_records,
+                         unsigned long long int *names_cnt,
+                         field_names_device_info *names_info,
+                         cudaStream_t stream = 0);
 
 }  // namespace gpu
 }  // namespace json

@@ -34,7 +34,7 @@
 #include <type_traits>
 
 /**
- * Does support concurrent insert, but not concurrent insert and probping.
+ * Does support concurrent insert, but not concurrent insert and probing.
  *
  * @note The user is responsible for the following stream semantics:
  * - Either the same stream should be used to create the map as is used by the kernels that access
@@ -82,9 +82,9 @@ class concurrent_unordered_multimap {
    *
    * @note The implementation of this multimap uses sentinel values to
    * indicate an entry in the hash table that is empty, i.e., if a hash bucket
-   *is empty, the pair residing there will be equal to (unused_key,
-   *unused_element). As a result, attempting to insert a key equal to
-   *`unused_key` results in undefined behavior.
+   * is empty, the pair residing there will be equal to (unused_key,
+   * unused_element). As a result, attempting to insert a key equal to
+   * `unused_key` results in undefined behavior.
    *
    * @note All allocations, kernels and copies in the constructor take place
    * on stream but the constructor does not synchronize the stream. It is the user's

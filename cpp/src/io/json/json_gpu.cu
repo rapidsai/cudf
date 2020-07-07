@@ -624,6 +624,59 @@ __global__ void detect_json_data_types(const char *data,
   }
 }
 
+enum parse_state { PRE_NAME, NAME, POST_NAME, POST_NAME_QUOTE };
+
+/**
+ * @brief TODO
+ *
+ * @param[in] data Input data buffer
+ * @param[in] data_size Size of the data buffer, in bytes
+ * @param[in] opts A set of parsing options
+ * @param[in] rec_starts The start the input data of interest
+ * @param[in] num_records The number of lines/rows of input data
+ * @param[out] tag_cnt TODO
+ *
+ * @returns void
+ **/
+__global__ void gpu_collect_field_names(const char *data,
+                                        size_t data_size,
+                                        const ParseOptions opts,
+                                        const uint64_t *rec_starts,
+                                        cudf::size_type num_records,
+                                        unsigned long long int *names_cnt,
+                                        field_names_device_info *names_info)
+{
+  long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
+  if (rec_id >= num_records) return;
+
+  auto const start = rec_starts[rec_id];
+  // has the same semantics as end() in STL containers (one past last element)
+  auto const stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
+
+  parse_state st       = PRE_NAME;
+  auto last_name_start = start;
+  for (auto pos = start; pos < stop; ++pos) {
+    if (st == PRE_NAME && data[pos] == opts.quotechar) {
+      st              = NAME;
+      last_name_start = pos + 1;
+    } else if (st == NAME && data[pos] == opts.quotechar && data[pos - 1] != '\\') {
+      st       = POST_NAME;
+      auto idx = atomicAdd(names_cnt, 1);
+      if (nullptr != names_info) {
+        names_info->hashes.element<uint32_t>(idx)  = idx;
+        names_info->lengths.element<uint16_t>(idx) = pos - last_name_start;
+        names_info->offsets.element<uint64_t>(idx) = last_name_start;
+      }
+    } else if (st == POST_NAME && data[pos] == opts.quotechar) {
+      st = POST_NAME_QUOTE;
+    } else if (st == POST_NAME_QUOTE && data[pos] == opts.quotechar && data[pos - 1] != '\\') {
+      st = POST_NAME;
+    } else if (st == POST_NAME && data[pos] == opts.delimiter) {
+      st = PRE_NAME;
+    }
+  }
+}
+
 }  // namespace
 
 /**
@@ -685,6 +738,32 @@ void detect_data_types(ColumnInfo *column_infos,
 
   detect_json_data_types<<<grid_size, block_size, 0, stream>>>(
     data, data_size, options, num_columns, rec_starts, num_records, column_infos);
+
+  CUDA_TRY(cudaGetLastError());
+}
+
+/**
+ * @copydoc cudf::io::json::gpu::gpu_collect_field_names
+ */
+void collect_field_names(const char *data,
+                         size_t data_size,
+                         const ParseOptions &options,
+                         const uint64_t *rec_starts,
+                         cudf::size_type num_records,
+                         unsigned long long int *names_cnt,
+                         field_names_device_info *names_info,
+                         cudaStream_t stream)
+{
+  int block_size;
+  int min_grid_size;
+  CUDA_TRY(
+    cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, gpu_collect_field_names));
+
+  // Calculate actual block count to use based on records count
+  const int grid_size = (num_records + block_size - 1) / block_size;
+
+  gpu_collect_field_names<<<grid_size, block_size, 0, stream>>>(
+    data, data_size, options, rec_starts, num_records, names_cnt, names_info);
 
   CUDA_TRY(cudaGetLastError());
 }

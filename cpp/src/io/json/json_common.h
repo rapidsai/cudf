@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/types.hpp>
 
 class SerialTrieNode;
@@ -30,6 +31,12 @@ struct ColumnInfo {
   cudf::size_type int_count;
   cudf::size_type bool_count;
   cudf::size_type null_count;
+};
+
+struct field_names_device_info {
+  mutable_column_device_view hashes;
+  mutable_column_device_view lengths;
+  mutable_column_device_view offsets;
 };
 
 }  // namespace json

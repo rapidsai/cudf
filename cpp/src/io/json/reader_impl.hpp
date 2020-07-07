@@ -42,7 +42,7 @@ using namespace cudf::io;
 /**
  * @brief Class used to parse Json input and convert it into gdf columns
  *
- **/
+ */
 class reader::impl {
  public:
  private:
@@ -85,16 +85,24 @@ class reader::impl {
    * @param[in] range_size Bytes to read; use `0` for all remaining data
    *
    * @return void
-   **/
+   */
   void ingest_raw_input(size_t range_offset, size_t range_size);
 
+  /**
+   * @brief TODO
+   *
+   * @return TODO
+   */
+  std::vector<std::string> get_names_from_json_object(const std::vector<char> &json_obj,
+                                                      const ParseOptions &opts,
+                                                      cudaStream_t stream);
   /**
    * @brief Decompress the input data, if needed
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
    *
    * @return void
-   **/
+   */
   void decompress_input();
 
   /**
@@ -105,7 +113,7 @@ class reader::impl {
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return void
-   **/
+   */
   void set_record_starts(cudaStream_t stream);
 
   /**
@@ -116,7 +124,7 @@ class reader::impl {
    * Also updates the array of record starts to match the device data offset.
    *
    * @return void
-   **/
+   */
   void upload_data_to_device();
 
   /**
@@ -127,7 +135,7 @@ class reader::impl {
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return void
-   **/
+   */
   void set_column_names(cudaStream_t stream);
 
   /**
@@ -138,7 +146,7 @@ class reader::impl {
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return void
-   **/
+   */
   void set_data_types(cudaStream_t stream);
 
   /**
@@ -147,13 +155,13 @@ class reader::impl {
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return table_with_metadata struct
-   **/
+   */
   table_with_metadata convert_data_to_table(cudaStream_t stream);
 
  public:
   /**
    * @brief Constructor from a dataset source with reader options.
-   **/
+   */
   explicit impl(std::unique_ptr<datasource> source,
                 std::string filepath,
                 reader_options const &args,
@@ -167,7 +175,7 @@ class reader::impl {
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Unique pointer to the table data
-   **/
+   */
   table_with_metadata read(size_t range_offset, size_t range_size, cudaStream_t stream);
 };
 

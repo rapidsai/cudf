@@ -22,6 +22,7 @@
 #include "reader_impl.hpp"
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_scalar.hpp>
 
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/io/readers.hpp>
@@ -40,6 +41,42 @@ namespace json {
 using namespace cudf::io;
 
 namespace {
+
+/**
+ * @brief Estimates the maximum expected length or a row, based on the number
+ * of columns
+ *
+ * If the number of columns is not available, it will return a value large
+ * enough for most use cases
+ *
+ * @param[in] num_columns Number of columns in the JSON file (optional)
+ *
+ * @return Estimated maximum size of a row, in bytes
+ **/
+constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept
+{
+  constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
+  constexpr size_t column_bytes  = 64;
+  constexpr size_t base_padding  = 1024;  // 1KB
+  if (num_columns == 0) {
+    // Use flat size if the number of columns is not known
+    return max_row_bytes;
+  } else {
+    // Expand the size based on the number of columns, if available
+    return base_padding + num_columns * column_bytes;
+  }
+}
+
+}  // anonymous namespace
+template <typename T>
+void print_column(std::unique_ptr<column> &c)
+{
+  std::vector<T> hdata(c->size());
+  auto ddata = c->release();
+  cudaMemcpy(hdata.data(), ddata.data->data(), sizeof(T) * hdata.size(), cudaMemcpyDefault);
+  for (auto elem : hdata) std::cout << elem << ' ';
+}
+
 /**
  * @brief Extract value names from a JSON object
  *
@@ -48,9 +85,50 @@ namespace {
  *
  * @return std::vector<std::string> names of JSON object values
  **/
-std::vector<std::string> get_names_from_json_object(const std::vector<char> &json_obj,
-                                                    const ParseOptions &opts)
+std::vector<std::string> reader::impl::get_names_from_json_object(const std::vector<char> &json_obj,
+                                                                  const ParseOptions &opts,
+                                                                  cudaStream_t stream)
 {
+  // count fields
+  rmm::device_scalar<unsigned long long int> field_counter(0, stream);
+
+  cudf::io::json::gpu::collect_field_names(static_cast<const char *>(data_.data()),
+                                           data_.size(),
+                                           opts_,
+                                           rec_starts_.data().get(),
+                                           rec_starts_.size(),
+                                           field_counter.data(),
+                                           nullptr,
+                                           stream);
+
+  // allocate columns to store hash values, lengths, offsets
+  auto const num_fields = field_counter.value();
+  auto name_hashes      = make_numeric_column(data_type(type_id::UINT32), num_fields);
+  auto d_name_hashes    = mutable_column_device_view::create(name_hashes->mutable_view(), stream);
+  auto name_lengths     = make_numeric_column(data_type(type_id::UINT16), num_fields);
+  auto d_name_lengths   = mutable_column_device_view::create(name_lengths->mutable_view(), stream);
+  auto name_offsets     = make_numeric_column(data_type(type_id::UINT64), num_fields);
+  auto d_name_offsets   = mutable_column_device_view::create(name_offsets->mutable_view(), stream);
+
+  field_names_device_info info_arg{*d_name_hashes, *d_name_lengths, *d_name_offsets};
+  rmm::device_scalar<field_names_device_info> d_info_arg(info_arg, stream);
+
+  field_counter.set_value(0, stream);
+  cudf::io::json::gpu::collect_field_names(static_cast<const char *>(data_.data()),
+                                           data_.size(),
+                                           opts_,
+                                           rec_starts_.data().get(),
+                                           rec_starts_.size(),
+                                           field_counter.data(),
+                                           d_info_arg.data(),
+                                           stream);
+
+  // aggregate on min(offset)
+
+  // collect the names for metadata
+
+  // make a hash map (to be used for parsing)
+
   enum class ParseState { preColName, colName, postColName };
   std::vector<std::string> names;
   bool quotation = false;
@@ -82,33 +160,6 @@ std::vector<std::string> get_names_from_json_object(const std::vector<char> &jso
   }
   return names;
 }
-
-/**
- * @brief Estimates the maximum expected length or a row, based on the number
- * of columns
- *
- * If the number of columns is not available, it will return a value large
- * enough for most use cases
- *
- * @param[in] num_columns Number of columns in the JSON file (optional)
- *
- * @return Estimated maximum size of a row, in bytes
- **/
-constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept
-{
-  constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
-  constexpr size_t column_bytes  = 64;
-  constexpr size_t base_padding  = 1024;  // 1KB
-  if (num_columns == 0) {
-    // Use flat size if the number of columns is not known
-    return max_row_bytes;
-  } else {
-    // Expand the size based on the number of columns, if available
-    return base_padding + num_columns * column_bytes;
-  }
-}
-
-}  // anonymous namespace
 
 /**
  * @brief Ingest input JSON file/buffer, without decompression
@@ -325,7 +376,7 @@ void reader::impl::set_column_names(cudaStream_t stream)
   // If the first opening bracket is '{', assume object format
   const bool is_object = first_curly_bracket < first_square_bracket;
   if (is_object) {
-    metadata.column_names = get_names_from_json_object(first_row, opts_);
+    metadata.column_names = get_names_from_json_object(first_row, opts_, stream);
   } else {
     int cols_found = 0;
     bool quotation = false;
