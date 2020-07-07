@@ -45,7 +45,7 @@ std::string ptx_parser::remove_nonalphanumeric(const std::string& src)
 {
   std::string out = src;
   auto f = std::find_if_not(out.begin(), out.end(), [](auto c) { return is_white(c) || c == '['; });
-  auto l = std::find_if(out.begin(), out.end(), [](auto c) { return is_white(c) || c == ']'; });
+  auto l = std::find_if(f, out.end(), [](auto c) { return is_white(c) || c == ']'; });
   std::replace_if(
     f, l, [](auto c) { return !isalnum(c) && c != '_'; }, '_');
   return std::string(f, l);
