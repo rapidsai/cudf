@@ -13,13 +13,12 @@ import operator
 import numpy as np
 import pandas as pd
 import pytest
-
-from dask.dataframe.utils import assert_eq
-from distributed import Client
-
 from streamz import Stream
 from streamz.dask import DaskStream
 from streamz.dataframe import Aggregation, DataFrame, DataFrames, Series
+
+from dask.dataframe.utils import assert_eq
+from distributed import Client
 
 cudf = pytest.importorskip("cudf")
 
