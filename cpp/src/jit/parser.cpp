@@ -213,11 +213,10 @@ std::string ptx_parser::parse_statement(const std::string& src)
 std::vector<std::string> ptx_parser::parse_function_body(const std::string& src)
 {
   auto f = src.cbegin();
-  auto l = src.cbegin();
   std::vector<std::string> statements;
 
-  while (l < src.cend()) {
-    l = std::find(l, src.cend(), ';');
+  while (f < src.cend()) {
+    auto l = std::find(f, src.cend(), ';');
     statements.push_back(parse_statement(std::string(f, l)));
     f = ++l;
   }
@@ -228,11 +227,10 @@ std::string ptx_parser::parse_param(const std::string& src)
 {
   auto i = 0;
   auto f = src.cbegin();
-  auto l = src.cbegin();
 
-  while (std::distance(src.cbegin(), l) < src.size() && i <= 3) {
-    f = std::find_if_not(f, src.end(), [](auto c) { return is_white(c); });
-    l = std::find_if(f, src.end(), [](auto c) { return is_white(c); });
+  while (f < src.cend() && i <= 3) {
+    f = std::find_if_not(f, src.cend(), [](auto c) { return is_white(c); });
+    auto l = std::find_if(f, src.cend(), [](auto c) { return is_white(c); });
     if (++i == 3) return remove_nonalphanumeric(std::string(f, l));
     f = l;
   }
@@ -242,13 +240,12 @@ std::string ptx_parser::parse_param(const std::string& src)
 std::string ptx_parser::parse_param_list(const std::string& src)
 {
   auto f = src.begin();
-  auto l = src.begin();
 
   auto item_count = 0;
   std::string output{};
 
-  while (l < src.end()) {
-    l = std::find(l, src.end(), ',');
+  while (f < src.end()) {
+    auto l = std::find(f, src.end(), ',');
 
     output += [&, name = parse_param(std::string(f, l))] {
       if (pointer_arg_list.find(item_count) != pointer_arg_list.end()) {
