@@ -1,9 +1,8 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import warnings
 from functools import partial
 
-import dask.dataframe as dd
+from dask import dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf

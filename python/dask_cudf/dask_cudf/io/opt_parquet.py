@@ -1,10 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import warnings
 
-import pyarrow.parquet as pq
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
+from pyarrow import parquet as pq
 
 from dask.base import tokenize
 from dask.dataframe.io.parquet.core import set_index_columns
@@ -14,10 +13,10 @@ from dask.dataframe.io.parquet.utils import (
 )
 from dask.dataframe.io.utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
+from dask_cudf import DataFrame
+
 import cudf
 from cudf.core.column import as_column
-
-from dask_cudf import DataFrame
 
 try:
     import ujson as json
