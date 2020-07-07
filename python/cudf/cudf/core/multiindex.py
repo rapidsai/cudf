@@ -612,6 +612,20 @@ class MultiIndex(Index):
         return True
 
     @property
+    def empty(self):
+        """
+        Indicator whether MultiIndex is empty.
+
+        True if MultiIndex is entirely empty (no items).
+
+        Returns
+        -------
+        out : bool
+            If MultiIndex is empty, return True, if not return False.
+        """
+        return super().empty
+
+    @property
     def size(self):
         return len(self._source_data)
 
