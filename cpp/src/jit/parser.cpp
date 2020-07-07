@@ -327,10 +327,7 @@ std::string ptx_parser::parse()
   auto const _func = std::string(".func");  // Go directly to the .func mark
   auto f = std::search(no_comments.cbegin(), no_comments.cend(), _func.cbegin(), _func.cend()) +
            _func.size();
-  if (f >= no_comments.cend()) {
-    printf("No function (.func) found in the input ptx code.\n");
-    exit(1);
-  }
+  if (f >= no_comments.cend()) CUDF_FAIL("No function (.func) found in the input ptx code.\n");
 
   auto l = std::find(f, no_comments.cend(), '{');
 
