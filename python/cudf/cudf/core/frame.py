@@ -40,7 +40,7 @@ class Frame(libcudf.table.Table):
         """
         Indicator whether Frame is empty.
 
-        True if Frane is entirely empty (no items), meaning any
+        True if Frame is entirely empty (no items), meaning any
         of the axes are of length 0.
 
         Returns
