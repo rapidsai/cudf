@@ -168,7 +168,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             return cudf.DataFrame()
         elif len(objs) == 1:
             result = objs[0].copy()
-            if ignore_index is True:
+            if ignore_index:
                 result._index = cudf.RangeIndex(len(result))
             return result
         else:

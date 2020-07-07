@@ -54,7 +54,7 @@ class Frame(libcudf.table.Table):
                 # all/some objs are empty(and have index).
                 # If all objects are empty(and have index), we
                 # should set the index separately using RangeIndex.
-                if obj.shape[1] == 0:
+                if obj.empty:
                     empty_counter += 1
                     if len(obj) > 0:
                         some_empty = True
