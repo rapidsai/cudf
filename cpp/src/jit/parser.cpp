@@ -322,14 +322,14 @@ std::string ptx_parser::parse()
   std::string no_comments = remove_comments(ptx);
 
   input_arg_list.clear();
-  // Go directly to the .func mark
-  size_t offset = no_comments.find(".func");
-  if (offset == no_comments.size()) {
+  auto const _func = std::string(".func");  // Go directly to the .func mark
+  auto f = std::search(no_comments.cbegin(), no_comments.cend(), _func.cbegin(), _func.cend()) +
+           _func.size();
+  if (f >= no_comments.cend()) {
     printf("No function (.func) found in the input ptx code.\n");
     exit(1);
   }
 
-  auto f = no_comments.cbegin() + offset + 5;  // 5 = length of ".func"
   auto l = std::find(f, no_comments.cend(), '{');
 
   auto f2 = std::next(l);
