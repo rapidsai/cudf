@@ -112,7 +112,7 @@ struct format_compiler {
       }
       if (ch >= '0' && ch <= '9') {
         CUDF_EXPECTS(*str == 'f', "precision not supported for specifier: " + std::string(1, *str));
-        specifier_lengths[*str] = static_cast<int8_t>(ch - '0')+1;
+        specifier_lengths[*str] = static_cast<int8_t>(ch - '0') + 1;
         ch                      = *str++;
         length--;
       }
@@ -215,13 +215,13 @@ struct duration_to_string_size_fn {
       case 'S': return count_digits(timeparts[DU_SECOND]); break;
       // TODO: include dot only if non-zero.
       // 0 or 6 digits for pandas.
-      case 'u': return (timeparts[DU_SUBSECOND] == 0) ? 0 : 6+1; break;
+      case 'u': return (timeparts[DU_SUBSECOND] == 0) ? 0 : 6 + 1; break;
       // 0 or ns without trailing zeros
       case 'f':
         return (timeparts[DU_SUBSECOND] == 0) ? 0 : [units = type] {
-          if (units == type_id::DURATION_MILLISECONDS) return 3+1;
-          if (units == type_id::DURATION_MICROSECONDS) return 6+1;
-          if (units == type_id::DURATION_NANOSECONDS) return 9+1;
+          if (units == type_id::DURATION_MILLISECONDS) return 3 + 1;
+          if (units == type_id::DURATION_MICROSECONDS) return 6 + 1;
+          if (units == type_id::DURATION_NANOSECONDS) return 9 + 1;
           return 0;
         }() - count_trailing_zeros(timeparts[DU_SUBSECOND]);  // 3/6/9-trailing_zeros.
         break;
@@ -339,7 +339,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
             if (units == type_id::DURATION_NANOSECONDS) return 9;
             return 0;
           }();
-          int2str(subsecond_digits+1, digits, timeparts[DU_SUBSECOND]);
+          int2str(subsecond_digits + 1, digits, timeparts[DU_SUBSECOND]);
           ptr = copy_and_increment(
             ptr,
             subsecond_digits,
