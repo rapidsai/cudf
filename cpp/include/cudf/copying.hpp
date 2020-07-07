@@ -717,5 +717,39 @@ std::unique_ptr<scalar> get_element(
   size_type index,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Gather `n` samples from given `input_table` randomly
+ *
+ * @code{.pseudo}
+ * Example:
+ * input: {col1: {1, 2, 3, 4, 5}, col2: {6, 7, 8, 9, 10}}
+ * n: 3
+ * replace: false
+ *
+ * output:       {col1: {3, 1, 4}, col2: {8, 6, 9}}
+ *
+ * replace: true
+ *
+ * output:       {col1: {3, 1, 1}, col2: {8, 6, 6}}
+ * @endcode
+ *
+ * @throws cudf::logic_error if `n` > `input.num_rows()` and `replace` == false.
+ * @throws cudf::logic_error if `n` < 0.
+ *
+ * @param input View of a table to sample.
+ * @param n non-negative number of samples expected from `input`.
+ * @param replce Allow or disallow sampling of the same row more than once.
+ * @param seed Seed value to initiate random number generator.
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ *
+ * @return std::unique_ptr<table> Table containing samples from `input`
+ */
+std::unique_ptr<table> sample(
+  table_view input,
+  size_type n,
+  bool replace                        = true,
+  long seed                           = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** @} */
 }  // namespace cudf

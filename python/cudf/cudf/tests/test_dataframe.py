@@ -6175,3 +6175,104 @@ def test_cudf_arrow_array_error():
         "using .to_arrow()",
     ):
         sr.__arrow_array__()
+
+
+@pytest.mark.parametrize("n", [0, 2, 5, 10, None])
+@pytest.mark.parametrize("frac", [0.1, 0.5, 1, 2, None])
+@pytest.mark.parametrize("replace", [True, False])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_dataframe_sample_basic(n, frac, replace, axis):
+    # as we currently don't support column with same name
+    if axis == 1 and replace:
+        return
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+            "float": [0.05, 0.2, 0.3, 0.2, 0.25],
+            "int": [1, 3, 5, 4, 2],
+        },
+        index=[1, 2, 3, 4, 5],
+    )
+    df = DataFrame.from_pandas(pdf)
+    random_state = 0
+
+    kind = None
+
+    try:
+        pout = pdf.sample(
+            n=n,
+            frac=frac,
+            replace=replace,
+            random_state=random_state,
+            axis=axis,
+        )
+    except BaseException as e:
+        kind = type(e)
+        msg = str(e)
+
+    if kind is not None:
+        with pytest.raises(kind, match=msg):
+            gout = df.sample(
+                n=n,
+                frac=frac,
+                replace=replace,
+                random_state=random_state,
+                axis=axis,
+            )
+    else:
+        gout = df.sample(
+            n=n,
+            frac=frac,
+            replace=replace,
+            random_state=random_state,
+            axis=axis,
+        )
+
+    if kind is not None:
+        return
+
+    assert pout.shape == gout.shape
+
+
+@pytest.mark.parametrize("replace", [True, False])
+def test_dataframe_reproducibility(replace):
+    df = DataFrame({"a": cupy.arange(0, 1024)})
+
+    expected = df.sample(1024, replace=replace, random_state=1)
+    out = df.sample(1024, replace=replace, random_state=1)
+
+    assert_eq(expected, out)
+
+
+@pytest.mark.parametrize("n", [0, 2, 5, 10, None])
+@pytest.mark.parametrize("frac", [0.1, 0.5, 1, 2, None])
+@pytest.mark.parametrize("replace", [True, False])
+def test_series_sample_basic(n, frac, replace):
+    psr = pd.Series([1, 2, 3, 4, 5])
+    sr = Series.from_pandas(psr)
+    random_state = 0
+
+    kind = None
+
+    try:
+        pout = sr.sample(
+            n=n, frac=frac, replace=replace, random_state=random_state
+        )
+    except BaseException as e:
+        kind = type(e)
+        msg = str(e)
+
+    if kind is not None:
+        with pytest.raises(kind, match=msg):
+            gout = sr.sample(
+                n=n, frac=frac, replace=replace, random_state=random_state
+            )
+    else:
+        gout = sr.sample(
+            n=n, frac=frac, replace=replace, random_state=random_state
+        )
+
+    if kind is not None:
+        return
+
+    assert pout.shape == gout.shape
