@@ -342,6 +342,8 @@ std::string ptx_parser::parse()
   });
 
   // DO NOT CHANGE ORDER - parse_function_body must be called before parse_function_header
+  // because the function parameter types are inferred from their corresponding load
+  // instructions in the function body
   auto const fn_body_output   = parse_function_body(std::string(f2, l2));
   auto const fn_header_output = parse_function_header(std::string(f, l));
 
