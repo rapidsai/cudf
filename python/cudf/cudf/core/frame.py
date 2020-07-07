@@ -35,17 +35,33 @@ class Frame(libcudf.table.Table):
     def _from_table(cls, table):
         return cls(table._data, index=table._index)
 
+    @property
+    def empty(self):
+        """
+        Indicator whether Frame is empty.
+
+        True if Frane is entirely empty (no items), meaning any
+        of the axes are of length 0.
+
+        Returns
+        -------
+        out : bool
+            If Frame is empty, return True, if not return False.
+        """
+        if self._num_columns == 0:
+            return True
+        return self._num_rows == 0
+
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
     def _concat(cls, objs, axis=0, ignore_index=False):
 
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
-        empty_counter = 0
 
-        all_empty = False
         some_empty = False
         result_index_length = 0
+        empty_counter = 0
 
         for i, obj in enumerate(objs):
             objs[i] = obj.copy(deep=False)

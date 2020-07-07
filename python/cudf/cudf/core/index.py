@@ -277,6 +277,20 @@ class Index(Frame, Serializable):
         return cupy.asarray(indices)
 
     @property
+    def empty(self):
+        """
+        Indicator whether Index is empty.
+
+        True if Index is entirely empty (no items).
+
+        Returns
+        -------
+        out : bool
+            If Index is empty, return True, if not return False.
+        """
+        return super().empty
+
+    @property
     def values(self):
         """
         Return an array representing the data in the Index.
