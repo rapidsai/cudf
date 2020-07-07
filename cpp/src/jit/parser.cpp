@@ -298,20 +298,22 @@ std::string ptx_parser::parse_function_header(const std::string& src)
 std::string remove_comments(const std::string& src)
 {
   std::string output;
-  auto in_singleline_comment = false;
-  auto in_multiline_comment  = false;
-  for (int i = 0; i < src.size(); ++i) {
-    char const a = i != 0 ? src[i - 1] : '?';               // prior char
-    char const b = src[i];                                  // current char
-    char const c = i + 1 != src.size() ? src[i + 1] : '?';  // next char
-
-    if (b == '/' && c == '/') in_singleline_comment = true;
-    if (b == '/' && c == '*') in_multiline_comment = true;
-    if (b == '\n') in_singleline_comment = false;
-
-    if (not(in_singleline_comment or in_multiline_comment)) output += b;
-
-    if (a == '*' && b == '/') in_multiline_comment = false;
+  auto f = src.cbegin();
+  while (f < src.cend()) {
+    auto l = std::find(f, src.cend(), '/');
+    output.append(f, l);  // push chunk instead of 1 char at a time
+    f = std::next(l);     // skip over '/'
+    if (l < src.cend()) {
+      char n = f < src.cend() ? *f : '?';
+      if (n == '/') {                        // found "//"
+        f = std::find(f, src.cend(), '\n');  // skip to end of line
+      } else if (n == '*') {                 // found "/*"
+        auto term = std::string("*/");       // skip to end of next "*/"
+        f         = std::search(std::next(f), src.cend(), term.cbegin(), term.cend()) + term.size();
+      } else {
+        output.push_back('/');  // lone '/' should be pushed into output
+      }
+    }
   }
   return output;
 }
