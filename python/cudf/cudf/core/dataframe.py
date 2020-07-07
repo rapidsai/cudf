@@ -301,10 +301,10 @@ class DataFrame(Frame, Serializable):
                 # matches with `columns`.
                 # Hence only assign `data` with `columns` as keys
                 # and their values as empty columns.
-                data = dict.fromkeys(
-                    extra_cols,
-                    cudf.core.column.column_empty(row_count=0, dtype=None),
-                )
+                data = {
+                    key: cudf.core.column.column_empty(row_count=0, dtype=None)
+                    for key in extra_cols
+                }
 
         data, index = self._align_input_series_indices(data, index=index)
 
