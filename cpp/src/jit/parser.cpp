@@ -299,19 +299,19 @@ std::string remove_comments(const std::string& src)
 {
   std::string output;
   auto in_singleline_comment = false;
-  auto in_multiline_comment  = 0;
+  auto in_multiline_comment  = false;
   for (int i = 0; i < src.size(); ++i) {
     char const a = i != 0 ? src[i - 1] : '?';               // prior char
     char const b = src[i];                                  // current char
     char const c = i + 1 != src.size() ? src[i + 1] : '?';  // next char
 
     if (b == '/' && c == '/') in_singleline_comment = true;
-    if (b == '/' && c == '*') ++in_multiline_comment;
+    if (b == '/' && c == '*') in_multiline_comment = true;
     if (b == '\n') in_singleline_comment = false;
 
     if (not(in_singleline_comment or in_multiline_comment)) output += b;
 
-    if (a == '*' && b == '/') --in_multiline_comment;
+    if (a == '*' && b == '/') in_multiline_comment = false;
   }
   return output;
 }
