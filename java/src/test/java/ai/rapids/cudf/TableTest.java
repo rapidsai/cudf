@@ -695,7 +695,7 @@ public class TableTest extends CudfTestBase {
 
            Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0));
            Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
-           assertTablesAreEqual(expectedResults, orderedJoinedTable);
+         assertTablesAreEqual(expectedResults, orderedJoinedTable);
        }
 
        try (Table expectedResults = new Table.TestBuilder()

@@ -215,13 +215,16 @@ TEST_F(JoinTest, FullJoinWithNulls)
 
 TEST_F(JoinTest, FullJoinOnNulls)
 {
-  column_wrapper<int32_t> col0_0{{3, 1}, {1, 0}};
-  strcol_wrapper col0_1({"s0", "s1"});
-  column_wrapper<int32_t> col0_2{{0, 1}};
+  // clang-format off
+  column_wrapper<int32_t> col0_0{{  3,    1 },
+                                 {  1,    0  }};
+  strcol_wrapper          col0_1({"s0", "s1" });
+  column_wrapper<int32_t> col0_2{{  0,    1 }};
 
-  column_wrapper<int32_t> col1_0{{2, 5, 3, 7}, {1, 1, 1, 0}};
-  strcol_wrapper col1_1({"s1", "s0", "s0", "s1"});
-  column_wrapper<int32_t> col1_2{{1, 4, 2, 8}};
+  column_wrapper<int32_t> col1_0{{  2,    5,    3,    7 },
+                                 {  1,    1,    1,    0 }};
+  strcol_wrapper          col1_1({"s1", "s0", "s0", "s1" });
+  column_wrapper<int32_t> col1_2{{  1,    4,    2,    8 }};
 
   CVector cols0, cols1;
   cols0.push_back(col0_0.release());
@@ -245,11 +248,14 @@ TEST_F(JoinTest, FullJoinOnNulls)
   cudf::test::print(sorted_result->get_column(2).view(), std::cout, ",\t\t");
   cudf::test::print(sorted_result->get_column(3).view(), std::cout, ",\t\t");
 #endif
-
-  column_wrapper<int32_t> col_gold_0{{2, 5, 3, -1}, {1, 1, 1, 0}};
-  strcol_wrapper col_gold_1({"s1", "s0", "s0", "s1"});
-  column_wrapper<int32_t> col_gold_2{{-1, -1, 0, 1}, {0, 0, 1, 1}};
-  column_wrapper<int32_t> col_gold_3{{1, 4, 2, 8}, {1, 1, 1, 1}};
+ 
+  column_wrapper<int32_t> col_gold_0{{   2,    5,    3,    -1},
+                                     {   1,    1,    1,     0}};
+  strcol_wrapper          col_gold_1({ "s1", "s0", "s0",  "s1"});
+  column_wrapper<int32_t> col_gold_2{{  -1,   -1,    0,     1}, 
+                                     {   0,    0,    1,     1}};
+  column_wrapper<int32_t> col_gold_3{{   1,    4,    2,     8}, 
+                                     {   1,    1,    1,     1}};
 
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -274,14 +280,19 @@ TEST_F(JoinTest, FullJoinOnNulls)
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
 
-  result = cudf::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
+  result            = cudf::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
   result_sort_order = cudf::sorted_order(result->view());
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  col_gold_0 = {{2, 5, 3, -1, -1}, {1, 1, 1, 0, 0}};
-  col_gold_1 = strcol_wrapper({"s1", "s0", "s0", "s1", "s1"});
-  col_gold_2 = {{-1, -1, 0, -1, 1}, {0, 0, 1, 0, 2}};
-  col_gold_3 = {{1, 4, 2, 8, -1}, {1, 1, 1, 1, 0}};
+  col_gold_0 =               {{   2,    5,    3,    -1,   -1},
+                              {   1,    1,    1,     0,    0}};
+  col_gold_1 = strcol_wrapper({ "s1", "s0", "s0",  "s1", "s1"});
+  col_gold_2 =               {{  -1,   -1,    0,    -1,    1}, 
+                              {   0,    0,    1,     0,    2}};
+  col_gold_3 =               {{   1,    4,    2,     8,   -1}, 
+                              {   1,    1,    1,     1,    0}};
+
+  // clang-format on
 
   CVector cols_gold_nulls_unequal;
   cols_gold_nulls_unequal.push_back(col_gold_0.release());
@@ -380,13 +391,16 @@ TEST_F(JoinTest, LeftJoinWithNulls)
 
 TEST_F(JoinTest, LeftJoinOnNulls)
 {
-  column_wrapper<int32_t> col0_0{{3, 1, 2}, {1, 0, 1}};
-  strcol_wrapper col0_1({"s0", "s1", "s2"});
-  column_wrapper<int32_t> col0_2{{0, 1, 2}};
+  // clang-format off
+  column_wrapper<int32_t> col0_0{{  3,    1,    2},
+                                 {  1,    0,    1}};
+  strcol_wrapper          col0_1({"s0", "s1", "s2" });
+  column_wrapper<int32_t> col0_2{{  0,    1,    2 }};
 
-  column_wrapper<int32_t> col1_0{{2, 5, 3, 7}, {1, 1, 1, 0}};
-  strcol_wrapper col1_1({"s1", "s0", "s0", "s1"});
-  column_wrapper<int32_t> col1_2{{1, 4, 2, 8}};
+  column_wrapper<int32_t> col1_0{{  2,    5,    3,    7 },
+                                 {  1,    1,    1,    0 }};
+  strcol_wrapper          col1_1({"s1", "s0", "s0", "s1" });
+  column_wrapper<int32_t> col1_2{{  1,    4,    2,    8 }};
 
   CVector cols0, cols1;
   cols0.push_back(col0_0.release());
@@ -410,11 +424,15 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   cudf::test::print(sorted_result->get_column(2).view(), std::cout, ",\t\t");
   cudf::test::print(sorted_result->get_column(3).view(), std::cout, ",\t\t");
 #endif
-
-  column_wrapper<int32_t> col_gold_0{{3, -1, 2}, {1, 0, 1}};
-  strcol_wrapper col_gold_1({"s0", "s1", "s2"}, {1, 1, 1});
-  column_wrapper<int32_t> col_gold_2{{0, 1, 2}, {1, 1, 1}};
-  column_wrapper<int32_t> col_gold_3{{2, 8, -1}, {1, 1, 0}};
+ 
+  column_wrapper<int32_t> col_gold_0{{   3,    -1,    2},
+                                     {   1,     0,    1}};
+  strcol_wrapper          col_gold_1({ "s0",  "s1", "s2"},
+                                     {   1,     1,    1});
+  column_wrapper<int32_t> col_gold_2{{   0,     1,    2}, 
+                                     {   1,     1,    1}};
+  column_wrapper<int32_t> col_gold_3{{   2,     8,   -1}, 
+                                     {   1,     1,    0}};
 
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -439,15 +457,20 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
 
-  result = cudf::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
+  result            = cudf::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
   result_sort_order = cudf::sorted_order(result->view());
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  col_gold_0 = {{3, -1, 2}, {1, 0, 1}};
-  col_gold_1 = strcol_wrapper({"s0", "s1", "s2"}, {1, 1, 1});
-  col_gold_2 = {{0, 1, 2}, {1, 1, 1}};
-  col_gold_3 = {{2, -1, -1}, {1, 0, 0}};
+  col_gold_0 =               {{   3,    -1,    2},
+                              {   1,     0,    1}};
+  col_gold_1 = strcol_wrapper({ "s0",  "s1", "s2"},
+                              {   1,     1,    1});
+  col_gold_2 =               {{   0,     1,    2}, 
+                              {   1,     1,    1}};
+  col_gold_3 =               {{   2,    -1,   -1}, 
+                              {   1,     0,    0}};
 
+  // clang-format on
   CVector cols_gold_nulls_unequal;
   cols_gold_nulls_unequal.push_back(col_gold_0.release());
   cols_gold_nulls_unequal.push_back(col_gold_1.release());
@@ -546,13 +569,16 @@ TEST_F(JoinTest, InnerJoinWithNulls)
 // Test to check join behaviour when join keys are null.
 TEST_F(JoinTest, InnerJoinOnNulls)
 {
-  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper col0_1({"s1", "s1", "s8", "s4", "s0"}, {1, 1, 0, 1, 1});
-  column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
+  // clang-format off
+  column_wrapper<int32_t> col0_0{{  3,    1,    2,    0,    2}};
+  strcol_wrapper          col0_1({"s1", "s1", "s8", "s4", "s0"}, 
+                                 {  1,    1,    0,    1,    1});
+  column_wrapper<int32_t> col0_2{{  0,    1,    2,    4,    1}};
 
-  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
-  strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"}, {1, 0, 1, 1, 1});
-  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}};
+  column_wrapper<int32_t> col1_0{{  2,    2,    0,    4,    3}};
+  strcol_wrapper          col1_1({"s1", "s0", "s1", "s2", "s1"}, 
+                                 {  1,    0,    1,    1,    1});
+  column_wrapper<int32_t> col1_2{{  1,    0,    1,    2,    1}};
 
   CVector cols0, cols1;
   cols0.push_back(col0_0.release());
@@ -569,10 +595,11 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{3, 2}};
-  strcol_wrapper col_gold_1({"s1", "s0"}, {1, 0});
-  column_wrapper<int32_t> col_gold_2{{0, 2}};
-  column_wrapper<int32_t> col_gold_3{{1, 0}};
+  column_wrapper<int32_t> col_gold_0 {{  3,    2}};
+  strcol_wrapper          col_gold_1 ({"s1", "s0"}, 
+                                      {  1,    0});
+  column_wrapper<int32_t> col_gold_2{{   0,    2}};
+  column_wrapper<int32_t> col_gold_3{{   1,    0}};
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
@@ -583,18 +610,21 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
-
+  
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
 
-  result = cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
+  result            = cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
   result_sort_order = cudf::sorted_order(result->view());
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  col_gold_0 = {{3}};
-  col_gold_1 = strcol_wrapper({"s1"}, {1});
-  col_gold_2 = {{0}};
-  col_gold_3 = {{1}};
+  col_gold_0 =               {{  3}};
+  col_gold_1 = strcol_wrapper({"s1"}, 
+                              {  1});
+  col_gold_2 =               {{  0}};
+  col_gold_3 =               {{  1}};
+
+  // clang-format on
 
   CVector cols_gold_sql;
   cols_gold_sql.push_back(col_gold_0.release());
