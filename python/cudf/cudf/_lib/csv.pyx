@@ -73,7 +73,6 @@ cdef read_csv_args make_read_csv_args(
     object header,
     bool mangle_dupe_cols,
     object usecols,
-    object sep,
     object delimiter,
     bool delim_whitespace,
     bool skipinitialspace,
@@ -98,32 +97,7 @@ cdef read_csv_args make_read_csv_args(
     object prefix,
     object index_col,
 ) except +:
-
-    if delim_whitespace:
-        if delimiter is not None:
-            raise ValueError("cannot set both delimiter and delim_whitespace")
-        if sep != ',':
-            raise ValueError("cannot set both sep and delim_whitespace")
-
-    # Alias sep -> delimiter.
-    if delimiter is None:
-        delimiter = sep
-
-    if decimal == delimiter:
-        raise ValueError("decimal cannot be the same as delimiter")
-
-    if thousands == delimiter:
-        raise ValueError("thousands cannot be the same as delimiter")
-
-    if nrows is not None and skipfooter != 0:
-        raise ValueError("cannot use both nrows and skipfooter parameters")
-
-    if byte_range is not None:
-        if skipfooter != 0 or skiprows != 0 or nrows is not None:
-            raise ValueError("""cannot manually limit rows to be read when
-                                using the byte range parameter""")
-
-    cdef source_info c_source_info = make_source_info(filepath_or_buffer)
+    cdef source_info c_source_info = make_source_info([filepath_or_buffer])
     cdef read_csv_args read_csv_args_c = read_csv_args(c_source_info)
 
     # Reader settings
@@ -268,6 +242,41 @@ cdef read_csv_args make_read_csv_args(
     return read_csv_args_c
 
 
+def validate_args(
+    delimiter,
+    sep,
+    delim_whitespace,
+    decimal,
+    thousands,
+    nrows,
+    skipfooter,
+    byte_range,
+    skiprows
+):
+    if delim_whitespace:
+        if delimiter is not None:
+            raise ValueError("cannot set both delimiter and delim_whitespace")
+        if sep != ',':
+            raise ValueError("cannot set both sep and delim_whitespace")
+
+    # Alias sep -> delimiter.
+    actual_delimiter = delimiter if delimiter else sep
+
+    if decimal == actual_delimiter:
+        raise ValueError("decimal cannot be the same as delimiter")
+
+    if thousands == actual_delimiter:
+        raise ValueError("thousands cannot be the same as delimiter")
+
+    if nrows is not None and skipfooter != 0:
+        raise ValueError("cannot use both nrows and skipfooter parameters")
+
+    if byte_range is not None:
+        if skipfooter != 0 or skiprows != 0 or nrows is not None:
+            raise ValueError("""cannot manually limit rows to be read when
+                                using the byte range parameter""")
+
+
 def read_csv(
     filepath_or_buffer,
     lineterminator="\n",
@@ -324,9 +333,16 @@ def read_csv(
     ):
         filepath_or_buffer = filepath_or_buffer.encode()
 
+    validate_args(delimiter, sep, delim_whitespace, decimal, thousands,
+                  nrows, skipfooter, byte_range, skiprows)
+
+    # Alias sep -> delimiter.
+    if delimiter is None:
+        delimiter = sep
+
     cdef read_csv_args read_csv_arg_c = make_read_csv_args(
         filepath_or_buffer, lineterminator, quotechar, quoting, doublequote,
-        header, mangle_dupe_cols, usecols, sep, delimiter, delim_whitespace,
+        header, mangle_dupe_cols, usecols, delimiter, delim_whitespace,
         skipinitialspace, names, dtype, skipfooter, skiprows, dayfirst,
         compression, thousands, decimal, true_values, false_values, nrows,
         byte_range, skip_blank_lines, parse_dates, comment, na_values,

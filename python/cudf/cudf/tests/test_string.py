@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
 
@@ -9,12 +8,12 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-import cudf.utils.dtypes as dtypeutils
 from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.utils import dtypes as dtypeutils
 
 data_list = [
     ["AbC", "de", "FGHI", "j", "kLm"],

@@ -1,12 +1,11 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
-
 import warnings
 
 import pyarrow as pa
-import pyarrow.orc as orc
+from pyarrow import orc as orc
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf.utils import ioutils
 
 

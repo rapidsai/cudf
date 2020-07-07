@@ -221,6 +221,7 @@ def categorical_dtype_cudf(categories=None, ordered=None):
 try:
 
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
+
     from cudf.core.column import column
 
     def safe_hash(frame):

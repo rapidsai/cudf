@@ -1,6 +1,6 @@
-import pyarrow.orc as orc
+from pyarrow import orc as orc
 
-import dask.dataframe as dd
+from dask import dataframe as dd
 from dask.base import tokenize
 from dask.bytes.core import get_fs_token_paths, stringify_path
 from dask.dataframe.io.utils import _get_pyarrow_dtypes
@@ -116,8 +116,7 @@ def to_orc(
         then a ``dask.delayed`` object is returned for future computation.
     """
 
-    from dask import delayed
-    from dask import compute as dask_compute
+    from dask import compute as dask_compute, delayed
 
     # TODO: Use upstream dask implementation once available
     #       (see: Dask Issue#5596)
