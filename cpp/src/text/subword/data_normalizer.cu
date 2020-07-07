@@ -33,7 +33,13 @@ namespace nvtext {
 namespace detail {
 namespace {
 
-#define SORT_BIT 22
+/**
+ * @brief Bit used to filter out invalid code points.
+ *
+ * When normalizing characters to code point values, if this bit is set,
+ * the code point should be filtered out before returning from the normalizer.
+ */
+constexpr uint32_t FILTER_BIT = 22;
 
 /**
  * @brief Retrieve new code point from metadata value.
@@ -130,39 +136,50 @@ __device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
     utf8_blocks[i] = strings[start_byte_for_thread + i];
   }
 
-  // We can have at most 5 bits encoding the length. We check those bits to infer the actual length
   const uint8_t length_encoding_bits = utf8_blocks[0] >> 3;
+  // UTF-8 format is variable-width character encoding using up to 4 bytes.
+  // If the first byte is:
+  // - [x00-x7F] -- beginning of a 1-byte character (ASCII)
+  // - [xC0-xDF] -- beginning of a 2-byte character
+  // - [xE0-xEF] -- beginning of a 3-byte character
+  // - [xF0-xF7] -- beginning of a 3-byte character
+  // Anything else is an intermediate byte [x80-xBF].
+  // So shifted by 3 bits this becomes
+  // - [x00-x0F]  or leb < 16
+  // - [x18-x1B]  or 24 <= leb <= 27
+  // - [x1C-x1D]  or 28 <= leb <= 29
+  // - [x1E-x1F]  or leb >= 30
+  // The remaining bits are part of the value as specified by the mask
+  // specified by x's below.
+  // - b0xxxxxxx = x7F
+  // - b110xxxxx = x1F
+  // - b1110xxxx = x0F
+  // - b11110xxx = x07
+  using encoding_length_pair = thrust::pair<uint8_t, uint8_t>;
+  // Set the number of characters and the top masks based on the length encoding bits.
+  encoding_length_pair const char_encoding_length = [length_encoding_bits] {
+    if (length_encoding_bits < 16) return encoding_length_pair{1, 0x7F};
+    if (length_encoding_bits >= 24 && length_encoding_bits <= 27)
+      return encoding_length_pair{2, 0x1F};
+    if (length_encoding_bits == 28 || length_encoding_bits == 29)
+      return encoding_length_pair{3, 0x0F};
+    if (length_encoding_bits == 30) return encoding_length_pair{4, 0x07};
+    return encoding_length_pair{0, 0};
+  }();
 
-  // Set the number of characters and the top masks based on the
-  // length encoding bits.
-  uint8_t char_encoding_length = 0, top_mask = 0;
-  if (length_encoding_bits < 16) {
-    char_encoding_length = 1;
-    top_mask             = 0x7F;
-  } else if (length_encoding_bits >= 24 && length_encoding_bits <= 27) {
-    char_encoding_length = 2;
-    top_mask             = 0x1F;
-  } else if (length_encoding_bits == 28 || length_encoding_bits == 29) {
-    char_encoding_length = 3;
-    top_mask             = 0x0F;
-  } else if (length_encoding_bits == 30) {
-    char_encoding_length = 4;
-    top_mask             = 0x07;
-  }
-
-  // Now pack up the bits into a uint32_t. All threads will process 4 bytes
-  // to reduce divergence.
-  uint32_t code_point = (utf8_blocks[0] & top_mask) << 18;
-
+  // Now pack up the bits into a uint32_t.
+  // Move the first set of values into bits 19-24 in the 32-bit value.
+  uint32_t code_point = (utf8_blocks[0] & char_encoding_length.second) << 18;
+  // Move the remaining values which are 6 bits (mask b10xxxxxx = x3F)
+  // from the remaining bytes into successive positions in the 32-bit result.
 #pragma unroll
   for (int i = 1; i < max_utf8_blocks_for_char; ++i) {
     code_point |= ((utf8_blocks[i] & 0x3F) << (18 - 6 * i));
   }
 
-  // Zero out the bottom of code points with extra reads
-  const uint8_t shift_amt = 24 - 6 * char_encoding_length;
+  // Adjust the final result by shifting by the character length.
+  uint8_t const shift_amt = 24 - 6 * char_encoding_length.first;
   code_point >>= shift_amt;
-
   return code_point;
 }
 
@@ -198,7 +215,7 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
                                        uint32_t* code_points,
                                        uint32_t* chars_per_thread)
 {
-  constexpr uint32_t init_val                     = (1 << SORT_BIT);
+  constexpr uint32_t init_val                     = (1 << FILTER_BIT);
   uint32_t replacement_code_points[MAX_NEW_CHARS] = {init_val, init_val, init_val};
 
   const uint32_t char_for_thread = blockDim.x * blockIdx.x + threadIdx.x;
@@ -346,7 +363,7 @@ data_normalizer::data_normalizer(uint32_t max_num_strings,
   d_cp_metadata = detail::get_codepoint_metadata(stream);
   d_aux_table   = detail::get_aux_codepoint_data(stream);
 
-  cudf::detail::grid_1d grid{static_cast<cudf::size_type>(max_num_chars), THREADS_PER_BLOCK};
+  cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(max_num_chars), THREADS_PER_BLOCK};
   size_t const max_threads_on_device = grid.num_threads_per_block * grid.num_blocks;
   size_t const max_new_char_total    = MAX_NEW_CHARS * max_threads_on_device;
   device_code_points.resize(max_new_char_total, stream);
@@ -362,7 +379,7 @@ data_normalizer::data_normalizer(uint32_t max_num_strings,
                                 max_threads_on_device,
                                 stream);
   size_t temp_storage_select_bytes = 0;
-  NotEqual const select_op((1 << SORT_BIT));
+  NotEqual const select_op((1 << FILTER_BIT));
   cub::DeviceSelect::If(nullptr,
                         temp_storage_select_bytes,
                         device_code_points.data(),
@@ -392,7 +409,7 @@ std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(const cha
                            stream));
   uint32_t const bytes_count = device_strings_offsets.element(num_offsets - 1, stream);
 
-  cudf::detail::grid_1d grid{static_cast<cudf::size_type>(bytes_count), THREADS_PER_BLOCK, 1};
+  cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(bytes_count), THREADS_PER_BLOCK, 1};
   size_t const threads_on_device  = grid.num_threads_per_block * grid.num_blocks;
   size_t const max_new_char_total = MAX_NEW_CHARS * threads_on_device;
 
@@ -408,7 +425,7 @@ std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(const cha
     device_chars_per_thread.data());
   CHECK_CUDA(stream);
 
-  NotEqual const select_op((1 << SORT_BIT));
+  NotEqual const select_op((1 << FILTER_BIT));
   cub::DeviceSelect::If(cub_temp_storage.data(),
                         max_cub_storage_bytes,
                         device_code_points.data(),
