@@ -769,7 +769,9 @@ class DataFrame(Frame, Serializable):
         out : bool
             If DataFrame is empty, return True, if not return False.
         """
-        return not len(self)
+        if self._num_columns == 0:
+            return True
+        return self._num_rows == 0
 
     @property
     def values(self):
