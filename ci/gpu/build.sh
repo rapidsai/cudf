@@ -87,7 +87,7 @@ $CXX --version
 conda list
 
 ################################################################################
-# BUILD - Build libcudf, cuDF and dask_cudf from source
+# BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
 ################################################################################
 
 logger "Build libcudf..."
@@ -95,17 +95,6 @@ if [[ ${BUILD_MODE} == "pull-request" ]]; then
     $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka benchmarks tests
 else
     $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka benchmarks tests -l
-fi
-
-################################################################################
-# BUILD - Build libcudf_kafka from source
-################################################################################
-
-logger "Build libcudf_kafka..."
-if [[ ${BUILD_MODE} == "pull-request" ]]; then
-    $WORKSPACE/build.sh clean libcudf_kafka tests
-else
-    $WORKSPACE/build.sh clean libcudf_kafka tests -l
 fi
 
 ################################################################################
