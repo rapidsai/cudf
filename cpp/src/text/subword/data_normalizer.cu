@@ -218,7 +218,7 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
   constexpr uint32_t init_val                     = (1 << FILTER_BIT);
   uint32_t replacement_code_points[MAX_NEW_CHARS] = {init_val, init_val, init_val};
 
-  const uint32_t char_for_thread = blockDim.x * blockIdx.x + threadIdx.x;
+  uint32_t const char_for_thread = blockDim.x * blockIdx.x + threadIdx.x;
   uint32_t num_new_chars         = 0;
 
   if (char_for_thread < total_bytes) {
@@ -392,8 +392,8 @@ data_normalizer::data_normalizer(uint32_t max_num_strings,
   cub_temp_storage.resize(max_cub_storage_bytes, stream);
 }
 
-std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(const char* d_strings,
-                                                                       const uint32_t* d_offsets,
+std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(char const* d_strings,
+                                                                       uint32_t const* d_offsets,
                                                                        uint32_t num_strings,
                                                                        cudaStream_t stream)
 {

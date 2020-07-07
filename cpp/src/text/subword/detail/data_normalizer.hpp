@@ -87,8 +87,8 @@ class data_normalizer {
    *         to the code points array and the second is a pointer to the offsets
    *         used to locate the code points for each string.
    */
-  std::pair<ptr_length_pair, ptr_length_pair> normalize(const char* d_strings,
-                                                        const uint32_t* d_offsets,
+  std::pair<ptr_length_pair, ptr_length_pair> normalize(char const* d_strings,
+                                                        uint32_t const* d_offsets,
                                                         uint32_t num_strings,
                                                         cudaStream_t stream);
 
