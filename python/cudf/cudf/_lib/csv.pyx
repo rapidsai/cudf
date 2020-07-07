@@ -65,7 +65,7 @@ class Compression(IntEnum):
 
 
 cdef read_csv_args make_read_csv_args(
-    object filepath_or_buffer,
+    object datasource,
     object lineterminator,
     object quotechar,
     int quoting,
@@ -97,7 +97,7 @@ cdef read_csv_args make_read_csv_args(
     object prefix,
     object index_col,
 ) except +:
-    cdef source_info c_source_info = make_source_info([filepath_or_buffer])
+    cdef source_info c_source_info = make_source_info([datasource])
     cdef read_csv_args read_csv_args_c = read_csv_args(c_source_info)
 
     # Reader settings
@@ -278,7 +278,7 @@ def validate_args(
 
 
 def read_csv(
-    filepath_or_buffer,
+    datasource,
     lineterminator="\n",
     quotechar='"',
     quoting=0,
@@ -320,19 +320,19 @@ def read_csv(
     cudf.io.csv.read_csv
     """
 
-    if not isinstance(filepath_or_buffer, (BytesIO, StringIO, bytes,
-                                           cudf.io.kafka.KafkaSource)):
-        if not os.path.isfile(filepath_or_buffer):
+    if not isinstance(datasource, (BytesIO, StringIO, bytes,
+                                   cudf.io.kafka.KafkaDatasource)):
+        if not os.path.isfile(datasource):
             raise FileNotFoundError(
-                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
+                errno.ENOENT, os.strerror(errno.ENOENT), datasource
             )
 
-    if isinstance(filepath_or_buffer, StringIO):
-        filepath_or_buffer = filepath_or_buffer.read().encode()
-    elif isinstance(filepath_or_buffer, str) and not os.path.isfile(
-        filepath_or_buffer
+    if isinstance(datasource, StringIO):
+        datasource = datasource.read().encode()
+    elif isinstance(datasource, str) and not os.path.isfile(
+        datasource
     ):
-        filepath_or_buffer = filepath_or_buffer.encode()
+        datasource = datasource.encode()
 
     validate_args(delimiter, sep, delim_whitespace, decimal, thousands,
                   nrows, skipfooter, byte_range, skiprows)
@@ -342,7 +342,7 @@ def read_csv(
         delimiter = sep
 
     cdef read_csv_args read_csv_arg_c = make_read_csv_args(
-        filepath_or_buffer, lineterminator, quotechar, quoting, doublequote,
+        datasource, lineterminator, quotechar, quoting, doublequote,
         header, mangle_dupe_cols, usecols, delimiter, delim_whitespace,
         skipinitialspace, names, dtype, skipfooter, skiprows, dayfirst,
         compression, thousands, decimal, true_values, false_values, nrows,

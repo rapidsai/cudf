@@ -855,6 +855,33 @@ cudf.io.csv.read_csv
 doc_to_csv = docfmt_partial(docstring=_docstring_to_csv)
 
 
+_docstring_kafka_datasource = """
+Configuration object for a Kafka Datasource
+
+Parameters
+----------
+kafka_configs : dict, key/value pairs of librdkafka configuration values.
+    The complete list of valid configurations can be found at
+    https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+topic : string, case sensitive name of the Kafka topic that contains the
+    source data.
+partition : int,
+    Zero-based identifier of the Kafka partition that the underlying consumer
+    should consume messages from. Valid values are 0 - (N-1)
+start_offset : int, Kafka Topic/Partition offset that consumption
+    should begin at. Inclusive.
+end_offset : int, Kafka Topic/Parition offset that consumption
+    should end at. Inclusive.
+batch_timeout : int, default 10000
+    Maximum number of milliseconds that will be spent trying to
+    consume messages between the specified 'start_offset' and 'end_offset'.
+delimiter : string, default None, optional delimiter to insert into the
+    output between kafka messages, Ex: "\n"
+
+"""
+doc_kafka_datasource = docfmt_partial(docstring=_docstring_kafka_datasource)
+
+
 def is_url(url):
     """Check if a string is a valid URL to a network location.
 

@@ -1,7 +1,13 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.\
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+from cudf.utils import ioutils
 
 
-class KafkaSource(object):
+@ioutils.doc_kafka_datasource()
+class KafkaDatasource(object):
+
+    """{docstring}"""
+
     def __init__(
         self,
         kafka_configs,

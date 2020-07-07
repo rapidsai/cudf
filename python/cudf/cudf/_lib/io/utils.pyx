@@ -15,7 +15,6 @@ import codecs
 import errno
 import io
 import os
-import cudf
 
 # Converts the Python source input to libcudf++ IO source_info
 # with the appropriate type and source values
@@ -45,7 +44,7 @@ cdef source_info make_source_info(list src) except*:
     # Otherwise src is expected to be a numeric fd, string path, or PathLike.
     # TODO (ptaylor): Might need to update this check if accepted input types
     #                 change when UCX and/or cuStreamz support is added.
-    elif isinstance(src[0], cudf.io.kafka.KafkaSource):
+    elif isinstance(src[0], cudf.io.kafka.KafkaDatasource):
         kafka_src = src[0]
         for key, value in kafka_src.kafka_configs.items():
             kafka_confs[str.encode(key)] = str.encode(value)

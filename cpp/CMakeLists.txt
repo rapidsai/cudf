@@ -790,8 +790,8 @@ if(BUILD_CUDF_KAFKA)
                         "${CMAKE_CURRENT_SOURCE_DIR}/include/cudf")
     
     # Rename installation to proper name for later finding
-    set_target_properties(libcudf_kafka PROPERTIES OUTPUT_NAME "cudf_kafka")
-    set_target_properties(libcudf_kafka PROPERTIES BUILD_RPATH "\$ORIGIN")
+    #set_target_properties(libcudf_kafka PROPERTIES OUTPUT_NAME "cudf_kafka")
+    #set_target_properties(libcudf_kafka PROPERTIES BUILD_RPATH "\$ORIGIN")
 
     ###################################################################################################
     # cudf_kafka - librdkafka -------------------------------------------------------------------------
@@ -810,7 +810,7 @@ if(BUILD_CUDF_KAFKA)
     target_link_libraries(libcudf_kafka cudf)
 
     install(TARGETS libcudf_kafka
-            DESTINATION lib
+            DESTINATION libcudf_kafka/lib
             COMPONENT libcudf_kafka)
 
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/include
