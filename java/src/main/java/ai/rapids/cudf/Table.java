@@ -1641,6 +1641,20 @@ public final class Table implements AutoCloseable {
      * Usage:
      * Table t1 ...
      * Table t2 ...
+     * Table result = t1.onColumns(0,1).leftJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
+     */
+    public Table leftJoin(TableOperation rightJoinIndices) {
+        return leftJoin(rightJoinIndices, true);
+    }
+
+    /**
+     * Joins two tables on the join columns that are passed in.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
      * Table result = t1.onColumns(0,1).innerJoin(t2.onColumns(2,3));
      * @param rightJoinIndices - Indices of the right table to join on
      * @param compareNullsEqual - Whether null join-key values should match or not.
@@ -1651,6 +1665,20 @@ public final class Table implements AutoCloseable {
       return new Table(Table.innerJoin(operation.table.nativeHandle, operation.indices,
           rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
           compareNullsEqual));
+    }
+
+    /**
+     * Joins two tables on the join columns that are passed in.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).innerJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
+     */
+    public Table innerJoin(TableOperation rightJoinIndices) {
+      return innerJoin(rightJoinIndices, true);
     }
 
     /**
@@ -1671,6 +1699,20 @@ public final class Table implements AutoCloseable {
     }
 
     /**
+     * Joins two tables on the join columns that are passed in.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).fullJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
+     */
+    public Table fullJoin(TableOperation rightJoinIndices) {
+      return fullJoin(rightJoinIndices, true);
+    }
+
+    /**
      * Performs a semi-join between a left table and a right table, returning only the rows from
      * the left table that match rows in the right table on the join keys.
      * Usage:
@@ -1688,6 +1730,20 @@ public final class Table implements AutoCloseable {
     }
 
     /**
+     * Performs a semi-join between a left table and a right table, returning only the rows from
+     * the left table that match rows in the right table on the join keys.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).leftSemiJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @return the left semi-joined table.
+     */
+    public Table leftSemiJoin(TableOperation rightJoinIndices) {
+      return leftSemiJoin(rightJoinIndices, true);
+    }
+
+    /**
      * Performs an anti-join between a left table and a right table, returning only the rows from
      * the left table that do not match rows in the right table on the join keys.
      * Usage:
@@ -1702,6 +1758,20 @@ public final class Table implements AutoCloseable {
       return new Table(Table.leftAntiJoin(operation.table.nativeHandle, operation.indices,
           rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
           compareNullsEqual));
+    }
+
+    /**
+     * Performs an anti-join between a left table and a right table, returning only the rows from
+     * the left table that do not match rows in the right table on the join keys.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).leftAntiJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @return the left anti-joined table.
+     */
+    public Table leftAntiJoin(TableOperation rightJoinIndices) {
+      return leftAntiJoin(rightJoinIndices, true);
     }
 
     /**

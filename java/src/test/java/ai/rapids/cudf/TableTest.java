@@ -685,28 +685,29 @@ public class TableTest extends CudfTestBase {
          Table rightTable = new Table.TestBuilder()
              .column(null, null,   9,   8,  10,  32)
              .column( 201,  202, 203, 204, 205, 206)
-             .build();
+             .build()) {
 
-         Table expectedResultsWithNullsEqual = new Table.TestBuilder()
-             .column(   2,    3,   9,    0,    1,    7,    4, null, null, null, null,   8) // common
-             .column( 100,  101, 102,  103,  104,  105,  106,  107,  107,  108,  108, 109) // left
-             .column(null, null, 203, null, null, null, null,  201,  202,  201,  202, 204) // right
-             .build();
+       try (Table expectedResults = new Table.TestBuilder()
+           .column(   2,    3,   9,    0,    1,    7,    4, null, null, null, null,   8) // common
+           .column( 100,  101, 102,  103,  104,  105,  106,  107,  107,  108,  108, 109) // left
+           .column(null, null, 203, null, null, null, null,  201,  202,  201,  202, 204) // right
+           .build();
 
-         Table joinedTableWithNullsEqual = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0), true);
-         Table orderedJoinedTableWithNullsEqual = joinedTableWithNullsEqual.orderBy(Table.asc(1, true));
+           Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0));
+           Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+           assertTablesAreEqual(expectedResults, orderedJoinedTable);
+       }
 
-         Table expectedResultsWithNullsUnequal = new Table.TestBuilder()
-             .column(   2,    3,   9,    0,    1,    7,    4, null, null,    8) // common
-             .column( 100,  101, 102,  103,  104,  105,  106,  107,  108,  109) // left
-             .column(null, null, 203, null, null, null, null, null, null,  204) // right
-             .build();
+       try (Table expectedResults = new Table.TestBuilder()
+           .column(   2,    3,   9,    0,    1,    7,    4, null, null,    8) // common
+           .column( 100,  101, 102,  103,  104,  105,  106,  107,  108,  109) // left
+           .column(null, null, 203, null, null, null, null, null, null,  204) // right
+           .build();
 
-         Table joinedTableWithNullsUnequal = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0), false);
-         Table orderedJoinedTableWithNullsUnequal = joinedTableWithNullsUnequal.orderBy(Table.asc(1, true))) {
-
-      assertTablesAreEqual(expectedResultsWithNullsEqual, orderedJoinedTableWithNullsEqual);
-      assertTablesAreEqual(expectedResultsWithNullsUnequal, orderedJoinedTableWithNullsUnequal);
+           Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0), false);
+           Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+         assertTablesAreEqual(expectedResults, orderedJoinedTable);
+       }
     }
   }
 
@@ -769,7 +770,7 @@ public class TableTest extends CudfTestBase {
               .column( 102,  102,  107,  107,  103,  104,  100,  101,  106, 108,  105, 109, null, null) // left
               .column( 200,  202,  200,  202, null, null, null, null, null, 201, null, 203,  204,  205) // right
               .build();
-           Table joinedTable = leftTable.onColumns(0).fullJoin(rightTable.onColumns(0), true);
+           Table joinedTable = leftTable.onColumns(0).fullJoin(rightTable.onColumns(0));
            Table orderedJoinedTable = joinedTable.orderBy(Table.asc(0, true), Table.asc(1, true))) {
         assertTablesAreEqual(expectedResults, orderedJoinedTable);
       }
@@ -847,7 +848,7 @@ public class TableTest extends CudfTestBase {
              .column(102, 107,  108, 109) // left
              .column(202, 200,  201, 203) // right
              .build();
-         Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(0), true);
+         Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(0));
          Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
         assertTablesAreEqual(expected, orderedJoinedTable);
       }
@@ -944,7 +945,7 @@ public class TableTest extends CudfTestBase {
                .column(  9,   6, null,   8)
                .column(102, 107,  108, 109)
                .build();
-            Table joinedTable = leftTable.onColumns(0).leftSemiJoin(rightTable.onColumns(0), true);
+            Table joinedTable = leftTable.onColumns(0).leftSemiJoin(rightTable.onColumns(0));
             Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
           assertTablesAreEqual(expected, orderedJoinedTable);
        }
@@ -997,7 +998,7 @@ public class TableTest extends CudfTestBase {
               .column(  2,   3,   0,   1,   7,   4)
               .column(100, 101, 103, 104, 105, 106)
               .build();
-           Table joinedTable = leftTable.onColumns(0).leftAntiJoin(rightTable.onColumns(0), true);
+           Table joinedTable = leftTable.onColumns(0).leftAntiJoin(rightTable.onColumns(0));
            Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
         assertTablesAreEqual(expected, orderedJoinedTable);
       }
