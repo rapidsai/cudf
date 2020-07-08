@@ -25,6 +25,7 @@
 #include <rmm/device_scalar.hpp>
 
 #include <cudf/detail/utilities/trie.cuh>
+#include <cudf/groupby.hpp>
 #include <cudf/io/readers.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -69,12 +70,37 @@ constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept
 
 }  // anonymous namespace
 template <typename T>
-void print_column(std::unique_ptr<column> &c)
+void print_column(column_view c)
 {
-  std::vector<T> hdata(c->size());
-  auto ddata = c->release();
-  cudaMemcpy(hdata.data(), ddata.data->data(), sizeof(T) * hdata.size(), cudaMemcpyDefault);
+  std::vector<T> hdata(c.size());
+  cudaMemcpy(hdata.data(), c.data<T>(), sizeof(T) * hdata.size(), cudaMemcpyDefault);
   for (auto elem : hdata) std::cout << elem << ' ';
+}
+// offsets, lens, hashes
+std::unique_ptr<table> aggregate_field_names_info(column_view const &offsets,
+                                                  column_view const &lens,
+                                                  column_view const &hashes)
+{
+  std::vector<groupby::aggregation_request> requests;
+  requests.emplace_back(groupby::aggregation_request());
+  requests[0].values = offsets;
+  requests[0].aggregations.push_back(make_min_aggregation());
+  requests[0].aggregations.push_back(make_nth_element_aggregation(0));
+
+  requests.emplace_back(groupby::aggregation_request());
+  requests[1].values = lens;
+  requests[1].aggregations.push_back(make_min_aggregation());
+  requests[1].aggregations.push_back(make_nth_element_aggregation(0));
+
+  groupby::groupby gb_obj(table_view({hashes}), null_policy::EXCLUDE, sorted::NO, {}, {});
+
+  auto result = gb_obj.aggregate(requests);
+
+  std::vector<std::unique_ptr<column>> out_columns;
+  out_columns.emplace_back(std::move(result.second[0].results[0]));  // offsets
+  out_columns.emplace_back(std::move(result.second[1].results[0]));  // lengths
+  out_columns.emplace_back(std::move(result.first->release()[0]));   // hashes
+  return std::make_unique<table>(std::move(out_columns));
 }
 
 /**
@@ -124,6 +150,14 @@ std::vector<std::string> reader::impl::get_names_from_json_object(const std::vec
                                            stream);
 
   // aggregate on min(offset)
+  auto aggregated_info =
+    aggregate_field_names_info(name_offsets->view(), name_lengths->view(), name_hashes->view());
+  // full info not needed anymore
+  name_lengths.reset();
+  name_offsets.reset();
+  name_hashes.reset();
+
+  // sort columns by offset
 
   // collect the names for metadata
 
