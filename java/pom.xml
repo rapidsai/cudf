@@ -144,8 +144,11 @@
         <skipNativeCopy>false</skipNativeCopy>
         <cxx11.abi.value>ON</cxx11.abi.value>
         <cxx.flags/>
+        <cmake.export.compile.commands>OFF</cmake.export.compile.commands>
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
         <PER_THREAD_DEFAULT_STREAM>OFF</PER_THREAD_DEFAULT_STREAM>
+        <project.build.directory>target/${CUDA_VERSION}</project.build.directory>
+        <native.build.path>${project.build.directory}/cmake-build</native.build.path>
     </properties>
 
     <profiles>
@@ -234,6 +237,7 @@
     </profiles>
 
     <build>
+	<directory>${project.build.directory}</directory>
         <resources>
             <resource>
               <!-- Include the properties file to provide the build information. -->
@@ -255,7 +259,7 @@
               </includes>
             </resource>
             <resource>
-                <directory>${basedir}/target/native-deps/</directory>
+                <directory>${project.build.directory}/native-deps/</directory>
             </resource>
         </resources>
         <pluginManagement>
@@ -344,6 +348,7 @@
                                     <arg value="-DPER_THREAD_DEFAULT_STREAM=${PER_THREAD_DEFAULT_STREAM}" />
                                     <arg value="-DCMAKE_CXX11_ABI=${cxx11.abi.value}"/>
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
+                                    <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${cmake.export.compile.commands}"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
@@ -454,7 +459,7 @@
                         <configuration>
                             <overwrite>true</overwrite>
                             <skip>${skipNativeCopy}</skip>
-                            <outputDirectory>${basedir}/target/native-deps/${os.arch}/${os.name}</outputDirectory>
+                            <outputDirectory>${project.build.directory}/native-deps/${os.arch}/${os.name}</outputDirectory>
                             <resources>
                                 <resource>
                                     <directory>${native.build.path}</directory>
