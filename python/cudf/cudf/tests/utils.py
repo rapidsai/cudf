@@ -59,7 +59,7 @@ def count_zero(arr):
     return np.count_nonzero(arr == 0)
 
 
-def assert_eq(left, right, **kwargs):
+def assert_eq(left, right, allow_nullable_pd_types=False, **kwargs):
     """ Assert that two cudf-like things are equivalent
 
     This equality test works for pandas/cudf dataframes/series/indexes/scalars
@@ -77,7 +77,12 @@ def assert_eq(left, right, **kwargs):
         left = cupy.asnumpy(left)
     if isinstance(right, cupy.ndarray):
         right = cupy.asnumpy(right)
-
+    if (
+        allow_nullable_pd_types
+        and isinstance(left, (pd.Series, pd.DataFrame))
+        and left.__class__ == right.__class__
+    ):
+        left, right = maybe_demote_dtypes(left, right)
     if isinstance(left, pd.DataFrame):
         tm.assert_frame_equal(left, right, **kwargs)
     elif isinstance(left, pd.Series):
@@ -100,6 +105,34 @@ def assert_eq(left, right, **kwargs):
             else:
                 assert np.allclose(left, right, equal_nan=True)
     return True
+
+def demote_series_dtype(sr):
+    """ Demote a pandas nullable extension dtype into
+    a non-nullable numpy type, filling with the appropriate
+    NA value
+    """
+    in_dtype = sr.dtype
+    out_dtype = dtypeutils._pd_nullable_dtypes_to_cudf_dtypes.get(sr.dtype, sr.dtype)
+
+    if out_dtype.kind == 'i':
+        min_int = np.iinfo(out_dtype).min
+        out_sr = sr.fillna(min_int)
+        out_sr = out_sr.astype(out_dtype)
+    elif out_dtype.kind == 'O':
+        # instantiating pandas string series with None still gets object
+        # does NOT default to String, with pd.NA yet
+        out_sr = sr.astype(out_dtype)
+        out_sr[sr.isnull()] = None
+    return out_sr
+
+
+def maybe_demote_dtypes(obj):
+    if isinstance(obj, pd.Series):
+        return demote_series_dtype(obj)
+    elif isinstance(obj, pd.DataFrame):
+        for col in obj.columns:
+            obj[col] = demote_series_dtype(obj[col])
+    return obj
 
 
 def assert_neq(left, right, **kwargs):
