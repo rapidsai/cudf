@@ -93,9 +93,7 @@ class reader::impl {
    *
    * @return TODO
    */
-  std::vector<std::string> get_names_from_json_object(const std::vector<char> &json_obj,
-                                                      const ParseOptions &opts,
-                                                      cudaStream_t stream);
+  std::vector<std::string> get_field_names(const ParseOptions &opts, cudaStream_t stream);
   /**
    * @brief Decompress the input data, if needed
    *

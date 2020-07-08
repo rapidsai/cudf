@@ -27,6 +27,7 @@
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/io/readers.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <io/comp/io_uncomp.h>
@@ -106,19 +107,17 @@ std::unique_ptr<table> aggregate_field_names_info(column_view const &offsets,
 /**
  * @brief Extract value names from a JSON object
  *
- * @param[in] json_obj Host vector containing the JSON object
  * @param[in] opts Parsing options (e.g. delimiter and quotation character)
  *
  * @return std::vector<std::string> names of JSON object values
  **/
-std::vector<std::string> reader::impl::get_names_from_json_object(const std::vector<char> &json_obj,
-                                                                  const ParseOptions &opts,
-                                                                  cudaStream_t stream)
+std::vector<std::string> reader::impl::get_field_names(const ParseOptions &opts,
+                                                       cudaStream_t stream)
 {
   // count fields
   rmm::device_scalar<unsigned long long int> field_counter(0, stream);
-
-  cudf::io::json::gpu::collect_field_names(static_cast<const char *>(data_.data()),
+  auto const data_ptr = static_cast<const char *>(data_.data());
+  cudf::io::json::gpu::collect_field_names(data_ptr,
                                            data_.size(),
                                            opts_,
                                            rec_starts_.data().get(),
@@ -129,18 +128,18 @@ std::vector<std::string> reader::impl::get_names_from_json_object(const std::vec
 
   // allocate columns to store hash values, lengths, offsets
   auto const num_fields = field_counter.value();
-  auto name_hashes      = make_numeric_column(data_type(type_id::UINT32), num_fields);
-  auto d_name_hashes    = mutable_column_device_view::create(name_hashes->mutable_view(), stream);
-  auto name_lengths     = make_numeric_column(data_type(type_id::UINT16), num_fields);
-  auto d_name_lengths   = mutable_column_device_view::create(name_lengths->mutable_view(), stream);
   auto name_offsets     = make_numeric_column(data_type(type_id::UINT64), num_fields);
   auto d_name_offsets   = mutable_column_device_view::create(name_offsets->mutable_view(), stream);
+  auto name_lengths     = make_numeric_column(data_type(type_id::UINT16), num_fields);
+  auto d_name_lengths   = mutable_column_device_view::create(name_lengths->mutable_view(), stream);
+  auto name_hashes      = make_numeric_column(data_type(type_id::UINT32), num_fields);
+  auto d_name_hashes    = mutable_column_device_view::create(name_hashes->mutable_view(), stream);
 
   field_names_device_info info_arg{*d_name_hashes, *d_name_lengths, *d_name_offsets};
   rmm::device_scalar<field_names_device_info> d_info_arg(info_arg, stream);
 
   field_counter.set_value(0, stream);
-  cudf::io::json::gpu::collect_field_names(static_cast<const char *>(data_.data()),
+  cudf::io::json::gpu::collect_field_names(data_ptr,
                                            data_.size(),
                                            opts_,
                                            rec_starts_.data().get(),
@@ -149,7 +148,6 @@ std::vector<std::string> reader::impl::get_names_from_json_object(const std::vec
                                            d_info_arg.data(),
                                            stream);
 
-  // aggregate on min(offset)
   auto aggregated_info =
     aggregate_field_names_info(name_offsets->view(), name_lengths->view(), name_hashes->view());
   // full info not needed anymore
@@ -157,41 +155,37 @@ std::vector<std::string> reader::impl::get_names_from_json_object(const std::vec
   name_offsets.reset();
   name_hashes.reset();
 
-  // sort columns by offset
+  auto const agg_offset_col_view = aggregated_info->get_column(0).view();
+  auto sorted_info = sort_by_key(aggregated_info->view(), table_view({agg_offset_col_view}));
+  // unsorted info not needed anymore
+  aggregated_info.release();
+
+  // print_column<uint64_t>(sorted_info->get_column(0).view());
 
   // collect the names for metadata
+  auto const num_cols = sorted_info->num_rows();
+  std::vector<uint64_t> h_offsets(num_cols);
+  cudaMemcpyAsync(h_offsets.data(),
+                  sorted_info->get_column(0).view().data<uint64_t>(),
+                  sizeof(uint64_t) * num_cols,
+                  cudaMemcpyDefault);
+
+  std::vector<uint16_t> h_lens(num_cols);
+  cudaMemcpyAsync(h_lens.data(),
+                  sorted_info->get_column(1).view().data<uint16_t>(),
+                  sizeof(uint16_t) * num_cols,
+                  cudaMemcpyDefault);
+
+  std::vector<std::string> names(num_cols);
+  std::transform(
+    h_offsets.begin(), h_offsets.end(), h_lens.begin(), names.begin(), [&](auto offset, auto len) {
+      std::vector<char> buffer(len);
+      cudaMemcpyAsync(buffer.data(), data_ptr + offset, len, cudaMemcpyDefault);
+      return std::string(reinterpret_cast<const char *>(buffer.data()), len);
+    });
 
   // make a hash map (to be used for parsing)
 
-  enum class ParseState { preColName, colName, postColName };
-  std::vector<std::string> names;
-  bool quotation = false;
-  auto state     = ParseState::preColName;
-  int name_start = 0;
-  for (size_t pos = 0; pos < json_obj.size(); ++pos) {
-    if (state == ParseState::preColName) {
-      if (json_obj[pos] == opts.quotechar) {
-        name_start = pos + 1;
-        state      = ParseState::colName;
-        continue;
-      }
-    } else if (state == ParseState::colName) {
-      if (json_obj[pos] == opts.quotechar && json_obj[pos - 1] != '\\') {
-        // if found a non-escaped quote character, it's the end of the column name
-        names.emplace_back(&json_obj[name_start], &json_obj[pos]);
-        state = ParseState::postColName;
-        continue;
-      }
-    } else if (state == ParseState::postColName) {
-      // TODO handle complex data types that might include unquoted commas
-      if (!quotation && json_obj[pos] == opts.delimiter) {
-        state = ParseState::preColName;
-        continue;
-      } else if (json_obj[pos] == opts.quotechar) {
-        quotation = !quotation;
-      }
-    }
-  }
   return names;
 }
 
@@ -410,7 +404,7 @@ void reader::impl::set_column_names(cudaStream_t stream)
   // If the first opening bracket is '{', assume object format
   const bool is_object = first_curly_bracket < first_square_bracket;
   if (is_object) {
-    metadata.column_names = get_names_from_json_object(first_row, opts_, stream);
+    metadata.column_names = get_field_names(opts_, stream);
   } else {
     int cols_found = 0;
     bool quotation = false;
