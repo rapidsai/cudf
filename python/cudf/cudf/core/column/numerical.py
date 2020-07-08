@@ -165,17 +165,9 @@ class NumericalColumn(column.ColumnBase):
     def to_pandas(self, index=None):
         host_dtype = {
             v: k for k, v in _pd_nullable_dtypes_to_cudf_dtypes.items()
-        }[self.dtype]
-        host_data = pd.Series(
-            self.data_array_view.copy_to_host(), dtype=host_dtype
-        )
-        if self.has_nulls:
-            host_mask = cudautils.expand_mask_bits(
-                len(host_data), self.mask_array_view
-            ).copy_to_host()
-            host_data[host_mask == False] = pd.NA
-        host_data.index = index
-        return host_data
+        }.get(self.dtype, self.dtype)
+
+        return pd.Series(self.to_arrow().to_pandas(), index=index).astype(host_dtype)
 
     def to_arrow(self):
         mask = None
