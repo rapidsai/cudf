@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <curand.h>
-#include <curand_kernel.h>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>
