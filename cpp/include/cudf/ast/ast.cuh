@@ -175,8 +175,6 @@ class linearizer : public abstract_visitor {
 
   cudf::size_type visit(literal const& expr) override
   {
-    std::cout << "visiting literal value" << std::endl;
-
     // Resolve node type
     auto data_type = expr.get_data_type();
     // TODO: Use scalar device view (?)
@@ -195,7 +193,6 @@ class linearizer : public abstract_visitor {
 
   cudf::size_type visit(column_reference const& expr) override
   {
-    std::cout << "visiting column reference" << std::endl;
     // Resolve node type
     auto data_type = expr.get_data_type(this->table);
     // Push data reference
@@ -212,10 +209,8 @@ class linearizer : public abstract_visitor {
 
   cudf::size_type visit(operator_expression const& expr) override
   {
-    std::cout << "visiting operator_expression" << std::endl;
     const auto op                       = expr.get_operator();
     auto operand_data_reference_indices = this->visit_operands(expr.get_operands());
-    std::cout << "visited operands" << std::endl;
     // Resolve operand types
     auto operand_types = std::vector<cudf::data_type>();
     std::transform(operand_data_reference_indices.cbegin(),
@@ -259,7 +254,6 @@ class linearizer : public abstract_visitor {
                                          operand_data_reference_indices.cbegin(),
                                          operand_data_reference_indices.cend());
     this->operator_source_indices.push_back(index);
-    std::cout << "visited operator_expression" << std::endl;
     return index;
   }
 
@@ -406,6 +400,7 @@ struct typed_binop_dispatch {
     auto typed_output =
       resolve_output_data_reference<Element>(output, table, thread_intermediate_storage, row_index);
     *typed_output = ast_operator_dispatcher_numeric(op, do_binop<Element>{}, typed_lhs, typed_rhs);
+    /*
     if (row_index == 0) {
       printf("lhs index %i = %f, rhs index %i = %f, output index %i = %f\n",
              lhs.data_index,
@@ -415,6 +410,7 @@ struct typed_binop_dispatch {
              output.data_index,
              float(*typed_output));
     }
+    */
   }
 
   template <typename Element, std::enable_if_t<!cudf::is_numeric<Element>()>* = nullptr>
@@ -490,6 +486,7 @@ __device__ void evaluate_row_expression(table_device_view const& table,
       auto lhs_data_ref    = data_references[operator_source_indices[operator_source_index]];
       auto rhs_data_ref    = data_references[operator_source_indices[operator_source_index + 1]];
       auto output_data_ref = data_references[operator_source_indices[operator_source_index + 2]];
+      /*
       if (row_index == 0) {
         printf("Operator id %i is ", operator_index);
         switch (op) {
@@ -502,6 +499,7 @@ __device__ void evaluate_row_expression(table_device_view const& table,
         printf("rhs index %i to ", operator_source_indices[operator_source_index + 1]);
         printf("output index %i.\n", operator_source_indices[operator_source_index + 2]);
       }
+      */
 
       operator_source_index += 3;
       operate(op,
@@ -586,6 +584,7 @@ std::unique_ptr<column> compute_column(
     thrust::device_vector<cudf::size_type>(operator_source_indices);
 
   // Output linearizer info
+  /*
   std::cout << "LINEARIZER INFO:" << std::endl;
   std::cout << "Node counter: " << expr_linearizer.get_node_counter() << std::endl;
   std::cout << "Number of data references: " << data_references.size() << std::endl;
@@ -605,6 +604,7 @@ std::unique_ptr<column> compute_column(
   std::cout << "Operator source indices: ";
   for (auto v : operator_source_indices) { std::cout << v << ", "; }
   std::cout << std::endl;
+  */
 
   // Create table device view
   auto table_device   = table_device_view::create(table, stream);
@@ -622,7 +622,7 @@ std::unique_ptr<column> compute_column(
   auto num_intermediates = expr_linearizer.get_intermediate_counter();
   auto shmem_size_per_block =
     sizeof(std::int64_t) * num_intermediates * config.num_threads_per_block;
-  std::cout << "Requesting " << shmem_size_per_block << " bytes of shared memory." << std::endl;
+  // std::cout << "Requesting " << shmem_size_per_block << " bytes of shared memory." << std::endl;
 
   // Execute the kernel
   compute_column_kernel<<<config.num_blocks,
