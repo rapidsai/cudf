@@ -1446,7 +1446,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         data = ColumnBase._concat(gpu_cols, dtype=new_dtype)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
-        if isinstance(arbitrary.array, pd.core.arrays.masked.BaseMaskedArray):
+        if isinstance(arbitrary, pd.Series) and isinstance(arbitrary.array, pd.core.arrays.masked.BaseMaskedArray):
             return as_column(arbitrary.array)
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
