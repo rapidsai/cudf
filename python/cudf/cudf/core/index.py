@@ -538,6 +538,11 @@ class Index(Frame, Serializable):
         >>> idx1.difference(idx2, sort=False)
         Int64Index([2, 1], dtype='int64')
         """
+        if sort not in {None, False}:
+            raise ValueError(
+                f"The 'sort' keyword only takes the values "
+                f"of None or False; {sort} was passed."
+            )
 
         other = as_index(other)
 
