@@ -82,7 +82,8 @@ def assert_eq(left, right, allow_nullable_pd_types=False, **kwargs):
         and isinstance(left, (pd.Series, pd.DataFrame))
         and left.__class__ == right.__class__
     ):
-        left, right = maybe_demote_dtypes(left, right)
+        left = maybe_demote_dtypes(left)
+        right = maybe_demote_dtypes(right)
     if isinstance(left, pd.DataFrame):
         tm.assert_frame_equal(left, right, **kwargs)
     elif isinstance(left, pd.Series):
