@@ -1,5 +1,6 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
+import cupy
 import numpy as np
 import pytest
 from pandas.util.testing import assert_series_equal
@@ -552,7 +553,7 @@ def test_text_subword_tokenize(tmpdir):
     hash_file.write(content)
 
     tokens, masks, metadata = sr.str.subword_tokenize(str(hash_file), 8, 8)
-    expected_tokens = cudf.Series(
+    expected_tokens = cupy.asarray(
         [
             2023,
             2003,
@@ -599,7 +600,7 @@ def test_text_subword_tokenize(tmpdir):
     )
     assert_eq(expected_tokens, tokens)
 
-    expected_masks = cudf.Series(
+    expected_masks = cupy.asarray(
         [
             1,
             1,
@@ -646,7 +647,7 @@ def test_text_subword_tokenize(tmpdir):
     )
     assert_eq(expected_masks, masks)
 
-    expected_metadata = cudf.Series(
+    expected_metadata = cupy.asarray(
         [0, 0, 3, 1, 0, 3, 2, 0, 3, 3, 0, 1, 4, 0, 1], dtype=np.uint32
     )
     assert_eq(expected_metadata, metadata)

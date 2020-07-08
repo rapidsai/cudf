@@ -2,6 +2,7 @@
 import pickle
 import warnings
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -3984,9 +3985,9 @@ class StringMethods(object):
             max_rows_tensor,
         )
         return (
-            cudf.Series(tokens),
-            cudf.Series(masks),
-            cudf.Series(metadata),
+            cupy.asarray(tokens),
+            cupy.asarray(masks),
+            cupy.asarray(metadata),
         )
 
 

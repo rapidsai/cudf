@@ -72,17 +72,21 @@ struct tokenizer_result {
   /**
    * @brief A vector of token-ids for each row.
    *
-   * This is a flat matrix (nrows_tensor x sequence_length) of token-ids.
+   * The data is a flat matrix (nrows_tensor x sequence_length) of token-ids.
+   * This column is of type UINT32 with no null entries.
    */
   std::unique_ptr<cudf::column> tensor_token_ids;
   /**
    * @brief This mask identifies which tensor-token-ids are valid.
+   *
+   * This column is of type UINT32 with no null entries.
    */
   std::unique_ptr<cudf::column> tensor_attention_mask;
   /**
    * @brief The metadata for each tensor row.
    *
-   * Three elements per tensor row [rowID, start_pos, stop_pos])
+   * There are three elements per tensor row [row-id, start_pos, stop_pos])
+   * This column is of type UINT32 with no null entries.
    */
   std::unique_ptr<cudf::column> tensor_metadata;
 };
