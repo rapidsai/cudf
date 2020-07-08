@@ -125,6 +125,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/contains.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_booleans.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_datetime.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_durations.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_floats.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
