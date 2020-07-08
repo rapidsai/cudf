@@ -200,7 +200,7 @@ class MultiIndex(Index):
         return MultiIndex.from_frame(df, names=names)
 
     @property
-    def _shape(self):
+    def shape(self):
         return (self._data.nrows, len(self._data.names))
 
     @property
