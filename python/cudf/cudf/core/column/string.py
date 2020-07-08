@@ -1435,6 +1435,32 @@ class StringMethods(object):
         """
         return self._return_or_inplace(cpp_is_lower(self._column), **kwargs)
 
+    def isipv4(self, **kwargs):
+        """
+        Check whether all characters in each string form an IPv4 address.
+
+        If a string has zero characters, False is returned for
+        that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["", "127.0.0.1", "255.255.255.255", "123.456"])
+        >>> s.str.isipv4()
+        0    False
+        1     True
+        2     True
+        3    False
+        dtype: bool
+        """
+        return self._return_or_inplace(
+            str_cast.is_ipv4(self._column), **kwargs
+        )
+
     def lower(self, **kwargs):
         """
         Converts all characters to lowercase.
