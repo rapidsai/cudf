@@ -1450,7 +1450,7 @@ class StringMethods(object):
         --------
         >>> import cudf
         >>> s = cudf.Series(["", "127.0.0.1", "255.255.255.255", "123.456"])
-        >>> s.str.ishex()
+        >>> s.str.isipv4()
         0    False
         1     True
         2     True
