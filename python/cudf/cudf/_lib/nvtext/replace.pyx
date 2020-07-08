@@ -52,13 +52,13 @@ def filter_tokens(Column strings,
                   Scalar delimiter):
     """
     Tokens smaller than `min_token_length` are removed from `strings`
-    in the Column and optionally replaced with the corresponding 
+    in the Column and optionally replaced with the corresponding
     `replacement` string. Tokens are identified by the `delimiter`
     character provided.
     """
 
     cdef column_view c_strings = strings.view()
-    cdef string_scalar* c_replacement = <string_scalar*>replacement.c_value.get()
+    cdef string_scalar* c_repl = <string_scalar*>replacement.c_value.get()
     cdef string_scalar* c_delimiter = <string_scalar*>delimiter.c_value.get()
     cdef unique_ptr[column] c_result
 
@@ -67,7 +67,7 @@ def filter_tokens(Column strings,
             cpp_filter_tokens(
                 c_strings,
                 min_token_length,
-                c_replacement[0],
+                c_repl[0],
                 c_delimiter[0],
             )
         )
