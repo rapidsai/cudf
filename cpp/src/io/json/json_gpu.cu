@@ -639,13 +639,13 @@ enum parse_state { PRE_NAME, NAME, POST_NAME, POST_NAME_QUOTE };
  *
  * @returns void
  **/
-__global__ void gpu_collect_field_names(const char *data,
-                                        size_t data_size,
-                                        const ParseOptions opts,
-                                        const uint64_t *rec_starts,
-                                        cudf::size_type num_records,
-                                        unsigned long long int *names_cnt,
-                                        field_names_device_info *names_info)
+__global__ void gpu_collect_field_names_info(const char *data,
+                                             size_t data_size,
+                                             const ParseOptions opts,
+                                             const uint64_t *rec_starts,
+                                             cudf::size_type num_records,
+                                             unsigned long long int *names_cnt,
+                                             mutable_table_device_view *names_info)
 {
   long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
@@ -664,11 +664,11 @@ __global__ void gpu_collect_field_names(const char *data,
       st       = POST_NAME;
       auto idx = atomicAdd(names_cnt, 1);
       if (nullptr != names_info) {
-        auto len = pos - last_name_start;
-        names_info->hashes.element<uint32_t>(idx) =
+        auto len                                     = pos - last_name_start;
+        names_info->column(0).element<uint64_t>(idx) = last_name_start;
+        names_info->column(1).element<uint16_t>(idx) = len;
+        names_info->column(2).element<uint32_t>(idx) =
           MurmurHash3_32<cudf::string_view>{}(cudf::string_view(data + last_name_start, len));
-        names_info->lengths.element<uint16_t>(idx) = len;
-        names_info->offsets.element<uint64_t>(idx) = last_name_start;
       }
     } else if (st == POST_NAME && data[pos] == opts.quotechar) {
       st = POST_NAME_QUOTE;
@@ -746,26 +746,26 @@ void detect_data_types(ColumnInfo *column_infos,
 }
 
 /**
- * @copydoc cudf::io::json::gpu::gpu_collect_field_names
+ * @copydoc cudf::io::json::gpu::gpu_collect_field_names_info
  */
-void collect_field_names(const char *data,
-                         size_t data_size,
-                         const ParseOptions &options,
-                         const uint64_t *rec_starts,
-                         cudf::size_type num_records,
-                         unsigned long long int *names_cnt,
-                         field_names_device_info *names_info,
-                         cudaStream_t stream)
+void collect_field_names_info(const char *data,
+                              size_t data_size,
+                              const ParseOptions &options,
+                              const uint64_t *rec_starts,
+                              cudf::size_type num_records,
+                              unsigned long long int *names_cnt,
+                              mutable_table_device_view *names_info,
+                              cudaStream_t stream)
 {
   int block_size;
   int min_grid_size;
   CUDA_TRY(
-    cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, gpu_collect_field_names));
+    cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, gpu_collect_field_names_info));
 
   // Calculate actual block count to use based on records count
   const int grid_size = (num_records + block_size - 1) / block_size;
 
-  gpu_collect_field_names<<<grid_size, block_size, 0, stream>>>(
+  gpu_collect_field_names_info<<<grid_size, block_size, 0, stream>>>(
     data, data_size, options, rec_starts, num_records, names_cnt, names_info);
 
   CUDA_TRY(cudaGetLastError());

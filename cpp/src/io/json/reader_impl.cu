@@ -77,23 +77,22 @@ void print_column(column_view c)
   cudaMemcpy(hdata.data(), c.data<T>(), sizeof(T) * hdata.size(), cudaMemcpyDefault);
   for (auto elem : hdata) std::cout << elem << ' ';
 }
-// offsets, lens, hashes
-std::unique_ptr<table> aggregate_field_names_info(column_view const &offsets,
-                                                  column_view const &lens,
-                                                  column_view const &hashes)
+
+// table contains offsets, lens, hashes
+std::unique_ptr<table> aggregate_field_names_info(table_view const &info)
 {
   std::vector<groupby::aggregation_request> requests;
   requests.emplace_back(groupby::aggregation_request());
-  requests[0].values = offsets;
+  requests[0].values = info.column(0);
   requests[0].aggregations.push_back(make_min_aggregation());
   requests[0].aggregations.push_back(make_nth_element_aggregation(0));
 
   requests.emplace_back(groupby::aggregation_request());
-  requests[1].values = lens;
+  requests[1].values = info.column(1);
   requests[1].aggregations.push_back(make_min_aggregation());
   requests[1].aggregations.push_back(make_nth_element_aggregation(0));
 
-  groupby::groupby gb_obj(table_view({hashes}), null_policy::EXCLUDE, sorted::NO, {}, {});
+  groupby::groupby gb_obj(table_view({info.column(2)}), null_policy::EXCLUDE, sorted::NO, {}, {});
 
   auto result = gb_obj.aggregate(requests);
 
@@ -102,6 +101,19 @@ std::unique_ptr<table> aggregate_field_names_info(column_view const &offsets,
   out_columns.emplace_back(std::move(result.second[1].results[0]));  // lengths
   out_columns.emplace_back(std::move(result.first->release()[0]));   // hashes
   return std::make_unique<table>(std::move(out_columns));
+}
+
+void populate_col_names_hash_map(column_view hashes,
+                                 concurrent_unordered_map<uint32_t, uint32_t> &map,
+                                 cudaStream_t stream)
+{
+  auto column_data = hashes.data<uint32_t>();
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     hashes.size(),
+                     [map, column_data] __device__(size_type idx) mutable {
+                       map.insert(thrust::make_pair(column_data[idx], idx));
+                     });
 }
 
 /**
@@ -117,50 +129,43 @@ std::vector<std::string> reader::impl::get_field_names(const ParseOptions &opts,
   // count fields
   rmm::device_scalar<unsigned long long int> field_counter(0, stream);
   auto const data_ptr = static_cast<const char *>(data_.data());
-  cudf::io::json::gpu::collect_field_names(data_ptr,
-                                           data_.size(),
-                                           opts_,
-                                           rec_starts_.data().get(),
-                                           rec_starts_.size(),
-                                           field_counter.data(),
-                                           nullptr,
-                                           stream);
+  cudf::io::json::gpu::collect_field_names_info(data_ptr,
+                                                data_.size(),
+                                                opts_,
+                                                rec_starts_.data().get(),
+                                                rec_starts_.size(),
+                                                field_counter.data(),
+                                                nullptr,
+                                                stream);
 
   // allocate columns to store hash values, lengths, offsets
   auto const num_fields = field_counter.value();
-  auto name_offsets     = make_numeric_column(data_type(type_id::UINT64), num_fields);
-  auto d_name_offsets   = mutable_column_device_view::create(name_offsets->mutable_view(), stream);
-  auto name_lengths     = make_numeric_column(data_type(type_id::UINT16), num_fields);
-  auto d_name_lengths   = mutable_column_device_view::create(name_lengths->mutable_view(), stream);
-  auto name_hashes      = make_numeric_column(data_type(type_id::UINT32), num_fields);
-  auto d_name_hashes    = mutable_column_device_view::create(name_hashes->mutable_view(), stream);
-
-  field_names_device_info info_arg{*d_name_hashes, *d_name_lengths, *d_name_offsets};
-  rmm::device_scalar<field_names_device_info> d_info_arg(info_arg, stream);
+  std::vector<std::unique_ptr<column>> info_columns;
+  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT64), num_fields));
+  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT16), num_fields));
+  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT32), num_fields));
+  auto info = std::make_unique<table>(std::move(info_columns));
+  rmm::device_scalar<mutable_table_device_view> d_info(
+    *mutable_table_device_view::create(info->mutable_view(), stream), stream);
 
   field_counter.set_value(0, stream);
-  cudf::io::json::gpu::collect_field_names(data_ptr,
-                                           data_.size(),
-                                           opts_,
-                                           rec_starts_.data().get(),
-                                           rec_starts_.size(),
-                                           field_counter.data(),
-                                           d_info_arg.data(),
-                                           stream);
+  cudf::io::json::gpu::collect_field_names_info(data_ptr,
+                                                data_.size(),
+                                                opts_,
+                                                rec_starts_.data().get(),
+                                                rec_starts_.size(),
+                                                field_counter.data(),
+                                                d_info.data(),
+                                                stream);
 
-  auto aggregated_info =
-    aggregate_field_names_info(name_offsets->view(), name_lengths->view(), name_hashes->view());
+  auto aggregated_info = aggregate_field_names_info(info->view());
   // full info not needed anymore
-  name_lengths.reset();
-  name_offsets.reset();
-  name_hashes.reset();
+  info.release();
 
   auto const agg_offset_col_view = aggregated_info->get_column(0).view();
   auto sorted_info = sort_by_key(aggregated_info->view(), table_view({agg_offset_col_view}));
   // unsorted info not needed anymore
   aggregated_info.release();
-
-  // print_column<uint64_t>(sorted_info->get_column(0).view());
 
   // collect the names for metadata
   auto const num_cols = sorted_info->num_rows();
@@ -185,6 +190,8 @@ std::vector<std::string> reader::impl::get_field_names(const ParseOptions &opts,
     });
 
   // make a hash map (to be used for parsing)
+  column_names_hash_map = std::move(concurrent_unordered_map<uint32_t, uint32_t>::create(num_cols));
+  populate_col_names_hash_map(sorted_info->get_column(2).view(), *column_names_hash_map, stream);
 
   return names;
 }

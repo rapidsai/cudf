@@ -25,6 +25,7 @@
 #include "json_gpu.h"
 
 #include <thrust/device_vector.h>
+#include <hash/concurrent_unordered_map.cuh>
 #include <rmm/device_buffer.hpp>
 
 #include <io/utilities/column_buffer.hpp>
@@ -68,6 +69,9 @@ class reader::impl {
 
   table_metadata metadata;
   std::vector<data_type> dtypes_;
+
+  using col_map_type = concurrent_unordered_map<uint32_t, uint32_t>;
+  std::unique_ptr<col_map_type, std::function<void(col_map_type *)>> column_names_hash_map;
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;

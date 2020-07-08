@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
 #include <io/utilities/parsing_utils.cuh>
@@ -89,14 +90,14 @@ void detect_data_types(ColumnInfo *column_infos,
  *
  * @returns void
  **/
-void collect_field_names(const char *data,
-                         size_t data_size,
-                         const ParseOptions &options,
-                         const uint64_t *rec_starts,
-                         cudf::size_type num_records,
-                         unsigned long long int *names_cnt,
-                         field_names_device_info *names_info,
-                         cudaStream_t stream = 0);
+void collect_field_names_info(const char *data,
+                              size_t data_size,
+                              const ParseOptions &options,
+                              const uint64_t *rec_starts,
+                              cudf::size_type num_records,
+                              unsigned long long int *names_cnt,
+                              mutable_table_device_view *names_info,
+                              cudaStream_t stream = 0);
 
 }  // namespace gpu
 }  // namespace json
