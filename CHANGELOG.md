@@ -30,6 +30,7 @@
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
 - PR #5612 Add `is_hex` strings API
+- PR #5625 string conversion to and from duration types
 
 ## Improvements
 
