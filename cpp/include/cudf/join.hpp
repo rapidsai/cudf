@@ -355,7 +355,7 @@ std::unique_ptr<cudf::table> cross_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Hash join that builds hash table in creation and probes results in preceding `*_join`
+ * @brief Hash join that builds hash table in creation and probes results in subsequent `*_join`
  * member functions.
  *
  * This class enables the hash join scheme that builds hash table once, and probes as many times as
@@ -463,7 +463,7 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
 
   /**
-   * @brief Instantiates a hash join instance and build the internal hash table used for preceding
+   * @brief Instantiates a hash join instance and build the internal hash table used for subsequent
    * probe calls.
    *
    * @param build The build table, from which the hash table is built.

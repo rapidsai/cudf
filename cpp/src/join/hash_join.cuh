@@ -198,7 +198,7 @@ class hash_join_impl : public cudf::hash_join {
  public:
   /**
    * @brief Constructor that internally builds the hash table based on the given `build` table and
-   * column indices specified by `build_on` for preceding probe calls.
+   * column indices specified by `build_on` for subsequent probe calls.
    *
    * @throw cudf::logic_error if the number of columns in `build` table is 0.
    * @throw cudf::logic_error if the number of rows in `build` table exceeds MAX_JOIN_SIZE.
