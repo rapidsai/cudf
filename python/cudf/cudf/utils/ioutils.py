@@ -101,17 +101,21 @@ Load a Parquet dataset into a DataFrame
 
 Parameters
 ----------
-filepath_or_buffer : str, path object, bytes, or file-like object
-    Either a path to a file (a `str`, `pathlib.Path`, or
-    `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
-    Python bytes of raw binary data, or any object with a `read()` method
-    (such as builtin `open()` file handler function or `BytesIO`).
+filepath_or_buffer : str, path object, bytes, file-like object, or a list
+    of such objects.
+    Contains one or more of the following: either a path to a file (a `str`,
+    `pathlib.Path`, or `py._path.local.LocalPath`), URL (including http, ftp,
+    and S3 locations), Python bytes of raw binary data, or any object with a
+    `read()` method (such as builtin `open()` file handler function or
+    `BytesIO`).
 engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
-row_group : int, default None
-    If not None, only the row group with the specified index will be read.
+row_groups : int, or list, or a list of lists default None
+    If not None, specifies, for each input file, which row groups to read.
+    If reading multiple inputs, a list of lists should be passed, one list
+    for each input.
 skip_rows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None

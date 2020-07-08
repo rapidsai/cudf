@@ -1,5 +1,4 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
-
 import numbers
 import pickle
 import warnings
@@ -72,8 +71,8 @@ class MultiIndex(Index):
         name=None,
         **kwargs,
     ) -> "MultiIndex":
-        from cudf.core.series import Series
         from cudf import DataFrame
+        from cudf.core.series import Series
 
         if sortorder is not None:
             raise NotImplementedError("sortorder is not yet supported")
@@ -125,14 +124,7 @@ class MultiIndex(Index):
             return out
 
         # name setup
-        if isinstance(
-            names,
-            (
-                Sequence,
-                pd.core.indexes.frozen.FrozenNDArray,
-                pd.core.indexes.frozen.FrozenList,
-            ),
-        ):
+        if isinstance(names, (Sequence, pd.core.indexes.frozen.FrozenList,),):
             if sum(x is None for x in names) > 1:
                 column_names = list(range(len(codes)))
             else:
@@ -146,7 +138,7 @@ class MultiIndex(Index):
             raise ValueError("Must pass non-zero number of levels/codes")
 
         if not isinstance(codes, DataFrame) and not isinstance(
-            codes[0], (Sequence, pd.core.indexes.frozen.FrozenNDArray)
+            codes[0], (Sequence, np.ndarray)
         ):
             raise TypeError("Codes is not a Sequence of sequences")
 
@@ -179,7 +171,7 @@ class MultiIndex(Index):
             else:
                 level = DataFrame({name: out._levels[i]})
 
-            import cudf._lib as libcudf
+            from cudf import _lib as libcudf
 
             source_data[name] = libcudf.copying.gather(
                 level, codes._data.columns[0]
@@ -311,6 +303,22 @@ class MultiIndex(Index):
         """
         return 2
 
+    def _get_level_label(self, level):
+        """ Get name of the level.
+
+        Parameters
+        ----------
+        level : int or level name
+            if level is name, it will be returned as it is
+            else if level is index of the level, then level
+            label will be returned as per the index.
+        """
+
+        if level in self._data.names:
+            return level
+        else:
+            return self._data.names[level]
+
     def isin(self, values, level=None):
         """Return a boolean array where the index values are in values.
 
@@ -414,9 +422,7 @@ class MultiIndex(Index):
     def _compute_validity_mask(self, index, row_tuple, max_length):
         """ Computes the valid set of indices of values in the lookup
         """
-        from cudf import DataFrame
-        from cudf import Series
-        from cudf import concat
+        from cudf import DataFrame, Series, concat
 
         lookup = DataFrame()
         for idx, row in enumerate(row_tuple):
@@ -475,8 +481,7 @@ class MultiIndex(Index):
         return self._compute_validity_mask(index, row_tuple, max_length)
 
     def _index_and_downcast(self, result, index, index_key):
-        from cudf import DataFrame
-        from cudf import Series
+        from cudf import DataFrame, Series
 
         if isinstance(index_key, (numbers.Number, slice)):
             index_key = [index_key]
@@ -539,7 +544,9 @@ class MultiIndex(Index):
     def _get_row_major(self, df, row_tuple):
         from cudf import Series
 
-        if pd.api.types.is_bool_dtype(row_tuple):
+        if pd.api.types.is_bool_dtype(
+            list(row_tuple) if isinstance(row_tuple, tuple) else row_tuple
+        ):
             return df[row_tuple]
 
         valid_indices = self._get_valid_indices_by_tuple(
@@ -610,8 +617,9 @@ class MultiIndex(Index):
 
     def take(self, indices):
         from collections.abc import Sequence
-        from cudf import Series
         from numbers import Integral
+
+        from cudf import Series
 
         if isinstance(indices, (Integral, Sequence)):
             indices = np.array(indices)
@@ -863,8 +871,8 @@ class MultiIndex(Index):
             )
         return self._is_monotonic_decreasing
 
-    def argsort(self, ascending=True):
-        return self._source_data.argsort(ascending=ascending)
+    def argsort(self, ascending=True, **kwargs):
+        return self._source_data.argsort(ascending=ascending, **kwargs)
 
     def unique(self):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())

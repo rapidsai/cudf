@@ -3,11 +3,11 @@ import os
 
 import pytest
 
-import dask.dataframe as dd
-
-import cudf
+from dask import dataframe as dd
 
 import dask_cudf
+
+import cudf
 
 # import pyarrow.orc as orc
 

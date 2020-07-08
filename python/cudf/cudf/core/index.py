@@ -1,5 +1,4 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
 from __future__ import division, print_function
 
 import pickle
@@ -259,7 +258,7 @@ class Index(Frame, Serializable):
         """
         return self[indices]
 
-    def argsort(self, ascending=True):
+    def argsort(self, ascending=True, **kwargs):
         """
         Return the integer indices that would sort the index.
 
@@ -274,7 +273,7 @@ class Index(Frame, Serializable):
         array : A cupy array containing Integer indices that
             would sort the index if used as an indexer.
         """
-        indices = self._values.argsort(ascending=ascending)
+        indices = self._values.argsort(ascending=ascending, **kwargs)
         return cupy.asarray(indices)
 
     @property
@@ -344,7 +343,7 @@ class Index(Frame, Serializable):
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        import cudf.io.dlpack as dlpack
+        from cudf.io import dlpack as dlpack
 
         return dlpack.to_dlpack(self)
 

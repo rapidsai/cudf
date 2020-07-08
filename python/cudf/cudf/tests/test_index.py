@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -19,9 +19,9 @@ from cudf.core.index import (
 )
 from cudf.tests.utils import (
     FLOAT_TYPES,
-    INTEGER_TYPES,
     NUMERIC_TYPES,
     OTHER_TYPES,
+    SIGNED_INTEGER_TYPES,
     UNSIGNED_TYPES,
     assert_eq,
 )
@@ -138,12 +138,18 @@ def test_categorical_index():
     assert isinstance(gdf1.index, CategoricalIndex)
     assert_eq(pdf, gdf1)
     assert_eq(pdf.index, gdf1.index)
-    assert_eq(pdf.index.codes, gdf1.index.codes.to_array())
+    assert_eq(
+        pdf.index.codes,
+        gdf1.index.codes.astype(pdf.index.codes.dtype).to_array(),
+    )
 
     assert isinstance(gdf2.index, CategoricalIndex)
     assert_eq(pdf, gdf2)
     assert_eq(pdf.index, gdf2.index)
-    assert_eq(pdf.index.codes, gdf2.index.codes.to_array())
+    assert_eq(
+        pdf.index.codes,
+        gdf2.index.codes.astype(pdf.index.codes.dtype).to_array(),
+    )
 
 
 def test_pandas_as_index():
@@ -177,7 +183,12 @@ def test_pandas_as_index():
     assert_eq(pdf_datetime_index, gdf_datetime_index)
     assert_eq(pdf_category_index, gdf_category_index)
 
-    assert_eq(pdf_category_index.codes, gdf_category_index.codes.to_array())
+    assert_eq(
+        pdf_category_index.codes,
+        gdf_category_index.codes.astype(
+            pdf_category_index.codes.dtype
+        ).to_array(),
+    )
 
 
 def test_index_rename():
@@ -485,7 +496,8 @@ def test_index_where(data, condition, other, error):
             expect = ps.where(ps_condition, other=ps_other)
             got = gs.where(gs_condition, other=gs_other)
             np.testing.assert_array_equal(
-                expect.codes, got.codes.fillna(-1).to_array()
+                expect.codes,
+                got.codes.astype(expect.codes.dtype).fillna(-1).to_array(),
             )
             assert tuple(expect.categories) == tuple(got.categories)
         else:
@@ -562,7 +574,7 @@ def test_index_basic(data, dtype, name):
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize("name", [1, "a", None])
-@pytest.mark.parametrize("dtype", INTEGER_TYPES)
+@pytest.mark.parametrize("dtype", SIGNED_INTEGER_TYPES)
 def test_integer_index_apis(data, name, dtype):
     pindex = pd.Int64Index(data, dtype=dtype, name=name)
     # Int8Index
@@ -672,3 +684,58 @@ def test_categorical_index_basic(data, categories, dtype, ordered, name):
     )
 
     assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_empty(data, dtype):
+    pdi = pd.Index(data, dtype=dtype)
+    gdi = cudf.Index(data, dtype=dtype)
+
+    assert_eq(pdi.empty, gdi.empty)
+
+
+@pytest.mark.parametrize(
+    "pdi",
+    [
+        pd.MultiIndex(
+            levels=[[], [], []],
+            codes=[[], [], []],
+            names=["one", "two", "three"],
+        ),
+        pd.MultiIndex.from_tuples(
+            list(
+                zip(
+                    *[
+                        [
+                            "bar",
+                            "bar",
+                            "baz",
+                            "baz",
+                            "foo",
+                            "foo",
+                            "qux",
+                            "qux",
+                        ],
+                        [
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                        ],
+                    ]
+                )
+            )
+        ),
+    ],
+)
+def test_multiIndex_empty(pdi):
+    gdi = cudf.from_pandas(pdi)
+
+    assert_eq(pdi.empty, gdi.empty)

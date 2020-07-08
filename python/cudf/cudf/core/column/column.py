@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 import pickle
 import warnings
 from numbers import Number
@@ -12,7 +11,7 @@ import pyarrow as pa
 from numba import cuda, njit
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.column import Column
 from cudf._lib.null_mask import (
     MaskState,
@@ -33,7 +32,7 @@ from cudf.utils.dtypes import (
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
-    min_scalar_type,
+    min_unsigned_type,
     np_to_pa_dtype,
 )
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
@@ -686,7 +685,7 @@ class ColumnBase(Column, Serializable):
             raise TypeError(msg)
 
         # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(True, "after")
+        sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
         sorted_indices = sorted_indices[self.null_count :]
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
@@ -789,7 +788,7 @@ class ColumnBase(Column, Serializable):
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        import cudf.io.dlpack as dlpack
+        from cudf.io import dlpack as dlpack
 
         return dlpack.to_dlpack(self)
 
@@ -880,19 +879,27 @@ class ColumnBase(Column, Serializable):
         # Re-label self w.r.t. the provided categories
         if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
             labels = sr.label_encoding(cats=dtype.categories)
+            if "ordered" in kwargs:
+                warnings.warn(
+                    "Ignoring the `ordered` parameter passed in `**kwargs`, "
+                    "will be using `ordered` parameter of CategoricalDtype"
+                )
+
             return build_categorical_column(
                 categories=dtype.categories,
                 codes=labels._column,
                 mask=self.mask,
-                ordered=ordered,
-            ).astype(dtype)
+                ordered=dtype.ordered,
+            )
 
-        labels, cats = sr.factorize()
+        cats = sr.unique().astype(sr.dtype)
+        label_dtype = min_unsigned_type(len(cats))
+        labels = sr.label_encoding(cats=cats, dtype=label_dtype, na_sentinel=1)
 
         # columns include null index in factorization; remove:
         if self.has_nulls:
             cats = cats.dropna()
-            min_type = min_scalar_type(len(cats), 8)
+            min_type = min_unsigned_type(len(cats), 8)
             labels = labels - 1
             if np.dtype(min_type).itemsize < labels.dtype.itemsize:
                 labels = labels.astype(min_type)
@@ -902,7 +909,7 @@ class ColumnBase(Column, Serializable):
             codes=labels._column,
             mask=self.mask,
             ordered=ordered,
-        ).astype(dtype)
+        )
 
     def as_numerical_column(self, dtype, **kwargs):
         raise NotImplementedError
@@ -920,9 +927,12 @@ class ColumnBase(Column, Serializable):
         )
         return result
 
-    def argsort(self, ascending):
-        _, inds = self.sort_by_values(ascending=ascending)
-        return inds
+    def argsort(self, ascending, na_position="last"):
+
+        sorted_indices = self.as_frame()._get_sorted_inds(
+            ascending=ascending, na_position=na_position
+        )
+        return sorted_indices
 
     @property
     def __cuda_array_interface__(self):
@@ -1171,6 +1181,11 @@ def build_categorical_column(
         Indicates whether the categories are ordered
     """
 
+    codes_dtype = min_unsigned_type(len(categories))
+    codes = as_column(codes)
+    if codes.dtype != codes_dtype:
+        codes = codes.astype(codes_dtype)
+
     dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
 
     return build_column(
@@ -1180,7 +1195,7 @@ def build_categorical_column(
         size=size,
         offset=offset,
         null_count=null_count,
-        children=(as_column(codes),),
+        children=(codes,),
     )
 
 
@@ -1300,11 +1315,12 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             )
 
         elif isinstance(arbitrary, pa.NullArray):
-            new_dtype = pd.api.types.pandas_dtype(dtype)
             if type(dtype) == str and dtype == "empty":
                 new_dtype = pd.api.types.pandas_dtype(
                     arbitrary.type.to_pandas_dtype()
                 )
+            else:
+                new_dtype = pd.api.types.pandas_dtype(dtype)
 
             if is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
@@ -1324,7 +1340,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
-            codes = as_column(arbitrary.indices)
+            codes_dtype = min_unsigned_type(len(arbitrary.indices))
+            codes = as_column(arbitrary.indices).astype(codes_dtype)
             if isinstance(arbitrary.dictionary, pa.NullArray):
                 categories = as_column([], dtype="object")
             else:
