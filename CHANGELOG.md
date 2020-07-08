@@ -152,6 +152,7 @@
 - PR #5609 Fix loc and iloc issue with column like input
 - PR #5578 Fix getattr logic in GroupBy
 - PR #5490 Fix python column view
+- PR #5613 Fix assigning an equal length object into a masked out Series
 - PR #5608 Fix issue related to string types being represented as binary types
 - PR #5619 Fix issue related to typecasting when using a `CategoricalDtype`
 - PR #5649 Fix issue when empty Dataframe with index are passed to `cudf.concat`
