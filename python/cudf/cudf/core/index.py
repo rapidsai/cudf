@@ -474,7 +474,6 @@ class Index(Frame, Serializable):
             to_concat = [self]
             to_concat.extend(other)
         else:
-
             this = self
             if len(other) == 0:
                 # short-circuit and return a copy
