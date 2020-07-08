@@ -71,7 +71,6 @@ struct alignas(4) format_item {
  */
 struct format_compiler {
   std::string format;
-  type_id units;  // is this required?
   rmm::device_vector<format_item> d_items;
 
   std::map<char, int8_t> specifier_lengths = {{'d', -1},
@@ -82,7 +81,7 @@ struct format_compiler {
                                               {'u', -1},   // 0 or 6+1(dot)
                                               {'f', -1}};  // 0 or <=9+1(dot) without trialing zeros
 
-  format_compiler(const char* format, type_id units) : format(format), units(units) {}
+  format_compiler(const char* format) : format(format) {}
 
   format_item const* compile_to_device()
   {
@@ -378,7 +377,7 @@ struct dispatch_from_durations_fn {
   {
     CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
 
-    format_compiler compiler(format.c_str(), durations.type().id());
+    format_compiler compiler(format.c_str());
     auto d_format_items = compiler.compile_to_device();
 
     size_type strings_count = durations.size();
@@ -442,7 +441,7 @@ struct parse_duration {
   column_device_view const d_strings;
   format_item const* d_format_items;
   size_type items_count;
-  type_id units;
+  type_id type;
   // int8_t subsecond_precision;
 
   //
@@ -534,7 +533,7 @@ struct parse_duration {
     return 0;
   }
 
-  __device__ int64_t duration_from_parts(int32_t const* timeparts)
+  __device__ int64_t duration_from_parts(int32_t const* timeparts, type_id units)
   {
     int32_t days = timeparts[DU_DAY];
     if (units == type_id::DURATION_DAYS) return days;
@@ -567,7 +566,7 @@ struct parse_duration {
     int32_t timeparts[DU_ARRAYSIZE] = {0};
     if (parse_into_parts(d_str, timeparts)) return T{0};  // unexpected parse case
     //
-    return static_cast<T>(duration_from_parts(timeparts));
+    return static_cast<T>(duration_from_parts(timeparts, type));
   }
 };
 
@@ -575,14 +574,13 @@ struct dispatch_to_durations_fn {
   template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
   void operator()(column_device_view const& d_strings,
                   std::string const& format,
-                  type_id units,
                   mutable_column_view& results_view,
                   cudaStream_t stream) const
   {
-    format_compiler compiler(format.c_str(), d_strings.type().id());
+    format_compiler compiler(format.c_str());
     auto d_items   = compiler.compile_to_device();
     auto d_results = results_view.data<T>();
-    parse_duration<T> pfn{d_strings, d_items, compiler.items_count(), units};
+    parse_duration<T> pfn{d_strings, d_items, compiler.items_count(), results_view.type().id()};
     thrust::transform(rmm::exec_policy(stream)->on(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(results_view.size()),
@@ -592,7 +590,6 @@ struct dispatch_to_durations_fn {
   template <typename T, std::enable_if_t<not cudf::is_duration<T>()>* = nullptr>
   void operator()(column_device_view const&,
                   std::string const&,
-                  type_id,
                   mutable_column_view&,
                   cudaStream_t) const
   {
@@ -640,7 +637,6 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
                         dispatch_to_durations_fn(),
                         d_column,
                         format,
-                        duration_type.id(),
                         results_view,
                         stream);
   results->set_null_count(strings.null_count());
