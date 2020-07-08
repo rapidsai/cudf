@@ -808,9 +808,7 @@ def test_index_append(data, other):
     gd_data = cudf.core.index.as_index(data)
     gd_other = cudf.core.index.as_index(other)
 
-    if (gd_data.dtype == "object" and gd_other.dtype != "object") or (
-        gd_other.dtype == "object" and gd_data.dtype != "object"
-    ):
+    if cudf.utils.dtypes.is_mixed_with_object_dtype(gd_data, gd_other):
         gd_data = gd_data.astype("str")
         gd_other = gd_other.astype("str")
 

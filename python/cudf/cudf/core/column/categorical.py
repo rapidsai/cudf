@@ -12,7 +12,11 @@ from cudf._lib.transform import bools_to_mask
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.dtypes import CategoricalDtype
-from cudf.utils.dtypes import min_signed_type, min_unsigned_type
+from cudf.utils.dtypes import (
+    is_mixed_with_object_dtype,
+    min_signed_type,
+    min_unsigned_type,
+)
 
 
 class CategoricalAccessor(object):
@@ -291,13 +295,7 @@ class CategoricalAccessor(object):
             dtype=old_categories.dtype if len(new_categories) == 0 else None,
         )
 
-        if (
-            old_categories.dtype == "object"
-            and new_categories.dtype != "object"
-        ) or (
-            new_categories.dtype == "object"
-            and old_categories.dtype != "object"
-        ):
+        if is_mixed_with_object_dtype(old_categories, new_categories):
             raise TypeError(
                 "cudf does not support mixed types, please type-cast \
                     new_categories to the same type as existing categories."

@@ -37,6 +37,7 @@ from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_datetime_dtype,
     is_list_like,
+    is_mixed_with_object_dtype,
     is_scalar,
     is_string_dtype,
     min_scalar_type,
@@ -1606,9 +1607,7 @@ class Series(Frame, Serializable):
                 ):
                     dtype_mismatch = True
 
-                if (objs[0].dtype == "object" and obj.dtype != "object") or (
-                    obj.dtype == "object" and objs[0].dtype != "object"
-                ):
+                if is_mixed_with_object_dtype(objs[0], obj):
                     raise TypeError(
                         "cudf does not support mixed types, please type-cast "
                         "both series to same dtypes."
@@ -2290,9 +2289,7 @@ class Series(Frame, Serializable):
             dtype = min_scalar_type(len(cats), 8)
 
         cats = column.as_column(cats)
-        if (self.dtype == "object" and cats.dtype != "object") or (
-            self.dtype != "object" and cats.dtype == "object"
-        ):
+        if is_mixed_with_object_dtype(self, cats):
             return _return_sentinel_series()
 
         try:

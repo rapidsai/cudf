@@ -25,6 +25,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_list_like,
+    is_mixed_with_object_dtype,
     is_scalar,
     numeric_normalize_types,
 )
@@ -485,9 +486,7 @@ class Index(Frame, Serializable):
                 to_concat = [other]
 
             if len(self) and len(other):
-                if (this.dtype == "object" and other.dtype != "object") or (
-                    other.dtype == "object" and this.dtype != "object"
-                ):
+                if is_mixed_with_object_dtype(this, other):
                     raise TypeError(
                         "cudf does not support mixed types, please type-cast "
                         "both index to same dtypes."
@@ -548,10 +547,7 @@ class Index(Frame, Serializable):
 
         other = as_index(other)
 
-        if self.dtype != other.dtype and (
-            cudf.utils.dtypes.is_string_dtype(self.dtype)
-            or cudf.utils.dtypes.is_string_dtype(other.dtype)
-        ):
+        if is_mixed_with_object_dtype(self, other):
             if self.equals(other):
                 if cudf.utils.dtypes.is_string_dtype(self.dtype):
                     return StringIndex([], dtype=self.dtype)
@@ -689,10 +685,7 @@ class Index(Frame, Serializable):
             if isinstance(other, CategoricalIndex):
                 return other.equals(self)
 
-            if self.dtype != other.dtype and (
-                cudf.utils.dtypes.is_string_dtype(self.dtype)
-                or cudf.utils.dtypes.is_string_dtype(other.dtype)
-            ):
+            if is_mixed_with_object_dtype(self, other):
                 return False
 
             result = self == other
