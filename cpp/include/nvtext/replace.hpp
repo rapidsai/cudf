@@ -87,5 +87,50 @@ std::unique_ptr<cudf::column> replace_tokens(
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource());
 
+/**
+ * @brief Removes tokens whose lengths are less than a specified number of characters.
+ *
+ * Tokens identified in each string are removed from the corresponding output string.
+ * The removed tokens can be replaced by specifying a `replacement` string as well.
+ *
+ * The `delimiter` may be zero or more characters. If the `delimiter` is empty,
+ * whitespace (character code-point <= ' ') is used for identifying tokens.
+ * Also, any consecutive delimiters found in a string are ignored.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["this is me", "theme music"]
+ * result = filter_tokens(s,3)
+ * result is now ["this  ", "theme music"]
+ * @endcode
+ *
+ * Note the first string in `result` still retains the space delimiters.
+ *
+ * Example with `replacement` string.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["this is me", "theme music"]
+ * result = filter_tokens(s,5,"---")
+ * result is now ["--- --- ---", "theme music"]
+ * @endcode
+ *
+ * @throw cudf::logic_error if delimiter is invalid
+ *
+ * @param strings Strings column to replace.
+ * @param min_token_length The minimum number of characters for a token to not be removed.
+ * @param replacement Optional replacement string to be used in place of removed tokens.
+ * @param delimiter Characters used to separate each string into tokens.
+ *                  The default of empty string will identify tokens using whitespace.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New strings columns of with replaced strings.
+ */
+std::unique_ptr<cudf::column> filter_tokens(
+  cudf::strings_column_view const& strings,
+  cudf::size_type min_token_length,
+  cudf::string_scalar const& replacement = cudf::string_scalar{""},
+  cudf::string_scalar const& delimiter   = cudf::string_scalar{""},
+  rmm::mr::device_memory_resource* mr    = rmm::mr::get_default_resource());
+
 /** @} */  // end of group
 }  // namespace nvtext
