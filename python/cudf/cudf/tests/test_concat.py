@@ -466,3 +466,55 @@ def test_concat_series_dataframe_input_str(objs):
     expected = pd.concat(pd_objs)
     actual = gd.concat(gd_objs)
     assert_eq(expected, actual, check_dtype=False, check_index_type=False)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame(
+            {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+        ),
+        pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+        pd.DataFrame({"l": [10]}),
+        pd.DataFrame({"l": [10]}, index=[200]),
+        pd.DataFrame([], index=[100]),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
+        [
+            pd.DataFrame(
+                {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+            ),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+        ],
+        [
+            pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+            pd.DataFrame({"l": [10]}),
+            pd.DataFrame({"l": [10]}, index=[200]),
+        ],
+        [pd.DataFrame([]), pd.DataFrame([], index=[100])],
+    ],
+)
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_concat_empty_dataframes(df, other, ignore_index):
+    other_pd = [df] + other
+
+    gdf = gd.from_pandas(df)
+    other_gd = [gdf] + [gd.from_pandas(o) for o in other]
+
+    expected = pd.concat(other_pd, ignore_index=ignore_index)
+    actual = gd.concat(other_gd, ignore_index=ignore_index)
+    if expected.shape != df.shape:
+        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+    else:
+        assert_eq(
+            expected, actual, check_index_type=False if gdf.empty else True
+        )

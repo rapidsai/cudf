@@ -270,8 +270,8 @@ def test_drop_duplicates_empty(df):
 
 @pytest.mark.parametrize("num_columns", [3, 4, 5])
 def test_dataframe_drop_duplicates_numeric_method(num_columns):
-    import random
     import itertools as it
+    import random
 
     comb = list(it.permutations(range(num_columns), num_columns))
     shuf = list(comb)
