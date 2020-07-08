@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/types.hpp>
 #include <strings/utilities.cuh>
 
@@ -213,8 +214,7 @@ struct duration_to_string_size_fn {
       case 'H': return count_digits(timeparts[DU_HOUR]); break;
       case 'M': return count_digits(timeparts[DU_MINUTE]); break;
       case 'S': return count_digits(timeparts[DU_SECOND]); break;
-      // TODO: include dot only if non-zero.
-      // 0 or 6 digits for pandas.
+      // 0 or 6 digits for pandas, include dot only if non-zero.
       case 'u': return (timeparts[DU_SUBSECOND] == 0) ? 0 : 6 + 1; break;
       // 0 or ns without trailing zeros
       case 'f':
@@ -298,7 +298,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
       *str++ = '-';
       min_digits--;
     }
-    digits_idx = std::max(digits_idx, min_digits);  // TODO FIXME fixed_digits size, not min_digits
+    digits_idx = std::max(digits_idx, min_digits);
     // digits are backwards, reverse the string into the output
     while (digits_idx-- > 0) *str++ = digits[digits_idx];
     return str;
@@ -438,9 +438,9 @@ struct dispatch_from_durations_fn {
 
 }  // namespace
 
+// TODO skip days if non-zero days for non-ISO format.
 std::unique_ptr<column> from_durations(column_view const& durations,
                                        std::string const& format,
-                                       // TODO // common for all: check if non-zero days
                                        cudaStream_t stream,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -457,6 +457,7 @@ std::unique_ptr<column> from_durations(column_view const& durations,
                                        std::string const& format,
                                        rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::from_durations(durations, format, cudaStream_t{}, mr);
 }
 }  // namespace strings
