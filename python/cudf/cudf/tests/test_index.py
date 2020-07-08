@@ -600,6 +600,19 @@ def test_index_difference(data, other, sort):
     assert_eq(expected, actual)
 
 
+def test_index_difference_sort_error():
+    pdi = pd.Index([1, 2, 3])
+    gdi = cudf.Index([1, 2, 3])
+
+    try:
+        pdi.difference(pdi, sort=True)
+    except Exception as e:
+        with pytest.raises(type(e), match=e.__str__()):
+            gdi.difference(gdi, sort=True)
+    else:
+        raise AssertionError("Expected pdi.difference to fail when sort=True")
+
+
 @pytest.mark.parametrize(
     "data",
     [

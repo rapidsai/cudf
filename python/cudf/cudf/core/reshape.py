@@ -175,7 +175,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             if ignore_index:
                 result = cudf.DataFrame(
                     data=objs[0]._data.copy(),
-                    index=cudf.RangeIndex(len(result)),
+                    index=cudf.RangeIndex(len(objs[0])),
                 )
             else:
                 result = objs[0].copy()

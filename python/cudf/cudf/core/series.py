@@ -605,7 +605,7 @@ class Series(Frame, Serializable):
                 "verify_integrity parameter is not supported yet."
             )
 
-        if isinstance(to_append, (list, tuple)):
+        if is_list_like(to_append):
             to_concat = [self]
             to_concat.extend(to_append)
         else:

@@ -24,6 +24,7 @@ from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_list_like,
     is_scalar,
     numeric_normalize_types,
 )
@@ -224,7 +225,7 @@ class Index(Frame, Serializable):
 
     @names.setter
     def names(self, values):
-        if not pd.api.types.is_list_like(values):
+        if not is_list_like(values):
             raise ValueError("Names must be a list-like")
 
         num_values = len(values)
@@ -468,8 +469,9 @@ class Index(Frame, Serializable):
         Int64Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
         """
 
-        if isinstance(other, (list, tuple)):
-            to_concat = [self] + list(other)
+        if is_list_like(other):
+            to_concat = [self]
+            to_concat.extend(other)
         else:
 
             this = self

@@ -6453,7 +6453,7 @@ class DataFrame(Frame, Serializable):
                 if (self.columns.get_indexer(other.columns) >= 0).all():
                     other = other.reindex(columns=self.columns)
 
-        if isinstance(other, (list, tuple)):
+        if is_list_like(other):
             to_concat = [self, *other]
         else:
             to_concat = [self, other]
