@@ -167,7 +167,12 @@ class Series(Frame, Serializable):
                 data = data.astype(dtype)
 
         if data is None:
-            data = {}
+            if index is not None:
+                data = column.column_empty(
+                    row_count=len(index), dtype=None, masked=True
+                )
+            else:
+                data = {}
 
         if not isinstance(data, column.ColumnBase):
             data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
@@ -738,20 +743,6 @@ class Series(Frame, Serializable):
 
         else:
             return NotImplemented
-
-    @property
-    def empty(self):
-        """
-        Indicator whether Series is empty.
-
-        True if Series is entirely empty (no items).
-
-        Returns
-        -------
-        out : bool
-            If Series is empty, return True, if not return False.
-        """
-        return not len(self)
 
     def __getitem__(self, arg):
         if isinstance(arg, slice):
