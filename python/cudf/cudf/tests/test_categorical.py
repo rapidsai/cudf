@@ -178,7 +178,7 @@ def test_categorical_element_indexing():
     pdsr = pd.Series(cat)
     sr = Series(cat)
     assert_eq(pdsr, sr)
-    assert_eq(pdsr.cat.codes, sr.cat.codes)
+    assert_eq(pdsr.cat.codes, sr.cat.codes, check_dtype=False)
 
 
 def test_categorical_masking():
