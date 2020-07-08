@@ -33,6 +33,7 @@
 - PR #5536 Parquet reader - add support for multiple sources
 - PR #5607 Add Java bindings for duration types
 - PR #5612 Add `is_hex` strings API
+- PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
 - PR #5658 Add `filter_tokens` nvtext API
 
@@ -153,6 +154,7 @@
 - PR #5609 Fix loc and iloc issue with column like input
 - PR #5578 Fix getattr logic in GroupBy
 - PR #5490 Fix python column view
+- PR #5613 Fix assigning an equal length object into a masked out Series
 - PR #5608 Fix issue related to string types being represented as binary types
 - PR #5619 Fix issue related to typecasting when using a `CategoricalDtype`
 - PR #5649 Fix issue when empty Dataframe with index are passed to `cudf.concat`
