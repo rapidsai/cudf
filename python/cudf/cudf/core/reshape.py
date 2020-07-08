@@ -169,9 +169,13 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             # objs are empty dataframes.
             return cudf.DataFrame()
         elif len(objs) == 1:
-            result = objs[0].copy()
             if ignore_index:
-                result._index = cudf.RangeIndex(len(result))
+                result = cudf.DataFrame(
+                    data=objs[0]._data.copy(),
+                    index=cudf.RangeIndex(len(result)),
+                )
+            else:
+                result = objs[0].copy()
             return result
         else:
             return DataFrame._concat(

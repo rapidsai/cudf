@@ -6462,9 +6462,12 @@ class DataFrame(Frame, Serializable):
             obj for obj in to_concat if isinstance(obj, Frame) and len(obj)
         ]
         if len(to_concat) == 0:
-            result = self.copy()
             if ignore_index and len(self) != 0:
-                result._index = RangeIndex(len(result))
+                result = cudf.DataFrame(
+                    data=self._data.copy(), index=RangeIndex(len(self))
+                )
+            else:
+                result = self.copy()
             return result
 
         return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
