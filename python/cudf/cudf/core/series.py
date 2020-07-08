@@ -546,27 +546,6 @@ class Series(Frame, Serializable):
 
         return Series._concat([this, other], index=index)
 
-    @copy_docstring(Frame._sample)
-    def sample(
-        self,
-        n=None,
-        frac=None,
-        replace=False,
-        weights=None,
-        random_state=None,
-        axis=None,
-        keep_index=True,
-    ):
-        return self._sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            weights=weights,
-            random_state=random_state,
-            axis=axis,
-            keep_index=keep_index,
-        )
-
     def reindex(self, index=None, copy=True):
         """Return a Series that conforms to a new index
 

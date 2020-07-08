@@ -1,5 +1,4 @@
 import functools
-import random
 import warnings
 from collections import OrderedDict
 
@@ -1204,7 +1203,8 @@ class Frame(libcudf.table.Table):
             "consider using .to_arrow()"
         )
 
-    def _sample(
+    @annotate("SAMPLE", color="orange", domain="cudf_python")
+    def sample(
         self,
         n=None,
         frac=None,
@@ -1236,11 +1236,12 @@ class Frame(libcudf.table.Table):
         axis : {0 or ‘index’, 1 or ‘columns’, None}, default None
             Axis to sample. Accepts axis number or name.
             Default is stat axis for given data type
-            (0 for Series and DataFrames).
+            (0 for Series and DataFrames). Series and Index doesn't
+            support axis=1.
 
         Returns
         -------
-        Series or DataFrame
+        Series or DataFrame or Index
             A new object of same type as caller containing n items
             randomly sampled from the caller object.
 
@@ -1307,7 +1308,7 @@ class Frame(libcudf.table.Table):
                 )
 
             seed = (
-                random.randint(0, 10000)
+                np.random.randint(np.iinfo(np.int64).max, dtype=np.int64)
                 if random_state is None
                 else np.int64(random_state)
             )
@@ -1325,13 +1326,13 @@ class Frame(libcudf.table.Table):
 
             return result
         else:
-            if isinstance(self, cudf.Series):
+            if isinstance(self, (cudf.Series, cudf.Index)):
                 raise ValueError(
                     f"No axis named {axis} for "
                     f"object type {self.__class__}"
                 )
 
-            columns = np.array(self._data.names)
+            columns = np.asarray(self._data.names)
             if not replace and n > columns.size:
                 raise ValueError(
                     "Cannot take a larger sample "
@@ -1340,7 +1341,7 @@ class Frame(libcudf.table.Table):
 
             if weights is not None:
                 if is_column_like(weights):
-                    weights = np.array(weights)
+                    weights = np.asarray(weights)
                 else:
                     raise ValueError(
                         "Strings can only be passed to weights "

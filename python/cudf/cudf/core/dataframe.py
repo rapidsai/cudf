@@ -3139,27 +3139,6 @@ class DataFrame(Frame, Serializable):
 
         return outdf
 
-    @copy_docstring(Frame._sample)
-    def sample(
-        self,
-        n=None,
-        frac=None,
-        replace=False,
-        weights=None,
-        random_state=None,
-        axis=None,
-        keep_index=True,
-    ):
-        return self._sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            weights=weights,
-            random_state=random_state,
-            axis=axis,
-            keep_index=keep_index,
-        )
-
     @annotate("ARGSORT", color="yellow", domain="cudf_python")
     def argsort(self, ascending=True, na_position="last"):
         """

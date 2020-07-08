@@ -155,10 +155,10 @@ std::unique_ptr<column> copy_if_else(
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> sample(table_view input,
-                              size_type n,
-                              bool replace                        = true,
-                              long seed                           = 0,
+std::unique_ptr<table> sample(table_view const& input,
+                              size_type const n,
+                              row_multi_sampling multi_smpl       = row_multi_sampling::DISALLOWED,
+                              long const seed                     = 0,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream                 = 0);
 

@@ -718,6 +718,14 @@ std::unique_ptr<scalar> get_element(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
+ * @brief Indicates whether a row can be sampled more than once.
+ **/
+enum class row_multi_sampling : bool {
+  DISALLOWED,  // A row can be sampled only once
+  ALLOWED      // A row can be sampled more than once
+};
+
+/**
  * @brief Gather `n` samples from given `input_table` randomly
  *
  * @code{.pseudo}
@@ -738,17 +746,17 @@ std::unique_ptr<scalar> get_element(
  *
  * @param input View of a table to sample.
  * @param n non-negative number of samples expected from `input`.
- * @param replce Allow or disallow sampling of the same row more than once.
+ * @param multi_smpl Allow or disallow sampling of the same row more than once.
  * @param seed Seed value to initiate random number generator.
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @return std::unique_ptr<table> Table containing samples from `input`
  */
 std::unique_ptr<table> sample(
-  table_view input,
-  size_type n,
-  bool replace                        = true,
-  long seed                           = 0,
+  table_view const& input,
+  size_type const n,
+  row_multi_sampling multi_smpl       = row_multi_sampling::DISALLOWED,
+  long const seed                     = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */

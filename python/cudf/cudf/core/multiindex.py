@@ -200,6 +200,10 @@ class MultiIndex(Index):
         return MultiIndex.from_frame(df, names=names)
 
     @property
+    def _shape(self):
+        return (self._data.nrows, len(self._data.names))
+
+    @property
     def _source_data(self):
         return cudf.DataFrame(self._data)
 

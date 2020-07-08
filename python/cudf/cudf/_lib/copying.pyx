@@ -5,7 +5,7 @@ import pandas as pd
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.vector cimport vector
-from libc.stdint cimport int32_t
+from libc.stdint cimport int32_t, int64_t
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_scalar
@@ -659,24 +659,28 @@ def get_element(Column input_column, size_type index):
 
 
 def sample(Table input, size_type n,
-           bool replace, int seed, bool keep_index=True):
+           bool replace, int64_t seed, bool keep_index=True):
     cdef table_view tbl_view = (
         input.view() if keep_index else input.data_view()
     )
+    cdef cpp_copying.row_multi_sampling multi_smpl
+
+    if replace:
+        multi_smpl = cpp_copying.row_multi_sampling.ALLOWED
+    else:
+        multi_smpl = cpp_copying.row_multi_sampling.DISALLOWED
 
     cdef unique_ptr[table] c_output
     with nogil:
         c_output = move(
-            cpp_copying.sample(tbl_view, n, replace, seed)
+            cpp_copying.sample(tbl_view, n, multi_smpl, seed)
         )
 
     return Table.from_unique_ptr(
         move(c_output),
         column_names=input._column_names,
         index_names=(
-            None if (
-                input._index is None)
-            or keep_index is False
+            None if keep_index is False
             else input._index_names
         )
     )

@@ -684,3 +684,37 @@ def test_categorical_index_basic(data, categories, dtype, ordered, name):
     )
 
     assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("n", [0, 2, 5, 10, None])
+@pytest.mark.parametrize("frac", [0.1, 0.5, 1, 2, None])
+@pytest.mark.parametrize("replace", [True, False])
+def test_index_sample_basic(n, frac, replace):
+    psr = pd.Series([1, 2, 3, 4, 5])
+    gindex = cudf.Index(psr)
+    random_state = 0
+
+    kind = None
+
+    try:
+        pout = psr.sample(
+            n=n, frac=frac, replace=replace, random_state=random_state
+        )
+    except BaseException as e:
+        kind = type(e)
+        msg = str(e)
+
+    if kind is not None:
+        with pytest.raises(kind, match=msg):
+            gout = gindex.sample(
+                n=n, frac=frac, replace=replace, random_state=random_state
+            )
+    else:
+        gout = gindex.sample(
+            n=n, frac=frac, replace=replace, random_state=random_state
+        )
+
+    if kind is not None:
+        return
+
+    assert pout.shape == gout.shape
