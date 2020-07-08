@@ -317,7 +317,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
         case 'd':  // days
           ptr = int2str(ptr, item.length, timeparts[DU_DAY]);
           break;
-        case '+':  // + if day is negative
+        case '+':  // +hour if day is negative
           if (timeparts[DU_DAY] < 0) *ptr++ = '+';
           break;
         case 'H':  // 24-hour
@@ -329,7 +329,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
         case 'S':  // second
           ptr = int2str(ptr, item.length, timeparts[DU_SECOND]);
           break;
-        case 'u':
+        case 'u':  // microsecond
         case 'f':  // sub-second
         {
           char subsecond_digits[] = ".000000000";  // 9 max digits
@@ -436,7 +436,6 @@ struct dispatch_from_durations_fn {
   }
 };
 
-
 // this parses duration characters into a duration integer
 template <typename T>  // duration type
 struct parse_duration {
@@ -444,45 +443,47 @@ struct parse_duration {
   format_item const* d_format_items;
   size_type items_count;
   type_id units;
-  //int8_t subsecond_precision;
+  // int8_t subsecond_precision;
 
   //
   __device__ int32_t str2int(const char* str, int8_t max_bytes, int8_t& actual_length)
   {
-    const char* ptr = (*str=='-' || *str=='+')? str+1 : str;
+    const char* ptr = (*str == '-' || *str == '+') ? str + 1 : str;
     int32_t value   = 0;
     for (int8_t idx = 0; idx < max_bytes; ++idx) {
       char chr = *ptr++;
       if (chr < '0' || chr > '9') {
-        ptr--; //roll back
+        ptr--;  // roll back
         break;
       }
       value = (value * 10) + static_cast<int32_t>(chr - '0');
     }
-    actual_length = ptr-str;
-    return (*str=='-')? -value : value;
+    actual_length = ptr - str;
+    return (*str == '-') ? -value : value;
   }
 
- // function to parse fraction of decimal value with trailing zeros removed.
-  __device__ int32_t str2int_fixed(const char* str, int8_t fixed_width, size_type string_length, int8_t& actual_length)
+  // function to parse fraction of decimal value with trailing zeros removed.
+  __device__ int32_t str2int_fixed(const char* str,
+                                   int8_t fixed_width,
+                                   size_type string_length,
+                                   int8_t& actual_length)
   {
-    const char* ptr = (*str=='.')? str+1 : str;
+    const char* ptr = (*str == '.') ? str + 1 : str;
     int32_t value   = 0;
     // add end of string condition.
-    for (int8_t idx = 0; idx < fixed_width && idx<string_length; ++idx) {
+    for (int8_t idx = 0; idx < fixed_width && idx < string_length; ++idx) {
       char chr = *ptr++;
       if (chr < '0' || chr > '9') {
-        ptr--; //roll back
+        ptr--;  // roll back
         break;
       }
       value = (value * 10) + static_cast<int32_t>(chr - '0');
     }
-    actual_length = ptr-str;
+    actual_length = ptr - str;
     // trailing zeros
     constexpr int64_t powers_of_ten[] = {
       1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
-    if(actual_length<fixed_width)
-      value *= powers_of_ten[fixed_width-actual_length];
+    if (actual_length < fixed_width) value *= powers_of_ten[fixed_width - actual_length];
     return value;
   }
 
@@ -506,22 +507,25 @@ struct parse_duration {
       int8_t item_length{0};
       switch (item.value) {
         case 'd': timeparts[DU_DAY] = str2int(ptr, 11, item_length); break;
-        case '+': if(*ptr == '+') item_length=1; break;  // skip
+        case '+':
+          if (*ptr == '+') item_length = 1;
+          break;  // skip
         case 'H': timeparts[DU_HOUR] = str2int(ptr, 2, item_length); break;
         case 'M': timeparts[DU_MINUTE] = str2int(ptr, 2, item_length); break;
         case 'S': timeparts[DU_SECOND] = str2int(ptr, 2, item_length); break;
         case 'u':
         case 'f':
-            if(*ptr == '.') {
-                auto subsecond_precision = (item.length==-1)? 9: item.length-1;
-                auto subsecond = str2int_fixed(ptr+1, subsecond_precision, length-1, item_length);
-                constexpr int64_t powers_of_ten[] = {
-                  1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
-                int64_t nanoseconds =  subsecond * powers_of_ten[9 - subsecond_precision];  // normalize to nanoseconds
-                timeparts[DU_SUBSECOND] = nanoseconds;
-                item_length++;
-            }
-        break;
+          if (*ptr == '.') {
+            auto subsecond_precision = (item.length == -1) ? 9 : item.length - 1;
+            auto subsecond = str2int_fixed(ptr + 1, subsecond_precision, length - 1, item_length);
+            constexpr int64_t powers_of_ten[] = {
+              1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
+            int64_t nanoseconds =
+              subsecond * powers_of_ten[9 - subsecond_precision];  // normalize to nanoseconds
+            timeparts[DU_SUBSECOND] = nanoseconds;
+            item_length++;
+          }
+          break;
         default: return 3;
       }
       ptr += item_length;
@@ -530,28 +534,28 @@ struct parse_duration {
     return 0;
   }
 
-  __device__ int64_t timestamp_from_parts(int32_t const* timeparts)
+  __device__ int64_t duration_from_parts(int32_t const* timeparts)
   {
     int32_t days = timeparts[DU_DAY];
     if (units == type_id::DURATION_DAYS) return days;
 
-    auto hour   = timeparts[DU_HOUR];
-    auto minute = timeparts[DU_MINUTE];
-    auto second = timeparts[DU_SECOND];
-    int64_t timestamp = (days * 24L * 3600L) + (hour * 3600L) + (minute * 60L) + second;
-    if (units == type_id::DURATION_SECONDS) return timestamp;
+    auto hour        = timeparts[DU_HOUR];
+    auto minute      = timeparts[DU_MINUTE];
+    auto second      = timeparts[DU_SECOND];
+    int64_t duration = (days * 24L * 3600L) + (hour * 3600L) + (minute * 60L) + second;
+    if (units == type_id::DURATION_SECONDS) return duration;
 
     auto subsecond = timeparts[DU_SUBSECOND];
     if (units == type_id::DURATION_MILLISECONDS) {
-      timestamp *= 1000L;
+      duration *= 1000L;
       subsecond = subsecond / 1000000L;
     } else if (units == type_id::DURATION_MICROSECONDS) {
-      timestamp *= 1000000L;
+      duration *= 1000000L;
       subsecond = subsecond / 1000L;
     } else if (units == type_id::DURATION_NANOSECONDS)
-      timestamp *= 1000000000L;
-    timestamp += subsecond;
-    return timestamp;
+      duration *= 1000000000L;
+    duration += subsecond;
+    return duration;
   }
 
   __device__ T operator()(size_type idx)
@@ -563,12 +567,10 @@ struct parse_duration {
     int32_t timeparts[DU_ARRAYSIZE] = {0};
     if (parse_into_parts(d_str, timeparts)) return T{0};  // unexpected parse case
     //
-    return static_cast<T>(timestamp_from_parts(timeparts));
+    return static_cast<T>(duration_from_parts(timeparts));
   }
 };
 
-
-// dispatch operator to map timestamp to native fixed-width-type
 struct dispatch_to_durations_fn {
   template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
   void operator()(column_device_view const& d_strings,
@@ -580,8 +582,7 @@ struct dispatch_to_durations_fn {
     format_compiler compiler(format.c_str(), d_strings.type().id());
     auto d_items   = compiler.compile_to_device();
     auto d_results = results_view.data<T>();
-    parse_duration<T> pfn{
-      d_strings, d_items, compiler.items_count(), units};
+    parse_duration<T> pfn{d_strings, d_items, compiler.items_count(), units};
     thrust::transform(rmm::exec_policy(stream)->on(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(results_view.size()),
@@ -629,14 +630,19 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
   auto d_column       = *strings_column;
 
   auto results      = make_duration_column(duration_type,
-                                       strings_count,
-                                       copy_bitmask(strings.parent(), stream, mr),
-                                       strings.null_count(),
-                                       stream,
-                                       mr);
+                                      strings_count,
+                                      copy_bitmask(strings.parent(), stream, mr),
+                                      strings.null_count(),
+                                      stream,
+                                      mr);
   auto results_view = results->mutable_view();
-  cudf::type_dispatcher(
-    duration_type, dispatch_to_durations_fn(), d_column, format, duration_type.id(), results_view, stream);
+  cudf::type_dispatcher(duration_type,
+                        dispatch_to_durations_fn(),
+                        d_column,
+                        format,
+                        duration_type.id(),
+                        results_view,
+                        stream);
   results->set_null_count(strings.null_count());
   return results;
 }
