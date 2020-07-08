@@ -288,7 +288,7 @@ TEST_F(JoinTest, FullJoinOnNulls)
                               {   1,    1,    1,     0,    0}};
   col_gold_1 = strcol_wrapper({ "s1", "s0", "s0",  "s1", "s1"});
   col_gold_2 =               {{  -1,   -1,    0,    -1,    1}, 
-                              {   0,    0,    1,     0,    2}};
+                              {   0,    0,    1,     0,    1}};
   col_gold_3 =               {{   1,    4,    2,     8,   -1}, 
                               {   1,    1,    1,     1,    0}};
 
