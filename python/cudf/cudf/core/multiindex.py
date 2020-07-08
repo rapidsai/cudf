@@ -762,14 +762,7 @@ class MultiIndex(Index):
     def _concat(cls, objs):
         from cudf import DataFrame, MultiIndex
 
-        source_data = []
-        for o in objs:
-            if not isinstance(o, MultiIndex):
-                raise TypeError(
-                    "all objects should be of type "
-                    "MultiIndex for MultiIndex concatenation"
-                )
-            source_data.append(o._source_data)
+        source_data = [o._source_data for o in objs]
 
         if len(source_data) > 1:
             for index, obj in enumerate(source_data[1:]):
@@ -932,6 +925,14 @@ class MultiIndex(Index):
             to_concat.extend(other)
         else:
             to_concat = [self, other]
+
+        for obj in to_concat:
+            if not isinstance(obj, MultiIndex):
+                raise TypeError(
+                    f"all objects should be of type "
+                    f"MultiIndex for MultiIndex.append, "
+                    f"found object of type: {type(obj)}"
+                )
 
         return MultiIndex._concat(to_concat)
 
