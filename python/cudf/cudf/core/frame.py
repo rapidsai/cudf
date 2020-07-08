@@ -1411,7 +1411,7 @@ class Frame(libcudf.table.Table):
 
             return result
         else:
-            if isinstance(self, (cudf.Series, cudf.Index)):
+            if len(self.shape) != 2:
                 raise ValueError(
                     f"No axis named {axis} for "
                     f"object type {self.__class__}"
@@ -1449,9 +1449,12 @@ class Frame(libcudf.table.Table):
                 columns, size=n, replace=replace, p=weights
             )
 
-            result = self[gather_map]
-            if not keep_index:
-                result.index = None
+            if isinstance(self, cudf.MultiIndex):
+                result = cudf.Index(self._source_data[gather_map])
+            else:
+                result = self[gather_map]
+                if not keep_index:
+                    result.index = None
 
             return result
 

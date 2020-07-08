@@ -732,16 +732,16 @@ enum class row_multi_sampling : bool {
  * Example:
  * input: {col1: {1, 2, 3, 4, 5}, col2: {6, 7, 8, 9, 10}}
  * n: 3
- * replace: false
+ * multi_smpl: false
  *
  * output:       {col1: {3, 1, 4}, col2: {8, 6, 9}}
  *
- * replace: true
+ * multi_smpl: true
  *
  * output:       {col1: {3, 1, 1}, col2: {8, 6, 6}}
  * @endcode
  *
- * @throws cudf::logic_error if `n` > `input.num_rows()` and `replace` == false.
+ * @throws cudf::logic_error if `n` > `input.num_rows()` and `multi_smpl` == DISALLOWED.
  * @throws cudf::logic_error if `n` < 0.
  *
  * @param input View of a table to sample.

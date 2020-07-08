@@ -6254,7 +6254,7 @@ def test_series_sample_basic(n, frac, replace):
     kind = None
 
     try:
-        pout = sr.sample(
+        pout = psr.sample(
             n=n, frac=frac, replace=replace, random_state=random_state
         )
     except BaseException as e:
