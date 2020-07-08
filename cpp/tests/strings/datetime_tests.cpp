@@ -17,8 +17,8 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/wrappers/timestamps.hpp>
 #include <cudf/wrappers/durations.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
 #include <tests/strings/utilities.h>
 #include <tests/utilities/base_fixture.hpp>

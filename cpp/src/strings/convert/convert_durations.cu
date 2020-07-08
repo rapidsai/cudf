@@ -633,12 +633,8 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
                                       stream,
                                       mr);
   auto results_view = results->mutable_view();
-  cudf::type_dispatcher(duration_type,
-                        dispatch_to_durations_fn(),
-                        d_column,
-                        format,
-                        results_view,
-                        stream);
+  cudf::type_dispatcher(
+    duration_type, dispatch_to_durations_fn(), d_column, format, results_view, stream);
   results->set_null_count(strings.null_count());
   return results;
 }
