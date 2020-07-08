@@ -215,7 +215,7 @@ def test_string_series_compare(obj, cmpop, cmp_obj):
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem", [1, 2, 100])
 @pytest.mark.parametrize("cmpop", _cmpops)
-@pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES | {"datetime64[ms]"})
+@pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES + ["datetime64[ms]"])
 def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
     arr1 = np.random.randint(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
@@ -486,6 +486,29 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     cd_frame["x"] = cd_frame["x"].astype(np.float64)
     cd_frame["y"] = cd_frame["y"].astype(np.float64)
     utils.assert_eq(cd_frame, pd_frame)
+
+
+@pytest.mark.parametrize(
+    "df2",
+    [
+        cudf.DataFrame({"a": [3, 2, 1]}, index=[3, 2, 1]),
+        cudf.DataFrame([3, 2]),
+    ],
+)
+@pytest.mark.parametrize("binop", [operator.eq, operator.ne])
+def test_df_different_index_shape(df2, binop):
+    df1 = cudf.DataFrame([1, 2, 3], index=[1, 2, 3])
+
+    pdf1 = df1.to_pandas()
+    pdf2 = df2.to_pandas()
+
+    try:
+        binop(pdf1, pdf2)
+    except Exception as e:
+        with pytest.raises(type(e), match=e.__str__()):
+            binop(df1, df2)
+    else:
+        raise AssertionError(f"Expected {binop} to fail for {pdf1} and {pdf2}")
 
 
 @pytest.mark.parametrize("op", [operator.eq, operator.ne])

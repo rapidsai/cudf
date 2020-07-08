@@ -24,7 +24,7 @@ if LooseVersion(pd.__version__) < LooseVersion("0.24"):
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = NUMERIC_TYPES | {"bool"}
+    types = NUMERIC_TYPES + ["bool"]
     renamer = {
         "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
     }
@@ -37,7 +37,7 @@ def pdf(request):
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
-    del test_pdf.columns.name
+    test_pdf.columns.name = None
     test_pdf.index.name = "index"
 
     # Cast all the column dtypes to objects, rename them, and then cast to

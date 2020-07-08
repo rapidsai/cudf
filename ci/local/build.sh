@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DOCKER_IMAGE="gpuci/rapidsai-base:cuda10.0-ubuntu16.04-gcc5-py3.6"
+DOCKER_IMAGE="gpuci/rapidsai:cuda10.0-ubuntu16.04-gcc5-py3.6"
 REPO_PATH=${PWD}
 RAPIDS_DIR_IN_CONTAINER="/rapids"
 CPP_BUILD_DIR="cpp/build"

@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 import pickle
 import warnings
 from numbers import Number
@@ -12,7 +11,7 @@ import pyarrow as pa
 from numba import cuda, njit
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.column import Column
 from cudf._lib.null_mask import (
     MaskState,
@@ -21,7 +20,7 @@ from cudf._lib.null_mask import (
 )
 from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import as_scalar
-from cudf._lib.stream_compaction import unique_count as cpp_unique_count
+from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
@@ -33,7 +32,7 @@ from cudf.utils.dtypes import (
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
-    min_scalar_type,
+    min_unsigned_type,
     np_to_pa_dtype,
 )
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
@@ -385,25 +384,58 @@ class ColumnBase(Column, Serializable):
                 children=self.base_children,
             )
 
-    def view(self, newcls, **kwargs):
-        """View the underlying column data differently using a subclass of
-        ColumnBase
+    def view(self, dtype):
+        """
+        View the data underlying a column as different dtype.
+        The source column must divide evenly into the size of
+        the desired data type. Columns with nulls may only be
+        viewed as dtypes with size equal to source dtype size
 
         Parameters
         ----------
-        newcls : ColumnBase
-            The logical view to be used
-        **kwargs :
-            Additional paramters for instantiating instance of *newcls*.
-            Valid keywords are valid parameters for ``newcls.__init__``.
-            Any omitted keywords will be defaulted to the corresponding
-            attributes in ``self``.
+        dtype : NumPy dtype, string
+            The dtype to view the data as
+
         """
-        params = Column._replace_defaults(self)
-        params.update(kwargs)
-        if "mask" in kwargs and "null_count" not in kwargs:
-            del params["null_count"]
-        return newcls(**params)
+
+        dtype = np.dtype(dtype)
+
+        if dtype.kind in ("o", "u", "s"):
+            raise TypeError(
+                "Bytes viewed as str without metadata is ambiguous"
+            )
+
+        if self.dtype.itemsize == dtype.itemsize:
+            return build_column(
+                self.base_data,
+                dtype=dtype,
+                mask=self.base_mask,
+                size=self.size,
+                offset=self.offset,
+            )
+
+        else:
+            if self.null_count > 0:
+                raise ValueError(
+                    "Can not produce a view of a column with nulls"
+                )
+
+            if (self.size * self.dtype.itemsize) % dtype.itemsize:
+                raise ValueError(
+                    f"Can not divide {self.size * self.dtype.itemsize}"
+                    + f" total bytes into {dtype} with size {dtype.itemsize}"
+                )
+
+            new_buf_ptr = (
+                self.base_data.ptr + self.offset * self.dtype.itemsize
+            )
+            new_buf_size = self.size * self.dtype.itemsize
+            view_buf = Buffer(
+                data=new_buf_ptr,
+                size=new_buf_size,
+                owner=self.base_data._owner,
+            )
+            return build_column(view_buf, dtype=dtype)
 
     def element_indexing(self, index):
         """Default implementation for indexing to an element
@@ -653,7 +685,7 @@ class ColumnBase(Column, Serializable):
             raise TypeError(msg)
 
         # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(True, "after")
+        sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
         sorted_indices = sorted_indices[self.null_count :]
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
@@ -756,13 +788,13 @@ class ColumnBase(Column, Serializable):
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        import cudf.io.dlpack as dlpack
+        from cudf.io import dlpack as dlpack
 
         return dlpack.to_dlpack(self)
 
     @property
     def is_unique(self):
-        return self.unique_count() == len(self)
+        return self.distinct_count() == len(self)
 
     @property
     def is_monotonic(self):
@@ -820,11 +852,11 @@ class ColumnBase(Column, Serializable):
         col_keys = self[col_inds]
         return col_keys, col_inds
 
-    def unique_count(self, method="sort", dropna=True):
+    def distinct_count(self, method="sort", dropna=True):
         if method != "sort":
-            msg = "non sort based unique_count() not implemented yet"
+            msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
-        return cpp_unique_count(self, ignore_nulls=dropna)
+        return cpp_distinct_count(self, ignore_nulls=dropna)
 
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
@@ -847,19 +879,27 @@ class ColumnBase(Column, Serializable):
         # Re-label self w.r.t. the provided categories
         if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
             labels = sr.label_encoding(cats=dtype.categories)
+            if "ordered" in kwargs:
+                warnings.warn(
+                    "Ignoring the `ordered` parameter passed in `**kwargs`, "
+                    "will be using `ordered` parameter of CategoricalDtype"
+                )
+
             return build_categorical_column(
                 categories=dtype.categories,
                 codes=labels._column,
                 mask=self.mask,
-                ordered=ordered,
-            ).astype(dtype)
+                ordered=dtype.ordered,
+            )
 
-        labels, cats = sr.factorize()
+        cats = sr.unique().astype(sr.dtype)
+        label_dtype = min_unsigned_type(len(cats))
+        labels = sr.label_encoding(cats=cats, dtype=label_dtype, na_sentinel=1)
 
         # columns include null index in factorization; remove:
         if self.has_nulls:
             cats = cats.dropna()
-            min_type = min_scalar_type(len(cats), 8)
+            min_type = min_unsigned_type(len(cats), 8)
             labels = labels - 1
             if np.dtype(min_type).itemsize < labels.dtype.itemsize:
                 labels = labels.astype(min_type)
@@ -869,7 +909,7 @@ class ColumnBase(Column, Serializable):
             codes=labels._column,
             mask=self.mask,
             ordered=ordered,
-        ).astype(dtype)
+        )
 
     def as_numerical_column(self, dtype, **kwargs):
         raise NotImplementedError
@@ -887,9 +927,12 @@ class ColumnBase(Column, Serializable):
         )
         return result
 
-    def argsort(self, ascending):
-        _, inds = self.sort_by_values(ascending=ascending)
-        return inds
+    def argsort(self, ascending, na_position="last"):
+
+        sorted_indices = self.as_frame()._get_sorted_inds(
+            ascending=ascending, na_position=na_position
+        )
+        return sorted_indices
 
     @property
     def __cuda_array_interface__(self):
@@ -962,6 +1005,12 @@ class ColumnBase(Column, Serializable):
         if "mask" in header:
             mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
+
+    def min(self, dtype=None):
+        return libcudf.reduce.reduce("min", self, dtype=dtype)
+
+    def max(self, dtype=None):
+        return libcudf.reduce.reduce("max", self, dtype=dtype)
 
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
@@ -1132,6 +1181,11 @@ def build_categorical_column(
         Indicates whether the categories are ordered
     """
 
+    codes_dtype = min_unsigned_type(len(categories))
+    codes = as_column(codes)
+    if codes.dtype != codes_dtype:
+        codes = codes.astype(codes_dtype)
+
     dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
 
     return build_column(
@@ -1141,7 +1195,7 @@ def build_categorical_column(
         size=size,
         offset=offset,
         null_count=null_count,
-        children=(as_column(codes),),
+        children=(codes,),
     )
 
 
@@ -1195,9 +1249,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if dtype is not None:
             data = data.astype(dtype)
 
-    elif isinstance(arbitrary, Buffer):
+    elif type(arbitrary) is Buffer:
         if dtype is None:
             raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
+
         data = build_column(arbitrary, dtype=dtype)
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
@@ -1260,11 +1315,12 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             )
 
         elif isinstance(arbitrary, pa.NullArray):
-            new_dtype = pd.api.types.pandas_dtype(dtype)
             if type(dtype) == str and dtype == "empty":
                 new_dtype = pd.api.types.pandas_dtype(
                     arbitrary.type.to_pandas_dtype()
                 )
+            else:
+                new_dtype = pd.api.types.pandas_dtype(dtype)
 
             if is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
@@ -1284,7 +1340,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
-            codes = as_column(arbitrary.indices)
+            codes_dtype = min_unsigned_type(len(arbitrary.indices))
+            codes = as_column(arbitrary.indices).astype(codes_dtype)
             if isinstance(arbitrary.dictionary, pa.NullArray):
                 categories = as_column([], dtype="object")
             else:

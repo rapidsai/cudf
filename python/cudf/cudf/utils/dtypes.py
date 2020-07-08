@@ -29,6 +29,21 @@ _np_pa_dtypes = {
     np.str_: pa.string(),
 }
 
+SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
+UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
+INTEGER_TYPES = SIGNED_INTEGER_TYPES | UNSIGNED_TYPES
+FLOAT_TYPES = {"float32", "float64"}
+SIGNED_TYPES = SIGNED_INTEGER_TYPES | FLOAT_TYPES
+NUMERIC_TYPES = SIGNED_TYPES | UNSIGNED_TYPES
+DATETIME_TYPES = {
+    "datetime64[s]",
+    "datetime64[ms]",
+    "datetime64[us]",
+    "datetime64[ns]",
+}
+OTHER_TYPES = {"bool", "category", "str"}
+ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | OTHER_TYPES
+
 
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype.
@@ -208,7 +223,10 @@ def is_list_like(obj):
     Boolean: True or False depending on whether the
     input `obj` is like-like or not.
     """
-    return isinstance(obj, (Sequence,),) and not isinstance(obj, (str, bytes))
+
+    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
+        obj, (str, bytes)
+    )
 
 
 def is_column_like(obj):
@@ -280,6 +298,19 @@ def min_signed_type(x, min_size=8):
                 return int_dtype
     # resort to using `int64` and let numpy raise appropriate exception:
     return np.int64(x).dtype
+
+
+def min_unsigned_type(x, min_size=8):
+    """
+    Return the smallest *unsigned* integer dtype
+    that can represent the integer ``x``
+    """
+    for int_dtype in np.sctypes["uint"]:
+        if (np.dtype(int_dtype).itemsize * 8) >= min_size:
+            if 0 <= x <= np.iinfo(int_dtype).max:
+                return int_dtype
+    # resort to using `uint64` and let numpy raise appropriate exception:
+    return np.uint64(x).dtype
 
 
 def min_column_type(x, expected_type):

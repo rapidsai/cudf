@@ -38,7 +38,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${GTEST_INCLUDE_DIR}"
                     "${GBENCH_INCLUDE_DIR}"
-                    "${ARROW_INCLUDE}"
+                    "${ARROW_INCLUDE_DIR}"
                     "${RMM_INCLUDE}"
                     "${CMAKE_CURRENT_SOURCE_DIR}")
 

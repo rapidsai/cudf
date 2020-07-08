@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 from contextlib import ContextDecorator
 
 from cudf._lib.nvtx._lib import (

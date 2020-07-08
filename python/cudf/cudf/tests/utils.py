@@ -3,10 +3,11 @@ from contextlib import contextmanager
 import cupy
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
+from pandas.util import testing as tm
 
-from cudf import Series
+import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
+from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [
     "bool",
@@ -20,20 +21,15 @@ supported_numpy_dtypes = [
     "datetime64[us]",
 ]
 
-SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
-UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
-INTEGER_TYPES = SIGNED_INTEGER_TYPES | UNSIGNED_TYPES
-FLOAT_TYPES = {"float32", "float64"}
-SIGNED_TYPES = SIGNED_INTEGER_TYPES | FLOAT_TYPES
-NUMERIC_TYPES = SIGNED_TYPES | UNSIGNED_TYPES
-DATETIME_TYPES = {
-    "datetime64[s]",
-    "datetime64[ms]",
-    "datetime64[us]",
-    "datetime64[ns]",
-}
-OTHER_TYPES = {"bool", "category", "str"}
-ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | OTHER_TYPES
+SIGNED_INTEGER_TYPES = sorted(list(dtypeutils.SIGNED_INTEGER_TYPES))
+UNSIGNED_TYPES = sorted(list(dtypeutils.UNSIGNED_TYPES))
+INTEGER_TYPES = sorted(list(dtypeutils.INTEGER_TYPES))
+FLOAT_TYPES = sorted(list(dtypeutils.FLOAT_TYPES))
+SIGNED_TYPES = sorted(list(dtypeutils.SIGNED_TYPES))
+NUMERIC_TYPES = sorted(list(dtypeutils.NUMERIC_TYPES))
+DATETIME_TYPES = sorted(list(dtypeutils.DATETIME_TYPES))
+OTHER_TYPES = sorted(list(dtypeutils.OTHER_TYPES))
+ALL_TYPES = sorted(list(dtypeutils.ALL_TYPES))
 
 
 def random_bitmask(size):
@@ -63,7 +59,7 @@ def count_zero(arr):
     return np.count_nonzero(arr == 0)
 
 
-def assert_eq(a, b, **kwargs):
+def assert_eq(left, right, **kwargs):
     """ Assert that two cudf-like things are equivalent
 
     This equality test works for pandas/cudf dataframes/series/indexes/scalars
@@ -73,43 +69,43 @@ def assert_eq(a, b, **kwargs):
     """
     __tracebackhide__ = True
 
-    if hasattr(a, "to_pandas"):
-        a = a.to_pandas()
-    if hasattr(b, "to_pandas"):
-        b = b.to_pandas()
-    if isinstance(a, cupy.ndarray):
-        a = cupy.asnumpy(a)
-    if isinstance(b, cupy.ndarray):
-        b = cupy.asnumpy(b)
+    if hasattr(left, "to_pandas"):
+        left = left.to_pandas()
+    if hasattr(right, "to_pandas"):
+        right = right.to_pandas()
+    if isinstance(left, cupy.ndarray):
+        left = cupy.asnumpy(left)
+    if isinstance(right, cupy.ndarray):
+        right = cupy.asnumpy(right)
 
-    if isinstance(a, pd.DataFrame):
-        tm.assert_frame_equal(a, b, **kwargs)
-    elif isinstance(a, pd.Series):
-        tm.assert_series_equal(a, b, **kwargs)
-    elif isinstance(a, pd.Index):
-        tm.assert_index_equal(a, b, **kwargs)
-    elif isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
-        if np.issubdtype(a.dtype, np.floating) and np.issubdtype(
-            b.dtype, np.floating
+    if isinstance(left, pd.DataFrame):
+        tm.assert_frame_equal(left, right, **kwargs)
+    elif isinstance(left, pd.Series):
+        tm.assert_series_equal(left, right, **kwargs)
+    elif isinstance(left, pd.Index):
+        tm.assert_index_equal(left, right, **kwargs)
+    elif isinstance(left, np.ndarray) and isinstance(right, np.ndarray):
+        if np.issubdtype(left.dtype, np.floating) and np.issubdtype(
+            right.dtype, np.floating
         ):
-            assert np.allclose(a, b, equal_nan=True)
+            assert np.allclose(left, right, equal_nan=True)
         else:
-            assert np.array_equal(a, b)
+            assert np.array_equal(left, right)
     else:
-        if a == b:
+        if left == right:
             return True
         else:
-            if np.isnan(a):
-                assert np.isnan(b)
+            if np.isnan(left):
+                assert np.isnan(right)
             else:
-                assert np.allclose(a, b, equal_nan=True)
+                assert np.allclose(left, right, equal_nan=True)
     return True
 
 
-def assert_neq(a, b, **kwargs):
+def assert_neq(left, right, **kwargs):
     __tracebackhide__ = True
     try:
-        assert_eq(a, b, **kwargs)
+        assert_eq(left, right, **kwargs)
     except AssertionError:
         pass
     else:
@@ -150,9 +146,9 @@ def gen_rand(dtype, size, **kwargs):
 def gen_rand_series(dtype, size, **kwargs):
     values = gen_rand(dtype, size, **kwargs)
     if kwargs.get("has_nulls", False):
-        return Series.from_masked_array(values, random_bitmask(size))
+        return cudf.Series.from_masked_array(values, random_bitmask(size))
 
-    return Series(values)
+    return cudf.Series(values)
 
 
 @contextmanager

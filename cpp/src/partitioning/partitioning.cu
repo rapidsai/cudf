@@ -642,7 +642,7 @@ struct dispatch_map_type {
    *
    */
   template <typename MapType>
-  std::enable_if_t<std::is_integral<MapType>::value and not is_boolean<MapType>(),
+  std::enable_if_t<is_index_type<MapType>(),
                    std::pair<std::unique_ptr<table>, std::vector<size_type>>>
   operator()(table_view const& t,
              column_view const& partition_map,
@@ -709,7 +709,7 @@ struct dispatch_map_type {
   }
 
   template <typename MapType>
-  std::enable_if_t<not std::is_integral<MapType>::value or is_boolean<MapType>(),
+  std::enable_if_t<not is_index_type<MapType>(),
                    std::pair<std::unique_ptr<table>, std::vector<size_type>>>
   operator()(table_view const& t,
              column_view const& partition_map,

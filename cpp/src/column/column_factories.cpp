@@ -162,7 +162,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   // any of the children in the strings column which would otherwise cause an exception.
   auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream);
   column_view sc{
-    data_type{STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
+    data_type{type_id::STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
   auto sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
   // fill the column with the scalar
   auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, mr, stream);

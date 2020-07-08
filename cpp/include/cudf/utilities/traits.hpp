@@ -172,6 +172,47 @@ constexpr inline bool is_numeric(data_type type)
 }
 
 /**
+ * @brief Indicates whether the type `T` is a index type.
+ *
+ * A type `T` is considered an index type if it is valid to use
+ * elements of type `T` to index into a column. I.e.,
+ * index types are integral types such as 'INT*' apart from 'bool'.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is index type
+ * @return false  `T` is not index type
+ **/
+template <typename T>
+constexpr inline bool is_index_type()
+{
+  return std::is_integral<T>::value and not std::is_same<T, bool>::value;
+}
+
+struct is_index_type_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_index_type<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether the type `type` is a index type.
+ *
+ * A type `T` is considered an index type if it is valid to use
+ * elements of type `T` to index into a column. I.e.,
+ * index types are integral types such as 'INT*' apart from 'bool'.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is index type
+ * @return false `type` is not index type
+ **/
+constexpr inline bool is_index_type(data_type type)
+{
+  return cudf::type_dispatcher(type, is_index_type_impl{});
+}
+
+/**
  * @brief Indicates whether `type` is a unsigned numeric `data_type`.
  *
  * "Unsigned Numeric" types are fundamental integral types such as `UINT*`.

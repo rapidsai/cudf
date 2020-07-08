@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
 
@@ -14,6 +13,7 @@ from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.utils import dtypes as dtypeutils
 
 data_list = [
     ["AbC", "de", "FGHI", "j", "kLm"],
@@ -68,11 +68,11 @@ def test_string_export(ps_gs):
 
     expect = ps
     got = gs.to_pandas()
-    pd.testing.assert_series_equal(expect, got)
+    assert_eq(expect, got)
 
     expect = np.array(ps)
     got = gs.to_array()
-    np.testing.assert_array_equal(expect, got)
+    assert_eq(expect, got)
 
     expect = pa.Array.from_pandas(ps)
     got = gs.to_arrow()
@@ -160,7 +160,7 @@ def test_string_repr(ps_gs, item):
 
 
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool", "object", "str"}
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool", "object", "str"]
 )
 def test_string_astype(dtype):
     if (
@@ -180,6 +180,7 @@ def test_string_astype(dtype):
             "2019-06-03T00:00:00Z",
             "2019-05-04T00:00:00Z",
             "2018-06-04T00:00:00Z",
+            "1922-07-21T01:02:03Z",
         ]
     elif dtype == "str" or dtype == "object":
         data = ["ab", "cd", "ef", "gh", "ij"]
@@ -197,7 +198,7 @@ def test_string_astype(dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool", "object", "str"}
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool", "object", "str"]
 )
 def test_string_empty_astype(dtype):
     data = []
@@ -210,7 +211,7 @@ def test_string_empty_astype(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool"})
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool"])
 def test_string_numeric_astype(dtype):
     if dtype.startswith("bool"):
         data = [1, 0, 1, 0, 1]
@@ -223,27 +224,25 @@ def test_string_numeric_astype(dtype):
     elif dtype.startswith("float"):
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
     elif dtype.startswith("datetime64"):
-        data = [1000000000, 2000000000, 3000000000, 4000000000, 5000000000]
-    if dtype.startswith("datetime64"):
-        ps = pd.Series(data, dtype="datetime64[ns]")
-        gs = Series.from_pandas(ps)
-    else:
-        ps = pd.Series(data, dtype=dtype)
-        gs = Series(data, dtype=dtype)
+        # pandas rounds the output format based on the data
+        # Use numpy instead
+        # but fix '2011-01-01T00:00:00' -> '2011-01-01 00:00:00'
+        data = [1000000001, 2000000001, 3000000001, 4000000001, 5000000001]
+        ps = np.asarray(data, dtype=dtype).astype(str)
+        ps = np.array([i.replace("T", " ") for i in ps])
 
-    # Pandas datetime64 --> str typecasting returns arbitrary format depending
-    # on the data, so making it consistent unless we choose to match the
-    # behavior
-    if dtype.startswith("datetime64"):
-        expect = ps.dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-    else:
-        expect = ps.astype("str")
+    if not dtype.startswith("datetime64"):
+        ps = pd.Series(data, dtype=dtype)
+
+    gs = Series(data, dtype=dtype)
+
+    expect = pd.Series(ps.astype("str"))
     got = gs.astype("str")
 
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"bool"})
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool"])
 def test_string_empty_numeric_astype(dtype):
     data = []
 
@@ -310,29 +309,67 @@ def test_string_len(ps_gs):
         ["f", "g", "h", "i", "j"],
         ("f", "g", "h", "i", "j"),
         pd.Series(["f", "g", "h", "i", "j"]),
-        pd.Index(["f", "g", "h", "i", "j"]),
-        (["f", "g", "h", "i", "j"], ["f", "g", "h", "i", "j"]),
-        [["f", "g", "h", "i", "j"], ["f", "g", "h", "i", "j"]],
-        (
-            pd.Series(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            pd.Series(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            ["f", "a", "b", "f", "a"],
-            pd.Index(["1", "2", "3", "4", "5"]),
-            ["f", "a", "b", "f", "a"],
+        # xref pandas-dev/#33436
+        pytest.param(
             pd.Index(["f", "g", "h", "i", "j"]),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/pull/33436"
+            ),
+        ),
+        (
+            np.array(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
         ),
         [
-            pd.Index(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            pd.Series(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            ["f", "a", "b", "f", "a"],
-            pd.Index(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            pd.Index(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
         ],
+        [
+            pd.Series(["f", "g", "h", "i", "j"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+        ],
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+        ),
+        [
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ],
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ),
+        pytest.param(
+            (
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["1", "2", "3", "4", "5"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/pull/33436"
+            ),
+        ),
+        pytest.param(
+            [
+                pd.Index(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/pull/33436"
+            ),
+        ),
     ],
 )
 @pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
@@ -351,6 +388,11 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
     pd_others = others
     if isinstance(pd_others, pd.Series):
         pd_others = pd_others.values
+    if isinstance(pd_others, (list, tuple)):
+        for elem in pd_others:
+            if isinstance(elem, (pd.Series, Series)):
+                elem.index = ps.index
+
     expect = ps.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
     got = gs.str.cat(others=others, sep=sep, na_rep=na_rep)
 
@@ -1988,17 +2030,13 @@ def test_string_typecast_error(data, obj_type, dtype):
     psr = pd.Series(data, dtype=obj_type)
     gsr = Series(data, dtype=obj_type)
 
-    exception_type = None
     try:
         psr.astype(dtype=dtype)
     except Exception as e:
-        exception_type = type(e)
-
-    if exception_type is None:
-        raise TypeError("Was expecting `psr.astype` to fail")
-
-    with pytest.raises(exception_type):
-        gsr.astype(dtype=dtype)
+        with pytest.raises(type(e)):
+            gsr.astype(dtype=dtype)
+    else:
+        raise AssertionError("Was expecting `psr.astype` to fail")
 
 
 @pytest.mark.parametrize(
@@ -2017,6 +2055,13 @@ def test_string_hex_to_int(data):
     got = gsr.str.htoi()
     expected = Series([263988422296292, 0, 281474976710655])
 
+    assert_eq(expected, got)
+
+
+def test_string_ishex():
+    gsr = Series(["", None, "0x01a2b3c4d5e6f", "0789", "ABCDEF0"])
+    got = gsr.str.ishex()
+    expected = Series([False, None, True, True, True])
     assert_eq(expected, got)
 
 
@@ -2040,7 +2085,9 @@ def test_string_int_to_ipv4():
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES - {"int64", "uint64"})
+@pytest.mark.parametrize(
+    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int64", "uint64"}))
+)
 def test_string_int_to_ipv4_dtype_fail(dtype):
     gsr = Series([1, 2, 3, 4, 5]).astype(dtype)
     with pytest.raises(TypeError):
@@ -2104,3 +2151,231 @@ def test_string_str_byte_count(data, expected):
     expected = as_index(expected, dtype="int32")
     actual = si.str.byte_count()
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (["1", "2", "3", "4", "5"], [True, True, True, True, True]),
+        (
+            ["1.1", "2.0", "3.2", "4.3", "5."],
+            [False, False, False, False, False],
+        ),
+        (
+            [".12312", "213123.", ".3223.", "323423.."],
+            [False, False, False, False],
+        ),
+        ([""], [False]),
+        (
+            ["1..1", "+2", "++3", "4++", "-5"],
+            [False, True, False, False, True],
+        ),
+        (
+            [
+                "24313345435345 ",
+                "+2632726478",
+                "++367293674326",
+                "4382493264392746.237649274692++",
+                "-578239479238469264",
+            ],
+            [False, True, False, False, True],
+        ),
+        (
+            ["2a2b", "a+b", "++a", "a.b++", "-b"],
+            [False, False, False, False, False],
+        ),
+        (
+            ["2a2b", "1+3", "9.0++a", "+", "-"],
+            [False, False, False, False, False],
+        ),
+    ],
+)
+def test_str_isinteger(data, expected):
+    sr = Series(data, dtype="str")
+    expected = Series(expected)
+    actual = sr.str.isinteger()
+    assert_eq(expected, actual)
+
+    sr = as_index(data)
+    expected = as_index(expected)
+    actual = sr.str.isinteger()
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        (["1", "2", "3", "4", "5"], [True, True, True, True, True]),
+        (["1.1", "2.0", "3.2", "4.3", "5."], [True, True, True, True, True]),
+        ([""], [False]),
+        (
+            [".12312", "213123.", ".3223.", "323423.."],
+            [True, True, False, False],
+        ),
+        (
+            ["1.00.323.1", "+2.1", "++3.30", "4.9991++", "-5.3"],
+            [False, True, False, False, True],
+        ),
+        (
+            [
+                "24313345435345 ",
+                "+2632726478",
+                "++367293674326",
+                "4382493264392746.237649274692++",
+                "-578239479238469264",
+            ],
+            [False, True, False, False, True],
+        ),
+        (
+            [
+                "24313345435345.32732 ",
+                "+2632726478.3627638276",
+                "++0.326294632367293674326",
+                "4382493264392746.237649274692++",
+                "-57823947923.8469264",
+            ],
+            [False, True, False, False, True],
+        ),
+        (
+            ["2a2b", "a+b", "++a", "a.b++", "-b"],
+            [False, False, False, False, False],
+        ),
+        (
+            ["2a2b", "1+3", "9.0++a", "+", "-"],
+            [False, False, False, False, False],
+        ),
+    ],
+)
+def test_str_isfloat(data, expected):
+    sr = Series(data, dtype="str")
+    expected = Series(expected)
+    actual = sr.str.isfloat()
+    assert_eq(expected, actual)
+
+    sr = as_index(data)
+    expected = as_index(expected)
+    actual = sr.str.isfloat()
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+        ["a", "z", ".", '"', "aa", "zz"],
+        ["aa", "zz"],
+        ["z", "a", "zz", "aa"],
+        ["1", "2", "3", "4", "5"],
+        [""],
+        ["a"],
+        ["hello"],
+        ["small text", "this is a larger text......"],
+        ["👋🏻", "🔥", "🥇"],
+        ["This is 💯", "here is a calendar", "📅"],
+        ["", ".", ";", "[", "]"],
+        ["\t", ".", "\n", "\n\t", "\t\n"],
+    ],
+)
+def test_str_min(data):
+    psr = pd.Series(data)
+    sr = Series(data)
+
+    assert_eq(psr.min(), sr.min())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+        ["a", "z", ".", '"', "aa", "zz"],
+        ["aa", "zz"],
+        ["z", "a", "zz", "aa"],
+        ["1", "2", "3", "4", "5"],
+        [""],
+        ["a"],
+        ["hello"],
+        ["small text", "this is a larger text......"],
+        ["👋🏻", "🔥", "🥇"],
+        ["This is 💯", "here is a calendar", "📅"],
+        ["", ".", ";", "[", "]"],
+        ["\t", ".", "\n", "\n\t", "\t\n"],
+    ],
+)
+def test_str_max(data):
+    psr = pd.Series(data)
+    sr = Series(data)
+
+    assert_eq(psr.max(), sr.max())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+        ["a", "z", ".", '"', "aa", "zz"],
+        ["aa", "zz"],
+        ["z", "a", "zz", "aa"],
+        ["1", "2", "3", "4", "5"],
+        [""],
+        ["a"],
+        ["hello"],
+        ["small text", "this is a larger text......"],
+        ["👋🏻", "🔥", "🥇"],
+        ["This is 💯", "here is a calendar", "📅"],
+        ["", ".", ";", "[", "]"],
+        ["\t", ".", "\n", "\n\t", "\t\n"],
+    ],
+)
+def test_str_sum(data):
+    psr = pd.Series(data)
+    sr = Series(data)
+
+    assert_eq(psr.sum(), sr.sum())
+
+
+def test_str_mean():
+    sr = Series(["a", "b", "c", "d", "e"])
+
+    with pytest.raises(NotImplementedError):
+        sr.mean()
+
+
+def test_string_product():
+    psr = pd.Series(["1", "2", "3", "4", "5"])
+    sr = Series(["1", "2", "3", "4", "5"])
+
+    try:
+        psr.product()
+    except Exception as e:
+        with pytest.raises(
+            type(e), match=e.__str__().replace("str", "object")
+        ):
+            sr.product()
+    else:
+        raise AssertionError("psr.product() should've failed")
+
+
+def test_string_var():
+    psr = pd.Series(["1", "2", "3", "4", "5"])
+    sr = Series(["1", "2", "3", "4", "5"])
+
+    try:
+        psr.var()
+    except Exception as e:
+        with pytest.raises(type(e)):
+            sr.var()
+    else:
+        raise AssertionError("psr.var() should've failed")
+
+
+def test_string_std():
+    psr = pd.Series(["1", "2", "3", "4", "5"])
+    sr = Series(["1", "2", "3", "4", "5"])
+
+    try:
+        psr.std()
+    except Exception as e:
+        with pytest.raises(type(e)):
+            sr.std()
+    else:
+        raise AssertionError("psr.std() should've failed")

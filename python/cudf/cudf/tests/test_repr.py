@@ -1,15 +1,13 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
-
-import hypothesis.strategies as st
 import numpy as np
 import pandas as pd
 import pytest
-from hypothesis import given, settings
+from hypothesis import given, settings, strategies as st
 
 import cudf
 from cudf.tests import utils
 
-repr_categories = utils.NUMERIC_TYPES | {"str", "category", "datetime64[ns]"}
+repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
 
 
 @pytest.mark.parametrize("dtype", repr_categories)

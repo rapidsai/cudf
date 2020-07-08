@@ -1023,8 +1023,9 @@ namespace detail {
 void normalize_nans_and_zeros(mutable_column_view in_out, cudaStream_t stream = 0)
 {
   if (in_out.size() == 0) { return; }
-  CUDF_EXPECTS(in_out.type() == data_type(FLOAT32) || in_out.type() == data_type(FLOAT64),
-               "Expects float or double input");
+  CUDF_EXPECTS(
+    in_out.type() == data_type(type_id::FLOAT32) || in_out.type() == data_type(type_id::FLOAT64),
+    "Expects float or double input");
 
   // wrapping the in_out data in a column_view so we can call the same lower level code.
   // that we use for the non in-place version.

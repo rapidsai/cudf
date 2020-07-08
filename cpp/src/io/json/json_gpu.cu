@@ -480,7 +480,7 @@ __global__ void convert_json_to_columns_kernel(const char *data,
     if (start <= field_data_last &&
         !serializedTrieContains(opts.naValuesTrie, data + start, field_end - start)) {
       // Type dispatcher does not handle strings
-      if (dtypes[col].id() == STRING) {
+      if (dtypes[col].id() == type_id::STRING) {
         auto str_list           = static_cast<string_pair *>(output_columns[col]);
         str_list[rec_id].first  = data + start;
         str_list[rec_id].second = field_data_last - start + 1;
@@ -502,7 +502,7 @@ __global__ void convert_json_to_columns_kernel(const char *data,
           atomicAdd(&num_valid_fields[col], 1);
         }
       }
-    } else if (dtypes[col].id() == STRING) {
+    } else if (dtypes[col].id() == type_id::STRING) {
       auto str_list           = static_cast<string_pair *>(output_columns[col]);
       str_list[rec_id].first  = nullptr;
       str_list[rec_id].second = 0;
