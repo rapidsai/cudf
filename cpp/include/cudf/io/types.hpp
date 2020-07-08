@@ -138,33 +138,62 @@ struct table_with_metadata {
 };
 
 /**
+ * @brief Non-owning view of a host memory buffer
+ *
+ * Used to describe buffer input in `source_info` objects.
+ */
+struct host_buffer {
+  const char* data = nullptr;
+  size_t size      = 0;
+  host_buffer()    = default;
+  host_buffer(const char* data, size_t size) : data(data), size(size) {}
+};
+
+/**
  * @brief Source information for read interfaces
  */
 struct source_info {
   io_type type = io_type::FILEPATH;
-  std::string filepath;
-  std::pair<const char*, size_t> buffer;
-  std::shared_ptr<arrow::io::RandomAccessFile> file;
-  cudf::io::datasource* user_source = nullptr;
+  std::vector<std::string> filepaths;
+  std::vector<host_buffer> buffers;
+  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> files;
+  std::vector<cudf::io::datasource*> user_sources;
 
   source_info() = default;
 
-  explicit source_info(const std::string& file_path) : type(io_type::FILEPATH), filepath(file_path)
+  explicit source_info(std::vector<std::string> const& file_paths)
+    : type(io_type::FILEPATH), filepaths(file_paths)
+  {
+  }
+  explicit source_info(std::string const& file_path)
+    : type(io_type::FILEPATH), filepaths({file_path})
   {
   }
 
-  explicit source_info(const char* host_buffer, size_t size)
-    : type(io_type::HOST_BUFFER), buffer(host_buffer, size)
+  explicit source_info(std::vector<host_buffer> const& host_buffers)
+    : type(io_type::HOST_BUFFER), buffers(host_buffers)
+  {
+  }
+  explicit source_info(const char* host_data, size_t size)
+    : type(io_type::HOST_BUFFER), buffers({{host_data, size}})
   {
   }
 
+  explicit source_info(std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> const& arrow_files)
+    : type(io_type::ARROW_RANDOM_ACCESS_FILE), files(arrow_files)
+  {
+  }
   explicit source_info(const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
-    : type(io_type::ARROW_RANDOM_ACCESS_FILE), file(arrow_file)
+    : type(io_type::ARROW_RANDOM_ACCESS_FILE), files({arrow_file})
   {
   }
 
+  explicit source_info(std::vector<cudf::io::datasource*> const& sources)
+    : type(io_type::USER_IMPLEMENTED), user_sources(sources)
+  {
+  }
   explicit source_info(cudf::io::datasource* source)
-    : type(io_type::USER_IMPLEMENTED), user_source(source)
+    : type(io_type::USER_IMPLEMENTED), user_sources({source})
   {
   }
 };

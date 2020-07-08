@@ -1046,15 +1046,13 @@ def test_raise_data_error():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
 
-    # we have to test that Pandas does this too:
     try:
         pdf.groupby("a").mean()
     except Exception as e:
-        typ = type(e)
-        msg = str(e)
-
-    with pytest.raises(typ, match=msg):
-        gdf.groupby("a").mean()
+        with pytest.raises(type(e), match=e.__str__()):
+            gdf.groupby("a").mean()
+    else:
+        raise AssertionError("Expected pandas groupby to fail")
 
 
 def test_drop_unsupported_multi_agg():

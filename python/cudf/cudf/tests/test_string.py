@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
 
@@ -9,12 +8,12 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-import cudf.utils.dtypes as dtypeutils
 from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.utils import dtypes as dtypeutils
 
 data_list = [
     ["AbC", "de", "FGHI", "j", "kLm"],
@@ -2031,17 +2030,13 @@ def test_string_typecast_error(data, obj_type, dtype):
     psr = pd.Series(data, dtype=obj_type)
     gsr = Series(data, dtype=obj_type)
 
-    exception_type = None
     try:
         psr.astype(dtype=dtype)
     except Exception as e:
-        exception_type = type(e)
-
-    if exception_type is None:
-        raise TypeError("Was expecting `psr.astype` to fail")
-
-    with pytest.raises(exception_type):
-        gsr.astype(dtype=dtype)
+        with pytest.raises(type(e)):
+            gsr.astype(dtype=dtype)
+    else:
+        raise AssertionError("Was expecting `psr.astype` to fail")
 
 
 @pytest.mark.parametrize(
@@ -2060,6 +2055,13 @@ def test_string_hex_to_int(data):
     got = gsr.str.htoi()
     expected = Series([263988422296292, 0, 281474976710655])
 
+    assert_eq(expected, got)
+
+
+def test_string_ishex():
+    gsr = Series(["", None, "0x01a2b3c4d5e6f", "0789", "ABCDEF0"])
+    got = gsr.str.ishex()
+    expected = Series([False, None, True, True, True])
     assert_eq(expected, got)
 
 
@@ -2341,46 +2343,39 @@ def test_str_mean():
 def test_string_product():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = Series(["1", "2", "3", "4", "5"])
-    error_type = None
+
     try:
         psr.product()
     except Exception as e:
-        error_type = type(e)
-
-    if error_type is None:
+        with pytest.raises(
+            type(e), match=e.__str__().replace("str", "object")
+        ):
+            sr.product()
+    else:
         raise AssertionError("psr.product() should've failed")
-
-    with pytest.raises(error_type):
-        sr.product()
 
 
 def test_string_var():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = Series(["1", "2", "3", "4", "5"])
-    error_type = None
+
     try:
         psr.var()
     except Exception as e:
-        error_type = type(e)
-
-    if error_type is None:
+        with pytest.raises(type(e)):
+            sr.var()
+    else:
         raise AssertionError("psr.var() should've failed")
-
-    with pytest.raises(error_type):
-        sr.var()
 
 
 def test_string_std():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = Series(["1", "2", "3", "4", "5"])
-    error_type = None
+
     try:
         psr.std()
     except Exception as e:
-        error_type = type(e)
-
-    if error_type is None:
+        with pytest.raises(type(e)):
+            sr.std()
+    else:
         raise AssertionError("psr.std() should've failed")
-
-    with pytest.raises(error_type):
-        sr.std()

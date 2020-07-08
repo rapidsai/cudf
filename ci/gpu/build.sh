@@ -98,6 +98,17 @@ else
 fi
 
 ################################################################################
+# BUILD - Build libcudf_kafka from source
+################################################################################
+
+logger "Build libcudf_kafka..."
+if [[ ${BUILD_MODE} == "pull-request" ]]; then
+    $WORKSPACE/build.sh clean libcudf_kafka tests
+else
+    $WORKSPACE/build.sh clean libcudf_kafka tests -l
+fi
+
+################################################################################
 # TEST - Run GoogleTest and py.tests for libcudf, and
 # cuDF
 ################################################################################
