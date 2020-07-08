@@ -918,7 +918,52 @@ class MultiIndex(Index):
 
         Examples
         --------
-        TODO: PREM: Add examples here
+        >>> import cudf
+        >>> idx1 = cudf.MultiIndex(
+        ... levels=[[1, 2], ['blue', 'red']],
+        ... codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+        >>> idx2 = cudf.MultiIndex(
+        ... levels=[[3, 4], ['blue', 'red']],
+        ... codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+        >>> idx1
+        MultiIndex(levels=[0    1
+        1    2
+        dtype: int64, 0    blue
+        1     red
+        dtype: object],
+        codes=   0  1
+        0  0  1
+        1  0  0
+        2  1  1
+        3  1  0)
+        >>> idx2
+        MultiIndex(levels=[0    3
+        1    4
+        dtype: int64, 0    blue
+        1     red
+        dtype: object],
+        codes=   0  1
+        0  0  1
+        1  0  0
+        2  1  1
+        3  1  0)
+        >>> idx1.append(idx2)
+        MultiIndex(levels=[0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64, 0    blue
+        1     red
+        dtype: object],
+        codes=   0  1
+        0  0  1
+        1  0  0
+        2  1  1
+        3  1  0
+        4  2  1
+        5  2  0
+        6  3  1
+        7  3  0)
         """
         if isinstance(other, (list, tuple)):
             to_concat = [self]
