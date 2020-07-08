@@ -9,7 +9,7 @@ import pandas as pd
 from pandas.api.types import is_dict_like
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
@@ -167,7 +167,12 @@ class Series(Frame, Serializable):
                 data = data.astype(dtype)
 
         if data is None:
-            data = {}
+            if index is not None:
+                data = column.column_empty(
+                    row_count=len(index), dtype=None, masked=True
+                )
+            else:
+                data = {}
 
         if not isinstance(data, column.ColumnBase):
             data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
@@ -738,20 +743,6 @@ class Series(Frame, Serializable):
 
         else:
             return NotImplemented
-
-    @property
-    def empty(self):
-        """
-        Indicator whether Series is empty.
-
-        True if Series is entirely empty (no items).
-
-        Returns
-        -------
-        out : bool
-            If Series is empty, return True, if not return False.
-        """
-        return not len(self)
 
     def __getitem__(self, arg):
         if isinstance(arg, slice):
@@ -3807,21 +3798,21 @@ class Series(Frame, Serializable):
     @ioutils.doc_to_json()
     def to_json(self, path_or_buf=None, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.json as json
+        from cudf.io import json as json
 
         return json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
 
     @ioutils.doc_to_hdf()
     def to_hdf(self, path_or_buf, key, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.hdf as hdf
+        from cudf.io import hdf as hdf
 
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        import cudf.io.dlpack as dlpack
+        from cudf.io import dlpack as dlpack
 
         return dlpack.to_dlpack(self)
 
