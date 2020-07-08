@@ -91,9 +91,12 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
 
     # Return for single object
     if len(objs) == 1:
-        result = objs[0]
         if ignore_index:
-            result._index = cudf.RangeIndex(len(result))
+            result = cudf.DataFrame(
+                data=objs[0]._data.copy(), index=cudf.RangeIndex(len(objs[0]))
+            )
+        else:
+            result = objs[0].copy()
         return result
 
     if len(objs) == 0:
