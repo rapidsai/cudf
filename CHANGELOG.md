@@ -34,6 +34,7 @@
 - PR #5607 Add Java bindings for duration types
 - PR #5612 Add `is_hex` strings API
 - PR #5623 Add `is_ipv4` strings API
+- PR #5658 Add `filter_tokens` nvtext API
 
 ## Improvements
 
