@@ -781,7 +781,7 @@ add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
 if(BUILD_CUDF_KAFKA)
 
     # cudf_kafka library
-    add_library(libcudf_kafka
+    add_library(cudf_kafka
         libcudf_kafka/src/kafka_consumer.cpp
     )
 
@@ -798,24 +798,24 @@ if(BUILD_CUDF_KAFKA)
     message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
     message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
 
-    target_link_libraries(libcudf_kafka ${RDKAFKA++_LIBRARY})
+    target_link_libraries(cudf_kafka ${RDKAFKA++_LIBRARY})
     include_directories("${RDKAFKA_INCLUDE}")
 
     ###################################################################################################
     # - cudf_kafka Install ----------------------------------------------------------------------------
-    target_link_libraries(libcudf_kafka cudf)
+    target_link_libraries(cudf_kafka cudf)
 
-    install(TARGETS libcudf_kafka
+    install(TARGETS cudf_kafka
             DESTINATION lib
-            COMPONENT libcudf_kafka)
+            COMPONENT cudf_kafka)
 
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/include
             DESTINATION include
-            COMPONENT libcudf_kafka)
+            COMPONENT cudf_kafka)
 
     add_custom_target(install_libcudf_kafka
-            COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=libcudf_kafka -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
-            DEPENDS libcudf_kafka)
+            COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf_kafka -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+            DEPENDS cudf_kafka)
 
     ####################################################################################################
     # - cudf_kafka Tests
