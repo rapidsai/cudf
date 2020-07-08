@@ -436,6 +436,169 @@ struct dispatch_from_durations_fn {
   }
 };
 
+
+// this parses duration characters into a duration integer
+template <typename T>  // duration type
+struct parse_duration {
+  column_device_view const d_strings;
+  format_item const* d_format_items;
+  size_type items_count;
+  type_id units;
+  //int8_t subsecond_precision;
+
+  //
+  __device__ int32_t str2int(const char* str, int8_t max_bytes, int8_t& actual_length)
+  {
+    const char* ptr = (*str=='-' || *str=='+')? str+1 : str;
+    int32_t value   = 0;
+    for (int8_t idx = 0; idx < max_bytes; ++idx) {
+      char chr = *ptr++;
+      if (chr < '0' || chr > '9') {
+        ptr--; //roll back
+        break;
+      }
+      value = (value * 10) + static_cast<int32_t>(chr - '0');
+    }
+    actual_length = ptr-str;
+    return (*str=='-')? -value : value;
+  }
+
+ // function to parse fraction of decimal value with trailing zeros removed.
+  __device__ int32_t str2int_fixed(const char* str, int8_t fixed_width, size_type string_length, int8_t& actual_length)
+  {
+    const char* ptr = (*str=='.')? str+1 : str;
+    int32_t value   = 0;
+    // add end of string condition.
+    for (int8_t idx = 0; idx < fixed_width && idx<string_length; ++idx) {
+      char chr = *ptr++;
+      if (chr < '0' || chr > '9') {
+        ptr--; //roll back
+        break;
+      }
+      value = (value * 10) + static_cast<int32_t>(chr - '0');
+    }
+    actual_length = ptr-str;
+    // trailing zeros
+    constexpr int64_t powers_of_ten[] = {
+      1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
+    if(actual_length<fixed_width)
+      value *= powers_of_ten[fixed_width-actual_length];
+    return value;
+  }
+
+  // Walk the format_items to read the datetime string.
+  // Returns 0 if all ok.
+  __device__ int parse_into_parts(string_view const& d_string, int32_t* timeparts)
+  {
+    auto ptr    = d_string.data();
+    auto length = d_string.size_bytes();
+    for (size_t idx = 0; idx < items_count; ++idx) {
+      auto item = d_format_items[idx];
+      if (length < item.length) return 1;
+      if (item.item_type == format_char_type::literal) {  // static character we'll just skip;
+        // consume item.length bytes from string
+        ptr += item.length;
+        length -= item.length;
+        continue;
+      }
+
+      // special logic for each specifier
+      int8_t item_length{0};
+      switch (item.value) {
+        case 'd': timeparts[DU_DAY] = str2int(ptr, 11, item_length); break;
+        case '+': if(*ptr == '+') item_length=1; break;  // skip
+        case 'H': timeparts[DU_HOUR] = str2int(ptr, 2, item_length); break;
+        case 'M': timeparts[DU_MINUTE] = str2int(ptr, 2, item_length); break;
+        case 'S': timeparts[DU_SECOND] = str2int(ptr, 2, item_length); break;
+        case 'u':
+        case 'f':
+            if(*ptr == '.') {
+                auto subsecond_precision = (item.length==-1)? 9: item.length-1;
+                auto subsecond = str2int_fixed(ptr+1, subsecond_precision, length-1, item_length);
+                constexpr int64_t powers_of_ten[] = {
+                  1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
+                int64_t nanoseconds =  subsecond * powers_of_ten[9 - subsecond_precision];  // normalize to nanoseconds
+                timeparts[DU_SUBSECOND] = nanoseconds;
+                item_length++;
+            }
+        break;
+        default: return 3;
+      }
+      ptr += item_length;
+      length -= item_length;
+    }
+    return 0;
+  }
+
+  __device__ int64_t timestamp_from_parts(int32_t const* timeparts)
+  {
+    int32_t days = timeparts[DU_DAY];
+    if (units == type_id::DURATION_DAYS) return days;
+
+    auto hour   = timeparts[DU_HOUR];
+    auto minute = timeparts[DU_MINUTE];
+    auto second = timeparts[DU_SECOND];
+    int64_t timestamp = (days * 24L * 3600L) + (hour * 3600L) + (minute * 60L) + second;
+    if (units == type_id::DURATION_SECONDS) return timestamp;
+
+    auto subsecond = timeparts[DU_SUBSECOND];
+    if (units == type_id::DURATION_MILLISECONDS) {
+      timestamp *= 1000L;
+      subsecond = subsecond / 1000000L;
+    } else if (units == type_id::DURATION_MICROSECONDS) {
+      timestamp *= 1000000L;
+      subsecond = subsecond / 1000L;
+    } else if (units == type_id::DURATION_NANOSECONDS)
+      timestamp *= 1000000000L;
+    timestamp += subsecond;
+    return timestamp;
+  }
+
+  __device__ T operator()(size_type idx)
+  {
+    if (d_strings.is_null(idx)) return T{0};
+    string_view d_str = d_strings.element<string_view>(idx);
+    if (d_str.empty()) return T{0};
+    //
+    int32_t timeparts[DU_ARRAYSIZE] = {0};
+    if (parse_into_parts(d_str, timeparts)) return T{0};  // unexpected parse case
+    //
+    return static_cast<T>(timestamp_from_parts(timeparts));
+  }
+};
+
+
+// dispatch operator to map timestamp to native fixed-width-type
+struct dispatch_to_durations_fn {
+  template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+  void operator()(column_device_view const& d_strings,
+                  std::string const& format,
+                  type_id units,
+                  mutable_column_view& results_view,
+                  cudaStream_t stream) const
+  {
+    format_compiler compiler(format.c_str(), d_strings.type().id());
+    auto d_items   = compiler.compile_to_device();
+    auto d_results = results_view.data<T>();
+    parse_duration<T> pfn{
+      d_strings, d_items, compiler.items_count(), units};
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(results_view.size()),
+                      d_results,
+                      pfn);
+  }
+  template <typename T, std::enable_if_t<not cudf::is_duration<T>()>* = nullptr>
+  void operator()(column_device_view const&,
+                  std::string const&,
+                  type_id,
+                  mutable_column_view&,
+                  cudaStream_t) const
+  {
+    CUDF_FAIL("Only durations type are expected");
+  }
+};
+
 }  // namespace
 
 // TODO skip days if non-zero days for non-ISO format.
@@ -451,6 +614,33 @@ std::unique_ptr<column> from_durations(column_view const& durations,
     durations.type(), dispatch_from_durations_fn{}, durations, format, mr, stream);
 }
 
+std::unique_ptr<column> to_durations(strings_column_view const& strings,
+                                     data_type duration_type,
+                                     std::string const& format,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  size_type strings_count = strings.size();
+  if (strings_count == 0) return make_duration_column(duration_type, 0);
+
+  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
+
+  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto d_column       = *strings_column;
+
+  auto results      = make_duration_column(duration_type,
+                                       strings_count,
+                                       copy_bitmask(strings.parent(), stream, mr),
+                                       strings.null_count(),
+                                       stream,
+                                       mr);
+  auto results_view = results->mutable_view();
+  cudf::type_dispatcher(
+    duration_type, dispatch_to_durations_fn(), d_column, format, duration_type.id(), results_view, stream);
+  results->set_null_count(strings.null_count());
+  return results;
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> from_durations(column_view const& durations,
@@ -460,5 +650,15 @@ std::unique_ptr<column> from_durations(column_view const& durations,
   CUDF_FUNC_RANGE();
   return detail::from_durations(durations, format, cudaStream_t{}, mr);
 }
+
+std::unique_ptr<column> to_durations(strings_column_view const& strings,
+                                     data_type duration_type,
+                                     std::string const& format,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::to_durations(strings, duration_type, format, cudaStream_t{}, mr);
+}
+
 }  // namespace strings
 }  // namespace cudf
