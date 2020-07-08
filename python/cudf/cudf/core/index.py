@@ -471,7 +471,6 @@ class Index(Frame, Serializable):
         if isinstance(other, (list, tuple)):
             to_concat = [self] + list(other)
         else:
-
             this = self
             if len(other) == 0:
                 # short-circuit and return a copy
