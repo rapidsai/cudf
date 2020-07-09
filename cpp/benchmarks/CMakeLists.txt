@@ -213,3 +213,11 @@ set(CSV_WRITER_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_writer_benchmark.cpp")
 
 ConfigureBench(CSV_WRITER_BENCH "${CSV_WRITER_BENCH_SRC}")
+
+###################################################################################################
+# - subword tokenizer benchmark -------------------------------------------------------------------
+
+set(SUBWORD_TOKENIZER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/text/subword_benchmark.cpp")
+
+ConfigureBench(SUBWORD_TOKENIZER_BENCH "${SUBWORD_TOKENIZER_BENCH_SRC}")
