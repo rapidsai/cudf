@@ -303,3 +303,18 @@ TEST_F(StringsCharsTest, EmptyStrings)
   cudf::test::expect_columns_equal(*results, expected);
   EXPECT_FALSE(cudf::strings::all_float(strings_view));
 }
+
+TEST_F(StringsCharsTest, FilterAlphanum)
+{
+  cudf::test::strings_column_wrapper strings(
+    {"abc£def", "I am a developer", "℉℧ is not alphanumeric", "Αγγλικά is alphanumeric", ""});
+  auto results =
+    cudf::strings::filter_characters_of_type(cudf::strings_column_view(strings),
+                                             cudf::strings::string_character_types::ALL_TYPES,
+                                             cudf::string_scalar(" "),
+                                             cudf::strings::string_character_types::ALPHANUM);
+  cudf::test::print(results->view());
+  cudf::test::strings_column_wrapper expected(
+    {"abc def", "I am a developer", "   is not alphanumeric", "Αγγλικά is alphanumeric", ""});
+  cudf::test::expect_columns_equal(*results, expected);
+}
