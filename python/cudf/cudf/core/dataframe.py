@@ -295,7 +295,22 @@ class DataFrame(Frame, Serializable):
         if index is None:
             index = as_index(self._get_union_of_series_names(data))
         else:
-            index = RangeIndex(start=0, stop=len(data))
+            data_length = len(data)
+            index_length = len(index)
+            if data_length != index_length:
+                if index_length % data_length == 0:
+                    initial_data = data
+                    data = []
+                    for _ in range(int(index_length / data_length)):
+                        data.extend([o.copy() for o in initial_data])
+                else:
+                    raise ValueError(
+                        f"Shape of passed values is "
+                        f"{(data_length, len(data[0]))}, "
+                        f"indices imply {(index_length, len(data[0]))}"
+                    )
+
+            index = as_index(index)
 
         series_lengths = list(map(lambda x: len(x), data))
         data = numeric_normalize_types(*data)
@@ -2335,7 +2350,11 @@ class DataFrame(Frame, Serializable):
             columns = pd.Index(range(len(self._data.columns)))
         is_multiindex = isinstance(columns, pd.MultiIndex)
 
-        if not isinstance(columns, pd.Index):
+        if isinstance(
+            columns, (cudf.Series, cudf.Index, cudf.core.column.ColumnBase)
+        ):
+            columns = pd.Index(columns.to_array(), tupleize_cols=is_multiindex)
+        elif not isinstance(columns, pd.Index):
             columns = pd.Index(columns, tupleize_cols=is_multiindex)
 
         if not len(columns) == len(self._data.names):
