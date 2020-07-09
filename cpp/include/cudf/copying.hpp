@@ -726,7 +726,7 @@ enum class row_multi_sampling : bool {
 };
 
 /**
- * @brief Gather `n` samples from given `input_table` randomly
+ * @brief Gather `n` samples from given `input` randomly
  *
  * @code{.pseudo}
  * Example:

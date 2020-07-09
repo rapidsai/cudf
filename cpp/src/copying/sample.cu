@@ -70,24 +70,15 @@ std::unique_ptr<table> sample(table_view const& input,
                          thrust::counting_iterator<size_type>(num_rows),
                          gather_map_mutable_view.begin<size_type>(),
                          rng_eng);
-    auto gather_map_view = gather_map->view();
 
-    if (n != num_rows) {
-      auto sliced_gather_map = cudf::slice(gather_map_view, {0, n})[0];
-      return detail::gather(input,
-                            sliced_gather_map.begin<size_type>(),
-                            sliced_gather_map.end<size_type>(),
-                            false,
-                            mr,
-                            stream);
-    } else {
-      return detail::gather(input,
-                            gather_map_view.begin<size_type>(),
-                            gather_map_view.end<size_type>(),
-                            false,
-                            mr,
-                            stream);
-    }
+    auto gather_map_view =
+      (n == num_rows) ? gather_map->view() : cudf::slice(gather_map->view(), {0, n})[0];
+    return detail::gather(input,
+                          gather_map_view.begin<size_type>(),
+                          gather_map_view.end<size_type>(),
+                          false,
+                          mr,
+                          stream);
   }
 }
 
