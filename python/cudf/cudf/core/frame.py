@@ -35,6 +35,13 @@ class Frame(libcudf.table.Table):
     def _from_table(cls, table):
         return cls(table._data, index=table._index)
 
+    def _mimic_inplace(self, result, inplace=False):
+        if inplace:
+            self._data = result._data
+            self._index = result._index
+        else:
+            return result
+
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
     def _concat(cls, objs, axis=0, ignore_index=False):

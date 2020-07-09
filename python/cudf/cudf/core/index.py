@@ -187,13 +187,6 @@ class Index(Frame, Serializable):
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
 
-    def _mimic_inplace(self, other, inplace=False):
-        if inplace is True:
-            col = self._data[self.name]
-            col._mimic_inplace(other._data[other.name], inplace=True)
-        else:
-            return other
-
     @classmethod
     def deserialize(cls, header, frames):
         """

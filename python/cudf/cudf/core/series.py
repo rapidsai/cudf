@@ -1574,15 +1574,6 @@ class Series(Frame, Serializable):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def _mimic_inplace(self, result, inplace=False):
-        if inplace:
-            self._column._mimic_inplace(result._column, inplace=True)
-            self.index._mimic_inplace(result.index, inplace=True)
-            self._size = len(self._index)
-            self.name = result.name
-        else:
-            return result
-
     def fill(self, fill_value, begin=0, end=-1, inplace=False):
         return self._fill([fill_value], begin, end, inplace)
 

@@ -2800,13 +2800,6 @@ class DataFrame(Frame, Serializable):
 
         return self._mimic_inplace(outdf, inplace=inplace)
 
-    def _mimic_inplace(self, result, inplace=False):
-        if inplace:
-            self._data = result._data
-            self._index = result._index
-        else:
-            return result
-
     def pop(self, item):
         """Return a column and drop it from the DataFrame.
         """
