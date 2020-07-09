@@ -58,16 +58,22 @@ cdef extern from "cudf/io/types.hpp" \
         unique_ptr[table] tbl
         table_metadata metadata
 
+    cdef cppclass host_buffer:
+        const char* data
+        size_t size
+
+        host_buffer()
+        host_buffer(const char* data, size_t size)
+
     cdef cppclass source_info:
         io_type type
-        string filepath
-        pair[const char*, size_t] buffer
-        shared_ptr[CRandomAccessFile] file
+        vector[string] filepaths
+        vector[host_buffer] buffers
+        vector[shared_ptr[CRandomAccessFile]] files
 
         source_info() except +
-        source_info(const string filepath) except +
-        source_info(const char* host_buffer, size_t size) except +
-        source_info(const shared_ptr[CRandomAccessFile] arrow_file) except +
+        source_info(const vector[string] &filepaths) except +
+        source_info(const vector[host_buffer] &host_buffers) except +
 
     cdef cppclass sink_info:
         io_type type

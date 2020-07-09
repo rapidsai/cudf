@@ -2,13 +2,13 @@ import numba.cuda
 import pytest
 
 import dask
-import dask.dataframe as dd
+from dask import dataframe as dd
 from dask.distributed import Client
 from distributed.utils_test import loop  # noqa: F401
 
-import cudf
-
 import dask_cudf
+
+import cudf
 
 dask_cuda = pytest.importorskip("dask_cuda")
 

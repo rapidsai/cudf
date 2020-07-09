@@ -19,6 +19,7 @@
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include "cudf/types.hpp"
 #include "hash_join.cuh"
 
 namespace cudf {
@@ -29,6 +30,7 @@ std::unique_ptr<table> inner_join(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
+  null_equality compare_nulls,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -36,12 +38,16 @@ std::unique_ptr<table> inner_join(
   // on the smaller table. Thus, if `left` is smaller than `right`, swap `left/right`.
   if (right.num_rows() > left.num_rows()) {
     auto hash_join = cudf::hash_join::create(left, left_on);
-    return hash_join->inner_join(
-      right, right_on, columns_in_common, cudf::hash_join::probe_output_side::RIGHT, mr);
+    return hash_join->inner_join(right,
+                                 right_on,
+                                 columns_in_common,
+                                 cudf::hash_join::probe_output_side::RIGHT,
+                                 compare_nulls,
+                                 mr);
   }
   auto hash_join = cudf::hash_join::create(right, right_on);
   return hash_join->inner_join(
-    left, left_on, columns_in_common, cudf::hash_join::probe_output_side::LEFT, mr);
+    left, left_on, columns_in_common, cudf::hash_join::probe_output_side::LEFT, compare_nulls, mr);
 }
 
 std::unique_ptr<table> left_join(
@@ -50,11 +56,12 @@ std::unique_ptr<table> left_join(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
+  null_equality compare_nulls,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   auto hash_join = cudf::hash_join::create(right, right_on);
-  return hash_join->left_join(left, left_on, columns_in_common, mr);
+  return hash_join->left_join(left, left_on, columns_in_common, compare_nulls, mr);
 }
 
 std::unique_ptr<table> full_join(
@@ -63,11 +70,12 @@ std::unique_ptr<table> full_join(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
+  null_equality compare_nulls,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   auto hash_join = cudf::hash_join::create(right, right_on);
-  return hash_join->full_join(left, left_on, columns_in_common, mr);
+  return hash_join->full_join(left, left_on, columns_in_common, compare_nulls, mr);
 }
 
 std::unique_ptr<const hash_join> hash_join::create(cudf::table_view const& build,

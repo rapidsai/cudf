@@ -23,6 +23,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
+#include "cudf/types.hpp"
 #include "join_common_utils.hpp"
 #include "join_kernels.cuh"
 
@@ -46,6 +47,7 @@ namespace detail {
  * @param probe_table The left hand table
  * @param hash_table A hash table built on the build table that maps the index
  * of every row to the hash value of that row.
+ * @param compare_nulls Controls whether null join-key values should match or not.
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return An estimate of the size of the output of the join operation
@@ -54,6 +56,7 @@ template <join_kind JoinKind, typename multimap_type>
 size_type estimate_join_output_size(table_device_view build_table,
                                     table_device_view probe_table,
                                     multimap_type const& hash_table,
+                                    null_equality compare_nulls,
                                     cudaStream_t stream)
 {
   const size_type build_table_num_rows{build_table.num_rows()};
@@ -112,7 +115,7 @@ size_type estimate_join_output_size(table_device_view build_table,
     size_estimate.set_value(0);
 
     row_hash hash_probe{probe_table};
-    row_equality equality{probe_table, build_table};
+    row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
     // Probe the hash table without actually building the output to simply
     // find what the size of the output will be.
     compute_join_output_size<JoinKind, multimap_type, block_size>
@@ -215,18 +218,21 @@ class hash_join_impl : public cudf::hash_join {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     cudf::hash_join::probe_output_side probe_output_side,
+    null_equality compare_nulls,
     rmm::mr::device_memory_resource* mr) const override;
 
   std::unique_ptr<cudf::table> left_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    null_equality compare_nulls,
     rmm::mr::device_memory_resource* mr) const override;
 
   std::unique_ptr<cudf::table> full_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    null_equality compare_nulls,
     rmm::mr::device_memory_resource* mr) const override;
 
  private:
@@ -260,6 +266,7 @@ class hash_join_impl : public cudf::hash_join {
    * an output column will be produced. For each of these pairs (P, B), P
    * should exist in `probe_on` and B should exist in `_build_on`.
    * @param probe_output_side @see cudf::hash_join::probe_output_side.
+   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param mr Device memory resource used to allocate the returned table's device memory.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
@@ -275,6 +282,7 @@ class hash_join_impl : public cudf::hash_join {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     cudf::hash_join::probe_output_side probe_output_side,
+    null_equality compare_nulls,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0) const;
 
@@ -290,6 +298,7 @@ class hash_join_impl : public cudf::hash_join {
    * @param probe_table Table of probe side columns to join.
    * @param flip_join_indices Flag that indicates whether the left (probe) and right (build)
    * tables have been flipped, meaning the output indices should also be flipped.
+   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Join output indices vector pair.
@@ -299,6 +308,7 @@ class hash_join_impl : public cudf::hash_join {
                    std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>>
   probe_join_indices(cudf::table_view const& probe,
                      bool flip_join_indices,
+                     null_equality compare_nulls,
                      cudaStream_t stream) const;
 };
 

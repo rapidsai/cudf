@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 import array as arr
 import io
 import operator
@@ -6175,3 +6174,66 @@ def test_cudf_arrow_array_error():
         "using .to_arrow()",
     ):
         sr.__arrow_array__()
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[100, 10, 1, 0]),
+        pd.DataFrame(columns=["a", "b", "c", "d"]),
+        pd.DataFrame(columns=["a", "b", "c", "d"], index=[100]),
+        pd.DataFrame(
+            columns=["a", "b", "c", "d"], index=[100, 10000, 2131, 133]
+        ),
+        pd.DataFrame({"a": [1, 2, 3], "b": ["abc", "xyz", "klm"]}),
+    ],
+)
+def test_dataframe_empty(df):
+    pdf = df
+    gdf = gd.from_pandas(pdf)
+
+    assert_eq(pdf.empty, gdf.empty)
+
+
+@pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series(),
+        pd.Series(index=[100, 10, 1, 0]),
+        pd.Series([]),
+        pd.Series(["a", "b", "c", "d"]),
+        pd.Series(["a", "b", "c", "d"], index=[0, 1, 10, 11]),
+    ],
+)
+def test_series_empty(ps):
+    ps = ps
+    gs = gd.from_pandas(ps)
+
+    assert_eq(ps.empty, gs.empty)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [1],
+        {"a": [10, 11, 12]},
+        {
+            "a": [10, 11, 12],
+            "another column name": [12, 22, 34],
+            "xyz": [0, 10, 11],
+        },
+    ],
+)
+@pytest.mark.parametrize("columns", [["a"], ["another column name"], None])
+def test_dataframe_init_with_columns(data, columns):
+    pdf = pd.DataFrame(data, columns=columns)
+    gdf = gd.DataFrame(data, columns=columns)
+
+    assert_eq(
+        pdf,
+        gdf,
+        check_index_type=False if len(pdf.index) == 0 else True,
+        check_dtype=False if pdf.empty and len(pdf.columns) else True,
+    )

@@ -27,6 +27,7 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
+#include "cudf/types.hpp"
 
 #include <future>
 
@@ -42,34 +43,60 @@ struct JoinTest : public cudf::test::BaseFixture {
 
 enum class join_kind { INNER, LEFT, FULL };
 
-template <join_kind JoinKind,
-          bool sort_result                  = true,
-          ProbeOutputSide probe_output_side = ProbeOutputSide::LEFT,
-          size_t parallelism                = 8>
+template <join_kind JoinKind, typename... RestArgs>
+std::enable_if_t<JoinKind == join_kind::INNER, std::unique_ptr<Table>> probe_once(
+  cudf::hash_join const& hash_join,
+  Table const& probe,
+  std::vector<cudf::size_type> const& probe_on,
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  RestArgs&&... args)
+{
+  return hash_join.inner_join(probe, probe_on, columns_in_common, std::forward<RestArgs>(args)...);
+}
+template <join_kind JoinKind, typename... RestArgs>
+std::enable_if_t<JoinKind == join_kind::LEFT, std::unique_ptr<Table>> probe_once(
+  cudf::hash_join const& hash_join,
+  Table const& probe,
+  std::vector<cudf::size_type> const& probe_on,
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  RestArgs&&... args)
+{
+  return hash_join.left_join(probe, probe_on, columns_in_common, std::forward<RestArgs>(args)...);
+}
+template <join_kind JoinKind, typename... RestArgs>
+std::enable_if_t<JoinKind == join_kind::FULL, std::unique_ptr<Table>> probe_once(
+  cudf::hash_join const& hash_join,
+  Table const& probe,
+  std::vector<cudf::size_type> const& probe_on,
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  RestArgs&&... args)
+{
+  return hash_join.full_join(probe, probe_on, columns_in_common, std::forward<RestArgs>(args)...);
+}
+
+static constexpr size_t s_parallelism{8};
+
+template <join_kind JoinKind, bool sort_result = true, typename... RestArgs>
 void build_once_probe_multiple_parallel(
+  Table const& gold,
   Table const& left,
   Table const& right,
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-  Table const& gold)
+  RestArgs&&... args)
 {
   auto hash_join = cudf::hash_join::create(right, right_on);
 
-  std::vector<std::future<std::unique_ptr<Table>>> probe_threads(parallelism);
-  std::vector<std::unique_ptr<Table>> results(parallelism);
-  for (size_t i = 0; i < parallelism; i++) {
+  std::vector<std::future<std::unique_ptr<Table>>> probe_threads(s_parallelism);
+  std::vector<std::unique_ptr<Table>> results(s_parallelism);
+  for (size_t i = 0; i < s_parallelism; i++) {
     probe_threads[i] = std::async(std::launch::async, [&]() {
-      if (JoinKind == join_kind::INNER) {
-        return hash_join->inner_join(left, left_on, columns_in_common, probe_output_side);
-      } else if (JoinKind == join_kind::LEFT) {
-        return hash_join->left_join(left, left_on, columns_in_common);
-      } else if (JoinKind == join_kind::FULL) {
-        return hash_join->full_join(left, left_on, columns_in_common);
-      }
+      return probe_once<JoinKind>(
+        *hash_join, left, left_on, columns_in_common, std::forward<RestArgs>(args)...);
     });
   }
-  for (size_t i = 0; i < parallelism; i++) { results[i] = probe_threads[i].get(); }
+  for (size_t i = 0; i < s_parallelism; i++) { results[i] = probe_threads[i].get(); }
 
   for (const auto& result : results) {
     if (sort_result) {
@@ -102,10 +129,10 @@ TEST_F(JoinTest, InvalidCommonColumnIndices)
   EXPECT_THROW(cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}), cudf::logic_error);
 
   EXPECT_THROW((build_once_probe_multiple_parallel<join_kind::INNER, false>(
-                 t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}}, {})),
+                 {}, t0, t1, {0, 1}, {0, 1}, {{0, 1}, {1, 0}})),
                cudf::logic_error);
-  EXPECT_THROW((build_once_probe_multiple_parallel<join_kind::INNER, false, ProbeOutputSide::RIGHT>(
-                 t1, t0, {0, 1}, {0, 1}, {{1, 0}, {0, 1}}, {})),
+  EXPECT_THROW((build_once_probe_multiple_parallel<join_kind::INNER, false>(
+                 {}, t1, t0, {0, 1}, {0, 1}, {{1, 0}, {0, 1}}, ProbeOutputSide::RIGHT)),
                cudf::logic_error);
 }
 
@@ -135,7 +162,7 @@ TEST_F(JoinTest, FullJoinNoCommon)
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 
-  build_once_probe_multiple_parallel<join_kind::FULL>(t0, t1, {0}, {0}, {}, *sorted_gold);
+  build_once_probe_multiple_parallel<join_kind::FULL>(*sorted_gold, t0, t1, {0}, {0}, {});
 }
 
 TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon)
@@ -183,7 +210,7 @@ TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon)
 
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 
-  build_once_probe_multiple_parallel<join_kind::LEFT>(t0, t1, {0}, {0}, {}, *sorted_gold);
+  build_once_probe_multiple_parallel<join_kind::LEFT>(*sorted_gold, t0, t1, {0}, {0}, {});
 }
 
 TEST_F(JoinTest, FullJoinNoNulls)
@@ -227,7 +254,7 @@ TEST_F(JoinTest, FullJoinNoNulls)
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 
   build_once_probe_multiple_parallel<join_kind::FULL>(
-    t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, *sorted_gold);
+    *sorted_gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 }
 
 TEST_F(JoinTest, FullJoinWithNulls)
@@ -271,7 +298,107 @@ TEST_F(JoinTest, FullJoinWithNulls)
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 
   build_once_probe_multiple_parallel<join_kind::FULL>(
-    t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, *sorted_gold);
+    *sorted_gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+}
+
+TEST_F(JoinTest, FullJoinOnNulls)
+{
+  // clang-format off
+  column_wrapper<int32_t> col0_0{{  3,    1 },
+                                 {  1,    0  }};
+  strcol_wrapper          col0_1({"s0", "s1" });
+  column_wrapper<int32_t> col0_2{{  0,    1 }};
+
+  column_wrapper<int32_t> col1_0{{  2,    5,    3,    7 },
+                                 {  1,    1,    1,    0 }};
+  strcol_wrapper          col1_1({"s1", "s0", "s0", "s1" });
+  column_wrapper<int32_t> col1_2{{  1,    4,    2,    8 }};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result            = cudf::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+#if 0
+  std::cout << "Actual Results:\n";
+  cudf::test::print(sorted_result->get_column(0).view(), std::cout, ",\t\t");
+  cudf::test::print(sorted_result->get_column(1).view(), std::cout, ",\t\t");
+  cudf::test::print(sorted_result->get_column(2).view(), std::cout, ",\t\t");
+  cudf::test::print(sorted_result->get_column(3).view(), std::cout, ",\t\t");
+#endif
+ 
+  column_wrapper<int32_t> col_gold_0{{   2,    5,    3,    -1},
+                                     {   1,    1,    1,     0}};
+  strcol_wrapper          col_gold_1({ "s1", "s0", "s0",  "s1"});
+  column_wrapper<int32_t> col_gold_2{{  -1,   -1,    0,     1}, 
+                                     {   0,    0,    1,     1}};
+  column_wrapper<int32_t> col_gold_3{{   1,    4,    2,     8}, 
+                                     {   1,    1,    1,     1}};
+
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  Table gold(std::move(cols_gold));
+
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+
+#if 0
+  std::cout << "Expected Results:\n";
+  cudf::test::print(sorted_gold->get_column(0).view(), std::cout, ",\t\t");
+  cudf::test::print(sorted_gold->get_column(1).view(), std::cout, ",\t\t");
+  cudf::test::print(sorted_gold->get_column(2).view(), std::cout, ",\t\t");
+  cudf::test::print(sorted_gold->get_column(3).view(), std::cout, ",\t\t");
+#endif
+
+  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+
+  build_once_probe_multiple_parallel<join_kind::FULL>(
+    *sorted_gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+
+  // Repeat test with compare_nulls_equal=false,
+  // as per SQL standard.
+
+  result            = cudf::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
+  result_sort_order = cudf::sorted_order(result->view());
+  sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+  col_gold_0 =               {{   2,    5,    3,    -1,   -1},
+                              {   1,    1,    1,     0,    0}};
+  col_gold_1 = strcol_wrapper({ "s1", "s0", "s0",  "s1", "s1"});
+  col_gold_2 =               {{  -1,   -1,    0,    -1,    1}, 
+                              {   0,    0,    1,     0,    1}};
+  col_gold_3 =               {{   1,    4,    2,     8,   -1}, 
+                              {   1,    1,    1,     1,    0}};
+
+  // clang-format on
+
+  CVector cols_gold_nulls_unequal;
+  cols_gold_nulls_unequal.push_back(col_gold_0.release());
+  cols_gold_nulls_unequal.push_back(col_gold_1.release());
+  cols_gold_nulls_unequal.push_back(col_gold_2.release());
+  cols_gold_nulls_unequal.push_back(col_gold_3.release());
+  Table gold_nulls_unequal{std::move(cols_gold_nulls_unequal)};
+
+  gold_sort_order = cudf::sorted_order(gold_nulls_unequal.view());
+  sorted_gold     = cudf::gather(gold_nulls_unequal.view(), *gold_sort_order);
+
+  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+
+  build_once_probe_multiple_parallel<join_kind::FULL>(
+    *sorted_gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
 }
 
 TEST_F(JoinTest, LeftJoinNoNulls)
@@ -315,7 +442,7 @@ TEST_F(JoinTest, LeftJoinNoNulls)
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 
   build_once_probe_multiple_parallel<join_kind::LEFT>(
-    t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, *sorted_gold);
+    *sorted_gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 }
 
 TEST_F(JoinTest, LeftJoinWithNulls)
@@ -359,7 +486,108 @@ TEST_F(JoinTest, LeftJoinWithNulls)
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 
   build_once_probe_multiple_parallel<join_kind::LEFT>(
-    t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, *sorted_gold);
+    *sorted_gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+}
+
+TEST_F(JoinTest, LeftJoinOnNulls)
+{
+  // clang-format off
+  column_wrapper<int32_t> col0_0{{  3,    1,    2},
+                                 {  1,    0,    1}};
+  strcol_wrapper          col0_1({"s0", "s1", "s2" });
+  column_wrapper<int32_t> col0_2{{  0,    1,    2 }};
+
+  column_wrapper<int32_t> col1_0{{  2,    5,    3,    7 },
+                                 {  1,    1,    1,    0 }};
+  strcol_wrapper          col1_1({"s1", "s0", "s0", "s1" });
+  column_wrapper<int32_t> col1_2{{  1,    4,    2,    8 }};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result            = cudf::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+#if 0
+  std::cout << "Actual Results:\n";
+  cudf::test::print(sorted_result->get_column(0).view(), std::cout, ",\t\t");
+  cudf::test::print(sorted_result->get_column(1).view(), std::cout, ",\t\t");
+  cudf::test::print(sorted_result->get_column(2).view(), std::cout, ",\t\t");
+  cudf::test::print(sorted_result->get_column(3).view(), std::cout, ",\t\t");
+#endif
+ 
+  column_wrapper<int32_t> col_gold_0{{   3,    -1,    2},
+                                     {   1,     0,    1}};
+  strcol_wrapper          col_gold_1({ "s0",  "s1", "s2"},
+                                     {   1,     1,    1});
+  column_wrapper<int32_t> col_gold_2{{   0,     1,    2}, 
+                                     {   1,     1,    1}};
+  column_wrapper<int32_t> col_gold_3{{   2,     8,   -1}, 
+                                     {   1,     1,    0}};
+
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  Table gold(std::move(cols_gold));
+
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+
+#if 0
+  std::cout << "Expected Results:\n";
+  cudf::test::print(sorted_gold->get_column(0).view(), std::cout, ",\t\t");
+  cudf::test::print(sorted_gold->get_column(1).view(), std::cout, ",\t\t");
+  cudf::test::print(sorted_gold->get_column(2).view(), std::cout, ",\t\t");
+  cudf::test::print(sorted_gold->get_column(3).view(), std::cout, ",\t\t");
+#endif
+
+  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+
+    build_once_probe_multiple_parallel<join_kind::LEFT>(
+            *sorted_gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+
+  // Repeat test with compare_nulls_equal=false,
+  // as per SQL standard.
+
+  result            = cudf::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
+  result_sort_order = cudf::sorted_order(result->view());
+  sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+  col_gold_0 =               {{   3,    -1,    2},
+                              {   1,     0,    1}};
+  col_gold_1 = strcol_wrapper({ "s0",  "s1", "s2"},
+                              {   1,     1,    1});
+  col_gold_2 =               {{   0,     1,    2}, 
+                              {   1,     1,    1}};
+  col_gold_3 =               {{   2,    -1,   -1}, 
+                              {   1,     0,    0}};
+
+  // clang-format on
+  CVector cols_gold_nulls_unequal;
+  cols_gold_nulls_unequal.push_back(col_gold_0.release());
+  cols_gold_nulls_unequal.push_back(col_gold_1.release());
+  cols_gold_nulls_unequal.push_back(col_gold_2.release());
+  cols_gold_nulls_unequal.push_back(col_gold_3.release());
+  Table gold_nulls_unequal{std::move(cols_gold_nulls_unequal)};
+
+  gold_sort_order = cudf::sorted_order(gold_nulls_unequal.view());
+  sorted_gold     = cudf::gather(gold_nulls_unequal.view(), *gold_sort_order);
+
+  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+
+  build_once_probe_multiple_parallel<join_kind::LEFT>(
+    *sorted_gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
 }
 
 TEST_F(JoinTest, InnerJoinNoNulls)
@@ -403,9 +631,9 @@ TEST_F(JoinTest, InnerJoinNoNulls)
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 
   build_once_probe_multiple_parallel<join_kind::INNER>(
-    t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, *sorted_gold);
-  build_once_probe_multiple_parallel<join_kind::INNER, true, ProbeOutputSide::RIGHT>(
-    t1, t0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, *sorted_gold);
+    *sorted_gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  build_once_probe_multiple_parallel<join_kind::INNER>(
+    *sorted_gold, t1, t0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, ProbeOutputSide::RIGHT);
 }
 
 TEST_F(JoinTest, InnerJoinWithNulls)
@@ -449,9 +677,103 @@ TEST_F(JoinTest, InnerJoinWithNulls)
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 
   build_once_probe_multiple_parallel<join_kind::INNER>(
-    t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, *sorted_gold);
-  build_once_probe_multiple_parallel<join_kind::INNER, true, ProbeOutputSide::RIGHT>(
-    t1, t0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, *sorted_gold);
+    *sorted_gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  build_once_probe_multiple_parallel<join_kind::INNER>(
+    *sorted_gold, t1, t0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, ProbeOutputSide::RIGHT);
+}
+
+// Test to check join behaviour when join keys are null.
+TEST_F(JoinTest, InnerJoinOnNulls)
+{
+  // clang-format off
+  column_wrapper<int32_t> col0_0{{  3,    1,    2,    0,    2}};
+  strcol_wrapper          col0_1({"s1", "s1", "s8", "s4", "s0"}, 
+                                 {  1,    1,    0,    1,    1});
+  column_wrapper<int32_t> col0_2{{  0,    1,    2,    4,    1}};
+
+  column_wrapper<int32_t> col1_0{{  2,    2,    0,    4,    3}};
+  strcol_wrapper          col1_1({"s1", "s0", "s1", "s2", "s1"}, 
+                                 {  1,    0,    1,    1,    1});
+  column_wrapper<int32_t> col1_2{{  1,    0,    1,    2,    1}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result            = cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+  column_wrapper<int32_t> col_gold_0 {{  3,    2}};
+  strcol_wrapper          col_gold_1 ({"s1", "s0"}, 
+                                      {  1,    0});
+  column_wrapper<int32_t> col_gold_2{{   0,    2}};
+  column_wrapper<int32_t> col_gold_3{{   1,    0}};
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  Table gold(std::move(cols_gold));
+
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+
+    build_once_probe_multiple_parallel<join_kind::INNER>(
+            *sorted_gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+    build_once_probe_multiple_parallel<join_kind::INNER>(
+            *sorted_gold, t1, t0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, ProbeOutputSide::RIGHT);
+
+  // Repeat test with compare_nulls_equal=false,
+  // as per SQL standard.
+
+  result            = cudf::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, cudf::null_equality::UNEQUAL);
+  result_sort_order = cudf::sorted_order(result->view());
+  sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+  col_gold_0 =               {{  3}};
+  col_gold_1 = strcol_wrapper({"s1"}, 
+                              {  1});
+  col_gold_2 =               {{  0}};
+  col_gold_3 =               {{  1}};
+
+  // clang-format on
+
+  CVector cols_gold_sql;
+  cols_gold_sql.push_back(col_gold_0.release());
+  cols_gold_sql.push_back(col_gold_1.release());
+  cols_gold_sql.push_back(col_gold_2.release());
+  cols_gold_sql.push_back(col_gold_3.release());
+  Table gold_sql(std::move(cols_gold_sql));
+
+  gold_sort_order = cudf::sorted_order(gold_sql.view());
+  sorted_gold     = cudf::gather(gold_sql.view(), *gold_sort_order);
+  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+
+  build_once_probe_multiple_parallel<join_kind::INNER>(*sorted_gold,
+                                                       t0,
+                                                       t1,
+                                                       {0, 1},
+                                                       {0, 1},
+                                                       {{0, 0}, {1, 1}},
+                                                       ProbeOutputSide::LEFT,
+                                                       cudf::null_equality::UNEQUAL);
+  build_once_probe_multiple_parallel<join_kind::INNER>(*sorted_gold,
+                                                       t1,
+                                                       t0,
+                                                       {0, 1},
+                                                       {0, 1},
+                                                       {{0, 0}, {1, 1}},
+                                                       ProbeOutputSide::RIGHT,
+                                                       cudf::null_equality::UNEQUAL);
 }
 
 // Empty Left Table
@@ -476,9 +798,9 @@ TEST_F(JoinTest, EmptyLeftTableInnerJoin)
   cudf::test::expect_tables_equal(empty0, *result);
 
   build_once_probe_multiple_parallel<join_kind::INNER, false>(
-    empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, empty0);
-  build_once_probe_multiple_parallel<join_kind::INNER, false, ProbeOutputSide::RIGHT>(
-    t1, empty0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, empty0);
+    empty0, empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  build_once_probe_multiple_parallel<join_kind::INNER, false>(
+    empty0, t1, empty0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, ProbeOutputSide::RIGHT);
 }
 
 TEST_F(JoinTest, EmptyLeftTableLeftJoin)
@@ -502,7 +824,7 @@ TEST_F(JoinTest, EmptyLeftTableLeftJoin)
   cudf::test::expect_tables_equal(empty0, *result);
 
   build_once_probe_multiple_parallel<join_kind::LEFT, false>(
-    empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, empty0);
+    empty0, empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 }
 
 TEST_F(JoinTest, EmptyLeftTableFullJoin)
@@ -526,7 +848,7 @@ TEST_F(JoinTest, EmptyLeftTableFullJoin)
   cudf::test::expect_tables_equal(t1, *result);
 
   build_once_probe_multiple_parallel<join_kind::FULL, false>(
-    empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, t1);
+    t1, empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 }
 
 // Empty Right Table
@@ -551,9 +873,9 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin)
   cudf::test::expect_tables_equal(empty1, *result);
 
   build_once_probe_multiple_parallel<join_kind::INNER, false>(
-    t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, empty1);
-  build_once_probe_multiple_parallel<join_kind::INNER, false, ProbeOutputSide::RIGHT>(
-    empty1, t0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, empty1);
+    empty1, t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  build_once_probe_multiple_parallel<join_kind::INNER, false>(
+    empty1, empty1, t0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, ProbeOutputSide::RIGHT);
 }
 
 TEST_F(JoinTest, EmptyRightTableLeftJoin)
@@ -577,7 +899,7 @@ TEST_F(JoinTest, EmptyRightTableLeftJoin)
   cudf::test::expect_tables_equal(t0, *result);
 
   build_once_probe_multiple_parallel<join_kind::LEFT, false>(
-    t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, t0);
+    t0, t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 }
 
 TEST_F(JoinTest, EmptyRightTableFullJoin)
@@ -601,7 +923,7 @@ TEST_F(JoinTest, EmptyRightTableFullJoin)
   cudf::test::expect_tables_equal(t0, *result);
 
   build_once_probe_multiple_parallel<join_kind::FULL, false>(
-    t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, t0);
+    t0, t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 }
 
 // Both tables empty
@@ -626,9 +948,9 @@ TEST_F(JoinTest, BothEmptyInnerJoin)
   cudf::test::expect_tables_equal(empty1, *result);
 
   build_once_probe_multiple_parallel<join_kind::INNER, false>(
-    t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, empty1);
-  build_once_probe_multiple_parallel<join_kind::INNER, false, ProbeOutputSide::RIGHT>(
-    empty1, t0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, empty1);
+    empty1, t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  build_once_probe_multiple_parallel<join_kind::INNER, false>(
+    empty1, empty1, t0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, ProbeOutputSide::RIGHT);
 }
 
 TEST_F(JoinTest, BothEmptyLeftJoin)
@@ -652,7 +974,7 @@ TEST_F(JoinTest, BothEmptyLeftJoin)
   cudf::test::expect_tables_equal(empty1, *result);
 
   build_once_probe_multiple_parallel<join_kind::LEFT, false>(
-    t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, empty1);
+    empty1, t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 }
 
 TEST_F(JoinTest, BothEmptyFullJoin)
@@ -676,7 +998,7 @@ TEST_F(JoinTest, BothEmptyFullJoin)
   cudf::test::expect_tables_equal(empty1, *result);
 
   build_once_probe_multiple_parallel<join_kind::FULL, false>(
-    t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, empty1);
+    empty1, t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 }
 
 // EqualValues X Inner,Left,Full
@@ -710,9 +1032,9 @@ TEST_F(JoinTest, EqualValuesInnerJoin)
   cudf::test::expect_tables_equal(gold, *result);
 
   build_once_probe_multiple_parallel<join_kind::INNER, false>(
-    t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, gold);
-  build_once_probe_multiple_parallel<join_kind::INNER, false, ProbeOutputSide::RIGHT>(
-    t1, t0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, gold);
+    gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
+  build_once_probe_multiple_parallel<join_kind::INNER, false>(
+    gold, t1, t0, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, ProbeOutputSide::RIGHT);
 }
 
 TEST_F(JoinTest, EqualValuesLeftJoin)
@@ -744,7 +1066,7 @@ TEST_F(JoinTest, EqualValuesLeftJoin)
   cudf::test::expect_tables_equal(gold, *result);
 
   build_once_probe_multiple_parallel<join_kind::LEFT, false>(
-    t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, gold);
+    gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 }
 
 TEST_F(JoinTest, EqualValuesFullJoin)
@@ -776,7 +1098,7 @@ TEST_F(JoinTest, EqualValuesFullJoin)
   cudf::test::expect_tables_equal(gold, *result);
 
   build_once_probe_multiple_parallel<join_kind::FULL, false>(
-    t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}}, gold);
+    gold, t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
 }
 
 TEST_F(JoinTest, InnerJoinCornerCase)
@@ -804,9 +1126,9 @@ TEST_F(JoinTest, InnerJoinCornerCase)
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 
-  build_once_probe_multiple_parallel<join_kind::INNER>(t0, t1, {0}, {0}, {{0, 0}}, *sorted_gold);
-  build_once_probe_multiple_parallel<join_kind::INNER, true, ProbeOutputSide::RIGHT>(
-    t1, t0, {0}, {0}, {{0, 0}}, *sorted_gold);
+  build_once_probe_multiple_parallel<join_kind::INNER>(*sorted_gold, t0, t1, {0}, {0}, {{0, 0}});
+  build_once_probe_multiple_parallel<join_kind::INNER>(
+    *sorted_gold, t1, t0, {0}, {0}, {{0, 0}}, ProbeOutputSide::RIGHT);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

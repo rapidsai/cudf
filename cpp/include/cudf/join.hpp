@@ -76,6 +76,8 @@ namespace cudf {
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.  For each of these pairs (L, R), L
  * should exist in `left_on` and R should exist in `right_on`.
+ * @param[in] compare_nulls controls whether null join-key values
+ * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return Result of joining `left` and `right` tables on the columns
@@ -88,6 +90,7 @@ std::unique_ptr<cudf::table> inner_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -141,6 +144,8 @@ std::unique_ptr<cudf::table> inner_join(
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.  For each of these pairs (L, R), L
  * should exist in `left_on` and R should exist in `right_on`.
+ * @param[in] compare_nulls controls whether null join-key values
+ * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return Result of joining `left` and `right` tables on the columns
@@ -153,6 +158,7 @@ std::unique_ptr<cudf::table> left_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -206,6 +212,8 @@ std::unique_ptr<cudf::table> left_join(
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.  For each of these pairs (L, R), L
  * should exist in `left_on` and R should exist in `right_on`.
+ * @param[in] compare_nulls controls whether null join-key values
+ * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return Result of joining `left` and `right` tables on the columns
@@ -218,6 +226,7 @@ std::unique_ptr<cudf::table> full_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 /**
  * @brief Performs a left semi join on the specified columns of two
@@ -258,8 +267,9 @@ std::unique_ptr<cudf::table> full_join(
  *                             indicated by `left_on[i]`.
  * @param[in] return_columns   A vector of column indices from `left` to
  *                             include in the returned table.
- * @param[in] mr               Device memory resource used to allocate the returned table's device
- *                             memory
+ * @param[in] compare_nulls    Controls whether null join-key values should match or not.
+ * @param[in] mr               Device memory resource used to allocate the returned table's
+ *                             device memory
  *
  * @return                     Result of joining `left` and `right` tables on the columns
  *                             specified by `left_on` and `right_on`. The resulting table
@@ -271,6 +281,7 @@ std::unique_ptr<cudf::table> left_semi_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -312,8 +323,9 @@ std::unique_ptr<cudf::table> left_semi_join(
  *                             indicated by `left_on[i]`.
  * @param[in] return_columns   A vector of column indices from `left` to
  *                             include in the returned table.
- * @param[in] mr               Device memory resource used to allocate the returned table's device
- *                             memory
+ * @param[in] compare_nulls    Controls whether null join-key values should match or not.
+ * @param[in] mr               Device memory resource used to allocate the returned table's
+ *                             device memory
  *
  * @return                     Result of joining `left` and `right` tables on the columns
  *                             specified by `left_on` and `right_on`. The resulting table
@@ -325,6 +337,7 @@ std::unique_ptr<cudf::table> left_anti_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -392,6 +405,7 @@ class hash_join {
    * an output column will be produced. For each of these pairs (P, B), P
    * should exist in `probe_on` and B should exist in `build_on`.
    * @param probe_output_side @see probe_output_side.
+   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
@@ -406,6 +420,7 @@ class hash_join {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     probe_output_side probe_output_side = hash_join::probe_output_side::LEFT,
+    null_equality compare_nulls         = null_equality::EQUAL,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
 
   /**
@@ -421,7 +436,7 @@ class hash_join {
    * from `probe_on` columns. Else, for every column in `probe_on` and `build_on`,
    * an output column will be produced. For each of these pairs (P, B), P
    * should exist in `probe_on` and B should exist in `build_on`.
-   * @param probe_output_side @see probe_output_side.
+   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
@@ -433,6 +448,7 @@ class hash_join {
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    null_equality compare_nulls         = null_equality::EQUAL,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
 
   /**
@@ -448,7 +464,7 @@ class hash_join {
    * from `probe_on` columns. Else, for every column in `probe_on` and `build_on`,
    * an output column will be produced. For each of these pairs (P, B), P
    * should exist in `probe_on` and B should exist in `build_on`.
-   * @param probe_output_side @see cudf::hash_join::probe_output_side.
+   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
@@ -460,6 +476,7 @@ class hash_join {
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+    null_equality compare_nulls         = null_equality::EQUAL,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
 
   /**

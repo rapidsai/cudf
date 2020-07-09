@@ -1,5 +1,4 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import pickle
 import warnings
 
@@ -8,8 +7,8 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-import cudf._lib as libcudf
-import cudf._lib.string_casting as str_cast
+from cudf import _lib as libcudf
+from cudf._lib import string_casting as str_cast
 from cudf._lib.column import Column
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams as cpp_generate_character_ngrams,
@@ -1435,6 +1434,32 @@ class StringMethods(object):
         dtype: bool
         """
         return self._return_or_inplace(cpp_is_lower(self._column), **kwargs)
+
+    def isipv4(self, **kwargs):
+        """
+        Check whether all characters in each string form an IPv4 address.
+
+        If a string has zero characters, False is returned for
+        that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["", "127.0.0.1", "255.255.255.255", "123.456"])
+        >>> s.str.isipv4()
+        0    False
+        1     True
+        2     True
+        3    False
+        dtype: bool
+        """
+        return self._return_or_inplace(
+            str_cast.is_ipv4(self._column), **kwargs
+        )
 
     def lower(self, **kwargs):
         """
