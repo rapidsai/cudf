@@ -83,3 +83,27 @@ TEST_F(StringsConvertTest, IPv4Error)
   auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, 100);
   EXPECT_THROW(cudf::strings::integers_to_ipv4(column->view()), cudf::logic_error);
 }
+
+TEST_F(StringsConvertTest, IsIPv4)
+{
+  std::vector<const char*> h_strings{"",
+                                     "123.456.789.10",
+                                     nullptr,
+                                     "0.0.0.0",
+                                     ".111.211.113",
+                                     "127:0:0:1",
+                                     "255.255.255.255",
+                                     "192.168.0.",
+                                     "1...1",
+                                     "127.0.A.1",
+                                     "9.1.2.3.4",
+                                     "8.9"};
+  cudf::test::strings_column_wrapper strings(
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  cudf::test::fixed_width_column_wrapper<bool> expected({0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0},
+                                                        {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  auto results = cudf::strings::is_ipv4(cudf::strings_column_view(strings));
+  cudf::test::expect_columns_equal(*results, expected);
+}
