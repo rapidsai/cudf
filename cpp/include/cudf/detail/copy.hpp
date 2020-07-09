@@ -157,8 +157,8 @@ std::unique_ptr<column> copy_if_else(
  */
 std::unique_ptr<table> sample(table_view const& input,
                               size_type const n,
-                              row_multi_sampling multi_smpl       = row_multi_sampling::DISALLOWED,
-                              long const seed                     = 0,
+                              row_multi_sampling multi_sampling   = row_multi_sampling::DISALLOWED,
+                              int64_t const seed                  = 0,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream                 = 0);
 

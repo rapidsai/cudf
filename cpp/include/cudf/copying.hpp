@@ -732,21 +732,21 @@ enum class row_multi_sampling : bool {
  * Example:
  * input: {col1: {1, 2, 3, 4, 5}, col2: {6, 7, 8, 9, 10}}
  * n: 3
- * multi_smpl: false
+ * multi_sampling: false
  *
  * output:       {col1: {3, 1, 4}, col2: {8, 6, 9}}
  *
- * multi_smpl: true
+ * multi_sampling: true
  *
  * output:       {col1: {3, 1, 1}, col2: {8, 6, 6}}
  * @endcode
  *
- * @throws cudf::logic_error if `n` > `input.num_rows()` and `multi_smpl` == DISALLOWED.
+ * @throws cudf::logic_error if `n` > `input.num_rows()` and `multi_sampling` == DISALLOWED.
  * @throws cudf::logic_error if `n` < 0.
  *
  * @param input View of a table to sample.
  * @param n non-negative number of samples expected from `input`.
- * @param multi_smpl Allow or disallow sampling of the same row more than once.
+ * @param multi_sampling Allow or disallow sampling of the same row more than once.
  * @param seed Seed value to initiate random number generator.
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
@@ -755,8 +755,8 @@ enum class row_multi_sampling : bool {
 std::unique_ptr<table> sample(
   table_view const& input,
   size_type const n,
-  row_multi_sampling multi_smpl       = row_multi_sampling::DISALLOWED,
-  long const seed                     = 0,
+  row_multi_sampling multi_sampling   = row_multi_sampling::DISALLOWED,
+  int64_t const seed                  = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */

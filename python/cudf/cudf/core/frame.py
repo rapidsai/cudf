@@ -1450,6 +1450,8 @@ class Frame(libcudf.table.Table):
             )
 
             if isinstance(self, cudf.MultiIndex):
+                # TODO: Need to update this once MultiIndex is refactored,
+                # should be able to treat it similar to other Frame object
                 result = cudf.Index(self._source_data[gather_map])
             else:
                 result = self[gather_map]
