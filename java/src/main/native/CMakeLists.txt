@@ -149,7 +149,8 @@ endif (CUDF_INCLUDE AND CUDF_LIBRARY)
 # - RMM -------------------------------------------------------------------------------------------
 
 find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_HOME}/include"
+          HINTS "$ENV{RMM_ROOT}/include"
+                "$ENV{RMM_HOME}/include"
                 "$ENV{CONDA_PREFIX}/include/rmm"
                 "$ENV{CONDA_PREFIX}/include")
 
