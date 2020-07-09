@@ -538,7 +538,7 @@ def test_text_filter_tokens():
         ["All-we-need;is;🔥", "\tall-we-need0is;🌊", "all;we:need+is;🌬"]
     )
     expected = cudf.Series(
-        ["All-we-need;--;--", "\tall-we-need0is;--", "all;we:need+is;--"]
+        ["All-we-need;is;--", "\tall-we-need0is;--", "all;we:need+is;--"]
     )
     actual = sr.str.filter_tokens(2, "--", ";")
     assert_eq(expected, actual)
