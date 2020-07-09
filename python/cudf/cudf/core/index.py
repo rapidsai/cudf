@@ -124,7 +124,7 @@ class Index(Frame, Serializable):
 
     def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
         """
-        Return Series with duplicate values removed
+        Return Index with duplicate values removed
         """
         result = super().drop_duplicates(
             subset=[self.name], keep=keep, ignore_index=ignore_index
