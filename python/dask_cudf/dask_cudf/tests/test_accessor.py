@@ -3,11 +3,11 @@ import pandas as pd
 import pytest
 from pandas.util.testing import assert_series_equal
 
-import dask.dataframe as dd
-
-from cudf import DataFrame, Series
+from dask import dataframe as dd
 
 import dask_cudf as dgd
+
+from cudf import DataFrame, Series
 
 #############################################################################
 #                        Datetime Accessor                                  #

@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import itertools
 import warnings
 
@@ -7,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.join import compute_result_col_names
 from cudf.core.dtypes import CategoricalDtype
 

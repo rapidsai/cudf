@@ -5,6 +5,7 @@
 - PR #5292 Add unsigned int type columns to libcudf
 - PR #5287 Add `index.join` support
 - PR #5222 Adding clip feature support to DataFrame and Series
+- PR #5318 Support/leverage DataFrame.shuffle in dask_cudf
 - PR #4546 Support pandas 1.0+
 - PR #5331 Add `cudf::drop_nans`
 - PR #5327 Add `cudf::cross_join` feature
@@ -27,9 +28,15 @@
 - PR #5488 Add plumbings for `.str.replace_tokens`
 - PR #5502 Add Unsigned int types support in dlpack
 - PR #5497 Add `.str.isinteger` & `.str.isfloat`
+- PR #5511 Port of clx subword tokenizer to cudf 
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
 - PR #5668 Adding support for `cudf.testing`
+- PR #5536 Parquet reader - add support for multiple sources
+- PR #5607 Add Java bindings for duration types
+- PR #5612 Add `is_hex` strings API
+- PR #5637 Parameterize Null comparator behaviour in Joins
+- PR #5623 Add `is_ipv4` strings API
 
 ## Improvements
 
@@ -97,6 +104,10 @@
 - PR #5584 Refactor `CompactProtocolReader::InitSchema`
 - PR #5591 Add `__arrow_array__` protocol and raise a descriptive error message
 - PR #5601 Instantiate Table instances in `Frame._concat` to avoid `DF.insert()` overhead
+- PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
+- PR #5603 Refactor JIT `parser.cpp`
+- PR #5643 Update `isort` to 5.0.4
+- PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 
 ## Bug Fixes
 
@@ -142,9 +153,15 @@
 - PR #5564 Fix CudfEngine.read_metadata API in dask_cudf
 - PR #5537 Fix issue related to using `set_index` on a string series
 - PR #5561 Fix `copy_bitmask` issue with offset
+- PR #5609 Fix loc and iloc issue with column like input
 - PR #5578 Fix getattr logic in GroupBy
 - PR #5490 Fix python column view
-
+- PR #5613 Fix assigning an equal length object into a masked out Series
+- PR #5608 Fix issue related to string types being represented as binary types
+- PR #5619 Fix issue related to typecasting when using a `CategoricalDtype`
+- PR #5649 Fix issue when empty Dataframe with index are passed to `cudf.concat`
+- PR #5644 Fix issue related to Dataframe init when passing in `columns`
+- PR #5656 Fix issue with incorrect docker image being used in local build script
 
 # cuDF 0.14.0 (Date TBD)
 

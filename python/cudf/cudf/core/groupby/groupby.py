@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import collections
 import functools
 import pickle
@@ -7,7 +6,7 @@ import pickle
 import pandas as pd
 
 import cudf
-import cudf._lib.groupby as libgroupby
+from cudf._lib import groupby as libgroupby
 from cudf._lib.nvtx import annotate
 from cudf.core.abc import Serializable
 from cudf.utils.utils import cached_property

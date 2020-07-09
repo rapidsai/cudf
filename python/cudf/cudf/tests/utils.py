@@ -3,11 +3,11 @@ from contextlib import contextmanager
 import cupy
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
+from pandas.util import testing as tm
 
 import cudf
-import cudf.utils.dtypes as dtypeutils
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
+from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [
     "bool",
