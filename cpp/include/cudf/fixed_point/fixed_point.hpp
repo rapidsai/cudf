@@ -18,8 +18,8 @@
 
 #include <cassert>
 #include <cmath>
-#include <iostream>
 #include <limits>
+#include <string>
 #include <type_traits>
 
 //! `fixed_point` and supporting types
@@ -757,20 +757,6 @@ CUDA_HOST_DEVICE_CALLABLE bool operator>(fixed_point<Rep1, Rad1> const& lhs,
 {
   auto const scale = std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value > rhs.rescaled(scale)._value;
-}
-
-/**
- * @brief ostream operator for outputting `fixed_point` number
- *
- * @tparam Rep Representation type of number being output
- * @tparam Rad Radix (base) type of number being output
- * @param os target ostream
- * @return fp `fixed_point` number being output
- */
-template <typename Rep, Radix Radix>
-std::ostream& operator<<(std::ostream& os, fixed_point<Rep, Radix> const& fp)
-{
-  return os << static_cast<double>(fp);
 }
 
 using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
