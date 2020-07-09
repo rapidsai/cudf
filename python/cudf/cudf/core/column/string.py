@@ -3940,18 +3940,15 @@ class StringMethods(object):
 
         Parameters
         ----------
-        targets : array-like, Sequence or Series
-            The tokens to search for inside each string.
-
         min_token_length: int
-            Minimum number of characters for token to be retained
+            Minimum number of characters for a token to be retained
             in the output string.
 
         replacement : str
-            String used to in place of removed tokens.
+            String used in place of removed tokens.
 
         delimiter : str
-            The character used to locate the tokens of each string.
+            The character(s) used to locate the tokens of each string.
             Default is whitespace.
 
         Returns
@@ -3968,7 +3965,7 @@ class StringMethods(object):
         2
         dtype: object
         >>> sr = cudf.Series(["this;is;me", "theme;music", ""])
-        >>> sr.str.filter_tokens(4,None,";")
+        >>> sr.str.filter_tokens(5,None,";")
         0             ;;
         1    theme;music
         2
