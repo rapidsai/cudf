@@ -1,5 +1,7 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
+import cupy
+import numpy as np
 import pytest
 from pandas.util.testing import assert_series_equal
 
@@ -519,3 +521,133 @@ def test_text_replace_tokens_error_cases():
         match="Type of delimiter should be a string, found <class 'list'>",
     ):
         sr.str.replace_tokens(["a"], ["s"], delimiter=["a", "b"])
+
+
+def test_text_subword_tokenize(tmpdir):
+    sr = cudf.Series(
+        [
+            "This is a test",
+            "A test this is",
+            "Is test a this",
+            "Test   test",
+            "this   This",
+        ]
+    )
+    hash_file = tmpdir.mkdir("nvtext").join("tmp_hashed_vocab.txt")
+    content = "1\n0\n23\n"
+    coefficients = [65559] * 23
+    for c in coefficients:
+        content = content + str(c) + " 0\n"
+    # based on values from the bert_hash_table.txt file for the
+    # test words used here: 'this' 'is' 'a' test'
+    table = [0] * 23
+    table[0] = 3015668
+    table[1] = 6205475701751155871
+    table[5] = 6358029
+    table[16] = 451412625363
+    table[20] = 6206321707968235495
+    content = content + "23\n"
+    for v in table:
+        content = content + str(v) + "\n"
+    content = content + "100\n101\n102\n\n"
+    hash_file.write(content)
+
+    tokens, masks, metadata = sr.str.subword_tokenize(str(hash_file), 8, 8)
+    expected_tokens = cupy.asarray(
+        [
+            2023,
+            2003,
+            1037,
+            3231,
+            0,
+            0,
+            0,
+            0,
+            1037,
+            3231,
+            2023,
+            2003,
+            0,
+            0,
+            0,
+            0,
+            2003,
+            3231,
+            1037,
+            2023,
+            0,
+            0,
+            0,
+            0,
+            3231,
+            3231,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2023,
+            2023,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ],
+        dtype=np.uint32,
+    )
+    assert_eq(expected_tokens, tokens)
+
+    expected_masks = cupy.asarray(
+        [
+            1,
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ],
+        dtype=np.uint32,
+    )
+    assert_eq(expected_masks, masks)
+
+    expected_metadata = cupy.asarray(
+        [0, 0, 3, 1, 0, 3, 2, 0, 3, 3, 0, 1, 4, 0, 1], dtype=np.uint32
+    )
+    assert_eq(expected_metadata, metadata)
