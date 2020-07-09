@@ -739,3 +739,25 @@ def test_multiIndex_empty(pdi):
     gdi = cudf.from_pandas(pdi)
 
     assert_eq(pdi.empty, gdi.empty)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_drop_duplicates(data, dtype):
+    pdi = pd.Index(data, dtype=dtype)
+    gdi = cudf.Index(data, dtype=dtype)
+
+    assert_eq(pdi.drop_duplicates(), gdi.drop_duplicates())
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_tolist(data, dtype):
+    pdi = pd.Index(data, dtype=dtype)
+    gdi = cudf.Index(data, dtype=dtype)
+
+    assert_eq(pdi.tolist(), gdi.tolist())
