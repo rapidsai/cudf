@@ -25,12 +25,6 @@
 
 #include <vector>
 
-#define CUDF_TEST_EXPECT_COLUMNS_EQUAL(lhs, rhs) \
-  {                                              \
-    SCOPED_TRACE(" <--  line of failure\n");     \
-    cudf::test::expect_columns_equal(lhs, rhs);  \
-  }
-
 struct StringsDurationsTest : public cudf::test::BaseFixture {
 };
 
