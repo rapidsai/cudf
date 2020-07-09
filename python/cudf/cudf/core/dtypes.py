@@ -107,7 +107,7 @@ class CategoricalDtype(ExtensionDtype):
         return cls(categories=categories, ordered=ordered)
 
 
-class ListDtype:
+class ListDtype(ExtensionDtype):
     def __init__(self, value_type):
         if isinstance(value_type, ListDtype):
             self._typ = pa.list_(value_type._typ)
@@ -121,6 +121,10 @@ class ListDtype:
             return ListDtype.from_arrow(self._typ.value_type)
         else:
             return np.dtype(self._typ.value_type.to_pandas_dtype()).name
+
+    @property
+    def type(self):
+        return list
 
     @property
     def name(self):

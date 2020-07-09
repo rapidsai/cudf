@@ -26,7 +26,7 @@ from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
     is_categorical_dtype,
@@ -121,18 +121,11 @@ class ColumnBase(Column, Serializable):
     def __len__(self):
         return self.size
 
-    def to_pandas(self):
-        arr = self.data_array_view
-        sr = pd.Series(arr.copy_to_host())
-
-        if self.nullable:
-            mask_bytes = (
-                cudautils.expand_mask_bits(len(self), self.mask_array_view)
-                .copy_to_host()
-                .astype(bool)
-            )
-            sr[~mask_bytes] = None
-        return sr
+    def to_pandas(self, index=None):
+        pd_series = self.to_arrow().to_pandas()
+        if index is not None:
+            pd_series.index = index
+        return pd_series
 
     def clip(self, lo, hi):
         if is_categorical_dtype(self):
@@ -1139,7 +1132,7 @@ def build_column(
             null_count=null_count,
         )
     elif dtype is cudf.core.dtypes.ListDtype:
-        return cudf.core.column.ListsColumn(
+        return cudf.core.column.ListColumn(
             data=data,
             size=size,
             dtype=dtype,
@@ -1416,10 +1409,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 offset=pa_offset,
             )
         elif isinstance(arbitrary, pa.ListArray):
-            raise NotImplementedError(
-                "cudf doesn't support list like data types"
-            )
-
+            data = cudf.core.column.ListColumn.from_arrow(arbitrary)
         else:
             pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
                 arbitrary

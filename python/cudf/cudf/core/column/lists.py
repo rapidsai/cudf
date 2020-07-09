@@ -53,12 +53,15 @@ class ListColumn(ColumnBase):
                 dtype=ListDtype.from_arrow(array.type),
                 offset=array.offset,
                 mask=mask,
+                null_count=array.null_count,
                 children=(ListColumn.from_arrow(array.values), offsets),
             )
 
     def to_arrow(self):
         offsets = self.children[1].to_arrow()
-        values = self.children[0]
+        values = self.children[0].to_arrow()
+        if len(values) == values.null_count:
+            values = pa.NullArray.from_pandas([None] * len(values))
         if self.nullable:
             nbuf = self.mask.to_host_array().view("int8")
             nbuf = pa.py_buffer(nbuf)
@@ -66,8 +69,5 @@ class ListColumn(ColumnBase):
         else:
             buffers = offsets.buffers()
         return pa.ListArray.from_buffers(
-            self.dtype.to_arrow(),
-            len(self),
-            buffers,
-            children=[values.to_arrow()],
+            self.dtype.to_arrow(), len(self), buffers, children=[values],
         )
