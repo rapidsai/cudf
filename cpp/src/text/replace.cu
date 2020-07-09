@@ -40,9 +40,10 @@ struct base_token_replacer_fn {
   char* d_chars{};                           ///< output buffer
 
   /**
-   * @brief Tokenizes each string for the provided replacer-check function.
+   * @brief Tokenizes each string and calls the provided `replacer` function
+   * for each token.
    *
-   * @tparam ReplaceFn Should accept `string_view` and return `replace_result`
+   * @tparam ReplaceFn Should accept a `string_view` and return a `replace_result`
    * @param idx Index of the current string to process
    * @param replacer Function to call for each token to determined its replacement
    */
@@ -57,18 +58,19 @@ struct base_token_replacer_fn {
     auto const d_str  = d_strings.element<cudf::string_view>(idx);
     auto const in_ptr = d_str.data();
     auto out_ptr      = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    auto nbytes       = d_str.size_bytes();
+    auto nbytes       = d_str.size_bytes();  // count the output bytes
     auto last_pos     = cudf::size_type{0};
     auto tokenizer    = characters_tokenizer{d_str, d_delimiter};
-
+    // process each token
     while (tokenizer.next_token()) {
       auto const token_pos = tokenizer.token_byte_positions();
       auto const token =
         cudf::string_view{d_str.data() + token_pos.first, token_pos.second - token_pos.first};
+      // ask replacer if this token should be replaced
       auto const result = replacer(token);
       if (result.first) {  // first == replace indicator, second == new string
         auto d_replacement = result.second;
-        nbytes += d_replacement.size_bytes() - token.size_bytes();  // total output bytes
+        nbytes += d_replacement.size_bytes() - token.size_bytes();
         if (out_ptr) {
           // copy over string up to the token location
           out_ptr = cudf::strings::detail::copy_and_increment(
@@ -80,7 +82,7 @@ struct base_token_replacer_fn {
       }
     }
 
-    // copy the remainder of the string bytes to the output buffer
+    // copy the remainder of the string's bytes to the output buffer
     if (out_ptr)
       memcpy(out_ptr, in_ptr + last_pos, d_str.size_bytes() - last_pos);
     else
@@ -118,10 +120,10 @@ struct replace_tokens_fn : base_token_replacer_fn {
   }
 
   /**
-   * @brief Return replacement string for this given token.
+   * @brief Return replacement string for the given token.
    *
-   * @param token Token to be replaced.
-   * @return result pair indicates replacement condition and string
+   * @param token Token candidate to be replaced.
+   * @return result pair specifies replacement condition and new string
    */
   __device__ replace_result token_replacement(cudf::string_view const& token)
   {
@@ -137,6 +139,7 @@ struct replace_tokens_fn : base_token_replacer_fn {
       }();
       return replace_result{true, d_repl};
     }
+    // otherwise, do not replace this token
     return replace_result{false, cudf::string_view()};
   }
 
@@ -151,7 +154,7 @@ struct replace_tokens_fn : base_token_replacer_fn {
  * @brief Functor to filter tokens in each string.
  *
  * This tokenizes a string using the given d_delimiter and replaces any tokens
- * are smaller than min_token_length with a replacement string.
+ * that are shorter than min_token_length with a replacement string.
  *
  * This should be called first to compute the size of each output string and then
  * a second time to fill in the allocated output buffer for each string.
@@ -183,7 +186,6 @@ struct filter_tokens_fn : base_token_replacer_fn {
 
 // detail APIs
 
-// zero or more character tokenizer
 std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& strings,
                                              cudf::strings_column_view const& targets,
                                              cudf::strings_column_view const& replacements,
