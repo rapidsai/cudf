@@ -1,9 +1,8 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import warnings
 from functools import partial
 
-import dask.dataframe as dd
+from dask import dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf
@@ -14,7 +13,7 @@ from cudf.io import write_to_dataset
 class CudfEngine(ArrowEngine):
     @staticmethod
     def read_metadata(*args, **kwargs):
-        meta, stats, parts = ArrowEngine.read_metadata(*args, **kwargs)
+        meta, stats, parts, index = ArrowEngine.read_metadata(*args, **kwargs)
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
@@ -28,7 +27,7 @@ class CudfEngine(ArrowEngine):
             else:
                 new_meta[col] = as_column(meta[col])
 
-        return (new_meta, stats, parts)
+        return (new_meta, stats, parts, index)
 
     @staticmethod
     def read_partition(
@@ -52,7 +51,7 @@ class CudfEngine(ArrowEngine):
                 path,
                 engine="cudf",
                 columns=columns,
-                row_group=row_group,
+                row_groups=row_group,
                 strings_to_categorical=strings_to_cats,
                 **kwargs.get("read", {}),
             )
@@ -62,7 +61,7 @@ class CudfEngine(ArrowEngine):
                     f,
                     engine="cudf",
                     columns=columns,
-                    row_group=row_group,
+                    row_groups=row_group,
                     strings_to_categorical=strings_to_cats,
                     **kwargs.get("read", {}),
                 )

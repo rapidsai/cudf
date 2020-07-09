@@ -48,8 +48,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Wrap an existing on device cudf::column with the corresponding ColumnVector.
+   * @param nativePointer host address of the cudf::column object which will be
+   *                      owned by this instance.
    */
-  ColumnVector(long nativePointer) {
+  public ColumnVector(long nativePointer) {
     assert nativePointer != 0;
     offHeap = new OffHeapState(nativePointer);
     MemoryCleaner.register(this, offHeap);
@@ -809,11 +811,47 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * <p>
    * Postconditions - A new vector is allocated with the result. The caller owns the vector and
    * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   * @return A new INT16 vector allocated on the GPU.
    */
   public ColumnVector second() {
     assert type.hasTimeResolution();
     return new ColumnVector(second(getNativeView()));
+  }
+
+  /**
+   * Get the day of the week from a timestamp.
+   * <p>
+   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
+   * is responsible for its lifecycle.
+   * @return A new INT16 vector allocated on the GPU. Monday=1, ..., Sunday=7
+   */
+  public ColumnVector weekDay() {
+    assert type.isTimestamp();
+    return new ColumnVector(weekDay(getNativeView()));
+  }
+
+  /**
+   * Get the date that is the last day of the month for this timestamp.
+   * <p>
+   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
+   * is responsible for its lifecycle.
+   * @return A new TIMESTAMP_DAYS vector allocated on the GPU.
+   */
+  public ColumnVector lastDayOfMonth() {
+    assert type.isTimestamp();
+    return new ColumnVector(lastDayOfMonth(getNativeView()));
+  }
+
+  /**
+   * Get the day of the year from a timestamp.
+   * <p>
+   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
+   * is responsible for its lifecycle.
+   * @return A new INT16 vector allocated on the GPU. The value is between [1, {365-366}]
+   */
+  public ColumnVector dayOfYear() {
+    assert type.isTimestamp();
+    return new ColumnVector(dayOfYear(getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1393,6 +1431,21 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Cast to unsigned Byte - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to byte
+   * When casting from a Date, Timestamp, or Boolean to a byte type the underlying numerical
+   * representation of the data will be used for the cast.
+   * <p>
+   * Java does not have an unsigned byte type, so properly decoding these values
+   * will require extra steps on the part of the application.  See
+   * {@link Byte#toUnsignedInt(byte)}.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asUnsignedBytes() {
+    return castTo(DType.UINT8);
+  }
+
+  /**
    * Cast to Short - ColumnVector
    * This method takes the value provided by the ColumnVector and casts to short
    * When casting from a Date, Timestamp, or Boolean to a short type the underlying numerical
@@ -1401,6 +1454,21 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector asShorts() {
     return castTo(DType.INT16);
+  }
+
+  /**
+   * Cast to unsigned Short - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to short
+   * When casting from a Date, Timestamp, or Boolean to a short type the underlying numerical
+   * representation of the data will be used for the cast.
+   * <p>
+   * Java does not have an unsigned short type, so properly decoding these values
+   * will require extra steps on the part of the application.  See
+   * {@link Short#toUnsignedInt(short)}.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asUnsignedShorts() {
+    return castTo(DType.UINT16);
   }
 
   /**
@@ -1415,6 +1483,21 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Cast to unsigned Int - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to int
+   * When casting from a Date, Timestamp, or Boolean to a int type the underlying numerical
+   * representation of the data will be used for the cast.
+   * <p>
+   * Java does not have an unsigned int type, so properly decoding these values
+   * will require extra steps on the part of the application.  See
+   * {@link Integer#toUnsignedLong(int)}.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asUnsignedInts() {
+    return castTo(DType.UINT32);
+  }
+
+  /**
    * Cast to Long - ColumnVector
    * This method takes the value provided by the ColumnVector and casts to long
    * When casting from a Date, Timestamp, or Boolean to a long type the underlying numerical
@@ -1423,6 +1506,21 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector asLongs() {
     return castTo(DType.INT64);
+  }
+
+  /**
+   * Cast to unsigned Long - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to long
+   * When casting from a Date, Timestamp, or Boolean to a long type the underlying numerical
+   * representation of the data will be used for the cast.
+   * <p>
+   * Java does not have an unsigned long type, so properly decoding these values
+   * will require extra steps on the part of the application.  See
+   * {@link Long#toUnsignedString(long)}.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asUnsignedLongs() {
+    return castTo(DType.UINT64);
   }
 
   /**
@@ -1695,7 +1793,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
     assert separator != null : "separator scalar provided may not be null";
     assert separator.getType() == DType.STRING : "separator scalar must be a string scalar";
-    assert separator.isValid() == true : "separator string scalar may not contain a null value";
     assert narep != null : "narep scalar provided may not be null";
     assert narep.getType() == DType.STRING : "narep scalar must be a string scalar";
     long size = columns[0].getRowCount();
@@ -1744,8 +1841,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert substring != null : "target string may not be null";
     assert substring.getType() == DType.STRING : "substring scalar must be a string scalar";
-    assert substring.isValid() == true : "substring string scalar may not contain a null value";
-    assert substring.getJavaString().isEmpty() == false : "substring string scalar may not be empty";
     assert start >= 0 : "start index must be a positive value";
     assert end >= start || end == -1 : "end index must be -1 or >= the start index";
 
@@ -1766,7 +1861,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert delimiter != null : "delimiter may not be null";
     assert delimiter.getType() == DType.STRING : "delimiter must be a string scalar";
-    assert delimiter.isValid() == true : "delimiter string scalar may not contain a null value";
     return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
   }
 
@@ -1885,8 +1979,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern scalar may not be null";
     assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
-    assert pattern.isValid() == true : "pattern string scalar may not contain a null value";
-    assert pattern.getJavaString().isEmpty() == false : "pattern string scalar may not be empty";
     return new ColumnVector(stringStartWith(getNativeView(), pattern.getScalarHandle()));
   }
 
@@ -1900,8 +1992,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern scalar may not be null";
     assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
-    assert pattern.isValid() == true : "pattern string scalar may not contain a null value";
-    assert pattern.getJavaString().isEmpty() == false : "pattern string scalar may not be empty";
     return new ColumnVector(stringEndWith(getNativeView(), pattern.getScalarHandle()));
   }
 
@@ -1926,7 +2016,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert toStrip != null : "toStrip scalar may not be null";
     assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
-    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
     return new ColumnVector(stringStrip(getNativeView(), StripType.BOTH.nativeId, toStrip.getScalarHandle()));
   }
 
@@ -1951,7 +2040,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert toStrip != null : "toStrip  Scalar may not be null";
     assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
-    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
     return new ColumnVector(stringStrip(getNativeView(), StripType.LEFT.nativeId, toStrip.getScalarHandle()));
   }
 
@@ -1976,7 +2064,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert toStrip != null : "toStrip  Scalar may not be null";
     assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
-    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
     return new ColumnVector(stringStrip(getNativeView(), StripType.RIGHT.nativeId, toStrip.getScalarHandle()));
   }
 
@@ -1991,8 +2078,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert compString != null : "compString scalar may not be null";
     assert compString.getType() == DType.STRING : "compString scalar must be a string scalar";
-    assert compString.isValid() : "compString string scalar may not contain a null value";
-    assert !compString.getJavaString().isEmpty() : "compString string scalar may not be empty";
     return new ColumnVector(stringContains(getNativeView(), compString.getScalarHandle()));
   }
 
@@ -2297,7 +2382,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * using the replace template for back-references.
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param pattern The regular expression patterns to search within each string.
-   * @param repl The replacement template for creating the output string.
+   * @param replace The replacement template for creating the output string.
    * @return native handle of the resulting cudf column containing the string results.
    */
   private static native long stringReplaceWithBackrefs(long columnView, String pattern,
@@ -2459,6 +2544,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long minute(long viewHandle) throws CudfException;
 
   private static native long second(long viewHandle) throws CudfException;
+
+  private static native long weekDay(long viewHandle) throws CudfException;
+
+  private static native long lastDayOfMonth(long viewHandle) throws CudfException;
+
+  private static native long dayOfYear(long viewHandle) throws CudfException;
 
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 
@@ -2809,9 +2900,29 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Create a new vector from the given values.
+   * <p>
+   * Java does not have an unsigned byte type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromUnsignedBytes(byte... values) {
+    return build(DType.UINT8, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
    */
   public static ColumnVector fromShorts(short... values) {
     return build(DType.INT16, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   * <p>
+   * Java does not have an unsigned short type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromUnsignedShorts(short... values) {
+    return build(DType.UINT16, values.length, (b) -> b.appendArray(values));
   }
 
   /**
@@ -2823,9 +2934,29 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Create a new vector from the given values.
+   * <p>
+   * Java does not have an unsigned int type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromUnsignedInts(int... values) {
+    return build(DType.UINT32, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
    */
   public static ColumnVector fromLongs(long... values) {
     return build(DType.INT64, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   * <p>
+   * Java does not have an unsigned long type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromUnsignedLongs(long... values) {
+    return build(DType.UINT64, values.length, (b) -> b.appendArray(values));
   }
 
   /**
@@ -2852,8 +2983,29 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new vector from the given values.
    */
+  public static ColumnVector durationSecondsFromLongs(long... values) {
+    return build(DType.DURATION_SECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
   public static ColumnVector timestampSecondsFromLongs(long... values) {
     return build(DType.TIMESTAMP_SECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static ColumnVector durationDaysFromInts(int... values) {
+    return build(DType.DURATION_DAYS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static ColumnVector durationMilliSecondsFromLongs(long... values) {
+    return build(DType.DURATION_MILLISECONDS, values.length, (b) -> b.appendArray(values));
   }
 
   /**
@@ -2866,8 +3018,22 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new vector from the given values.
    */
+  public static ColumnVector durationMicroSecondsFromLongs(long... values) {
+    return build(DType.DURATION_MICROSECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
   public static ColumnVector timestampMicroSecondsFromLongs(long... values) {
     return build(DType.TIMESTAMP_MICROSECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static ColumnVector durationNanoSecondsFromLongs(long... values) {
+    return build(DType.DURATION_NANOSECONDS, values.length, (b) -> b.appendArray(values));
   }
 
   /**
@@ -2910,9 +3076,33 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Create a new vector from the given values.  This API supports inline nulls,
    * but is much slower than using a regular array and should really only be used
    * for tests.
+   * <p>
+   * Java does not have an unsigned byte type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromBoxedUnsignedBytes(Byte... values) {
+    return build(DType.UINT8, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
    */
   public static ColumnVector fromBoxedShorts(Short... values) {
     return build(DType.INT16, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   * <p>
+   * Java does not have an unsigned short type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromBoxedUnsignedShorts(Short... values) {
+    return build(DType.UINT16, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -2928,9 +3118,33 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Create a new vector from the given values.  This API supports inline nulls,
    * but is much slower than using a regular array and should really only be used
    * for tests.
+   * <p>
+   * Java does not have an unsigned int type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromBoxedUnsignedInts(Integer... values) {
+    return build(DType.UINT32, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
    */
   public static ColumnVector fromBoxedLongs(Long... values) {
     return build(DType.INT64, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   * <p>
+   * Java does not have an unsigned long type, so the values will be
+   * treated as if the bits represent an unsigned value.
+   */
+  public static ColumnVector fromBoxedUnsignedLongs(Long... values) {
+    return build(DType.UINT64, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -2965,8 +3179,35 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    */
+  public static ColumnVector durationDaysFromBoxedInts(Integer... values) {
+    return build(DType.DURATION_DAYS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static ColumnVector durationSecondsFromBoxedLongs(Long... values) {
+    return build(DType.DURATION_SECONDS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
   public static ColumnVector timestampSecondsFromBoxedLongs(Long... values) {
     return build(DType.TIMESTAMP_SECONDS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static ColumnVector durationMilliSecondsFromBoxedLongs(Long... values) {
+    return build(DType.DURATION_MILLISECONDS, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -2983,8 +3224,26 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    */
+  public static ColumnVector durationMicroSecondsFromBoxedLongs(Long... values) {
+    return build(DType.DURATION_MICROSECONDS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
   public static ColumnVector timestampMicroSecondsFromBoxedLongs(Long... values) {
     return build(DType.TIMESTAMP_MICROSECONDS, values.length, (b) -> b.appendBoxed(values));
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
+   */
+  public static ColumnVector durationNanoSecondsFromBoxedLongs(Long... values) {
+    return build(DType.DURATION_NANOSECONDS, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**

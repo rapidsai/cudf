@@ -256,7 +256,8 @@ struct compute_substrings_from_fn {
 // type dispatcher.
 struct compute_substrings {
   template <typename PositionType,
-            std::enable_if_t<std::is_integral<PositionType>::value>* = nullptr>
+            std::enable_if_t<std::is_integral<PositionType>::value and
+                             not std::is_same<PositionType, bool>::value>* = nullptr>
   std::unique_ptr<column> operator()(column_device_view const& d_column,
                                      size_type null_count,
                                      column_view const& starts_column,
@@ -273,13 +274,10 @@ struct compute_substrings {
   }
 
   template <typename PositionType,
-            std::enable_if_t<not std::is_integral<PositionType>::value>* = nullptr>
-  std::unique_ptr<column> operator()(column_device_view const& d_column,
-                                     size_type null_count,
-                                     column_view const& starts_column,
-                                     column_view const& stops_column,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
+            typename... Args,
+            std::enable_if_t<not std::is_integral<PositionType>::value or
+                             std::is_same<PositionType, bool>::value>* = nullptr>
+  std::unique_ptr<column> operator()(Args&&... args) const
   {
     CUDF_FAIL("Positions values must be an integral type.");
   }
@@ -366,7 +364,7 @@ std::unique_ptr<column> slice_strings(
                "Parameters starts and stops must be of the same type.");
   CUDF_EXPECTS(starts_column.null_count() == 0, "Parameter starts must not contain nulls.");
   CUDF_EXPECTS(stops_column.null_count() == 0, "Parameter stops must not contain nulls.");
-  CUDF_EXPECTS(starts_column.type().id() != data_type{BOOL8}.id(),
+  CUDF_EXPECTS(starts_column.type().id() != data_type{type_id::BOOL8}.id(),
                "Positions values must not be bool type.");
   CUDF_EXPECTS(is_fixed_width(starts_column.type()), "Positions values must be fixed width type.");
 

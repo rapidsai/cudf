@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 from __future__ import division, print_function
 
 import inspect
@@ -7,8 +6,9 @@ import itertools
 import logging
 import numbers
 import pickle
+import sys
 import warnings
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from collections.abc import Mapping, Sequence
 from types import GeneratorType
 
@@ -18,9 +18,10 @@ import pandas as pd
 import pyarrow as pa
 from numba import cuda
 from pandas.api.types import is_dict_like
+from pandas.io.formats.printing import pprint_thing
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
 from cudf.core import column
@@ -268,6 +269,12 @@ class DataFrame(Frame, Serializable):
         self._index = as_index(index)
         data = list(itertools.zip_longest(*data))
 
+        if columns is not None and len(data) == 0:
+            data = [
+                cudf.core.column.column_empty(row_count=0, dtype=None)
+                for _ in columns
+            ]
+
         for col_name, col in enumerate(data):
             self._data[col_name] = column.as_column(col)
 
@@ -282,12 +289,22 @@ class DataFrame(Frame, Serializable):
             # not in `columns`
             keys = [key for key in data.keys() if key in columns]
             data = {key: data[key] for key in keys}
+            extra_cols = [col for col in columns if col not in data.keys()]
             if keys:
                 # if keys is non-empty,
                 # add null columns for all values
                 # in `columns` that don't exist in `keys`:
-                extra_cols = [col for col in columns if col not in data.keys()]
                 data.update({key: None for key in extra_cols})
+            else:
+                # if keys is empty,
+                # it means that none of the actual keys in `data`
+                # matches with `columns`.
+                # Hence only assign `data` with `columns` as keys
+                # and their values as empty columns.
+                data = {
+                    key: cudf.core.column.column_empty(row_count=0, dtype=None)
+                    for key in extra_cols
+                }
 
         data, index = self._align_input_series_indices(data, index=index)
 
@@ -756,21 +773,6 @@ class DataFrame(Frame, Serializable):
             return NotImplemented
 
     @property
-    def empty(self):
-        """
-        Indicator whether DataFrame is empty.
-
-        True if DataFrame is entirely empty (no items), meaning any
-        of the axes are of length 0.
-
-        Returns
-        -------
-        out : bool
-            If DataFrame is empty, return True, if not return False.
-        """
-        return not len(self)
-
-    @property
     def values(self):
         """
         Return a CuPy representation of the DataFrame.
@@ -791,6 +793,13 @@ class DataFrame(Frame, Serializable):
             To explicitly construct a GPU matrix, consider using \
             .as_gpu_matrix()\nTo explicitly construct a host \
             matrix, consider using .as_matrix()"
+        )
+
+    def __arrow_array__(self, type=None):
+        raise TypeError(
+            "Implicit conversion to a host PyArrow Table via __arrow_array__ "
+            "is not allowed, To explicitly construct a PyArrow Table, "
+            "consider using .to_arrow()"
         )
 
     def _get_numeric_data(self):
@@ -1037,7 +1046,13 @@ class DataFrame(Frame, Serializable):
                 upper_rows = int(nrows / 2.0) + 1
                 lower_rows = upper_rows + (nrows % 2)
             if len(self._data.names) > ncols:
-                right_cols = len(self._data.names) - int(ncols / 2.0) - 1
+                right_cols = len(self._data.names) - int(ncols / 2.0)
+                # adjust right columns for output if multiindex.
+                right_cols = (
+                    right_cols - 1
+                    if isinstance(self.index, cudf.MultiIndex)
+                    else right_cols
+                )
                 left_cols = int(ncols / 2.0) + 1
             if right_cols > 0:
                 # Pick ncols - left_cols number of columns
@@ -1098,6 +1113,7 @@ class DataFrame(Frame, Serializable):
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
+
         result = DataFrame(index=self.index)
 
         def op(lhs, rhs):
@@ -1114,6 +1130,12 @@ class DataFrame(Frame, Serializable):
             for k, col in enumerate(self._data):
                 result[col] = getattr(self[col], fn)(other[k])
         elif isinstance(other, DataFrame):
+            if fn in ("__eq__", "__ne__"):
+                if not self.index.equals(other.index):
+                    raise ValueError(
+                        "Can only compare identically-labeled "
+                        "DataFrame objects"
+                    )
 
             lhs, rhs = _align_indices(self, other)
             result.index = lhs.index
@@ -2114,6 +2136,21 @@ class DataFrame(Frame, Serializable):
         See also
         --------
         DataFrame.iloc
+
+        Notes
+        -----
+        One notable difference from Pandas is when DataFrame is of
+        mixed types and result is expected to be a Series in case of Pandas.
+        cuDF will return a DataFrame as it doesn't support mixed types
+        under Series yet.
+
+        Mixed dtype single row output as a dataframe (pandas results in Series)
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":["a", "b", "c"]})
+        >>> df.loc[0]
+           a  b
+        0  1  a
         """
         return _DataFrameLocIndexer(self)
 
@@ -2182,6 +2219,21 @@ class DataFrame(Frame, Serializable):
         See also
         --------
         DataFrame.loc
+
+        Notes
+        -----
+        One notable difference from Pandas is when DataFrame is of
+        mixed types and result is expected to be a Series in case of Pandas.
+        cuDF will return a DataFrame as it doesn't support mixed types
+        under Series yet.
+
+        Mixed dtype single row output as a dataframe (pandas results in Series)
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":["a", "b", "c"]})
+        >>> df.iloc[0]
+           a  b
+        0  1  a
         """
         return _DataFrameIlocIndexer(self)
 
@@ -2244,7 +2296,7 @@ class DataFrame(Frame, Serializable):
             raise ValueError(msg)
 
         mapper = dict(zip(old_cols, new_names))
-        self.rename(mapper=mapper, inplace=True)
+        self.rename(mapper=mapper, inplace=True, axis=1)
 
     @property
     def index(self):
@@ -2337,8 +2389,16 @@ class DataFrame(Frame, Serializable):
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
 
         if idx is not None:
-            idx = idx if isinstance(idx, Index) else as_index(idx)
-            if df.index.dtype != idx.dtype:
+            idx = as_index(idx)
+
+            if isinstance(idx, cudf.core.MultiIndex):
+                idx_dtype_match = (
+                    df.index._source_data.dtypes == idx._source_data.dtypes
+                ).all()
+            else:
+                idx_dtype_match = df.index.dtype == idx.dtype
+
+            if not idx_dtype_match:
                 cols = cols if cols is not None else list(df.columns)
                 df = DataFrame()
             else:
@@ -2700,7 +2760,7 @@ class DataFrame(Frame, Serializable):
         columns = (
             [target]
             if isinstance(target, (str, numbers.Number))
-            else list(target)
+            else list(set(target))
         )
         if inplace:
             outdf = self
@@ -2754,23 +2814,60 @@ class DataFrame(Frame, Serializable):
         del self[item]
         return popped
 
-    def rename(self, mapper=None, columns=None, copy=True, inplace=False):
-        """
-        Alter column labels.
+    def rename(
+        self,
+        mapper=None,
+        index=None,
+        columns=None,
+        axis=0,
+        copy=True,
+        inplace=False,
+        level=None,
+        errors="ignore",
+    ):
+        """Alter column and index labels.
 
         Function / dict values must be unique (1-to-1). Labels not contained in
         a dict / Series will be left as-is. Extra labels listed don’t throw an
         error.
 
+        DataFrame.rename supports two calling conventions
+
+        ``(index=index_mapper, columns=columns_mapper, ...)``
+        ``(mapper, axis={0/'index' or 1/'column'}, ...)``
+
+        We highly recommend using keyword arguments to clarify your intent.
+
         Parameters
         ----------
-        mapper, columns : dict-like or function, optional
-            dict-like or functions transformations to apply to
-            the column axis' values.
+        mapper : dict-like or function, default None
+            optional dict-like or functions transformations to apply to
+            the index/column values depending on selected ``axis``.
+        index : dict-like, default None
+            Optional dict-like transformations to apply to the index axis'
+            values. Does not support functions for axis 0 yet.
+        columns : dict-like or function, default None
+            optional dict-like or functions transformations to apply to
+            the columns axis' values.
+        axis : int, default 0
+            Axis to rename with mapper.
+            0 or 'index' for index
+            1  or 'columns' for columns
         copy : boolean, default True
             Also copy underlying data
-        inplace: boolean, default False
+        inplace : boolean, default False
             Return new DataFrame.  If True, assign columns without copy
+        level : int or level name, default None
+            In case of a MultiIndex, only rename labels in the specified level.
+        errors : {'raise', 'ignore', 'warn'}, default 'ignore'
+            *Only 'ignore' supported*
+            Control raising of exceptions on invalid data for provided dtype.
+
+            -   ``raise`` : allow exceptions to be raised
+            -   ``ignore`` : suppress exceptions. On error return original
+                object.
+            -   ``warn`` : prints last exceptions as warnings and
+                return original object.
 
         Returns
         -------
@@ -2779,36 +2876,69 @@ class DataFrame(Frame, Serializable):
         Notes
         -----
         Difference from pandas:
-          * Support axis='columns' only.
-          * Not supporting: index, level
+            * Not supporting: level
 
         Rename will not overwite column names. If a list with duplicates is
         passed, column names will be postfixed with a number.
         """
-        # Pandas defaults to using columns over mapper
-        if columns:
-            mapper = columns
+        if errors != "ignore":
+            raise NotImplementedError(
+                "Only errors='ignore' is currently supported"
+            )
 
-        out = DataFrame(index=self.index)
-        if isinstance(mapper, Mapping):
+        if level:
+            raise NotImplementedError(
+                "Only level=False is currently supported"
+            )
+
+        if mapper is None and index is None and columns is None:
+            return self.copy(deep=copy)
+
+        index = mapper if index is None and axis in (0, "index") else index
+        columns = (
+            mapper if columns is None and axis in (1, "columns") else columns
+        )
+
+        if index:
+            if (
+                any(type(item) == str for item in index.values())
+                and type(self.index) != cudf.core.index.StringIndex
+            ):
+                raise NotImplementedError(
+                    "Implicit conversion of index to "
+                    "mixed type is not yet supported."
+                )
+            out = DataFrame(
+                index=self.index.replace(
+                    to_replace=list(index.keys()),
+                    replacement=list(index.values()),
+                )
+            )
+        else:
+            out = DataFrame(index=self.index)
+
+        if columns:
             postfix = 1
-            # It is possible for DataFrames with a MultiIndex columns object
-            # to have columns with the same name. The following use of
-            # _cols.items and ("_1", "_2"... allows the use of
-            # rename in this case
-            for key, col in self._data.items():
-                if key in mapper:
-                    if mapper[key] in out.columns:
-                        out_column = mapper[key] + "_" + str(postfix)
-                        postfix += 1
+            if isinstance(columns, Mapping):
+                # It is possible for DataFrames with a MultiIndex columns
+                # object to have columns with the same name. The following
+                # use of _cols.items and ("_1", "_2"... allows the use of
+                # rename in this case
+                for key, col in self._data.items():
+                    if key in columns:
+                        if columns[key] in out._data:
+                            out_column = columns[key] + "_" + str(postfix)
+                            postfix += 1
+                        else:
+                            out_column = columns[key]
+                        out[out_column] = col
                     else:
-                        out_column = mapper[key]
-                    out[out_column] = col
-                else:
-                    out[key] = col
-        elif callable(mapper):
-            for col in self._data.names:
-                out[mapper(col)] = self[col]
+                        out[key] = col
+            elif callable(columns):
+                for key, col in self._data.items():
+                    out[columns(key)] = col
+        else:
+            out._data = self._data.copy(deep=copy)
 
         if inplace:
             self._data = out._data
@@ -3024,12 +3154,108 @@ class DataFrame(Frame, Serializable):
         )
 
     @annotate("SORT_INDEX", color="red", domain="cudf_python")
-    def sort_index(self, ascending=True):
-        """Sort by the index
-        """
-        return self.take(self.index.argsort(ascending=ascending))
+    def sort_index(
+        self,
+        axis=0,
+        level=None,
+        ascending=True,
+        inplace=False,
+        kind=None,
+        na_position="last",
+        sort_remaining=True,
+        ignore_index=False,
+    ):
+        """Sort object by labels (along an axis).
 
-    def sort_values(self, by, ascending=True, na_position="last"):
+        Parameters
+        ----------
+        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
+            The axis along which to sort. The value 0 identifies the rows,
+            and 1 identifies the columns.
+        level : int or level name or list of ints or list of level names
+            If not None, sort on values in specified index level(s).
+            This is only useful in the case of MultiIndex.
+        ascending : bool, default True
+            Sort ascending vs. descending.
+        inplace : bool, default False
+            If True, perform operation in-place.
+        kind : sorting method such as `quick sort` and others.
+            Not yet supported.
+        na_position : {‘first’, ‘last’}, default ‘last’
+            Puts NaNs at the beginning if first; last puts NaNs at the end.
+        sort_remaining : bool, default True
+            Not yet supported
+        ignore_index : bool, default False
+            if True, index will be replaced with RangeIndex.
+
+        Returns
+        -------
+        DataFrame or None
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame(
+        ... {"b":[3, 2, 1], "a":[2, 1, 3]}, index=[1, 3, 2])
+        >>> df.sort_index(axis=0)
+           b  a
+        1  3  2
+        2  1  3
+        3  2  1
+        >>> df.sort_index(axis=1)
+           a  b
+        1  2  3
+        3  1  2
+        2  3  1
+        """
+        if kind is not None:
+            raise NotImplementedError("kind is not yet supported")
+
+        if not sort_remaining:
+            raise NotImplementedError(
+                "sort_remaining == False is not yet supported"
+            )
+
+        if axis in (0, "index"):
+            if level is not None and isinstance(self.index, cudf.MultiIndex):
+                # Pandas currently don't handle na_position
+                # in case of MultiIndex
+                if ascending is True:
+                    na_position = "first"
+                else:
+                    na_position = "last"
+
+                if is_list_like(level):
+                    labels = [
+                        self.index._get_level_label(lvl) for lvl in level
+                    ]
+                else:
+                    labels = [self.index._get_level_label(level)]
+                inds = self.index._source_data[labels].argsort(
+                    ascending=ascending, na_position=na_position
+                )
+            else:
+                inds = self.index.argsort(
+                    ascending=ascending, na_position=na_position
+                )
+            outdf = self.take(inds)
+        else:
+            labels = sorted(self._data.names, reverse=not ascending)
+            outdf = self[labels]
+
+        if ignore_index is True:
+            outdf = outdf.reset_index(drop=True)
+        return self._mimic_inplace(outdf, inplace=inplace)
+
+    def sort_values(
+        self,
+        by,
+        axis=0,
+        ascending=True,
+        inplace=False,
+        kind="quicksort",
+        na_position="last",
+        ignore_index=False,
+    ):
         """
 
         Sort by the values row-wise.
@@ -3044,6 +3270,8 @@ class DataFrame(Frame, Serializable):
             by.
         na_position : {‘first’, ‘last’}, default ‘last’
             'first' puts nulls at the beginning, 'last' puts nulls at the end
+        ignore_index : bool, default False
+            If True, index will not be sorted.
 
         Returns
         -------
@@ -3067,9 +3295,17 @@ class DataFrame(Frame, Serializable):
         2  2  0
         1  1  2
         """
+        if inplace:
+            raise NotImplementedError("`inplace` not currently implemented.")
+        if kind != "quicksort":
+            raise NotImplementedError("`kind` not currently implemented.")
+        if axis != 0:
+            raise NotImplementedError("`axis` not currently implemented.")
+
         # argsort the `by` column
         return self.take(
-            self[by].argsort(ascending=ascending, na_position=na_position)
+            self[by].argsort(ascending=ascending, na_position=na_position),
+            keep_index=not ignore_index,
         )
 
     def nlargest(self, n, columns, keep="first"):
@@ -3218,12 +3454,12 @@ class DataFrame(Frame, Serializable):
             Type of merge to be performed.
 
             - left : use only keys from left frame, similar to a SQL left
-              outer join; preserve key order.
+              outer join.
             - right : not supported.
             - outer : use union of keys from both frames, similar to a SQL
-              full outer join; sort keys lexicographically.
+              full outer join.
             - inner: use intersection of keys from both frames, similar to
-              a SQL inner join; preserve the order of the left keys.
+              a SQL inner join.
         left_on : label or list, or array-like
             Column or index level names to join on in the left DataFrame.
             Can also be an array or list of arrays of the length of the
@@ -3237,9 +3473,8 @@ class DataFrame(Frame, Serializable):
         right_index : bool, default False
             Use the index from the right DataFrame as the join key.
         sort : bool, default False
-            Sort the join keys lexicographically in the result DataFrame.
-            If False, the order of the join keys depends on the join type
-            (see the `how` keyword).
+            Sort the resulting dataframe by the columns that were merged on,
+            starting from the left.
         suffixes: Tuple[str, str], defaults to ('_x', '_y')
             Suffixes applied to overlapping column names on the left and right
             sides
@@ -3249,6 +3484,10 @@ class DataFrame(Frame, Serializable):
         Returns
         -------
             merged : DataFrame
+
+        Notes
+        -----
+        **DataFrames merges in cuDF result in non-deterministic row ordering.**
 
         Examples
         --------
@@ -3794,6 +4033,305 @@ class DataFrame(Frame, Serializable):
         outdf = super().replace(to_replace=to_replace, replacement=value)
 
         return self._mimic_inplace(outdf, inplace=inplace)
+
+    def info(
+        self,
+        verbose=None,
+        buf=None,
+        max_cols=None,
+        memory_usage=None,
+        null_counts=None,
+    ):
+        """
+        Print a concise summary of a DataFrame.
+
+        This method prints information about a DataFrame including
+        the index dtype and column dtypes, non-null values and memory usage.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Whether to print the full summary. By default, the setting in
+            ``pandas.options.display.max_info_columns`` is followed.
+        buf : writable buffer, defaults to sys.stdout
+            Where to send the output. By default, the output is printed to
+            sys.stdout. Pass a writable buffer if you need to further process
+            the output.
+        max_cols : int, optional
+            When to switch from the verbose to the truncated output. If the
+            DataFrame has more than `max_cols` columns, the truncated output
+            is used. By default, the setting in
+            ``pandas.options.display.max_info_columns`` is used.
+        memory_usage : bool, str, optional
+            Specifies whether total memory usage of the DataFrame
+            elements (including the index) should be displayed. By default,
+            this follows the ``pandas.options.display.memory_usage`` setting.
+            True always show memory usage. False never shows memory usage.
+            A value of 'deep' is equivalent to "True with deep introspection".
+            Memory usage is shown in human-readable units (base-2
+            representation). Without deep introspection a memory estimation is
+            made based in column dtype and number of rows assuming values
+            consume the same memory amount for corresponding dtypes. With deep
+            memory introspection, a real memory usage calculation is performed
+            at the cost of computational resources.
+        null_counts : bool, optional
+            Whether to show the non-null counts. By default, this is shown
+            only if the frame is smaller than
+            ``pandas.options.display.max_info_rows`` and
+            ``pandas.options.display.max_info_columns``. A value of True always
+            shows the counts, and False never shows the counts.
+
+        Returns
+        -------
+        None
+            This method prints a summary of a DataFrame and returns None.
+
+        See Also
+        --------
+        DataFrame.describe: Generate descriptive statistics of DataFrame
+            columns.
+        DataFrame.memory_usage: Memory usage of DataFrame columns.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> int_values = [1, 2, 3, 4, 5]
+        >>> text_values = ['alpha', 'beta', 'gamma', 'delta', 'epsilon']
+        >>> float_values = [0.0, 0.25, 0.5, 0.75, 1.0]
+        >>> df = cudf.DataFrame({"int_col": int_values,
+        ...                     "text_col": text_values,
+        ...                     "float_col": float_values})
+        >>> df
+           int_col text_col  float_col
+        0        1    alpha       0.00
+        1        2     beta       0.25
+        2        3    gamma       0.50
+        3        4    delta       0.75
+        4        5  epsilon       1.00
+
+        Prints information of all columns:
+
+        >>> df.info(verbose=True)
+        <class 'cudf.core.dataframe.DataFrame'>
+        RangeIndex: 5 entries, 0 to 4
+        Data columns (total 3 columns):
+         #   Column     Non-Null Count  Dtype
+        ---  ------     --------------  -----
+         0   int_col    5 non-null      int64
+         1   text_col   5 non-null      object
+         2   float_col  5 non-null      float64
+        dtypes: float64(1), int64(1), object(1)
+        memory usage: 130.0+ bytes
+
+        Prints a summary of columns count and its dtypes but not per column
+        information:
+
+        >>> df.info(verbose=False)
+        <class 'cudf.core.dataframe.DataFrame'>
+        RangeIndex: 5 entries, 0 to 4
+        Columns: 3 entries, int_col to float_col
+        dtypes: float64(1), int64(1), object(1)
+        memory usage: 130.0+ bytes
+
+        Pipe output of DataFrame.info to buffer instead of sys.stdout,
+        get buffer content and writes to a text file:
+
+        >>> import io
+        >>> buffer = io.StringIO()
+        >>> df.info(buf=buffer)
+        >>> s = buffer.getvalue()
+        >>> with open("df_info.txt", "w",
+        ...           encoding="utf-8") as f:
+        ...     f.write(s)
+        ...
+        369
+
+        The `memory_usage` parameter allows deep introspection mode, specially
+        useful for big DataFrames and fine-tune memory optimization:
+
+        >>> import numpy as np
+        >>> random_strings_array = np.random.choice(['a', 'b', 'c'], 10 ** 6)
+        >>> df = cudf.DataFrame({
+        ...     'column_1': np.random.choice(['a', 'b', 'c'], 10 ** 6),
+        ...     'column_2': np.random.choice(['a', 'b', 'c'], 10 ** 6),
+        ...     'column_3': np.random.choice(['a', 'b', 'c'], 10 ** 6)
+        ... })
+        >>> df.info(memory_usage='deep')
+        <class 'cudf.core.dataframe.DataFrame'>
+        RangeIndex: 1000000 entries, 0 to 999999
+        Data columns (total 3 columns):
+         #   Column    Non-Null Count    Dtype
+        ---  ------    --------------    -----
+         0   column_1  1000000 non-null  object
+         1   column_2  1000000 non-null  object
+         2   column_3  1000000 non-null  object
+        dtypes: object(3)
+        memory usage: 14.3 MB
+        """
+        if buf is None:
+            buf = sys.stdout
+
+        lines = [str(type(self))]
+
+        index_name = type(self._index).__name__
+        if len(self._index) > 0:
+            entries_summary = f", {self._index[0]} to {self._index[-1]}"
+        else:
+            entries_summary = ""
+        index_summary = (
+            f"{index_name}: {len(self._index)} entries{entries_summary}"
+        )
+        lines.append(index_summary)
+
+        if len(self.columns) == 0:
+            lines.append(f"Empty {type(self).__name__}")
+            cudf.utils.ioutils.buffer_write_lines(buf, lines)
+            return
+
+        cols = self.columns
+        col_count = len(self.columns)
+
+        if max_cols is None:
+            max_cols = pd.options.display.max_info_columns
+
+        max_rows = pd.options.display.max_info_rows
+
+        if null_counts is None:
+            show_counts = (col_count <= max_cols) and (len(self) < max_rows)
+        else:
+            show_counts = null_counts
+
+        exceeds_info_cols = col_count > max_cols
+
+        def _put_str(s, space):
+            return str(s)[:space].ljust(space)
+
+        def _verbose_repr():
+            lines.append(f"Data columns (total {len(self.columns)} columns):")
+
+            id_head = " # "
+            column_head = "Column"
+            col_space = 2
+
+            max_col = max(len(pprint_thing(k)) for k in cols)
+            len_column = len(pprint_thing(column_head))
+            space = max(max_col, len_column) + col_space
+
+            max_id = len(pprint_thing(col_count))
+            len_id = len(pprint_thing(id_head))
+            space_num = max(max_id, len_id) + col_space
+            counts = None
+
+            header = _put_str(id_head, space_num) + _put_str(
+                column_head, space
+            )
+            if show_counts:
+                counts = self.count().tolist()
+                if len(cols) != len(counts):
+                    raise AssertionError(
+                        f"Columns must equal "
+                        f"counts ({len(cols)} != {len(counts)})"
+                    )
+                count_header = "Non-Null Count"
+                len_count = len(count_header)
+                non_null = " non-null"
+                max_count = max(len(pprint_thing(k)) for k in counts) + len(
+                    non_null
+                )
+                space_count = max(len_count, max_count) + col_space
+                count_temp = "{count}" + non_null
+            else:
+                count_header = ""
+                space_count = len(count_header)
+                len_count = space_count
+                count_temp = "{count}"
+
+            dtype_header = "Dtype"
+            len_dtype = len(dtype_header)
+            max_dtypes = max(len(pprint_thing(k)) for k in self.dtypes)
+            space_dtype = max(len_dtype, max_dtypes)
+            header += (
+                _put_str(count_header, space_count)
+                + _put_str(dtype_header, space_dtype).rstrip()
+            )
+
+            lines.append(header)
+            lines.append(
+                _put_str("-" * len_id, space_num)
+                + _put_str("-" * len_column, space)
+                + _put_str("-" * len_count, space_count)
+                + _put_str("-" * len_dtype, space_dtype).rstrip()
+            )
+
+            for i, col in enumerate(self.columns):
+                dtype = self.dtypes.iloc[i]
+                col = pprint_thing(col)
+
+                line_no = _put_str(" {num}".format(num=i), space_num)
+                count = ""
+                if show_counts:
+                    count = counts[i]
+
+                lines.append(
+                    line_no
+                    + _put_str(col, space)
+                    + _put_str(count_temp.format(count=count), space_count)
+                    + _put_str(dtype, space_dtype).rstrip()
+                )
+
+        def _non_verbose_repr():
+            if len(self.columns) > 0:
+                entries_summary = f", {self.columns[0]} to {self.columns[-1]}"
+            else:
+                entries_summary = ""
+            columns_summary = (
+                f"Columns: {len(self.columns)} entries{entries_summary}"
+            )
+            lines.append(columns_summary)
+
+        def _sizeof_fmt(num, size_qualifier):
+            # returns size in human readable format
+            for x in ["bytes", "KB", "MB", "GB", "TB"]:
+                if num < 1024.0:
+                    return f"{num:3.1f}{size_qualifier} {x}"
+                num /= 1024.0
+            return f"{num:3.1f}{size_qualifier} PB"
+
+        if verbose:
+            _verbose_repr()
+        elif verbose is False:  # specifically set to False, not nesc None
+            _non_verbose_repr()
+        else:
+            if exceeds_info_cols:
+                _non_verbose_repr()
+            else:
+                _verbose_repr()
+
+        dtype_counts = defaultdict(int)
+        for col in self._data:
+            dtype_counts[self._data[col].dtype.name] += 1
+
+        dtypes = [f"{k[0]}({k[1]:d})" for k in sorted(dtype_counts.items())]
+        lines.append(f"dtypes: {', '.join(dtypes)}")
+
+        if memory_usage is None:
+            memory_usage = pd.options.display.memory_usage
+
+        if memory_usage:
+            # append memory usage of df to display
+            size_qualifier = ""
+            if memory_usage == "deep":
+                deep = True
+            else:
+                deep = False
+                if "object" in dtype_counts or self.index.dtype == "object":
+                    size_qualifier = "+"
+            mem_usage = self.memory_usage(index=True, deep=deep).sum()
+            lines.append(
+                f"memory usage: {_sizeof_fmt(mem_usage, size_qualifier)}\n"
+            )
+
+        cudf.utils.ioutils.buffer_write_lines(buf, lines)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -4454,11 +4992,12 @@ class DataFrame(Frame, Serializable):
         """
         Construct a DataFrame from a list of Columns
         """
-        return cls(
-            data=dict(zip(range(len(cols)), cols)),
-            index=index,
-            columns=columns,
-        )
+        if columns is not None:
+            data = dict(zip(columns, cols))
+        else:
+            data = dict(zip(range(len(cols)), cols))
+
+        return cls(data=data, index=index,)
 
     def quantile(
         self,
@@ -5634,35 +6173,35 @@ class DataFrame(Frame, Serializable):
     @ioutils.doc_to_parquet()
     def to_parquet(self, path, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.parquet as pq
+        from cudf.io import parquet as pq
 
         return pq.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
     def to_feather(self, path, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.feather as feather
+        from cudf.io import feather as feather
 
         feather.to_feather(self, path, *args, **kwargs)
 
     @ioutils.doc_to_json()
     def to_json(self, path_or_buf=None, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.json as json
+        from cudf.io import json as json
 
         return json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
 
     @ioutils.doc_to_hdf()
     def to_hdf(self, path_or_buf, key, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.hdf as hdf
+        from cudf.io import hdf as hdf
 
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        import cudf.io.dlpack as dlpack
+        from cudf.io import dlpack as dlpack
 
         return dlpack.to_dlpack(self)
 
@@ -5679,7 +6218,7 @@ class DataFrame(Frame, Serializable):
         chunksize=None,
     ):
         """{docstring}"""
-        import cudf.io.csv as csv
+        from cudf.io import csv as csv
 
         return csv.to_csv(
             self,
@@ -5696,7 +6235,7 @@ class DataFrame(Frame, Serializable):
     @ioutils.doc_to_orc()
     def to_orc(self, fname, compression=None, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.orc as orc
+        from cudf.io import orc as orc
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 

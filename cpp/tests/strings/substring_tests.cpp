@@ -150,13 +150,14 @@ INSTANTIATE_TEST_CASE_P(StringsSubstringsTest,
 
 TEST_F(StringsSubstringsTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_column = cudf::strings_column_view(zero_size_strings_column);
   auto results        = cudf::strings::slice_strings(strings_column, 1, 2);
   cudf::test::expect_strings_empty(results->view());
 
-  cudf::column_view starts_column(cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
-  cudf::column_view stops_column(cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
+  cudf::column_view starts_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
+  cudf::column_view stops_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
   results = cudf::strings::slice_strings(strings_column, starts_column, stops_column);
   cudf::test::expect_strings_empty(results->view());
 }
@@ -276,7 +277,7 @@ struct StringsSubstringsScalarDelimiterTest : public cudf::test::BaseFixture {
 
 TEST_F(StringsSubstringsScalarDelimiterTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view col0(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(col0);
 
   auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("foo"), 1);
@@ -447,7 +448,7 @@ struct StringsSubstringsColumnDelimiterTest : public cudf::test::BaseFixture {
 
 TEST_F(StringsSubstringsColumnDelimiterTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view col0(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(col0);
 
   auto results = cudf::strings::slice_strings(strings_view, strings_view, 1);

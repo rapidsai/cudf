@@ -5,10 +5,12 @@ import sysconfig
 from distutils.sysconfig import get_python_lib
 
 import numpy as np
-import versioneer
+import pyarrow as pa
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
+
+import versioneer
 
 install_requires = ["numba", "cython"]
 
@@ -53,10 +55,14 @@ extensions = [
             ),
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
+            pa.get_include(),
             cuda_include_dir,
         ],
-        library_dirs=[get_python_lib(), os.path.join(os.sys.prefix, "lib")],
-        libraries=["cudf"],
+        library_dirs=(
+            pa.get_library_dirs()
+            + [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
+        ),
+        libraries=["cudf"] + pa.get_libraries(),
         language="c++",
         extra_compile_args=["-std=c++14"],
     )

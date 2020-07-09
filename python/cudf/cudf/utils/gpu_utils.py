@@ -7,16 +7,17 @@ def validate_setup(check_dask=True):
     if not check_dask and "DASK_PARENT" in os.environ:
         return
 
+    import warnings
+
     from cudf._cuda.gpu import (
-        getDeviceCount,
-        driverGetVersion,
-        runtimeGetVersion,
-        getDeviceAttribute,
         CudaDeviceAttr,
         CUDARuntimeError,
         deviceGetName,
+        driverGetVersion,
+        getDeviceAttribute,
+        getDeviceCount,
+        runtimeGetVersion,
     )
-    import warnings
 
     try:
         gpus_count = getDeviceCount()

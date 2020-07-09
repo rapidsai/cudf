@@ -604,7 +604,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _selected_columns = _metadata->select_columns(options.columns, _has_timestamp_column);
 
   // Override output timestamp resolution if requested
-  if (options.timestamp_type.id() != EMPTY) { _timestamp_type = options.timestamp_type; }
+  if (options.timestamp_type.id() != type_id::EMPTY) { _timestamp_type = options.timestamp_type; }
 
   // Enable or disable attempt to use row index for parsing
   _use_index = options.use_index;
@@ -833,19 +833,21 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 }
 
 // Forward to implementation
-reader::reader(std::string filepath,
+reader::reader(std::vector<std::string> const &filepaths,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(filepath), options, mr))
 {
+  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(datasource::create(filepaths[0]), options, mr);
 }
 
 // Forward to implementation
-reader::reader(std::unique_ptr<cudf::io::datasource> source,
+reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(source), options, mr))
 {
+  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(std::move(sources[0]), options, mr);
 }
 
 // Destructor within this translation unit
