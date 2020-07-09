@@ -6326,3 +6326,112 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
     else:
         assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data, ignore_dtype, index",
+    [
+        ([pd.Series([1, 2, 3])], False, ["a", "b", "c"]),
+        ([pd.Series(index=[1, 2, 3])], False, ["a", "b"]),
+        ([pd.Series(name="empty series name")], False, ["index1"]),
+        (
+            [pd.Series([1]), pd.Series([]), pd.Series([3])],
+            False,
+            ["0", "2", "1"],
+        ),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([]),
+                pd.Series([3], name="series that is named"),
+            ],
+            False,
+            ["_", "+", "*"],
+        ),
+        ([pd.Series([1, 2, 3], name="hi")] * 10, False, ["mean"] * 10),
+        (
+            [pd.Series([1, 2, 3], name=None, index=[10, 11, 12])] * 10,
+            False,
+            ["abc"] * 10,
+        ),
+        (
+            [
+                pd.Series([1, 2, 3], name=None, index=[10, 11, 12]),
+                pd.Series([1, 2, 30], name=None, index=[13, 144, 15]),
+            ],
+            True,
+            ["set_index_a", "set_index_b"],
+        ),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([]),
+                pd.Series(index=[10, 11, 12]),
+            ],
+            False,
+            ["a", "b", "c"],
+        ),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([], name="abc"),
+                pd.Series(index=[10, 11, 12]),
+            ],
+            False,
+            ["a", "v", "z"],
+        ),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([1, -100, 200, -399, 400], name="abc"),
+                pd.Series([111, 222, 333], index=[10, 11, 12]),
+            ],
+            False,
+            ["a", "v", "z"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "columns", [None, ["0"], [0], ["abc"], [144, 13], [2, 1, 0]]
+)
+def test_dataframe_init_from_series_list_with_index(
+    data, ignore_dtype, index, columns
+):
+    gd_data = [gd.from_pandas(obj) for obj in data]
+
+    expected = pd.DataFrame(data, columns=columns, index=index)
+    actual = gd.DataFrame(gd_data, columns=columns, index=index)
+
+    if ignore_dtype:
+        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+    else:
+        assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data, index",
+    [
+        ([pd.Series([1, 2]), pd.Series([1, 2])], ["a", "b", "c"]),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([]),
+                pd.Series([3], name="series that is named"),
+            ],
+            ["_", "+"],
+        ),
+        ([pd.Series([1, 2, 3], name="hi")] * 10, ["mean"] * 9),
+    ],
+)
+def test_dataframe_init_from_series_list_with_index_error(data, index):
+    gd_data = [gd.from_pandas(obj) for obj in data]
+    try:
+        pd.DataFrame(data, index=index)
+    except Exception as e:
+        with pytest.raises(type(e), match=re.escape(str(e))):
+            gd.DataFrame(gd_data, index=index)
+    else:
+        raise AssertionError(
+            "expected pd.DataFrame to because of index mismatch "
+            "with data dimensions"
+        )
