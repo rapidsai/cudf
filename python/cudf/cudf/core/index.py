@@ -1808,6 +1808,8 @@ class CategoricalIndex(GenericIndex):
         """
         return self._values.cat().categories
 
+    def to_pandas(self):
+        return pd.Index(self._values.to_pandas(), name=self.name)
 
 class StringIndex(GenericIndex):
     """String defined indices into another Column
