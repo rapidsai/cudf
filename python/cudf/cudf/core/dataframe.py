@@ -248,6 +248,10 @@ class DataFrame(Frame, Serializable):
                     self._data = new_df._data
                     self._index = new_df._index
                     self.columns = new_df.columns
+                elif len(data) > 0 and isinstance(data[0], cudf.Series):
+                    self._init_from_series_list(
+                        data=data, columns=columns, index=index
+                    )
                 else:
                     self._init_from_list_like(
                         data, index=index, columns=columns
@@ -267,58 +271,68 @@ class DataFrame(Frame, Serializable):
             return indexes[0]
         else:
             merged_index = cudf.core.Index._concat(indexes)
-            temp_df = cudf.DataFrame(
-                {
-                    "merged_ind": merged_index,
-                    "order": cupy.arange(len(merged_index)),
-                }
-            )
-            temp_df = temp_df.drop_duplicates("merged_ind")
-            temp_df = temp_df.sort_values("order")
-            merged_index = as_index(temp_df._data["merged_ind"])
-            return merged_index
+            merged_index = merged_index.drop_duplicates()
+            _, inds = merged_index._values.sort_by_values()
+            return merged_index.take(inds)
+
+    def _get_union_of_series_names(self, series_list):
+        names_list = []
+        unnamed_count = 0
+        for idx, series in enumerate(series_list):
+            if series.name is None:
+                names_list.append(f"Unnamed {unnamed_count}")
+                unnamed_count += 1
+            else:
+                names_list.append(series.name)
+        if unnamed_count == len(series_list):
+            names_list = [*range(len(series_list))]
+
+        return names_list
 
     def _init_from_series_list(self, data, columns, index):
-        if columns is None:
-            columns = self._get_union_of_indices([d.index for d in data])
+        dataframe_columns = self._get_union_of_indices([d.index for d in data])
+
+        if index is None:
+            index = as_index(self._get_union_of_series_names(data))
+        else:
+            index = RangeIndex(start=0, stop=len(data))
 
         series_lengths = list(map(lambda x: len(x), data))
         data = numeric_normalize_types(*data)
         if series_lengths.count(series_lengths[0]) == len(series_lengths):
-            for col in range(len(data)):
-                self._data[col] = column.as_column(data[col])
+            for idx, series in enumerate(data):
+                if not series.index.equals(dataframe_columns):
+                    series = series.reindex(dataframe_columns)
+                self._data[idx] = column.as_column(series._column)
 
-            self.columns = index
-            self._index = columns
+            self._index = dataframe_columns
+
             transpose = self.T
-            self._mimic_inplace(transpose, inplace=True)
+
         else:
-            longest_series = max(max(series_lengths), len(columns))
-            for col in range(len(data)):
-                current_col = column.as_column(data[col])
-                extra_padding = column.column_empty_like(
-                    current_col,
-                    masked=True,
-                    newsize=longest_series - len(current_col),
-                )
-                self._data[col] = current_col.append(extra_padding)
+            concat_df = cudf.concat(data, axis=1)
 
-            self.columns = [*range(len(data))]
-            self._index = RangeIndex(0, longest_series)
-            transpose = self.T
-            self._mimic_inplace(transpose, inplace=True)
+            if concat_df.columns.dtype == "object":
+                concat_df.columns = concat_df.columns.astype("str")
+
+            transpose = concat_df.T
+
+        transpose._index = index
+        self._mimic_inplace(transpose, inplace=True)
+
+        if columns:
+            for col_name in columns:
+                if col_name not in self._data:
+                    self._data[col_name] = column.column_empty(
+                        row_count=len(self), dtype=None, masked=True
+                    )
+            self._data = self._data.get_by_label(columns)
 
     def _init_from_list_like(self, data, index=None, columns=None):
         if index is None:
             index = RangeIndex(start=0, stop=len(data))
         else:
             index = as_index(index)
-
-        if len(data) > 0 and isinstance(data[0], cudf.Series):
-            self._init_from_series_list(
-                data=data, columns=columns, index=index
-            )
-            return
 
         self._index = as_index(index)
         data = list(itertools.zip_longest(*data))
