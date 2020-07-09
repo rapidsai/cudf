@@ -481,6 +481,7 @@ void reader::impl::set_data_types(cudaStream_t stream)
                                            static_cast<const char *>(data_.data()),
                                            data_.size(),
                                            opts_,
+                                           *column_names_hash_map,
                                            num_columns,
                                            rec_starts_.data().get(),
                                            rec_starts_.size(),
@@ -550,6 +551,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
                                                d_valid.data().get(),
                                                d_valid_counts.data().get(),
                                                opts_,
+                                               *column_names_hash_map,
                                                stream);
   CUDA_TRY(cudaStreamSynchronize(stream));
   CUDA_TRY(cudaGetLastError());

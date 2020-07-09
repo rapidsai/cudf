@@ -71,7 +71,8 @@ class reader::impl {
   std::vector<data_type> dtypes_;
 
   using col_map_type = concurrent_unordered_map<uint32_t, uint32_t>;
-  std::unique_ptr<col_map_type, std::function<void(col_map_type *)>> column_names_hash_map;
+  std::unique_ptr<col_map_type, std::function<void(col_map_type *)>> column_names_hash_map =
+    concurrent_unordered_map<uint32_t, uint32_t>::create(1);
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;

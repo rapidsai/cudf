@@ -19,6 +19,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
+#include <hash/concurrent_unordered_map.cuh>
+
 #include <io/utilities/parsing_utils.cuh>
 
 namespace cudf {
@@ -50,6 +52,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
                              bitmask_type *const *valid_fields,
                              cudf::size_type *num_valid_fields,
                              ParseOptions const &opts,
+                             concurrent_unordered_map<uint32_t, uint32_t> col_map,
                              cudaStream_t stream = 0);
 
 /**
@@ -70,6 +73,7 @@ void detect_data_types(ColumnInfo *column_infos,
                        const char *data,
                        size_t data_size,
                        const ParseOptions &options,
+                       concurrent_unordered_map<uint32_t, uint32_t> col_map,
                        int num_columns,
                        const uint64_t *rec_starts,
                        cudf::size_type num_records,

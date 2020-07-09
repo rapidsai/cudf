@@ -452,6 +452,7 @@ __global__ void convert_json_to_columns_kernel(const char *data,
                                                cudf::size_type num_records,
                                                const data_type *dtypes,
                                                ParseOptions opts,
+                                               concurrent_unordered_map<uint32_t, uint32_t> col_map,
                                                void *const *output_columns,
                                                int num_columns,
                                                bitmask_type *const *valid_fields,
@@ -530,6 +531,7 @@ __global__ void convert_json_to_columns_kernel(const char *data,
 __global__ void detect_json_data_types(const char *data,
                                        size_t data_size,
                                        const ParseOptions opts,
+                                       concurrent_unordered_map<uint32_t, uint32_t> col_map,
                                        int num_columns,
                                        const uint64_t *rec_starts,
                                        cudf::size_type num_records,
@@ -703,6 +705,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
                              bitmask_type *const *valid_fields,
                              cudf::size_type *num_valid_fields,
                              ParseOptions const &opts,
+                             concurrent_unordered_map<uint32_t, uint32_t> col_map,
                              cudaStream_t stream)
 {
   int block_size;
@@ -719,6 +722,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
     num_records,
     dtypes,
     opts,
+    col_map,
     output_columns,
     num_columns,
     valid_fields,
@@ -735,6 +739,7 @@ void detect_data_types(ColumnInfo *column_infos,
                        const char *data,
                        size_t data_size,
                        const ParseOptions &options,
+                       concurrent_unordered_map<uint32_t, uint32_t> col_map,
                        int num_columns,
                        const uint64_t *rec_starts,
                        cudf::size_type num_records,
@@ -748,7 +753,7 @@ void detect_data_types(ColumnInfo *column_infos,
   const int grid_size = (num_records + block_size - 1) / block_size;
 
   detect_json_data_types<<<grid_size, block_size, 0, stream>>>(
-    data, data_size, options, num_columns, rec_starts, num_records, column_infos);
+    data, data_size, options, col_map, num_columns, rec_starts, num_records, column_infos);
 
   CUDA_TRY(cudaGetLastError());
 }
