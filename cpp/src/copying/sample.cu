@@ -60,7 +60,6 @@ std::unique_ptr<table> sample(table_view const& input,
 
     return detail::gather(input, begin, end, false, mr, stream);
   } else {
-    auto rng_eng = thrust::random::default_random_engine(seed);
     auto gather_map =
       make_numeric_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream);
     auto gather_map_mutable_view = gather_map->mutable_view();
@@ -69,7 +68,7 @@ std::unique_ptr<table> sample(table_view const& input,
                          thrust::counting_iterator<size_type>(0),
                          thrust::counting_iterator<size_type>(num_rows),
                          gather_map_mutable_view.begin<size_type>(),
-                         rng_eng);
+                         thrust::default_random_engine(seed));
 
     auto gather_map_view =
       (n == num_rows) ? gather_map->view() : cudf::slice(gather_map->view(), {0, n})[0];
