@@ -36,10 +36,12 @@
 #include "compiled/binary_ops.hpp"
 
 #include <bit.hpp.jit>
+#include <fixed_point.hpp.jit>
 #include <jit/common_headers.hpp>
-#include <string>
 #include <timestamps.hpp.jit>
 #include <types.hpp.jit>
+
+#include <string>
 
 namespace cudf {
 
@@ -69,8 +71,12 @@ namespace jit {
 
 const std::string hash = "prog_binop";
 
-const std::vector<std::string> header_names{
-  "operation.h", "traits.h", cudf_types_hpp, cudf_utilities_bit_hpp, cudf_wrappers_timestamps_hpp};
+const std::vector<std::string> header_names{"operation.h",
+                                            "traits.h",
+                                            cudf_types_hpp,
+                                            cudf_utilities_bit_hpp,
+                                            cudf_wrappers_timestamps_hpp,
+                                            cudf_fixed_point_fixed_point_hpp};
 
 std::istream* headers_code(std::string filename, std::iostream& stream)
 {
