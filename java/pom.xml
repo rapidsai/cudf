@@ -147,20 +147,10 @@
         <CMAKE_EXPORT_COMPILE_COMMANDS>OFF</CMAKE_EXPORT_COMPILE_COMMANDS>
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
         <PER_THREAD_DEFAULT_STREAM>OFF</PER_THREAD_DEFAULT_STREAM>
-        <project.build.directory>target</project.build.directory>
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
     </properties>
 
     <profiles>
-        <profile> 
-            <id>managed-release-directory</id>
-            <activation> 
-                <activeByDefault>false</activeByDefault>
-            </activation>
-            <properties>
-                <project.build.directory>target/cuda-${CUDA_VERSION}/${git.branch}/release</project.build.directory>
-            </properties>
-        </profile>
         <profile>
             <id>abiOff</id>
             <properties>
@@ -246,7 +236,6 @@
     </profiles>
 
     <build>
-	    <directory>${project.build.directory}</directory>
         <resources>
             <resource>
               <!-- Include the properties file to provide the build information. -->
