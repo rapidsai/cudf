@@ -3,6 +3,8 @@
 """
 Test related to Index
 """
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -761,3 +763,33 @@ def test_index_tolist(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)
 
     assert_eq(pdi.tolist(), gdi.tolist())
+
+
+@pytest.mark.parametrize("data", [[], [1], [1, 2, 3]])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_iter_error(data, dtype):
+    gdi = cudf.Index(data, dtype=dtype)
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "Creation of an Iterator over a cudf.Index is not allowed, "
+            "To create an iterator, explicitly convert to any of the objects "
+            "supporting iteration using .to_pandas(), "
+            ".to_arrow(), .values_host."
+        ),
+    ):
+        iter(gdi)
+
+
+@pytest.mark.parametrize("data", [[], [1], [1, 2, 3, 4, 5]])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_values_host(data, dtype):
+    gdi = cudf.Index(data, dtype=dtype)
+    pdi = pd.Index(data, dtype=dtype)
+
+    np.testing.assert_array_equal(gdi.values_host, pdi.values)
