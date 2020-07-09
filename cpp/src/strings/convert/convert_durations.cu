@@ -365,7 +365,8 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
 
 /**
  * @brief This dispatch method is for converting integers into strings.
- * The template function declaration ensures only integer types are used.
+ *
+ * The template function declaration ensures only duration types are used.
  */
 struct dispatch_from_durations_fn {
   template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
@@ -430,7 +431,7 @@ struct dispatch_from_durations_fn {
                                      rmm::mr::device_memory_resource*,
                                      cudaStream_t) const
   {
-    CUDF_FAIL("Values for from_duration function must be a duration type.");
+    CUDF_FAIL("Values for from_durations function must be a duration type.");
   }
 };
 
