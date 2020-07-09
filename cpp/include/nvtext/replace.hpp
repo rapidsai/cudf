@@ -106,7 +106,7 @@ std::unique_ptr<cudf::column> replace_tokens(
  *
  * Note the first string in `result` still retains the space delimiters.
  *
- * Example with `replacement` string.
+ * Example with a `replacement` string.
  *
  * @code{.pseudo}
  * Example:
@@ -115,10 +115,12 @@ std::unique_ptr<cudf::column> replace_tokens(
  * result is now ["--- --- ---", "theme music"]
  * @endcode
  *
- * @throw cudf::logic_error if delimiter is invalid
+ * The `replacement` string is allowed to be shorter than min_token_length.
+ *
+ * @throw cudf::logic_error if `delimiter` or `replacement` is invalid
  *
  * @param strings Strings column to replace.
- * @param min_token_length The minimum number of characters for a token to not be removed.
+ * @param min_token_length The minimum number of characters to retain a token in the output string.
  * @param replacement Optional replacement string to be used in place of removed tokens.
  * @param delimiter Characters used to separate each string into tokens.
  *                  The default of empty string will identify tokens using whitespace.
