@@ -20,6 +20,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <type_traits>
 
 //! `fixed_point` and supporting types
 namespace numeric {
