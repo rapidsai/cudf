@@ -6450,6 +6450,28 @@ def test_series_column_iter_error():
     with pytest.raises(
         TypeError,
         match=re.escape(
+            "Creation of an Iterator over a cudf.Series is not allowed, "
+            "To create an iterator, explicitly convert to any of the objects "
+            "supporting iteration using .to_pandas(), "
+            ".to_arrow(), .values_host"
+        ),
+    ):
+        gs.items()
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "Creation of an Iterator over a cudf.Series is not allowed, "
+            "To create an iterator, explicitly convert to any of the objects "
+            "supporting iteration using .to_pandas(), "
+            ".to_arrow(), .values_host"
+        ),
+    ):
+        gs.iteritems()
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
             "Creation of an Iterator over a cudf Column is not allowed, "
             "To create an iterator, explicitly convert to any of the objects "
             "supporting iteration using .to_pandas(), .to_arrow()"
