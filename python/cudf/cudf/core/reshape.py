@@ -161,7 +161,20 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             )
 
     if typ is DataFrame:
-        return DataFrame._concat(objs, axis=axis, ignore_index=ignore_index)
+        objs = [obj for obj in objs if obj.shape != (0, 0)]
+        if len(objs) == 0:
+            # If objs is empty, that indicates all of
+            # objs are empty dataframes.
+            return cudf.DataFrame()
+        elif len(objs) == 1:
+            result = objs[0].copy()
+            if ignore_index:
+                result._index = cudf.RangeIndex(len(result))
+            return result
+        else:
+            return DataFrame._concat(
+                objs, axis=axis, ignore_index=ignore_index
+            )
     elif typ is Series:
         return Series._concat(objs, axis=axis)
     elif typ is cudf.MultiIndex:

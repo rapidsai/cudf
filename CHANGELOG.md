@@ -34,6 +34,8 @@
 - PR #5607 Add Java bindings for duration types
 - PR #5612 Add `is_hex` strings API
 - PR #5659 Added support for rapids-compose for Java bindings and other enhancements
+- PR #5637 Parameterize Null comparator behaviour in Joins
+- PR #5623 Add `is_ipv4` strings API
 
 ## Improvements
 
@@ -102,6 +104,7 @@
 - PR #5591 Add `__arrow_array__` protocol and raise a descriptive error message
 - PR #5601 Instantiate Table instances in `Frame._concat` to avoid `DF.insert()` overhead
 - PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
+- PR #5603 Refactor JIT `parser.cpp`
 - PR #5643 Update `isort` to 5.0.4
 
 ## Bug Fixes
@@ -151,8 +154,10 @@
 - PR #5609 Fix loc and iloc issue with column like input
 - PR #5578 Fix getattr logic in GroupBy
 - PR #5490 Fix python column view
+- PR #5613 Fix assigning an equal length object into a masked out Series
 - PR #5608 Fix issue related to string types being represented as binary types
 - PR #5619 Fix issue related to typecasting when using a `CategoricalDtype`
+- PR #5649 Fix issue when empty Dataframe with index are passed to `cudf.concat`
 - PR #5644 Fix issue related to Dataframe init when passing in `columns`
 
 
