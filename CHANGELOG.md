@@ -161,8 +161,8 @@
 - PR #5649 Fix issue when empty Dataframe with index are passed to `cudf.concat`
 - PR #5644 Fix issue related to Dataframe init when passing in `columns`
 - PR #5663 Move Duration types under Timestamps in doxygen Modules page
-
 - PR #5656 Fix issue with incorrect docker image being used in local build script
+
 
 # cuDF 0.14.0 (Date TBD)
 
