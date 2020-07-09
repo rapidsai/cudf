@@ -167,7 +167,10 @@ class NumericalColumn(column.ColumnBase):
             v: k for k, v in _pd_nullable_dtypes_to_cudf_dtypes.items()
         }.get(self.dtype, self.dtype)
 
-        return pd.Series(self.to_arrow().to_pandas(), index=index).astype(host_dtype)
+        result = self.to_arrow().to_pandas().astype(host_dtype)
+        if index is not None:
+            result.index = index
+        return result
 
     def to_arrow(self):
         mask = None

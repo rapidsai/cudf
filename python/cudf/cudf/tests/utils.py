@@ -59,7 +59,7 @@ def count_zero(arr):
     return np.count_nonzero(arr == 0)
 
 
-def assert_eq(left, right, allow_nullable_pd_types=False, **kwargs):
+def assert_eq(left, right, allow_nullable_pd_types=True, **kwargs):
     """ Assert that two cudf-like things are equivalent
 
     This equality test works for pandas/cudf dataframes/series/indexes/scalars
@@ -115,15 +115,19 @@ def demote_series_dtype(sr):
     in_dtype = sr.dtype
     out_dtype = dtypeutils._pd_nullable_dtypes_to_cudf_dtypes.get(sr.dtype, sr.dtype)
 
-    if out_dtype.kind == 'i':
+    if out_dtype.kind in ('i', 'u'):
         min_int = np.iinfo(out_dtype).min
         out_sr = sr.fillna(min_int)
         out_sr = out_sr.astype(out_dtype)
-    elif out_dtype.kind == 'O':
-        # instantiating pandas string series with None still gets object
-        # does NOT default to String, with pd.NA yet
+    elif out_dtype.kind in ('O', 'b'):
+        if out_dtype.kind == 'b':
+            out_dtype = np.dtype('O')
         out_sr = sr.astype(out_dtype)
-        out_sr[sr.isnull()] = None
+        # instantiating pandas str/bool series with None still gets object
+        # does NOT default to extension with pd.NA yet
+        out_sr[sr.isnull()] = None        
+    else:
+        out_sr = sr
     return out_sr
 
 
