@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 from __future__ import division, print_function
 
 import pickle
@@ -210,6 +210,29 @@ class Index(Frame, Serializable):
             "supporting iteration using .to_pandas(), "
             ".to_arrow(), .values_host."
         )
+
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the Index.
+
+        Only the values in the Index will be returned.
+
+        Returns
+        -------
+        out : numpy.ndarray
+            The values of the Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, -10, 100, 20])
+        >>> index.values_host
+        array([  1, -10, 100,  20])
+        >>> type(index.values)
+        <class 'numpy.ndarray'>
+        """
+        return self.to_series().values_host
 
     @classmethod
     def deserialize(cls, header, frames):
