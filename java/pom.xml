@@ -155,9 +155,7 @@
         <profile> 
             <id>managed-release-directory</id>
             <activation> 
-                <property>
-                    <name>git.branch</name>
-                </property>
+                <activeByDefault>false</activeByDefault>
             </activation>
             <properties>
                 <project.build.directory>target/cuda-${CUDA_VERSION}/${git.branch}/release</project.build.directory>
