@@ -28,6 +28,7 @@
 - PR #5488 Add plumbings for `.str.replace_tokens`
 - PR #5502 Add Unsigned int types support in dlpack
 - PR #5497 Add `.str.isinteger` & `.str.isfloat`
+- PR #5511 Port of clx subword tokenizer to cudf 
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
 - PR #5536 Parquet reader - add support for multiple sources
@@ -105,6 +106,7 @@
 - PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
 - PR #5603 Refactor JIT `parser.cpp`
 - PR #5643 Update `isort` to 5.0.4
+- PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 
 ## Bug Fixes
 
@@ -160,6 +162,7 @@
 - PR #5644 Fix issue related to Dataframe init when passing in `columns`
 - PR #5663 Move Duration types under Timestamps in doxygen Modules page
 
+- PR #5656 Fix issue with incorrect docker image being used in local build script
 
 # cuDF 0.14.0 (Date TBD)
 
