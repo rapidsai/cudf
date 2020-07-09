@@ -164,7 +164,7 @@
 - PR #5656 Fix issue with incorrect docker image being used in local build script
 
 
-# cuDF 0.14.0 (Date TBD)
+# cuDF 0.14.0 (03 Jun 2020)
 
 ## New Features
 
