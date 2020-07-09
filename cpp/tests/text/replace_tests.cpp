@@ -107,25 +107,25 @@ TEST_F(TextReplaceTest, ReplaceTokensErrorTest)
 
 TEST_F(TextReplaceTest, FilterTokens)
 {
-  cudf::test::strings_column_wrapper strings({" one two three ", "four  five  six", "seven eight"});
+  cudf::test::strings_column_wrapper strings({" one two three ", "four  fivé  six", "sevén eight"});
 
   auto results = nvtext::filter_tokens(cudf::strings_column_view(strings), 1);
   cudf::test::expect_columns_equal(*results, strings);  // no change
 
   {
     auto results = nvtext::filter_tokens(cudf::strings_column_view(strings), 4);
-    cudf::test::strings_column_wrapper expected({"   three ", "four  five  ", "seven eight"});
+    cudf::test::strings_column_wrapper expected({"   three ", "four  fivé  ", "sevén eight"});
     cudf::test::expect_columns_equal(*results, expected);
   }
   {
     auto results = nvtext::filter_tokens(cudf::strings_column_view(strings), 5);
-    cudf::test::strings_column_wrapper expected({"   three ", "    ", "seven eight"});
+    cudf::test::strings_column_wrapper expected({"   three ", "    ", "sevén eight"});
     cudf::test::expect_columns_equal(*results, expected);
   }
   {
     auto results =
       nvtext::filter_tokens(cudf::strings_column_view(strings), 4, cudf::string_scalar("--"));
-    cudf::test::strings_column_wrapper expected({" -- -- three ", "four  five  --", "seven eight"});
+    cudf::test::strings_column_wrapper expected({" -- -- three ", "four  fivé  --", "sevén eight"});
     cudf::test::expect_columns_equal(*results, expected);
   }
 }
