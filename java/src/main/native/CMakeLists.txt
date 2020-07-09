@@ -132,8 +132,7 @@ set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
                  "${PROJECT_SOURCE_DIR}/../../../../cpp/src/")
 
 find_library(CUDF_LIBRARY "cudf"
-    HINTS "$ENV{CUDF_ROOT}/lib"
-          "$ENV{CUDF_ROOT}"
+    HINTS "$ENV{CUDF_ROOT}"
           "$ENV{CONDA_PREFIX}/lib"
           "../../../../cpp/build")
 
@@ -150,14 +149,12 @@ endif (CUDF_INCLUDE AND CUDF_LIBRARY)
 # - RMM -------------------------------------------------------------------------------------------
 
 find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include"
-                "$ENV{RMM_HOME}/include"
+          HINTS "$ENV{RMM_HOME}/include"
                 "$ENV{CONDA_PREFIX}/include/rmm"
                 "$ENV{CONDA_PREFIX}/include")
 
 find_library(RMM_LIBRARY "rmm"
-             HINTS "$ENV{RMM_ROOT}/lib"
-                   "$ENV{RMM_ROOT}"
+             HINTS "$ENV{RMM_ROOT}"
                    "$ENV{CONDA_PREFIX}/lib")
 
 message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
