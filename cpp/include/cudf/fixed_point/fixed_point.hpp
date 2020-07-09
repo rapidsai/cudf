@@ -18,7 +18,6 @@
 
 #include <cassert>
 #include <cmath>
-#include <functional>
 #include <iostream>
 #include <limits>
 
