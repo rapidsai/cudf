@@ -64,6 +64,8 @@ __device__ void limit_range_to_brackets(const char *data, long &start, long &sto
   stop--;
 }
 
+enum parse_state { PRE_NAME, NAME, POST_NAME, POST_NAME_QUOTE };
+
 /**
  * @brief CUDA kernel that finds the end position of the next field name,
  * including the colon that separates the name from the field value.
@@ -72,26 +74,33 @@ __device__ void limit_range_to_brackets(const char *data, long &start, long &sto
  *
  * @param[in] data Pointer to the device buffer containing the data to process
  * @param[in] opts Parsing options (e.g. delimiter and quotation character)
- * @param[in] start Offset of the first character in the range
+ * @param[in,out] start Offset of the first character in the range
  * @param[in] stop Offset of the first character after the range
  *
- * @return long Position of the first character after the field name.
+ * @return uint32_t Hash value of the field name
  **/
-__device__ long seek_field_name_end(const char *data,
-                                    const ParseOptions opts,
-                                    long start,
-                                    long stop)
+__device__ uint32_t parse_field_name(const char *data,
+                                     const ParseOptions opts,
+                                     long &start,
+                                     long stop)
 {
-  bool quotation = false;
+  parse_state state = PRE_NAME;
+  auto name_start   = start;
+  uint32_t hash_val = 0;
   for (auto pos = start; pos < stop; ++pos) {
-    // Ignore escaped quotes
-    if (data[pos] == opts.quotechar && data[pos - 1] != '\\') {
-      quotation = !quotation;
-    } else if (!quotation && data[pos] == ':') {
-      return pos + 1;
+    if (state == PRE_NAME && data[pos] == opts.quotechar) {
+      state      = NAME;
+      name_start = pos + 1;
+    } else if (state == NAME && data[pos] == opts.quotechar && data[pos - 1] != '\\') {
+      state = POST_NAME;
+      hash_val =
+        MurmurHash3_32<cudf::string_view>{}(cudf::string_view(data + name_start, pos - name_start));
+    } else if (state == POST_NAME && data[pos] == ':') {
+      start = pos + 1;
+      break;
     }
   }
-  return stop;
+  return hash_val;
 }
 
 /**
@@ -459,7 +468,8 @@ __global__ void convert_json_to_columns_kernel(const char *data,
   const bool is_object = (data[start - 1] == '{');
 
   for (int col = 0; col < num_columns && start < stop; col++) {
-    if (is_object) { start = seek_field_name_end(data, opts, start, stop); }
+    auto dst_col = col;
+    if (is_object) { parse_field_name(data, opts, start, stop); }
     // field_end is at the next delimiter/newline
     const long field_end = cudf::io::gpu::seek_field_end(data, opts, start, stop);
     long field_data_last = field_end - 1;
@@ -469,30 +479,30 @@ __global__ void convert_json_to_columns_kernel(const char *data,
     if (start <= field_data_last &&
         !serializedTrieContains(opts.naValuesTrie, data + start, field_end - start)) {
       // Type dispatcher does not handle strings
-      if (dtypes[col].id() == type_id::STRING) {
-        auto str_list           = static_cast<string_pair *>(output_columns[col]);
+      if (dtypes[dst_col].id() == type_id::STRING) {
+        auto str_list           = static_cast<string_pair *>(output_columns[dst_col]);
         str_list[rec_id].first  = data + start;
         str_list[rec_id].second = field_data_last - start + 1;
 
         // set the valid bitmap - all bits were set to 0 to start
-        set_bit(valid_fields[col], rec_id);
-        atomicAdd(&num_valid_fields[col], 1);
+        set_bit(valid_fields[dst_col], rec_id);
+        atomicAdd(&num_valid_fields[dst_col], 1);
       } else {
-        if (cudf::type_dispatcher(dtypes[col],
+        if (cudf::type_dispatcher(dtypes[dst_col],
                                   ConvertFunctor{},
                                   data,
-                                  output_columns[col],
+                                  output_columns[dst_col],
                                   rec_id,
                                   start,
                                   field_data_last,
                                   opts)) {
           // set the valid bitmap - all bits were set to 0 to start
-          set_bit(valid_fields[col], rec_id);
-          atomicAdd(&num_valid_fields[col], 1);
+          set_bit(valid_fields[dst_col], rec_id);
+          atomicAdd(&num_valid_fields[dst_col], 1);
         }
       }
-    } else if (dtypes[col].id() == type_id::STRING) {
-      auto str_list           = static_cast<string_pair *>(output_columns[col]);
+    } else if (dtypes[dst_col].id() == type_id::STRING) {
+      auto str_list           = static_cast<string_pair *>(output_columns[dst_col]);
       str_list[rec_id].first  = nullptr;
       str_list[rec_id].second = 0;
     }
@@ -536,7 +546,7 @@ __global__ void detect_json_data_types(const char *data,
   const bool is_object = (data[start - 1] == '{');
 
   for (int col = 0; col < num_columns; col++) {
-    if (is_object) { start = seek_field_name_end(data, opts, start, stop); }
+    if (is_object) { parse_field_name(data, opts, start, stop); }
     auto field_start     = start;
     const long field_end = cudf::io::gpu::seek_field_end(data, opts, field_start, stop);
     long field_data_last = field_end - 1;
@@ -625,8 +635,6 @@ __global__ void detect_json_data_types(const char *data,
   }
 }
 
-enum parse_state { PRE_NAME, NAME, POST_NAME, POST_NAME_QUOTE };
-
 /**
  * @brief TODO
  *
@@ -639,13 +647,13 @@ enum parse_state { PRE_NAME, NAME, POST_NAME, POST_NAME_QUOTE };
  *
  * @returns void
  **/
-__global__ void gpu_collect_field_names_info(const char *data,
-                                             size_t data_size,
-                                             const ParseOptions opts,
-                                             const uint64_t *rec_starts,
-                                             cudf::size_type num_records,
-                                             unsigned long long int *names_cnt,
-                                             mutable_table_device_view *names_info)
+__global__ void collect_field_names_info_kernel(const char *data,
+                                                size_t data_size,
+                                                const ParseOptions opts,
+                                                const uint64_t *rec_starts,
+                                                cudf::size_type num_records,
+                                                unsigned long long int *names_cnt,
+                                                mutable_table_device_view *names_info)
 {
   long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
@@ -759,13 +767,13 @@ void collect_field_names_info(const char *data,
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(
-    cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, gpu_collect_field_names_info));
+  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
+    &min_grid_size, &block_size, collect_field_names_info_kernel));
 
   // Calculate actual block count to use based on records count
   const int grid_size = (num_records + block_size - 1) / block_size;
 
-  gpu_collect_field_names_info<<<grid_size, block_size, 0, stream>>>(
+  collect_field_names_info_kernel<<<grid_size, block_size, 0, stream>>>(
     data, data_size, options, rec_starts, num_records, names_cnt, names_info);
 
   CUDA_TRY(cudaGetLastError());
