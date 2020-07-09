@@ -17,6 +17,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/types.hpp>
 #include <strings/utilities.cuh>
+#include "utilities.cuh"
 
 #include <map>
 #include <vector>
@@ -245,8 +246,6 @@ struct duration_to_string_size_fn {
         string_length += format_length(item.value, timeparts);
     }
     return string_length;
-    // convert to characters
-    // format_from_parts(timeparts, d_chars + d_offsets[idx]);
   }
 };
 

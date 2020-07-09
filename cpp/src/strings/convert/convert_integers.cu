@@ -26,6 +26,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <strings/utilities.cuh>
+#include "utilities.cuh"
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/iterator/counting_iterator.h>
