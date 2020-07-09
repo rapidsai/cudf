@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import pickle
 import warnings
 from numbers import Number
@@ -755,7 +755,7 @@ class Series(Frame, Serializable):
             "Creation of an Iterator over a cudf.Series is not allowed, "
             "To create an iterator, explicitly convert to any of the objects "
             "supporting iteration using .to_pandas(), "
-            ".to_arrow(), .values_host."
+            ".to_arrow(), .values_host"
         )
 
     iteritems = __iter__

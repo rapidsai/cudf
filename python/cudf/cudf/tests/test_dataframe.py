@@ -6431,3 +6431,28 @@ def test_dataframe_init_from_series_list_with_index_error(data, index):
             "expected pd.DataFrame to because of index mismatch "
             "with data dimensions"
         )
+
+
+def test_series_column_iter_error():
+    gs = gd.Series([1, 2, 3])
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "Creation of an Iterator over a cudf.Series is not allowed, "
+            "To create an iterator, explicitly convert to any of the objects "
+            "supporting iteration using .to_pandas(), "
+            ".to_arrow(), .values_host"
+        ),
+    ):
+        iter(gs)
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "Creation of an Iterator over a cudf Column is not allowed, "
+            "To create an iterator, explicitly convert to any of the objects "
+            "supporting iteration using .to_pandas(), .to_arrow()"
+        ),
+    ):
+        iter(gs._column)
