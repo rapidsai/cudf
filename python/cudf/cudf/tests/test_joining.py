@@ -219,7 +219,7 @@ def test_dataframe_join_combine_cats():
     expect.index = expect.index.astype("category")
     got = lhs.join(rhs, how="outer")
 
-    assert_eq(sorted(expect.index), sorted(got.index))
+    assert_eq(sorted(expect.index), sorted(got.to_pandas().index))
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])

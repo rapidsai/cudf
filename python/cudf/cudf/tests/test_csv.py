@@ -1117,14 +1117,12 @@ def test_csv_reader_index_col():
     # using a column index
     cu_df = read_csv(StringIO(buffer), header=None, index_col=0)
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=0)
-    for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
-        assert str(cu_idx) == str(pd_idx)
+    assert_eq(cu_df.index.tolist(), pd_df.index.tolist())
 
     # passing False to avoid using a column as index (no-op in cuDF)
     cu_df = read_csv(StringIO(buffer), header=None, index_col=False)
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
-    for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
-        assert str(cu_idx) == str(pd_idx)
+    assert_eq(cu_df.index.tolist(), pd_df.index.tolist())
 
 
 @pytest.mark.parametrize(

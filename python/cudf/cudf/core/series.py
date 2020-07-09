@@ -811,6 +811,8 @@ class Series(Frame, Serializable):
         """
         return self.to_arrow().to_pylist()
 
+    to_list = tolist
+
     def head(self, n=5):
         """
         Return the first `n` rows.

@@ -5106,9 +5106,7 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 .fillna(-1)
                 .to_array(),
             )
-            assert tuple(expect_where.cat.categories) == tuple(
-                got_where.cat.categories
-            )
+            assert_eq(expect_where.cat.categories, got_where.cat.categories)
 
             np.testing.assert_array_equal(
                 expect_mask.cat.codes,
@@ -5116,9 +5114,7 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 .fillna(-1)
                 .to_array(),
             )
-            assert tuple(expect_mask.cat.categories) == tuple(
-                got_mask.cat.categories
-            )
+            assert_eq(expect_mask.cat.categories, got_mask.cat.categories)
         else:
             assert_eq(
                 expect_where.fillna(-1),

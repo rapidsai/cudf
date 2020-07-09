@@ -64,6 +64,10 @@ class GroupBy(Serializable):
 
     def __iter__(self):
         group_names, offsets, grouped_values = self._grouped()
+        if isinstance(group_names, cudf.Index) and not isinstance(
+            group_names, cudf.MultiIndex
+        ):
+            group_names = group_names.to_list()
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
 

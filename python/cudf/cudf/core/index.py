@@ -203,6 +203,14 @@ class Index(Frame, Serializable):
         else:
             return other
 
+    def __iter__(self):
+        raise TypeError(
+            "Creation of an Iterator over a cudf.Index is not allowed, "
+            "To create an iterator, explicitly convert to any of the objects "
+            "supporting iteration using .to_pandas(), "
+            ".to_arrow(), .values_host."
+        )
+
     @classmethod
     def deserialize(cls, header, frames):
         """
@@ -359,6 +367,8 @@ class Index(Frame, Serializable):
         list
         """
         return self.to_arrow().to_pylist()
+
+    to_list = tolist
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):

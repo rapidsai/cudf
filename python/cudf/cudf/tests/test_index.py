@@ -499,7 +499,7 @@ def test_index_where(data, condition, other, error):
                 expect.codes,
                 got.codes.astype(expect.codes.dtype).fillna(-1).to_array(),
             )
-            assert tuple(expect.categories) == tuple(got.categories)
+            assert_eq(expect.categories, got.categories)
         else:
             assert_eq(
                 ps.where(ps_condition, other=ps_other)
