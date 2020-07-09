@@ -234,6 +234,7 @@ def assert_frame_equal(
 
     if check_like:
         left, right = left.reindex(index=right.index), right
+        right = right[list(left._data.names)]
 
     if check_less_precise != False:
         raise NotImplementedError("check_less_precise is not yet supported")
@@ -250,7 +251,6 @@ def assert_frame_equal(
         obj=f"{obj}.index",
     )
 
-    # columns comparison
     pd.testing.assert_index_equal(
         left.columns,
         right.columns,
