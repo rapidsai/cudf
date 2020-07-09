@@ -82,17 +82,16 @@ def assert_column_equal(
     if check_exact and check_categorical:
         if is_categorical_dtype(left) and is_categorical_dtype(right):
             left_cat = left.cat().categories
-            right_cat = left.cat().categories
+            right_cat = right.cat().categories
 
             if check_category_order:
-                assert_index_equal(left_cat, right_cat, check_dtype=check_dtype, check_exact=True, check_categorical=False, check_category_order=False)
+                assert_index_equal(left_cat, right_cat, exact=check_dtype, check_exact=True, check_categorical=False)
                 assert_column_equal(left.codes, right.codes, check_dtype=check_dtype, check_exact=True, check_categorical=False, check_category_order=False)
 
-            if left.ordered == right.ordered:
+            if left.ordered != right.ordered:
                 msg1 = f"{left.ordered}"
                 msg2 = f"{right.ordered}"
                 raise_assert_detail("{obj} category", "Orders are different", msg1, msg2)
-            return
 
     if not check_dtype and is_categorical_dtype(left) and is_categorical_dtype(right):
         tmp_left = left.astype(left.categories.dtype)
@@ -104,12 +103,20 @@ def assert_column_equal(
             diff = diff * 100.0/left.size
             raise_assert_detail(obj, f"values are different ({np.round(diff, 5)} %)", msg1, msg2)
 
-    elif not left.equals(right):
-        msg1 = f"{left.to_array()}"
-        msg2 = f"{right.to_array()}"
-        diff = left.apply_boolean_mask(left.binary_operator("ne", right)).size
-        diff = diff * 100.0/left.size
-        raise_assert_detail(obj, f"values are different ({np.round(diff, 5)} %)", msg1, msg2)
+    else:
+        columns_equal = False
+        try:
+            columns_equal = left.equals(right)
+        except TypeError:
+            if is_categorical_dtype(left) and is_categorical_dtype(right):
+                left = left.astype(left.categories.dtype)
+                right = right.astype(right.categories.dtype)
+        if not columns_equal:
+            msg1 = f"{left.to_array()}"
+            msg2 = f"{right.to_array()}"
+            diff = left.apply_boolean_mask(left.binary_operator("ne", right)).size
+            diff = diff * 100.0/left.size
+            raise_assert_detail(obj, f"values are different ({np.round(diff, 5)} %)", msg1, msg2)
 
 
 def assert_index_equal(
@@ -173,7 +180,7 @@ def assert_series_equal(
     obj="Series",
 ):
     # instance validation
-    _check_isinstance(left, right, Series)
+    _check_isinstance(left, right, cudf.Series)
     
     if len(left) != len(right):
         msg1 = f"{len(left)}, {left.index}"
@@ -194,6 +201,9 @@ def assert_series_equal(
 
     assert_column_equal(left._column, right._column, check_dtype=check_dtype, check_column_type=check_series_type, check_less_precise=check_less_precise, check_exact=check_exact, check_datetimelike_compat=check_datetimelike_compat, check_categorical=check_categorical, check_category_order=check_category_order)
 
+    # metadata comparison
+    if check_names and (left.name != right.name):
+        raise_assert_detail(obj, "name mismatch", "{left.name}", "{right.name}")
 
 
 def assert_frame_equal(
