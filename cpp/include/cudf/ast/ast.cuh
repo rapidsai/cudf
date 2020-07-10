@@ -59,6 +59,46 @@ struct device_data_reference {
   table_reference table_reference = table_reference::LEFT;
 };
 
+class intermediate_counter {
+ public:
+  intermediate_counter() : used_values(), max_used(0) {}
+  cudf::size_type take()
+  {
+    auto first_missing =
+      this->used_values.size() ? this->find_first_missing(0, this->used_values.size() - 1) : 0;
+    this->used_values.insert(this->used_values.cbegin() + first_missing, first_missing);
+    this->max_used = std::max(max_used, first_missing + 1);
+    return first_missing;
+  }
+  void give(cudf::size_type value)
+  {
+    auto found = std::find(this->used_values.cbegin(), this->used_values.cend(), value);
+    if (found != this->used_values.cend()) { this->used_values.erase(found); }
+  }
+  cudf::size_type get_max_used() const { return this->max_used; }
+
+ private:
+  cudf::size_type find_first_missing(cudf::size_type start, cudf::size_type end)
+  {
+    // Given a sorted container, find the smallest value not already in the container
+    if (start > end) return end + 1;
+
+    // If the value at an index is not equal to its index, it must be the missing value
+    if (start != used_values.at(start)) return start;
+
+    auto mid = (start + end) / 2;
+
+    // Use binary search and check the left half or right half
+    // We can assume the missing value must be in the right half
+    if (used_values.at(mid) == mid) return this->find_first_missing(mid + 1, end);
+    // The missing value must be in the left half
+    return this->find_first_missing(start, mid);
+  }
+
+  std::vector<cudf::size_type> used_values;
+  cudf::size_type max_used;
+};
+
 }  // namespace detail
 
 enum class data_reference {
@@ -171,7 +211,7 @@ class binary_expression : public operator_expression {
 
 class linearizer : public abstract_visitor {
  public:
-  linearizer(cudf::table_view table) : table(table), node_counter(0), intermediate_counter(0) {}
+  linearizer(cudf::table_view table) : table(table), node_counter(0), intermediate_counter() {}
 
   cudf::size_type visit(literal const& expr) override
   {
@@ -216,7 +256,7 @@ class linearizer : public abstract_visitor {
     std::transform(operand_data_reference_indices.cbegin(),
                    operand_data_reference_indices.cend(),
                    std::back_inserter(operand_types),
-                   [this](cudf::size_type data_reference_index) -> cudf::data_type {
+                   [this](auto const& data_reference_index) -> cudf::data_type {
                      return this->get_data_references()[data_reference_index].data_type;
                    });
     // Validate types of operand data references match
@@ -224,6 +264,17 @@ class linearizer : public abstract_visitor {
         operand_types.cend()) {
       CUDF_FAIL("An AST operator expression was provided non-matching operand types.");
     }
+    // Give back intermediate storage locations that are consumed by this operation
+    std::for_each(
+      operand_data_reference_indices.cbegin(),
+      operand_data_reference_indices.cend(),
+      [this](auto const& data_reference_index) {
+        auto operand_source = this->get_data_references()[data_reference_index];
+        if (operand_source.reference_type == detail::device_data_reference_type::INTERMEDIATE) {
+          auto intermediate_index = operand_source.data_index;
+          this->intermediate_counter.give(intermediate_index);
+        }
+      });
     // Resolve node type
     auto data_type = operand_types.at(0);
     /* TODO: Need to fix. Can't support comparators yet.
@@ -239,12 +290,9 @@ class linearizer : public abstract_visitor {
     // Push operator
     this->operators.push_back(op);
     // Push data reference
-    auto source = detail::device_data_reference{
-      detail::device_data_reference_type::INTERMEDIATE,
-      data_type,
-      this->intermediate_counter  // TODO: Reuse indices
-    };
-    this->intermediate_counter++;
+    auto source = detail::device_data_reference{detail::device_data_reference_type::INTERMEDIATE,
+                                                data_type,
+                                                this->intermediate_counter.take()};
     this->data_references.push_back(source);
     // Increment counter
     auto index = this->node_counter;
@@ -266,7 +314,10 @@ class linearizer : public abstract_visitor {
     }
   }
   cudf::size_type get_node_counter() const { return this->node_counter; }
-  cudf::size_type get_intermediate_counter() const { return this->intermediate_counter; }
+  cudf::size_type get_intermediate_count() const
+  {
+    return this->intermediate_counter.get_max_used();
+  }
   std::vector<detail::device_data_reference> get_data_references() const
   {
     return this->data_references;
@@ -292,7 +343,7 @@ class linearizer : public abstract_visitor {
   // State information about the "linearized" GPU execution plan
   cudf::table_view table;
   cudf::size_type node_counter;
-  cudf::size_type intermediate_counter;
+  detail::intermediate_counter intermediate_counter;
   std::vector<detail::device_data_reference> data_references;
   std::vector<ast_operator> operators;
   std::vector<cudf::size_type> operator_source_indices;
@@ -619,7 +670,7 @@ std::unique_ptr<column> compute_column(
   // Configure kernel parameters
   auto block_size = 1024;  // TODO: Dynamically determine block size
   cudf::detail::grid_1d config(table_num_rows, block_size);
-  auto num_intermediates = expr_linearizer.get_intermediate_counter();
+  auto num_intermediates = expr_linearizer.get_intermediate_count();
   auto shmem_size_per_block =
     sizeof(std::int64_t) * num_intermediates * config.num_threads_per_block;
   // std::cout << "Requesting " << shmem_size_per_block << " bytes of shared memory." << std::endl;
