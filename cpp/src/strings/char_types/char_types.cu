@@ -83,15 +83,29 @@ std::unique_ptr<column> all_characters_of_type(
   return results;
 }
 
+namespace {
+
+/**
+ * @brief Removes individual characters from a strings column based on character type.
+ *
+ * Types to remove are specified by `types_to_filter` OR
+ * types to not remove are specified by `types_to_keep`.
+ *
+ * This is called twice. The first pass calculates the size of each output string.
+ * The final pass copies the results to the output strings column memory.
+ */
 struct filter_chars_fn {
   column_device_view const d_column;
   character_flags_table_type const* d_flags;
   string_character_types const types_to_filter;
   string_character_types const types_to_keep;
-  string_view const d_replacement;
-  int32_t* d_offsets{};
-  char* d_chars{};
+  string_view const d_replacement;  ///< optional replacement for removed characters
+  int32_t* d_offsets{};             ///< size of the output string stored here during first pass
+  char* d_chars{};                  ///< this is null only during the first pass
 
+  /**
+   * @brief Returns true if the given character should be replaced.
+   */
   __device__ bool replace_char(char_utf8 ch)
   {
     auto const code_point = detail::utf8_to_codepoint(ch);
@@ -124,6 +138,8 @@ struct filter_chars_fn {
     if (!out_ptr) d_offsets[idx] = nbytes;
   }
 };
+
+}  // namespace
 
 std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
                                                   string_character_types types_to_filter,
