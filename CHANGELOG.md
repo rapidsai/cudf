@@ -40,6 +40,7 @@
 
 ## Improvements
 
+- PR #5632 Switch JNI code to use `pool_memory_resource` instead of CNMeM
 - PR #5486 Link Boost libraries statically in the Java build
 - PR #5479 Link Arrow libraries statically
 - PR #5414 Use new release of Thrust/CUB in the JNI build
@@ -162,6 +163,7 @@
 - PR #5619 Fix issue related to typecasting when using a `CategoricalDtype`
 - PR #5649 Fix issue when empty Dataframe with index are passed to `cudf.concat`
 - PR #5644 Fix issue related to Dataframe init when passing in `columns`
+- PR #5664 Update conda upload versions for new supported CUDA/Python
 - PR #5656 Fix issue with incorrect docker image being used in local build script
 
 # cuDF 0.14.0 (Date TBD)
