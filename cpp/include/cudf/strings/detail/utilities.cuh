@@ -21,6 +21,8 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/scan.h>
+#include <mutex>
+#include <unordered_map>
 
 namespace cudf {
 namespace strings {
@@ -59,6 +61,47 @@ std::unique_ptr<column> make_offsets_child_column(
   CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream));
   return offsets_column;
 }
+
+// This template is a thin wrapper around per-context singleton objects.
+// It maintains a single object for each CUDA context.
+template <typename TableType>
+class per_context_cache {
+ public:
+  // Find an object cached for a current CUDA context.
+  // If there is no object available in the cache, it calls the initializer
+  // `init` to create a new one and cache it for later uses.
+  template <typename Initializer>
+  TableType* find_or_initialize(const Initializer& init)
+  {
+    CUcontext c;
+    cuCtxGetCurrent(&c);
+    auto finder = cache_.find(c);
+    if (finder == cache_.end()) {
+      TableType* result = init();
+      cache_[c]         = result;
+      return result;
+    } else
+      return finder->second;
+  }
+
+ private:
+  std::unordered_map<CUcontext, TableType*> cache_;
+};
+
+// This template is a thread-safe version of per_context_cache.
+template <typename TableType>
+class thread_safe_per_context_cache : public per_context_cache<TableType> {
+ public:
+  template <typename Initializer>
+  TableType* find_or_initialize(const Initializer& init)
+  {
+    std::lock_guard<std::mutex> guard(mutex);
+    return per_context_cache<TableType>::find_or_initialize(init);
+  }
+
+ private:
+  std::mutex mutex;
+};
 
 }  // namespace detail
 }  // namespace strings

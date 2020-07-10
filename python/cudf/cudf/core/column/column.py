@@ -544,6 +544,8 @@ class ColumnBase(Column, Serializable):
                         "Boolean mask must be of same length as column"
                     )
                 key = column.as_column(cupy.arange(len(self)))[key]
+                if hasattr(value, "__len__") and len(value) == len(self):
+                    value = column.as_column(value)[key]
             nelem = len(key)
 
         if is_scalar(value):

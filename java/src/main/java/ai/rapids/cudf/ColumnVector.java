@@ -48,8 +48,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Wrap an existing on device cudf::column with the corresponding ColumnVector.
+   * @param nativePointer host address of the cudf::column object which will be
+   *                      owned by this instance.
    */
-  ColumnVector(long nativePointer) {
+  public ColumnVector(long nativePointer) {
     assert nativePointer != 0;
     offHeap = new OffHeapState(nativePointer);
     MemoryCleaner.register(this, offHeap);
