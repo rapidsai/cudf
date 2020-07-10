@@ -550,7 +550,7 @@ __global__ void detect_json_data_types(const char *data,
   limit_range_to_brackets(data, start, stop);
   const bool is_object = (data[start - 1] == '{');
 
-  for (int col = 0; col < num_columns; col++) {
+  for (int col = 0; col < num_columns && start < stop; col++) {
     auto dst_col = col;
     if (is_object) {
       auto const col_name_hash = parse_field_name(data, opts, start, stop);
