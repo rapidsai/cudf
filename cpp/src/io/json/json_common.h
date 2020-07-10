@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/types.hpp>
 
 class SerialTrieNode;

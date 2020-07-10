@@ -64,7 +64,7 @@ __device__ void limit_range_to_brackets(const char *data, long &start, long &sto
   stop--;
 }
 
-enum parse_state { PRE_NAME, NAME, POST_NAME, POST_NAME_QUOTE };
+enum class field_name_parse_state { PRE_NAME, NAME, POST_NAME, POST_NAME_QUOTE };
 
 /**
  * @brief CUDA kernel that finds the end position of the next field name,
@@ -84,18 +84,19 @@ __device__ uint32_t parse_field_name(const char *data,
                                      long &start,
                                      long stop)
 {
-  parse_state state = PRE_NAME;
+  auto state        = field_name_parse_state::PRE_NAME;
   auto name_start   = start;
   uint32_t hash_val = 0;
   for (auto pos = start; pos < stop; ++pos) {
-    if (state == PRE_NAME && data[pos] == opts.quotechar) {
-      state      = NAME;
+    if (state == field_name_parse_state::PRE_NAME && data[pos] == opts.quotechar) {
+      state      = field_name_parse_state::NAME;
       name_start = pos + 1;
-    } else if (state == NAME && data[pos] == opts.quotechar && data[pos - 1] != '\\') {
-      state = POST_NAME;
+    } else if (state == field_name_parse_state::NAME && data[pos] == opts.quotechar &&
+               data[pos - 1] != '\\') {
+      state = field_name_parse_state::POST_NAME;
       hash_val =
         MurmurHash3_32<cudf::string_view>{}(cudf::string_view(data + name_start, pos - name_start));
-    } else if (state == POST_NAME && data[pos] == ':') {
+    } else if (state == field_name_parse_state::POST_NAME && data[pos] == ':') {
       start = pos + 1;
       break;
     }
@@ -676,14 +677,15 @@ __global__ void collect_field_names_info_kernel(const char *data,
   // has the same semantics as end() in STL containers (one past last element)
   auto const stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
 
-  parse_state st       = PRE_NAME;
+  auto st              = field_name_parse_state::PRE_NAME;
   auto last_name_start = start;
   for (auto pos = start; pos < stop; ++pos) {
-    if (st == PRE_NAME && data[pos] == opts.quotechar) {
-      st              = NAME;
+    if (st == field_name_parse_state::PRE_NAME && data[pos] == opts.quotechar) {
+      st              = field_name_parse_state::NAME;
       last_name_start = pos + 1;
-    } else if (st == NAME && data[pos] == opts.quotechar && data[pos - 1] != '\\') {
-      st       = POST_NAME;
+    } else if (st == field_name_parse_state::NAME && data[pos] == opts.quotechar &&
+               data[pos - 1] != '\\') {
+      st       = field_name_parse_state::POST_NAME;
       auto idx = atomicAdd(names_cnt, 1);
       if (nullptr != names_info) {
         auto len                                     = pos - last_name_start;
@@ -692,12 +694,13 @@ __global__ void collect_field_names_info_kernel(const char *data,
         names_info->column(2).element<uint32_t>(idx) =
           MurmurHash3_32<cudf::string_view>{}(cudf::string_view(data + last_name_start, len));
       }
-    } else if (st == POST_NAME && data[pos] == opts.quotechar) {
-      st = POST_NAME_QUOTE;
-    } else if (st == POST_NAME_QUOTE && data[pos] == opts.quotechar && data[pos - 1] != '\\') {
-      st = POST_NAME;
-    } else if (st == POST_NAME && data[pos] == opts.delimiter) {
-      st = PRE_NAME;
+    } else if (st == field_name_parse_state::POST_NAME && data[pos] == opts.quotechar) {
+      st = field_name_parse_state::POST_NAME_QUOTE;
+    } else if (st == field_name_parse_state::POST_NAME_QUOTE && data[pos] == opts.quotechar &&
+               data[pos - 1] != '\\') {
+      st = field_name_parse_state::POST_NAME;
+    } else if (st == field_name_parse_state::POST_NAME && data[pos] == opts.delimiter) {
+      st = field_name_parse_state::PRE_NAME;
     }
   }
 }
