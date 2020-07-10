@@ -548,10 +548,7 @@ class Index(Frame, Serializable):
 
         if is_mixed_with_object_dtype(self, other):
             if self.equals(other):
-                if cudf.utils.dtypes.is_string_dtype(self.dtype):
-                    return StringIndex([], dtype=self.dtype)
-                else:
-                    return self[:0]
+                return self[:0]
             else:
                 difference = self
         else:
