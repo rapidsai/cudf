@@ -221,3 +221,11 @@ set(AST_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/ast/ast_benchmark.cu")
 
 ConfigureBench(AST_BENCH "${AST_BENCH_SRC}")
+
+###################################################################################################
+# - binaryop benchmark ----------------------------------------------------------------------------
+
+set(BINARYOP_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binaryop_benchmark.cu")
+
+ConfigureBench(BINARYOP_BENCH "${BINARYOP_BENCH_SRC}")
