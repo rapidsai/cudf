@@ -23,7 +23,7 @@
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <type_traits>
+#include <simt/type_traits>
 
 namespace cudf {
 
