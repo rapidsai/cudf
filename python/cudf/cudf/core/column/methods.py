@@ -12,8 +12,8 @@ class ColumnMethodsMixin:
         if inplace:
             if self._parent is not None:
                 self._parent._mimic_inplace(
-                    self._parent._from_table(
-                        cudf._lib.table.Table({None: new_col})
+                    self._parent.__class__._from_table(
+                        cudf._lib.table.Table({self._parent.name: new_col})
                     ),
                     inplace=True,
                 )
