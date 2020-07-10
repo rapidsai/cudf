@@ -1507,6 +1507,10 @@ class Series(Frame, Serializable):
         return self._column.str(parent=self)
 
     @property
+    def list(self):
+        return self._column.list(parent=self)
+
+    @property
     def dtype(self):
         """dtype of the Series"""
         return self._column.dtype

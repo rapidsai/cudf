@@ -1,4 +1,5 @@
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -43,4 +44,26 @@ def test_create_list_series(data):
 def test_df_list_dtypes(data):
     expect = pd.DataFrame(data)
     got = cudf.DataFrame(data)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[]],
+        [[[]]],
+        [[0]],
+        [[0, 1]],
+        [[0, 1], [2, 3]],
+        [[[0, 1], [2]], [[3, 4]]],
+        [[[0, 1, None], None], None, [[3, 2, None], None]],
+        [[["a", "c", None], None], None, [["b", "d", None], None]],
+    ],
+)
+def test_leaves(data):
+    pa_array = pa.array(data)
+    while hasattr(pa_array, "flatten"):
+        pa_array = pa_array.flatten()
+    expect = cudf.Series(pa_array)
+    got = cudf.Series(data).list.leaves
     assert_eq(expect, got)

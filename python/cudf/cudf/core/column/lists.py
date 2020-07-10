@@ -2,6 +2,7 @@ import pyarrow as pa
 
 import cudf
 from cudf.core.column import ColumnBase
+from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import ListDtype
 from cudf.utils.utils import buffers_from_pyarrow
 
@@ -40,6 +41,14 @@ class ListColumn(ColumnBase):
     def get_children(self):
         return self._base_children
 
+    @property
+    def values(self):
+        return self.children[0]
+
+    @property
+    def indices(self):
+        return self.children[1]
+
     @classmethod
     def from_arrow(cls, array):
         if array.type.num_children == 0:
@@ -71,3 +80,21 @@ class ListColumn(ColumnBase):
         return pa.ListArray.from_buffers(
             self.dtype.to_arrow(), len(self), buffers, children=[values],
         )
+
+    def list(self, parent=None):
+        return ListMethods(self, parent=parent)
+
+
+class ListMethods(ColumnMethodsMixin):
+    def __init__(self, column, parent=None):
+        self._column = column
+        self._parent = parent
+
+    @property
+    def leaves(self):
+        if type(self._column.values) is ListColumn:
+            return self._column.values.list(parent=self._parent).leaves
+        else:
+            return self._return_or_inplace(
+                self._column.values, retain_index=False
+            )
