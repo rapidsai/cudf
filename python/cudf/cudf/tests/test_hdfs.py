@@ -5,8 +5,8 @@ import fastavro as fa
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-import pyarrow.orc as orc
 import pytest
+from pyarrow import orc as orc
 
 import cudf
 from cudf.tests.utils import assert_eq

@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 import pickle
 import warnings
 from numbers import Number
@@ -12,7 +11,7 @@ import pyarrow as pa
 from numba import cuda, njit
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.column import Column
 from cudf._lib.null_mask import (
     MaskState,
@@ -545,6 +544,8 @@ class ColumnBase(Column, Serializable):
                         "Boolean mask must be of same length as column"
                     )
                 key = column.as_column(cupy.arange(len(self)))[key]
+                if hasattr(value, "__len__") and len(value) == len(self):
+                    value = column.as_column(value)[key]
             nelem = len(key)
 
         if is_scalar(value):
@@ -789,7 +790,7 @@ class ColumnBase(Column, Serializable):
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        import cudf.io.dlpack as dlpack
+        from cudf.io import dlpack as dlpack
 
         return dlpack.to_dlpack(self)
 

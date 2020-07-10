@@ -1,12 +1,11 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
@@ -135,7 +134,7 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(self, dtype, **kwargs):
-        from cudf.core.column import string, as_column
+        from cudf.core.column import as_column, string
 
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[

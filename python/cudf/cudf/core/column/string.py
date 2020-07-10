@@ -1,15 +1,15 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import pickle
 import warnings
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
 import cudf
-import cudf._lib as libcudf
-import cudf._lib.string_casting as str_cast
+from cudf import _lib as libcudf
+from cudf._lib import string_casting as str_cast
 from cudf._lib.column import Column
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams as cpp_generate_character_ngrams,
@@ -20,6 +20,9 @@ from cudf._lib.nvtext.ngrams_tokenize import (
 )
 from cudf._lib.nvtext.normalize import normalize_spaces as cpp_normalize_spaces
 from cudf._lib.nvtext.replace import replace_tokens as cpp_replace_tokens
+from cudf._lib.nvtext.subword_tokenize import (
+    subword_tokenize as cpp_subword_tokenize,
+)
 from cudf._lib.nvtext.tokenize import (
     character_tokenize as cpp_character_tokenize,
     count_tokens as cpp_count_tokens,
@@ -1435,6 +1438,32 @@ class StringMethods(object):
         dtype: bool
         """
         return self._return_or_inplace(cpp_is_lower(self._column), **kwargs)
+
+    def isipv4(self, **kwargs):
+        """
+        Check whether all characters in each string form an IPv4 address.
+
+        If a string has zero characters, False is returned for
+        that check.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["", "127.0.0.1", "255.255.255.255", "123.456"])
+        >>> s.str.isipv4()
+        0    False
+        1     True
+        2     True
+        3    False
+        dtype: bool
+        """
+        return self._return_or_inplace(
+            str_cast.is_ipv4(self._column), **kwargs
+        )
 
     def lower(self, **kwargs):
         """
@@ -3899,6 +3928,92 @@ class StringMethods(object):
                 as_scalar(delimiter, dtype="str"),
             ),
             **kwargs,
+        )
+
+    def subword_tokenize(
+        self,
+        hash_file,
+        max_length=64,
+        stride=48,
+        do_lower=True,
+        do_truncate=False,
+        max_num_strings=100,
+        max_num_chars=100000,
+        max_rows_tensor=500,
+        **kwargs,
+    ):
+        """
+        Run CUDA BERT subword tokenizer on cuDF strings column.
+        Encodes words to token ids using vocabulary from a pretrained
+        tokenizer.
+
+        Parameters
+        ----------
+        hash_file : str
+            Path to hash file containing vocabulary of words with token-ids.
+        max_length : int, Default is 64
+            Limits the length of the sequence returned.
+            If tokenized string is shorter than max_length,
+            output will be padded with 0s.
+            If the tokenized string is longer than max_length and
+            do_truncate == False, there will be multiple returned
+            sequences containing the overflowing token-ids.
+        stride : int, Default is 48
+            If do_truncate == False and the tokenized string is larger
+            than max_length, the sequences containing the overflowing
+            token-ids can contain duplicated token-ids from the main
+            sequence. If max_length is equal to stride there are no
+            duplicated-id tokens. If stride is 80% of max_length,
+            20% of the first sequence will be repeated on the second
+            sequence and so on until the entire sentence is encoded.
+        do_lower : bool, Default is True
+            If set to true, original text will be lowercased before encoding.
+        do_truncate : bool, Default is False
+            If set to true, strings will be truncated and padded to
+            max_length. Each input string will result in exactly one output
+            sequence. If set to false, there may be multiple output
+            sequences when the max_length is smaller than generated tokens.
+        max_num_strings : int, Default is 100
+            The maximum number of strings to be encoded.
+        max_num_chars : int, Default is 100000
+            The maximum number of characters in the input strings column.
+        max_rows_tensor : int, Default is 500
+            The maximum number of rows in the output
+
+        Returns
+        -------
+        token-ids : Column
+            The token-ids for each string padded with 0s to max_length.
+        attention-mask : Column
+            The mask for token-ids result where corresponding positions
+            identify valid token-id values.
+        metadata : Column
+            Each row contains the index id of the original string and the
+            first and last index of the token-ids that are non-padded and
+            non-overlapping.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(['this is the', 'best book'])
+        >>> tokens, masks, metadata =
+               ser.str.subword_tokenize("bert_hash_table.txt")
+        """
+        tokens, masks, metadata = cpp_subword_tokenize(
+            self._column,
+            hash_file,
+            max_length,
+            stride,
+            do_lower,
+            do_truncate,
+            max_num_strings,
+            max_num_chars,
+            max_rows_tensor,
+        )
+        return (
+            cupy.asarray(tokens),
+            cupy.asarray(masks),
+            cupy.asarray(metadata),
         )
 
 

@@ -779,7 +779,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoin(JNIEnv *env, jcl
                                                                 jlong left_table,
                                                                 jintArray left_col_join_indices,
                                                                 jlong right_table,
-                                                                jintArray right_col_join_indices) {
+                                                                jintArray right_col_join_indices,
+                                                                jboolean compare_nulls_equal) {
   JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
   JNI_NULL_CHECK(env, left_col_join_indices, "left_col_join_indices is null", NULL);
   JNI_NULL_CHECK(env, right_table, "right_table is null", NULL);
@@ -804,7 +805,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoin(JNIEnv *env, jcl
     }
 
     std::unique_ptr<cudf::table> result =
-        cudf::left_join(*n_left_table, *n_right_table, left_join_cols, right_join_cols, dedupe);
+        cudf::left_join(*n_left_table, *n_right_table, left_join_cols, right_join_cols, dedupe,
+            static_cast<bool>(compare_nulls_equal)? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL);
 
     return cudf::jni::convert_table_for_return(env, result);
   }
@@ -815,7 +817,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoin(JNIEnv *env, jc
                                                                  jlong left_table,
                                                                  jintArray left_col_join_indices,
                                                                  jlong right_table,
-                                                                 jintArray right_col_join_indices) {
+                                                                 jintArray right_col_join_indices,
+                                                                 jboolean compare_nulls_equal) {
   JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
   JNI_NULL_CHECK(env, left_col_join_indices, "left_col_join_indices is null", NULL);
   JNI_NULL_CHECK(env, right_table, "right_table is null", NULL);
@@ -840,7 +843,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoin(JNIEnv *env, jc
     }
 
     std::unique_ptr<cudf::table> result =
-        cudf::inner_join(*n_left_table, *n_right_table, left_join_cols, right_join_cols, dedupe);
+        cudf::inner_join(*n_left_table, *n_right_table, left_join_cols, right_join_cols, dedupe,
+            static_cast<bool>(compare_nulls_equal)? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL);
 
     return cudf::jni::convert_table_for_return(env, result);
   }
@@ -851,7 +855,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullJoin(JNIEnv *env, jcl
                                                                 jlong left_table,
                                                                 jintArray left_col_join_indices,
                                                                 jlong right_table,
-                                                                jintArray right_col_join_indices) {
+                                                                jintArray right_col_join_indices,
+                                                                jboolean compare_nulls_equal) {
   JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
   JNI_NULL_CHECK(env, left_col_join_indices, "left_col_join_indices is null", NULL);
   JNI_NULL_CHECK(env, right_table, "right_table is null", NULL);
@@ -876,7 +881,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullJoin(JNIEnv *env, jcl
     }
 
     std::unique_ptr<cudf::table> result =
-        cudf::full_join(*n_left_table, *n_right_table, left_join_cols, right_join_cols, dedupe);
+        cudf::full_join(*n_left_table, *n_right_table, left_join_cols, right_join_cols, dedupe,
+            static_cast<bool>(compare_nulls_equal)? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL);
 
     return cudf::jni::convert_table_for_return(env, result);
   }
@@ -885,7 +891,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullJoin(JNIEnv *env, jcl
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoin(
     JNIEnv *env, jclass, jlong left_table, jintArray left_col_join_indices, jlong right_table,
-    jintArray right_col_join_indices) {
+    jintArray right_col_join_indices, jboolean compare_nulls_equal) {
   JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
   JNI_NULL_CHECK(env, left_col_join_indices, "left_col_join_indices is null", NULL);
   JNI_NULL_CHECK(env, right_table, "right_table is null", NULL);
@@ -907,7 +913,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoin(
     }
 
     std::unique_ptr<cudf::table> result = cudf::left_semi_join(
-        *n_left_table, *n_right_table, left_join_cols, right_join_cols, return_cols);
+        *n_left_table, *n_right_table, left_join_cols, right_join_cols, return_cols,
+          static_cast<bool>(compare_nulls_equal)? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL);
 
     return cudf::jni::convert_table_for_return(env, result);
   }
@@ -916,7 +923,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoin(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoin(
     JNIEnv *env, jclass, jlong left_table, jintArray left_col_join_indices, jlong right_table,
-    jintArray right_col_join_indices) {
+    jintArray right_col_join_indices, jboolean compare_nulls_equal) {
   JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
   JNI_NULL_CHECK(env, left_col_join_indices, "left_col_join_indices is null", NULL);
   JNI_NULL_CHECK(env, right_table, "right_table is null", NULL);
@@ -938,7 +945,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoin(
     }
 
     std::unique_ptr<cudf::table> result = cudf::left_anti_join(
-        *n_left_table, *n_right_table, left_join_cols, right_join_cols, return_cols);
+        *n_left_table, *n_right_table, left_join_cols, right_join_cols, return_cols,
+            static_cast<bool>(compare_nulls_equal)? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL);
 
     return cudf::jni::convert_table_for_return(env, result);
   }

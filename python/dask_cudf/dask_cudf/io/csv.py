@@ -2,7 +2,7 @@ import os
 from glob import glob
 from warnings import warn
 
-import dask.dataframe as dd
+from dask import dataframe as dd
 from dask.base import tokenize
 from dask.compatibility import apply
 from dask.dataframe.io.csv import make_reader
