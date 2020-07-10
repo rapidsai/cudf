@@ -499,6 +499,8 @@ void writer::impl::write(table_view const& table,
     //
     column_to_strings_fn converter{options_, mr_};
     for (auto&& sub_view : vector_views) {
+      // Skip if the table has no rows
+      if (sub_view.num_rows() == 0) continue;
       std::vector<std::unique_ptr<column>> str_column_vec;
 
       // populate vector of string-converted columns:

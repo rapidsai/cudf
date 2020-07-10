@@ -1542,3 +1542,16 @@ def test_csv_writer_empty_dataframe(tmpdir):
 
     assert df.shape == (0, 2)
     assert all(df.dtypes == ["object", "object"])
+
+
+def test_csv_write_chunksize_corner_case(tmpdir):
+    # With this num of rows and chunksize
+    # libcudf splits table such a way that it
+    # will end up creating a empty table slice
+    # which caused the issue.
+    df_fname = tmpdir.join("gdf_df_17.csv")
+    df = cudf.DataFrame({"a": np.arange(10_000)})
+    df.to_csv(df_fname, chunksize=1000, index=False)
+    got = cudf.read_csv(df_fname)
+
+    assert_eq(df, got)
