@@ -150,14 +150,13 @@ std::unique_ptr<column> copy_if_else(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::copy_if_else(table_view, size_type,
- * bool, long, rmm::mr::device_memory_resource*)
+ * @copydoc cudf::sample
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> sample(table_view const& input,
                               size_type const n,
-                              row_multi_sampling multi_sampling   = row_multi_sampling::DISALLOWED,
+                              sample_with_replacement replacement = sample_with_replacement::FALSE,
                               int64_t const seed                  = 0,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream                 = 0);

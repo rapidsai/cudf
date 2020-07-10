@@ -40,7 +40,7 @@ TEST_F(SampleTest, FailCaseRowMultipleSampling)
   cudf::size_type const n_samples = 10;
   cudf::table_view input({col1});
 
-  EXPECT_THROW(cudf::sample(input, n_samples, cudf::row_multi_sampling::DISALLOWED, 0),
+  EXPECT_THROW(cudf::sample(input, n_samples, cudf::sample_with_replacement::FALSE, 0),
                cudf::logic_error);
 }
 
@@ -53,7 +53,7 @@ TEST_F(SampleTest, RowMultipleSamplingDisallowed)
   cudf::table_view input({col1});
 
   for (int i = 0; i < 10; i++) {
-    auto out_table  = cudf::sample(input, n_samples, cudf::row_multi_sampling::DISALLOWED, i);
+    auto out_table  = cudf::sample(input, n_samples, cudf::sample_with_replacement::FALSE, i);
     auto sorted_out = cudf::sort(out_table->view());
 
     cudf::test::expect_tables_equal(input, sorted_out->view());
@@ -68,31 +68,31 @@ TEST_F(SampleTest, TestReproducibilityWithSeed)
 
   cudf::table_view input({col1});
 
-  auto expected_1 = cudf::sample(input, n_samples, cudf::row_multi_sampling::DISALLOWED, 1);
+  auto expected_1 = cudf::sample(input, n_samples, cudf::sample_with_replacement::FALSE, 1);
   for (int i = 0; i < 2; i++) {
-    auto out = cudf::sample(input, n_samples, cudf::row_multi_sampling::DISALLOWED, 1);
+    auto out = cudf::sample(input, n_samples, cudf::sample_with_replacement::FALSE, 1);
 
     cudf::test::expect_tables_equal(expected_1->view(), out->view());
   }
 
-  auto expected_2 = cudf::sample(input, n_samples, cudf::row_multi_sampling::ALLOWED, 1);
+  auto expected_2 = cudf::sample(input, n_samples, cudf::sample_with_replacement::TRUE, 1);
   for (int i = 0; i < 2; i++) {
-    auto out = cudf::sample(input, n_samples, cudf::row_multi_sampling::ALLOWED, 1);
+    auto out = cudf::sample(input, n_samples, cudf::sample_with_replacement::TRUE, 1);
 
     cudf::test::expect_tables_equal(expected_2->view(), out->view());
   }
 }
 
-struct SampleBasicTest
-  : public SampleTest,
-    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::row_multi_sampling>> {
+struct SampleBasicTest : public SampleTest,
+                         public ::testing::WithParamInterface<
+                           std::tuple<cudf::size_type, cudf::sample_with_replacement>> {
 };
 
 TEST_P(SampleBasicTest, CombinationOfParameters)
 {
-  cudf::size_type const table_size    = 1024;
-  cudf::size_type const n_samples     = std::get<0>(GetParam());
-  cudf::row_multi_sampling multi_smpl = std::get<1>(GetParam());
+  cudf::size_type const table_size         = 1024;
+  cudf::size_type const n_samples          = std::get<0>(GetParam());
+  cudf::sample_with_replacement multi_smpl = std::get<1>(GetParam());
 
   auto data = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
   cudf::test::fixed_width_column_wrapper<int16_t> col1(data, data + table_size);
@@ -107,10 +107,10 @@ TEST_P(SampleBasicTest, CombinationOfParameters)
 INSTANTIATE_TEST_CASE_P(
   SampleTest,
   SampleBasicTest,
-  ::testing::Values(std::make_tuple(0, cudf::row_multi_sampling::ALLOWED),
-                    std::make_tuple(0, cudf::row_multi_sampling::DISALLOWED),
-                    std::make_tuple(512, cudf::row_multi_sampling::ALLOWED),
-                    std::make_tuple(512, cudf::row_multi_sampling::DISALLOWED),
-                    std::make_tuple(1024, cudf::row_multi_sampling::ALLOWED),
-                    std::make_tuple(1024, cudf::row_multi_sampling::DISALLOWED),
-                    std::make_tuple(2048, cudf::row_multi_sampling::ALLOWED)));
+  ::testing::Values(std::make_tuple(0, cudf::sample_with_replacement::TRUE),
+                    std::make_tuple(0, cudf::sample_with_replacement::FALSE),
+                    std::make_tuple(512, cudf::sample_with_replacement::TRUE),
+                    std::make_tuple(512, cudf::sample_with_replacement::FALSE),
+                    std::make_tuple(1024, cudf::sample_with_replacement::TRUE),
+                    std::make_tuple(1024, cudf::sample_with_replacement::FALSE),
+                    std::make_tuple(2048, cudf::sample_with_replacement::TRUE)));

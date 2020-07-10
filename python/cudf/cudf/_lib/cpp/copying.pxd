@@ -155,13 +155,13 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         size_type index
     ) except +
 
-    ctypedef enum row_multi_sampling:
-        DISALLOWED 'cudf::row_multi_sampling::DISALLOWED',
-        ALLOWED 'cudf::row_multi_sampling::ALLOWED',
+    ctypedef enum sample_with_replacement:
+        FALSE 'cudf::sample_with_replacement::FALSE',
+        TRUE 'cudf::sample_with_replacement::TRUE',
 
     cdef unique_ptr[table] sample (
         table_view input,
         size_type n,
-        row_multi_sampling multi_smpl,
+        sample_with_replacement replacement,
         int64_t seed
     ) except +

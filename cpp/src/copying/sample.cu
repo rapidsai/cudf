@@ -32,7 +32,7 @@ namespace detail {
 
 std::unique_ptr<table> sample(table_view const& input,
                               size_type const n,
-                              row_multi_sampling multi_sampling,
+                              sample_with_replacement replacement,
                               int64_t const seed,
                               rmm::mr::device_memory_resource* mr,
                               cudaStream_t stream)
@@ -40,13 +40,13 @@ std::unique_ptr<table> sample(table_view const& input,
   CUDF_EXPECTS(n >= 0, "expected number of samples should be non-negative");
   auto const num_rows = input.num_rows();
 
-  if ((n > num_rows) and (multi_sampling == row_multi_sampling::DISALLOWED)) {
+  if ((n > num_rows) and (replacement == sample_with_replacement::FALSE)) {
     CUDF_FAIL("If n > number of rows, then multiple sampling of the same row should be allowed");
   }
 
   if (n == 0) return cudf::empty_like(input);
 
-  if (multi_sampling == row_multi_sampling::ALLOWED) {
+  if (replacement == sample_with_replacement::TRUE) {
     auto RandomGen = [seed, num_rows] __device__(auto i) {
       thrust::default_random_engine rng(seed);
       thrust::uniform_int_distribution<size_type> dist{0, num_rows};
@@ -85,12 +85,12 @@ std::unique_ptr<table> sample(table_view const& input,
 
 std::unique_ptr<table> sample(table_view const& input,
                               size_type const n,
-                              row_multi_sampling multi_sampling,
+                              sample_with_replacement replacement,
                               int64_t const seed,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
-  return detail::sample(input, n, multi_sampling, seed, mr);
+  return detail::sample(input, n, replacement, seed, mr);
 }
 }  // namespace cudf

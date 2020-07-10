@@ -663,17 +663,17 @@ def sample(Table input, size_type n,
     cdef table_view tbl_view = (
         input.view() if keep_index else input.data_view()
     )
-    cdef cpp_copying.row_multi_sampling multi_smpl
+    cdef cpp_copying.sample_with_replacement replacement
 
     if replace:
-        multi_smpl = cpp_copying.row_multi_sampling.ALLOWED
+        replacement = cpp_copying.sample_with_replacement.TRUE
     else:
-        multi_smpl = cpp_copying.row_multi_sampling.DISALLOWED
+        replacement = cpp_copying.sample_with_replacement.FALSE
 
     cdef unique_ptr[table] c_output
     with nogil:
         c_output = move(
-            cpp_copying.sample(tbl_view, n, multi_smpl, seed)
+            cpp_copying.sample(tbl_view, n, replacement, seed)
         )
 
     return Table.from_unique_ptr(
