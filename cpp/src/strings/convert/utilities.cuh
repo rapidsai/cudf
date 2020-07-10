@@ -99,50 +99,29 @@ __device__ inline size_type count_digits(IntegerType value)
             ? std::numeric_limits<IntegerType>::max()
             : cudf::util::absolute_value(value);
   // largest 8-byte unsigned value is 18446744073709551615 (20 digits)
+  // clang-format off
   size_type digits =
-    (value < 10
-       ? 1
-       : (value < 100
-            ? 2
-            : (value < 1000
-                 ? 3
-                 : (value < 10000
-                      ? 4
-                      : (value < 100000
-                           ? 5
-                           : (value < 1000000
-                                ? 6
-                                : (value < 10000000
-                                     ? 7
-                                     : (value < 100000000
-                                          ? 8
-                                          : (value < 1000000000
-                                               ? 9
-                                               : (value < 10000000000
-                                                    ? 10
-                                                    : (value < 100000000000
-                                                         ? 11
-                                                         : (value < 1000000000000
-                                                              ? 12
-                                                              : (value < 10000000000000
-                                                                   ? 13
-                                                                   : (value < 100000000000000
-                                                                        ? 14
-                                                                        : (value < 1000000000000000
-                                                                             ? 15
-                                                                             : (value <
-                                                                                    10000000000000000
-                                                                                  ? 16
-                                                                                  : (value <
-                                                                                         100000000000000000
-                                                                                       ? 17
-                                                                                       : (value <
-                                                                                              1000000000000000000
-                                                                                            ? 18
-                                                                                            : (value <
-                                                                                                   10000000000000000000
-                                                                                                 ? 19
-                                                                                                 : 20)))))))))))))))))));
+    (value < 10 ? 1 :
+    (value < 100 ? 2 :
+    (value < 1000 ? 3 :
+    (value < 10000 ? 4 :
+    (value < 100000 ? 5 :
+    (value < 1000000 ? 6 :
+    (value < 10000000 ? 7 :
+    (value < 100000000 ? 8 :
+    (value < 1000000000 ? 9 :
+    (value < 10000000000 ? 10 :
+    (value < 100000000000 ? 11 :
+    (value < 1000000000000 ? 12 :
+    (value < 10000000000000 ? 13 :
+    (value < 100000000000000 ? 14 :
+    (value < 1000000000000000 ? 15 :
+    (value < 10000000000000000 ? 16 :
+    (value < 100000000000000000 ? 17 :
+    (value < 1000000000000000000 ? 18 :
+    (value < 10000000000000000000 ? 19 :
+    20)))))))))))))))))));
+  // clang-format on
   return digits + static_cast<size_type>(is_negative);
 }
 

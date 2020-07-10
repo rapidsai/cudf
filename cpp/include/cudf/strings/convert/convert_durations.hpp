@@ -35,7 +35,7 @@ namespace strings {
  * | :-------: | ----------- | ---------------- |
  * | %%d | Days | -2,147,483,648 to 2,147,483,647 |
  * | %%+ | Optional '+' sign for hours in case of negative days: + | |
- * | %%H | hour of the day | 00 to 23 |
+ * | %%H | 24-hour of the day | 00 to 23 |
  * | %%M | Minute of the hour | 00 to 59 |
  * | %%S | Second of the minute | 00 to 59 |
  * | %%u | 6-digit microsecond | 000000 to 999999 |
@@ -74,17 +74,18 @@ std::unique_ptr<column> to_durations(
  *
  * The format pattern can include the following specifiers: "%d,%+,%H,%M,%S,%u,%f"
  *
- * | Specifier | Description |
- * | :-------: | ----------- |
- * | %%d | Days: -2,147,483,648-2,147,483,647 |
- * | %%+ | Optional '+' sign for hours in case of negative days: + |
- * | %%H | hour of the day: 00-23 |
- * | %%M | Minute of the hour: 00-59|
- * | %%S | Second of the minute: 00-59 |
- * | %%u | 6-digit microsecond: 000000-999999 |
- * | %%f | 9-digit nanosecond: 000000000-999999999 |
+ * | Specifier | Description | Range |
+ * | :-------: | ----------- | ---------------- |
+ * | %%d | Days | -2,147,483,648 to 2,147,483,647 |
+ * | %%+ | Optional '+' sign for hours in case of negative days: + | |
+ * | %%H | 24-hour of the day | 00 to 23 |
+ * | %%M | Minute of the hour | 00 to 59 |
+ * | %%S | Second of the minute | 00 to 59 |
+ * | %%u | 6-digit microsecond | 000000 to 999999 |
+ * | %%f | 9-digit nanosecond | 000000000 to 999999999 |
  *
  * Any format string starting with letter 'P' is considered iso format.
+ * For Example: "P%dD%HH%MM%S%fS"
  * https://en.wikipedia.org/wiki/ISO_8601#Durations
  * For ISO format, the leading zeros are not present for all specifiers and
  * trailing zeros are not present for "%f" specifier.

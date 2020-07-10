@@ -113,7 +113,7 @@ struct format_compiler {
       }
       if (ch >= '0' && ch <= '9') {
         CUDF_EXPECTS(*str == 'f', "precision not supported for specifier: " + std::string(1, *str));
-        specifier_lengths[*str] = static_cast<int8_t>(ch - '0') + 1;
+        specifier_lengths[*str] = static_cast<int8_t>(ch - '0') + 1;  // +1 is for dot
         ch                      = *str++;
         length--;
       }
@@ -219,9 +219,9 @@ struct duration_to_string_size_fn {
       // 0 or ns without trailing zeros
       case 'f':
         return (timeparts[DU_SUBSECOND] == 0) ? 0 : [units = type] {
-          if (units == type_id::DURATION_MILLISECONDS) return 3 + 1;
-          if (units == type_id::DURATION_MICROSECONDS) return 6 + 1;
-          if (units == type_id::DURATION_NANOSECONDS) return 9 + 1;
+          if (units == type_id::DURATION_MILLISECONDS) return 3 + 1;  // +1 is for dot
+          if (units == type_id::DURATION_MICROSECONDS) return 6 + 1;  // +1 is for dot
+          if (units == type_id::DURATION_NANOSECONDS) return 9 + 1;   // +1 is for dot
           return 0;
         }() - count_trailing_zeros(timeparts[DU_SUBSECOND]);  // 3/6/9-trailing_zeros.
         break;
@@ -337,7 +337,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
             if (units == type_id::DURATION_NANOSECONDS) return 9;
             return 0;
           }();
-          int2str(subsecond_digits + 1, digits, timeparts[DU_SUBSECOND]);
+          int2str(subsecond_digits + 1, digits, timeparts[DU_SUBSECOND]);  // +1 is for dot
           ptr = copy_and_increment(
             ptr,
             subsecond_digits,
@@ -515,7 +515,7 @@ struct parse_duration {
         case 'u':
         case 'f':
           if (*ptr == '.') {
-            auto subsecond_precision = (item.length == -1) ? 9 : item.length - 1;
+            auto subsecond_precision = (item.length == -1) ? 9 : item.length - 1;  // +1 is for dot
             auto subsecond = str2int_fixed(ptr + 1, subsecond_precision, length - 1, item_length);
             constexpr int64_t powers_of_ten[] = {
               1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
