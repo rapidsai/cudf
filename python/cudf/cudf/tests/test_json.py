@@ -295,7 +295,7 @@ def test_json_bool_values():
 
 
 @pytest.mark.parametrize(
-    "buffer", ["[null,]\n[1.0, ]", '{"0":null,"1":}\n{"0":1.0,"1": }']
+    "buffer", ["[1.0,]\n[null, ]", '{"0":1.0,"1":}\n{"0":null,"1": }','{"0":1.0}\n{"1":}']
 )
 def test_json_null_literal(buffer):
     df = cudf.read_json(buffer, lines=True)
@@ -304,7 +304,7 @@ def test_json_null_literal(buffer):
     # second column contains only empty fields, type should be set to int8
     np.testing.assert_array_equal(df.dtypes, ["float64", "int8"])
     np.testing.assert_array_equal(
-        df["0"].to_array(fillna=np.nan), [np.nan, 1.0]
+        df["0"].to_array(fillna=np.nan), [1.0, np.nan]
     )
     np.testing.assert_array_equal(
         df["1"].to_array(fillna=np.nan),

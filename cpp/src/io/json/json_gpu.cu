@@ -452,6 +452,7 @@ __global__ void convert_json_to_columns_kernel(const char *data,
                                                cudf::size_type num_records,
                                                const data_type *dtypes,
                                                ParseOptions opts,
+                                               bool is_object,
                                                col_map_type col_map,
                                                void *const *output_columns,
                                                int num_columns,
@@ -466,7 +467,6 @@ __global__ void convert_json_to_columns_kernel(const char *data,
   long stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
 
   limit_range_to_brackets(data, start, stop);
-  const bool is_object = (data[start - 1] == '{');
 
   for (int col = 0; col < num_columns && start < stop; col++) {
     auto dst_col = col;
@@ -534,6 +534,7 @@ __global__ void convert_json_to_columns_kernel(const char *data,
 __global__ void detect_json_data_types(const char *data,
                                        size_t data_size,
                                        const ParseOptions opts,
+                                       bool is_object,
                                        col_map_type col_map,
                                        int num_columns,
                                        const uint64_t *rec_starts,
@@ -548,13 +549,14 @@ __global__ void detect_json_data_types(const char *data,
   long stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
 
   limit_range_to_brackets(data, start, stop);
-  const bool is_object = (data[start - 1] == '{');
 
-  for (int col = 0; col < num_columns && start < stop; col++) {
+  int col = 0;
+  for (; col < num_columns && start < stop; col++) {
     auto dst_col = col;
     if (is_object) {
       auto const col_name_hash = parse_field_name(data, opts, start, stop);
       dst_col                  = (*col_map.find(col_name_hash)).second;
+      atomicAdd(&column_infos[dst_col].null_count, -1);
     }
     auto field_start     = start;
     const long field_end = cudf::io::gpu::seek_field_end(data, opts, field_start, stop);
@@ -642,6 +644,9 @@ __global__ void detect_json_data_types(const char *data,
       }
     }
   }
+  if (!is_object) {
+    for (; col < num_columns; col++) atomicAdd(&column_infos[col].null_count, 1);
+  }
 }
 
 /**
@@ -712,6 +717,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
                              bitmask_type *const *valid_fields,
                              cudf::size_type *num_valid_fields,
                              ParseOptions const &opts,
+                             bool is_object,
                              col_map_type col_map,
                              cudaStream_t stream)
 {
@@ -729,6 +735,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
     num_records,
     dtypes,
     opts,
+    is_object,
     col_map,
     output_columns,
     num_columns,
@@ -746,6 +753,7 @@ void detect_data_types(ColumnInfo *column_infos,
                        const char *data,
                        size_t data_size,
                        const ParseOptions &options,
+                       bool is_object,
                        col_map_type col_map,
                        int num_columns,
                        const uint64_t *rec_starts,
@@ -759,8 +767,15 @@ void detect_data_types(ColumnInfo *column_infos,
   // Calculate actual block count to use based on records count
   const int grid_size = (num_records + block_size - 1) / block_size;
 
-  detect_json_data_types<<<grid_size, block_size, 0, stream>>>(
-    data, data_size, options, col_map, num_columns, rec_starts, num_records, column_infos);
+  detect_json_data_types<<<grid_size, block_size, 0, stream>>>(data,
+                                                               data_size,
+                                                               options,
+                                                               is_object,
+                                                               col_map,
+                                                               num_columns,
+                                                               rec_starts,
+                                                               num_records,
+                                                               column_infos);
 
   CUDA_TRY(cudaGetLastError());
 }

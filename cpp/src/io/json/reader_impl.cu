@@ -442,8 +442,8 @@ void reader::impl::set_column_names(cudaStream_t stream)
   CUDF_EXPECTS(first_curly_bracket != first_row.end() || first_square_bracket != first_row.end(),
                "Input data is not a valid JSON file.");
   // If the first opening bracket is '{', assume object format
-  const bool is_object = first_curly_bracket < first_square_bracket;
-  if (is_object) {
+  is_json_object = first_curly_bracket < first_square_bracket;
+  if (is_json_object) {
     metadata.column_names = get_field_names(stream);
   } else {
     int cols_found = 0;
@@ -459,6 +459,17 @@ void reader::impl::set_column_names(cudaStream_t stream)
       }
     }
   }
+}
+
+void set_null_count(size_type num_rows,
+                    rmm::device_vector<cudf::io::json::ColumnInfo> &infos,
+                    cudaStream_t stream)
+{
+  thrust::for_each(
+    rmm::exec_policy(stream)->on(stream),
+    infos.begin(),
+    infos.end(),
+    [num_rows] __device__(cudf::io::json::ColumnInfo & info) { info.null_count = num_rows; });
 }
 
 /**
@@ -510,17 +521,18 @@ void reader::impl::set_data_types(cudaStream_t stream)
 
     rmm::device_vector<cudf::io::json::ColumnInfo> d_column_infos(num_columns,
                                                                   cudf::io::json::ColumnInfo{});
+    if (is_json_object) set_null_count(rec_starts_.size(), d_column_infos, stream);
     cudf::io::json::gpu::detect_data_types(d_column_infos.data().get(),
                                            static_cast<const char *>(data_.data()),
                                            data_.size(),
                                            opts_,
+                                           is_json_object,
                                            *column_names_hash_map,
                                            num_columns,
                                            rec_starts_.data().get(),
                                            rec_starts_.size(),
                                            stream);
     thrust::host_vector<cudf::io::json::ColumnInfo> h_column_infos = d_column_infos;
-
     for (const auto &cinfo : h_column_infos) {
       if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
         // Entire column is NULL; allocate the smallest amount of memory
@@ -584,6 +596,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
                                                d_valid.data().get(),
                                                d_valid_counts.data().get(),
                                                opts_,
+                                               is_json_object,
                                                *column_names_hash_map,
                                                stream);
   CUDA_TRY(cudaStreamSynchronize(stream));

@@ -475,9 +475,9 @@ TEST_F(JsonReaderTest, JsonLinesObjectsMissingData)
   EXPECT_EQ(result.tbl->num_columns(), 3);
   EXPECT_EQ(result.tbl->num_rows(), 2);
 
-  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::FLOAT64);
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
 
   EXPECT_EQ(std::string(result.metadata.column_names[0]), "col2");
   EXPECT_EQ(std::string(result.metadata.column_names[1]), "col3");
@@ -489,7 +489,7 @@ TEST_F(JsonReaderTest, JsonLinesObjectsMissingData)
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return i == 0; });
 
   cudf::test::expect_columns_equal(result.tbl->get_column(2),
-                                   int64_wrapper{{0, 200}, col1_validity});
+                                   float64_wrapper{{0., 200.}, col1_validity});
   cudf::test::expect_columns_equal(result.tbl->get_column(0),
                                    float64_wrapper{{1.1, 0.}, col2_validity});
   cudf::test::expect_columns_equal(result.tbl->get_column(1),
