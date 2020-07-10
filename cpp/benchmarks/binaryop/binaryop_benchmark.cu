@@ -18,7 +18,6 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-#include <algorithm>
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table.hpp>
@@ -30,7 +29,7 @@
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 
-#include <list>
+#include <algorithm>
 #include <numeric>
 #include <vector>
 
