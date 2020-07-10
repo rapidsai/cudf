@@ -27,7 +27,6 @@ from cudf.tests.utils import (
     UNSIGNED_TYPES,
     assert_eq,
 )
-from cudf.utils.dtypes import is_mixed_with_object_dtype
 
 
 def test_df_set_index_from_series():
@@ -596,7 +595,11 @@ def test_index_difference(data, other, sort):
     gd_data = cudf.core.index.as_index(data)
     gd_other = cudf.core.index.as_index(other)
 
-    if is_mixed_with_object_dtype(gd_data, gd_other):
+    if (
+        gd_data.dtype.kind == "f"
+        and gd_other.dtype.kind != "f"
+        or (gd_data.dtype.kind != "f" and gd_other.dtype.kind == "f")
+    ):
         pytest.xfail(
             "Bug in Pandas: https://github.com/pandas-dev/pandas/issues/35217"
         )
@@ -704,6 +707,15 @@ def test_index_categories_equal(data, other):
 
     gd_data = cudf.core.index.as_index(data).astype("category")
     gd_other = cudf.core.index.as_index(other)
+
+    if (
+        gd_data.dtype.kind == "f"
+        and gd_other.dtype.kind != "f"
+        or (gd_data.dtype.kind != "f" and gd_other.dtype.kind == "f")
+    ):
+        pytest.xfail(
+            "Bug in Pandas: https://github.com/pandas-dev/pandas/issues/35217"
+        )
 
     expected = pd_data.equals(pd_other)
     actual = gd_data.equals(gd_other)
