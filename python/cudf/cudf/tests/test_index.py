@@ -597,7 +597,9 @@ def test_index_difference(data, other, sort):
     gd_other = cudf.core.index.as_index(other)
 
     if is_mixed_with_object_dtype(gd_data, gd_other):
-        pytest.xfail("failing configuration (but should work)")
+        pytest.xfail(
+            "Bug in Pandas: https://github.com/pandas-dev/pandas/issues/35217"
+        )
     expected = pd_data.difference(pd_other, sort=sort)
     actual = gd_data.difference(gd_other, sort=sort)
     assert_eq(expected, actual)
