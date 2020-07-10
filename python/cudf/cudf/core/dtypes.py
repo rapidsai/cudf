@@ -140,8 +140,8 @@ class ListDtype(ExtensionDtype):
         return self._typ
 
     def __eq__(self, other):
-        if other == "list":
-            return True
+        if isinstance(other, str):
+            return other == self.name
         if type(other) is not ListDtype:
             return False
         return self._typ.equals(other._typ)
