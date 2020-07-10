@@ -295,7 +295,12 @@ def test_json_bool_values():
 
 
 @pytest.mark.parametrize(
-    "buffer", ["[1.0,]\n[null, ]", '{"0":1.0,"1":}\n{"0":null,"1": }','{"0":1.0}\n{"1":}']
+    "buffer",
+    [
+        "[1.0,]\n[null, ]",
+        '{"0":1.0,"1":}\n{"0":null,"1": }',
+        '{"0":1.0}\n{"1":}',
+    ],
 )
 def test_json_null_literal(buffer):
     df = cudf.read_json(buffer, lines=True)
