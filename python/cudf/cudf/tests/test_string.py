@@ -1113,6 +1113,20 @@ def test_string_char_types(type_op, data):
     assert_eq(getattr(gs.str, type_op)(), getattr(ps.str, type_op)())
 
 
+def test_string_filter_alphanum():
+    data = ["1234567890", "!@#$%^&*()", ",./<>?;:[]}{|+=", "abc DEF"]
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if str.isalnum(c):
+                rs = rs + c
+        expected.append(rs)
+
+    gs = Series(data)
+    assert_eq(gs.str.filter_alphanum(), Series(expected))
+
+
 @pytest.mark.parametrize(
     "case_op", ["title", "capitalize", "lower", "upper", "swapcase"]
 )
