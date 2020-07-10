@@ -7,4 +7,4 @@ printenv
 # Cleanup local git
 git clean -xdf
 # build libcudf with verbose output
-./build.sh -v libcudf --allgpuarch
+./build.sh -v libcudf_kafka --allgpuarch

@@ -36,7 +36,6 @@ requirements:
     - flatbuffers
     - boost-cpp >=1.72.0
     - dlpack
-    - librdkafka
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - dlpack

@@ -51,6 +51,9 @@ conda config --set ssl_verify False
 logger "Build conda pkg for libcudf..."
 source ci/cpu/libcudf/build_libcudf.sh
 
+logger "Build conda pkg for libcudf_kafka..."
+source ci/cpu/libcudf_kafka/build_libcudf_kafka.sh
+
 logger "Build conda pkg for cudf..."
 source ci/cpu/cudf/build_cudf.sh
 

@@ -1,0 +1,47 @@
+# Copyright (c) 2018, NVIDIA CORPORATION.
+
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
+{% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
+{% set cuda_version='.'.join(environ.get('CUDA_VERSION', '10.0').split('.')[:2]) %}
+
+package:
+  name: libcudf_kafka
+  version: {{ version }}
+
+source:
+  git_url: ../../..
+
+build:
+  number: {{ GIT_DESCRIBE_NUMBER }}
+  string: cuda{{ cuda_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  script_env:
+    - CC
+    - CXX
+    - CUDAHOSTCXX
+    - PARALLEL_LEVEL
+    - VERSION_SUFFIX
+  run_exports:
+    - {{ pin_subpackage("libcudf_kafka", max_pin="x.x") }}
+
+requirements:
+  build:
+    - cmake >=3.14.0
+  host:
+    - cudf {{ version }}
+    - librdkafka=1.4.0
+    - python-confluent-kafka
+  run:
+    - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
+    - librdkafka=1.4.0
+    - python-confluent-kafka
+
+test:
+  commands:
+    - test -f $PREFIX/lib/libcudf_kafka.so
+
+about:
+  home: http://rapids.ai/
+  license: Apache-2.0
+  license_family: Apache
+  license_file: LICENSE
+  summary: libcudf_kafka library
