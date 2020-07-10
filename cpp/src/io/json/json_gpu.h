@@ -84,16 +84,15 @@ void detect_data_types(ColumnInfo *column_infos,
                        cudaStream_t stream = 0);
 
 /**
- * @brief TODO
+ * @brief Collects information about field names in the file.
  *
  * @param[in] data Input data buffer
  * @param[in] data_size Size of the data buffer, in bytes
- * @param[in] opts A set of parsing options
- * @param[in] num_columns The number of columns of input data
+ * @param[in] options A set of parsing options
  * @param[in] rec_starts The start the input data of interest
  * @param[in] num_records The number of lines/rows of input data
- * @param[out] names_cnt TODO
- * @param[out] names_info TODO
+ * @param[out] names_cnt Number of found field names in the file
+ * @param[out] names_info Information (offset, length, hash) for each found field name
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @returns void

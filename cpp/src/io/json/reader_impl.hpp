@@ -96,11 +96,12 @@ class reader::impl {
   void ingest_raw_input(size_t range_offset, size_t range_size);
 
   /**
-   * @brief TODO
+   * @brief Extract the field names from the input file with object rows.
    *
-   * @return TODO
+   * @return std::vector<std::string> Array of field name strings
    */
   std::vector<std::string> get_field_names(cudaStream_t stream);
+
   /**
    * @brief Decompress the input data, if needed
    *

@@ -120,12 +120,14 @@ col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes, cudaS
 }
 
 /**
- * @brief TODO
+ * @brief Create a table whose columns contain the information on field names.
+ *
+ * The columns contain name offsets in the file, name lengths and name hashes, respectively.
  *
  * @param[in] opts Parsing options (e.g. delimiter and quotation character)
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  *
- * @return std::unique_ptr<table> TODO
+ * @return std::unique_ptr<table> cudf table with three columns (offsets, lenghts, hashes)
  */
 std::unique_ptr<table> create_field_names_info_table(
   rmm::device_buffer const &data,
@@ -168,11 +170,11 @@ std::unique_ptr<table> create_field_names_info_table(
 }
 
 /**
- * @brief TODO
+ * @brief Extract the field name strings for the JSON file.
  *
- * @param[in] sorted_info table containgin)
+ * @param[in] sorted_info table containing name offsets and lengths
  *
- * @return std::unique_ptr<table> TODO
+ * @return std::vector<std::string> Array of field name strings
  */
 std::vector<std::string> create_field_name_strings(uint8_t const *d_data_ptr,
                                                    table_view sorted_info,

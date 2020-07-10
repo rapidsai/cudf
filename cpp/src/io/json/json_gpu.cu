@@ -658,15 +658,15 @@ __global__ void detect_data_types_kernel(const char *data,
 }
 
 /**
- * @brief Collects information about field names in the file.
+ * @brief Cuda kernel that collects information about field names in the file.
  *
  * @param[in] data Input data buffer
  * @param[in] data_size Size of the data buffer, in bytes
  * @param[in] opts A set of parsing options
  * @param[in] rec_starts The start the input data of interest
  * @param[in] num_records The number of lines/rows of input data
- * @param[out] names_cnt Number of field names in the file
- * @param[out] names_info Information (offset, lenght, hash) for each found field name
+ * @param[out] names_cnt Number of found field names in the file
+ * @param[out] names_info Information (offset, length, hash) for each found field name
  *
  * @returns void
  **/
