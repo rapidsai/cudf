@@ -72,24 +72,24 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from a file path
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to the file containing the whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::string filepath,
+  explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor from a datasource
+   * @brief Constructor from an array of datasources
    *
-   * @param source Input datasource object to read the dataset from
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::unique_ptr<cudf::io::datasource> source,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -163,24 +163,24 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from a file path
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to the file containing the whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::string filepath,
+  explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor from a datasource
+   * @brief Constructor from an array of datasources
    *
-   * @param source Input datasource object to read the dataset from
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::unique_ptr<cudf::io::datasource> source,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -311,24 +311,24 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from a file path
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to the file containing the whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::string filepath,
+  explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor from a datasource
+   * @brief Constructor from an array of datasources
    *
-   * @param source Input datasource object to read the dataset from
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::unique_ptr<cudf::io::datasource> source,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -428,24 +428,24 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from a file path
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to the file containing the whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::string filepath,
+  explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor from a datasource
+   * @brief Constructor from an array of datasources
    *
-   * @param source Input datasource object to read the dataset from
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::unique_ptr<cudf::io::datasource> source,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -548,24 +548,24 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from a file path
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to the file containing the whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::string filepath,
+  explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor from a datasource
+   * @brief Constructor from an array of datasources
    *
-   * @param source Input datasource object to read the dataset from
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::unique_ptr<cudf::io::datasource> source,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -584,21 +584,6 @@ class reader {
   table_with_metadata read_all(cudaStream_t stream = 0);
 
   /**
-   * @brief Reads a specific group of rows.
-   *
-   * @param row_group Index of the row group
-   * @param row_group_count Number of row groups to read
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   *
-   * @throw cudf::logic_error if row group index is out of range
-   */
-  table_with_metadata read_row_group(size_type row_group,
-                                     size_type row_group_count = 1,
-                                     cudaStream_t stream       = 0);
-
-  /**
    * @brief Reads specific row groups.
    *
    * @param row_group_list Indices of the row groups
@@ -608,7 +593,7 @@ class reader {
    *
    * @throw cudf::logic_error if row group index is out of range
    */
-  table_with_metadata read_row_groups(const std::vector<size_type> &row_group_list,
+  table_with_metadata read_row_groups(std::vector<std::vector<size_type>> const &row_group_list,
                                       cudaStream_t stream = 0);
 
   /**

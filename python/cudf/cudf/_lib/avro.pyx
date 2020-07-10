@@ -45,7 +45,7 @@ cdef read_avro_args make_read_avro_args(filepath_or_buffer,
                                         column_names,
                                         num_rows, skip_rows) except*:
     cdef read_avro_args args = read_avro_args(
-        make_source_info(filepath_or_buffer)
+        make_source_info([filepath_or_buffer])
     )
     args.num_rows = <size_type> num_rows
     args.skip_rows = <size_type> skip_rows

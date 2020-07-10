@@ -3,16 +3,16 @@ import random
 import cupy as cp
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
+from pandas.util import testing as tm
 
 import dask
-import dask.dataframe as dd
+from dask import dataframe as dd
 from dask.dataframe.core import make_meta, meta_nonempty
 
-import cudf
-
 import dask_cudf as dgd
+
+import cudf
 
 
 def test_from_cudf():

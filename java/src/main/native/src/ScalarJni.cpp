@@ -202,6 +202,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint16Scalar(JNIEnv *env,
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDurationDaysScalar(JNIEnv *env, jclass, jint value,
+                                                                          jboolean is_valid) {
+  try {
+    cudf::jni::auto_set_device(env);
+    std::unique_ptr<cudf::scalar> s = cudf::make_duration_scalar(cudf::data_type(cudf::type_id::DURATION_DAYS));
+    s->set_valid(is_valid);
+    if (is_valid) {
+      using ScalarType = cudf::scalar_type_t<int32_t>;
+      static_cast<ScalarType *>(s.get())->set_value(static_cast<int32_t>(value));
+    }
+    return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt32Scalar(JNIEnv *env, jclass, jint value,
                                                                    jboolean is_valid) {
   try {
@@ -323,6 +338,24 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampDaysScalar(JNIEn
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<int32_t>;
       static_cast<ScalarType *>(s.get())->set_value(static_cast<int32_t>(value));
+    }
+    return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDurationTimeScalar(JNIEnv *env, jclass,
+                                                                          jint jdtype_id,
+                                                                          jlong value,
+                                                                          jboolean is_valid) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto dtype_id = static_cast<cudf::type_id>(jdtype_id);
+    std::unique_ptr<cudf::scalar> s = cudf::make_duration_scalar(cudf::data_type(dtype_id));
+    s->set_valid(is_valid);
+    if (is_valid) {
+      using ScalarType = cudf::scalar_type_t<int64_t>;
+      static_cast<ScalarType *>(s.get())->set_value(static_cast<int64_t>(value));
     }
     return reinterpret_cast<jlong>(s.release());
   }

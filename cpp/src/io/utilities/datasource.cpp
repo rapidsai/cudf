@@ -216,17 +216,18 @@ std::unique_ptr<datasource> datasource::create(const std::string &filepath,
   return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, size);
 }
 
-std::unique_ptr<datasource> datasource::create(const char *data, size_t size)
+std::unique_ptr<datasource> datasource::create(host_buffer const &buffer)
 {
   // Use Arrow IO buffer class for zero-copy reads of host memory
-  return std::make_unique<arrow_io_source>(
-    std::make_shared<arrow::io::BufferReader>(reinterpret_cast<const uint8_t *>(data), size));
+  return std::make_unique<arrow_io_source>(std::make_shared<arrow::io::BufferReader>(
+    reinterpret_cast<const uint8_t *>(buffer.data), buffer.size));
 }
 
-std::unique_ptr<datasource> datasource::create(std::shared_ptr<arrow::io::RandomAccessFile> file)
+std::unique_ptr<datasource> datasource::create(
+  std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
 {
   // Support derived classes of the top-level Arrow IO interface
-  return std::make_unique<arrow_io_source>(file);
+  return std::make_unique<arrow_io_source>(arrow_file);
 }
 
 std::unique_ptr<datasource> datasource::create(datasource *source)
