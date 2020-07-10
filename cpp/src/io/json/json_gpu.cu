@@ -470,7 +470,10 @@ __global__ void convert_json_to_columns_kernel(const char *data,
 
   for (int col = 0; col < num_columns && start < stop; col++) {
     auto dst_col = col;
-    if (is_object) { parse_field_name(data, opts, start, stop); }
+    if (is_object) {
+      auto const col_name_hash = parse_field_name(data, opts, start, stop);
+      dst_col                  = (*col_map.find(col_name_hash)).second;
+    }
     // field_end is at the next delimiter/newline
     const long field_end = cudf::io::gpu::seek_field_end(data, opts, start, stop);
     long field_data_last = field_end - 1;
@@ -548,7 +551,11 @@ __global__ void detect_json_data_types(const char *data,
   const bool is_object = (data[start - 1] == '{');
 
   for (int col = 0; col < num_columns; col++) {
-    if (is_object) { parse_field_name(data, opts, start, stop); }
+    auto dst_col = col;
+    if (is_object) {
+      auto const col_name_hash = parse_field_name(data, opts, start, stop);
+      dst_col                  = (*col_map.find(col_name_hash)).second;
+    }
     auto field_start     = start;
     const long field_end = cudf::io::gpu::seek_field_end(data, opts, field_start, stop);
     long field_data_last = field_end - 1;
@@ -560,12 +567,12 @@ __global__ void detect_json_data_types(const char *data,
     // Checking if the field is empty
     if (field_start > field_data_last ||
         serializedTrieContains(opts.naValuesTrie, data + field_start, field_len)) {
-      atomicAdd(&column_infos[col].null_count, 1);
+      atomicAdd(&column_infos[dst_col].null_count, 1);
       continue;
     }
     // Don't need counts to detect strings, any field in quotes is deduced to be a string
     if (data[field_start] == opts.quotechar && data[field_data_last] == opts.quotechar) {
-      atomicAdd(&column_infos[col].string_count, 1);
+      atomicAdd(&column_infos[dst_col].string_count, 1);
       continue;
     }
 
@@ -608,16 +615,16 @@ __global__ void detect_json_data_types(const char *data,
     if (maybe_hex) { --int_req_number_cnt; }
     if (serializedTrieContains(opts.trueValuesTrie, data + field_start, field_len) ||
         serializedTrieContains(opts.falseValuesTrie, data + field_start, field_len)) {
-      atomicAdd(&column_infos[col].bool_count, 1);
+      atomicAdd(&column_infos[dst_col].bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
-      atomicAdd(&column_infos[col].int_count, 1);
+      atomicAdd(&column_infos[dst_col].int_count, 1);
     } else if (is_like_float(field_len, digit_count, decimal_count, dash_count, exponent_count)) {
-      atomicAdd(&column_infos[col].float_count, 1);
+      atomicAdd(&column_infos[dst_col].float_count, 1);
     }
     // A date-time field cannot have more than 3 non-special characters
     // A number field cannot have more than one decimal point
     else if (other_count > 3 || decimal_count > 1) {
-      atomicAdd(&column_infos[col].string_count, 1);
+      atomicAdd(&column_infos[dst_col].string_count, 1);
     } else {
       // A date field can have either one or two '-' or '\'; A legal combination will only have one
       // of them To simplify the process of auto column detection, we are not covering all the
@@ -625,13 +632,13 @@ __global__ void detect_json_data_types(const char *data,
       if ((dash_count > 0 && dash_count <= 2 && slash_count == 0) ||
           (dash_count == 0 && slash_count > 0 && slash_count <= 2)) {
         if (colon_count <= 2) {
-          atomicAdd(&column_infos[col].datetime_count, 1);
+          atomicAdd(&column_infos[dst_col].datetime_count, 1);
         } else {
-          atomicAdd(&column_infos[col].string_count, 1);
+          atomicAdd(&column_infos[dst_col].string_count, 1);
         }
       } else {
         // Default field type is string
-        atomicAdd(&column_infos[col].string_count, 1);
+        atomicAdd(&column_infos[dst_col].string_count, 1);
       }
     }
   }
