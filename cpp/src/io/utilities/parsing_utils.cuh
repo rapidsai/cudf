@@ -54,13 +54,13 @@ namespace gpu {
  * @param pos Offset to start the seeking from
  * @param stop Offset of the end of the row
  *
- * @return long The position of the last character in the field, including the
+ * @return uint64_t The position of the last character in the field, including the
  *  delimiter(s) following the field data
  */
-__device__ __inline__ long seek_field_end(const char* data,
-                                          ParseOptions const& opts,
-                                          long pos,
-                                          long stop)
+__device__ __inline__ uint64_t seek_field_end(const char* data,
+                                              ParseOptions const& opts,
+                                              uint64_t pos,
+                                              uint64_t stop)
 {
   bool quotation = false;
   while (true) {
