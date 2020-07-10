@@ -184,6 +184,7 @@
 - PR #4923 Add Java and JNI bindings for string split
 - PR #4972 Add list_view (cudf::LIST) type
 - PR #4990 Add lists_column_view, list_column_wrapper, lists support for concatenate
+- PR #5073 gather support for cudf::LIST columns
 - PR #5004 Added a null considering min/max binary op
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
