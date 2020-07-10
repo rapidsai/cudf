@@ -1850,7 +1850,7 @@ class StringIndex(GenericIndex):
     @copy_docstring(StringMethods.__init__)
     @property
     def str(self):
-        return self._values.str(parent=self)
+        return StringMethods(column=self._values, parent=self)
 
     @property
     def _constructor_expanddim(self):

@@ -1500,17 +1500,17 @@ class Series(Frame, Serializable):
     @copy_docstring(CategoricalAccessor.__init__)
     @property
     def cat(self):
-        return self._column.cat(parent=self)
+        return CategoricalAccessor(column=self._column, parent=self)
 
     @copy_docstring(StringMethods.__init__)
     @property
     def str(self):
-        return self._column.str(parent=self)
+        return StringMethods(column=self._column, parent=self)
 
     @copy_docstring(ListMethods.__init__)
     @property
     def list(self):
-        return self._column.list(parent=self)
+        return ListMethods(column=self._column, parent=self)
 
     @property
     def dtype(self):
