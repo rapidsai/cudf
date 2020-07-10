@@ -39,6 +39,7 @@
 
 ## Improvements
 
+- PR #5605 Automatically flush RMM allocate/free logs in JNI
 - PR #5632 Switch JNI code to use `pool_memory_resource` instead of CNMeM
 - PR #5486 Link Boost libraries statically in the Java build
 - PR #5479 Link Arrow libraries statically
