@@ -32,9 +32,6 @@ class ListColumn(ColumnBase):
     def base_size(self):
         return self.size
 
-    def get_children(self):
-        return self._base_children
-
     @property
     def values(self):
         return self.children[0]
