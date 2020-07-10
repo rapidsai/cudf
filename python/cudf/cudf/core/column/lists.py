@@ -86,12 +86,36 @@ class ListColumn(ColumnBase):
 
 
 class ListMethods(ColumnMethodsMixin):
+    """
+    List methods for Series
+    """
+
     def __init__(self, column, parent=None):
         self._column = column
         self._parent = parent
 
     @property
     def leaves(self):
+        """
+        From a Series of (possibly nested) lists, obtain the values from
+        the innermost lists as a flat Series (one value per row).
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> a = cudf.Series([[[1, None], [3, 4]], None, [[5, 6]]])
+        >>> a.list.leaves
+        0       1
+        1    null
+        2       3
+        3       4
+        4       5
+        5       6
+        dtype: int64
+        """
         if type(self._column.values) is ListColumn:
             return self._column.values.list(parent=self._parent).leaves
         else:
