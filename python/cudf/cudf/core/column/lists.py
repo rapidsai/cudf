@@ -28,12 +28,6 @@ class ListColumn(ColumnBase):
             children=children,
         )
 
-    def serialize(self):
-        pass
-
-    def deserialize(self, header, frames):
-        pass
-
     @property
     def base_size(self):
         return self.size
