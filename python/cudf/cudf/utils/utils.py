@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import functools
 from collections import OrderedDict
 from math import floor, isinf, isnan

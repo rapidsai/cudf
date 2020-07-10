@@ -1,5 +1,4 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import math
 import os
 
@@ -8,13 +7,13 @@ import pandas as pd
 import pytest
 
 import dask
-import dask.dataframe as dd
+from dask import dataframe as dd
 from dask.dataframe.utils import assert_eq
 from dask.utils import natural_sort_key, parse_bytes
 
-import cudf
-
 import dask_cudf
+
+import cudf
 
 nrows = 40
 npartitions = 15

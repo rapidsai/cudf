@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
 
@@ -9,12 +8,12 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-import cudf.utils.dtypes as dtypeutils
 from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.utils import dtypes as dtypeutils
 
 data_list = [
     ["AbC", "de", "FGHI", "j", "kLm"],
@@ -2083,6 +2082,41 @@ def test_string_int_to_ipv4():
 
     got = Series(gsr._column.int2ip())
 
+    assert_eq(expected, got)
+
+
+def test_string_isipv4():
+    gsr = Series(
+        [
+            "",
+            None,
+            "1...1",
+            "141.168.0.1",
+            "127.0.0.1",
+            "1.255.0.1",
+            "256.27.28.26",
+            "25.257.28.26",
+            "25.27.258.26",
+            "25.27.28.256",
+            "-1.0.0.0",
+        ]
+    )
+    got = gsr.str.isipv4()
+    expected = Series(
+        [
+            False,
+            None,
+            False,
+            True,
+            True,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+        ]
+    )
     assert_eq(expected, got)
 
 

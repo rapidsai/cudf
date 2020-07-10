@@ -1,5 +1,4 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -486,8 +485,9 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
 
 def test_safe_merging_with_left_empty():
     import numpy as np
-    from cudf import DataFrame
     import pandas as pd
+
+    from cudf import DataFrame
 
     np.random.seed(0)
 

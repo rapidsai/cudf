@@ -34,7 +34,8 @@ from cudf._lib.cpp.strings.convert.convert_integers cimport (
 )
 from cudf._lib.cpp.strings.convert.convert_ipv4 cimport (
     ipv4_to_integers as cpp_ipv4_to_integers,
-    integers_to_ipv4 as cpp_integers_to_ipv4
+    integers_to_ipv4 as cpp_integers_to_ipv4,
+    is_ipv4 as cpp_is_ipv4
 )
 from cudf._lib.cpp.strings.convert.convert_urls cimport (
     url_encode as cpp_url_encode,
@@ -610,6 +611,23 @@ def ip2int(Column input_col, **kwargs):
     with nogil:
         c_result = move(
             cpp_ipv4_to_integers(input_column_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def is_ipv4(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that have strings in IPv4 format. This format is nnn.nnn.nnn.nnn
+    where nnn is integer digits in [0,255].
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    with nogil:
+        c_result = move(cpp_is_ipv4(
+            source_view
+        ))
 
     return Column.from_unique_ptr(move(c_result))
 
