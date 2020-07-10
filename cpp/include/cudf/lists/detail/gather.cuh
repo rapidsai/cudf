@@ -61,7 +61,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
                              size_type gather_map_size,
                              cudaStream_t stream,
                              rmm::mr::device_memory_resource* mr,
-                             rmm::device_uvector<int32_t> prev_base_offsets)
+                             rmm::device_uvector<int32_t>&& prev_base_offsets)
 {
   // size of the gather map is the # of output rows
   size_type output_count = gather_map_size;
