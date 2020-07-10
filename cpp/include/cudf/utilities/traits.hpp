@@ -391,7 +391,7 @@ struct is_chrono_impl {
  * @brief Indicates whether `type` is a chrono `data_type`.
  *
  * Chrono types include cudf timestamp types, which represent a point in time, and cudf
- * duration types that represent a time interval since the unix epoch.
+ * duration types that represent a time interval.
  *
  * @param type The `data_type` to verify
  * @return true `type` is a chrono type
