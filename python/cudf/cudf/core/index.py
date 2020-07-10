@@ -666,18 +666,9 @@ class Index(Frame, Serializable):
             if isinstance(val, np.ndarray):
                 return val.all()
             return bool(val)
+        elif isinstance(other, CategoricalIndex):
+            return other.equals(self)
         else:
-            if self.dtype.kind == "f" and other.dtype.kind != "f":
-                try:
-                    other = other.astype(self.dtype)
-                except (TypeError, ValueError):
-                    return False
-            elif self.dtype.kind != "f" and other.dtype.kind == "f":
-                return other.equals(self)
-
-            if isinstance(other, CategoricalIndex):
-                return other.equals(self)
-
             if is_mixed_with_object_dtype(self, other):
                 return False
 
