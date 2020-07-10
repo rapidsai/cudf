@@ -341,7 +341,7 @@ struct ConvertFunctor {
                                       !std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(const char *data,
                                                       void *output_columns,
-                                                      size_type row,
+                                                      cudf::size_type row,
                                                       uint64_t start,
                                                       uint64_t end,
                                                       const ParseOptions &opts)
@@ -452,10 +452,10 @@ __device__ __inline__ bool is_like_float(
 __global__ void convert_data_to_columns_kernel(const char *data,
                                                size_t data_size,
                                                const uint64_t *rec_starts,
-                                               size_type num_records,
+                                               cudf::size_type num_records,
                                                const data_type *dtypes,
                                                ParseOptions opts,
-                                               bool is_object,
+                                               bool are_rows_objects,
                                                col_map_type col_map,
                                                void *const *output_columns,
                                                int num_columns,
@@ -473,7 +473,7 @@ __global__ void convert_data_to_columns_kernel(const char *data,
 
   for (int col = 0; col < num_columns && start < stop; col++) {
     auto dst_col = col;
-    if (is_object) {
+    if (are_rows_objects) {
       auto const col_name_hash = parse_field_name(data, opts, &start, stop);
       dst_col                  = (*col_map.find(col_name_hash)).second;
     }
@@ -537,7 +537,7 @@ __global__ void convert_data_to_columns_kernel(const char *data,
 __global__ void detect_data_types_kernel(const char *data,
                                          size_t data_size,
                                          const ParseOptions opts,
-                                         bool is_object,
+                                         bool are_rows_objects,
                                          col_map_type col_map,
                                          int num_columns,
                                          const uint64_t *rec_starts,
@@ -556,10 +556,9 @@ __global__ void detect_data_types_kernel(const char *data,
   int col = 0;
   for (; col < num_columns && start < stop; col++) {
     auto dst_col = col;
-    if (is_object) {
+    if (are_rows_objects) {
       auto const col_name_hash = parse_field_name(data, opts, &start, stop);
       dst_col                  = (*col_map.find(col_name_hash)).second;
-      atomicAdd(&column_infos[dst_col].null_count, -1);
     }
     auto field_start     = start;
     auto const field_end = cudf::io::gpu::seek_field_end(data, opts, field_start, stop);
@@ -569,11 +568,16 @@ __global__ void detect_data_types_kernel(const char *data,
     // Advance the start offset
     start = field_end + 1;
 
-    // Checking if the field is empty
+    // Checking if the field is empty/valid
     if (field_start > field_data_last ||
         serializedTrieContains(opts.naValuesTrie, data + field_start, field_len)) {
-      atomicAdd(&column_infos[dst_col].null_count, 1);
+      // Increase the null count for array rows, where the null count is initialized to zero.
+      if (!are_rows_objects) { atomicAdd(&column_infos[dst_col].null_count, 1); }
       continue;
+    } else if (are_rows_objects) {
+      // For files with object rows, null count is initialized to row count. The value is decreased
+      // here for every valid field.
+      atomicAdd(&column_infos[dst_col].null_count, -1);
     }
     // Don't need counts to detect strings, any field in quotes is deduced to be a string
     if (data[field_start] == opts.quotechar && data[field_data_last] == opts.quotechar) {
@@ -647,7 +651,8 @@ __global__ void detect_data_types_kernel(const char *data,
       }
     }
   }
-  if (!is_object) {
+  if (!are_rows_objects) {
+    // For array rows, mark missing fields as null
     for (; col < num_columns; col++) atomicAdd(&column_infos[col].null_count, 1);
   }
 }
@@ -723,7 +728,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
                              bitmask_type *const *valid_fields,
                              cudf::size_type *num_valid_fields,
                              ParseOptions const &opts,
-                             bool is_object,
+                             bool are_rows_objects,
                              col_map_type col_map,
                              cudaStream_t stream)
 {
@@ -741,7 +746,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
     num_records,
     dtypes,
     opts,
-    is_object,
+    are_rows_objects,
     col_map,
     output_columns,
     num_columns,
@@ -759,7 +764,7 @@ void detect_data_types(ColumnInfo *column_infos,
                        const char *data,
                        size_t data_size,
                        const ParseOptions &options,
-                       bool is_object,
+                       bool are_rows_objects,
                        col_map_type col_map,
                        int num_columns,
                        const uint64_t *rec_starts,
@@ -777,7 +782,7 @@ void detect_data_types(ColumnInfo *column_infos,
   detect_data_types_kernel<<<grid_size, block_size, 0, stream>>>(data,
                                                                  data_size,
                                                                  options,
-                                                                 is_object,
+                                                                 are_rows_objects,
                                                                  col_map,
                                                                  num_columns,
                                                                  rec_starts,

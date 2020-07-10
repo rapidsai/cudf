@@ -81,7 +81,7 @@ class reader::impl {
   rmm::device_vector<SerialTrieNode> d_true_trie_;
   rmm::device_vector<SerialTrieNode> d_false_trie_;
   rmm::device_vector<SerialTrieNode> d_na_trie_;
-  bool is_json_object = false;
+  bool are_rows_objects = false;
 
   /**
    * @brief Ingest input JSON file/buffer, without decompression

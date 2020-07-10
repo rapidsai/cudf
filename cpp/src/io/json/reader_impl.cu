@@ -442,8 +442,9 @@ void reader::impl::set_column_names(cudaStream_t stream)
   CUDF_EXPECTS(first_curly_bracket != first_row.end() || first_square_bracket != first_row.end(),
                "Input data is not a valid JSON file.");
   // If the first opening bracket is '{', assume object format
-  is_json_object = first_curly_bracket < first_square_bracket;
-  if (is_json_object) {
+  // Note: must be initialized before data type inference
+  are_rows_objects = first_curly_bracket < first_square_bracket;
+  if (are_rows_objects) {
     metadata.column_names = get_field_names(stream);
   } else {
     int cols_found = 0;
@@ -461,6 +462,9 @@ void reader::impl::set_column_names(cudaStream_t stream)
   }
 }
 
+/**
+ * @brief Set the null count to the row count (all fields assumes to be null).
+ */
 void set_null_count(size_type num_rows,
                     rmm::device_vector<cudf::io::json::ColumnInfo> &infos,
                     cudaStream_t stream)
@@ -521,12 +525,15 @@ void reader::impl::set_data_types(cudaStream_t stream)
 
     rmm::device_vector<cudf::io::json::ColumnInfo> d_column_infos(num_columns,
                                                                   cudf::io::json::ColumnInfo{});
-    if (is_json_object) set_null_count(rec_starts_.size(), d_column_infos, stream);
+    // For object rows, it's not efficient for the kernel to determine which fields are missing in
+    // each row. Set the null count to row count; kernel reduces this value for each valid field.
+    if (are_rows_objects) set_null_count(rec_starts_.size(), d_column_infos, stream);
+
     cudf::io::json::gpu::detect_data_types(d_column_infos.data().get(),
                                            static_cast<const char *>(data_.data()),
                                            data_.size(),
                                            opts_,
-                                           is_json_object,
+                                           are_rows_objects,
                                            *column_names_hash_map,
                                            num_columns,
                                            rec_starts_.data().get(),
@@ -596,7 +603,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
                                                d_valid.data().get(),
                                                d_valid_counts.data().get(),
                                                opts_,
-                                               is_json_object,
+                                               are_rows_objects,
                                                *column_names_hash_map,
                                                stream);
   CUDA_TRY(cudaStreamSynchronize(stream));
