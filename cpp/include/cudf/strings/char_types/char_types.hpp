@@ -119,8 +119,8 @@ std::unique_ptr<column> all_characters_of_type(
  * s2 is ['ab', 'a-b', 'a-bb', '------']
  * @endcode
  *
- * In `s1` all NUMERIC types are removed.
- * In `s2` all non-LOWER types are replaced.
+ * In `s1` all NUMERIC types have been removed.
+ * In `s2` all non-LOWER types have been replaced.
  *
  * One but not both parameters `types_to_filter` and `types_to_keep` must
  * be set to `ALL_TYPES`.
