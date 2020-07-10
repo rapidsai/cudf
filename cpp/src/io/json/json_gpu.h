@@ -27,6 +27,8 @@ namespace cudf {
 namespace io {
 namespace json {
 namespace gpu {
+
+using col_map_type = concurrent_unordered_map<uint32_t, uint32_t>;
 /**
  * @brief Convert a buffer of input data (text) into raw cuDF column data.
  *
@@ -52,7 +54,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
                              bitmask_type *const *valid_fields,
                              cudf::size_type *num_valid_fields,
                              ParseOptions const &opts,
-                             concurrent_unordered_map<uint32_t, uint32_t> col_map,
+                             col_map_type col_map,
                              cudaStream_t stream = 0);
 
 /**
@@ -73,7 +75,7 @@ void detect_data_types(ColumnInfo *column_infos,
                        const char *data,
                        size_t data_size,
                        const ParseOptions &options,
-                       concurrent_unordered_map<uint32_t, uint32_t> col_map,
+                       col_map_type col_map,
                        int num_columns,
                        const uint64_t *rec_starts,
                        cudf::size_type num_records,

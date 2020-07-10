@@ -40,6 +40,9 @@ namespace json {
 using namespace cudf::io::json;
 using namespace cudf::io;
 
+using col_map_type     = cudf::io::json::gpu::col_map_type;
+using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_map_type *)>>;
+
 /**
  * @brief Class used to parse Json input and convert it into gdf columns
  *
@@ -70,9 +73,7 @@ class reader::impl {
   table_metadata metadata;
   std::vector<data_type> dtypes_;
 
-  using col_map_type = concurrent_unordered_map<uint32_t, uint32_t>;
-  std::unique_ptr<col_map_type, std::function<void(col_map_type *)>> column_names_hash_map =
-    concurrent_unordered_map<uint32_t, uint32_t>::create(1);
+  col_map_ptr_type column_names_hash_map = col_map_type::create(1);
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;
@@ -98,7 +99,7 @@ class reader::impl {
    *
    * @return TODO
    */
-  std::vector<std::string> get_field_names(const ParseOptions &opts, cudaStream_t stream);
+  std::vector<std::string> get_field_names(cudaStream_t stream);
   /**
    * @brief Decompress the input data, if needed
    *
