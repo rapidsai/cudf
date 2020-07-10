@@ -36,7 +36,7 @@ def raise_assert_detail(obj, message, left, right, diff=None):
 def _check_types(
     left, right, check_categorical=True, exact="equiv", obj="Index"
 ):
-    if not exact:
+    if not exact or exact == "equiv":
         if (
             isinstance(left, cudf.RangeIndex)
             and isinstance(right, cudf.Int64Index)
@@ -47,16 +47,18 @@ def _check_types(
             return
 
     if type(left) != type(right):
-        raise AssertionError(
-            f"{obj} left and right type differ, "
-            f"left is of type {type(left)} and right is of type {type(right)}"
+        raise_assert_detail(
+            obj, "Class types are different", f"{type(left)}", f"{type(right)}"
         )
 
-    if exact and is_categorical_dtype(left):
+    if (
+        exact
+        and not isinstance(left, cudf.MultiIndex)
+        and is_categorical_dtype(left)
+    ):
         if left.dtype != right.dtype:
-            raise AssertionError(
-                f"{obj} has Catgorical difference between "
-                f"left {left} and right {right}"
+            raise_assert_detail(
+                obj, "Catgorical difference", f"{left}", f"{right}"
             )
 
 
@@ -112,7 +114,7 @@ def assert_column_equal(
         ):
             pass
         else:
-            if left.dtype != right.dtype:
+            if type(left) != type(right) or left.dtype != right.dtype:
                 msg1 = f"{left.dtype}"
                 msg2 = f"{right.dtype}"
                 raise_assert_detail(obj, "Dtypes are different", msg1, msg2)
@@ -120,18 +122,16 @@ def assert_column_equal(
     if check_datetimelike_compat:
         if np.issubdtype(left.dtype, np.datetime64):
             right = right.astype(left.dtype)
-            if not left.equals(right):
-                raise AssertionError(
-                    f"[datetimelike_compat=True] {left.values} "
-                    f"is not equal to {right.values}."
-                )
         elif np.issubdtype(right.dtype, np.datetime64):
             left = left.astype(right.dtype)
+
+        if np.issubdtype(left.dtype, np.datetime64):
             if not left.equals(right):
                 raise AssertionError(
                     f"[datetimelike_compat=True] {left.values} "
                     f"is not equal to {right.values}."
                 )
+            return
 
     if check_exact and check_categorical:
         if is_categorical_dtype(left) and is_categorical_dtype(right):
@@ -167,46 +167,29 @@ def assert_column_equal(
         and is_categorical_dtype(left)
         and is_categorical_dtype(right)
     ):
-        tmp_left = left.astype(left.categories.dtype)
-        tmp_right = right.astype(right.categories.dtype)
-        if not tmp_left.equals(tmp_right):
-            msg1 = f"{left}"
-            msg2 = f"{right}"
-            diff = tmp_left.apply_boolean_mask(
-                tmp_left.binary_operator("ne", tmp_right)
+        left = left.astype(left.categories.dtype)
+        right = right.astype(right.categories.dtype)
+
+    columns_equal = False
+    try:
+        columns_equal = left.equals(right)
+    except TypeError:
+        if is_categorical_dtype(left) and is_categorical_dtype(right):
+            left = left.astype(left.categories.dtype)
+            right = right.astype(right.categories.dtype)
+    if not columns_equal:
+        msg1 = f"{left.to_array()}"
+        msg2 = f"{right.to_array()}"
+        try:
+            diff = left.apply_boolean_mask(
+                left.binary_operator("ne", right)
             ).size
             diff = diff * 100.0 / left.size
-            raise_assert_detail(
-                obj,
-                f"values are different ({np.round(diff, 5)} %)",
-                msg1,
-                msg2,
-            )
-
-    else:
-        columns_equal = False
-        try:
-            columns_equal = left.equals(right)
-        except TypeError:
-            if is_categorical_dtype(left) and is_categorical_dtype(right):
-                left = left.astype(left.categories.dtype)
-                right = right.astype(right.categories.dtype)
-        if not columns_equal:
-            msg1 = f"{left.to_array()}"
-            msg2 = f"{right.to_array()}"
-            try:
-                diff = left.apply_boolean_mask(
-                    left.binary_operator("ne", right)
-                ).size
-                diff = diff * 100.0 / left.size
-            except BaseException:
-                diff = 100.0
-            raise_assert_detail(
-                obj,
-                f"values are different ({np.round(diff, 5)} %)",
-                msg1,
-                msg2,
-            )
+        except BaseException:
+            diff = 100.0
+        raise_assert_detail(
+            obj, f"values are different ({np.round(diff, 5)} %)", msg1, msg2,
+        )
 
 
 def assert_index_equal(
@@ -577,7 +560,7 @@ def assert_frame_equal(
     pd.testing.assert_index_equal(
         left.columns,
         right.columns,
-        exact=check_index_type,
+        exact=check_column_type,
         check_names=check_names,
         check_less_precise=check_less_precise,
         check_exact=check_exact,
@@ -585,8 +568,6 @@ def assert_frame_equal(
         obj=f"{obj}.columns",
     )
 
-    if by_blocks:
-        raise NotImplementedError("by_blocks is not supported")
     for col in left.columns:
         assert_column_equal(
             left._data[col],

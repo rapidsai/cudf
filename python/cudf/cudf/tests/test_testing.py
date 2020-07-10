@@ -17,7 +17,6 @@ from cudf.tests.utils import NUMERIC_TYPES, OTHER_TYPES
 @pytest.mark.parametrize("exact", ["equiv", True, False])
 @pytest.mark.parametrize("check_names", [True, False])
 @pytest.mark.parametrize("rname", ["a", "b"])
-# @pytest.mark.parametrize("check_exact", [True, False])
 @pytest.mark.parametrize("check_categorical", [True, False])
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"]
@@ -72,28 +71,15 @@ def test_basic_assert_index_equal(
 
 
 @pytest.mark.parametrize("rdata", [[1, 2, 5], [1, 2, 6], [1, 2, 5, 6]])
-@pytest.mark.parametrize("check_index_type", ["equiv", True, False])
-@pytest.mark.parametrize("check_series_type", [True, False])
-@pytest.mark.parametrize("check_dtype", [True, False])
 @pytest.mark.parametrize("check_names", [True, False])
 @pytest.mark.parametrize("rname", ["a", "b"])
-@pytest.mark.parametrize("check_exact", [True, False])
 @pytest.mark.parametrize("check_category_order", [True, False])
 @pytest.mark.parametrize("check_categorical", [True, False])
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"]
 )
 def test_basic_assert_series_equal(
-    rdata,
-    rname,
-    check_index_type,
-    check_series_type,
-    check_dtype,
-    check_names,
-    check_exact,
-    check_category_order,
-    check_categorical,
-    dtype,
+    rdata, rname, check_names, check_category_order, check_categorical, dtype,
 ):
 
     p_left = pd.Series([1, 2, 3], name="a", dtype=dtype)
@@ -107,11 +93,7 @@ def test_basic_assert_series_equal(
         pd.testing.assert_series_equal(
             p_left,
             p_right,
-            check_index_type=check_index_type,
-            check_series_type=check_series_type,
-            check_dtype=check_dtype,
             check_names=check_names,
-            check_exact=check_exact,
             check_categorical=check_categorical,
             check_category_order=check_category_order,
         )
@@ -123,11 +105,7 @@ def test_basic_assert_series_equal(
             assert_series_equal(
                 left,
                 right,
-                check_index_type=check_index_type,
-                check_series_type=check_series_type,
-                check_dtype=check_dtype,
                 check_names=check_names,
-                check_exact=check_exact,
                 check_categorical=check_categorical,
                 check_category_order=check_category_order,
             )
@@ -135,11 +113,7 @@ def test_basic_assert_series_equal(
         assert_series_equal(
             left,
             right,
-            check_index_type=check_index_type,
-            check_series_type=check_series_type,
-            check_dtype=check_dtype,
             check_names=check_names,
-            check_exact=check_exact,
             check_categorical=check_categorical,
             check_category_order=check_category_order,
         )
@@ -212,4 +186,92 @@ def test_basic_assert_frame_equal(
             check_dtype=check_dtype,
             check_names=check_names,
             check_like=check_like,
+        )
+
+
+@pytest.mark.parametrize("rdata", [[0, 1, 2, 3], [0, 1, 2, 4]])
+@pytest.mark.parametrize("check_datetimelike_compat", [True, False])
+def test_datetime_like_compaibility(rdata, check_datetimelike_compat):
+    psr1 = pd.Series([0, 1, 2, 3], dtype="datetime64[ns]")
+    psr2 = pd.Series(rdata, dtype="datetime64[ns]").astype("str")
+
+    sr1 = cudf.from_pandas(psr1)
+    sr2 = cudf.from_pandas(psr2)
+
+    kind = None
+    try:
+        pd.testing.assert_series_equal(
+            psr1, psr2, check_datetimelike_compat=check_datetimelike_compat
+        )
+    except BaseException as e:
+        kind = type(e)
+
+    if kind is not None:
+        with pytest.raises(kind):
+            assert_series_equal(
+                sr1, sr2, check_datetimelike_compat=check_datetimelike_compat
+            )
+    else:
+        assert_series_equal(
+            sr1, sr2, check_datetimelike_compat=check_datetimelike_compat
+        )
+
+
+@pytest.mark.parametrize(
+    "rdata",
+    [
+        [[0, 1, 2, 3], ["G", "O", "N", "E"]],
+        [[0, 1, 2, 4], ["G", "O", "N", "E"]],
+    ],
+)
+def test_multiindex_equal(rdata):
+    pidx1 = pd.MultiIndex.from_arrays(
+        [[0, 1, 2, 3], ["G", "O", "N", "E"]], names=("n", "id")
+    )
+    pidx2 = pd.MultiIndex.from_arrays(rdata, names=("n", "id"))
+
+    idx1 = cudf.from_pandas(pidx1)
+    idx2 = cudf.from_pandas(pidx2)
+
+    kind = None
+    try:
+        pd.testing.assert_index_equal(pidx1, pidx2)
+    except BaseException as e:
+        kind = type(e)
+
+    if kind is not None:
+        with pytest.raises(kind):
+            assert_index_equal(idx1, idx2)
+    else:
+        assert_index_equal(idx1, idx2)
+
+
+@pytest.mark.parametrize("dtype", ["int8", "uint8", "float32", "category"])
+@pytest.mark.parametrize("check_exact", [True, False])
+@pytest.mark.parametrize("check_dtype", [True, False])
+def test_series_different_type_cases(dtype, check_exact, check_dtype):
+    data = [0, 1, 2, 3]
+
+    psr1 = pd.Series(data, dtype="uint8")
+    psr2 = pd.Series(data, dtype=dtype)
+
+    sr1 = cudf.from_pandas(psr1)
+    sr2 = cudf.from_pandas(psr2)
+
+    kind = None
+    try:
+        pd.testing.assert_series_equal(
+            psr1, psr2, check_exact=check_exact, check_dtype=check_dtype
+        )
+    except BaseException as e:
+        kind = type(e)
+
+    if kind is not None:
+        with pytest.raises(kind):
+            assert_series_equal(
+                sr1, sr2, check_exact=check_exact, check_dtype=check_dtype
+            )
+    else:
+        assert_series_equal(
+            sr1, sr2, check_exact=check_exact, check_dtype=check_dtype
         )
