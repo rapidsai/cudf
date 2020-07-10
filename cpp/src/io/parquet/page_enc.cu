@@ -192,6 +192,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
           hash;  // Store the hash along with the index, so we don't have to recompute it
       }
     }
+    __syncthreads();
   }
   __syncthreads();
   // Reorder the 16-bit local indices according to the hash values
