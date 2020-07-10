@@ -658,25 +658,25 @@ __global__ void detect_data_types_kernel(const char *data,
 }
 
 /**
- * @brief Cuda kernel that collects information about field names in the file.
+ * @brief Cuda kernel that collects information about JSON object keys in the file.
  *
  * @param[in] data Input data buffer
  * @param[in] data_size Size of the data buffer, in bytes
  * @param[in] opts A set of parsing options
  * @param[in] rec_starts The start the input data of interest
  * @param[in] num_records The number of lines/rows of input data
- * @param[out] names_cnt Number of found field names in the file
- * @param[out] names_info Information (offset, length, hash) for each found field name
+ * @param[out] keys_cnt Number of found field names in the file
+ * @param[out] keys_info Information (offset, length, hash) for each found field name
  *
  * @returns void
  **/
-__global__ void collect_field_names_info_kernel(const char *data,
-                                                size_t data_size,
-                                                const ParseOptions opts,
-                                                const uint64_t *rec_starts,
-                                                cudf::size_type num_records,
-                                                unsigned long long int *names_cnt,
-                                                mutable_table_device_view *names_info)
+__global__ void collect_keys_info_kernel(const char *data,
+                                         size_t data_size,
+                                         const ParseOptions opts,
+                                         const uint64_t *rec_starts,
+                                         cudf::size_type num_records,
+                                         unsigned long long int *keys_cnt,
+                                         mutable_table_device_view *keys_info)
 {
   auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
@@ -694,12 +694,12 @@ __global__ void collect_field_names_info_kernel(const char *data,
     } else if (st == field_name_parse_state::NAME && data[pos] == opts.quotechar &&
                data[pos - 1] != '\\') {
       st       = field_name_parse_state::POST_NAME;
-      auto idx = atomicAdd(names_cnt, 1);
-      if (nullptr != names_info) {
-        auto len                                     = pos - last_name_start;
-        names_info->column(0).element<uint64_t>(idx) = last_name_start;
-        names_info->column(1).element<uint16_t>(idx) = len;
-        names_info->column(2).element<uint32_t>(idx) =
+      auto idx = atomicAdd(keys_cnt, 1);
+      if (nullptr != keys_info) {
+        auto len                                    = pos - last_name_start;
+        keys_info->column(0).element<uint64_t>(idx) = last_name_start;
+        keys_info->column(1).element<uint16_t>(idx) = len;
+        keys_info->column(2).element<uint32_t>(idx) =
           MurmurHash3_32<cudf::string_view>{}(cudf::string_view(data + last_name_start, len));
       }
     } else if (st == field_name_parse_state::POST_NAME && data[pos] == opts.quotechar) {
@@ -793,27 +793,27 @@ void detect_data_types(ColumnInfo *column_infos,
 }
 
 /**
- * @copydoc cudf::io::json::gpu::gpu_collect_field_names_info
+ * @copydoc cudf::io::json::gpu::gpu_collect_keys_info
  */
-void collect_field_names_info(const char *data,
-                              size_t data_size,
-                              const ParseOptions &options,
-                              const uint64_t *rec_starts,
-                              cudf::size_type num_records,
-                              unsigned long long int *names_cnt,
-                              mutable_table_device_view *names_info,
-                              cudaStream_t stream)
+void collect_keys_info(const char *data,
+                       size_t data_size,
+                       const ParseOptions &options,
+                       const uint64_t *rec_starts,
+                       cudf::size_type num_records,
+                       unsigned long long int *keys_cnt,
+                       mutable_table_device_view *keys_info,
+                       cudaStream_t stream)
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
-    &min_grid_size, &block_size, collect_field_names_info_kernel));
+  CUDA_TRY(
+    cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, collect_keys_info_kernel));
 
   // Calculate actual block count to use based on records count
   const int grid_size = (num_records + block_size - 1) / block_size;
 
-  collect_field_names_info_kernel<<<grid_size, block_size, 0, stream>>>(
-    data, data_size, options, rec_starts, num_records, names_cnt, names_info);
+  collect_keys_info_kernel<<<grid_size, block_size, 0, stream>>>(
+    data, data_size, options, rec_starts, num_records, keys_cnt, keys_info);
 
   CUDA_TRY(cudaGetLastError());
 }

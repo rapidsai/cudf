@@ -78,21 +78,29 @@ void print_column(column_view c)
   for (auto elem : hdata) std::cout << elem << ' ';
 }
 
-// table contains offsets, lens, hashes
-std::unique_ptr<table> aggregate_field_names_info(std::unique_ptr<table> info)
+/**
+ * @brief Aggregate the table containing keys info by their hashes.
+ *
+ * @param[in] info Table with columns containing key offsets in the file, lengths and hashes,
+ respectively
+ *
+ * @returns std::unique_ptr<table> Table with data aggregated by hashes
+ */
+std::unique_ptr<table> aggregate_keys_info(std::unique_ptr<table> info)
 {
   auto info_view = info->view();
   std::vector<groupby::aggregation_request> requests;
   requests.emplace_back(groupby::aggregation_request());
-  requests[0].values = info_view.column(0);
+  requests[0].values = info_view.column(0);  // offsets
   requests[0].aggregations.push_back(make_min_aggregation());
   requests[0].aggregations.push_back(make_nth_element_aggregation(0));
 
   requests.emplace_back(groupby::aggregation_request());
-  requests[1].values = info_view.column(1);
+  requests[1].values = info_view.column(1);  // lengths
   requests[1].aggregations.push_back(make_min_aggregation());
   requests[1].aggregations.push_back(make_nth_element_aggregation(0));
 
+  // Aggregate by hash values
   groupby::groupby gb_obj(
     table_view({info_view.column(2)}), null_policy::EXCLUDE, sorted::NO, {}, {});
 
@@ -105,6 +113,9 @@ std::unique_ptr<table> aggregate_field_names_info(std::unique_ptr<table> info)
   return std::make_unique<table>(std::move(out_columns));
 }
 
+/**
+ * @brief Initializes the (key hash -> column index) hash map.
+ */
 col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes, cudaStream_t stream)
 {
   auto map_ptr{col_map_type::create(column_name_hashes.size())};
@@ -120,65 +131,63 @@ col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes, cudaS
 }
 
 /**
- * @brief Create a table whose columns contain the information on field names.
+ * @brief Create a table whose columns contain the information on JSON objects' keys.
  *
  * The columns contain name offsets in the file, name lengths and name hashes, respectively.
  *
+ * @param[in] data Input JSON device data
+ * @param[in] record_starts Device array of row start locations in the input buffer
  * @param[in] opts Parsing options (e.g. delimiter and quotation character)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  *
  * @return std::unique_ptr<table> cudf table with three columns (offsets, lenghts, hashes)
  */
-std::unique_ptr<table> create_field_names_info_table(
+std::unique_ptr<table> create_json_keys_info_table(
   rmm::device_buffer const &data,
   rmm::device_vector<uint64_t> const &record_starts,
   const ParseOptions &opts,
   cudaStream_t stream)
 {
-  // count fields
-  rmm::device_scalar<unsigned long long int> field_counter(0, stream);
+  // count keys
+  rmm::device_scalar<unsigned long long int> key_counter(0, stream);
   auto const data_ptr = static_cast<const char *>(data.data());
-  cudf::io::json::gpu::collect_field_names_info(data_ptr,
-                                                data.size(),
-                                                opts,
-                                                record_starts.data().get(),
-                                                record_starts.size(),
-                                                field_counter.data(),
-                                                nullptr,
-                                                stream);
+  cudf::io::json::gpu::collect_keys_info(data_ptr,
+                                         data.size(),
+                                         opts,
+                                         record_starts.data().get(),
+                                         record_starts.size(),
+                                         key_counter.data(),
+                                         nullptr,
+                                         stream);
 
   // allocate columns to store hash values, lengths, offsets
-  auto const num_fields = field_counter.value();
+  auto const num_keys = key_counter.value();
   std::vector<std::unique_ptr<column>> info_columns;
-  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT64), num_fields));
-  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT16), num_fields));
-  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT32), num_fields));
+  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT64), num_keys));
+  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT16), num_keys));
+  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT32), num_keys));
   auto info_table = std::make_unique<table>(std::move(info_columns));
   rmm::device_scalar<mutable_table_device_view> info_table_mdv(
     *mutable_table_device_view::create(info_table->mutable_view(), stream), stream);
 
-  field_counter.set_value(0, stream);
-  cudf::io::json::gpu::collect_field_names_info(data_ptr,
-                                                data.size(),
-                                                opts,
-                                                record_starts.data().get(),
-                                                record_starts.size(),
-                                                field_counter.data(),
-                                                info_table_mdv.data(),
-                                                stream);
+  key_counter.set_value(0, stream);
+  cudf::io::json::gpu::collect_keys_info(data_ptr,
+                                         data.size(),
+                                         opts,
+                                         record_starts.data().get(),
+                                         record_starts.size(),
+                                         key_counter.data(),
+                                         info_table_mdv.data(),
+                                         stream);
   return std::move(info_table);
 }
 
 /**
- * @brief Extract the field name strings for the JSON file.
- *
- * @param[in] sorted_info table containing name offsets and lengths
- *
- * @return std::vector<std::string> Array of field name strings
+ * @brief Extract the keys from the JSON file the name offsets/lengths.
  */
-std::vector<std::string> create_field_name_strings(uint8_t const *d_data_ptr,
-                                                   table_view sorted_info,
-                                                   cudaStream_t stream)
+std::vector<std::string> create_key_strings(uint8_t const *d_data_ptr,
+                                            table_view sorted_info,
+                                            cudaStream_t stream)
 {
   auto const num_cols = sorted_info.num_rows();
   std::vector<uint64_t> h_offsets(num_cols);
@@ -205,29 +214,28 @@ std::vector<std::string> create_field_name_strings(uint8_t const *d_data_ptr,
   return names;
 }
 
-auto sort_field_names_info_by_offset(std::unique_ptr<table> info)
+auto sort_keys_info_by_offset(std::unique_ptr<table> info)
 {
   auto const agg_offset_col_view = info->get_column(0).view();
   return sort_by_key(info->view(), table_view({agg_offset_col_view}));
 }
 
 /**
- * @brief Extract value names from a JSON file
+ * @brief Extract JSON object keys from a JSON file
  *
- * @param[in] opts Parsing options (e.g. delimiter and quotation character)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
- * @return std::vector<std::string> names of JSON object values
+ * @return std::vector<std::string> names of JSON object keys in the file
  */
-std::vector<std::string> reader::impl::get_field_names(cudaStream_t stream)
+std::vector<std::string> reader::impl::get_json_object_keys(cudaStream_t stream)
 {
-  auto info            = create_field_names_info_table(data_, rec_starts_, opts_, stream);
-  auto aggregated_info = aggregate_field_names_info(std::move(info));
-  auto sorted_info     = sort_field_names_info_by_offset(std::move(aggregated_info));
+  auto info            = create_json_keys_info_table(data_, rec_starts_, opts_, stream);
+  auto aggregated_info = aggregate_keys_info(std::move(info));
+  auto sorted_info     = sort_keys_info_by_offset(std::move(aggregated_info));
 
   column_names_hash_map = create_col_names_hash_map(sorted_info->get_column(2).view(), stream);
 
-  return create_field_name_strings(
+  return create_key_strings(
     static_cast<const uint8_t *>(data_.data()), sorted_info->view(), stream);
 }
 
@@ -447,7 +455,8 @@ void reader::impl::set_column_names(cudaStream_t stream)
   // Note: must be initialized before data type inference
   are_rows_objects = first_curly_bracket < first_square_bracket;
   if (are_rows_objects) {
-    metadata.column_names = get_field_names(stream);
+    // use keys as column names
+    metadata.column_names = get_json_object_keys(stream);
   } else {
     int cols_found = 0;
     bool quotation = false;

@@ -84,27 +84,27 @@ void detect_data_types(ColumnInfo *column_infos,
                        cudaStream_t stream = 0);
 
 /**
- * @brief Collects information about field names in the file.
+ * @brief Collects information about JSON object keys in the file.
  *
  * @param[in] data Input data buffer
  * @param[in] data_size Size of the data buffer, in bytes
  * @param[in] options A set of parsing options
  * @param[in] rec_starts The start the input data of interest
  * @param[in] num_records The number of lines/rows of input data
- * @param[out] names_cnt Number of found field names in the file
- * @param[out] names_info Information (offset, length, hash) for each found field name
+ * @param[out] keys_cnt Number of found keys in the file
+ * @param[out] keys_info Information (offset, length, hash) for each found key
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @returns void
  **/
-void collect_field_names_info(const char *data,
-                              size_t data_size,
-                              const ParseOptions &options,
-                              const uint64_t *rec_starts,
-                              cudf::size_type num_records,
-                              unsigned long long int *names_cnt,
-                              mutable_table_device_view *names_info,
-                              cudaStream_t stream = 0);
+void collect_keys_info(const char *data,
+                       size_t data_size,
+                       const ParseOptions &options,
+                       const uint64_t *rec_starts,
+                       cudf::size_type num_records,
+                       unsigned long long int *keys_cnt,
+                       mutable_table_device_view *keys_info,
+                       cudaStream_t stream = 0);
 
 }  // namespace gpu
 }  // namespace json

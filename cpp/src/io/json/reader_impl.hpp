@@ -96,11 +96,11 @@ class reader::impl {
   void ingest_raw_input(size_t range_offset, size_t range_size);
 
   /**
-   * @brief Extract the field names from the input file with object rows.
+   * @brief Extract the JSON objects keys from the input file with object rows.
    *
-   * @return std::vector<std::string> Array of field name strings
+   * @return std::vector<std::string> Array of key strings
    */
-  std::vector<std::string> get_field_names(cudaStream_t stream);
+  std::vector<std::string> get_json_object_keys(cudaStream_t stream);
 
   /**
    * @brief Decompress the input data, if needed
