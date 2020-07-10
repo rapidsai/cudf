@@ -668,7 +668,8 @@ std::unique_ptr<column> compute_column(
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   // Configure kernel parameters
-  auto block_size = 1024;  // TODO: Dynamically determine block size
+  auto block_size = 1024;  // TODO: Dynamically determine block size based on shared memory limits
+                           // and block size limits
   cudf::detail::grid_1d config(table_num_rows, block_size);
   auto num_intermediates = expr_linearizer.get_intermediate_count();
   auto shmem_size_per_block =
