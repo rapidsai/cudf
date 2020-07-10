@@ -1,7 +1,7 @@
 import cudf
 
 
-class ColumnMethods:
+class ColumnMethodsMixin:
     def _return_or_inplace(self, new_col, **kwargs):
         """
         Returns an object of the type of the column owner or updates the column
