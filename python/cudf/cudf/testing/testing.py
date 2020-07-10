@@ -39,10 +39,26 @@ def _check_types(
     if not exact or exact == "equiv":
         if (
             isinstance(left, cudf.RangeIndex)
-            and isinstance(right, cudf.Int64Index)
+            and isinstance(
+                right,
+                (
+                    cudf.Int8Index,
+                    cudf.Int16Index,
+                    cudf.Int32Index,
+                    cudf.Int64Index,
+                ),
+            )
         ) or (
             isinstance(right, cudf.RangeIndex)
-            and isinstance(left, cudf.Int64Index)
+            and isinstance(
+                left,
+                (
+                    cudf.Int8Index,
+                    cudf.Int16Index,
+                    cudf.Int32Index,
+                    cudf.Int64Index,
+                ),
+            )
         ):
             return
 
@@ -58,7 +74,7 @@ def _check_types(
     ):
         if left.dtype != right.dtype:
             raise_assert_detail(
-                obj, "Catgorical difference", f"{left}", f"{right}"
+                obj, "Categorical difference", f"{left}", f"{right}"
             )
 
 
@@ -106,7 +122,7 @@ def assert_column_equal(
         Specify object name being compared, internally used to
         show appropriate assertion message.
     """
-    if check_dtype:
+    if check_dtype is True:
         if (
             is_categorical_dtype(left)
             and is_categorical_dtype(right)
@@ -173,7 +189,9 @@ def assert_column_equal(
     columns_equal = False
     try:
         columns_equal = left.equals(right)
-    except TypeError:
+    except TypeError as e:
+        if str(e) != "Categoricals can only compare with the same type":
+            raise e
         if is_categorical_dtype(left) and is_categorical_dtype(right):
             left = left.astype(left.categories.dtype)
             right = right.astype(right.categories.dtype)
@@ -217,7 +235,7 @@ def assert_index_equal(
     exact : bool or {‘equiv’}, default ‘equiv’
         Whether to check the Index class, dtype and inferred_type
         are identical. If ‘equiv’, then RangeIndex can be substituted
-        for Int64Index as well.
+        for Int8Index, Int16Index, Int32Index, Int64Index as well.
     check_names : bool, default True
         Whether to check the names attribute.
     check_less_precise : bool or int, default False

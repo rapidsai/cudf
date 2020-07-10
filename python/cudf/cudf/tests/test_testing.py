@@ -246,7 +246,7 @@ def test_multiindex_equal(rdata):
         assert_index_equal(idx1, idx2)
 
 
-@pytest.mark.parametrize("dtype", ["int8", "uint8", "float32", "category"])
+@pytest.mark.parametrize("dtype", ["int8", "uint8", "float32"])
 @pytest.mark.parametrize("check_exact", [True, False])
 @pytest.mark.parametrize("check_dtype", [True, False])
 def test_series_different_type_cases(dtype, check_exact, check_dtype):
@@ -275,3 +275,27 @@ def test_series_different_type_cases(dtype, check_exact, check_dtype):
         assert_series_equal(
             sr1, sr2, check_exact=check_exact, check_dtype=check_dtype
         )
+
+
+@pytest.mark.parametrize(
+    "index",
+    [cudf.Int8Index, cudf.Int16Index, cudf.Int32Index, cudf.Int64Index],
+)
+@pytest.mark.parametrize("exact", ["equiv", True, False])
+def test_range_index_and_int_index_eqaulity(index, exact):
+    pidx1 = pd.RangeIndex(0, stop=5, step=1)
+    pidx2 = pd.Index([0, 1, 2, 3, 4])
+    idx1 = cudf.from_pandas(pidx1)
+    idx2 = index([0, 1, 2, 3, 4])
+
+    kind = None
+    try:
+        pd.testing.assert_index_equal(pidx1, pidx2, exact=exact)
+    except BaseException as e:
+        kind = type(e)
+
+    if kind is not None:
+        with pytest.raises(kind):
+            assert_index_equal(idx1, idx2, exact=exact)
+    else:
+        assert_index_equal(idx1, idx2, exact=exact)
