@@ -999,7 +999,7 @@ class StringMethods(object):
         4     True
         5    False
         dtype: bool
-        >>> s = cudf.Series(["this is plain text", "\t\n", "9.9", "9.9.9"])
+        >>> s = cudf.Series(["this is plain text", "\\t\\n", "9.9", "9.9.9"])
         >>> s.str.isfloat()
         0    False
         1    False
