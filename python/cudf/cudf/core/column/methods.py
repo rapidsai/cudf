@@ -13,10 +13,10 @@ class ColumnMethodsMixin:
         inplace = kwargs.get("inplace", False)
 
         if inplace:
-            if self._parent is None:
+            if self._parent is not None:
                 self._parent._mimic_inplace(
                     self._parent._from_table(
-                        cudf.core.table._Table({None: new_col})
+                        cudf._lib.table._Table({None: new_col})
                     ),
                     inplace=True,
                 )
