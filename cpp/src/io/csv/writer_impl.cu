@@ -514,7 +514,7 @@ void writer::impl::write(table_view const& table,
 
       // create string table view from str_column_vec:
       //
-      auto str_table_ptr = std::make_unique<cudf::table>(std::move(str_column_vec));
+      auto str_table_ptr  = std::make_unique<cudf::table>(std::move(str_column_vec));
       auto str_table_view = str_table_ptr->view();
 
       // concatenate columns in each row into one big string column
