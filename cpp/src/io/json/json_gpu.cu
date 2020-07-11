@@ -54,7 +54,7 @@ namespace {
  * @param[in,out] stop Offset of the first character after the range
  *
  * @return void
- **/
+ */
 __device__ void limit_range_to_brackets(const char *data, uint64_t &start, uint64_t &stop)
 {
   while (start < stop && data[start] != '[' && data[start] != '{') { start++; }
@@ -63,38 +63,40 @@ __device__ void limit_range_to_brackets(const char *data, uint64_t &start, uint6
   while (start < stop && data[stop - 1] != ']' && data[stop - 1] != '}') { stop--; }
   stop--;
 }
-
-enum class field_name_parse_state { PRE_NAME, NAME, POST_NAME, POST_NAME_QUOTE };
+/**
+ * @brief Enumerator for states when parsing JSON object keys.
+ */
+enum class key_parse_state { PRE_KEY, KEY, POST_KEY, POST_KEY_QUOTE };
 
 /**
- * @brief Computes the field name hash and moves the start offset past the field name.
+ * @brief Computes the JSON object key hash and moves the start offset past the key.
  *
  * @param[in] data Pointer to the device buffer containing the data to process
  * @param[in] opts Parsing options (e.g. delimiter and quotation character)
  * @param[in,out] start Offset of the first character in the range. The offset is updated to the
- * first character after the field name.
+ * first character after the key.
  * @param[in] stop Offset of the first character after the range
  *
- * @return uint32_t Hash value of the field name. Zero if parsing failed
- **/
-__device__ uint32_t parse_field_name(const char *data,
-                                     const ParseOptions opts,
-                                     uint64_t *start,
-                                     uint64_t stop)
+ * @return uint32_t Hash value of the key; zero if parsing failed
+ */
+__device__ uint32_t parse_key(const char *data,
+                              const ParseOptions opts,
+                              uint64_t *start,
+                              uint64_t stop)
 {
-  auto state        = field_name_parse_state::PRE_NAME;
-  auto name_start   = *start;
+  auto state        = key_parse_state::PRE_KEY;
+  auto key_start    = *start;
   uint32_t hash_val = 0;
   for (auto pos = *start; pos < stop; ++pos) {
-    if (state == field_name_parse_state::PRE_NAME && data[pos] == opts.quotechar) {
-      state      = field_name_parse_state::NAME;
-      name_start = pos + 1;
-    } else if (state == field_name_parse_state::NAME && data[pos] == opts.quotechar &&
+    if (state == key_parse_state::PRE_KEY && data[pos] == opts.quotechar) {
+      state     = key_parse_state::KEY;
+      key_start = pos + 1;
+    } else if (state == key_parse_state::KEY && data[pos] == opts.quotechar &&
                data[pos - 1] != '\\') {
-      state = field_name_parse_state::POST_NAME;
+      state = key_parse_state::POST_KEY;
       hash_val =
-        MurmurHash3_32<cudf::string_view>{}(cudf::string_view(data + name_start, pos - name_start));
-    } else if (state == field_name_parse_state::POST_NAME && data[pos] == ':') {
+        MurmurHash3_32<cudf::string_view>{}(cudf::string_view(data + key_start, pos - key_start));
+    } else if (state == key_parse_state::POST_KEY && data[pos] == ':') {
       *start = pos + 1;
       break;
     }
@@ -112,7 +114,7 @@ __device__ uint32_t parse_field_name(const char *data,
  * @param opts The global parsing behavior options
  *
  * @return The parsed numeric value
- **/
+ */
 template <typename T, int base>
 __inline__ __device__ T
 decode_value(const char *data, uint64_t start, uint64_t end, ParseOptions const &opts)
@@ -129,7 +131,7 @@ decode_value(const char *data, uint64_t start, uint64_t end, ParseOptions const 
  * @param opts The global parsing behavior options
  *
  * @return The parsed numeric value
- **/
+ */
 template <typename T>
 __inline__ __device__ T
 decode_value(const char *data, uint64_t start, uint64_t end, ParseOptions const &opts)
@@ -146,7 +148,7 @@ decode_value(const char *data, uint64_t start, uint64_t end, ParseOptions const 
  * @param opts The global parsing behavior options
  *
  * @return The parsed timestamp_D
- **/
+ */
 template <>
 __inline__ __device__ cudf::timestamp_D decode_value(const char *data,
                                                      uint64_t start,
@@ -165,7 +167,7 @@ __inline__ __device__ cudf::timestamp_D decode_value(const char *data,
  * @param opts The global parsing behavior options
  *
  * @return The parsed timestamp_s
- **/
+ */
 template <>
 __inline__ __device__ cudf::timestamp_s decode_value(const char *data,
                                                      uint64_t start,
@@ -185,7 +187,7 @@ __inline__ __device__ cudf::timestamp_s decode_value(const char *data,
  * @param opts The global parsing behavior options
  *
  * @return The parsed timestamp_ms
- **/
+ */
 template <>
 __inline__ __device__ cudf::timestamp_ms decode_value(const char *data,
                                                       uint64_t start,
@@ -205,7 +207,7 @@ __inline__ __device__ cudf::timestamp_ms decode_value(const char *data,
  * @param opts The global parsing behavior options
  *
  * @return The parsed timestamp_us
- **/
+ */
 template <>
 __inline__ __device__ cudf::timestamp_us decode_value(const char *data,
                                                       uint64_t start,
@@ -225,7 +227,7 @@ __inline__ __device__ cudf::timestamp_us decode_value(const char *data,
  * @param opts The global parsing behavior options
  *
  * @return The parsed timestamp_ns
- **/
+ */
 template <>
 __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
                                                       uint64_t start,
@@ -281,7 +283,7 @@ __inline__ __device__ cudf::list_view decode_value(const char *data,
 
 /**
  * @brief Functor for converting plain text data to cuDF data type value.
- **/
+ */
 struct ConvertFunctor {
   /**
    * @brief Template specialization for operator() for types whose values can be
@@ -290,7 +292,7 @@ struct ConvertFunctor {
    *
    * It is handled here rather than within convertStrToValue() as that function
    * is used by other types (ex. timestamp) that aren't 'booleable'.
-   **/
+   */
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(const char *data,
                                                       void *output_columns,
@@ -335,7 +337,7 @@ struct ConvertFunctor {
   /**
    * @brief Default template operator() dispatch specialization all data types
    * (including wrapper types) that is not covered by above.
-   **/
+   */
   template <typename T,
             typename std::enable_if_t<!std::is_floating_point<T>::value and
                                       !std::is_integral<T>::value> * = nullptr>
@@ -359,7 +361,7 @@ struct ConvertFunctor {
  * @param[in] ch The character to check
  *
  * @return True if the input is whitespace, False otherwise
- **/
+ */
 __inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == ' '; }
 
 /**
@@ -372,7 +374,7 @@ __inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == '
  * @param[in] quotechar The character used to denote quotes
  *
  * @return Adjusted or unchanged start_idx and end_idx
- **/
+ */
 __inline__ __device__ void trim_field_start_end(const char *data,
                                                 uint64_t *start,
                                                 uint64_t *end,
@@ -448,7 +450,7 @@ __device__ __inline__ bool is_like_float(
  * @param[out] num_valid_fields The numbers of valid fields in columns
  *
  * @return void
- **/
+ */
 __global__ void convert_data_to_columns_kernel(const char *data,
                                                size_t data_size,
                                                const uint64_t *rec_starts,
@@ -474,8 +476,8 @@ __global__ void convert_data_to_columns_kernel(const char *data,
   for (int col = 0; col < num_columns && start < stop; col++) {
     auto dst_col = col;
     if (are_rows_objects) {
-      auto const col_name_hash = parse_field_name(data, opts, &start, stop);
-      dst_col                  = (*col_map.find(col_name_hash)).second;
+      auto const key_hash = parse_key(data, opts, &start, stop);
+      dst_col             = (*col_map.find(key_hash)).second;
     }
     // field_end is at the next delimiter/newline
     auto const field_end = cudf::io::gpu::seek_field_end(data, opts, start, stop);
@@ -533,7 +535,7 @@ __global__ void convert_data_to_columns_kernel(const char *data,
  * @param[out] column_infos The count for each column data type
  *
  * @returns void
- **/
+ */
 __global__ void detect_data_types_kernel(const char *data,
                                          size_t data_size,
                                          const ParseOptions opts,
@@ -557,8 +559,8 @@ __global__ void detect_data_types_kernel(const char *data,
   for (; col < num_columns && start < stop; col++) {
     auto dst_col = col;
     if (are_rows_objects) {
-      auto const col_name_hash = parse_field_name(data, opts, &start, stop);
-      dst_col                  = (*col_map.find(col_name_hash)).second;
+      auto const key_hash = parse_key(data, opts, &start, stop);
+      dst_col             = (*col_map.find(key_hash)).second;
     }
     auto field_start     = start;
     auto const field_end = cudf::io::gpu::seek_field_end(data, opts, field_start, stop);
@@ -665,11 +667,11 @@ __global__ void detect_data_types_kernel(const char *data,
  * @param[in] opts A set of parsing options
  * @param[in] rec_starts The start the input data of interest
  * @param[in] num_records The number of lines/rows of input data
- * @param[out] keys_cnt Number of found field names in the file
- * @param[out] keys_info Information (offset, length, hash) for each found field name
+ * @param[out] keys_cnt Number of found keys in the file
+ * @param[out] keys_info Information (offset, length, hash) for each found key
  *
  * @returns void
- **/
+ */
 __global__ void collect_keys_info_kernel(const char *data,
                                          size_t data_size,
                                          const ParseOptions opts,
@@ -685,15 +687,14 @@ __global__ void collect_keys_info_kernel(const char *data,
   // has the same semantics as end() in STL containers (one past last element)
   auto const stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
 
-  auto st              = field_name_parse_state::PRE_NAME;
+  auto st              = key_parse_state::PRE_KEY;
   auto last_name_start = start;
   for (auto pos = start; pos < stop; ++pos) {
-    if (st == field_name_parse_state::PRE_NAME && data[pos] == opts.quotechar) {
-      st              = field_name_parse_state::NAME;
+    if (st == key_parse_state::PRE_KEY && data[pos] == opts.quotechar) {
+      st              = key_parse_state::KEY;
       last_name_start = pos + 1;
-    } else if (st == field_name_parse_state::NAME && data[pos] == opts.quotechar &&
-               data[pos - 1] != '\\') {
-      st       = field_name_parse_state::POST_NAME;
+    } else if (st == key_parse_state::KEY && data[pos] == opts.quotechar && data[pos - 1] != '\\') {
+      st       = key_parse_state::POST_KEY;
       auto idx = atomicAdd(keys_cnt, 1);
       if (nullptr != keys_info) {
         auto len                                    = pos - last_name_start;
@@ -702,13 +703,13 @@ __global__ void collect_keys_info_kernel(const char *data,
         keys_info->column(2).element<uint32_t>(idx) =
           MurmurHash3_32<cudf::string_view>{}(cudf::string_view(data + last_name_start, len));
       }
-    } else if (st == field_name_parse_state::POST_NAME && data[pos] == opts.quotechar) {
-      st = field_name_parse_state::POST_NAME_QUOTE;
-    } else if (st == field_name_parse_state::POST_NAME_QUOTE && data[pos] == opts.quotechar &&
+    } else if (st == key_parse_state::POST_KEY && data[pos] == opts.quotechar) {
+      st = key_parse_state::POST_KEY_QUOTE;
+    } else if (st == key_parse_state::POST_KEY_QUOTE && data[pos] == opts.quotechar &&
                data[pos - 1] != '\\') {
-      st = field_name_parse_state::POST_NAME;
-    } else if (st == field_name_parse_state::POST_NAME && data[pos] == opts.delimiter) {
-      st = field_name_parse_state::PRE_NAME;
+      st = key_parse_state::POST_KEY;
+    } else if (st == key_parse_state::POST_KEY && data[pos] == opts.delimiter) {
+      st = key_parse_state::PRE_KEY;
     }
   }
 }
@@ -718,7 +719,7 @@ __global__ void collect_keys_info_kernel(const char *data,
 /**
  * @copydoc cudf::io::json::gpu::convert_json_to_columns
  *
- **/
+ */
 void convert_json_to_columns(rmm::device_buffer const &input_data,
                              data_type *const dtypes,
                              void *const *output_columns,
@@ -759,7 +760,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
 /**
  * @copydoc cudf::io::json::gpu::detect_data_types
  *
- **/
+ */
 void detect_data_types(ColumnInfo *column_infos,
                        const char *data,
                        size_t data_size,
