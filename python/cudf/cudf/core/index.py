@@ -553,7 +553,7 @@ class Index(Frame, Serializable):
         other = as_index(other)
 
         if is_mixed_with_object_dtype(self, other):
-            difference = self
+            difference = self.copy()
         else:
             difference = self.join(other, how="leftanti")
             if self.dtype != other.dtype:
