@@ -137,7 +137,10 @@ class Frame(libcudf.table.Table):
                         [col.dtype for col in cols], []
                     )
                 # If all categorical dtypes, combine the categories
-                elif all(is_categorical_dtype(col.dtype) for col in cols):
+                elif all(
+                    isinstance(col, cudf.core.column.CategoricalColumn)
+                    for col in cols
+                ):
                     # Combine and de-dupe the categories
                     categories[idx] = (
                         cudf.concat([col.cat().categories for col in cols])
@@ -763,7 +766,9 @@ class Frame(libcudf.table.Table):
             for column_name, other_column in zip(self._data.names, other):
                 input_col = self._data[column_name]
                 if column_name in cond._data:
-                    if is_categorical_dtype(input_col.dtype):
+                    if isinstance(
+                        input_col, cudf.core.column.CategoricalColumn
+                    ):
                         if np.isscalar(other_column):
                             try:
                                 other_column = input_col._encode(other_column)
@@ -779,7 +784,10 @@ class Frame(libcudf.table.Table):
                         input_col, other_column, cond._data[column_name]
                     )
 
-                    if is_categorical_dtype(self._data[column_name].dtype):
+                    if isinstance(
+                        self._data[column_name],
+                        cudf.core.column.CategoricalColumn,
+                    ):
                         result = build_categorical_column(
                             categories=self._data[column_name].categories,
                             codes=as_column(
@@ -816,7 +824,7 @@ class Frame(libcudf.table.Table):
                     """Array conditional must be same shape as self"""
                 )
             input_col = self._data[self.name]
-            if is_categorical_dtype(input_col.dtype):
+            if isinstance(input_col, cudf.core.column.CategoricalColumn):
                 if np.isscalar(other):
                     try:
                         other = input_col._encode(other)

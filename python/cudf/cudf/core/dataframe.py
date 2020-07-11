@@ -5149,16 +5149,22 @@ class DataFrame(Frame, Serializable):
             import numpy as np
 
             for col in self._data.names:
-                if is_categorical_dtype(
-                    self[col].dtype
-                ) and is_categorical_dtype(values.dtype):
+                if isinstance(
+                    self[col]._column, cudf.core.column.CategoricalColumn
+                ) and isinstance(
+                    values._column, cudf.core.column.CategoricalColumn
+                ):
                     res = self._data[col].binary_operator("eq", values._column)
                     result[col] = res
                 elif (
-                    is_categorical_dtype(self[col].dtype)
+                    isinstance(
+                        self[col]._column, cudf.core.column.CategoricalColumn
+                    )
                     or np.issubdtype(self[col].dtype, np.dtype("object"))
                 ) or (
-                    is_categorical_dtype(values.dtype)
+                    isinstance(
+                        values._column, cudf.core.column.CategoricalColumn
+                    )
                     or np.issubdtype(values.dtype, np.dtype("object"))
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
