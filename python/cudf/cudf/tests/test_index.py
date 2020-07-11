@@ -867,11 +867,16 @@ def test_index_append_error(data, other):
     gd_data = cudf.core.index.as_index(data)
     gd_other = cudf.core.index.as_index(other)
 
+    got_dtype = list(
+        set([gd_data.dtype, gd_other.dtype]) - set([np.dtype("object")])
+    )
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "cudf does not support mixed types, please type-cast "
-            "both index to same dtypes."
+            f"cudf does not support appending an Index of "
+            f"dtype `{np.dtype('object')}` with an Index "
+            f"of dtype `{got_dtype[0]}`, please type-cast "
+            f"either one of them to same dtypes."
         ),
     ):
         gd_data.append(gd_other)
@@ -879,8 +884,10 @@ def test_index_append_error(data, other):
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "cudf does not support mixed types, please type-cast "
-            "both index to same dtypes."
+            f"cudf does not support appending an Index of "
+            f"dtype `{np.dtype('object')}` with an Index "
+            f"of dtype `{got_dtype[0]}`, please type-cast "
+            f"either one of them to same dtypes."
         ),
     ):
         gd_other.append(gd_data)

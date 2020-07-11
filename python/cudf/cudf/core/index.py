@@ -486,9 +486,15 @@ class Index(Frame, Serializable):
 
             if len(self) and len(other):
                 if is_mixed_with_object_dtype(this, other):
+                    got_dtype = list(
+                        set([this.dtype, other.dtype])
+                        - set([np.dtype("object")])
+                    )
                     raise TypeError(
-                        "cudf does not support mixed types, please type-cast "
-                        "both index to same dtypes."
+                        f"cudf does not support appending an Index of "
+                        f"dtype `{np.dtype('object')}` with an Index "
+                        f"of dtype `{got_dtype[0]}`, please type-cast "
+                        f"either one of them to same dtypes."
                     )
 
                 if isinstance(self._values, cudf.core.column.NumericalColumn):
