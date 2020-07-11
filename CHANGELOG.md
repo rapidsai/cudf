@@ -166,6 +166,7 @@
 - PR #5644 Fix issue related to Dataframe init when passing in `columns`
 - PR #5664 Update conda upload versions for new supported CUDA/Python
 - PR #5656 Fix issue with incorrect docker image being used in local build script
+- PR #5672 Fix crash in parquet writer while writing large string data
 
 # cuDF 0.14.0 (Date TBD)
 
