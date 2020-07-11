@@ -73,7 +73,11 @@ class reader::impl {
   table_metadata metadata;
   std::vector<data_type> dtypes_;
 
+  // the map is only used for files with rows in object format; initialize to a dummy value so the
+  // map object can be passed to the kernel in any case
   col_map_ptr_type column_names_hash_map = col_map_type::create(1);
+  // using a pointer here so a failure to initialize would be more apparent
+  std::unique_ptr<bool> are_rows_objects;
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;
@@ -81,7 +85,6 @@ class reader::impl {
   rmm::device_vector<SerialTrieNode> d_true_trie_;
   rmm::device_vector<SerialTrieNode> d_false_trie_;
   rmm::device_vector<SerialTrieNode> d_na_trie_;
-  bool are_rows_objects = false;
 
   /**
    * @brief Ingest input JSON file/buffer, without decompression

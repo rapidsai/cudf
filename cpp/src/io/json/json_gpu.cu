@@ -530,8 +530,8 @@ __global__ void convert_data_to_columns_kernel(const char *data,
  * @param[in] data_size Size of the data buffer, in bytes
  * @param[in] opts A set of parsing options
  * @param[in] num_columns The number of columns of input data
- * @param[in] rec_starts The start the input data of interest
- * @param[in] num_records The number of lines/rows of input data
+ * @param[in] rec_starts The offset of each row in the input
+ * @param[in] num_records The number of rows
  * @param[out] column_infos The count for each column data type
  *
  * @returns void
@@ -665,8 +665,8 @@ __global__ void detect_data_types_kernel(const char *data,
  * @param[in] data Input data buffer
  * @param[in] data_size Size of the data buffer, in bytes
  * @param[in] opts A set of parsing options
- * @param[in] rec_starts The start the input data of interest
- * @param[in] num_records The number of lines/rows of input data
+ * @param[in] rec_starts The offset of each row in the input
+ * @param[in] num_records The number of rows
  * @param[out] keys_cnt Number of found keys in the file
  * @param[out] keys_info Information (offset, length, hash) for each found key
  *

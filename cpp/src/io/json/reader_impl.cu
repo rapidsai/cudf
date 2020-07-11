@@ -70,25 +70,17 @@ constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept
 }
 
 }  // anonymous namespace
-template <typename T>
-void print_column(column_view c)
-{
-  std::vector<T> hdata(c.size());
-  cudaMemcpy(hdata.data(), c.data<T>(), sizeof(T) * hdata.size(), cudaMemcpyDefault);
-  for (auto elem : hdata) std::cout << elem << ' ';
-}
 
 /**
  * @brief Aggregate the table containing keys info by their hashes.
  *
- * @param[in] info Table with columns containing key offsets in the file, lengths and hashes,
- respectively
+ * @param[in] info Table with columns containing key offsets, lengths and hashes, respectively
  *
  * @returns std::unique_ptr<table> Table with data aggregated by hashes
  */
 std::unique_ptr<table> aggregate_keys_info(std::unique_ptr<table> info)
 {
-  auto info_view = info->view();
+  auto const info_view = info->view();
   std::vector<groupby::aggregation_request> requests;
   requests.emplace_back(groupby::aggregation_request());
   requests[0].values = info_view.column(0);  // offsets
@@ -118,16 +110,15 @@ std::unique_ptr<table> aggregate_keys_info(std::unique_ptr<table> info)
  */
 col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes, cudaStream_t stream)
 {
-  auto map_ptr{col_map_type::create(column_name_hashes.size())};
-  auto map         = *map_ptr;
-  auto column_data = column_name_hashes.data<uint32_t>();
+  auto key_col_map{col_map_type::create(column_name_hashes.size())};
+  auto const column_data = column_name_hashes.data<uint32_t>();
   thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      column_name_hashes.size(),
-                     [=] __device__(size_type idx) mutable {
+                     [map = *key_col_map, column_data] __device__(size_type idx) mutable {
                        map.insert(thrust::make_pair(column_data[idx], idx));
                      });
-  return std::move(map_ptr);
+  return std::move(key_col_map);
 }
 
 /**
@@ -160,7 +151,7 @@ std::unique_ptr<table> create_json_keys_info_table(
                                          nullptr,
                                          stream);
 
-  // allocate columns to store hash values, lengths, offsets
+  // Allocate columns to store hash values, lengths, offsets
   auto const num_keys = key_counter.value();
   std::vector<std::unique_ptr<column>> info_columns;
   info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT64), num_keys));
@@ -170,7 +161,9 @@ std::unique_ptr<table> create_json_keys_info_table(
   rmm::device_scalar<mutable_table_device_view> info_table_mdv(
     *mutable_table_device_view::create(info_table->mutable_view(), stream), stream);
 
+  // Reset the key counter - now used for indexing
   key_counter.set_value(0, stream);
+  // Fill the allocated columns
   cudf::io::json::gpu::collect_keys_info(data_ptr,
                                          data.size(),
                                          opts,
@@ -221,11 +214,11 @@ auto sort_keys_info_by_offset(std::unique_ptr<table> info)
 }
 
 /**
- * @brief Extract JSON object keys from a JSON file
+ * @brief Extract JSON object keys from a JSON file.
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
- * @return std::vector<std::string> names of JSON object keys in the file
+ * @return std::vector<std::string> Names of JSON object keys in the file
  */
 std::vector<std::string> reader::impl::get_json_object_keys(cudaStream_t stream)
 {
@@ -240,7 +233,7 @@ std::vector<std::string> reader::impl::get_json_object_keys(cudaStream_t stream)
 }
 
 /**
- * @brief Ingest input JSON file/buffer, without decompression
+ * @brief Ingest input JSON file/buffer, without decompression.
  *
  * Sets the source_, byte_range_offset_, and byte_range_size_ data members
  *
@@ -453,8 +446,8 @@ void reader::impl::set_column_names(cudaStream_t stream)
                "Input data is not a valid JSON file.");
   // If the first opening bracket is '{', assume object format
   // Note: must be initialized before data type inference
-  are_rows_objects = first_curly_bracket < first_square_bracket;
-  if (are_rows_objects) {
+  are_rows_objects = std::make_unique<bool>(first_curly_bracket < first_square_bracket);
+  if (*are_rows_objects) {
     // use keys as column names
     metadata.column_names = get_json_object_keys(stream);
   } else {
@@ -538,13 +531,13 @@ void reader::impl::set_data_types(cudaStream_t stream)
                                                                   cudf::io::json::ColumnInfo{});
     // For object rows, it's not efficient for the kernel to determine which fields are missing in
     // each row. Set the null count to row count; kernel reduces this value for each valid field.
-    if (are_rows_objects) set_null_count(rec_starts_.size(), d_column_infos, stream);
+    if (*are_rows_objects) set_null_count(rec_starts_.size(), d_column_infos, stream);
 
     cudf::io::json::gpu::detect_data_types(d_column_infos.data().get(),
                                            static_cast<const char *>(data_.data()),
                                            data_.size(),
                                            opts_,
-                                           are_rows_objects,
+                                           *are_rows_objects,
                                            *column_names_hash_map,
                                            num_columns,
                                            rec_starts_.data().get(),
@@ -614,7 +607,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
                                                d_valid.data().get(),
                                                d_valid_counts.data().get(),
                                                opts_,
-                                               are_rows_objects,
+                                               *are_rows_objects,
                                                *column_names_hash_map,
                                                stream);
   CUDA_TRY(cudaStreamSynchronize(stream));

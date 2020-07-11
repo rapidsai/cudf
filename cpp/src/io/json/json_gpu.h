@@ -44,7 +44,7 @@ using col_map_type = concurrent_unordered_map<uint32_t, uint32_t>;
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @returns void
- **/
+ */
 void convert_json_to_columns(rmm::device_buffer const &input_data,
                              data_type *const dtypes,
                              void *const *output_columns,
@@ -66,12 +66,12 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
  * @param[in] data_size Size of the data buffer, in bytes
  * @param[in] opts A set of parsing options
  * @param[in] num_columns The number of columns of input data
- * @param[in] rec_starts The start the input data of interest
- * @param[in] num_records The number of lines/rows of input data
+ * @param[in] rec_starts The offset of each row in the input
+ * @param[in] num_records The number of rows
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @returns void
- **/
+ */
 void detect_data_types(ColumnInfo *column_infos,
                        const char *data,
                        size_t data_size,
@@ -89,14 +89,14 @@ void detect_data_types(ColumnInfo *column_infos,
  * @param[in] data Input data buffer
  * @param[in] data_size Size of the data buffer, in bytes
  * @param[in] options A set of parsing options
- * @param[in] rec_starts The start the input data of interest
- * @param[in] num_records The number of lines/rows of input data
+ * @param[in] rec_starts The offset of each row in the input
+ * @param[in] num_records The number of rows
  * @param[out] keys_cnt Number of found keys in the file
  * @param[out] keys_info Information (offset, length, hash) for each found key
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @returns void
- **/
+ */
 void collect_keys_info(const char *data,
                        size_t data_size,
                        const ParseOptions &options,
