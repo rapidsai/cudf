@@ -57,6 +57,11 @@ const std::vector<std::string> compiler_flags{
   "-D_LIBCUDACXX_HAS_NO_CSTDDEF",
   "-D_LIBCUDACXX_HAS_NO_CLIMITS",
   "-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS",
+#if defined(__powerpc64__)
+  "-D__powerpc64__"
+#elif defined(__x86_64__)
+  "-D__x86_64__"
+#endif
 };
 
 const std::unordered_map<std::string, char const*> stringified_headers{
