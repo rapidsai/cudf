@@ -364,3 +364,9 @@ def check_cast_unsupported_dtype(dtype):
     raise NotImplementedError(
         "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)
     )
+
+
+def is_mixed_with_object_dtype(lhs, rhs):
+    return (lhs.dtype == "object" and rhs.dtype != "object") or (
+        rhs.dtype == "object" and lhs.dtype != "object"
+    )
