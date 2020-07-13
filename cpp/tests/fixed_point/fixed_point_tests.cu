@@ -579,4 +579,20 @@ TEST_F(FixedPointTest, FixedPointBinaryOpAdd)
   cudf::test::expect_columns_equal(expected_col, result->view());
 }
 
+TEST_F(FixedPointTest, FixedPointConcatentate)
+{
+  auto vec = std::vector<decimal32>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimal32{});
+
+  auto const a = wrapper<decimal32>(vec.begin(), /***/ vec.begin() + 300);
+  auto const b = wrapper<decimal32>(vec.begin() + 300, vec.begin() + 700);
+  auto const c = wrapper<decimal32>(vec.begin() + 700, vec.end());
+
+  auto const fixed_point_columns = std::vector<cudf::column_view>{a, b, c};
+  auto const results             = cudf::concatenate(fixed_point_columns);
+  auto const expected            = wrapper<decimal32>(vec.begin(), vec.end());
+
+  cudf::test::expect_columns_equal(*results, expected);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
