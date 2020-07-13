@@ -2,10 +2,12 @@
 import pickle
 import warnings
 from numbers import Number
+from shutil import get_terminal_size
 
 import cupy
 import numpy as np
 import pandas as pd
+from pandas._config import get_option
 from pandas.api.types import is_dict_like
 
 import cudf
@@ -952,13 +954,20 @@ class Series(Frame, Serializable):
         return self.to_string()
 
     def __repr__(self):
-        mr = pd.options.display.max_rows
-        if len(self) > mr and mr != 0:
-            top = self.head(int(mr / 2 + 1))
-            bottom = self.tail(int(mr / 2 + 1))
-            from cudf import concat
+        # max_rows = pd.options.display.max_rows
 
-            preprocess = concat([top, bottom])
+        width, height = get_terminal_size()
+        max_rows = (
+            height
+            if get_option("display.max_rows") == 0
+            else get_option("display.max_rows")
+        )
+
+        if len(self) > max_rows and max_rows != 0:
+            top = self.head(int(max_rows / 2 + 1))
+            bottom = self.tail(int(max_rows / 2 + 1))
+
+            preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
         if (
@@ -972,22 +981,30 @@ class Series(Frame, Serializable):
             output = (
                 preprocess.astype("O").fillna("null").to_pandas().__repr__()
             )
+        elif isinstance(
+            preprocess._column, cudf.core.column.CategoricalColumn
+        ):
+            min_rows = (
+                height
+                if get_option("display.max_rows") == 0
+                else get_option("display.min_rows")
+            )
+            show_dimensions = get_option("display.show_dimensions")
+            output = preprocess.to_pandas().to_string(
+                name=self.name,
+                dtype=self.dtype,
+                min_rows=min_rows,
+                max_rows=max_rows,
+                length=show_dimensions,
+                na_rep="null",
+            )
+        elif is_datetime_dtype(preprocess.dtype):
+            output = preprocess.to_pandas().fillna("null").__repr__()
         else:
             output = preprocess.to_pandas().__repr__()
+
         lines = output.split("\n")
 
-        if preprocess.null_count:
-            if isinstance(
-                preprocess._column, cudf.core.column.CategoricalColumn
-            ):
-                for idx in range(len(preprocess)):
-                    if preprocess[idx] is None:
-                        lines[idx] = lines[idx].replace(" NaN", "null")
-
-            if is_datetime_dtype(preprocess.dtype):
-                for idx in range(len(preprocess)):
-                    if preprocess[idx] is None:
-                        lines[idx] = lines[idx].replace(" NaT", "null")
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             category_memory = lines[-1]
             lines = lines[:-1]
