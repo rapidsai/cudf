@@ -873,15 +873,17 @@ def test_index_append_error(data, other):
     gd_data = cudf.core.index.as_index(data)
     gd_other = cudf.core.index.as_index(other)
 
-    got_dtype = list(
-        set([gd_data.dtype, gd_other.dtype]) - set([np.dtype("object")])
+    got_dtype = (
+        gd_other.dtype
+        if gd_data.dtype == np.dtype("object")
+        else gd_data.dtype
     )
     with pytest.raises(
         TypeError,
         match=re.escape(
             f"cudf does not support appending an Index of "
             f"dtype `{np.dtype('object')}` with an Index "
-            f"of dtype `{got_dtype[0]}`, please type-cast "
+            f"of dtype `{got_dtype}`, please type-cast "
             f"either one of them to same dtypes."
         ),
     ):
@@ -892,7 +894,7 @@ def test_index_append_error(data, other):
         match=re.escape(
             f"cudf does not support appending an Index of "
             f"dtype `{np.dtype('object')}` with an Index "
-            f"of dtype `{got_dtype[0]}`, please type-cast "
+            f"of dtype `{got_dtype}`, please type-cast "
             f"either one of them to same dtypes."
         ),
     ):
