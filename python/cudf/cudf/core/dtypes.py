@@ -131,7 +131,11 @@ class ListDtype(ExtensionDtype):
 
     @property
     def type(self):
-        return list
+        return (
+            lambda x: pa.array([x])
+            if cudf.utils.dtypes.is_scalar(x)
+            else pa.array(x)
+        )
 
     @property
     def name(self):

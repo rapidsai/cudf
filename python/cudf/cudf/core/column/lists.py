@@ -39,14 +39,14 @@ class ListColumn(ColumnBase):
         """
         Column of values (may itself be a ListColumn)
         """
-        return self.children[0]
+        return self.children[1]
 
     @property
-    def indices(self):
+    def offsets(self):
         """
         Column of integer offsets to the values
         """
-        return self.children[1]
+        return self.children[0]
 
     @classmethod
     def from_arrow(cls, array):
@@ -62,12 +62,12 @@ class ListColumn(ColumnBase):
                 offset=array.offset,
                 mask=mask,
                 null_count=array.null_count,
-                children=(ListColumn.from_arrow(array.values), offsets),
+                children=(offsets, ListColumn.from_arrow(array.values)),
             )
 
     def to_arrow(self):
-        offsets = self.children[1].to_arrow()
-        values = self.children[0].to_arrow()
+        offsets = self.offsets.to_arrow()
+        values = self.values.to_arrow()
         if len(values) == values.null_count:
             values = pa.NullArray.from_pandas([None] * len(values))
         if self.nullable:

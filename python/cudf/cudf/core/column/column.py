@@ -29,6 +29,7 @@ from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
     is_categorical_dtype,
+    is_list_dtype,
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
@@ -1138,7 +1139,7 @@ def build_column(
             children=children,
             null_count=null_count,
         )
-    elif dtype is cudf.core.dtypes.ListDtype:
+    elif is_list_dtype(dtype):
         return cudf.core.column.ListColumn(
             data=data,
             size=size,
