@@ -38,6 +38,7 @@
 - PR #5612 Add `is_hex` strings API
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
+- PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 
 ## Improvements
 
