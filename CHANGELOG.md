@@ -16,6 +16,7 @@
 - PR #5397 Add internal implementation of nested loop equijoins.
 - PR #5303 Add slice_strings functionality using delimiter string
 - PR #5301 Add Java bindings for `zfill`
+- PR #5411 Enable metadata collection for chunked parquet writer
 - PR #5359 Add duration types
 - PR #5364 Validate array interface during buffer construction
 - PR #5418 Add support for `DataFrame.info`
@@ -37,6 +38,7 @@
 - PR #5612 Add `is_hex` strings API
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
+- PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 
 ## Improvements
 
@@ -167,6 +169,7 @@
 - PR #5340 Disable iteration in cudf objects and add support for `DataFrame` initialization with list of `Series`
 - PR #5664 Update conda upload versions for new supported CUDA/Python
 - PR #5656 Fix issue with incorrect docker image being used in local build script
+- PR #5671 Fix chunksize issue with `DataFrame.to_csv`
 - PR #5672 Fix crash in parquet writer while writing large string data
 
 # cuDF 0.14.0 (Date TBD)
