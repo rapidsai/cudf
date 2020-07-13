@@ -145,7 +145,7 @@ class CudfEngine(ArrowEngine):
                 else _meta[0]
             )
             with fs.open(metadata_path, "wb") as fil:
-                fil.write(_meta.tobytes())
+                fil.write(memoryview(_meta))
 
 
 def read_parquet(
