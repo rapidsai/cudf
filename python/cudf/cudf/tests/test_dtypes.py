@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa

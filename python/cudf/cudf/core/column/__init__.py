@@ -1,5 +1,7 @@
-from cudf.core.column.categorical import CategoricalColumn  # noqa: F401
-from cudf.core.column.column import (  # noqa: F401
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+from cudf.core.column.categorical import CategoricalColumn
+from cudf.core.column.column import (
     ColumnBase,
     as_column,
     build_categorical_column,
