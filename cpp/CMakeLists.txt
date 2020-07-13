@@ -277,16 +277,7 @@ endif(Boost_FOUND)
 find_path(RMM_INCLUDE "rmm"
           HINTS "$ENV{RMM_ROOT}/include")
 
-find_library(RMM_LIBRARY "rmm"
-             HINTS "$ENV{RMM_ROOT}/lib" "$ENV{RMM_ROOT}/build")
-
-message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
-
-add_library(rmm SHARED IMPORTED ${RMM_LIBRARY})
-if(RMM_INCLUDE AND RMM_LIBRARY)
-    set_target_properties(rmm PROPERTIES IMPORTED_LOCATION ${RMM_LIBRARY})
-endif(RMM_INCLUDE AND RMM_LIBRARY)
 
 ###################################################################################################
 # - DLPACK -------------------------------------------------------------------------------------------
@@ -386,8 +377,7 @@ endif(CONDA_INCLUDE_DIRS)
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}"
-                 "${RMM_LIBRARY}")
+                 "${GTEST_LIBRARY_DIR}")
 
 if(CONDA_LINK_DIRS)
     link_directories("${CONDA_LINK_DIRS}")
@@ -730,7 +720,7 @@ endif(HT_DEFAULT_ALLOCATOR)
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------

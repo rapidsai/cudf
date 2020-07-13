@@ -21,10 +21,10 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/cxxopts.hpp>
 
-#include <rmm/mr/device/cnmem_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/default_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <ftw.h>
 #include <random>
@@ -237,9 +237,12 @@ class TempDirTestEnvironment : public ::testing::Environment {
 inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(
   std::string const &allocation_mode)
 {
-  if (allocation_mode == "cuda") return std::make_unique<rmm::mr::cuda_memory_resource>();
-  if (allocation_mode == "pool") return std::make_unique<rmm::mr::cnmem_memory_resource>();
-  if (allocation_mode == "managed") return std::make_unique<rmm::mr::managed_memory_resource>();
+  using cuda_mr    = rmm::mr::cuda_memory_resource;
+  using pool_mr    = rmm::mr::pool_memory_resource<cuda_mr>;
+  using managed_mr = rmm::mr::managed_memory_resource;
+  if (allocation_mode == "cuda") return std::make_unique<cuda_mr>();
+  if (allocation_mode == "pool") return std::make_unique<pool_mr>(new cuda_mr());
+  if (allocation_mode == "managed") return std::make_unique<managed_mr>();
   CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }
 
