@@ -441,8 +441,8 @@ struct copy_block_partitions_dispatcher {
                            gather_map.begin(),
                            gather_map.end(),
                            false,
-                           mr,
-                           stream);
+                           stream,
+                           mr);
   }
 };
 

@@ -35,6 +35,7 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
   CUDF_EXPECTS(num_rows == offsets_column->size() - 1,
                "Invalid offsets column size for lists column.");
   CUDF_EXPECTS(offsets_column->null_count() == 0, "Offsets column should not contain nulls");
+  CUDF_EXPECTS(child_column != nullptr, "Must pass a valid child column");
 
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));

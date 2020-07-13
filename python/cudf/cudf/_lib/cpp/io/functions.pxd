@@ -203,7 +203,11 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef void write_parquet_chunked(cudf_table_view.table_view table_,
                                     shared_ptr[pq_chunked_state]) except +
 
-    cdef void write_parquet_chunked_end(shared_ptr[pq_chunked_state]) except +
+    cdef unique_ptr[vector[uint8_t]] write_parquet_chunked_end(
+        shared_ptr[pq_chunked_state],
+        bool return_meta,
+        string metadata_out_file_path,
+    ) except +
 
     cdef unique_ptr[vector[uint8_t]] merge_rowgroup_metadata(
         const vector[unique_ptr[vector[uint8_t]]]& metadata_list
