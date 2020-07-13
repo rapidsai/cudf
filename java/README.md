@@ -56,12 +56,12 @@ When building libcudf, make sure you pass in the cmake options
 `-DARROW_STATIC_LIB=ON -DBoost_USE_STATIC_LIBS=ON` so that Apache Arrow and Boost libraries are
 linked statically.
 
-If you use the default cmake options libcudart will be dynamically linked to libcudf and librmm
-which are included.  If you do this the resulting jar will have a classifier associated with it
+If you use the default cmake options libcudart will be dynamically linked to libcudf
+which is included.  If you do this the resulting jar will have a classifier associated with it
 because that jar can only be used with a single version of the CUDA runtime.  
 
 There is experimental work to try and remove that requirement but it is not fully functional
-you can build RMM and cuDF with `-DCUDA_STATIC_RUNTIME=ON` when running cmake, and similarly 
+you can build cuDF with `-DCUDA_STATIC_RUNTIME=ON` when running cmake, and similarly 
 `-DCUDA_STATIC_RUNTIME=ON` when running maven.  This will statically link in the CUDA runtime
 and result in a jar with no classifier that should run on any host that has a version of the
 driver new enough to support the runtime that this was built with. Unfortunately `libnvrtc` is still
@@ -92,16 +92,7 @@ between different threads (see
 [blog post](https://devblogs.nvidia.com/gpu-pro-tip-cuda-7-streams-simplify-concurrency/)).
 
 Since the PTDS option is for each compilation unit, it should be done at the same time across the
-whole codebase. To enable PTDS, first build RMM:
-```shell script
-conda activate cudf_dev
-cd src/rmm/build
-cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DPER_THREAD_DEFAULT_STREAM=ON
-make -j`nproc`
-make install
-```
-
-then build cuDF:
+whole codebase. To enable PTDS, first build cuDF:
 ```shell script
 cd src/cudf/cpp/build
 cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DPER_THREAD_DEFAULT_STREAM=ON
@@ -109,7 +100,7 @@ make -j`nproc`
 make install
 ```
 
-and finally build the jar:
+then build the jar:
 ```shell script
 cd src/cudf/java
 mvn clean install -DPER_THREAD_DEFAULT_STREAM=ON
