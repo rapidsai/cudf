@@ -32,7 +32,6 @@ import java.net.URL;
 public class NativeDepsLoader {
   private static final Logger log = LoggerFactory.getLogger(NativeDepsLoader.class);
   private static final String[] loadOrder = new String[] {
-      "rmm",
       "cudf",
       "cudfjni"
   };

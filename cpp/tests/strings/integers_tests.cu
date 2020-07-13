@@ -40,7 +40,7 @@ TEST_F(StringsConvertTest, ToInteger)
   std::vector<int32_t> h_expected{0, 1234, 0, 0, -9832, 93, 765, -1, 2147483647, -2147483648};
 
   auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::to_integers(strings_view, cudf::data_type{cudf::INT32});
+  auto results = cudf::strings::to_integers(strings_view, cudf::data_type{cudf::type_id::INT32});
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected(
     h_expected.begin(),
@@ -74,23 +74,25 @@ TEST_F(StringsConvertTest, FromInteger)
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::from_integers(zero_size_column);
   cudf::test::expect_strings_empty(results->view());
 }
 
 TEST_F(StringsConvertTest, ZeroSizeIntegersColumn)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::to_integers(zero_size_column, cudf::data_type{cudf::INT32});
+  cudf::column_view zero_size_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto results =
+    cudf::strings::to_integers(zero_size_column, cudf::data_type{cudf::type_id::INT32});
   EXPECT_EQ(0, results->size());
 }
 
 TEST_F(StringsConvertTest, EmptyStringsColumn)
 {
   cudf::test::strings_column_wrapper strings({"", "", ""});
-  auto results =
-    cudf::strings::to_integers(cudf::strings_column_view(strings), cudf::data_type{cudf::INT64});
+  auto results = cudf::strings::to_integers(cudf::strings_column_view(strings),
+                                            cudf::data_type{cudf::type_id::INT64});
   cudf::test::fixed_width_column_wrapper<int64_t> expected({0, 0, 0});
   cudf::test::expect_columns_equal(results->view(), expected);
 }
@@ -172,7 +174,7 @@ TEST_F(StringsConvertTest, HexToInteger)
     }
 
     auto results = cudf::strings::hex_to_integers(cudf::strings_column_view(strings),
-                                                  cudf::data_type{cudf::INT32});
+                                                  cudf::data_type{cudf::type_id::INT32});
     cudf::test::fixed_width_column_wrapper<int32_t> expected(
       h_expected.begin(),
       h_expected.end(),
@@ -189,11 +191,35 @@ TEST_F(StringsConvertTest, HexToInteger)
     }
 
     auto results = cudf::strings::hex_to_integers(cudf::strings_column_view(strings),
-                                                  cudf::data_type{cudf::INT64});
+                                                  cudf::data_type{cudf::type_id::INT64});
     cudf::test::fixed_width_column_wrapper<int64_t> expected(
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
     cudf::test::expect_columns_equal(*results, expected);
   }
+}
+
+TEST_F(StringsConvertTest, IsHex)
+{
+  std::vector<const char*> h_strings{"",
+                                     "1234",
+                                     nullptr,
+                                     "98BEEF",
+                                     "1a5",
+                                     "2face",
+                                     "0xAABBCCDD",
+                                     "112233445566",
+                                     "XYZ",
+                                     "0",
+                                     "0x",
+                                     "x"};
+  cudf::test::strings_column_wrapper strings(
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  cudf::test::fixed_width_column_wrapper<bool> expected({0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0},
+                                                        {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  auto results = cudf::strings::is_hex(cudf::strings_column_view(strings));
+  cudf::test::expect_columns_equal(*results, expected);
 }

@@ -97,7 +97,8 @@ TEST_F(StringsCombineTest, Concatenate)
 
 TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   std::vector<cudf::column_view> strings_columns;
   strings_columns.push_back(zero_size_strings_column);
   strings_columns.push_back(zero_size_strings_column);
@@ -138,7 +139,8 @@ TEST_F(StringsCombineTest, Join)
 
 TEST_F(StringsCombineTest, JoinZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::join_strings(strings_view);
   cudf::test::expect_strings_empty(results->view());
@@ -179,7 +181,7 @@ TEST_F(StringsConcatenateWithColSeparatorTest, ExceptionTests)
   }
 
   {
-    cudf::column_view col0(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+    cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
     cudf::test::fixed_width_column_wrapper<int64_t> col1{{1}};
 
     EXPECT_THROW(
@@ -199,7 +201,7 @@ TEST_F(StringsConcatenateWithColSeparatorTest, ExceptionTests)
 
 TEST_F(StringsConcatenateWithColSeparatorTest, ZeroSizedColumns)
 {
-  cudf::column_view col0(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
 
   auto results =
     cudf::strings::concatenate(cudf::table_view{{col0}}, cudf::strings_column_view(col0));

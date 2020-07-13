@@ -593,6 +593,32 @@ TEST_F(ParquetWriterTest, DeviceWriteLargeishFile)
   auto custom_tbl = cudf_io::read_parquet(custom_args);
   expect_tables_equal(custom_tbl.tbl->view(), expected->view());
 }
+template <typename T>
+std::string create_parquet_file(int num_cols)
+{
+  srand(31337);
+  auto const table = create_random_fixed_table<T>(num_cols, 10, true);
+  auto const filepath =
+    temp_env->get_temp_filepath(typeid(T).name() + std::to_string(num_cols) + ".parquet");
+  cudf_io::write_parquet_args const out_args{cudf_io::sink_info{filepath}, table->view()};
+  cudf_io::write_parquet(out_args);
+  return filepath;
+}
+
+TEST_F(ParquetWriterTest, MultipleMismatchedSources)
+{
+  auto const int5file = create_parquet_file<int>(5);
+  {
+    auto const float5file = create_parquet_file<float>(5);
+    cudf_io::read_parquet_args const read_args{cudf_io::source_info{{int5file, float5file}}};
+    EXPECT_THROW(cudf_io::read_parquet(read_args), cudf::logic_error);
+  }
+  {
+    auto const int10file = create_parquet_file<int>(10);
+    cudf_io::read_parquet_args const read_args{cudf_io::source_info{{int5file, int10file}}};
+    EXPECT_THROW(cudf_io::read_parquet(read_args), cudf::logic_error);
+  }
+}
 
 TEST_F(ParquetChunkedWriterTest, SingleTable)
 {
@@ -758,8 +784,8 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroups)
   cudf_io::write_parquet_chunked_end(state);
 
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
-  read_args.row_group_list = {1, 0, 1};
-  auto result              = cudf_io::read_parquet(read_args);
+  read_args.row_groups = {{1, 0, 1}};
+  auto result          = cudf_io::read_parquet(read_args);
 
   expect_tables_equal(*result.tbl, *full_table);
 }
@@ -776,9 +802,11 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroupsError)
   cudf_io::write_parquet_chunked_end(state);
 
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
-  read_args.row_group_list = {0, 1};
+  read_args.row_groups = {{0, 1}};
   EXPECT_THROW(cudf_io::read_parquet(read_args), cudf::logic_error);
-  read_args.row_group_list = {-1};
+  read_args.row_groups = {{-1}};
+  EXPECT_THROW(cudf_io::read_parquet(read_args), cudf::logic_error);
+  read_args.row_groups = {{0}, {0}};
   EXPECT_THROW(cudf_io::read_parquet(read_args), cudf::logic_error);
 }
 

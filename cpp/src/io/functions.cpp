@@ -28,24 +28,26 @@ namespace cudf {
 namespace io {
 namespace {
 template <typename reader, typename reader_options>
-std::unique_ptr<reader> make_reader(source_info const& source,
+std::unique_ptr<reader> make_reader(source_info const& src_info,
                                     reader_options const& options,
                                     rmm::mr::device_memory_resource* mr)
 {
-  if (source.type == io_type::FILEPATH) {
-    return std::make_unique<reader>(source.filepath, options, mr);
+  if (src_info.type == io_type::FILEPATH) {
+    return std::make_unique<reader>(src_info.filepaths, options, mr);
   }
-  if (source.type == io_type::HOST_BUFFER) {
-    return std::make_unique<reader>(
-      cudf::io::datasource::create(source.buffer.first, source.buffer.second), options, mr);
+
+  std::vector<std::unique_ptr<datasource>> datasources;
+  if (src_info.type == io_type::HOST_BUFFER) {
+    datasources = cudf::io::datasource::create(src_info.buffers);
+  } else if (src_info.type == io_type::ARROW_RANDOM_ACCESS_FILE) {
+    datasources = cudf::io::datasource::create(src_info.files);
+  } else if (src_info.type == io_type::USER_IMPLEMENTED) {
+    datasources = cudf::io::datasource::create(src_info.user_sources);
+  } else {
+    CUDF_FAIL("Unsupported source type");
   }
-  if (source.type == io_type::ARROW_RANDOM_ACCESS_FILE) {
-    return std::make_unique<reader>(cudf::io::datasource::create(source.file), options, mr);
-  }
-  if (source.type == io_type::USER_IMPLEMENTED) {
-    return std::make_unique<reader>(cudf::io::datasource::create(source.user_source), options, mr);
-  }
-  CUDF_FAIL("Unsupported source type");
+
+  return std::make_unique<reader>(std::move(datasources), options, mr);
 }
 
 template <typename writer, typename writer_options>
@@ -256,10 +258,8 @@ table_with_metadata read_parquet(read_parquet_args const& args, rmm::mr::device_
     args.columns, args.strings_to_categorical, args.use_pandas_metadata, args.timestamp_type};
   auto reader = make_reader<detail_parquet::reader>(args.source, options, mr);
 
-  if (args.row_group_list.size() > 0) {
-    return reader->read_row_groups(args.row_group_list);
-  } else if (args.row_group != -1) {
-    return reader->read_row_group(args.row_group, std::max(args.row_group_count, 1));
+  if (args.row_groups.size() > 0) {
+    return reader->read_row_groups(args.row_groups);
   } else if (args.skip_rows != -1 || args.num_rows != -1) {
     return reader->read_rows(args.skip_rows, args.num_rows);
   } else {

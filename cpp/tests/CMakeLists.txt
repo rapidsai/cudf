@@ -349,6 +349,9 @@ ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
 set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_str_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_list_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/detail_gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cpp"
@@ -375,7 +378,9 @@ ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 # - iterator tests --------------------------------------------------------------------------------
 
 set(ITERATOR_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/value_iterator_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/pair_iterator_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/scalar_iterator_test.cu")
 
 ConfigureTest(ITERATOR_TEST "${ITERATOR_TEST_SRC}")
 
@@ -535,7 +540,8 @@ set(TEXT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tokenize_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/normalize_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/replace_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/subword_tests.cpp")
 
 ConfigureTest(TEXT_TEST "${TEXT_TEST_SRC}")
 
