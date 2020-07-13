@@ -31,6 +31,7 @@
 - PR #5511 Port of clx subword tokenizer to cudf 
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
+- PR #5454 Add support for `DataFrame.append`, `Index.append`, `Index.difference` and `Index.empty`
 - PR #5536 Parquet reader - add support for multiple sources
 - PR #5607 Add Java bindings for duration types
 - PR #5612 Add `is_hex` strings API
@@ -40,6 +41,8 @@
 
 ## Improvements
 
+- PR #5605 Automatically flush RMM allocate/free logs in JNI
+- PR #5632 Switch JNI code to use `pool_memory_resource` instead of CNMeM
 - PR #5486 Link Boost libraries statically in the Java build
 - PR #5479 Link Arrow libraries statically
 - PR #5414 Use new release of Thrust/CUB in the JNI build
@@ -74,6 +77,7 @@
 - PR #5405 Add Error message to `StringColumn.unary_operator`
 - PR #5424 Add python plumbing for `.str.character_tokenize`
 - PR #5420 Aligning signature of `Series.value_counts` to Pandas
+- PR #5535 Update document for XGBoost usage with dask-cuda
 - PR #5431 Adding support for unsigned int
 - PR #5426 Refactor strings code to minimize calls to regex
 - PR #5433 Add support for column inputs in `strings::starts_with` and `strings::ends_with`
@@ -161,7 +165,9 @@
 - PR #5619 Fix issue related to typecasting when using a `CategoricalDtype`
 - PR #5649 Fix issue when empty Dataframe with index are passed to `cudf.concat`
 - PR #5644 Fix issue related to Dataframe init when passing in `columns`
-
+- PR #5664 Update conda upload versions for new supported CUDA/Python
+- PR #5656 Fix issue with incorrect docker image being used in local build script
+- PR #5672 Fix crash in parquet writer while writing large string data
 
 # cuDF 0.14.0 (Date TBD)
 
@@ -182,6 +188,7 @@
 - PR #4923 Add Java and JNI bindings for string split
 - PR #4972 Add list_view (cudf::LIST) type
 - PR #4990 Add lists_column_view, list_column_wrapper, lists support for concatenate
+- PR #5073 gather support for cudf::LIST columns
 - PR #5004 Added a null considering min/max binary op
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
