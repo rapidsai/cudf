@@ -6439,10 +6439,9 @@ def test_series_column_iter_error():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Creation of an Iterator over a cudf.Series is not allowed, "
-            "To create an iterator, explicitly convert to any of the objects "
-            "supporting iteration using .to_pandas(), "
-            ".to_arrow(), or .values_host"
+            f"{gs.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
         ),
     ):
         iter(gs)
@@ -6450,10 +6449,9 @@ def test_series_column_iter_error():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Creation of an Iterator over a cudf.Series is not allowed, "
-            "To create an iterator, explicitly convert to any of the objects "
-            "supporting iteration using .to_pandas(), "
-            ".to_arrow(), or .values_host"
+            f"{gs.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
         ),
     ):
         gs.items()
@@ -6461,10 +6459,9 @@ def test_series_column_iter_error():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Creation of an Iterator over a cudf.Series is not allowed, "
-            "To create an iterator, explicitly convert to any of the objects "
-            "supporting iteration using .to_pandas(), "
-            ".to_arrow(), or .values_host"
+            f"{gs.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
         ),
     ):
         gs.iteritems()
@@ -6472,9 +6469,9 @@ def test_series_column_iter_error():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Creation of an Iterator over a cudf Column is not allowed, "
-            "To create an iterator, explicitly convert to any of the objects "
-            "supporting iteration using .to_pandas(), .to_arrow()"
+            f"{gs._column.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
         ),
     ):
         iter(gs._column)

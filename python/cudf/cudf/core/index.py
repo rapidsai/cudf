@@ -204,12 +204,7 @@ class Index(Frame, Serializable):
             return other
 
     def __iter__(self):
-        raise TypeError(
-            "Creation of an Iterator over a cudf.Index is not allowed, "
-            "To create an iterator, explicitly convert to any of the objects "
-            "supporting iteration using .to_pandas(), "
-            ".to_arrow(), or .values_host."
-        )
+        cudf.utils.utils.raise_iteration_error(obj=self)
 
     @property
     def values_host(self):

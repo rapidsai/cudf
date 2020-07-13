@@ -775,10 +775,9 @@ def test_index_iter_error(data, dtype):
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Creation of an Iterator over a cudf.Index is not allowed, "
-            "To create an iterator, explicitly convert to any of the objects "
-            "supporting iteration using .to_pandas(), "
-            ".to_arrow(), or .values_host."
+            f"{gdi.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
         ),
     ):
         iter(gdi)

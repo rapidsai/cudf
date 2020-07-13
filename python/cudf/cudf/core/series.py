@@ -734,12 +734,7 @@ class Series(Frame, Serializable):
             return self.loc[arg]
 
     def __iter__(self):
-        raise TypeError(
-            "Creation of an Iterator over a cudf.Series is not allowed, "
-            "To create an iterator, explicitly convert to any of the objects "
-            "supporting iteration using .to_pandas(), "
-            ".to_arrow(), or .values_host"
-        )
+        cudf.utils.utils.raise_iteration_error(obj=self)
 
     iteritems = __iter__
 

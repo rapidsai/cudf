@@ -121,11 +121,7 @@ class ColumnBase(Column, Serializable):
         return self.size
 
     def __iter__(self):
-        raise TypeError(
-            "Creation of an Iterator over a cudf Column is not allowed, "
-            "To create an iterator, explicitly convert to any of the objects "
-            "supporting iteration using .to_pandas(), .to_arrow()"
-        )
+        cudf.utils.utils.raise_iteration_error(obj=self)
 
     def to_pandas(self):
         arr = self.data_array_view
