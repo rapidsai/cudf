@@ -182,7 +182,6 @@ class StringMethods(ColumnMethodsMixin):
         Patterned after Python’s string methods, with some
         inspiration from R’s stringr package.
         """
-        breakpoint()
         value_type = (
             column.dtype.leaf_type if is_list_dtype(column) else column.dtype
         )
