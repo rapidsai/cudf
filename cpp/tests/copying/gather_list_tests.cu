@@ -254,15 +254,18 @@ TYPED_TEST(GatherTestList, GatherNestedWithEmpties)
 {
   using T   = TypeParam;
   using LCW = cudf::test::lists_column_wrapper<T>;
+// clang-format off
+  #define EL LCW{}
+  // clang-format on
 
   cudf::test::lists_column_wrapper<T> list{
-    {{2, 3}, LCW{}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}, {LCW{}}};
+    {{2, 3}, EL}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}, {EL}};
   cudf::test::fixed_width_column_wrapper<int> gather_map{0, 2};
 
   cudf::table_view source_table({list});
   auto results = cudf::gather(source_table, gather_map);
 
-  cudf::test::lists_column_wrapper<T> expected{{{2, 3}, LCW{}}, {LCW{}}};
+  cudf::test::lists_column_wrapper<T> expected{{{2, 3}, EL}, {EL}};
 
   cudf::test::expect_columns_equal(results->view().column(0), expected);
 }
@@ -271,6 +274,9 @@ TYPED_TEST(GatherTestList, GatherDetailInvalidIndex)
 {
   using T   = TypeParam;
   using LCW = cudf::test::lists_column_wrapper<T>;
+// clang-format off
+  #define EL LCW{}
+  // clang-format on
 
   // List<List<T>>
   {
@@ -287,7 +293,7 @@ TYPED_TEST(GatherTestList, GatherDetailInvalidIndex)
 
     std::vector<int32_t> expected_validity{1, 0, 0, 1};
     cudf::test::lists_column_wrapper<T> expected{
-      {{{2, 3}, {4, 5}}, {LCW{}}, {LCW{}}, {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}},
+      {{{2, 3}, {4, 5}}, {EL}, {EL}, {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}},
       expected_validity.begin()};
 
     cudf::test::expect_columns_equal(results->view().column(0), expected);

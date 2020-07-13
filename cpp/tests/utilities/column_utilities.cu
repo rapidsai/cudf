@@ -495,6 +495,10 @@ struct column_view_printer {
                            detail::to_string(bitmask_to_host(col), col.size(), indent) + "\n"
                        : "") +
       indent + "Children :\n" +
+      (lcv.size() > 0 && lcv.child().type().id() != type_id::LIST && lcv.child().has_nulls()
+         ? indent + detail::to_string(bitmask_to_host(lcv.child()), lcv.child().size(), indent) +
+             "\n"
+         : "") +
       (lcv.size() > 0 ? detail::to_string(lcv.child(), ", ", indent + "   ") : "") + "\n";
 
     out.push_back(tmp);

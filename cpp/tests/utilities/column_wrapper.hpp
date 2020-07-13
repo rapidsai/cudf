@@ -673,6 +673,12 @@ class lists_column_wrapper : public detail::column_wrapper {
     build_from_non_nested(make_empty_column(cudf::data_type{cudf::type_to_id<T>()}));
   }
 
+  lists_column_wrapper(lists_column_wrapper<T> const& l) : column_wrapper{}
+  {
+    std::vector<bool> valids;
+    build_from_nested({l}, valids);
+  }
+
   /**
    * @brief Construct a lists column of nested lists from an initializer list of values
    * and a validity iterator.
@@ -746,14 +752,15 @@ class lists_column_wrapper : public detail::column_wrapper {
                      cudf::column_view col =
                        l.root ? lists_column_view(*l.wrapped).child() : *l.wrapped;
 
-                     // verify all children are of the same type (C++ allows you to use initializer
-                     // lists that could construct an invalid list column type)
                      if (child_id == type_id::EMPTY) {
                        child_id = col.type().id();
                      } else {
-                       CUDF_EXPECTS(child_id == col.type().id(), "Mismatched list types");
+                       // handle the case where we have incomplete hierarchies. see comment
+                       // below in the concatenate step.
+                       if (child_id != type_id::LIST && col.type().id() == type_id::LIST) {
+                         child_id = type_id::LIST;
+                       }
                      }
-
                      return col;
                    });
 
@@ -776,12 +783,32 @@ class lists_column_wrapper : public detail::column_wrapper {
     auto offsets =
       cudf::test::fixed_width_column_wrapper<size_type>(offsetv.begin(), offsetv.end()).release();
 
-    // concatenate them together, skipping data for children that are null
+    // concatenate them together, skipping data for children that are null.
+    // handle the corner case where we have an "incomplete hierarchy"
+    //
+    // lists_column_wrapper<int> list{ {{}}, {} };
+    //
+    // The above case makes sense semantically. The second list is simply empty and has no internal
+    // list. However, because of the way the constructors are called here,  the list on the left
+    // will be of type List<List<int>> while the one on the right will be of type List<int> which
+    // would normally be appear to be a mismatch of types (as in the case of List<float> and
+    // List<int>).  we will allow this specific case through so that we get useful semantics when
+    // declaring these objects.
     std::vector<column_view> children;
     for (size_t idx = 0; idx < cols.size(); idx++) {
-      if (valids[idx]) { children.push_back(cols[idx]); }
+      if (!valids[idx]) { continue; }
+
+      // handle incomplete hierarchies
+      bool is_empty_mismatched_child = (cols[idx].type().id() != child_id) && cols[idx].size() == 0;
+      if (is_empty_mismatched_child) { continue; }
+
+      // otherwise we expect that all columns have the same type
+      CUDF_EXPECTS(cols[idx].type().id() == child_id, "Unexpected child column mismatch");
+
+      children.push_back(cols[idx]);
     }
-    auto data = concatenate(children);
+    auto data = children.empty() ? make_empty_column(cudf::data_type{cudf::type_to_id<T>()})
+                                 : concatenate(children);
 
     // construct the list column
     wrapped = make_lists_column(
@@ -801,7 +828,8 @@ class lists_column_wrapper : public detail::column_wrapper {
    */
   void build_from_non_nested(std::unique_ptr<column> c)
   {
-    CUDF_EXPECTS(!cudf::is_nested(c->type()), "Unexpected nested type");
+    CUDF_EXPECTS(c->type().id() == type_id::EMPTY || !cudf::is_nested(c->type()),
+                 "Unexpected type");
 
     std::vector<size_type> offsetv;
     offsetv.push_back(0);
