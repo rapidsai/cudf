@@ -365,6 +365,7 @@ def read_csv(
     if index_col is not None and index_col is not False:
         if isinstance(index_col, int):
             df = df.set_index(df._data.get_by_index(index_col).names[0])
+            df._index.name = index_col
         else:
             df = df.set_index(index_col)
 

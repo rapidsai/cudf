@@ -1,4 +1,4 @@
-# Copyright (c) 2018-20, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import csv
 import gzip
@@ -1117,12 +1117,12 @@ def test_csv_reader_index_col():
     # using a column index
     cu_df = read_csv(StringIO(buffer), header=None, index_col=0)
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=0)
-    assert_eq(cu_df.index.tolist(), pd_df.index.tolist())
+    assert_eq(cu_df.index, pd_df.index)
 
     # passing False to avoid using a column as index (no-op in cuDF)
     cu_df = read_csv(StringIO(buffer), header=None, index_col=False)
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
-    assert_eq(cu_df.index.tolist(), pd_df.index.tolist())
+    assert_eq(cu_df.index, pd_df.index)
 
 
 @pytest.mark.parametrize(
