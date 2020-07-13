@@ -6746,6 +6746,35 @@ def test_dataframe_init_from_series_list_with_index_error(data, index):
         )
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        [pd.Series([1, 2, 3], index=["a", "a", "a"])],
+        [pd.Series([1, 2, 3], index=["a", "a", "a"])] * 4,
+        [
+            pd.Series([1, 2, 3], index=["a", "b", "a"]),
+            pd.Series([1, 2, 3], index=["b", "b", "a"]),
+        ],
+        [
+            pd.Series([1, 2, 3], index=["a", "b", "z"]),
+            pd.Series([1, 2, 3], index=["u", "b", "a"]),
+            pd.Series([1, 2, 3], index=["u", "b", "u"]),
+        ],
+    ],
+)
+def test_dataframe_init_from_series_list_duplicate_index_error(data):
+    gd_data = [gd.from_pandas(obj) for obj in data]
+    try:
+        pd.DataFrame(data)
+    except Exception as e:
+        with pytest.raises(ValueError, match=re.escape(str(e))):
+            gd.DataFrame(gd_data)
+    else:
+        raise AssertionError(
+            "expected pd.DataFrame to because of " "duplicates in index"
+        )
+
+
 def test_series_column_iter_error():
     gs = gd.Series([1, 2, 3])
 

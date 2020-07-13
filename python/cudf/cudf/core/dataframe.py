@@ -297,6 +297,11 @@ class DataFrame(Frame, Serializable):
         data = numeric_normalize_types(*data)
         if series_lengths.count(series_lengths[0]) == len(series_lengths):
             for idx, series in enumerate(data):
+                if not series.index.is_unique:
+                    raise ValueError(
+                        "Reindexing only valid with uniquely valued Index "
+                        "objects"
+                    )
                 if not series.index.equals(dataframe_columns):
                     series = series.reindex(dataframe_columns)
                 self._data[idx] = column.as_column(series._column)
