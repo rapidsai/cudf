@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -76,14 +76,13 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     ignore_index : bool, default False
         Set True to ignore the index of the *objs* and provide a
         default range index instead.
+    sort : bool, default False
+        Sort non-concatenation axis if it is not already aligned.
 
     Returns
     -------
     A new object of like type with rows from each object in ``objs``.
     """
-
-    if sort not in (None, False):
-        raise NotImplementedError("sort parameter is not yet supported")
 
     if not objs:
         raise ValueError("No objects to concatenate")
@@ -92,7 +91,14 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
 
     # Return for single object
     if len(objs) == 1:
-        return objs[0]
+        if ignore_index:
+            result = cudf.DataFrame(
+                data=objs[0]._data.copy(deep=True),
+                index=cudf.RangeIndex(len(objs[0])),
+            )
+        else:
+            result = objs[0].copy()
+        return result
 
     if len(objs) == 0:
         raise ValueError("All objects passed were None")
@@ -167,16 +173,22 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             # objs are empty dataframes.
             return cudf.DataFrame()
         elif len(objs) == 1:
-            result = objs[0].copy()
             if ignore_index:
-                result._index = cudf.RangeIndex(len(result))
+                result = cudf.DataFrame(
+                    data=objs[0]._data.copy(deep=True),
+                    index=cudf.RangeIndex(len(objs[0])),
+                )
+            else:
+                result = objs[0].copy()
             return result
         else:
             return DataFrame._concat(
-                objs, axis=axis, ignore_index=ignore_index
+                objs, axis=axis, ignore_index=ignore_index, sort=sort
             )
     elif typ is Series:
-        return Series._concat(objs, axis=axis)
+        return Series._concat(
+            objs, axis=axis, index=None if ignore_index else True
+        )
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, Index):

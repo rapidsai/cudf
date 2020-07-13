@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import numbers
 import pickle
 import warnings
@@ -763,6 +763,12 @@ class MultiIndex(Index):
         from cudf import DataFrame, MultiIndex
 
         source_data = [o._source_data for o in objs]
+
+        if len(source_data) > 1:
+            for index, obj in enumerate(source_data[1:]):
+                obj.columns = source_data[0].columns
+                source_data[index + 1] = obj
+
         source_data = DataFrame._concat(source_data)
         names = [None for x in source_data.columns]
         objs = list(filter(lambda o: o.names is not None, objs))
@@ -897,6 +903,83 @@ class MultiIndex(Index):
         if hasattr(other, "to_pandas"):
             temp_other = self.to_pandas()
         return temp_self.difference(temp_other, sort)
+
+    def append(self, other):
+        """
+        Append a collection of MultiIndex objects together
+
+        Parameters
+        ----------
+        other : MultiIndex or list/tuple of MultiIndex objects
+
+        Returns
+        -------
+        appended : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx1 = cudf.MultiIndex(
+        ... levels=[[1, 2], ['blue', 'red']],
+        ... codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+        >>> idx2 = cudf.MultiIndex(
+        ... levels=[[3, 4], ['blue', 'red']],
+        ... codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+        >>> idx1
+        MultiIndex(levels=[0    1
+        1    2
+        dtype: int64, 0    blue
+        1     red
+        dtype: object],
+        codes=   0  1
+        0  0  1
+        1  0  0
+        2  1  1
+        3  1  0)
+        >>> idx2
+        MultiIndex(levels=[0    3
+        1    4
+        dtype: int64, 0    blue
+        1     red
+        dtype: object],
+        codes=   0  1
+        0  0  1
+        1  0  0
+        2  1  1
+        3  1  0)
+        >>> idx1.append(idx2)
+        MultiIndex(levels=[0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64, 0    blue
+        1     red
+        dtype: object],
+        codes=   0  1
+        0  0  1
+        1  0  0
+        2  1  1
+        3  1  0
+        4  2  1
+        5  2  0
+        6  3  1
+        7  3  0)
+        """
+        if isinstance(other, (list, tuple)):
+            to_concat = [self]
+            to_concat.extend(other)
+        else:
+            to_concat = [self, other]
+
+        for obj in to_concat:
+            if not isinstance(obj, MultiIndex):
+                raise TypeError(
+                    f"all objects should be of type "
+                    f"MultiIndex for MultiIndex.append, "
+                    f"found object of type: {type(obj)}"
+                )
+
+        return MultiIndex._concat(to_concat)
 
     def nan_to_num(*args, **kwargs):
         return args[0]
