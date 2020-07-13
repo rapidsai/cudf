@@ -30,11 +30,11 @@ constexpr int64_t data_size = 512 << 20;  // 512 MB
 namespace cudf_io = cudf::io;
 
 template <typename T>
-class OrcWrite : public cudf::benchmark {
+class OrcRead : public cudf::benchmark {
 };
 
 template <typename T>
-void ORC_write(benchmark::State& state)
+void ORC_read(benchmark::State& state)
 {
   // ORC does not support unsigned int types
   if (std::is_unsigned<T>::value and not std::is_same<T, bool>::value) return;
@@ -64,13 +64,13 @@ void ORC_write(benchmark::State& state)
   state.SetBytesProcessed(total_bytes * state.iterations());
 }
 
-#define ORC_WR_BENCHMARK_DEFINE(name, datatype, compression)   \
-  BENCHMARK_TEMPLATE_DEFINE_F(OrcWrite, name, datatype)        \
-  (::benchmark::State & state) { ORC_write<datatype>(state); } \
-  BENCHMARK_REGISTER_F(OrcWrite, name)                         \
-    ->Args({data_size, 64, compression})                       \
-    ->Unit(benchmark::kMillisecond)                            \
+#define ORC_RD_BENCHMARK_DEFINE(name, datatype, compression)  \
+  BENCHMARK_TEMPLATE_DEFINE_F(OrcRead, name, datatype)        \
+  (::benchmark::State & state) { ORC_read<datatype>(state); } \
+  BENCHMARK_REGISTER_F(OrcRead, name)                         \
+    ->Args({data_size, 64, compression})                      \
+    ->Unit(benchmark::kMillisecond)                           \
     ->UseManualTime();
 
-CUIO_BENCH_ALL_TYPES(ORC_WR_BENCHMARK_DEFINE, UNCOMPRESSED)
-CUIO_BENCH_ALL_TYPES(ORC_WR_BENCHMARK_DEFINE, USE_SNAPPY)
+CUIO_BENCH_ALL_TYPES(ORC_RD_BENCHMARK_DEFINE, UNCOMPRESSED)
+CUIO_BENCH_ALL_TYPES(ORC_RD_BENCHMARK_DEFINE, USE_SNAPPY)
