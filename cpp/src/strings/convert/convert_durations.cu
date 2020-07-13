@@ -149,35 +149,25 @@ __device__ void dissect_duration(int64_t duration, int32_t* timeparts, type_id u
     return static_cast<int32_t>(((time % base) + base) % base);
   };
 
-  // This function handles converting units by dividing and adjusting for negative values.
-  // Examples:
-  //     scale(-61,60)  -2
-  //     scale(-60,60)  -1
-  //     scale(-59,60)  -1
-  //     scale( 59,60)   0
-  //     scale( 60,60)   1
-  //     scale( 61,60)   1
-  auto scale_time = [](int64_t time, int64_t base) {
-    return static_cast<int32_t>((time - ((time < 0) * (base - 1L))) / base);
-  };
-
-  int64_t seconds{0};
+  duration_s seconds{0};
   if (units == type_id::DURATION_SECONDS) {
-    seconds = duration;
+    seconds = duration_s(duration);
   } else if (units == type_id::DURATION_MILLISECONDS) {
-    seconds = simt::std::chrono::floor<cudf::duration_s>(cudf::duration_ms(duration)).count();
+    seconds                 = simt::std::chrono::floor<duration_s>(duration_ms(duration));
     timeparts[DU_SUBSECOND] = modulo_time(duration, 1000L);
   } else if (units == type_id::DURATION_MICROSECONDS) {
-    seconds = simt::std::chrono::floor<cudf::duration_s>(cudf::duration_us(duration)).count();
+    seconds                 = simt::std::chrono::floor<duration_s>(duration_us(duration));
     timeparts[DU_SUBSECOND] = modulo_time(duration, 1000L * 1000);
   } else if (units == type_id::DURATION_NANOSECONDS) {
-    seconds = simt::std::chrono::floor<cudf::duration_s>(cudf::duration_ns(duration)).count();
+    seconds                 = simt::std::chrono::floor<duration_s>(duration_ns(duration));
     timeparts[DU_SUBSECOND] = modulo_time(duration, 1000L * 1000 * 1000);
   }
-  timeparts[DU_DAY]    = scale_time(seconds, 24 * 60 * 60);
-  timeparts[DU_HOUR]   = modulo_time(scale_time(seconds, 60 * 60), 24);
-  timeparts[DU_MINUTE] = modulo_time(scale_time(seconds, 60), 60);
-  timeparts[DU_SECOND] = modulo_time(seconds, 60);
+  timeparts[DU_DAY] = simt::std::chrono::floor<duration_D>(seconds).count();
+  timeparts[DU_HOUR] =
+    modulo_time(simt::std::chrono::floor<simt::std::chrono::hours>(seconds).count(), 24);
+  timeparts[DU_MINUTE] =
+    modulo_time(simt::std::chrono::floor<simt::std::chrono::minutes>(seconds).count(), 60);
+  timeparts[DU_SECOND] = modulo_time(seconds.count(), 60);
 }
 
 template <typename T>
@@ -538,23 +528,22 @@ struct parse_duration {
     int32_t days = timeparts[DU_DAY];
     if (units == type_id::DURATION_DAYS) return days;
 
-    auto hour        = timeparts[DU_HOUR];
-    auto minute      = timeparts[DU_MINUTE];
-    auto second      = timeparts[DU_SECOND];
-    int64_t duration = (days * 24L * 3600L) + (hour * 3600L) + (minute * 60L) + second;
-    if (units == type_id::DURATION_SECONDS) return duration;
+    auto hour     = timeparts[DU_HOUR];
+    auto minute   = timeparts[DU_MINUTE];
+    auto second   = timeparts[DU_SECOND];
+    auto duration = duration_D(days) + simt::std::chrono::hours(hour) +
+                    simt::std::chrono::minutes(minute) + duration_s(second);
+    if (units == type_id::DURATION_SECONDS)
+      return simt::std::chrono::duration_cast<duration_s>(duration).count();
 
-    auto subsecond = timeparts[DU_SUBSECOND];
+    duration_ns subsecond(timeparts[DU_SUBSECOND]);  // ns
     if (units == type_id::DURATION_MILLISECONDS) {
-      duration *= 1000L;
-      subsecond = subsecond / 1000000L;
+      return simt::std::chrono::duration_cast<duration_ms>(duration + subsecond).count();
     } else if (units == type_id::DURATION_MICROSECONDS) {
-      duration *= 1000000L;
-      subsecond = subsecond / 1000L;
+      return simt::std::chrono::duration_cast<duration_us>(duration + subsecond).count();
     } else if (units == type_id::DURATION_NANOSECONDS)
-      duration *= 1000000000L;
-    duration += subsecond;
-    return duration;
+      return simt::std::chrono::duration_cast<duration_ns>(duration + subsecond).count();
+    return simt::std::chrono::duration_cast<duration_ns>(duration + subsecond).count();
   }
 
   __device__ T operator()(size_type idx)
