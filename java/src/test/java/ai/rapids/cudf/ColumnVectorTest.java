@@ -603,6 +603,15 @@ public class ColumnVectorTest extends CudfTestBase {
         case STRING:
           s = Scalar.fromString("hello, world!");
           break;
+        case DURATION_DAYS:
+          s = Scalar.durationDaysFromInt(3);
+          break;
+        case DURATION_SECONDS:
+        case DURATION_MILLISECONDS:
+        case DURATION_MICROSECONDS:
+        case DURATION_NANOSECONDS:
+          s = Scalar.durationFromLong(type, 21313);
+          break;
         case EMPTY:
           continue;
         default:
@@ -737,6 +746,36 @@ public class ColumnVectorTest extends CudfTestBase {
           String v = "hello, world!";
           s = Scalar.fromString(v);
           expected = ColumnVector.fromStrings(v, v, v, v);
+          break;
+        }
+        case DURATION_DAYS: {
+          int v = 13;
+          s = Scalar.durationDaysFromInt(v);
+          expected = ColumnVector.durationDaysFromInts(v, v, v, v);
+          break;
+        }
+        case DURATION_MICROSECONDS: {
+          long v = 1123123123L;
+          s = Scalar.durationFromLong(type, v);
+          expected = ColumnVector.durationMicroSecondsFromLongs(v, v, v, v);
+          break;
+        }
+        case DURATION_MILLISECONDS: {
+          long v = 11212432423L;
+          s = Scalar.durationFromLong(type, v);
+          expected = ColumnVector.durationMilliSecondsFromLongs(v, v, v, v);
+          break;
+        }
+        case DURATION_NANOSECONDS: {
+          long v = 12353245343L;
+          s = Scalar.durationFromLong(type, v);
+          expected = ColumnVector.durationNanoSecondsFromLongs(v, v, v, v);
+          break;
+        }
+        case DURATION_SECONDS: {
+          long v = 132342321123L;
+          s = Scalar.durationFromLong(type, v);
+          expected = ColumnVector.durationSecondsFromLongs(v, v, v, v);
           break;
         }
         case EMPTY:
@@ -2284,6 +2323,93 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, isDouble);
       assertColumnsAreEqual(expectedFloats, floats);
       assertColumnsAreEqual(expectedDoubles, doubles);
+    }
+  }
+  @Test
+  void testCreateDurationDays() {
+    Integer[] days = {100, 10, 23, 1, -1, 0, Integer.MAX_VALUE, null, Integer.MIN_VALUE};
+
+    try (ColumnVector durationDays = ColumnVector.durationDaysFromBoxedInts(days)) {
+      HostColumnVector hc = durationDays.copyToHost();
+      assertTrue(hc.hasNulls());
+      assertEquals(DType.DURATION_DAYS, hc.getType());
+      for (int i = 0; i < days.length; i++) {
+        assertEquals(days[i] == null, hc.isNull(i));
+        if (!hc.isNull(i)) {
+          assertEquals(days[i], hc.getInt(i));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testCreateDurationSeconds() {
+    Long[] secs = {10230L, 10L, 203L, 1L, -1L, 0L, Long.MAX_VALUE, null, Long.MIN_VALUE};
+
+    try (ColumnVector durationSeconds = ColumnVector.durationSecondsFromBoxedLongs(secs)) {
+      HostColumnVector hc = durationSeconds.copyToHost();
+      assertTrue(hc.hasNulls());
+      assertEquals(DType.DURATION_SECONDS, hc.getType());
+      for (int i = 0 ; i < secs.length ; i++) {
+        assertEquals(secs[i] == null, hc.isNull(i));
+        if (!hc.isNull(i)) {
+          assertEquals(secs[i], hc.getLong(i));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testCreateDurationMilliseconds() {
+    Long[] ms = {12342340230L, 12112340L, 2230233L, 1L, -1L, 0L, Long.MAX_VALUE, null,
+        Long.MIN_VALUE};
+
+    try (ColumnVector durationMs = ColumnVector.durationMilliSecondsFromBoxedLongs(ms)) {
+      HostColumnVector hc = durationMs.copyToHost();
+      assertTrue(hc.hasNulls());
+      assertEquals(DType.DURATION_MILLISECONDS, hc.getType());
+      for (int i = 0 ; i < ms.length ; i++) {
+        assertEquals(ms[i] == null, hc.isNull(i));
+        if (!hc.isNull(i)) {
+          assertEquals(ms[i], hc.getLong(i));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testCreateDurationMicroseconds() {
+    Long[] us = {1234234230L, 132350L, 289877803L, 1L, -1L, 0L, Long.MAX_VALUE, null,
+        Long.MIN_VALUE};
+
+    try (ColumnVector durationUs = ColumnVector.durationMicroSecondsFromBoxedLongs(us)) {
+      HostColumnVector hc = durationUs.copyToHost();
+      assertTrue(hc.hasNulls());
+      assertEquals(DType.DURATION_MICROSECONDS, hc.getType());
+      for (int i = 0 ; i < us.length ; i++) {
+        assertEquals(us[i] == null, hc.isNull(i));
+        if (!hc.isNull(i)) {
+          assertEquals(us[i], hc.getLong(i));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testCreateDurationNanoseconds() {
+    Long[] ns = {1234234230L, 198832350L, 289877803L, 1L, -1L, 0L, Long.MAX_VALUE, null,
+        Long.MIN_VALUE};
+
+    try (ColumnVector durationNs = ColumnVector.durationNanoSecondsFromBoxedLongs(ns)) {
+      HostColumnVector hc = durationNs.copyToHost();
+      assertTrue(hc.hasNulls());
+      assertEquals(DType.DURATION_NANOSECONDS, hc.getType());
+      for (int i = 0 ; i < ns.length ; i++) {
+        assertEquals(ns[i] == null, hc.isNull(i));
+        if (!hc.isNull(i)) {
+          assertEquals(ns[i], hc.getLong(i));
+        }
+      }
     }
   }
 }

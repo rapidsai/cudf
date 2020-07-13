@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 from __future__ import division, print_function
 
 import inspect
@@ -22,7 +21,7 @@ from pandas.api.types import is_dict_like
 from pandas.io.formats.printing import pprint_thing
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
 from cudf.core import column
@@ -188,7 +187,6 @@ class DataFrame(Frame, Serializable):
         if isinstance(data, ColumnAccessor):
             self._data = data
             if index is None:
-
                 index = as_index(range(self._data.nrows))
             self._index = as_index(index)
             return None
@@ -270,6 +268,12 @@ class DataFrame(Frame, Serializable):
         self._index = as_index(index)
         data = list(itertools.zip_longest(*data))
 
+        if columns is not None and len(data) == 0:
+            data = [
+                cudf.core.column.column_empty(row_count=0, dtype=None)
+                for _ in columns
+            ]
+
         for col_name, col in enumerate(data):
             self._data[col_name] = column.as_column(col)
 
@@ -284,12 +288,22 @@ class DataFrame(Frame, Serializable):
             # not in `columns`
             keys = [key for key in data.keys() if key in columns]
             data = {key: data[key] for key in keys}
+            extra_cols = [col for col in columns if col not in data.keys()]
             if keys:
                 # if keys is non-empty,
                 # add null columns for all values
                 # in `columns` that don't exist in `keys`:
-                extra_cols = [col for col in columns if col not in data.keys()]
                 data.update({key: None for key in extra_cols})
+            else:
+                # if keys is empty,
+                # it means that none of the actual keys in `data`
+                # matches with `columns`.
+                # Hence only assign `data` with `columns` as keys
+                # and their values as empty columns.
+                data = {
+                    key: cudf.core.column.column_empty(row_count=0, dtype=None)
+                    for key in extra_cols
+                }
 
         data, index = self._align_input_series_indices(data, index=index)
 
@@ -758,21 +772,6 @@ class DataFrame(Frame, Serializable):
             return NotImplemented
 
     @property
-    def empty(self):
-        """
-        Indicator whether DataFrame is empty.
-
-        True if DataFrame is entirely empty (no items), meaning any
-        of the axes are of length 0.
-
-        Returns
-        -------
-        out : bool
-            If DataFrame is empty, return True, if not return False.
-        """
-        return not len(self)
-
-    @property
     def values(self):
         """
         Return a CuPy representation of the DataFrame.
@@ -789,10 +788,10 @@ class DataFrame(Frame, Serializable):
 
     def __array__(self, dtype=None):
         raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
-            To explicitly construct a GPU matrix, consider using \
-            .as_gpu_matrix()\nTo explicitly construct a host \
-            matrix, consider using .as_matrix()"
+            "Implicit conversion to a host NumPy array via __array__ is not "
+            "allowed, To explicitly construct a GPU matrix, consider using "
+            ".as_gpu_matrix()\nTo explicitly construct a host "
+            "matrix, consider using .as_matrix()"
         )
 
     def __arrow_array__(self, type=None):
@@ -4974,8 +4973,6 @@ class DataFrame(Frame, Serializable):
     def to_gpu_matrix(self):
         """Convert to a numba gpu ndarray
 
-
-
         Returns
         -------
         numba gpu ndarray
@@ -4992,11 +4989,12 @@ class DataFrame(Frame, Serializable):
         """
         Construct a DataFrame from a list of Columns
         """
-        return cls(
-            data=dict(zip(range(len(cols)), cols)),
-            index=index,
-            columns=columns,
-        )
+        if columns is not None:
+            data = dict(zip(columns, cols))
+        else:
+            data = dict(zip(range(len(cols)), cols))
+
+        return cls(data=data, index=index,)
 
     def quantile(
         self,
@@ -5148,19 +5146,24 @@ class DataFrame(Frame, Serializable):
             values = values.reindex(self.index)
 
             result = DataFrame()
-            import numpy as np
 
             for col in self._data.names:
-                if is_categorical_dtype(
-                    self[col].dtype
-                ) and is_categorical_dtype(values.dtype):
+                if isinstance(
+                    self[col]._column, cudf.core.column.CategoricalColumn
+                ) and isinstance(
+                    values._column, cudf.core.column.CategoricalColumn
+                ):
                     res = self._data[col].binary_operator("eq", values._column)
                     result[col] = res
                 elif (
-                    is_categorical_dtype(self[col].dtype)
+                    isinstance(
+                        self[col]._column, cudf.core.column.CategoricalColumn
+                    )
                     or np.issubdtype(self[col].dtype, np.dtype("object"))
                 ) or (
-                    is_categorical_dtype(values.dtype)
+                    isinstance(
+                        values._column, cudf.core.column.CategoricalColumn
+                    )
                     or np.issubdtype(values.dtype, np.dtype("object"))
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
@@ -6172,35 +6175,35 @@ class DataFrame(Frame, Serializable):
     @ioutils.doc_to_parquet()
     def to_parquet(self, path, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.parquet as pq
+        from cudf.io import parquet as pq
 
         return pq.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
     def to_feather(self, path, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.feather as feather
+        from cudf.io import feather as feather
 
         feather.to_feather(self, path, *args, **kwargs)
 
     @ioutils.doc_to_json()
     def to_json(self, path_or_buf=None, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.json as json
+        from cudf.io import json as json
 
         return json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
 
     @ioutils.doc_to_hdf()
     def to_hdf(self, path_or_buf, key, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.hdf as hdf
+        from cudf.io import hdf as hdf
 
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        import cudf.io.dlpack as dlpack
+        from cudf.io import dlpack as dlpack
 
         return dlpack.to_dlpack(self)
 
@@ -6217,7 +6220,7 @@ class DataFrame(Frame, Serializable):
         chunksize=None,
     ):
         """{docstring}"""
-        import cudf.io.csv as csv
+        from cudf.io import csv as csv
 
         return csv.to_csv(
             self,
@@ -6234,7 +6237,7 @@ class DataFrame(Frame, Serializable):
     @ioutils.doc_to_orc()
     def to_orc(self, fname, compression=None, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.orc as orc
+        from cudf.io import orc as orc
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
@@ -6322,6 +6325,156 @@ class DataFrame(Frame, Serializable):
         )
         df.columns = self.columns
         return df
+
+    def append(
+        self, other, ignore_index=False, verify_integrity=False, sort=False
+    ):
+        """
+        Append rows of `other` to the end of caller, returning a new object.
+        Columns in `other` that are not in the caller are added as new columns.
+
+        Parameters
+        ----------
+        other : DataFrame or Series/dict-like object, or list of these
+            The data to append.
+        ignore_index : bool, default False
+            If True, do not use the index labels.
+        sort : bool, default False
+            Sort columns ordering if the columns of
+            `self` and `other` are not aligned.
+        verify_integrity : bool, default False
+            This Parameter is currently not supported.
+
+        Returns
+        -------
+        DataFrame
+
+        See Also
+        --------
+        cudf.concat : General function to concatenate DataFrame or
+            objects.
+
+        Notes
+        -----
+        If a list of dict/series is passed and the keys are all contained in
+        the DataFrame's index, the order of the columns in the resulting
+        DataFrame will be unchanged.
+        Iteratively appending rows to a cudf DataFrame can be more
+        computationally intensive than a single concatenate. A better
+        solution is to append those rows to a list and then concatenate
+        the list with the original DataFrame all at once.
+        `verify_integrity` parameter is not supported yet.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame([[1, 2], [3, 4]], columns=list('AB'))
+        >>> df
+           A  B
+        0  1  2
+        1  3  4
+        >>> df2 = cudf.DataFrame([[5, 6], [7, 8]], columns=list('AB'))
+        >>> df2
+           A  B
+        0  5  6
+        1  7  8
+        >>> df.append(df2)
+           A  B
+        0  1  2
+        1  3  4
+        0  5  6
+        1  7  8
+
+        With `ignore_index` set to True:
+        >>> df.append(df2, ignore_index=True)
+           A  B
+        0  1  2
+        1  3  4
+        2  5  6
+        3  7  8
+
+        The following, while not recommended methods for generating DataFrames,
+        show two ways to generate a DataFrame from multiple data sources.
+        Less efficient:
+        >>> df = cudf.DataFrame(columns=['A'])
+        >>> for i in range(5):
+        ...     df = df.append({'A': i}, ignore_index=True)
+        >>> df
+           A
+        0  0
+        1  1
+        2  2
+        3  3
+        4  4
+
+        More efficient than above:
+        >>> cudf.concat([cudf.DataFrame([i], columns=['A']) for i in range(5)],
+        ...           ignore_index=True)
+           A
+        0  0
+        1  1
+        2  2
+        3  3
+        4  4
+        """
+        if verify_integrity not in (None, False):
+            raise NotImplementedError(
+                "verify_integrity parameter is not supported yet."
+            )
+
+        if isinstance(other, dict):
+            if not ignore_index:
+                raise TypeError("Can only append a dict if ignore_index=True")
+            other = DataFrame(other)
+            result = cudf.concat(
+                [self, other], ignore_index=ignore_index, sort=sort
+            )
+            return result
+        elif isinstance(other, cudf.Series):
+            if other.name is None and not ignore_index:
+                raise TypeError(
+                    "Can only append a Series if ignore_index=True "
+                    "or if the Series has a name"
+                )
+
+            current_cols = self.columns
+            combined_columns = other.index.to_pandas()
+            if not self.empty:
+                combined_columns = current_cols.union(
+                    combined_columns, sort=False
+                )
+
+            if sort:
+                combined_columns = combined_columns.sort_values()
+
+            other = other.reindex(combined_columns, copy=False).to_frame().T
+            if not current_cols.equals(combined_columns):
+                self = self.reindex(columns=combined_columns)
+        elif isinstance(other, list):
+            if not other:
+                pass
+            elif not isinstance(other[0], cudf.DataFrame):
+                other = cudf.DataFrame(other)
+                if (self.columns.get_indexer(other.columns) >= 0).all():
+                    other = other.reindex(columns=self.columns)
+
+        if is_list_like(other):
+            to_concat = [self, *other]
+        else:
+            to_concat = [self, other]
+        to_concat = [
+            obj for obj in to_concat if isinstance(obj, Frame) and len(obj)
+        ]
+        if len(to_concat) == 0:
+            if ignore_index and len(self) != 0:
+                result = cudf.DataFrame(
+                    data=self._data.copy(), index=RangeIndex(len(self))
+                )
+            else:
+                result = self.copy()
+            return result
+
+        return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
 
 
 def from_pandas(obj, nan_as_null=None):

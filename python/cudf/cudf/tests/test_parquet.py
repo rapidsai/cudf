@@ -1,6 +1,6 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import os
+import pathlib
 import random
 from glob import glob
 from io import BytesIO
@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from pyarrow import parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
@@ -314,21 +315,52 @@ def test_parquet_read_metadata(tmpdir, pdf):
 
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
-def test_parquet_read_row_group(tmpdir, pdf, row_group_size):
+def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
+    if "col_category" in pdf.columns:
+        pdf = pdf.drop(columns=["col_category"])
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
 
     num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
-    gdf = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
-    gdf = cudf.concat(gdf).reset_index(drop=True)
+    gdf = [cudf.read_parquet(fname, row_groups=[i]) for i in range(row_groups)]
+    gdf = cudf.concat(gdf)
+    assert_eq(pdf.reset_index(drop=True), gdf.reset_index(drop=True))
 
-    if "col_category" in pdf.columns:
-        pdf = pdf.drop(columns=["col_category"])
-    if "col_category" in gdf.columns:
-        gdf = gdf.drop("col_category")
+    # first half rows come from the first source, rest from the second
+    gdf = cudf.read_parquet(
+        [fname, fname],
+        row_groups=[
+            list(range(row_groups // 2)),
+            list(range(row_groups // 2, row_groups)),
+        ],
+    )
+    assert_eq(pdf.reset_index(drop=True), gdf.reset_index(drop=True))
 
-    assert_eq(pdf.reset_index(drop=True), gdf, check_categorical=False)
+
+@pytest.mark.parametrize("row_group_size", [1, 5, 100])
+def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
+    fname = tmpdir.join("row_group.parquet")
+    pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
+
+    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
+
+    # alternate rows between the two sources
+    gdf = cudf.read_parquet(
+        [fname, fname],
+        row_groups=[
+            list(range(0, row_groups, 2)),
+            list(range(1, row_groups, 2)),
+        ],
+    )
+
+    ref_df = [
+        cudf.read_parquet(fname, row_groups=i)
+        for i in list(range(0, row_groups, 2)) + list(range(1, row_groups, 2))
+    ]
+    ref_df = cudf.concat(ref_df)
+
+    assert_eq(ref_df, gdf)
 
 
 @pytest.mark.parametrize("row_group_size", [1, 4, 33])
@@ -341,11 +373,6 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     num_rows = total_rows // 4
     skip_rows = (total_rows - num_rows) // 2
     gdf = cudf.read_parquet(fname, skip_rows=skip_rows, num_rows=num_rows)
-
-    if "col_category" in pdf.columns:
-        pdf = pdf.drop(columns=["col_category"])
-    if "col_category" in gdf.columns:
-        gdf = gdf.drop("col_category")
 
     for row in range(num_rows):
         assert gdf["col_int32"].iloc[row] == row + skip_rows
@@ -450,6 +477,41 @@ def test_parquet_reader_local_filepath():
 def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
     expect = pd.read_parquet(parquet_path_or_buf("filepath"))
     got = cudf.read_parquet(parquet_path_or_buf(src))
+
+    assert_eq(expect, got)
+
+
+def create_parquet_source(df, src_type, fname):
+    if src_type == "filepath":
+        df.to_parquet(fname, engine="pyarrow")
+        return str(fname)
+    if src_type == "pathobj":
+        df.to_parquet(fname, engine="pyarrow")
+        return fname
+    if src_type == "bytes_io":
+        buffer = BytesIO()
+        df.to_parquet(buffer, engine="pyarrow")
+        return buffer
+    if src_type == "bytes":
+        buffer = BytesIO()
+        df.to_parquet(buffer, engine="pyarrow")
+        return buffer.getvalue()
+    if src_type == "url":
+        df.to_parquet(fname, engine="pyarrow")
+        return pathlib.Path(fname).as_uri()
+
+
+@pytest.mark.parametrize(
+    "src", ["filepath", "pathobj", "bytes_io", "bytes", "url"]
+)
+def test_parquet_reader_multiple_files(tmpdir, src):
+    test_pdf1 = make_pdf(nrows=1000, nvalids=1000 // 2)
+    test_pdf2 = make_pdf(nrows=500)
+    expect = pd.concat([test_pdf1, test_pdf2])
+
+    src1 = create_parquet_source(test_pdf1, src, tmpdir.join("multi1.parquet"))
+    src2 = create_parquet_source(test_pdf2, src, tmpdir.join("multi2.parquet"))
+    got = cudf.read_parquet([src1, src2])
 
     assert_eq(expect, got)
 
@@ -707,6 +769,24 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
         gdf.to_parquet(dir1, partition_cols=cols)
 
 
+def test_parquet_writer_chunked_metadata(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    test_path = "test/path"
+
+    writer = ParquetWriter(gdf_fname)
+    writer.write_table(simple_gdf)
+    writer.write_table(simple_gdf)
+    meta_byte_array = writer.close(metadata_file_path=test_path)
+    fmd = pq.ParquetFile(BytesIO(meta_byte_array)).metadata
+
+    assert fmd.num_rows == 2 * len(simple_gdf)
+    assert fmd.num_row_groups == 2
+
+    for r in range(fmd.num_row_groups):
+        for c in range(fmd.num_columns):
+            assert fmd.row_group(r).column(c).file_path == test_path
+
+
 def test_write_read_cudf(tmpdir, pdf):
     file_path = tmpdir.join("cudf.parquet")
     if "col_category" in pdf.columns:
@@ -744,3 +824,23 @@ def test_write_cudf_read_pandas_pyarrow(tmpdir, pdf):
     ).to_pandas()
 
     assert_eq(cudf_res, pd_res, check_index_type=False if pdf.empty else True)
+
+
+def test_parquet_writer_criteo(tmpdir):
+    # To run this test, download the day 0 of criteo dataset from
+    # http://labs.criteo.com/2013/12/download-terabyte-click-logs/
+    # and place the uncompressed dataset in the home directory
+    fname = os.path.expanduser("~/day_0")
+    if not os.path.isfile(fname):
+        pytest.skip("Local criteo day 0 tsv file is not found")
+
+    cudf_path = tmpdir.join("cudf.parquet")
+
+    cont_names = ["I" + str(x) for x in range(1, 14)]
+    cat_names = ["C" + str(x) for x in range(1, 27)]
+    cols = ["label"] + cont_names + cat_names
+
+    df = cudf.read_csv(fname, sep="\t", names=cols, byte_range=(0, 1000000000))
+    df = df.drop(columns=cont_names)
+
+    df.to_parquet(cudf_path)

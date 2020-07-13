@@ -471,6 +471,10 @@ def test_categorical_dataframe_slice_copy():
     [
         pd.Series([1, 2, 3, 89]),
         pd.Series([1, 2, 3, 89, 3, 1, 89], dtype="category"),
+        pd.Series(["1", "2", "3", "4", "5"], dtype="category"),
+        pd.Series(["1.0", "2.5", "3.001", "9"], dtype="category"),
+        pd.Series(["1", "2", "3", None, "4", "5"], dtype="category"),
+        pd.Series(["1.0", "2.5", "3.001", None, "9"], dtype="category"),
         pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
         pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
         pd.Series([1, 2, 3, 89, None, np.nan, np.NaN], dtype="float64"),
@@ -488,6 +492,8 @@ def test_categorical_dataframe_slice_copy():
         pd.CategoricalDtype(categories=["aa", "bb", "c"]),
         pd.CategoricalDtype(categories=["a", "bb", "c"]),
         pd.CategoricalDtype(categories=["a", "b", "c"]),
+        pd.CategoricalDtype(categories=["1", "2", "3", "4"]),
+        pd.CategoricalDtype(categories=["1.0", "2.5", "3.001", "9"]),
         pd.CategoricalDtype(categories=[]),
     ],
 )
@@ -641,6 +647,7 @@ def test_astype_dtype(data, expected):
         (["a", "bd", "ef"], ["asdfsdf", "bddf", "eff"]),
         ([1, 2, 3], []),
         ([0.0, 6.7, 10.0], []),
+        (["a", "bd", "ef"], []),
     ],
 )
 def test_add_categories(data, add):

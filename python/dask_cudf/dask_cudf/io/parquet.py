@@ -1,10 +1,9 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import warnings
 from functools import partial
 from io import BufferedWriter, IOBase
 
-import dask.dataframe as dd
+from dask import dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf
@@ -53,7 +52,7 @@ class CudfEngine(ArrowEngine):
                 path,
                 engine="cudf",
                 columns=columns,
-                row_group=row_group,
+                row_groups=row_group,
                 strings_to_categorical=strings_to_cats,
                 **kwargs.get("read", {}),
             )
@@ -63,7 +62,7 @@ class CudfEngine(ArrowEngine):
                     f,
                     engine="cudf",
                     columns=columns,
-                    row_group=row_group,
+                    row_groups=row_group,
                     strings_to_categorical=strings_to_cats,
                     **kwargs.get("read", {}),
                 )

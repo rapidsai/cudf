@@ -1,12 +1,11 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import datetime as dt
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
