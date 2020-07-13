@@ -37,6 +37,7 @@ from cudf.utils.dtypes import (
     can_convert_to_column,
     is_categorical_dtype,
     is_datetime_dtype,
+    is_list_dtype,
     is_list_like,
     is_scalar,
     is_string_dtype,
@@ -906,6 +907,7 @@ class Series(Frame, Serializable):
             and not preprocess.dtype == "O"
             and not is_categorical_dtype(preprocess.dtype)
             and not is_datetime_dtype(preprocess.dtype)
+            and not is_list_dtype(preprocess.dtype)
         ):
             output = (
                 preprocess.astype("O").fillna("null").to_pandas().__repr__()

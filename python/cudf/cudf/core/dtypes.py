@@ -139,6 +139,9 @@ class ListDtype(ExtensionDtype):
     def to_arrow(self):
         return self._typ
 
+    def to_pandas(self):
+        super().to_pandas(integer_object_nulls=True)
+
     def __eq__(self, other):
         if isinstance(other, str):
             return other == self.name

@@ -147,6 +147,13 @@ def is_categorical_dtype(obj):
     return pandas_dtype(obj).type is CategoricalDtypeType
 
 
+def is_list_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.ListDtype
+        or obj is cudf.core.dtypes.ListDtype
+    )
+
+
 def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.
