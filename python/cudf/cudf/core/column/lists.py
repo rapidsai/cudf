@@ -36,10 +36,16 @@ class ListColumn(ColumnBase):
 
     @property
     def values(self):
+        """
+        Column of values (may itself be a ListColumn)
+        """
         return self.children[0]
 
     @property
     def indices(self):
+        """
+        Column of integer offsets to the values
+        """
         return self.children[1]
 
     @classmethod
