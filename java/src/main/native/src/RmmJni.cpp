@@ -14,20 +14,17 @@
  * limitations under the License.
  */
 
-#include <atomic>
-#include <chrono>
 #include <ctime>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <mutex>
 
-#include <rmm/mr/device/cnmem_managed_memory_resource.hpp>
-#include <rmm/mr/device/cnmem_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/default_memory_resource.hpp>
 #include <rmm/mr/device/logging_resource_adaptor.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
 #include <unordered_map>
 
 #include "jni_utils.hpp"
@@ -365,14 +362,17 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
     bool use_pool_alloc = allocation_mode & 1;
     bool use_managed_mem = allocation_mode & 2;
     if (use_pool_alloc) {
-      std::vector<int> devices; // Just do default devices for now...
       if (use_managed_mem) {
-        auto tmp = new rmm::mr::cnmem_managed_memory_resource(pool_size, devices);
+        using managed_mr = rmm::mr::managed_memory_resource;
+        using managed_pool = rmm::mr::pool_memory_resource<managed_mr>;
+        auto tmp = new managed_pool(new managed_mr(), pool_size, pool_size);
         Initialized_resource.reset(tmp);
         auto wrapped = make_tracking_adaptor(tmp, RMM_ALLOC_SIZE_ALIGNMENT);
         Tracking_memory_resource.reset(wrapped);
       } else {
-        auto tmp = new rmm::mr::cnmem_memory_resource(pool_size, devices);
+        using cuda_mr = rmm::mr::cuda_memory_resource;
+        using cuda_pool = rmm::mr::pool_memory_resource<cuda_mr>;
+        auto tmp = new cuda_pool(new cuda_mr(), pool_size, pool_size);
         Initialized_resource.reset(tmp);
         auto wrapped = make_tracking_adaptor(tmp, RMM_ALLOC_SIZE_ALIGNMENT);
         Tracking_memory_resource.reset(wrapped);
@@ -396,16 +396,16 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
       case 1: // File
       {
         cudf::jni::native_jstring path(env, jpath);
-        log_result.reset(
-            new logging_resource_adaptor<base_tracking_resource_adaptor>(resource, path.get()));
+        log_result.reset(new logging_resource_adaptor<base_tracking_resource_adaptor>(
+            resource, path.get(), /*auto_flush=*/true));
       } break;
       case 2: // stdout
-        log_result.reset(
-            new logging_resource_adaptor<base_tracking_resource_adaptor>(resource, std::cout));
+        log_result.reset(new logging_resource_adaptor<base_tracking_resource_adaptor>(
+            resource, std::cout, /*auto_flush=*/true));
         break;
       case 3: // stderr
-        log_result.reset(
-            new logging_resource_adaptor<base_tracking_resource_adaptor>(resource, std::cerr));
+        log_result.reset(new logging_resource_adaptor<base_tracking_resource_adaptor>(
+            resource, std::cerr, /*auto_flush=*/true));
         break;
     }
 

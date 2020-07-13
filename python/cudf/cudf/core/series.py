@@ -34,12 +34,13 @@ from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
-    is_categorical_dtype,
     is_datetime_dtype,
     is_list_like,
+    is_mixed_with_object_dtype,
     is_scalar,
     is_string_dtype,
     min_scalar_type,
+    numeric_normalize_types,
 )
 
 
@@ -166,6 +167,12 @@ class Series(Frame, Serializable):
             if dtype is not None:
                 data = data.astype(dtype)
 
+        if isinstance(data, dict):
+            index = data.keys()
+            data = column.as_column(
+                data.values(), nan_as_null=nan_as_null, dtype=dtype
+            )
+
         if data is None:
             if index is not None:
                 data = column.column_empty(
@@ -268,9 +275,9 @@ class Series(Frame, Serializable):
         <class 'cupy.core.core.ndarray'>
         """
 
-        if is_categorical_dtype(self.dtype) or np.issubdtype(
-            self.dtype, np.dtype("object")
-        ):
+        if isinstance(
+            self._column, cudf.core.column.CategoricalColumn
+        ) or np.issubdtype(self.dtype, np.dtype("object")):
             raise TypeError("Data must be numeric")
 
         if len(self) == 0:
@@ -304,7 +311,7 @@ class Series(Frame, Serializable):
         """
         if self.dtype == np.dtype("object"):
             return self._column.to_array()
-        elif is_categorical_dtype(self.dtype):
+        elif isinstance(self._column, cudf.core.column.CategoricalColumn):
             return self._column.to_pandas().values
         else:
             return self._column.data_array_view.copy_to_host()
@@ -521,35 +528,90 @@ class Series(Frame, Serializable):
     def __deepcopy__(self):
         return self.copy()
 
-    def append(self, other, ignore_index=False):
+    def append(self, to_append, ignore_index=False, verify_integrity=False):
         """Append values from another ``Series`` or array-like object.
         If ``ignore_index=True``, the index is reset.
 
         Parameters
         ----------
-        other : ``Series`` or array-like object
-        ignore_index : boolean, default False. If true, the index is reset.
+        to_append : Series or list/tuple of Series
+            Series to append with self.
+        ignore_index : boolean, default False.
+            If True, do not use the index.
+        verify_integrity : bool, default False
+            This Parameter is currently not supported.
 
         Returns
         -------
-        A new Series equivalent to self concatenated with other
+        Series
+            A new concatenated series
+
+        See Also
+        --------
+        concat : General function to concatenate DataFrame or Series objects.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s1 = cudf.Series([1, 2, 3])
+        >>> s2 = cudf.Series([4, 5, 6])
+        >>> s1
+        0    1
+        1    2
+        2    3
+        dtype: int64
+        >>> s2
+        0    4
+        1    5
+        2    6
+        dtype: int64
+        >>> s1.append(s2)
+        0    1
+        1    2
+        2    3
+        0    4
+        1    5
+        2    6
+        dtype: int64
+
+        >>> s3 = cudf.Series([4, 5, 6], index=[3, 4, 5])
+        >>> s3
+        3    4
+        4    5
+        5    6
+        dtype: int64
+        >>> s1.append(s3)
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        dtype: int64
+
+        With `ignore_index` set to True:
+
+        >>> s1.append(s2, ignore_index=True)
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        dtype: int64
         """
-        this = self
-        other = Series(other)
+        if verify_integrity not in (None, False):
+            raise NotImplementedError(
+                "verify_integrity parameter is not supported yet."
+            )
 
-        from cudf.core.column import numerical
-        from cudf.utils.dtypes import numeric_normalize_types
-
-        if isinstance(this._column, numerical.NumericalColumn):
-            if self.dtype != other.dtype:
-                this, other = numeric_normalize_types(this, other)
-
-        if ignore_index:
-            index = None
+        if is_list_like(to_append):
+            to_concat = [self]
+            to_concat.extend(to_append)
         else:
-            index = True
+            to_concat = [self, to_append]
 
-        return Series._concat([this, other], index=index)
+        return cudf.concat(to_concat, ignore_index=ignore_index)
 
     def reindex(self, index=None, copy=True):
         """Return a Series that conforms to a new index
@@ -903,7 +965,9 @@ class Series(Frame, Serializable):
         if (
             preprocess.nullable
             and not preprocess.dtype == "O"
-            and not is_categorical_dtype(preprocess.dtype)
+            and not isinstance(
+                preprocess._column, cudf.core.column.CategoricalColumn
+            )
             and not is_datetime_dtype(preprocess.dtype)
         ):
             output = (
@@ -912,7 +976,7 @@ class Series(Frame, Serializable):
         else:
             output = preprocess.to_pandas().__repr__()
         lines = output.split("\n")
-        if is_categorical_dtype(preprocess.dtype):
+        if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             for idx, value in enumerate(preprocess):
                 if value is None:
                     lines[idx] = lines[idx].replace(" NaN", "null")
@@ -920,7 +984,7 @@ class Series(Frame, Serializable):
             for idx, value in enumerate(preprocess):
                 if value is None:
                     lines[idx] = lines[idx].replace(" NaT", "null")
-        if is_categorical_dtype(preprocess.dtype):
+        if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             category_memory = lines[-1]
             lines = lines[:-1]
         if len(lines) > 1:
@@ -941,7 +1005,7 @@ class Series(Frame, Serializable):
         else:
             lines = output.split(",")
             return lines[0] + ", dtype: %s)" % self.dtype
-        if is_categorical_dtype(preprocess.dtype):
+        if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             lines.append(category_memory)
         return "\n".join(lines)
 
@@ -1518,6 +1582,45 @@ class Series(Frame, Serializable):
             [name] = names
         else:
             name = None
+
+        if len(objs) > 1:
+            dtype_mismatch = False
+            for obj in objs[1:]:
+                if (
+                    obj.null_count == len(obj)
+                    or len(obj) == 0
+                    or isinstance(
+                        obj._column, cudf.core.column.CategoricalColumn
+                    )
+                    or isinstance(
+                        objs[0]._column, cudf.core.column.CategoricalColumn
+                    )
+                ):
+                    continue
+
+                if (
+                    not dtype_mismatch
+                    and (
+                        not isinstance(
+                            objs[0]._column, cudf.core.column.CategoricalColumn
+                        )
+                        and not isinstance(
+                            obj._column, cudf.core.column.CategoricalColumn
+                        )
+                    )
+                    and objs[0].dtype != obj.dtype
+                ):
+                    dtype_mismatch = True
+
+                if is_mixed_with_object_dtype(objs[0], obj):
+                    raise TypeError(
+                        "cudf does not support mixed types, please type-cast "
+                        "both series to same dtypes."
+                    )
+
+            if dtype_mismatch:
+                objs = numeric_normalize_types(*objs)
+
         col = ColumnBase._concat([o._column for o in objs])
         return cls(data=col, index=index, name=name)
 
@@ -2191,9 +2294,7 @@ class Series(Frame, Serializable):
             dtype = min_scalar_type(len(cats), 8)
 
         cats = column.as_column(cats)
-        if (self.dtype == "object" and cats.dtype != "object") or (
-            self.dtype != "object" and cats.dtype == "object"
-        ):
+        if is_mixed_with_object_dtype(self, cats):
             return _return_sentinel_series()
 
         try:
@@ -2351,8 +2452,8 @@ class Series(Frame, Serializable):
         4    105
         dtype: int64
         """
-        if is_string_dtype(self._column.dtype) or is_categorical_dtype(
-            self._column.dtype
+        if is_string_dtype(self._column.dtype) or isinstance(
+            self._column, cudf.core.column.CategoricalColumn
         ):
             raise TypeError(
                 "User defined functions are currently not "
