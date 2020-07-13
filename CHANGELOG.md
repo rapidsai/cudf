@@ -31,6 +31,7 @@
 - PR #5511 Port of clx subword tokenizer to cudf 
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
+- PR #5454 Add support for `DataFrame.append`, `Index.append`, `Index.difference` and `Index.empty`
 - PR #5536 Parquet reader - add support for multiple sources
 - PR #5607 Add Java bindings for duration types
 - PR #5612 Add `is_hex` strings API
@@ -166,6 +167,7 @@
 - PR #5664 Update conda upload versions for new supported CUDA/Python
 - PR #5656 Fix issue with incorrect docker image being used in local build script
 - PR #5671 Fix chunksize issue with `DataFrame.to_csv`
+- PR #5672 Fix crash in parquet writer while writing large string data
 
 # cuDF 0.14.0 (Date TBD)
 
