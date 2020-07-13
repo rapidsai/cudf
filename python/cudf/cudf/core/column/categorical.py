@@ -940,7 +940,7 @@ class CategoricalColumn(column.ColumnBase):
     def to_pandas(self, index=None):
         signed_dtype = min_signed_type(len(self.categories))
         codes = self.cat().codes.astype(signed_dtype).fillna(-1).to_array()
-        categories = self.categories.to_pandas()
+        categories = self.categories.to_arrow().to_pandas()
         data = pd.Categorical.from_codes(
             codes, categories=categories, ordered=self.ordered
         )
