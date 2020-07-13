@@ -1214,7 +1214,7 @@ def test_strings_rsplit(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
 
-    pd.testing.assert_frame_equal(
+    assert_eq(
         ps.str.rsplit(n=n, expand=expand).reset_index(),
         gs.str.rsplit(n=n, expand=expand).to_pandas().reset_index(),
         check_index_type=False,
