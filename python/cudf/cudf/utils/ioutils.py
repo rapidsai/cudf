@@ -974,8 +974,6 @@ def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
     -------
     filepath_or_buffer : str,
         Filepath string or buffer of data
-    should_close : bool
-        Whether filepath_or_buffer should be closed after IO
     """
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options", {})
@@ -987,16 +985,38 @@ def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
         if not _is_local_filesystem(fs):
             filepath_or_buffer = fsspec.open(
                 path_or_data, mode=mode or "w", **(storage_options)
-            ).open()
-            # Not necessary that all openFile objects inherit from IOBase
-            if not isinstance(filepath_or_buffer, IOBase):
-                if "b" in mode:
-                    filepath_or_buffer = BufferedWriter(filepath_or_buffer)
-                else:
-                    filepath_or_buffer = TextIOWrapper(filepath_or_buffer)
-            return filepath_or_buffer, True
+            )
+            return filepath_or_buffer
 
-    return path_or_data, False
+    return path_or_data
+
+
+def get_IOBase_writer(file_obj):
+    """
+    Parameters
+    ----------
+    file_obj : file-like object
+        Open file object for writing to any filesystem
+
+    Returns
+    -------
+    iobase_file_obj : file-like object
+        Open file object inheriting from io.IOBase
+    """
+    if not isinstance(file_obj, IOBase):
+        if "b" in file_obj.mode:
+            iobase_file_obj = BufferedWriter(file_obj)
+        else:
+            iobase_file_obj = TextIOWrapper(file_obj)
+        return iobase_file_obj
+
+    return file_obj
+
+
+def is_fsspec_open_file(file_obj):
+    if isinstance(file_obj, fsspec.core.OpenFile):
+        return True
+    return False
 
 
 def buffer_write_lines(buf, lines):

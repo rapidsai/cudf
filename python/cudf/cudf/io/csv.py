@@ -107,7 +107,7 @@ def to_csv(
     if path is None:
         raise ValueError("path/filename not provided")
 
-    path_or_buf, should_close = ioutils.get_writer_filepath_or_buffer(
+    path_or_buf = ioutils.get_writer_filepath_or_buffer(
         path_or_data=path, mode="w", **kwargs
     )
 
@@ -132,15 +132,25 @@ def to_csv(
 
     rows_per_chunk = chunksize if chunksize else len(df)
 
-    libcudf.csv.write_csv(
-        df,
-        path_or_buf=path_or_buf,
-        sep=sep,
-        na_rep=na_rep,
-        header=header,
-        line_terminator=line_terminator,
-        rows_per_chunk=rows_per_chunk,
-    )
-
-    if should_close:
-        path_or_buf.close()
+    if ioutils.is_fsspec_open_file(path_or_buf):
+        with path_or_buf as file_obj:
+            file_obj = ioutils.get_IOBase_writer(file_obj)
+            libcudf.csv.write_csv(
+                df,
+                path_or_buf=file_obj,
+                sep=sep,
+                na_rep=na_rep,
+                header=header,
+                line_terminator=line_terminator,
+                rows_per_chunk=rows_per_chunk,
+            )
+    else:
+        libcudf.csv.write_csv(
+            df,
+            path_or_buf=path_or_buf,
+            sep=sep,
+            na_rep=na_rep,
+            header=header,
+            line_terminator=line_terminator,
+            rows_per_chunk=rows_per_chunk,
+        )

@@ -238,20 +238,29 @@ def to_parquet(
                     + "supported by the gpu accelerated parquet writer"
                 )
 
-        path_or_buf, should_close = ioutils.get_writer_filepath_or_buffer(
+        path_or_buf = ioutils.get_writer_filepath_or_buffer(
             path, mode="wb", **kwargs
         )
-
-        write_parquet_res = libparquet.write_parquet(
-            df,
-            path=path_or_buf,
-            index=index,
-            compression=compression,
-            statistics=statistics,
-            metadata_file_path=metadata_file_path,
-        )
-        if should_close:
-            path_or_buf.close()
+        if ioutils.is_fsspec_open_file(path_or_buf):
+            with path_or_buf as file_obj:
+                file_obj = ioutils.get_IOBase_writer(file_obj)
+                write_parquet_res = libparquet.write_parquet(
+                    df,
+                    path=file_obj,
+                    index=index,
+                    compression=compression,
+                    statistics=statistics,
+                    metadata_file_path=metadata_file_path,
+                )
+        else:
+            write_parquet_res = libparquet.write_parquet(
+                df,
+                path=path_or_buf,
+                index=index,
+                compression=compression,
+                statistics=statistics,
+                metadata_file_path=metadata_file_path,
+            )
 
         return write_parquet_res
 

@@ -81,11 +81,12 @@ def read_orc(
 def to_orc(df, fname, compression=None, enable_statistics=False, **kwargs):
     """{docstring}"""
 
-    path_or_buf, should_close = ioutils.get_writer_filepath_or_buffer(
+    path_or_buf = ioutils.get_writer_filepath_or_buffer(
         path_or_data=fname, mode="wb", **kwargs
     )
-
-    libcudf.orc.write_orc(df, path_or_buf, compression, enable_statistics)
-
-    if should_close:
-        path_or_buf.close()
+    if ioutils.is_fsspec_open_file(path_or_buf):
+        with path_or_buf as file_obj:
+            file_obj = ioutils.get_IOBase_writer(file_obj)
+            libcudf.orc.write_orc(df, file_obj, compression, enable_statistics)
+    else:
+        libcudf.orc.write_orc(df, path_or_buf, compression, enable_statistics)
