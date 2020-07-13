@@ -380,14 +380,6 @@
                             def proc = 'ldd ${native.build.path}/libcudfjni.so'.execute()
                             proc.consumeProcessOutput(sout, serr)
                             proc.waitForOrKill(10000)
-                            def librp = ~/librmm\\.so\\s+=>\\s+(.*)librmm.*\\.so\\s+.*/
-                            def m = librp.matcher(sout)
-                            if (m.find()) {
-                                pom.properties['native.deps.path'] = m.group(1)
-                            } else {
-                                fail("Could not find rmm as a dependency of libcudfjni out> $sout err> $serr")
-                            }
-
                             def libcudf = ~/libcudf\\.so\\s+=>\\s+(.*)libcudf.*\\.so\\s+.*/
                             def cudfm = libcudf.matcher(sout)
                             if (cudfm.find()) {
@@ -467,13 +459,6 @@
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
                                         <include>libcudf.so</include>
-                                    </includes>
-                                </resource>
-                                <resource>
-                                    <!--Set by groovy script-->
-                                    <directory>${native.deps.path}</directory>
-                                    <includes>
-                                        <include>librmm.so</include>
                                     </includes>
                                 </resource>
                             </resources>
