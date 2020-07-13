@@ -1,11 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import pyarrow as pa
 
 import cudf
 from cudf.core.column import ColumnBase
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import ListDtype
+from cudf.utils.dtypes import is_list_dtype
 from cudf.utils.utils import buffers_from_pyarrow
 
 
@@ -84,6 +84,10 @@ class ListMethods(ColumnMethodsMixin):
     """
 
     def __init__(self, column, parent=None):
+        if not is_list_dtype(column.dtype):
+            raise AttributeError(
+                "Can only use .cat accessor with a 'list' dtype"
+            )
         self._column = column
         self._parent = parent
 

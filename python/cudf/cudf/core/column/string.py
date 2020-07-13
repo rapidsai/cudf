@@ -124,7 +124,12 @@ from cudf.core.column import column, datetime
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import can_convert_to_column, is_scalar, is_string_dtype
+from cudf.utils.dtypes import (
+    can_convert_to_column,
+    is_list_dtype,
+    is_scalar,
+    is_string_dtype,
+)
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -177,6 +182,14 @@ class StringMethods(ColumnMethodsMixin):
         Patterned after Python’s string methods, with some
         inspiration from R’s stringr package.
         """
+        breakpoint()
+        value_type = (
+            column.dtype.leaf_type if is_list_dtype(column) else column.dtype
+        )
+        if not is_string_dtype(value_type):
+            raise AttributeError(
+                "Can only use .str accessor with string values"
+            )
         self._column = column
         self._parent = parent
 

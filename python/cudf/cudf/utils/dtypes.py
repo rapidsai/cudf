@@ -151,6 +151,8 @@ def is_list_dtype(obj):
     return (
         type(obj) is cudf.core.dtypes.ListDtype
         or obj is cudf.core.dtypes.ListDtype
+        or type(obj) is cudf.core.column.ListColumn
+        or obj is cudf.core.column.ListColumn
     )
 
 

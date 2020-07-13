@@ -123,6 +123,13 @@ class ListDtype(ExtensionDtype):
             return np.dtype(self._typ.value_type.to_pandas_dtype()).name
 
     @property
+    def leaf_type(self):
+        if isinstance(self.value_type, ListDtype):
+            return self.value_type.leaf_type
+        else:
+            return self.value_type
+
+    @property
     def type(self):
         return list
 
@@ -150,4 +157,7 @@ class ListDtype(ExtensionDtype):
         return self._typ.equals(other._typ)
 
     def __repr__(self):
-        return f"ListDtype({self.value_type})"
+        if isinstance(self.value_type, ListDtype):
+            return f"ListDtype({self.value_type.__repr__()})"
+        else:
+            return f"ListDtype({self.value_type})"

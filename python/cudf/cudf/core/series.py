@@ -1493,10 +1493,6 @@ class Series(Frame, Serializable):
     @copy_docstring(CategoricalAccessor.__init__)
     @property
     def cat(self):
-        if not is_categorical_dtype(self.dtype):
-            raise AttributeError(
-                "Can only use .cat accessor " "with a 'category' dtype"
-            )
         return CategoricalAccessor(column=self._column, parent=self)
 
     @copy_docstring(StringMethods.__init__)
