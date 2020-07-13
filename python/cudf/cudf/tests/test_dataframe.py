@@ -885,10 +885,13 @@ def test_dataframe_hash_partition_masked_value(nrows):
         for row in df.itertuples():
             valid = bool(bytemask[row.key])
             expected_value = (
-                row.key + 100 if valid else np.iinfo(gdf["val"].dtype).min
+                row.key + 100 if valid else pd.NA
             )
             got_value = row.val
-            assert expected_value == got_value
+            if expected_value is pd.NA:
+                assert got_value is pd.NA
+            else:
+                assert expected_value == got_value
 
 
 @pytest.mark.parametrize("nrows", [3, 10, 50])
@@ -907,10 +910,13 @@ def test_dataframe_hash_partition_masked_keys(nrows):
             valid = bool(bytemask[row.val - 100])
             # val is key + 100
             expected_value = (
-                row.val - 100 if valid else np.iinfo(gdf["val"].dtype).min
+                row.val - 100 if valid else pd.NA
             )
             got_value = row.key
-            assert expected_value == got_value
+            if expected_value is pd.NA:
+                assert got_value is pd.NA
+            else:
+                assert expected_value == got_value
 
 
 @pytest.mark.parametrize("keep_index", [True, False])
@@ -2518,6 +2524,8 @@ def test_select_dtype():
     )
     pdf = gdf.to_pandas()
 
+    pdf['d'] = pdf['d'].astype('object')
+    
     assert_eq(pdf.select_dtypes("float64"), gdf.select_dtypes("float64"))
     assert_eq(pdf.select_dtypes(np.float64), gdf.select_dtypes(np.float64))
     assert_eq(
@@ -2528,7 +2536,6 @@ def test_select_dtype():
         pdf.select_dtypes(include=["object", "int", "category"]),
         gdf.select_dtypes(include=["object", "int", "category"]),
     )
-
     assert_eq(
         pdf.select_dtypes(include=["int64", "float64"]),
         gdf.select_dtypes(include=["int64", "float64"]),
@@ -2564,6 +2571,9 @@ def test_select_dtype():
 
     gdf = DataFrame({"A": [3, 4, 5], "C": [1, 2, 3], "D": ["a", "b", "c"]})
     pdf = gdf.to_pandas()
+
+    pdf['D'] = pdf['D'].astype('object')
+
     assert_eq(
         pdf.select_dtypes(include=["object", "int", "category"]),
         gdf.select_dtypes(include=["object", "int", "category"]),
@@ -2611,6 +2621,9 @@ def test_select_dtype():
         {"a": gd.Series([], dtype="int"), "b": gd.Series([], dtype="str")}
     )
     pdf = gdf.to_pandas()
+
+    pdf['b'] = pdf['b'].astype('object')
+    
     assert_eq(
         pdf.select_dtypes(exclude=["object"]),
         gdf.select_dtypes(exclude=["object"]),
