@@ -163,9 +163,12 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.unary.cast(self, dtype)
 
     def to_pandas(self, index=None):
-        host_dtype = {
-            v: k for k, v in _pd_nullable_dtypes_to_cudf_dtypes.items()
-        }.get(self.dtype, self.dtype)
+        if self.has_nulls:
+            host_dtype = {
+                v: k for k, v in _pd_nullable_dtypes_to_cudf_dtypes.items()
+            }.get(self.dtype, self.dtype)
+        else:
+            host_dtype = self.dtype
 
         result = self.to_arrow().to_pandas().astype(host_dtype)
         if index is not None:
