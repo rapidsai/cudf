@@ -3626,10 +3626,11 @@ def test_series_values_host_property(data):
         [5.0, 7.0, 8.0],
         pytest.param(
             pd.Categorical(["a", "b", "c"]),
-            marks=pytest.mark.xfail(raises=TypeError),
+            marks=pytest.mark.xfail(raises=NotImplementedError),
         ),
         pytest.param(
-            ["m", "a", "d", "v"], marks=pytest.mark.xfail(raises=TypeError)
+            ["m", "a", "d", "v"],
+            marks=pytest.mark.xfail(raises=NotImplementedError),
         ),
     ],
 )

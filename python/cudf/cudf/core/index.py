@@ -128,15 +128,24 @@ class Index(Frame, Serializable):
         """
         pass
 
-    def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
+    def drop_duplicates(self, keep="first"):
         """
         Return Index with duplicate values removed
-        """
-        result = super().drop_duplicates(
-            subset=[self.name], keep=keep, ignore_index=ignore_index
-        )
 
-        return self._mimic_inplace(result, inplace=inplace)
+        Parameters
+        ----------
+        keep : {‘first’, ‘last’, False}, default ‘first’
+            * ‘first’ : Drop duplicates except for the
+                first occurrence.
+            * ‘last’ : Drop duplicates except for the
+                last occurrence.
+            *  False : Drop all duplicates.
+
+        Returns
+        -------
+        deduplicated : Index
+        """
+        return super().drop_duplicates(subset=[self.name], keep=keep)
 
     def serialize(self):
         """Serialize into pickle format suitable for file storage or network

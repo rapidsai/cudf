@@ -976,7 +976,7 @@ class CategoricalColumn(column.ColumnBase):
         """
         Return a CuPy representation of the CategoricalColumn.
         """
-        raise TypeError("Data must be numeric")
+        raise NotImplementedError("cudf.Categorical is not yet implemented")
 
     def unique(self):
         codes = self.as_numerical.unique()

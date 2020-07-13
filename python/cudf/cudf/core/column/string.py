@@ -4302,14 +4302,16 @@ class StringColumn(column.ColumnBase):
         """
         Return a numpy representation of the StringColumn.
         """
-        return self.to_array()
+        return self.to_pandas().values
 
     @property
     def values(self):
         """
         Return a CuPy representation of the StringColumn.
         """
-        raise TypeError("Data must be numeric")
+        raise NotImplementedError(
+            "String Arrays is not yet implemented in cudf"
+        )
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
