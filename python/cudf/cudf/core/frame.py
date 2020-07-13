@@ -1,3 +1,4 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import functools
 import warnings
 from collections import OrderedDict
@@ -54,7 +55,7 @@ class Frame(libcudf.table.Table):
 
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
-    def _concat(cls, objs, axis=0, ignore_index=False):
+    def _concat(cls, objs, axis=0, ignore_index=False, sort=False):
 
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
@@ -136,7 +137,10 @@ class Frame(libcudf.table.Table):
                         [col.dtype for col in cols], []
                     )
                 # If all categorical dtypes, combine the categories
-                elif all(is_categorical_dtype(col.dtype) for col in cols):
+                elif all(
+                    isinstance(col, cudf.core.column.CategoricalColumn)
+                    for col in cols
+                ):
                     # Combine and de-dupe the categories
                     categories[idx] = (
                         cudf.concat([col.cat().categories for col in cols])
@@ -200,7 +204,15 @@ class Frame(libcudf.table.Table):
 
         # Get a list of the unique table column names
         names = [name for f in objs for name in f._column_names]
-        names = list(OrderedDict.fromkeys(names).keys())
+        names = OrderedDict.fromkeys(names).keys()
+
+        try:
+            if sort:
+                names = list(sorted(names))
+            else:
+                names = list(names)
+        except TypeError:
+            names = list(names)
 
         # Combine the index and table columns for each Frame into a
         # list of [...index_cols, ...table_cols]. If a table is
@@ -754,7 +766,9 @@ class Frame(libcudf.table.Table):
             for column_name, other_column in zip(self._data.names, other):
                 input_col = self._data[column_name]
                 if column_name in cond._data:
-                    if is_categorical_dtype(input_col.dtype):
+                    if isinstance(
+                        input_col, cudf.core.column.CategoricalColumn
+                    ):
                         if np.isscalar(other_column):
                             try:
                                 other_column = input_col._encode(other_column)
@@ -770,7 +784,10 @@ class Frame(libcudf.table.Table):
                         input_col, other_column, cond._data[column_name]
                     )
 
-                    if is_categorical_dtype(self._data[column_name].dtype):
+                    if isinstance(
+                        self._data[column_name],
+                        cudf.core.column.CategoricalColumn,
+                    ):
                         result = build_categorical_column(
                             categories=self._data[column_name].categories,
                             codes=as_column(
@@ -807,7 +824,7 @@ class Frame(libcudf.table.Table):
                     """Array conditional must be same shape as self"""
                 )
             input_col = self._data[self.name]
-            if is_categorical_dtype(input_col.dtype):
+            if isinstance(input_col, cudf.core.column.CategoricalColumn):
                 if np.isscalar(other):
                     try:
                         other = input_col._encode(other)
@@ -1274,10 +1291,10 @@ class Frame(libcudf.table.Table):
 
     def __array__(self, dtype=None):
         raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
-            To explicitly construct a GPU array, consider using \
-            cupy.asarray(...)\nTo explicitly construct a \
-            host array, consider using .to_array()"
+            "Implicit conversion to a host NumPy array via __array__ is not "
+            "allowed, To explicitly construct a GPU array, consider using "
+            "cupy.asarray(...)\nTo explicitly construct a "
+            "host array, consider using .to_array()"
         )
 
     def __arrow_array__(self, type=None):
