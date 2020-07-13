@@ -672,7 +672,7 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
   cudf_io::write_parquet_chunked(*table1, state);
   cudf_io::write_parquet_chunked(*table2, state);
   auto md = cudf_io::write_parquet_chunked_end(state);
-  assert(!md);
+  CUDF_EXPECTS(!md, "The return value should be null.");
 
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
@@ -701,7 +701,7 @@ TEST_F(ParquetChunkedWriterTest, ManyTables)
     cudf_io::write_parquet_chunked(tbl, state);
   });
   auto md = cudf_io::write_parquet_chunked_end(state, true, "dummy/path");
-  assert(md);
+  CUDF_EXPECTS(md, "The returned metadata should not be null.");
 
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
