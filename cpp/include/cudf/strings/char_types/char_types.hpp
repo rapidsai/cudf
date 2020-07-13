@@ -108,7 +108,7 @@ std::unique_ptr<column> all_characters_of_type(
  * `types_to_filter` and set `types_to_keep` to `ALL_TYPES`.
  *
  * To filter out characters NOT of a select type, specify `ALL_TYPES` for
- * `types_to_filter` and which types to remove in `types_to_keep`.
+ * `types_to_filter` and which types to not remove in `types_to_keep`.
  *
  * @code{.pseudo}
  * Example:
