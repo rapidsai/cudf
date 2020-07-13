@@ -343,7 +343,7 @@ class Index(Frame, Serializable):
         >>> index.values
         array([  1, -10, 100,  20])
         >>> type(index.values)
-        <class 'numpy.ndarray'>
+        <class 'cupy.core.core.ndarray'>
         """
         return self._values.values
 
