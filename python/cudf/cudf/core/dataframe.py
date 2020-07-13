@@ -270,34 +270,11 @@ class DataFrame(Frame, Serializable):
         if dtype:
             self._data = self.astype(dtype)._data
 
-    def _get_union_of_indices(self, indexes):
-        if len(indexes) == 1:
-            return indexes[0]
-        else:
-            merged_index = cudf.core.Index._concat(indexes)
-            merged_index = merged_index.drop_duplicates()
-            _, inds = merged_index._values.sort_by_values()
-            return merged_index.take(inds)
-
-    def _get_union_of_series_names(self, series_list):
-        names_list = []
-        unnamed_count = 0
-        for idx, series in enumerate(series_list):
-            if series.name is None:
-                names_list.append(f"Unnamed {unnamed_count}")
-                unnamed_count += 1
-            else:
-                names_list.append(series.name)
-        if unnamed_count == len(series_list):
-            names_list = [*range(len(series_list))]
-
-        return names_list
-
     def _init_from_series_list(self, data, columns, index):
-        dataframe_columns = self._get_union_of_indices([d.index for d in data])
+        dataframe_columns = _get_union_of_indices([d.index for d in data])
 
         if index is None:
-            index = as_index(self._get_union_of_series_names(data))
+            index = as_index(_get_union_of_series_names(data))
         else:
             data_length = len(data)
             index_length = len(index)
@@ -6715,3 +6692,28 @@ def extract_col(df, col):
         ):
             return df.index._data.columns[0]
         return df.index._data[col]
+
+
+def _get_union_of_indices(indexes):
+    if len(indexes) == 1:
+        return indexes[0]
+    else:
+        merged_index = cudf.core.Index._concat(indexes)
+        merged_index = merged_index.drop_duplicates()
+        _, inds = merged_index._values.sort_by_values()
+        return merged_index.take(inds)
+
+
+def _get_union_of_series_names(series_list):
+    names_list = []
+    unnamed_count = 0
+    for idx, series in enumerate(series_list):
+        if series.name is None:
+            names_list.append(f"Unnamed {unnamed_count}")
+            unnamed_count += 1
+        else:
+            names_list.append(series.name)
+    if unnamed_count == len(series_list):
+        names_list = [*range(len(series_list))]
+
+    return names_list
