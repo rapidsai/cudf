@@ -14,6 +14,7 @@ from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
+    is_categorical_dtype,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
@@ -74,6 +75,10 @@ class CategoricalAccessor(ColumnMethodsMixin):
         dtype: category
         Categories (3, int64): [1, 2, 3]
         """
+        if not is_categorical_dtype(column.dtype):
+            raise AttributeError(
+                "Can only use .cat accessor " "with a 'category' dtype"
+            )
         self._column = column
         self._parent = parent
 
