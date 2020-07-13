@@ -27,6 +27,9 @@ requirements:
     - pyarrow 0.17.1.*
     - libcudf {{ version }}
     - rmm {{ minor_version }}.*
+    - flake8=3.8.3
+    - black=19.10
+    - isort=5.0.7
   run:
     - python
     - pandas >=1.0,<1.1.0a0
