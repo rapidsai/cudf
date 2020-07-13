@@ -208,7 +208,7 @@ class Index(Frame, Serializable):
             "Creation of an Iterator over a cudf.Index is not allowed, "
             "To create an iterator, explicitly convert to any of the objects "
             "supporting iteration using .to_pandas(), "
-            ".to_arrow(), .values_host."
+            ".to_arrow(), or .values_host."
         )
 
     @property
