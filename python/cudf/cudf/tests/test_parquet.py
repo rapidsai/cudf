@@ -1,5 +1,4 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import os
 import pathlib
 import random
@@ -10,8 +9,8 @@ from string import ascii_letters
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-import pyarrow.parquet as pq
 import pytest
+from pyarrow import parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
@@ -787,7 +786,7 @@ def test_parquet_writer_chunked_metadata(tmpdir, simple_pdf, simple_gdf):
         for c in range(fmd.num_columns):
             assert fmd.row_group(r).column(c).file_path == test_path
 
-            
+
 def test_write_read_cudf(tmpdir, pdf):
     file_path = tmpdir.join("cudf.parquet")
     if "col_category" in pdf.columns:
