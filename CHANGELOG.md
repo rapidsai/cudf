@@ -112,6 +112,7 @@
 - PR #5603 Refactor JIT `parser.cpp`
 - PR #5643 Update `isort` to 5.0.4
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
+- PR #5679 Use `pickle5` to test older Python versions
 
 ## Bug Fixes
 
