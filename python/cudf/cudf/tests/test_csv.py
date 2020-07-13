@@ -1548,7 +1548,7 @@ def test_csv_write_chunksize_corner_case(tmpdir):
     # With this num of rows and chunksize
     # libcudf splits table such a way that it
     # will end up creating an empty table slice
-    # which caused the issue.
+    # which caused the issue 5588.
     df_fname = tmpdir.join("gdf_df_17.csv")
     df = cudf.DataFrame({"a": np.arange(10_000)})
     df.to_csv(df_fname, chunksize=1000, index=False)
