@@ -149,17 +149,7 @@ find_path(RMM_INCLUDE "rmm"
                 "$ENV{CONDA_PREFIX}/include/rmm"
                 "$ENV{CONDA_PREFIX}/include")
 
-find_library(RMM_LIBRARY "rmm"
-             HINTS "$ENV{RMM_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
-
-message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
-
-add_library(rmm SHARED IMPORTED ${RMM_LIBRARY})
-if (RMM_INCLUDE AND RMM_LIBRARY)
-    set_target_properties(rmm PROPERTIES IMPORTED_LOCATION ${RMM_LIBRARY})
-endif (RMM_INCLUDE AND RMM_LIBRARY)
 
 ###################################################################################################
 # - find JNI -------------------------------------------------------------------------------------
@@ -189,7 +179,6 @@ include_directories("${THRUST_INCLUDE}"
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
-                 "${RMM_LIBRARY}"
                  "${CUDF_LIBRARY}")
 
 
@@ -230,6 +219,6 @@ endif(PER_THREAD_DEFAULT_STREAM)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni cudf rmm ${CUDART_LIBRARY} cuda nvrtc)
+target_link_libraries(cudfjni cudf ${CUDART_LIBRARY} cuda nvrtc)
 
 

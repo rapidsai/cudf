@@ -561,11 +561,16 @@ add_library(cudf
             src/lists/lists_column_factories.cu
             src/lists/lists_column_view.cu
             src/lists/copying/concatenate.cu
+            src/lists/copying/gather.cu
             src/text/generate_ngrams.cu
             src/text/normalize.cu
             src/text/tokenize.cu
             src/text/ngrams_tokenize.cu
             src/text/replace.cu
+            src/text/subword/load_hash_file.cu
+            src/text/subword/data_normalizer.cu
+            src/text/subword/wordpiece_tokenizer.cu
+            src/text/subword/subword_tokenize.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
             src/dictionary/add_keys.cu
