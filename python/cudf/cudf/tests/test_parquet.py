@@ -806,3 +806,23 @@ def test_write_cudf_read_pandas_pyarrow(tmpdir, pdf):
     ).to_pandas()
 
     assert_eq(cudf_res, pd_res, check_index_type=False if pdf.empty else True)
+
+
+def test_parquet_writer_criteo(tmpdir):
+    # To run this test, download the day 0 of criteo dataset from
+    # http://labs.criteo.com/2013/12/download-terabyte-click-logs/
+    # and place the uncompressed dataset in the home directory
+    fname = os.path.expanduser("~/day_0")
+    if not os.path.isfile(fname):
+        pytest.skip("Local criteo day 0 tsv file is not found")
+
+    cudf_path = tmpdir.join("cudf.parquet")
+
+    cont_names = ["I" + str(x) for x in range(1, 14)]
+    cat_names = ["C" + str(x) for x in range(1, 27)]
+    cols = ["label"] + cont_names + cat_names
+
+    df = cudf.read_csv(fname, sep="\t", names=cols, byte_range=(0, 1000000000))
+    df = df.drop(columns=cont_names)
+
+    df.to_parquet(cudf_path)
