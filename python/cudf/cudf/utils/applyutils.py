@@ -1,12 +1,11 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
 import functools
 
 import cupy
 from numba import cuda
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf.core.column import column
 from cudf.core.series import Series
 from cudf.utils import utils

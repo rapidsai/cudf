@@ -75,7 +75,7 @@ that committed code follows our standards. You can use the tools to
 automatically format your python code by running:
 
 ```bash
-isort --recursive --atomic --apply python
+isort --atomic python/**/*.py
 black python
 ```
 

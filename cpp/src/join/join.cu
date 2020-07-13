@@ -23,6 +23,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include "cudf/detail/utilities/cuda.cuh"
+#include "cudf/types.hpp"
 #include "hash_join.cuh"
 #include "join_common_utils.hpp"
 #include "nested_loop_join.cuh"
@@ -190,13 +192,14 @@ get_left_join_indices_complement(rmm::device_vector<size_type>& right_indices,
  *
  * @param left  Table of left columns to join
  * @param right Table of right  columns to join
+ * @param compare_nulls Controls whether null join-key values should match or not.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return Join output indices vector pair
  */
 template <join_kind JoinKind>
 std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> get_base_join_indices(
-  table_view const& left, table_view const& right, cudaStream_t stream)
+  table_view const& left, table_view const& right, null_equality compare_nulls, cudaStream_t stream)
 {
   CUDF_EXPECTS(0 != left.num_columns(), "Selected left dataset is empty");
   CUDF_EXPECTS(0 != right.num_columns(), "Selected right dataset is empty");
@@ -209,7 +212,7 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> get_base
 
   constexpr join_kind BaseJoinKind =
     (JoinKind == join_kind::FULL_JOIN) ? join_kind::LEFT_JOIN : JoinKind;
-  return get_base_hash_join_indices<BaseJoinKind>(left, right, false, stream);
+  return get_base_hash_join_indices<BaseJoinKind>(left, right, false, compare_nulls, stream);
 }
 
 /**
@@ -386,6 +389,7 @@ std::unique_ptr<table> construct_join_output_df(
  * `right_on` if it is inner join or gathered from both `left_on` and
  * `right_on` if it is full join. Else, for every column in `left_on` and
  * `right_on`, an output column will be produced.
+ * @param compare_nulls Controls whether null join-key values should match or not.
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
@@ -400,6 +404,7 @@ std::unique_ptr<table> join_call_compute_df(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
+  null_equality compare_nulls,
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream = 0)
 {
@@ -426,8 +431,8 @@ std::unique_ptr<table> join_call_compute_df(
     return get_empty_joined_table(left, right, columns_in_common);
   }
 
-  auto joined_indices =
-    get_base_join_indices<JoinKind>(left.select(left_on), right.select(right_on), stream);
+  auto joined_indices = get_base_join_indices<JoinKind>(
+    left.select(left_on), right.select(right_on), compare_nulls, stream);
 
   return construct_join_output_df<JoinKind>(
     left, right, joined_indices, columns_in_common, mr, stream);
@@ -441,11 +446,12 @@ std::unique_ptr<table> inner_join(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
+  null_equality compare_nulls,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::join_call_compute_df<::cudf::detail::join_kind::INNER_JOIN>(
-    left, right, left_on, right_on, columns_in_common, mr);
+    left, right, left_on, right_on, columns_in_common, compare_nulls, mr);
 }
 
 std::unique_ptr<table> left_join(
@@ -454,11 +460,12 @@ std::unique_ptr<table> left_join(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
+  null_equality compare_nulls,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::join_call_compute_df<::cudf::detail::join_kind::LEFT_JOIN>(
-    left, right, left_on, right_on, columns_in_common, mr);
+    left, right, left_on, right_on, columns_in_common, compare_nulls, mr);
 }
 
 std::unique_ptr<table> full_join(
@@ -467,11 +474,12 @@ std::unique_ptr<table> full_join(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
+  null_equality compare_nulls,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::join_call_compute_df<::cudf::detail::join_kind::FULL_JOIN>(
-    left, right, left_on, right_on, columns_in_common, mr);
+    left, right, left_on, right_on, columns_in_common, compare_nulls, mr);
 }
 
 }  // namespace cudf

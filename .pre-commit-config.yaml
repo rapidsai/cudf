@@ -1,6 +1,6 @@
 repos:
       - repo: https://github.com/timothycrosley/isort
-        rev: 4.3.21
+        rev: 5.0.4
         hooks:
               - id: isort
       - repo: https://github.com/ambv/black

@@ -1,13 +1,12 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
-
 import warnings
 
-import pyarrow.parquet as pq
 from fsspec.core import get_fs_token_paths
+from pyarrow import parquet as pq
 from pyarrow.compat import guid
 
 import cudf
-import cudf._lib.parquet as libparquet
+from cudf._lib import parquet as libparquet
 from cudf.utils import ioutils
 from cudf.utils.dtypes import is_list_like
 

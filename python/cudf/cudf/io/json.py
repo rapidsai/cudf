@@ -1,12 +1,11 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import warnings
 from io import BytesIO, StringIO
 
 import pandas as pd
 
 import cudf
-import cudf._lib.json as libjson
+from cudf._lib import json as libjson
 from cudf.utils import ioutils
 
 
