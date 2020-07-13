@@ -229,10 +229,10 @@ class Index(Frame, Serializable):
         >>> index = cudf.Index([1, -10, 100, 20])
         >>> index.values_host
         array([  1, -10, 100,  20])
-        >>> type(index.values)
-        <class 'numpy.ndarray'>
+        >>> type(index.values_host)
+        <class 'cupy.core.core.ndarray'>
         """
-        return self.to_series().values_host
+        return self._values.values_host
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -325,17 +325,17 @@ class Index(Frame, Serializable):
         Returns
         -------
         array : A cupy array of data in the Index.
-        """
-        if is_categorical_dtype(self.dtype) or np.issubdtype(
-            self.dtype, np.dtype("object")
-        ):
-            raise TypeError("Data must be numeric")
-        if len(self) == 0:
-            return cupy.asarray([], dtype=self.dtype)
-        if self._values.null_count > 0:
-            raise ValueError("Column must have no nulls.")
 
-        return cupy.asarray(self._values.data_array_view)
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, -10, 100, 20])
+        >>> index.values
+        array([  1, -10, 100,  20])
+        >>> type(index.values)
+        <class 'numpy.ndarray'>
+        """
+        return self._values.values
 
     def any(self):
         """

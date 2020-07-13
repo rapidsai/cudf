@@ -267,19 +267,7 @@ class Series(Frame, Serializable):
         >>> type(ser.values)
         <class 'cupy.core.core.ndarray'>
         """
-
-        if is_categorical_dtype(self.dtype) or np.issubdtype(
-            self.dtype, np.dtype("object")
-        ):
-            raise TypeError("Data must be numeric")
-
-        if len(self) == 0:
-            return cupy.asarray([], dtype=self.dtype)
-
-        if self.has_nulls:
-            raise ValueError("Column must have no nulls.")
-
-        return cupy.asarray(self._column.data_array_view)
+        return self._column.values
 
     @property
     def values_host(self):
@@ -299,15 +287,10 @@ class Series(Frame, Serializable):
         >>> ser = cudf.Series([1, -10, 100, 20])
         >>> ser.values_host
         array([  1, -10, 100,  20])
-        >>> type(ser.values)
+        >>> type(ser.values_host)
         <class 'numpy.ndarray'>
         """
-        if self.dtype == np.dtype("object"):
-            return self._column.to_array()
-        elif is_categorical_dtype(self.dtype):
-            return self._column.to_pandas().values
-        else:
-            return self._column.data_array_view.copy_to_host()
+        return self._column.values_host
 
     @classmethod
     def from_arrow(cls, s):

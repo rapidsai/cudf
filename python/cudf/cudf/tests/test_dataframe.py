@@ -6442,7 +6442,7 @@ def test_series_column_iter_error():
             "Creation of an Iterator over a cudf.Series is not allowed, "
             "To create an iterator, explicitly convert to any of the objects "
             "supporting iteration using .to_pandas(), "
-            ".to_arrow(), .values_host"
+            ".to_arrow(), or .values_host"
         ),
     ):
         iter(gs)
@@ -6453,7 +6453,7 @@ def test_series_column_iter_error():
             "Creation of an Iterator over a cudf.Series is not allowed, "
             "To create an iterator, explicitly convert to any of the objects "
             "supporting iteration using .to_pandas(), "
-            ".to_arrow(), .values_host"
+            ".to_arrow(), or .values_host"
         ),
     ):
         gs.items()
@@ -6464,7 +6464,7 @@ def test_series_column_iter_error():
             "Creation of an Iterator over a cudf.Series is not allowed, "
             "To create an iterator, explicitly convert to any of the objects "
             "supporting iteration using .to_pandas(), "
-            ".to_arrow(), .values_host"
+            ".to_arrow(), or .values_host"
         ),
     ):
         gs.iteritems()
