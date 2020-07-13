@@ -16,6 +16,7 @@
 - PR #5397 Add internal implementation of nested loop equijoins.
 - PR #5303 Add slice_strings functionality using delimiter string
 - PR #5301 Add Java bindings for `zfill`
+- PR #5411 Enable metadata collection for chunked parquet writer
 - PR #5359 Add duration types
 - PR #5364 Validate array interface during buffer construction
 - PR #5418 Add support for `DataFrame.info`
