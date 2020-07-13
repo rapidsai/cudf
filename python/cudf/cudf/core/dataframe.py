@@ -271,14 +271,44 @@ class DataFrame(Frame, Serializable):
             self._data = self.astype(dtype)._data
 
     def _init_from_series_list(self, data, columns, index):
-        dataframe_columns = _get_union_of_indices([d.index for d in data])
-
         if index is None:
-            index = as_index(_get_union_of_series_names(data))
+            # When `index` is `None`, the final index of
+            # resulting dataframe will be union of
+            # all Series's names.
+            final_index = as_index(_get_union_of_series_names(data))
         else:
+            # When an `index` is passed, the final index of
+            # resulting dataframe will be whatever
+            # index passed, but will need
+            # shape validations - explained below
             data_length = len(data)
             index_length = len(index)
             if data_length != index_length:
+                # If the passed `index` length doesn't match
+                # length of Series objects in `data`, we must
+                # check if `data` can be duplicated/expanded
+                # to match the length of index. For that we
+                # check if the length of index is a factor
+                # of length of data.
+                #
+                # 1. If yes, we extend data
+                # until length of data is equal to length of index.
+                # 2. If no, we throw an error stating the
+                # shape of resulting `data` and `index`
+
+                # Simple example
+                # >>> import pandas as pd
+                # >>> s = pd.DataFrame([1, 2, 3])
+                # >>> s = pd.Series([1, 2, 3])
+                # >>> pd.DataFrame([s], index=['a', 'b'])
+                #    0  1  2
+                # a  1  2  3
+                # b  1  2  3
+                # >>> pd.DataFrame([s], index=['a', 'b', 'c'])
+                #    0  1  2
+                # a  1  2  3
+                # b  1  2  3
+                # c  1  2  3
                 if index_length % data_length == 0:
                     initial_data = data
                     data = []
@@ -291,25 +321,31 @@ class DataFrame(Frame, Serializable):
                         f"indices imply {(index_length, len(data[0]))}"
                     )
 
-            index = as_index(index)
+            final_index = as_index(index)
 
         series_lengths = list(map(lambda x: len(x), data))
         data = numeric_normalize_types(*data)
         if series_lengths.count(series_lengths[0]) == len(series_lengths):
+            # Calculating the final dataframe columns by
+            # getting union of all `index` of the Series objects.
+            final_columns = _get_union_of_indices([d.index for d in data])
+
             for idx, series in enumerate(data):
                 if not series.index.is_unique:
                     raise ValueError(
                         "Reindexing only valid with uniquely valued Index "
                         "objects"
                     )
-                if not series.index.equals(dataframe_columns):
-                    series = series.reindex(dataframe_columns)
+                if not series.index.equals(final_columns):
+                    series = series.reindex(final_columns)
                 self._data[idx] = column.as_column(series._column)
 
-            self._index = dataframe_columns
+            # Setting `final_columns` to self._index so
+            # that the resulting `transpose` will be have
+            # columns set to `final_columns`
+            self._index = final_columns
 
             transpose = self.T
-
         else:
             concat_df = cudf.concat(data, axis=1)
 
@@ -318,9 +354,12 @@ class DataFrame(Frame, Serializable):
 
             transpose = concat_df.T
 
-        transpose._index = index
+        transpose._index = final_index
         self._mimic_inplace(transpose, inplace=True)
 
+        # If `columns` is passed, the result dataframe
+        # contain a dataframe with only the
+        # specified `columns` in the same order.
         if columns:
             for col_name in columns:
                 if col_name not in self._data:
