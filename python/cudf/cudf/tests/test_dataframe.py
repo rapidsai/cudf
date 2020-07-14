@@ -182,31 +182,6 @@ def test_append_index(a, b):
     assert_eq(expected.index, actual.index)
 
 
-def test_series_append():
-    a1 = np.arange(10, dtype=np.float64)
-    series = Series(a1)
-    # Add new buffer
-    a2 = np.arange(5)
-    series = series.append(a2)
-    assert len(series) == 15
-    np.testing.assert_equal(series.to_array(), np.hstack([a1, a2]))
-
-    # Ensure appending to previous buffer
-    a3 = np.arange(3)
-    series = series.append(a3)
-    assert len(series) == 18
-    a4 = np.hstack([a1, a2, a3])
-    np.testing.assert_equal(series.to_array(), a4)
-
-    # Appending different dtype
-    a5 = np.array([1, 2, 3], dtype=np.int32)
-    a6 = np.array([4.5, 5.5, 6.5], dtype=np.float64)
-    series = Series(a5).append(a6)
-    np.testing.assert_equal(series.to_array(), np.hstack([a5, a6]))
-    series = Series(a6).append(a5)
-    np.testing.assert_equal(series.to_array(), np.hstack([a6, a5]))
-
-
 def test_series_init_none():
 
     # test for creating empty series
@@ -981,7 +956,7 @@ def test_dataframe_concat_different_column_types():
         gd.concat([df1, df2])
 
     df2 = gd.Series(["a string"])
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         gd.concat([df1, df2])
 
 
@@ -5492,24 +5467,31 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
 
 
 @pytest.mark.parametrize(
-    "data",
+    "data,columns",
     [
-        [1, 2, 3, 100, 112, 35464],
-        range(100),
-        [],
-        (-10, 21, 32, 32, 1, 2, 3),
-        (),
-        [[1, 2, 3], [1, 2, 3]],
-        [range(100), range(100)],
-        ((1, 2, 3), (1, 2, 3)),
-        [[1, 2, 3]],
-        [range(100)],
-        ((1, 2, 3),),
+        ([1, 2, 3, 100, 112, 35464], ["a"]),
+        (range(100), None),
+        ([], None),
+        ((-10, 21, 32, 32, 1, 2, 3), ["p"]),
+        ((), None),
+        ([[1, 2, 3], [1, 2, 3]], ["col1", "col2", "col3"]),
+        ([range(100), range(100)], ["range" + str(i) for i in range(100)]),
+        (((1, 2, 3), (1, 2, 3)), ["tuple0", "tuple1", "tuple2"]),
+        ([[1, 2, 3]], ["list col1", "list col2", "list col3"]),
+        ([range(100)], ["range" + str(i) for i in range(100)]),
+        (((1, 2, 3),), ["k1", "k2", "k3"]),
     ],
 )
-def test_dataframe_init_1d_list(data):
-    expect = pd.DataFrame(data)
-    actual = DataFrame(data)
+def test_dataframe_init_1d_list(data, columns):
+    expect = pd.DataFrame(data, columns=columns)
+    actual = DataFrame(data, columns=columns)
+
+    assert_eq(
+        expect, actual, check_index_type=False if len(data) == 0 else True
+    )
+
+    expect = pd.DataFrame(data, columns=None)
+    actual = DataFrame(data, columns=None)
 
     assert_eq(
         expect, actual, check_index_type=False if len(data) == 0 else True
@@ -6143,6 +6125,336 @@ def test_cudf_isclose_different_index():
         [False, True, True, False, True, False], index=s1.index
     )
     assert_eq(expected, gd.isclose(s1, s2))
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB")),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[10, 20]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[7, 8]),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            },
+            index=[7, 20, 11, 9],
+        ),
+        pd.DataFrame({"l": [10]}),
+        pd.DataFrame({"l": [10]}, index=[100]),
+        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+        pd.DataFrame(
+            {"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]},
+            index=[100, 200, 300, 400, 500, 0],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+        pd.DataFrame([[5, 6], [7, 8]], columns=list("BD")),
+        pd.DataFrame([[5, 6], [7, 8]], columns=list("DE")),
+        pd.DataFrame(),
+        pd.DataFrame(
+            {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+        ),
+        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+        pd.DataFrame({"l": [10]}),
+        pd.DataFrame({"l": [10]}, index=[200]),
+        pd.DataFrame([]),
+        pd.DataFrame([], index=[100]),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            },
+            index=[0, 100, 200, 300],
+        ),
+    ],
+)
+@pytest.mark.parametrize("sort", [False, True])
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_dataframe_append_dataframe(df, other, sort, ignore_index):
+    pdf = df
+    other_pd = other
+
+    gdf = gd.from_pandas(df)
+    other_gd = gd.from_pandas(other)
+
+    expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
+    actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
+
+    if expected.shape != df.shape:
+        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+    else:
+        assert_eq(
+            expected, actual, check_index_type=False if gdf.empty else True
+        )
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=[10, 20]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=[0, 1], index=[10, 20]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=[1, 0], index=[7, 8]),
+        pd.DataFrame(
+            {
+                23: [315.3324, 3243.32432, 3232.332, -100.32],
+                33: [0.3223, 0.32, 0.0000232, 0.32224],
+            }
+        ),
+        pd.DataFrame(
+            {
+                0: [315.3324, 3243.32432, 3232.332, -100.32],
+                1: [0.3223, 0.32, 0.0000232, 0.32224],
+            },
+            index=[7, 20, 11, 9],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        pd.Series([10, 11, 23, 234, 13]),
+        pytest.param(
+            pd.Series([10, 11, 23, 234, 13], index=[11, 12, 13, 44, 33]),
+            marks=pytest.mark.xfail(
+                reason="pandas bug: "
+                "https://github.com/pandas-dev/pandas/issues/35092"
+            ),
+        ),
+        {1: 1},
+        {0: 10, 1: 100, 2: 102},
+    ],
+)
+@pytest.mark.parametrize("sort", [False, True])
+def test_dataframe_append_series_dict(df, other, sort):
+    pdf = df
+    other_pd = other
+
+    gdf = gd.from_pandas(df)
+    if isinstance(other, pd.Series):
+        other_gd = gd.from_pandas(other)
+    else:
+        other_gd = other
+
+    expected = pdf.append(other_pd, ignore_index=True, sort=sort)
+    actual = gdf.append(other_gd, ignore_index=True, sort=sort)
+
+    if expected.shape != df.shape:
+        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+    else:
+        assert_eq(
+            expected, actual, check_index_type=False if gdf.empty else True
+        )
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB")),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[10, 20]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[7, 8]),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            },
+            index=[7, 20, 11, 9],
+        ),
+        pd.DataFrame({"l": [10]}),
+        pd.DataFrame({"l": [10]}, index=[100]),
+        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+        pd.DataFrame(
+            {"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]},
+            index=[100, 200, 300, 400, 500, 0],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [pd.DataFrame([[5, 6], [7, 8]], columns=list("AB"))],
+        [
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("BD")),
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("DE")),
+        ],
+        [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
+        [
+            pd.DataFrame(
+                {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+            ),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+        ],
+        [
+            pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+            pd.DataFrame({"l": [10]}),
+            pd.DataFrame({"l": [10]}, index=[200]),
+        ],
+        [pd.DataFrame([]), pd.DataFrame([], index=[100])],
+        [
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                },
+                index=[0, 100, 200, 300],
+            ),
+        ],
+        [
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                },
+                index=[0, 100, 200, 300],
+            ),
+        ],
+        [
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                },
+                index=[0, 100, 200, 300],
+            ),
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                },
+                index=[0, 100, 200, 300],
+            ),
+        ],
+    ],
+)
+@pytest.mark.parametrize("sort", [False, True])
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_dataframe_append_dataframe_lists(df, other, sort, ignore_index):
+    pdf = df
+    other_pd = other
+
+    gdf = gd.from_pandas(df)
+    other_gd = [
+        gd.from_pandas(o) if isinstance(o, pd.DataFrame) else o for o in other
+    ]
+
+    expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
+    actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
+    if expected.shape != df.shape:
+        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+    else:
+        assert_eq(
+            expected, actual, check_index_type=False if gdf.empty else True
+        )
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB")),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[10, 20]),
+        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[7, 8]),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                "z": [0.3223, 0.32, 0.0000232, 0.32224],
+            },
+            index=[7, 20, 11, 9],
+        ),
+        pd.DataFrame({"l": [10]}),
+        pd.DataFrame({"l": [10]}, index=[100]),
+        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+        pd.DataFrame(
+            {"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]},
+            index=[100, 200, 300, 400, 500, 0],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [[1, 2], [10, 100]],
+        [[1, 2, 10, 100, 0.1, 0.2, 0.0021]],
+        [[]],
+        [[], [], [], []],
+        [[0.23, 0.00023, -10.00, 100, 200, 1000232, 1232.32323]],
+    ],
+)
+@pytest.mark.parametrize("sort", [False, True])
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_dataframe_append_lists(df, other, sort, ignore_index):
+    pdf = df
+    other_pd = other
+
+    gdf = gd.from_pandas(df)
+    other_gd = [
+        gd.from_pandas(o) if isinstance(o, pd.DataFrame) else o for o in other
+    ]
+
+    expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
+    actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
+
+    if expected.shape != df.shape:
+        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+    else:
+        assert_eq(
+            expected, actual, check_index_type=False if gdf.empty else True
+        )
+
+
+def test_dataframe_append_error():
+    df = gd.DataFrame({"a": [1, 2, 3]})
+    ps = gd.Series([1, 2, 3])
+
+    with pytest.raises(
+        TypeError,
+        match="Can only append a Series if ignore_index=True "
+        "or if the Series has a name",
+    ):
+        df.append(ps)
 
 
 def test_cudf_arrow_array_error():

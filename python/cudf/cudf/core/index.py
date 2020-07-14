@@ -22,7 +22,13 @@ from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.frame import Frame
 from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import is_categorical_dtype, is_scalar
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_list_like,
+    is_mixed_with_object_dtype,
+    is_scalar,
+    numeric_normalize_types,
+)
 from cudf.utils.utils import cached_property
 
 
@@ -220,7 +226,7 @@ class Index(Frame, Serializable):
 
     @names.setter
     def names(self, values):
-        if not pd.api.types.is_list_like(values):
+        if not is_list_like(values):
             raise ValueError("Names must be a list-like")
 
         num_values = len(values)
@@ -434,6 +440,131 @@ class Index(Frame, Serializable):
         result.name = name
         return result
 
+    def append(self, other):
+        """
+        Append a collection of Index options together.
+
+        Parameters
+        ----------
+        other : Index or list/tuple of indices
+
+        Returns
+        -------
+        appended : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1, 2, 10, 100])
+        >>> idx
+        Int64Index([1, 2, 10, 100], dtype='int64')
+        >>> other = cudf.Index([200, 400, 50])
+        >>> other
+        Int64Index([200, 400, 50], dtype='int64')
+        >>> idx.append(other)
+        Int64Index([1, 2, 10, 100, 200, 400, 50], dtype='int64')
+
+        append accepts list of Index objects
+
+        >>> idx.append([other, other])
+        Int64Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
+        """
+
+        if is_list_like(other):
+            to_concat = [self]
+            to_concat.extend(other)
+        else:
+            this = self
+            if len(other) == 0:
+                # short-circuit and return a copy
+                to_concat = [self]
+
+            other = as_index(other)
+
+            if len(self) == 0:
+                to_concat = [other]
+
+            if len(self) and len(other):
+                if is_mixed_with_object_dtype(this, other):
+                    got_dtype = (
+                        other.dtype
+                        if this.dtype == np.dtype("object")
+                        else this.dtype
+                    )
+                    raise TypeError(
+                        f"cudf does not support appending an Index of "
+                        f"dtype `{np.dtype('object')}` with an Index "
+                        f"of dtype `{got_dtype}`, please type-cast "
+                        f"either one of them to same dtypes."
+                    )
+
+                if isinstance(self._values, cudf.core.column.NumericalColumn):
+                    if self.dtype != other.dtype:
+                        this, other = numeric_normalize_types(self, other)
+                to_concat = [this, other]
+
+        for obj in to_concat:
+            if not isinstance(obj, Index):
+                raise TypeError("all inputs must be Index")
+
+        return self._concat(to_concat)
+
+    def difference(self, other, sort=None):
+        """
+        Return a new Index with elements from the index that are not in
+        `other`.
+
+        This is the set difference of two Index objects.
+
+        Parameters
+        ----------
+        other : Index or array-like
+        sort : False or None, default None
+            Whether to sort the resulting index. By default, the
+            values are attempted to be sorted, but any TypeError from
+            incomparable elements is caught by cudf.
+            * None : Attempt to sort the result, but catch any TypeErrors
+              from comparing incomparable elements.
+            * False : Do not sort the result.
+
+        Returns
+        -------
+        difference : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx1 = cudf.Index([2, 1, 3, 4])
+        >>> idx1
+        Int64Index([2, 1, 3, 4], dtype='int64')
+        >>> idx2 = cudf.Index([3, 4, 5, 6])
+        >>> idx2
+        Int64Index([3, 4, 5, 6], dtype='int64')
+        >>> idx1.difference(idx2)
+        Int64Index([1, 2], dtype='int64')
+        >>> idx1.difference(idx2, sort=False)
+        Int64Index([2, 1], dtype='int64')
+        """
+        if sort not in {None, False}:
+            raise ValueError(
+                f"The 'sort' keyword only takes the values "
+                f"of None or False; {sort} was passed."
+            )
+
+        other = as_index(other)
+
+        if is_mixed_with_object_dtype(self, other):
+            difference = self.copy()
+        else:
+            difference = self.join(other, how="leftanti")
+            if self.dtype != other.dtype:
+                difference = difference.astype(self.dtype)
+
+        if sort is None:
+            _, inds = difference._values.sort_by_values()
+            return as_index(difference.take(inds))
+        return difference
+
     def _apply_op(self, fn, other=None):
 
         idx_series = cudf.Series(self, name=self.name)
@@ -532,22 +663,24 @@ class Index(Frame, Serializable):
             True if “other” is an Index and it has the same elements
             as calling index; False otherwise.
         """
-        if self is other:
-            return True
-        if len(self) != len(other):
-            return False
+        basic_equality = _check_basic_index_equality(self, other)
+
+        if basic_equality is not None:
+            return basic_equality
         elif len(self) == 1:
             val = self[0] == other[0]
             # when self is multiindex we need to checkall
             if isinstance(val, np.ndarray):
                 return val.all()
             return bool(val)
+        elif isinstance(other, CategoricalIndex):
+            return other.equals(self)
         else:
+            if is_mixed_with_object_dtype(self, other):
+                return False
+
             result = self == other
-            if isinstance(result, bool):
-                return result
-            else:
-                return result._values.all()
+            return result._values.all()
 
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
@@ -748,6 +881,20 @@ class Index(Frame, Serializable):
     @property
     def is_monotonic_decreasing(self):
         raise (NotImplementedError)
+
+    @property
+    def empty(self):
+        """
+        Indicator whether Index is empty.
+
+        True if Index is entirely empty (no items).
+
+        Returns
+        -------
+        out : bool
+            If Index is empty, return True, if not return False.
+        """
+        return not self.size
 
     def get_slice_bound(self, label, side, kind):
         """
@@ -1106,12 +1253,13 @@ class RangeIndex(Index):
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
 
+    @annotate("RANGE_INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
-        if self is other:
-            return True
-        if len(self) != len(other):
-            return False
-        if isinstance(other, cudf.core.index.RangeIndex):
+        basic_equality = _check_basic_index_equality(self, other)
+
+        if basic_equality is not None:
+            return basic_equality
+        elif isinstance(other, cudf.core.index.RangeIndex):
             return self._start == other._start and self._stop == other._stop
         else:
             return (self == other)._values.all()
@@ -1347,6 +1495,13 @@ class GenericIndex(Index):
 
     def __len__(self):
         return len(self._values)
+
+    @property
+    def size(self):
+        """
+        Return the number of elements in the underlying data.
+        """
+        return len(self)
 
     def __repr__(self):
         from pandas._config import get_option
@@ -1807,6 +1962,32 @@ class CategoricalIndex(GenericIndex):
         """
         return self._values.cat().categories
 
+    @annotate("CATEGORICAL_INDEX_EQUALS", color="green", domain="cudf_python")
+    def equals(self, other):
+        """
+        Determine if two Index objects contain the same elements.
+
+        Returns
+        -------
+        out: bool
+            True if “other” is an Index and it has the same elements
+            as calling index; False otherwise.
+        """
+        basic_equality = _check_basic_index_equality(self, other)
+
+        if basic_equality is not None:
+            return basic_equality
+        else:
+            casted_other = other
+            if not isinstance(other, CategoricalIndex):
+                casted_other = other.astype(self.dtype)
+
+            if self.dtype != casted_other.dtype:
+                return False
+
+            result = self._values == casted_other._values
+            return result
+
 
 class StringIndex(GenericIndex):
     """String defined indices into another Column
@@ -1954,3 +2135,13 @@ def _setdefault_name(values, **kwargs):
         else:
             kwargs.update({"name": values.name})
     return kwargs
+
+
+def _check_basic_index_equality(left, right):
+    if left is right:
+        return True
+    elif not isinstance(right, Index):
+        return False
+    elif len(left) != len(right):
+        return False
+    return None
