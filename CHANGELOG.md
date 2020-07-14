@@ -39,6 +39,7 @@
 - PR #5612 Add `is_hex` strings API
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
+- PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 
 ## Improvements
 
@@ -108,11 +109,13 @@
 - PR #5562 Add missing join type for java
 - PR #5584 Refactor `CompactProtocolReader::InitSchema`
 - PR #5591 Add `__arrow_array__` protocol and raise a descriptive error message
+- PR #5635 Ad cuIO reader benchmarks for CSV, ORC and Parquet
 - PR #5601 Instantiate Table instances in `Frame._concat` to avoid `DF.insert()` overhead
 - PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
 - PR #5603 Refactor JIT `parser.cpp`
 - PR #5643 Update `isort` to 5.0.4
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
+- PR #5679 Use `pickle5` to test older Python versions
 
 ## Bug Fixes
 
@@ -168,6 +171,7 @@
 - PR #5644 Fix issue related to Dataframe init when passing in `columns`
 - PR #5664 Update conda upload versions for new supported CUDA/Python
 - PR #5656 Fix issue with incorrect docker image being used in local build script
+- PR #5671 Fix chunksize issue with `DataFrame.to_csv`
 - PR #5672 Fix crash in parquet writer while writing large string data
 
 # cuDF 0.14.0 (Date TBD)
