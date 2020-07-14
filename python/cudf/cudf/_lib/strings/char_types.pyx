@@ -28,20 +28,12 @@ def filter_alphanum(Column source_strings, Scalar repl, bool keep=True):
     cdef string_scalar* scalar_repl = <string_scalar*>(repl.c_value.get())
 
     with nogil:
-        if keep is True:
-            c_result = move(cpp_filter_characters_of_type(
-                source_view,
-                string_character_types.ALL_TYPES,
-                scalar_repl[0],
-                string_character_types.ALPHANUM
-            ))
-        else:
-            c_result = move(cpp_filter_characters_of_type(
-                source_view,
-                string_character_types.ALPHANUM,
-                scalar_repl[0],
-                string_character_types.ALL_TYPES
-            ))
+        c_result = move(cpp_filter_characters_of_type(
+            source_view,
+            string_character_types.ALL_TYPES if keep else string_character_types.ALPHANUM,
+            scalar_repl[0],
+            string_character_types.ALPHANUM if keep else string_character_types.ALL_TYPES
+        ))
 
     return Column.from_unique_ptr(move(c_result))
 

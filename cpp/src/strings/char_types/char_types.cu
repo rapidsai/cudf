@@ -88,7 +88,7 @@ namespace {
 /**
  * @brief Removes individual characters from a strings column based on character type.
  *
- * Types to remove are specified by `types_to_filter` OR
+ * Types to remove are specified by `types_to_remove` OR
  * types to not remove are specified by `types_to_keep`.
  *
  * This is called twice. The first pass calculates the size of each output string.
@@ -97,7 +97,7 @@ namespace {
 struct filter_chars_fn {
   column_device_view const d_column;
   character_flags_table_type const* d_flags;
-  string_character_types const types_to_filter;
+  string_character_types const types_to_remove;
   string_character_types const types_to_keep;
   string_view const d_replacement;  ///< optional replacement for removed characters
   int32_t* d_offsets{};             ///< size of the output string stored here during first pass
@@ -111,9 +111,9 @@ struct filter_chars_fn {
     auto const code_point = detail::utf8_to_codepoint(ch);
     auto const flag       = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
     if (flag == 0)  // all types pass unless specifically identified
-      return (types_to_filter == ALL_TYPES);
+      return (types_to_remove == ALL_TYPES);
     if (types_to_keep == ALL_TYPES)  // filter case
-      return (types_to_filter & flag) != 0;
+      return (types_to_remove & flag) != 0;
     return (types_to_keep & flag) == 0;  // keep case
   }
 
@@ -142,19 +142,19 @@ struct filter_chars_fn {
 }  // namespace
 
 std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
-                                                  string_character_types types_to_filter,
+                                                  string_character_types types_to_remove,
                                                   string_scalar const& replacement,
                                                   string_character_types types_to_keep,
                                                   cudaStream_t stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(replacement.is_valid(), "Parameter replacement must be valid");
-  if (types_to_filter == ALL_TYPES)
+  if (types_to_remove == ALL_TYPES)
     CUDF_EXPECTS(types_to_keep != ALL_TYPES,
-                 "Parameters types_to_filter and types_to_keep must not be both ALL_TYPES");
+                 "Parameters types_to_remove and types_to_keep must not be both ALL_TYPES");
   else
     CUDF_EXPECTS(types_to_keep == ALL_TYPES,
-                 "One of parameter types_to_filter and types_to_keep must be set to ALL_TYPES");
+                 "One of parameter types_to_remove and types_to_keep must be set to ALL_TYPES");
 
   auto const strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(cudf::data_type{cudf::type_id::STRING});
@@ -163,7 +163,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
   cudf::string_view d_replacement(replacement.data(), replacement.size());
   filter_chars_fn filterer{*strings_column,
                            detail::get_character_flags_table(),
-                           types_to_filter,
+                           types_to_remove,
                            types_to_keep,
                            d_replacement};
 
@@ -283,14 +283,14 @@ std::unique_ptr<column> all_characters_of_type(strings_column_view const& string
 }
 
 std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
-                                                  string_character_types types_to_filter,
+                                                  string_character_types types_to_remove,
                                                   string_scalar const& replacement,
                                                   string_character_types types_to_keep,
                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters_of_type(
-    strings, types_to_filter, replacement, types_to_keep, 0, mr);
+    strings, types_to_remove, replacement, types_to_keep, 0, mr);
 }
 
 std::unique_ptr<column> is_integer(strings_column_view const& strings,

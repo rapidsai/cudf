@@ -30,7 +30,7 @@ cdef extern from "cudf/strings/char_types/char_types.hpp" \
 
     cdef unique_ptr[column] filter_characters_of_type(
         column_view source_strings,
-        string_character_types types_to_filter,
+        string_character_types types_to_remove,
         string_scalar replacement,
         string_character_types types_to_keep) except +
 

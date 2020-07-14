@@ -105,10 +105,10 @@ std::unique_ptr<column> all_characters_of_type(
  * @brief Filter specific character types from a column of strings.
  *
  * To remove all characters of a specific type, set that type in
- * `types_to_filter` and set `types_to_keep` to `ALL_TYPES`.
+ * `types_to_remove` and set `types_to_keep` to `ALL_TYPES`.
  *
  * To filter out characters NOT of a select type, specify `ALL_TYPES` for
- * `types_to_filter` and which types to not remove in `types_to_keep`.
+ * `types_to_remove` and which types to not remove in `types_to_keep`.
  *
  * @code{.pseudo}
  * Example:
@@ -122,25 +122,25 @@ std::unique_ptr<column> all_characters_of_type(
  * In `s1` all NUMERIC types have been removed.
  * In `s2` all non-LOWER types have been replaced.
  *
- * One but not both parameters `types_to_filter` and `types_to_keep` must
+ * One but not both parameters `types_to_remove` and `types_to_keep` must
  * be set to `ALL_TYPES`.
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @throw cudf::logic_error if neither or both `types_to_filter` and
+ * @throw cudf::logic_error if neither or both `types_to_remove` and
  *        `types_to_keep` are set to `ALL_TYPES`.
  *
  * @param strings Strings instance for this operation.
- * @param types_to_filter The character types to check in each string.
+ * @param types_to_remove The character types to check in each string.
  *        Use `ALL_TYPES` here to specify `types_to_keep` instead.
  * @param types_to_keep Default `ALL_TYPES` means all characters of
- *        `types_to_filter` will be filtered.
+ *        `types_to_remove` will be filtered.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> filter_characters_of_type(
   strings_column_view const& strings,
-  string_character_types types_to_filter,
+  string_character_types types_to_remove,
   string_scalar const& replacement     = string_scalar(""),
   string_character_types types_to_keep = string_character_types::ALL_TYPES,
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource());
