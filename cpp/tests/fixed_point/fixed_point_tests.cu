@@ -24,6 +24,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/replace.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -593,6 +594,30 @@ TEST_F(FixedPointTest, FixedPointConcatentate)
   auto const expected            = wrapper<decimal32>(vec.begin(), vec.end());
 
   cudf::test::expect_columns_equal(*results, expected);
+}
+
+TEST_F(FixedPointTest, FixedPointReplace)
+{
+  auto const ONE = decimal32{1, scale_type{0}};
+  auto const TWO = decimal32{2, scale_type{0}};
+  auto const sz  = std::size_t{1000};
+
+  auto vec1       = std::vector<decimal32>(sz);
+  auto const vec2 = std::vector<decimal32>(sz, TWO);
+
+  std::generate(vec1.begin(), vec1.end(), [&, i = 0]() mutable { return ++i % 2 ? ONE : TWO; });
+
+  auto const to_replace  = std::vector<decimal32>{ONE};
+  auto const replacement = std::vector<decimal32>{TWO};
+
+  auto const input_w       = wrapper<decimal32>(vec1.begin(), vec1.end());
+  auto const to_replace_w  = wrapper<decimal32>(to_replace.begin(), to_replace.end());
+  auto const replacement_w = wrapper<decimal32>(replacement.begin(), replacement.end());
+  auto const expected_w    = wrapper<decimal32>(vec2.begin(), vec2.end());
+
+  auto const result = cudf::find_and_replace_all(input_w, to_replace_w, replacement_w, mr());
+
+  cudf::test::expect_columns_equal(*result, expected_w);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
