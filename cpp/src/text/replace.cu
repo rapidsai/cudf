@@ -159,14 +159,14 @@ struct replace_tokens_fn : base_token_replacer_fn {
  * This should be called first to compute the size of each output string and then
  * a second time to fill in the allocated output buffer for each string.
  */
-struct filter_tokens_fn : base_token_replacer_fn {
+struct remove_small_tokens_fn : base_token_replacer_fn {
   cudf::size_type min_token_length;       ///< minimum size for found tokens
   cudf::string_view const d_replacement;  ///< replacement string
 
-  filter_tokens_fn(cudf::column_device_view const& d_strings,
-                   cudf::string_view const& d_delimiter,
-                   cudf::size_type min_token_length,
-                   cudf::string_view const& d_replacement)
+  remove_small_tokens_fn(cudf::column_device_view const& d_strings,
+                         cudf::string_view const& d_delimiter,
+                         cudf::size_type min_token_length,
+                         cudf::string_view const& d_replacement)
     : base_token_replacer_fn{d_strings, d_delimiter},
       min_token_length{min_token_length},
       d_replacement{d_replacement}
@@ -246,7 +246,7 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   cudf::string_view d_replacement(replacement.data(), replacement.size());
   cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
-  filter_tokens_fn filterer{*strings_column, d_delimiter, min_token_length, d_replacement};
+  remove_small_tokens_fn filterer{*strings_column, d_delimiter, min_token_length, d_replacement};
 
   // copy null mask from input column
   rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
