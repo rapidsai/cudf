@@ -28,6 +28,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include "cudf/search.hpp"
 #include "cudf/types.hpp"
 
 #include <algorithm>
@@ -618,6 +619,46 @@ TEST_F(FixedPointTest, FixedPointReplace)
   auto const result = cudf::find_and_replace_all(input_w, to_replace_w, replacement_w, mr());
 
   cudf::test::expect_columns_equal(*result, expected_w);
+}
+
+TEST_F(FixedPointTest, FixedPointLowerBound)
+{
+  auto vec = std::vector<decimal32>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimal32{});
+
+  auto const values = wrapper<decimal32>{decimal32{200, scale_type{0}},
+                                         decimal32{400, scale_type{0}},
+                                         decimal32{600, scale_type{0}},
+                                         decimal32{800, scale_type{0}}};
+  auto const expect = wrapper<cudf::size_type>{200, 400, 600, 800};
+  auto const column = wrapper<decimal32>(vec.begin(), vec.end());
+
+  auto result = cudf::lower_bound({cudf::table_view{{column}}},
+                                  {cudf::table_view{{values}}},
+                                  {cudf::order::ASCENDING},
+                                  {cudf::null_order::BEFORE});
+
+  expect_columns_equal(*result, expect);
+}
+
+TEST_F(FixedPointTest, FixedPointUpperBound)
+{
+  auto vec = std::vector<decimal32>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimal32{});
+
+  auto const values = wrapper<decimal32>{decimal32{200, scale_type{0}},
+                                         decimal32{400, scale_type{0}},
+                                         decimal32{600, scale_type{0}},
+                                         decimal32{800, scale_type{0}}};
+  auto const expect = wrapper<cudf::size_type>{201, 401, 601, 801};
+  auto const column = wrapper<decimal32>(vec.begin(), vec.end());
+
+  auto result = cudf::upper_bound({cudf::table_view{{column}}},
+                                  {cudf::table_view{{values}}},
+                                  {cudf::order::ASCENDING},
+                                  {cudf::null_order::BEFORE});
+
+  expect_columns_equal(*result, expect);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
