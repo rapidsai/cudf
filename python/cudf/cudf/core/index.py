@@ -145,7 +145,7 @@ class Index(Frame, Serializable):
         -------
         deduplicated : Index
         """
-        return super().drop_duplicates(subset=[self.name], keep=keep)
+        return super().drop_duplicates(keep=keep)
 
     def serialize(self):
         """Serialize into pickle format suitable for file storage or network

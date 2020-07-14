@@ -1681,9 +1681,7 @@ class Series(Frame, Serializable):
         """
         Return Series with duplicate values removed
         """
-        result = super().drop_duplicates(
-            subset=[self.name], keep=keep, ignore_index=ignore_index
-        )
+        result = super().drop_duplicates(keep=keep, ignore_index=ignore_index)
 
         return self._mimic_inplace(result, inplace=inplace)
 
