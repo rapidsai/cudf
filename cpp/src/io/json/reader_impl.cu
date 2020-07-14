@@ -178,7 +178,7 @@ std::unique_ptr<table> create_json_keys_info_table(
 /**
  * @brief Extract the keys from the JSON file the name offsets/lengths.
  */
-std::vector<std::string> create_key_strings(uint8_t const *d_data_ptr,
+std::vector<std::string> create_key_strings(char const *h_data,
                                             table_view sorted_info,
                                             cudaStream_t stream)
 {
@@ -200,9 +200,7 @@ std::vector<std::string> create_key_strings(uint8_t const *d_data_ptr,
   std::vector<std::string> names(num_cols);
   std::transform(
     h_offsets.begin(), h_offsets.end(), h_lens.begin(), names.begin(), [&](auto offset, auto len) {
-      std::vector<char> buffer(len);
-      cudaMemcpyAsync(buffer.data(), d_data_ptr + offset, len, cudaMemcpyDefault, stream);
-      return std::string(reinterpret_cast<const char *>(buffer.data()), len);
+      return std::string(h_data + offset, len);
     });
   return names;
 }
@@ -228,8 +226,7 @@ std::vector<std::string> reader::impl::get_json_object_keys(cudaStream_t stream)
 
   column_names_hash_map = create_col_names_hash_map(sorted_info->get_column(2).view(), stream);
 
-  return create_key_strings(
-    static_cast<const uint8_t *>(data_.data()), sorted_info->view(), stream);
+  return create_key_strings(uncomp_data_, sorted_info->view(), stream);
 }
 
 /**
