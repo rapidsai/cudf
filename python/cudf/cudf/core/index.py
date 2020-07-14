@@ -2084,7 +2084,7 @@ class StringIndex(GenericIndex):
                 self.__class__.__name__, self._values.to_array()
             )
             + (
-                ", name='{}'".format(self.name)
+                f", name={pd.io.formats.printing.default_pprint(self.name)}"
                 if self.name is not None
                 else ""
             )
