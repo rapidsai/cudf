@@ -1266,11 +1266,9 @@ class RangeIndex(Index):
 
     def __repr__(self):
         return (
-            "{}(start={}, stop={}".format(
-                self.__class__.__name__, self._start, self._stop
-            )
+            f"{self.__class__.__name__}(start={self._start}, stop={self._stop}"
             + (
-                ", name='{}'".format(str(self.name))
+                f", name={pd.io.formats.printing.default_pprint(self.name)}"
                 if self.name is not None
                 else ""
             )
