@@ -18,6 +18,7 @@ from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
+from libcpp cimport bool
 
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.table cimport Table
@@ -345,11 +346,35 @@ cdef class ParquetWriter:
         with nogil:
             write_parquet_chunked(tv, self.state)
 
-    def close(self):
-        if self.state:
-            with nogil:
-                write_parquet_chunked_end(self.state)
-                self.state.reset()
+    def close(self, object metadata_file_path=None):
+        cdef unique_ptr[vector[uint8_t]] out_metadata_c
+        cdef bool return_meta
+        cdef string metadata_out_file_path
+
+        if not self.state:
+            return None
+
+        # Update metadata-collection options
+        if metadata_file_path is not None:
+            metadata_out_file_path = str.encode(metadata_file_path)
+            return_meta = True
+        else:
+            return_meta = False
+
+        with nogil:
+            out_metadata_c = move(
+                write_parquet_chunked_end(
+                    self.state, return_meta, metadata_out_file_path
+                )
+            )
+            self.state.reset()
+
+        if metadata_file_path is not None:
+            out_metadata_py = BufferArrayFromVector.from_unique_ptr(
+                move(out_metadata_c)
+            )
+            return np.asarray(out_metadata_py)
+        return None
 
     def __dealloc__(self):
         self.close()
