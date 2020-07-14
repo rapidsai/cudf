@@ -1230,3 +1230,9 @@ def test_dataframe_iloc_index(gdf, slice):
     expected = pdf.iloc[:, slice]
 
     assert_eq(actual, expected)
+
+def test_iloc_list_series():
+    gsr = cudf.Series([[]], dtype="list")
+    psr = gsr.to_pandas()
+    assert_eq(gsr[[]], psr[[]])
+
