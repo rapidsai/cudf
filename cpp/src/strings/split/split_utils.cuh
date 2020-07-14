@@ -20,6 +20,8 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
+using position_pair = thrust::pair<size_type, size_type>;
+
 /**
  * @brief Instantiated for each string to manage navigating tokens from
  * the beginning or the end of that string.
@@ -91,10 +93,7 @@ struct whitespace_string_tokenizer {
     return start_position < end_position;
   }
 
-  __device__ string_view get_token() const
-  {
-    return string_view{d_str.data() + start_position, end_position - start_position};
-  }
+  __device__ position_pair get_token() const { return position_pair{start_position, end_position}; }
 
   __device__ whitespace_string_tokenizer(string_view const& d_str, bool reverse = false)
     : d_str{d_str},

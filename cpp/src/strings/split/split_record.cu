@@ -197,29 +197,27 @@ struct whitespace_token_reader_fn {
     auto const d_str = d_strings.element<string_view>(idx);
     whitespace_string_tokenizer tokenizer(d_str, dir != Dir::FORWARD);
     size_type token_idx = 0;
-    string_view last_token{};
+    position_pair token{0, 0};
     if (dir == Dir::FORWARD) {
       while (tokenizer.next_token() && (token_idx < token_count)) {
-        last_token            = tokenizer.get_token();
-        d_result[token_idx++] = string_index_pair{last_token.data(), last_token.size_bytes()};
+        token = tokenizer.get_token();
+        d_result[token_idx++] =
+          string_index_pair{d_str.data() + token.first, token.second - token.first};
       }
       if (token_count == max_tokens) {
-        d_result[token_idx - 1] = string_index_pair{
-          last_token.data(),
-          static_cast<size_type>(d_str.data() + d_str.size_bytes() - last_token.data())};
+        d_result[token_idx - 1] =
+          string_index_pair{d_str.data() + token.first, d_str.size_bytes() - token.first};
       }
     } else {
       while (tokenizer.prev_token() && (token_idx < token_count)) {
-        last_token = tokenizer.get_token();
+        token = tokenizer.get_token();
         d_result[token_count - 1 - token_idx] =
-          string_index_pair{last_token.data(), last_token.size_bytes()};
+          string_index_pair{d_str.data() + token.first, token.second - token.first};
         ++token_idx;
       }
       if (token_count == max_tokens) {
         --token_idx;
-        d_result[token_count - 1 - token_idx] = string_index_pair{
-          d_str.data(),
-          static_cast<size_type>(last_token.data() + last_token.size_bytes() - d_str.data())};
+        d_result[token_count - 1 - token_idx] = string_index_pair{d_str.data(), token.second};
       }
     }
   }
