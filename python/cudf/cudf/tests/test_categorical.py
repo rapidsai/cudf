@@ -647,6 +647,7 @@ def test_astype_dtype(data, expected):
         (["a", "bd", "ef"], ["asdfsdf", "bddf", "eff"]),
         ([1, 2, 3], []),
         ([0.0, 6.7, 10.0], []),
+        (["a", "bd", "ef"], []),
     ],
 )
 def test_add_categories(data, add):
