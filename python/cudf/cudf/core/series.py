@@ -851,6 +851,8 @@ class Series(Frame, Serializable):
         -------
         list
         """
+        # TODO: Raise error as part
+        # of https://github.com/rapidsai/cudf/issues/5689
         return self.to_arrow().to_pylist()
 
     to_list = tolist
