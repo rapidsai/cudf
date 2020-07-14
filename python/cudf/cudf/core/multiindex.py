@@ -816,10 +816,6 @@ class MultiIndex(Index):
         ...     )
         >>> midx.values_host
         array([(1, 1), (1, 5), (3, 2), (4, 2), (5, 1)], dtype=object)
-        >>> type(values_host)
-        Traceback (most recent call last):
-        File "<stdin>", line 1, in <module>
-        NameError: name 'values_host' is not defined
         >>> type(midx.values_host)
         <class 'numpy.ndarray'>
         """
