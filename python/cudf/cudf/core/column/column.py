@@ -1631,7 +1631,9 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     data = as_column(
                         np.asarray(
                             arbitrary,
-                            dtype=dtype if dtype is None else np.dtype(dtype),
+                            dtype="object"
+                            if dtype is None
+                            else np.dtype(dtype),
                         ),
                         dtype=dtype,
                         nan_as_null=nan_as_null,

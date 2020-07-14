@@ -84,13 +84,12 @@ def test_column_series_multi_dim(data):
         cudf.core.column.as_column(data)
 
 
-@pytest.mark.parametrize("data", [["1.0", "2", -3], ["1", "0.11", 0.1]])
-def test_column_series_misc_input(data):
-    psr = pd.Series(data)
-    sr = cudf.Series(data)
-
-    assert_eq(psr.dtype, sr.dtype)
-    assert_eq(psr.astype("str"), sr)
+@pytest.mark.parametrize(
+    "data", [[1, "1.0", "2", -3], [np.nan, 0, "null", cp.nan]]
+)
+def test_column_mixed_dtype(data):
+    with pytest.raises(TypeError):
+        cudf.Series(data)
 
 
 @pytest.mark.parametrize("nan_as_null", [True, False])

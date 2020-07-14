@@ -723,6 +723,7 @@ class DataFrame(Frame, Serializable):
         sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
         if index:
             ind.append("Index")
+            ind = cudf.Index(ind, dtype="str")
             sizes.append(self.index.memory_usage(deep=deep))
         return Series(sizes, index=ind)
 
