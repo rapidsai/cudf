@@ -32,6 +32,7 @@
 - PR #5511 Port of clx subword tokenizer to cudf 
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
+- PR #5460 Add support to write to remote filesystems
 - PR #5454 Add support for `DataFrame.append`, `Index.append`, `Index.difference` and `Index.empty`
 - PR #5536 Parquet reader - add support for multiple sources
 - PR #5607 Add Java bindings for duration types
@@ -115,6 +116,7 @@
 - PR #5643 Update `isort` to 5.0.4
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
+- PR #5684 Use `pickle5` in `Serializable` (when available)
 
 ## Bug Fixes
 
