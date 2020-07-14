@@ -17,7 +17,7 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn -h"
+VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h"
 HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [-v] [-g] [-n] [-h] [-l]
    clean                - remove all existing build artifacts and configuration (start
                           over)
@@ -34,6 +34,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafk
    --allgpuarch         - build for all supported GPU architectures
    --disable_nvtx       - disable inserting NVTX profiling ranges
    --show_depr_warn     - show cmake deprecation warnings
+   --ptds               - enable per-thread default stream
    -h                   - print this text
 
    default action (no args) is to build and install 'libcudf' then 'cudf'
@@ -53,6 +54,7 @@ BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
 BUILD_TESTS=OFF
 BUILD_DISABLE_DEPRECATION_WARNING=ON
+BUILD_PER_THREAD_DEFAULT_STREAM=OFF
 BUILD_LIBCUDF_KAFKA=OFF
 
 # Set defaults for vars that may not have been defined externally
@@ -110,6 +112,9 @@ fi
 if hasArg --show_depr_warn; then
     BUILD_DISABLE_DEPRECATION_WARNING=OFF
 fi
+if hasArg --ptds; then
+    BUILD_PER_THREAD_DEFAULT_STREAM=ON
+fi
 if hasArg libcudf_kafka; then
     BUILD_LIBCUDF_KAFKA=ON
 fi
@@ -148,6 +153,7 @@ if buildAll || hasArg libcudf || hasArg libcudf_kafka; then
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
+          -DPER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
           -DBUILD_CUDF_KAFKA=${BUILD_LIBCUDF_KAFKA} $REPODIR/cpp
 fi

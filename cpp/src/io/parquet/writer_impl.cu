@@ -962,7 +962,11 @@ void writer::write_chunked(table_view const &table, pq_chunked_state &state)
 }
 
 // Forward to implementation
-void writer::write_chunked_end(pq_chunked_state &state) { _impl->write_chunked_end(state); }
+std::unique_ptr<std::vector<uint8_t>> writer::write_chunked_end(
+  pq_chunked_state &state, bool return_filemetadata, const std::string &metadata_out_file_path)
+{
+  return _impl->write_chunked_end(state, return_filemetadata, metadata_out_file_path);
+}
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>> &metadata_list)
