@@ -3,6 +3,8 @@
 """
 Test related to MultiIndex
 """
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -819,3 +821,21 @@ def test_multicolumn_set_item(pdf, pdfIndex):
     pdf["d"] = [1, 2, 3, 4, 5]
     gdf["d"] = [1, 2, 3, 4, 5]
     assert_eq(pdf, gdf)
+
+
+def test_multiindex_iter_error():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            f"{midx.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        ),
+    ):
+        iter(midx)

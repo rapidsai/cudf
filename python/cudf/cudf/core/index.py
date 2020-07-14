@@ -231,7 +231,7 @@ class Index(Frame, Serializable):
         Returns
         -------
         out : numpy.ndarray
-            The values of the Series.
+            The values of the Index.
 
         Examples
         --------
@@ -399,7 +399,7 @@ class Index(Frame, Serializable):
         -------
         list
         """
-        # TODO: Throw error as part
+        # TODO: Raise error as part
         # of https://github.com/rapidsai/cudf/issues/5689
         return self.to_arrow().to_pylist()
 

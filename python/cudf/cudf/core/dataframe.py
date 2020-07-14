@@ -211,10 +211,8 @@ class DataFrame(Frame, Serializable):
             else:
                 self._index = as_index(index)
             if columns is not None:
-                if isinstance(
-                    columns, (cudf.Series, cudf.Index)
-                ) and not isinstance(columns, (cudf.MultiIndex)):
-                    columns = columns.to_list()
+                if isinstance(columns, (cudf.Series, cudf.Index)):
+                    columns = columns.to_pandas()
 
                 self._data = ColumnAccessor(
                     OrderedDict.fromkeys(

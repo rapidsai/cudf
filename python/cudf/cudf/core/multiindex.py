@@ -667,16 +667,7 @@ class MultiIndex(Index):
         return MultiIndex(names=names, source_data=source_data)
 
     def __iter__(self):
-        self.n = 0
-        return self
-
-    def __next__(self):
-        if self.n < len(self.codes):
-            result = self[self.n]
-            self.n += 1
-            return result
-        else:
-            raise StopIteration
+        cudf.utils.utils.raise_iteration_error(obj=self)
 
     def __getitem__(self, index):
         # TODO: This should be a take of the _source_data only
@@ -783,6 +774,87 @@ class MultiIndex(Index):
         pdi = pd.MultiIndex.from_tuples(tuples, names=names)
         result = cls.from_pandas(pdi)
         return result
+
+    def to_arrow(self):
+        """
+        Convert to a PyArrow Table.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(
+        ...         levels=[[1, 3, 4, 5], [1, 2, 5]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...     )
+        >>> midx.to_arrow()
+        pyarrow.Table
+        x: int64
+        y: int64
+        """
+        return self._source_data.to_arrow()
+
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the MultiIndex.
+
+        Only the values in the MultiIndex will be returned.
+
+        Returns
+        -------
+        out : numpy.ndarray
+            The values of the MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(
+        ...         levels=[[1, 3, 4, 5], [1, 2, 5]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...     )
+        >>> midx.values_host
+        array([(1, 1), (1, 5), (3, 2), (4, 2), (5, 1)], dtype=object)
+        >>> type(values_host)
+        Traceback (most recent call last):
+        File "<stdin>", line 1, in <module>
+        NameError: name 'values_host' is not defined
+        >>> type(midx.values_host)
+        <class 'numpy.ndarray'>
+        """
+        return self.to_pandas().values
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the MultiIndex.
+
+        Only the values in the MultiIndex will be returned.
+
+        Returns
+        -------
+        out: cupy.ndarray
+            The values of the MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(
+        ...         levels=[[1, 3, 4, 5], [1, 2, 5]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...     )
+        >>> midx.values
+        array([[1, 1],
+            [1, 5],
+            [3, 2],
+            [4, 2],
+            [5, 1]])
+        >>> type(midx.values)
+        <class 'cupy.core.core.ndarray'>
+        """
+        return self._source_data.values
 
     @classmethod
     def from_frame(cls, dataframe, names=None):
