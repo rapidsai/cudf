@@ -108,11 +108,13 @@
 - PR #5562 Add missing join type for java
 - PR #5584 Refactor `CompactProtocolReader::InitSchema`
 - PR #5591 Add `__arrow_array__` protocol and raise a descriptive error message
+- PR #5635 Ad cuIO reader benchmarks for CSV, ORC and Parquet
 - PR #5601 Instantiate Table instances in `Frame._concat` to avoid `DF.insert()` overhead
 - PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
 - PR #5603 Refactor JIT `parser.cpp`
 - PR #5643 Update `isort` to 5.0.4
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
+- PR #5679 Use `pickle5` to test older Python versions
 
 ## Bug Fixes
 
