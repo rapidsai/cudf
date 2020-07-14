@@ -81,13 +81,15 @@ struct token_reader_fn {
                                              size_type end_pos,
                                              size_type delimiter_pos) const
   {
-    auto const src_byte_offset = dir == Dir::FORWARD
-                                   ? d_str.byte_offset(start_pos)
-                                   : d_str.byte_offset(delimiter_pos + d_delimiter.length());
-    auto const token_char_bytes = dir == Dir::FORWARD
-                                    ? d_str.byte_offset(delimiter_pos) - src_byte_offset
-                                    : d_str.byte_offset(end_pos) - src_byte_offset;
-    return string_index_pair{d_str.data() + src_byte_offset, token_char_bytes};
+    if (dir == Dir::FORWARD) {
+      auto const byte_offset = d_str.byte_offset(start_pos);
+      return string_index_pair{d_str.data() + byte_offset,
+                               d_str.byte_offset(delimiter_pos) - byte_offset};
+    } else {
+      auto const byte_offset = d_str.byte_offset(delimiter_pos + d_delimiter.length());
+      return string_index_pair{d_str.data() + byte_offset,
+                               d_str.byte_offset(end_pos) - byte_offset};
+    }
   }
 
   __device__ void operator()(size_type idx)
@@ -194,10 +196,8 @@ struct whitespace_token_reader_fn {
         d_result[token_idx++] =
           string_index_pair{d_str.data() + token.first, token.second - token.first};
       }
-      if (token_count == max_tokens) {
-        d_result[token_idx - 1] =
-          string_index_pair{d_str.data() + token.first, d_str.size_bytes() - token.first};
-      }
+      --token_idx;
+      token.second = d_str.size_bytes() - token.first;
     } else {
       while (tokenizer.prev_token() && (token_idx < token_count)) {
         token = tokenizer.get_token();
@@ -205,11 +205,12 @@ struct whitespace_token_reader_fn {
           string_index_pair{d_str.data() + token.first, token.second - token.first};
         ++token_idx;
       }
-      if (token_count == max_tokens) {
-        --token_idx;
-        d_result[token_count - 1 - token_idx] = string_index_pair{d_str.data(), token.second};
-      }
+      token_idx   = token_count - token_idx;  // token_count - 1 - (token_idx-1)
+      token.first = 0;
     }
+    // reset last token only if we hit the max
+    if (token_count == max_tokens)
+      d_result[token_idx] = string_index_pair{d_str.data() + token.first, token.second};
   }
 };
 
