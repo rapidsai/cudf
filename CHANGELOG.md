@@ -170,12 +170,14 @@
 - PR #5619 Fix issue related to typecasting when using a `CategoricalDtype`
 - PR #5649 Fix issue when empty Dataframe with index are passed to `cudf.concat`
 - PR #5644 Fix issue related to Dataframe init when passing in `columns`
+- PR #5663 Move Duration types under Timestamps in doxygen Modules page
 - PR #5664 Update conda upload versions for new supported CUDA/Python
 - PR #5656 Fix issue with incorrect docker image being used in local build script
 - PR #5671 Fix chunksize issue with `DataFrame.to_csv`
 - PR #5672 Fix crash in parquet writer while writing large string data
 
-# cuDF 0.14.0 (Date TBD)
+
+# cuDF 0.14.0 (03 Jun 2020)
 
 ## New Features
 
