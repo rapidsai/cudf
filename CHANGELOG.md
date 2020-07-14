@@ -116,6 +116,7 @@
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
+- PR #5687 Change strings::split_record to return a lists column
 
 ## Bug Fixes
 
