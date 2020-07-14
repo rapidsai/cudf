@@ -954,8 +954,6 @@ class Series(Frame, Serializable):
         return self.to_string()
 
     def __repr__(self):
-        # max_rows = pd.options.display.max_rows
-
         width, height = get_terminal_size()
         max_rows = (
             height

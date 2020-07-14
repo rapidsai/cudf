@@ -2080,9 +2080,8 @@ class StringIndex(GenericIndex):
 
     def __repr__(self):
         return (
-            "{}({}, dtype='object'".format(
-                self.__class__.__name__, self._values.to_array()
-            )
+            f"{self.__class__.__name__}({self._values.to_array()},"
+            f" dtype='object'"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"
                 if self.name is not None

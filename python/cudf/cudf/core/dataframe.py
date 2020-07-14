@@ -298,7 +298,6 @@ class DataFrame(Frame, Serializable):
 
                 # Simple example
                 # >>> import pandas as pd
-                # >>> s = pd.DataFrame([1, 2, 3])
                 # >>> s = pd.Series([1, 2, 3])
                 # >>> pd.DataFrame([s], index=['a', 'b'])
                 #    0  1  2
