@@ -16,7 +16,7 @@ from cudf.utils.dtypes import (
     min_signed_type,
     np_to_pa_dtype,
     numeric_normalize_types,
-    _pd_nullable_dtypes_to_cudf_dtypes,
+    pd_dtype_from_cudf_dtype
 )
 
 
@@ -162,14 +162,16 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.unary.cast(self, dtype)
 
     def to_pandas(self, index=None):
-        if self.has_nulls:
-            host_dtype = {
-                v: k for k, v in _pd_nullable_dtypes_to_cudf_dtypes.items()
-            }.get(self.dtype, self.dtype)
-        else:
-            host_dtype = self.dtype
 
-        result = self.to_arrow().to_pandas().astype(host_dtype)
+        arrow_data = self.to_arrow()
+        host_dtype = pd_dtype_from_cudf_dtype(self.dtype, has_nulls=self.has_nulls)
+        if hasattr(host_dtype, "__from_arrow__"):
+            pandas_array = host_dtype.__from_arrow__(arrow_data)
+
+        else:
+            pandas_array = arrow_data.to_pandas()
+
+        result = pd.Series(pandas_array, copy=True)
         if index is not None:
             result.index = index
         return result

@@ -113,7 +113,8 @@ def demote_series_dtype(sr):
     NA value
     """
     in_dtype = sr.dtype
-    out_dtype = dtypeutils._pd_nullable_dtypes_to_cudf_dtypes.get(sr.dtype, sr.dtype)
+    dtype_map = {v:k for k, v in dtypeutils.cudf_dtypes_to_pandas_dtypes.items()}
+    out_dtype = dtype_map.get(sr.dtype, sr.dtype)
 
     if out_dtype.kind in ('i', 'u'):
         min_int = np.iinfo(out_dtype).min
