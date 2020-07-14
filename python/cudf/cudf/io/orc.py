@@ -1,4 +1,5 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+
 import warnings
 
 import pyarrow as pa
@@ -42,7 +43,7 @@ def read_orc(
     from cudf import DataFrame
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        filepath_or_buffer, None, **kwargs
+        path_or_data=filepath_or_buffer, compression=None, **kwargs
     )
     if compression is not None:
         ValueError("URL content-encoding decompression is not supported")
@@ -77,7 +78,15 @@ def read_orc(
 
 
 @ioutils.doc_to_orc()
-def to_orc(df, fname, compression=None, enable_statistics=False):
+def to_orc(df, fname, compression=None, enable_statistics=False, **kwargs):
     """{docstring}"""
 
-    libcudf.orc.write_orc(df, fname, compression, enable_statistics)
+    path_or_buf = ioutils.get_writer_filepath_or_buffer(
+        path_or_data=fname, mode="wb", **kwargs
+    )
+    if ioutils.is_fsspec_open_file(path_or_buf):
+        with path_or_buf as file_obj:
+            file_obj = ioutils.get_IOBase_writer(file_obj)
+            libcudf.orc.write_orc(df, file_obj, compression, enable_statistics)
+    else:
+        libcudf.orc.write_orc(df, path_or_buf, compression, enable_statistics)
