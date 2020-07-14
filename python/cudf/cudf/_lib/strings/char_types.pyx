@@ -30,9 +30,11 @@ def filter_alphanum(Column source_strings, Scalar repl, bool keep=True):
     with nogil:
         c_result = move(cpp_filter_characters_of_type(
             source_view,
-            string_character_types.ALL_TYPES if keep else string_character_types.ALPHANUM,
+            string_character_types.ALL_TYPES if keep 
+            else string_character_types.ALPHANUM,
             scalar_repl[0],
-            string_character_types.ALPHANUM if keep else string_character_types.ALL_TYPES
+            string_character_types.ALPHANUM if keep 
+            else string_character_types.ALL_TYPES
         ))
 
     return Column.from_unique_ptr(move(c_result))
