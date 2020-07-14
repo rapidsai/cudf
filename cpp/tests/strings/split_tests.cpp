@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -444,8 +444,6 @@ TEST_F(StringsSplitTest, RSplitRecordWhitespaceWithMaxSplit)
   auto result =
     cudf::strings::rsplit_record(cudf::strings_column_view(strings), cudf::string_scalar(""), 1);
   cudf::lists_column_view lcv(result->view());
-  cudf::test::print(lcv.offsets());
-  cudf::test::print(lcv.child());
   cudf::test::expect_columns_equal(lcv.child(), expected);
   cudf::test::expect_columns_equal(lcv.offsets(), offsets);
 }
