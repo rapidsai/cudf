@@ -240,7 +240,7 @@ class Index(Frame, Serializable):
         >>> index.values_host
         array([  1, -10, 100,  20])
         >>> type(index.values_host)
-        <class 'cupy.core.core.ndarray'>
+        <class 'numpy.ndarray'>
         """
         return self._values.values_host
 
