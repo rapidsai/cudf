@@ -117,7 +117,7 @@ class concurrent_unordered_multimap {
                                                Allocator,
                                                count_collisions>;
 
-    auto deleter = [stream](Self* p) { p->destroy(stream); };
+    auto deleter = [stream](Self* p) { (*p).destroy(stream); };
 
     return std::unique_ptr<Self, std::function<void(Self*)>>{
       new Self(capacity, init, hash_function, equal, allocator, stream), deleter};
