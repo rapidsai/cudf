@@ -1119,6 +1119,13 @@ def test_csv_reader_index_col():
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=0)
     assert_eq(cu_df.index, pd_df.index)
 
+    # using a column index with names
+    cu_df = read_csv(StringIO(buffer), header=None, index_col=0, names=names)
+    pd_df = pd.read_csv(
+        StringIO(buffer), header=None, index_col=0, names=names
+    )
+    assert_eq(cu_df.index, pd_df.index)
+
     # passing False to avoid using a column as index (no-op in cuDF)
     cu_df = read_csv(StringIO(buffer), header=None, index_col=False)
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
