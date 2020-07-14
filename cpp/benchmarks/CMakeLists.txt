@@ -191,6 +191,30 @@ set(PARQUET_WRITER_CHUNKS_BENCH_SRC
 ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH "${PARQUET_WRITER_CHUNKS_BENCH_SRC}")
 
 ###################################################################################################
+# - parquet reader benchmark ----------------------------------------------------------------------
+
+set(PARQUET_READER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_reader_benchmark.cpp")
+
+ConfigureBench(PARQUET_READER_BENCH "${PARQUET_READER_BENCH_SRC}")
+
+###################################################################################################
+# - orc reader benchmark --------------------------------------------------------------------------
+
+set(ORC_READER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_reader_benchmark.cpp")
+
+ConfigureBench(ORC_READER_BENCH "${ORC_READER_BENCH_SRC}")
+
+###################################################################################################
+# - csv reader benchmark --------------------------------------------------------------------------
+
+set(CSV_READER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_reader_benchmark.cpp")
+
+ConfigureBench(CSV_READER_BENCH "${CSV_READER_BENCH_SRC}")
+
+###################################################################################################
 # - parquet writer benchmark -----------------------------------------------------------------------------
 
 set(PARQUET_WRITER_BENCH_SRC
