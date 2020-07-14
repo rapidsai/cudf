@@ -5248,9 +5248,9 @@ class DataFrame(Frame, Serializable):
         >>> import cudf
         >>> import numpy as np
         >>> df = cudf.DataFrame({"Person":
-                   ["John", "Myla", "Lewis", "John", "Myla"],
-                   "Age": [24., np.nan, 21., 33, 26],
-                   "Single": [False, True, True, True, False]})
+        ...                     ["John", "Myla", "Lewis", "John", "Myla"],
+        ...                     "Age": [24., np.nan, 21., 33, 26],
+        ...                     "Single": [False, True, True, True, False]})
         >>> df.count()
         Person    5
         Age       4

@@ -168,6 +168,7 @@
 - PR #5656 Fix issue with incorrect docker image being used in local build script
 - PR #5671 Fix chunksize issue with `DataFrame.to_csv`
 - PR #5672 Fix crash in parquet writer while writing large string data
+- PR #5691 Raise error on incompatible mixed-type input for a column
 
 # cuDF 0.14.0 (Date TBD)
 
