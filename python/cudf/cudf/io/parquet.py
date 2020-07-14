@@ -1,7 +1,6 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import warnings
-from io import BufferedWriter, IOBase
 
 from fsspec.core import get_fs_token_paths
 from pyarrow import parquet as pq
@@ -114,8 +113,7 @@ def write_to_dataset(
             write_df = sub_df.copy(deep=False)
             write_df.drop(columns=partition_cols, inplace=True)
             with fs.open(full_path, mode="wb") as fil:
-                if not isinstance(fil, IOBase):
-                    fil = BufferedWriter(fil)
+                fil = ioutils.get_IOBase_writer(fil)
                 if return_metadata:
                     metadata.append(
                         write_df.to_parquet(
