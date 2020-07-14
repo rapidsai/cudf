@@ -67,7 +67,7 @@ class GroupBy(Serializable):
         if isinstance(group_names, cudf.Index) and not isinstance(
             group_names, cudf.MultiIndex
         ):
-            group_names = group_names.to_list()
+            group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
 
