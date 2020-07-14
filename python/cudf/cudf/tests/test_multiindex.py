@@ -5,6 +5,7 @@ Test related to MultiIndex
 """
 import re
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -839,3 +840,29 @@ def test_multiindex_iter_error():
         ),
     ):
         iter(midx)
+
+
+def test_multiindex_values():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+
+    result = midx.values
+
+    assert isinstance(result, cp.ndarray)
+    np.testing.assert_array_equal(
+        result.get(), np.array([[1, 1], [1, 5], [3, 2], [4, 2], [5, 1]])
+    )
+
+
+def test_multiindex_values_host():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    pmidx = midx.to_pandas()
+
+    assert_eq(midx.values_host, pmidx.values)
