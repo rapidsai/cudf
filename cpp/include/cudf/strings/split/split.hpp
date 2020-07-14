@@ -82,82 +82,69 @@ std::unique_ptr<table> rsplit(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief The result(s) of a `contiguous_(r)split_record`
+ * @brief Splits individual strings elements in to a list of tokens.
  *
- * Each column_view resulting from a split operation performed by
- * contiguous_split_record will be returned wrapped in a
- * `contiguous_split_record_result`. The column data addresses stored in the
- * column_view objects are not owned by top level cudf::column objects. The
- * backing memory is instead owned by the `all_data` field and in one contiguous
- * block.
+ * Each element generates an array of tokens that are stored in a
+ * resulting list column.
  *
- * The user is responsible for assuring that the `column_views` or any derived
- * objects do not outlive the memory owned by `all_data`
- */
-struct contiguous_split_record_result {
-  std::vector<column_view> column_views;
-  std::unique_ptr<rmm::device_buffer> all_data;
-};
-
-/**
- * @brief Splits each element of the input column to a column of tokens storing
- * the resulting columns in a single contiguous block of memory.
+ * The number of elements in the output list will be the same as the number of
+ * elements in the input column. Each individual list item will contain the
+ * tokens for that row. The resulting number of tokens in each row can vary
+ * from 0 to `maxsplit+1`.
  *
- * This function splits each element in the input column to a column of tokens.
- * The number of columns in the output vector will be the same as the number of
- * elements in the input column. The column length will coincide with the
- * number of tokens; the resulting columns wrapped in the returned object may
- * have different sizes.
+ * The `delimiter` is searched within each string from beginning to end
+ * and splitting stops when either `maxsplit` or the end of the string is reached.
  *
- * Splitting a null string element will result in an empty output column.
+ * A null string element will result in a null list item for that row.
  *
- * @throws cudf:logic_error if `delimiter` is invalid.
+ * @throw cudf:logic_error if `delimiter` is invalid.
  *
  * @param strings A column of string elements to be splitted.
- * @param delimiter UTF-8 encoded string indicating the split points in each
- *        string.
+ * @param delimiter The string to identify split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
  * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return contiguous_split_record_result New vector of strings column_view
- *         objects
- *         (each column_view element of the vector holds splits from a string
- *         element of the input column).
+ * @return List column of strings
+ *         Each vector of the list column holds splits from a single row
+ *         element of the input column.
  */
-contiguous_split_record_result contiguous_split_record(
+std::unique_ptr<column> split_record(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Splits each element of the input column from the end to a column of
- * tokens storing the resulting columns in a single contiguous block of memory.
+ * @brief  Splits individual strings elements in to a list of tokens starting
+ * from the end of each string.
  *
- * This function splits each element in the input column to a column of tokens.
- * The number of columns in the output vector will be the same as the number of
- * elements in the input column. The column length will coincide with the
- * number of tokens; the resulting columns wrapped in the returned object may
- * have different sizes.
+ * Each element generates an array of tokens that are stored in a
+ * resulting list column.
  *
- * Splitting a null string element will result in an empty output column.
+ * The number of elements in the output list will be the same as the number of
+ * elements in the input column. Each individual list item will contain the
+ * tokens for that row. The resulting number of tokens in each row can vary
+ * from 0 to `maxsplit+1`.
  *
- * @throws cudf:logic_error if `delimiter` is invalid.
+ * The `delimiter` is searched from end to beginning within each string
+ * and splitting stops when either `maxsplit` or the end of the string is reached.
+ *
+ * A null string element will result in a null list item for that row.
+ *
+ * @throw cudf:logic_error if `delimiter` is invalid.
  *
  * @param strings A column of string elements to be splitted.
- * @param delimiter UTF-8 encoded string indicating the split points in each
- *        string.
+ * @param delimiter The string to identify split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
  * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return contiguous_split_record_result New vector of strings column_view
- *         objects
- *         (each column_view element of the vector holds splits from a string
- *         element of the input column).
+ * @return List column of strings
+ *         Each vector of the list column holds splits from a single row
+ *         element of the input column.
  */
-contiguous_split_record_result contiguous_rsplit_record(
+std::unique_ptr<column> rsplit_record(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
