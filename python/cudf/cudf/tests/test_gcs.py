@@ -1,7 +1,12 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import io
+import os
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.orc
 import pytest
 
 import cudf
@@ -24,9 +29,9 @@ def pdf(scope="module"):
     return df
 
 
-def test_csv(pdf, monkeypatch):
+def test_read_csv(pdf, monkeypatch):
     # Write to buffer
-    fpath = TEST_BUCKET + "file.csv"
+    fpath = TEST_BUCKET + "test_csv_reader.csv"
     buffer = pdf.to_csv(index=False)
 
     def mock_open(*args):
@@ -35,4 +40,19 @@ def test_csv(pdf, monkeypatch):
     monkeypatch.setattr(gcsfs.core.GCSFileSystem, "open", mock_open)
     got = cudf.read_csv("gcs://{}".format(fpath))
 
+    assert_eq(pdf, got)
+
+
+def test_write_orc(pdf, monkeypatch, tmpdir):
+    gcs_fname = TEST_BUCKET + "test_orc_writer.orc"
+    local_filepath = os.path.join(tmpdir, "test_orc.orc")
+    gdf = cudf.from_pandas(pdf)
+
+    def mock_open(*args, **kwargs):
+        return open(local_filepath, "wb")
+
+    monkeypatch.setattr(gcsfs.core.GCSFileSystem, "open", mock_open)
+    gdf.to_orc("gcs://{}".format(gcs_fname))
+
+    got = pa.orc.ORCFile(local_filepath).read().to_pandas()
     assert_eq(pdf, got)
