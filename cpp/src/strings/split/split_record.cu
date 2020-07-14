@@ -40,8 +40,10 @@ enum class Dir { FORWARD, BACKWARD };
 
 /**
  * @brief Compute the number of tokens for the `idx'th` string element of `d_strings`.
+ *
+ * The number of tokens is the same regardless if counting from the beginning
+ * or the end of the string.
  */
-template <Dir dir>
 struct token_counter_fn {
   column_device_view const d_strings;  // strings to split
   string_view const d_delimiter;       // delimiter for split
@@ -53,17 +55,12 @@ struct token_counter_fn {
 
     auto const d_str      = d_strings.element<string_view>(idx);
     size_type token_count = 0;
-    size_type start_pos   = 0;               // updates only if moving forward
-    size_type end_pos     = d_str.length();  // updates only if moving backward
+    size_type start_pos   = 0;
     while (token_count < max_tokens - 1) {
-      auto const delimiter_pos = dir == Dir::FORWARD ? d_str.find(d_delimiter, start_pos)
-                                                     : d_str.rfind(d_delimiter, start_pos, end_pos);
+      auto const delimiter_pos = d_str.find(d_delimiter, start_pos);
       if (delimiter_pos < 0) break;
       token_count++;
-      if (dir == Dir::FORWARD)
-        start_pos = delimiter_pos + d_delimiter.length();
-      else
-        end_pos = delimiter_pos;
+      start_pos = delimiter_pos + d_delimiter.length();
     }
     return token_count + 1;  // always at least one token
   }
@@ -79,27 +76,18 @@ struct token_reader_fn {
   int32_t* d_token_offsets{};          // for locating tokens in d_tokens
   string_index_pair* d_tokens{};
 
-  template <bool last>
   __device__ string_index_pair resolve_token(string_view const& d_str,
                                              size_type start_pos,
                                              size_type end_pos,
                                              size_type delimiter_pos) const
   {
-    if (last) {
-      auto const src_byte_offset  = dir == Dir::FORWARD ? d_str.byte_offset(start_pos) : 0;
-      auto const token_char_bytes = dir == Dir::FORWARD
-                                      ? d_str.byte_offset(end_pos) - src_byte_offset
-                                      : d_str.byte_offset(end_pos);
-      return string_index_pair{d_str.data() + src_byte_offset, token_char_bytes};
-    } else {
-      auto const src_byte_offset = dir == Dir::FORWARD
-                                     ? d_str.byte_offset(start_pos)
-                                     : d_str.byte_offset(delimiter_pos + d_delimiter.length());
-      auto const token_char_bytes = dir == Dir::FORWARD
-                                      ? d_str.byte_offset(delimiter_pos) - src_byte_offset
-                                      : d_str.byte_offset(end_pos) - src_byte_offset;
-      return string_index_pair{d_str.data() + src_byte_offset, token_char_bytes};
-    }
+    auto const src_byte_offset = dir == Dir::FORWARD
+                                   ? d_str.byte_offset(start_pos)
+                                   : d_str.byte_offset(delimiter_pos + d_delimiter.length());
+    auto const token_char_bytes = dir == Dir::FORWARD
+                                    ? d_str.byte_offset(delimiter_pos) - src_byte_offset
+                                    : d_str.byte_offset(end_pos) - src_byte_offset;
+    return string_index_pair{d_str.data() + src_byte_offset, token_char_bytes};
   }
 
   __device__ void operator()(size_type idx)
@@ -111,6 +99,7 @@ struct token_reader_fn {
     auto d_result           = d_tokens + token_offset;
     auto const d_str        = d_strings.element<string_view>(idx);
     if (d_str.empty()) {
+      // Pandas str.split("") for non-whitespace delimiter is an empty string
       *d_result = string_index_pair{"", 0};
       return;
     }
@@ -122,24 +111,25 @@ struct token_reader_fn {
       auto const delimiter_pos = dir == Dir::FORWARD ? d_str.find(d_delimiter, start_pos)
                                                      : d_str.rfind(d_delimiter, start_pos, end_pos);
       if (delimiter_pos < 0) break;
-      auto const token = resolve_token<false>(d_str, start_pos, end_pos, delimiter_pos);
-      if (dir == Dir::FORWARD)
+      auto const token = resolve_token(d_str, start_pos, end_pos, delimiter_pos);
+      if (dir == Dir::FORWARD) {
         d_result[token_idx] = token;
-      else
+        start_pos           = delimiter_pos + d_delimiter.length();
+      } else {
         d_result[token_count - 1 - token_idx] = token;
-
+        end_pos                               = delimiter_pos;
+      }
       token_idx++;
-      if (dir == Dir::FORWARD)
-        start_pos = delimiter_pos + d_delimiter.length();
-      else
-        end_pos = delimiter_pos;
     }
 
-    auto const last_token = resolve_token<true>(d_str, start_pos, end_pos, -1);
-    if (dir == Dir::FORWARD)
-      d_result[token_idx] = last_token;
-    else
-      d_result[0] = last_token;
+    // set last token to remainder of the string
+    if (dir == Dir::FORWARD) {
+      auto const offset_bytes = d_str.byte_offset(start_pos);
+      d_result[token_idx] =
+        string_index_pair{d_str.data() + offset_bytes, d_str.byte_offset(end_pos) - offset_bytes};
+    } else {
+      d_result[0] = string_index_pair{d_str.data(), d_str.byte_offset(end_pos)};
+    }
   }
 };
 
@@ -289,7 +279,7 @@ std::unique_ptr<column> split_record(
   } else {
     string_view d_delimiter(delimiter.data(), delimiter.size());
     return split_record_fn(strings,
-                           token_counter_fn<dir>{*d_strings_column_ptr, d_delimiter, max_tokens},
+                           token_counter_fn{*d_strings_column_ptr, d_delimiter, max_tokens},
                            token_reader_fn<dir>{*d_strings_column_ptr, d_delimiter},
                            mr,
                            stream);
