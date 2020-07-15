@@ -27,9 +27,8 @@
 #include <vector>
 
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/iterator/transform_input_output_iterator.h>
 #include <thrust/transform.h>
-#include "transform_mutable_iterator.h"
 
 using namespace numeric;
 
@@ -569,7 +568,7 @@ class ColumnLike {
   }
 
   auto begin() {
-    return thrust::make_transform_mutable_iterator(_data.begin(),
+    return thrust::make_transform_input_output_iterator(_data.begin(),
       RepToFP<Rep, Rad>{_scale}, FPToRep<Rep, Rad>{_scale});
   }
 
@@ -615,7 +614,7 @@ class DeviceColumnLike {
   }
 
   auto begin() {
-    return thrust::make_transform_mutable_iterator(_data.begin(),
+    return thrust::make_transform_input_output_iterator(_data.begin(),
       RepToFP<Rep, Rad>{_scale}, FPToRep<Rep, Rad>{_scale});
   }
 
