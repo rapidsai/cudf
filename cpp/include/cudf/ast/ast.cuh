@@ -30,6 +30,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <functional>
 #include <iterator>
+#include <rmm/device_uvector.hpp>
 #include <type_traits>
 #include "operators.cuh"
 
@@ -635,12 +636,30 @@ std::unique_ptr<column> compute_column(
 
   // Create device data
   nvtxRangePush("Creating device data...");
-  auto device_data_references = rmm::device_vector<detail::device_data_reference>(data_references);
+  auto device_data_references =
+    rmm::device_uvector<detail::device_data_reference>(data_references.size(), stream);
+  CUDA_TRY(cudaMemcpyAsync(device_data_references.data(),
+                           data_references.data(),
+                           sizeof(detail::device_data_reference) * data_references.size(),
+                           cudaMemcpyHostToDevice,
+                           stream));
   // TODO: Literals
   // auto device_literals = thrust::device_vector<const scalar>();
-  auto device_operators = rmm::device_vector<cudf::ast::ast_operator>(operators);
+  auto device_operators = rmm::device_uvector<cudf::ast::ast_operator>(operators.size(), stream);
+  CUDA_TRY(cudaMemcpyAsync(device_operators.data(),
+                           operators.data(),
+                           sizeof(cudf::ast::ast_operator) * operators.size(),
+                           cudaMemcpyHostToDevice,
+                           stream));
   auto device_operator_source_indices =
-    rmm::device_vector<cudf::size_type>(operator_source_indices);
+    rmm::device_uvector<cudf::size_type>(operator_source_indices.size(), stream);
+  CUDA_TRY(cudaMemcpyAsync(device_operator_source_indices.data(),
+                           operator_source_indices.data(),
+                           sizeof(cudf::size_type) * operator_source_indices.size(),
+                           cudaMemcpyHostToDevice,
+                           stream));
+  // The stream is synced later when the table_device_view is created.
+  // CUDA_TRY(cudaStreamSynchronize(stream));
   nvtxRangePop();
 
   // Output linearizer info
