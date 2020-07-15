@@ -32,6 +32,7 @@
 - PR #5511 Port of clx subword tokenizer to cudf 
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
+- PR #5460 Add support to write to remote filesystems
 - PR #5454 Add support for `DataFrame.append`, `Index.append`, `Index.difference` and `Index.empty`
 - PR #5536 Parquet reader - add support for multiple sources
 - PR #5607 Add Java bindings for duration types
@@ -115,6 +116,7 @@
 - PR #5643 Update `isort` to 5.0.4
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
+- PR #5684 Use `pickle5` in `Serializable` (when available)
 
 ## Bug Fixes
 
@@ -168,12 +170,14 @@
 - PR #5619 Fix issue related to typecasting when using a `CategoricalDtype`
 - PR #5649 Fix issue when empty Dataframe with index are passed to `cudf.concat`
 - PR #5644 Fix issue related to Dataframe init when passing in `columns`
+- PR #5663 Move Duration types under Timestamps in doxygen Modules page
 - PR #5664 Update conda upload versions for new supported CUDA/Python
 - PR #5656 Fix issue with incorrect docker image being used in local build script
 - PR #5671 Fix chunksize issue with `DataFrame.to_csv`
 - PR #5672 Fix crash in parquet writer while writing large string data
+- PR #5693 Add fix missing from PR 5656 to update local docker image to py3.7
 
-# cuDF 0.14.0 (Date TBD)
+# cuDF 0.14.0 (03 Jun 2020)
 
 ## New Features
 
