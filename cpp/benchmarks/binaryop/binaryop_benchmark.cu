@@ -42,18 +42,19 @@ enum class TreeType {
                    // child column reference
 };
 
-template <typename key_type, TreeType tree_type>
+template <typename key_type, TreeType tree_type, bool reuse_columns>
 class BINARYOP : public cudf::benchmark {
 };
 
-template <typename key_type, TreeType tree_type>
+template <typename key_type, TreeType tree_type, bool reuse_columns>
 static void BM_binaryop_transform(benchmark::State& state)
 {
   const cudf::size_type table_size{(cudf::size_type)state.range(0)};
   const cudf::size_type tree_levels = (cudf::size_type)state.range(1);
 
   // Create table data
-  auto n_cols = (tree_type == TreeType::FULL_COMPLETE) ? 2 << tree_levels : tree_levels + 1;
+  auto n_cols =
+    reuse_columns ? 1 : (tree_type == TreeType::FULL_COMPLETE) ? 2 << tree_levels : tree_levels + 1;
   auto column_wrappers = std::vector<cudf::test::fixed_width_column_wrapper<key_type>>();
   auto columns         = std::vector<cudf::column_view>(n_cols);
 
@@ -78,10 +79,17 @@ static void BM_binaryop_transform(benchmark::State& state)
       // Execute tree that chains additions like (((a + b) + c) + d)
       auto op               = cudf::binary_operator::ADD;
       auto result_data_type = cudf::data_type(cudf::type_to_id<key_type>());
-      auto result = cudf::binary_operation(columns.at(0), columns.at(1), op, result_data_type);
-      std::for_each(std::next(columns.cbegin(), 2), columns.cend(), [&](auto const& col) {
-        result = cudf::binary_operation(result->view(), col, op, result_data_type);
-      });
+      if (reuse_columns) {
+        auto result = cudf::binary_operation(columns.at(0), columns.at(0), op, result_data_type);
+        for (cudf::size_type i = 0; i < tree_levels - 1; i++) {
+          result = cudf::binary_operation(result->view(), columns.at(0), op, result_data_type);
+        }
+      } else {
+        auto result = cudf::binary_operation(columns.at(0), columns.at(1), op, result_data_type);
+        std::for_each(std::next(columns.cbegin(), 2), columns.cend(), [&](auto const& col) {
+          result = cudf::binary_operation(result->view(), col, op, result_data_type);
+        });
+      }
     }
   }
 
@@ -89,28 +97,230 @@ static void BM_binaryop_transform(benchmark::State& state)
                           sizeof(key_type));
 }
 
-#define BINARYOP_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type) \
-  BENCHMARK_TEMPLATE_DEFINE_F(BINARYOP, name, key_type, tree_type)     \
-  (::benchmark::State & st) { BM_binaryop_transform<key_type, tree_type>(st); }
+#define BINARYOP_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns) \
+  BENCHMARK_TEMPLATE_DEFINE_F(BINARYOP, name, key_type, tree_type, reuse_columns)     \
+  (::benchmark::State & st) { BM_binaryop_transform<key_type, tree_type, reuse_columns>(st); }
 
-BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_int32_full, int32_t, TreeType::FULL_COMPLETE);
-BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_int64_full, int64_t, TreeType::FULL_COMPLETE);
-BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_float_full, float, TreeType::FULL_COMPLETE);
-BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_double_full, double, TreeType::FULL_COMPLETE);
-BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_int32_imbalanced, int32_t, TreeType::IMBALANCED_LEFT);
-BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_int64_imbalanced, int64_t, TreeType::IMBALANCED_LEFT);
-BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_float_imbalanced, float, TreeType::IMBALANCED_LEFT);
-BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_double_imbalanced, double, TreeType::IMBALANCED_LEFT);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_int32_full_unique,
+                                    int32_t,
+                                    TreeType::FULL_COMPLETE,
+                                    false);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_int64_full_unique,
+                                    int64_t,
+                                    TreeType::FULL_COMPLETE,
+                                    false);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_float_full_unique,
+                                    float,
+                                    TreeType::FULL_COMPLETE,
+                                    false);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_double_full_unique,
+                                    double,
+                                    TreeType::FULL_COMPLETE,
+                                    false);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_int32_imbalanced_unique,
+                                    int32_t,
+                                    TreeType::IMBALANCED_LEFT,
+                                    false);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_int64_imbalanced_unique,
+                                    int64_t,
+                                    TreeType::IMBALANCED_LEFT,
+                                    false);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_float_imbalanced_unique,
+                                    float,
+                                    TreeType::IMBALANCED_LEFT,
+                                    false);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_double_imbalanced_unique,
+                                    double,
+                                    TreeType::IMBALANCED_LEFT,
+                                    false);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_int32_full_reuse,
+                                    int32_t,
+                                    TreeType::FULL_COMPLETE,
+                                    true);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_int64_full_reuse,
+                                    int64_t,
+                                    TreeType::FULL_COMPLETE,
+                                    true);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_float_full_reuse,
+                                    float,
+                                    TreeType::FULL_COMPLETE,
+                                    true);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_double_full_reuse,
+                                    double,
+                                    TreeType::FULL_COMPLETE,
+                                    true);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_int32_imbalanced_reuse,
+                                    int32_t,
+                                    TreeType::IMBALANCED_LEFT,
+                                    true);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_int64_imbalanced_reuse,
+                                    int64_t,
+                                    TreeType::IMBALANCED_LEFT,
+                                    true);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_float_imbalanced_reuse,
+                                    float,
+                                    TreeType::IMBALANCED_LEFT,
+                                    true);
+BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_double_imbalanced_reuse,
+                                    double,
+                                    TreeType::IMBALANCED_LEFT,
+                                    true);
 
-BENCHMARK_REGISTER_F(BINARYOP, binaryop_int32_imbalanced)
+BENCHMARK_REGISTER_F(BINARYOP, binaryop_int32_imbalanced_unique)
   ->Unit(benchmark::kMillisecond)
   ->Args({100'000, 1})
+  ->Args({100'000, 2})
+  ->Args({100'000, 5})
   ->Args({100'000, 10})
+  ->Args({100'000, 20})
+  ->Args({100'000, 50})
   ->Args({100'000, 100})
-  ->Args({100'000, 1000})
-  ->Args({100'000'000, 1})
-  ->Args({100'000'000, 10})
+  ->Args({100'000, 200})
+  ->Args({200'000, 1})
+  ->Args({200'000, 2})
+  ->Args({200'000, 5})
+  ->Args({200'000, 10})
+  ->Args({200'000, 20})
+  ->Args({200'000, 50})
+  ->Args({200'000, 100})
+  ->Args({200'000, 200})
+  ->Args({500'000, 1})
+  ->Args({500'000, 2})
+  ->Args({500'000, 5})
+  ->Args({500'000, 10})
+  ->Args({500'000, 20})
+  ->Args({500'000, 50})
+  ->Args({500'000, 100})
+  ->Args({500'000, 200})
+  ->Args({1'000'000, 1})
+  ->Args({1'000'000, 2})
+  ->Args({1'000'000, 5})
+  ->Args({1'000'000, 10})
+  ->Args({1'000'000, 20})
+  ->Args({1'000'000, 50})
+  ->Args({1'000'000, 100})
+  ->Args({1'000'000, 200})
+  ->Args({2'000'000, 1})
+  ->Args({2'000'000, 2})
+  ->Args({2'000'000, 5})
+  ->Args({2'000'000, 10})
+  ->Args({2'000'000, 20})
+  ->Args({2'000'000, 50})
+  ->Args({2'000'000, 100})
+  ->Args({2'000'000, 200})
+  ->Args({5'000'000, 1})
+  ->Args({5'000'000, 2})
+  ->Args({5'000'000, 5})
+  ->Args({5'000'000, 10})
+  ->Args({5'000'000, 20})
+  ->Args({5'000'000, 50})
+  ->Args({5'000'000, 100})
+  ->Args({5'000'000, 200})
+  ->Args({10'000'000, 1})
+  ->Args({10'000'000, 2})
+  ->Args({10'000'000, 5})
+  ->Args({10'000'000, 10})
+  ->Args({10'000'000, 20})
+  ->Args({10'000'000, 50})
   ->Args({10'000'000, 100})
-  ->Args({1'000'000, 1'000})
-  ->Args({100'000, 10'000})
+  ->Args({10'000'000, 200})
+  ->Args({20'000'000, 1})
+  ->Args({20'000'000, 2})
+  ->Args({20'000'000, 5})
+  ->Args({20'000'000, 10})
+  ->Args({20'000'000, 20})
+  ->Args({20'000'000, 50})
+  ->Args({20'000'000, 100})
+  ->Args({50'000'000, 1})
+  ->Args({50'000'000, 2})
+  ->Args({50'000'000, 5})
+  ->Args({50'000'000, 10})
+  ->Args({50'000'000, 20})
+  ->Args({50'000'000, 50})
+  ->Args({100'000'000, 1})
+  ->Args({100'000'000, 2})
+  ->Args({100'000'000, 5})
+  ->Args({100'000'000, 10})
+  ->Args({100'000'000, 20})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(BINARYOP, binaryop_int32_imbalanced_reuse)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 1})
+  ->Args({100'000, 2})
+  ->Args({100'000, 5})
+  ->Args({100'000, 10})
+  ->Args({100'000, 20})
+  ->Args({100'000, 50})
+  ->Args({100'000, 100})
+  ->Args({100'000, 200})
+  ->Args({200'000, 1})
+  ->Args({200'000, 2})
+  ->Args({200'000, 5})
+  ->Args({200'000, 10})
+  ->Args({200'000, 20})
+  ->Args({200'000, 50})
+  ->Args({200'000, 100})
+  ->Args({200'000, 200})
+  ->Args({500'000, 1})
+  ->Args({500'000, 2})
+  ->Args({500'000, 5})
+  ->Args({500'000, 10})
+  ->Args({500'000, 20})
+  ->Args({500'000, 50})
+  ->Args({500'000, 100})
+  ->Args({500'000, 200})
+  ->Args({1'000'000, 1})
+  ->Args({1'000'000, 2})
+  ->Args({1'000'000, 5})
+  ->Args({1'000'000, 10})
+  ->Args({1'000'000, 20})
+  ->Args({1'000'000, 50})
+  ->Args({1'000'000, 100})
+  ->Args({1'000'000, 200})
+  ->Args({2'000'000, 1})
+  ->Args({2'000'000, 2})
+  ->Args({2'000'000, 5})
+  ->Args({2'000'000, 10})
+  ->Args({2'000'000, 20})
+  ->Args({2'000'000, 50})
+  ->Args({2'000'000, 100})
+  ->Args({2'000'000, 200})
+  ->Args({5'000'000, 1})
+  ->Args({5'000'000, 2})
+  ->Args({5'000'000, 5})
+  ->Args({5'000'000, 10})
+  ->Args({5'000'000, 20})
+  ->Args({5'000'000, 50})
+  ->Args({5'000'000, 100})
+  ->Args({5'000'000, 200})
+  ->Args({10'000'000, 1})
+  ->Args({10'000'000, 2})
+  ->Args({10'000'000, 5})
+  ->Args({10'000'000, 10})
+  ->Args({10'000'000, 20})
+  ->Args({10'000'000, 50})
+  ->Args({10'000'000, 100})
+  ->Args({10'000'000, 200})
+  ->Args({20'000'000, 1})
+  ->Args({20'000'000, 2})
+  ->Args({20'000'000, 5})
+  ->Args({20'000'000, 10})
+  ->Args({20'000'000, 20})
+  ->Args({20'000'000, 50})
+  ->Args({20'000'000, 100})
+  ->Args({20'000'000, 200})
+  ->Args({50'000'000, 1})
+  ->Args({50'000'000, 2})
+  ->Args({50'000'000, 5})
+  ->Args({50'000'000, 10})
+  ->Args({50'000'000, 20})
+  ->Args({50'000'000, 50})
+  ->Args({50'000'000, 100})
+  ->Args({50'000'000, 200})
+  ->Args({100'000'000, 1})
+  ->Args({100'000'000, 2})
+  ->Args({100'000'000, 5})
+  ->Args({100'000'000, 10})
+  ->Args({100'000'000, 20})
   ->UseManualTime();
