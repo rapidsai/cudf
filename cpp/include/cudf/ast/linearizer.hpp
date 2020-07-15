@@ -15,20 +15,10 @@
  */
 #pragma once
 
-#include <thrust/detail/raw_pointer_cast.h>
-#include <algorithm>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/traits.hpp>
-#include <functional>
-#include <iterator>
-#include <rmm/device_uvector.hpp>
-#include <type_traits>
 #include "operators.hpp"
 
 namespace cudf {

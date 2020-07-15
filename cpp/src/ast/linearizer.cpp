@@ -16,14 +16,11 @@
 #include <algorithm>
 #include <cudf/ast/linearizer.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/traits.hpp>
 #include <functional>
 #include <iterator>
-#include <type_traits>
 
 namespace cudf {
 
