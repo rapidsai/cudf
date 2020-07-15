@@ -77,7 +77,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         """
         if not is_categorical_dtype(column.dtype):
             raise AttributeError(
-                "Can only use .cat accessor " "with a 'category' dtype"
+                "Can only use .cat accessor with a 'category' dtype"
             )
         self._column = column
         self._parent = parent

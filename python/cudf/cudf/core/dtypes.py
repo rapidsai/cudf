@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import pickle
 
 import numpy as np
@@ -116,7 +118,7 @@ class ListDtype(ExtensionDtype):
             self._typ = pa.list_(value_type)
 
     @property
-    def value_type(self):
+    def element_type(self):
         if isinstance(self._typ.value_type, pa.ListType):
             return ListDtype.from_arrow(self._typ.value_type)
         else:
@@ -131,6 +133,8 @@ class ListDtype(ExtensionDtype):
 
     @property
     def type(self):
+        # TODO: we should change this to return something like a
+        # ListDtypeType, once we figure out what that should look like
         return pa.array
 
     @property
