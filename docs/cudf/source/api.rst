@@ -22,6 +22,7 @@ Series
 
 .. autoclass:: Series
     :members:
+    :inherited-members:
     :exclude-members: serialize, deserialize, logical_not, logical_or, logical_and, remainder, sum_of_squares, fill, merge
 
 Strings
@@ -42,6 +43,7 @@ Index
 .. currentmodule:: cudf.core.index
 .. autoclass:: Index
     :members:
+    :inherited-members:
     :exclude-members: serialize, deserialize, is_monotonic, is_monotonic_increasing, is_monotonic_decreasing
 
 RangeIndex
@@ -49,6 +51,7 @@ RangeIndex
 .. currentmodule:: cudf.core.index
 .. autoclass:: RangeIndex
     :members:
+    :inherited-members:
     :exclude-members: deserialize, serialize
 
 GenericIndex
@@ -56,41 +59,48 @@ GenericIndex
 .. currentmodule:: cudf.core.index
 .. autoclass:: GenericIndex
     :members:
+    :inherited-members:
 
 MultiIndex
 ----------
 .. currentmodule:: cudf.core.multiindex
 .. autoclass:: MultiIndex
     :members:
+    :inherited-members:
 
 Int8Index
 ---------
 .. currentmodule:: cudf.core.index
 .. autoclass:: Int8Index
     :members:
+    :inherited-members:
 
 Int16Index
 ----------
 .. currentmodule:: cudf.core.index
 .. autoclass:: Int16Index
     :members:
+    :inherited-members:
 
 Int32Index
 ----------
 .. currentmodule:: cudf.core.index
 .. autoclass:: Int32Index
     :members:
+    :inherited-members:
 
 Int64Index
 ----------
 .. currentmodule:: cudf.core.index
 .. autoclass:: Int64Index
     :members:
+    :inherited-members:
 
 UInt8Index
 ----------
 .. currentmodule:: cudf.core.index
 .. autoclass:: UInt8Index
+    :inherited-members:
     :members:
 
 UInt16Index
@@ -98,48 +108,56 @@ UInt16Index
 .. currentmodule:: cudf.core.index
 .. autoclass:: UInt16Index
     :members:
+    :inherited-members:
 
 UInt32Index
 -----------
 .. currentmodule:: cudf.core.index
 .. autoclass:: UInt32Index
     :members:
+    :inherited-members:
 
 UInt64Index
 -----------
 .. currentmodule:: cudf.core.index
 .. autoclass:: UInt64Index
     :members:
+    :inherited-members:
 
 Float32Index
 ------------
 .. currentmodule:: cudf.core.index
 .. autoclass:: Float32Index
     :members:
+    :inherited-members:
 
 Float64Index
 ------------
 .. currentmodule:: cudf.core.index
 .. autoclass:: Float64Index
     :members:
+    :inherited-members:
 
 CategoricalIndex
 ----------------
 .. currentmodule:: cudf.core.index
 .. autoclass:: CategoricalIndex
     :members:
+    :inherited-members:
 
 StringIndex
 -----------
 .. currentmodule:: cudf.core.index
 .. autoclass:: StringIndex
     :members:
+    :inherited-members:
 
 DatetimeIndex
 -------------
 .. currentmodule:: cudf.core.index
 .. autoclass:: DatetimeIndex
     :members:
+    :inherited-members:
 
 Categories
 ----------
