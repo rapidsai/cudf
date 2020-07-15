@@ -153,6 +153,8 @@ def is_list_dtype(obj):
         or obj is cudf.core.dtypes.ListDtype
         or type(obj) is cudf.core.column.ListColumn
         or obj is cudf.core.column.ListColumn
+        or (isinstance(obj, str) and obj == "list")
+        or (hasattr(obj, "dtype") and is_list_dtype(obj.dtype))
     )
 
 
