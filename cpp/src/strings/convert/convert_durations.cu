@@ -21,6 +21,7 @@
 #include <strings/utilities.cuh>
 
 #include <map>
+#include <rmm/device_uvector.hpp>
 #include <vector>
 
 namespace cudf {
@@ -73,7 +74,7 @@ struct alignas(4) format_item {
  */
 struct format_compiler {
   std::string format;
-  rmm::device_vector<format_item> d_items;
+  rmm::device_uvector<format_item> d_items;
 
   std::map<char, int8_t> specifier_lengths = {{'d', -1},
                                               {'+', -1},  // only for negative days
@@ -83,9 +84,7 @@ struct format_compiler {
                                               {'u', -1},   // 0 or 6+1(dot)
                                               {'f', -1}};  // 0 or <=9+1(dot) without trialing zeros
 
-  format_compiler(const char* format) : format(format) {}
-
-  format_item const* compile_to_device()
+  format_compiler(const char* format_, cudaStream_t stream) : format(format_), d_items(0, stream)
   {
     std::vector<format_item> items;
     const char* str         = format.c_str();
@@ -125,13 +124,16 @@ struct format_compiler {
       items.push_back(format_item::new_specifier(ch, spec_length));
     }
     // create program in device memory
-    d_items.resize(items.size());
-    CUDA_TRY(cudaMemcpyAsync(
-      d_items.data().get(), items.data(), items.size() * sizeof(items[0]), cudaMemcpyHostToDevice));
-    return d_items.data().get();
+    d_items.resize(items.size(), stream);
+    CUDA_TRY(cudaMemcpyAsync(d_items.data(),
+                             items.data(),
+                             items.size() * sizeof(items[0]),
+                             cudaMemcpyHostToDevice,
+                             stream));
   }
 
-  // these calls are only valid after compile_to_device is called
+  format_item const* compiled_format_items() { return d_items.data(); }
+
   size_type items_count() const { return static_cast<size_type>(d_items.size()); }
 };
 
@@ -368,8 +370,8 @@ struct dispatch_from_durations_fn {
   {
     CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
 
-    format_compiler compiler(format.c_str());
-    auto d_format_items = compiler.compile_to_device();
+    format_compiler compiler(format.c_str(), stream);
+    auto d_format_items = compiler.compiled_format_items();
 
     size_type strings_count = durations.size();
     auto column             = column_device_view::create(durations, stream);
@@ -389,9 +391,9 @@ struct dispatch_from_durations_fn {
 
     // build chars column
     auto const chars_bytes =
-    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-    auto chars_column =
-      detail::create_chars_child_column(strings_count, durations.null_count(), chars_bytes, mr, stream);
+      cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+    auto chars_column = detail::create_chars_child_column(
+      strings_count, durations.null_count(), chars_bytes, mr, stream);
     auto chars_view = chars_column->mutable_view();
     auto d_chars    = chars_view.template data<char>();
 
@@ -566,8 +568,8 @@ struct dispatch_to_durations_fn {
                   mutable_column_view& results_view,
                   cudaStream_t stream) const
   {
-    format_compiler compiler(format.c_str());
-    auto d_items   = compiler.compile_to_device();
+    format_compiler compiler(format.c_str(), stream);
+    auto d_items   = compiler.compiled_format_items();
     auto d_results = results_view.data<T>();
     parse_duration<T> pfn{d_strings, d_items, compiler.items_count(), results_view.type().id()};
     thrust::transform(rmm::exec_policy(stream)->on(stream),
