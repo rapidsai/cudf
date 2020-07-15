@@ -4333,6 +4333,22 @@ class StringColumn(column.ColumnBase):
             pd_series.index = index
         return pd_series
 
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the StringColumn.
+        """
+        return self.to_pandas().values
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the StringColumn.
+        """
+        raise NotImplementedError(
+            "String Arrays is not yet implemented in cudf"
+        )
+
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
 
