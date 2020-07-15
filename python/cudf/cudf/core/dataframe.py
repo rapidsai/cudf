@@ -6386,6 +6386,7 @@ class DataFrame(Frame, Serializable):
         1  7  8
 
         With `ignore_index` set to True:
+
         >>> df.append(df2, ignore_index=True)
            A  B
         0  1  2
@@ -6396,6 +6397,7 @@ class DataFrame(Frame, Serializable):
         The following, while not recommended methods for generating DataFrames,
         show two ways to generate a DataFrame from multiple data sources.
         Less efficient:
+
         >>> df = cudf.DataFrame(columns=['A'])
         >>> for i in range(5):
         ...     df = df.append({'A': i}, ignore_index=True)
@@ -6408,6 +6410,7 @@ class DataFrame(Frame, Serializable):
         4  4
 
         More efficient than above:
+
         >>> cudf.concat([cudf.DataFrame([i], columns=['A']) for i in range(5)],
         ...           ignore_index=True)
            A

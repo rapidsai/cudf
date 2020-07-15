@@ -1225,8 +1225,8 @@ class Frame(libcudf.table.Table):
         repeats : int, array, numpy array, or Column
             the number of times to repeat each element
 
-        Example
-        -------
+        Examples
+        --------
         >>> import cudf as cudf
         >>> s = cudf.Series([0, 2]) # or DataFrame
         >>> s
@@ -1349,8 +1349,8 @@ class Frame(libcudf.table.Table):
             A new object of same type as caller containing n items
             randomly sampled from the caller object.
 
-         Example
-        -------
+        Examples
+        --------
         >>> import cudf as cudf
         >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
         >>> df.sample(3)
@@ -1638,8 +1638,8 @@ class Frame(libcudf.table.Table):
         ----------
         cols : input Table containing columns to interleave.
 
-        Example
-        -------
+        Examples
+        --------
         >>> df = DataFrame([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
         >>> df
         0    [A1, A2, A3]
@@ -1677,8 +1677,8 @@ class Frame(libcudf.table.Table):
         self : input Table containing columns to interleave.
         count : Number of times to tile "rows". Must be non-negative.
 
-        Example
-        -------
+        Examples
+        --------
         >>> df  = Dataframe([[8, 4, 7], [5, 2, 3]])
         >>> count = 2
         >>> df.tile(df, count)

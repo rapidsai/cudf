@@ -746,7 +746,8 @@ class Series(Frame, Serializable):
 
         See Also
         --------
-        cudf.DataFrame.memory_usage : Bytes consumed by a DataFrame.
+        cudf.core.dataframe.DataFrame.memory_usage : Bytes consumed by
+            a DataFrame.
 
         Examples
         --------

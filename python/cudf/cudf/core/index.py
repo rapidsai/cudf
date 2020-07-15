@@ -529,6 +529,7 @@ class Index(Frame, Serializable):
             Whether to sort the resulting index. By default, the
             values are attempted to be sorted, but any TypeError from
             incomparable elements is caught by cudf.
+
             * None : Attempt to sort the result, but catch any TypeErrors
               from comparing incomparable elements.
             * False : Do not sort the result.
