@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
@@ -620,9 +621,9 @@ std::unique_ptr<column> compute_column(
   cudaStream_t stream                 = 0,  // TODO use detail API
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
+  CUDF_FUNC_RANGE()
   // Linearize the AST
-  nvtxRangePush(__FUNCTION__);
-  nvtxMark("Linearizing...");
+  nvtxRangePush("Linearizing...");
   auto expr_linearizer = linearizer(table);
   expr.get().accept(expr_linearizer);
   auto data_references         = expr_linearizer.get_data_references();
@@ -631,16 +632,17 @@ std::unique_ptr<column> compute_column(
   auto num_operators           = cudf::size_type(operators.size());
   auto operator_source_indices = expr_linearizer.get_operator_source_indices();
   auto expr_data_type          = expr_linearizer.get_root_data_type();
+  nvtxRangePop();
 
   // Create device data
-  nvtxMark("Creating device data...");
-  auto device_data_references =
-    thrust::device_vector<detail::device_data_reference>(data_references);
+  nvtxRangePush("Creating device data...");
+  auto device_data_references = rmm::device_vector<detail::device_data_reference>(data_references);
   // TODO: Literals
   // auto device_literals = thrust::device_vector<const scalar>();
-  auto device_operators = thrust::device_vector<cudf::ast::ast_operator>(operators);
+  auto device_operators = rmm::device_vector<cudf::ast::ast_operator>(operators);
   auto device_operator_source_indices =
-    thrust::device_vector<cudf::size_type>(operator_source_indices);
+    rmm::device_vector<cudf::size_type>(operator_source_indices);
+  nvtxRangePop();
 
   // Output linearizer info
   /*
@@ -665,19 +667,21 @@ std::unique_ptr<column> compute_column(
   */
 
   // Create table device view
-  nvtxMark("Creating table device view...");
+  nvtxRangePush("Creating table device view...");
   auto table_device   = table_device_view::create(table, stream);
   auto table_num_rows = table.num_rows();
+  nvtxRangePop();
 
   // Prepare output column
-  nvtxMark("Preparing output column...");
+  nvtxRangePush("Preparing output column...");
   auto output_column =
     make_fixed_width_column(expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
+  nvtxRangePop();
 
   // Configure kernel parameters
-  nvtxMark("Configuring kernel parameters...");
+  nvtxRangePush("Configuring kernel parameters...");
   auto block_size = 1024;  // TODO: Dynamically determine block size based on shared memory limits
                            // and block size limits
   cudf::detail::grid_1d config(table_num_rows, block_size);
@@ -685,9 +689,10 @@ std::unique_ptr<column> compute_column(
   auto shmem_size_per_block =
     sizeof(std::int64_t) * num_intermediates * config.num_threads_per_block;
   // std::cout << "Requesting " << shmem_size_per_block << " bytes of shared memory." << std::endl;
+  nvtxRangePop();
 
   // Execute the kernel
-  nvtxMark("Executing AST kernel...");
+  nvtxRangePush("Executing AST kernel...");
   compute_column_kernel<<<config.num_blocks,
                           config.num_threads_per_block,
                           shmem_size_per_block,
