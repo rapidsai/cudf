@@ -325,7 +325,7 @@ class Index(Frame, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
-        return pd.Index(self._values.data_array_view.copy_to_host(), name=self.name)
+        return pd.Index(self._values.to_arrow().to_pandas(), name=self.name)
 
     def to_arrow(self):
         """
