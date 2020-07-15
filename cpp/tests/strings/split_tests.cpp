@@ -242,7 +242,8 @@ TEST_F(StringsSplitTest, RSplitWhitespaceWithMax)
 
 TEST_F(StringsSplitTest, SplitZeroSizeStringsColumns)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::split(zero_size_strings_column);
   EXPECT_TRUE(results->num_columns() == 1);
   cudf::test::expect_strings_empty(results->get_column(0));
@@ -598,7 +599,8 @@ TEST_F(StringsSplitTest, ContiguousRSplitRecordWhitespaceWithMaxSplit)
 
 TEST_F(StringsSplitTest, ContiguousSplitRecordZeroSizeStringsColumns)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto split_record_result = cudf::strings::contiguous_split_record(zero_size_strings_column);
   EXPECT_TRUE(split_record_result.column_views.size() == 0);
   auto rsplit_record_result = cudf::strings::contiguous_rsplit_record(zero_size_strings_column);
@@ -767,7 +769,8 @@ TEST_F(StringsSplitTest, RPartitionWhitespace)
 
 TEST_F(StringsSplitTest, PartitionZeroSizeStringsColumns)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::partition(zero_size_strings_column);
   EXPECT_TRUE(results->num_columns() == 0);
   results = cudf::strings::rpartition(zero_size_strings_column);

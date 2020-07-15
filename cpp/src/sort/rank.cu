@@ -237,7 +237,7 @@ std::unique_ptr<column> rank(column_view const &input,
                              cudaStream_t stream = 0)
 {
   data_type const output_type = (percentage or method == rank_method::AVERAGE)
-                                  ? data_type(FLOAT64)
+                                  ? data_type(type_id::FLOAT64)
                                   : data_type(type_to_id<size_type>());
   std::unique_ptr<column> rank_column = [&null_handling, &output_type, &input, &mr, &stream] {
     // na_option=keep assign NA to NA values
@@ -266,7 +266,7 @@ std::unique_ptr<column> rank(column_view const &input,
         return rmm::device_vector<size_type>();
     }();
 
-  if (output_type.id() == FLOAT64) {
+  if (output_type.id() == type_id::FLOAT64) {
     switch (method) {
       case rank_method::FIRST:
         rank_first<double>(sorted_order_view, rank_mutable_view, stream);

@@ -125,3 +125,58 @@ def test_setitem_dataframe_series_inplace(df):
     gsr_a.replace(500, 501, inplace=True)
 
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "replace_data",
+    [
+        [100, 200, 300, 400, 500],
+        Series([100, 200, 300, 400, 500]),
+        Series([100, 200, 300, 400, 500], index=[2, 3, 4, 5, 6]),
+    ],
+)
+def test_series_set_equal_length_object_by_mask(replace_data):
+
+    psr = pd.Series([1, 2, 3, 4, 5])
+    gsr = Series.from_pandas(psr)
+
+    # Lengths match in trivial case
+    pd_bool_col = pd.Series([True] * len(psr))
+    gd_bool_col = Series.from_pandas(pd_bool_col)
+
+    psr[pd_bool_col] = (
+        replace_data.to_pandas()
+        if hasattr(replace_data, "to_pandas")
+        else replace_data
+    )
+    gsr[gd_bool_col] = replace_data
+
+    assert_eq(psr.astype("float"), gsr.astype("float"))
+
+    # Test partial masking
+    psr[psr > 1] = (
+        replace_data.to_pandas()
+        if hasattr(replace_data, "to_pandas")
+        else replace_data
+    )
+    gsr[gsr > 1] = replace_data
+
+    assert_eq(psr.astype("float"), gsr.astype("float"))
+
+
+def test_column_set_equal_length_object_by_mask():
+    # Series.__setitem__ might bypass some of the cases
+    # handled in column.__setitem__ so this test is needed
+
+    data = Series([0, 0, 1, 1, 1])._column
+    replace_data = Series([100, 200, 300, 400, 500])._column
+    bool_col = Series([True, True, True, True, True])._column
+
+    data[bool_col] = replace_data
+    assert_eq(Series(data), Series(replace_data))
+
+    data = Series([0, 0, 1, 1, 1])._column
+    bool_col = Series([True, False, True, False, True])._column
+    data[bool_col] = replace_data
+
+    assert_eq(Series(data), Series([100, 0, 300, 1, 500]))
