@@ -541,7 +541,7 @@ struct FPToRep {
 
   __host__ __device__
   Rep operator()(FP fp) const {
-    return scaled_integer<Rep>{fp.rescale(scale)}.value;
+    return scaled_integer<Rep>{fp.rescaled(scale)}.value;
   }
 };
 
