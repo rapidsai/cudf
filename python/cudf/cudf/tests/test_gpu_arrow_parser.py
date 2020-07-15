@@ -18,9 +18,7 @@ def make_gpu_parse_arrow_data_batch():
 
     dest_lat = pa.array(lat)
     dest_lon = pa.array(lon)
-    if pa.__version__ == "0.7.1":
-        dest_lat = dest_lat.cast(pa.float32())
-        dest_lon = dest_lon.cast(pa.float32())
+
     batch = pa.RecordBatch.from_arrays(
         [dest_lat, dest_lon], ["dest_lat", "dest_lon"]
     )

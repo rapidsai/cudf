@@ -310,7 +310,7 @@ class DataFrame(Frame, Serializable):
                     initial_data = data
                     data = []
                     for _ in range(int(index_length / data_length)):
-                        data.extend([o.copy() for o in initial_data])
+                        data.extend([o for o in initial_data])
                 else:
                     raise ValueError(
                         f"Shape of passed values is "
