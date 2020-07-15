@@ -702,4 +702,25 @@ TEST_F(FixedPointTest, FixedPointReductionProduct)
   EXPECT_EQ(result_scalar->value(), _24);
 }
 
+TEST_F(FixedPointTest, FixedPointReductionSum)
+{
+  auto const ZERO  = decimal32{0, scale_type{0}};
+  auto const ONE   = decimal32{1, scale_type{0}};
+  auto const TWO   = decimal32{2, scale_type{0}};
+  auto const THREE = decimal32{3, scale_type{0}};
+  auto const FOUR  = decimal32{4, scale_type{0}};
+  auto const TEN   = decimal32{10, scale_type{0}};
+
+  auto const in       = std::vector<decimal32>{ONE, TWO, THREE, FOUR};
+  auto const column   = wrapper<decimal32>(in.cbegin(), in.cend());
+  auto const expected = std::accumulate(in.cbegin(), in.cend(), ZERO, std::plus<decimal32>());
+  auto const out_type = cudf::data_type{cudf::type_id::DECIMAL32};
+
+  auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
+  auto const result_scalar = static_cast<cudf::scalar_type_t<decimal32>*>(result.get());
+
+  EXPECT_EQ(result_scalar->value(), expected);
+  EXPECT_EQ(result_scalar->value(), TEN);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
