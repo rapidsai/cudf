@@ -85,11 +85,22 @@ def test_column_series_multi_dim(data):
 
 
 @pytest.mark.parametrize(
-    "data", [[1, "1.0", "2", -3], [np.nan, 0, "null", cp.nan]]
+    ("data", "error"),
+    [
+        ([1, "1.0", "2", -3], TypeError),
+        ([np.nan, 0, "null", cp.nan], TypeError),
+        (
+            [np.int32(4), np.float64(1.5), np.float32(1.290994), np.int8(0)],
+            None,
+        ),
+    ],
 )
-def test_column_mixed_dtype(data):
-    with pytest.raises(TypeError):
+def test_column_mixed_dtype(data, error):
+    if error is None:
         cudf.Series(data)
+    else:
+        with pytest.raises(TypeError):
+            cudf.Series(data)
 
 
 @pytest.mark.parametrize("nan_as_null", [True, False])

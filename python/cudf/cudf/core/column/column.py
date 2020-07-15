@@ -1628,16 +1628,28 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
-                    data = as_column(
-                        np.asarray(
+                    try:
+                        tmp_data = np.asarray(
                             arbitrary,
-                            dtype="object"
-                            if dtype is None
-                            else np.dtype(dtype),
-                        ),
-                        dtype=dtype,
-                        nan_as_null=nan_as_null,
-                    )
+                            dtype=dtype if dtype is None else np.dtype(dtype),
+                        )
+                        if tmp_data.dtype < np.dtype("U"):
+                            data = tmp_data
+                        else:
+                            data = np.asarray(
+                                arbitrary,
+                                dtype="object"
+                                if dtype is None
+                                else np.dtype(dtype),
+                            )
+
+                        data = as_column(
+                            data, dtype=dtype, nan_as_null=nan_as_null
+                        )
+                    except (pa.ArrowTypeError, TypeError):
+                        raise TypeError(
+                            "CUDF doesn't support incompatible mixed types"
+                        )
     return data
 
 
