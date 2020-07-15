@@ -60,10 +60,7 @@ TYPED_TEST(InterleaveColumnsTest, TwoColumns)
   auto a = fixed_width_column_wrapper<T>({0, 2});
   auto b = fixed_width_column_wrapper<T>({1, 3});
 
-  cudf::table_view in(std::vector<cudf::column_view>{
-    a,
-    b,
-  });
+  cudf::table_view in(std::vector<cudf::column_view>{a, b});
 
   auto expected = fixed_width_column_wrapper<T>({0, 1, 2, 3});
   auto actual   = cudf::interleave_columns(in);
