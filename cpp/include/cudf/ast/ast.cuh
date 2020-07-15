@@ -57,6 +57,12 @@ struct device_data_reference {
   cudf::size_type
     data_index;  // The column index of a table, index of a literal, or index of an intermediate
   table_reference table_reference = table_reference::LEFT;
+
+  inline bool operator==(const device_data_reference& rhs) const
+  {
+    return data_index == rhs.data_index && reference_type == rhs.reference_type &&
+           table_reference == rhs.table_reference;
+  }
 };
 
 class intermediate_counter {
@@ -78,7 +84,7 @@ class intermediate_counter {
   cudf::size_type get_max_used() const { return this->max_used; }
 
  private:
-  cudf::size_type find_first_missing(cudf::size_type start, cudf::size_type end)
+  cudf::size_type find_first_missing(cudf::size_type start, cudf::size_type end) const
   {
     // Given a sorted container, find the smallest value not already in the container
     if (start > end) return end + 1;
@@ -211,7 +217,7 @@ class binary_expression : public operator_expression {
 
 class linearizer : public abstract_visitor {
  public:
-  linearizer(cudf::table_view table) : table(table), node_counter(0), intermediate_counter() {}
+  linearizer(cudf::table_view table) : table(table), intermediate_counter() {}
 
   cudf::size_type visit(literal const& expr) override
   {
@@ -224,11 +230,7 @@ class linearizer : public abstract_visitor {
     // Push data reference
     auto source = detail::device_data_reference{
       detail::device_data_reference_type::LITERAL, data_type, literal_index};
-    this->data_references.push_back(source);
-    // Increment counter
-    auto index = this->node_counter;
-    this->node_counter++;
-    return index;
+    return this->add_data_reference(source);
   }
 
   cudf::size_type visit(column_reference const& expr) override
@@ -240,11 +242,7 @@ class linearizer : public abstract_visitor {
                                                 data_type,
                                                 expr.get_column_index(),
                                                 expr.get_table_source()};
-    this->data_references.push_back(source);
-    // Increment counter
-    auto index = this->node_counter;
-    this->node_counter++;
-    return index;
+    return this->add_data_reference(source);
   }
 
   cudf::size_type visit(operator_expression const& expr) override
@@ -293,10 +291,7 @@ class linearizer : public abstract_visitor {
     auto source = detail::device_data_reference{detail::device_data_reference_type::INTERMEDIATE,
                                                 data_type,
                                                 this->intermediate_counter.take()};
-    this->data_references.push_back(source);
-    // Increment counter
-    auto index = this->node_counter;
-    this->node_counter++;
+    auto index  = this->add_data_reference(source);
     // Insert source indices from all operands (sources) and operator (destination)
     this->operator_source_indices.insert(this->operator_source_indices.end(),
                                          operand_data_reference_indices.cbegin(),
@@ -313,7 +308,6 @@ class linearizer : public abstract_visitor {
       return this->get_data_references().back().data_type;
     }
   }
-  cudf::size_type get_node_counter() const { return this->node_counter; }
   cudf::size_type get_intermediate_count() const
   {
     return this->intermediate_counter.get_max_used();
@@ -340,9 +334,20 @@ class linearizer : public abstract_visitor {
     }
     return operand_data_reference_indices;
   }
+  cudf::size_type add_data_reference(detail::device_data_reference data_ref)
+  {
+    // If an equivalent data reference already exists, return its index. Otherwise add this data
+    // reference and return the new index.
+    auto it = std::find(this->data_references.cbegin(), this->data_references.cend(), data_ref);
+    if (it != this->data_references.cend()) {
+      return std::distance(this->data_references.cbegin(), it);
+    } else {
+      this->data_references.push_back(data_ref);
+      return this->data_references.size() - 1;
+    }
+  }
   // State information about the "linearized" GPU execution plan
   cudf::table_view table;
-  cudf::size_type node_counter;
   detail::intermediate_counter intermediate_counter;
   std::vector<detail::device_data_reference> data_references;
   std::vector<ast_operator> operators;
@@ -637,7 +642,6 @@ std::unique_ptr<column> compute_column(
   // Output linearizer info
   /*
   std::cout << "LINEARIZER INFO:" << std::endl;
-  std::cout << "Node counter: " << expr_linearizer.get_node_counter() << std::endl;
   std::cout << "Number of data references: " << data_references.size() << std::endl;
   std::cout << "Data references: ";
   for (auto dr : data_references) {
