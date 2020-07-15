@@ -224,14 +224,15 @@ class DataFrame(Frame, Serializable):
             # descr is an optional field of the _cuda_ary_iface_
             if "descr" in arr_interface:
                 if len(arr_interface["descr"]) == 1:
-                    new_df = self._from_arrays(data, index=index,
-                                               columns=columns)
+                    new_df = self._from_arrays(
+                        data, index=index, columns=columns
+                    )
                 else:
-                    new_df = self.from_records(data, index=index,
-                                               columns=columns)
+                    new_df = self.from_records(
+                        data, index=index, columns=columns
+                    )
             else:
-                new_df = self._from_arrays(data, index=index,
-                                           columns=columns)
+                new_df = self._from_arrays(data, index=index, columns=columns)
 
             self._data = new_df._data
             self._index = new_df._index
