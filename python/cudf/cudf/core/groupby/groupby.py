@@ -64,6 +64,8 @@ class GroupBy(Serializable):
 
     def __iter__(self):
         group_names, offsets, grouped_values = self._grouped()
+        if isinstance(group_names, cudf.Index):
+            group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
 
