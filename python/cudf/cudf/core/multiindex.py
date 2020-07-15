@@ -780,23 +780,9 @@ class MultiIndex(Index):
         return result
 
     def to_arrow(self):
-        """
-        Convert to a PyArrow Table.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> midx = cudf.MultiIndex(
-        ...         levels=[[1, 3, 4, 5], [1, 2, 5]],
-        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        ...         names=["x", "y"],
-        ...     )
-        >>> midx.to_arrow()
-        pyarrow.Table
-        x: int64
-        y: int64
-        """
-        return self._source_data.to_arrow()
+        raise NotImplementedError(
+            "MultiIndex.to_arrow() is not yet implemented"
+        )
 
     @property
     def values_host(self):

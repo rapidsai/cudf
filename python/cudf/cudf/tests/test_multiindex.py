@@ -866,3 +866,16 @@ def test_multiindex_values_host():
     pmidx = midx.to_pandas()
 
     assert_eq(midx.values_host, pmidx.values)
+
+
+def test_multiindex_to_arrow():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape("MultiIndex.to_arrow() is not yet implemented"),
+    ):
+        midx.to_arrow()
