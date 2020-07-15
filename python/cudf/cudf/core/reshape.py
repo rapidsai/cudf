@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -12,6 +12,59 @@ from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
+def _align_objs(objs, how="outer"):
+    """Align a set of Series or Dataframe objects.
+
+    Parameters
+    ----------
+    objs : list of DataFrame, Series, or Index
+
+    Returns
+    -------
+    A bool for if indexes have matched and a set of
+    reindexed and aligned objects ready for concatenation
+    """
+    # Check if multiindex then check if indexes match. GenericIndex
+    # returns ndarray tuple of bools requiring additional filter.
+    # Then check for duplicate index value.
+    i_objs = iter(objs)
+    first = next(i_objs)
+    match_index = all(first.index.equals(rest.index) for rest in i_objs)
+
+    if match_index:
+        return objs, True
+    else:
+        if not all(o.index.is_unique for o in objs):
+            raise ValueError("cannot reindex from a duplicate axis")
+
+        index = objs[0].index
+        for obj in objs[1:]:
+            name = index.name
+            index = (
+                cudf.DataFrame(index=obj.index)
+                .join(cudf.DataFrame(index=index), how=how)
+                .index
+            )
+            index.name = name
+
+        return [obj.reindex(index) for obj in objs], False
+
+
+def _normalize_series_and_dataframe(objs, axis):
+    sr_name = 0
+    for idx, o in enumerate(objs):
+        if isinstance(o, Series):
+            if axis == 1:
+                name = o.name
+                if name is None:
+                    name = sr_name
+                    sr_name += 1
+            else:
+                name = sr_name
+
+            objs[idx] = o.to_frame(name=name)
+
+
 def concat(objs, axis=0, ignore_index=False, sort=None):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
@@ -23,22 +76,29 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     ignore_index : bool, default False
         Set True to ignore the index of the *objs* and provide a
         default range index instead.
+    sort : bool, default False
+        Sort non-concatenation axis if it is not already aligned.
 
     Returns
     -------
     A new object of like type with rows from each object in ``objs``.
     """
-    if sort not in (None, False):
-        raise NotImplementedError("sort parameter is not yet supported")
 
     if not objs:
-        raise ValueError("Need at least one object to concatenate")
+        raise ValueError("No objects to concatenate")
 
     objs = [obj for obj in objs if obj is not None]
 
     # Return for single object
     if len(objs) == 1:
-        return objs[0]
+        if ignore_index:
+            result = cudf.DataFrame(
+                data=objs[0]._data.copy(deep=True),
+                index=cudf.RangeIndex(len(objs[0])),
+            )
+        else:
+            result = objs[0].copy()
+        return result
 
     if len(objs) == 0:
         raise ValueError("All objects passed were None")
@@ -58,20 +118,15 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
+
         assert typs.issubset(allowed_typs)
         df = DataFrame()
+        _normalize_series_and_dataframe(objs, axis=axis)
 
-        sr_name = 0
-        for idx, o in enumerate(objs):
-            if isinstance(o, Series):
-                name = o.name
-                if name is None:
-                    name = sr_name
-                    sr_name += 1
-                objs[idx] = o.to_frame(name=name)
+        objs, match_index = _align_objs(objs)
 
         for idx, o in enumerate(objs):
-            if idx == 0:
+            if not ignore_index and idx == 0:
                 df.index = o.index
             for col in o._data.names:
                 if col in df._data:
@@ -88,28 +143,58 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         for o in objs[1:]:
             result_columns = result_columns.append(o.columns)
 
-        df.columns = result_columns
-        return df
+        df.columns = result_columns.unique()
+        if ignore_index:
+            df.index = None
+            return df
+        elif not match_index:
+            return df.sort_index()
+        else:
+            return df
 
     typ = list(typs)[0]
 
     if len(typs) > 1:
-        raise ValueError(
-            "`concat` expects all objects to be of the same "
-            "type. Got mix of %r." % [t.__name__ for t in typs]
-        )
-    typ = list(typs)[0]
+        if allowed_typs == typs:
+            # This block of code will run when `objs` has
+            # both Series & DataFrame kind of inputs.
+            _normalize_series_and_dataframe(objs, axis=axis)
+            typ = DataFrame
+        else:
+            raise ValueError(
+                "`concat` cannot concatenate objects of "
+                "types: %r." % sorted([t.__name__ for t in typs])
+            )
 
     if typ is DataFrame:
-        return DataFrame._concat(objs, axis=axis, ignore_index=ignore_index)
+        objs = [obj for obj in objs if obj.shape != (0, 0)]
+        if len(objs) == 0:
+            # If objs is empty, that indicates all of
+            # objs are empty dataframes.
+            return cudf.DataFrame()
+        elif len(objs) == 1:
+            if ignore_index:
+                result = cudf.DataFrame(
+                    data=objs[0]._data.copy(deep=True),
+                    index=cudf.RangeIndex(len(objs[0])),
+                )
+            else:
+                result = objs[0].copy()
+            return result
+        else:
+            return DataFrame._concat(
+                objs, axis=axis, ignore_index=ignore_index, sort=sort
+            )
     elif typ is Series:
-        return Series._concat(objs, axis=axis)
+        return Series._concat(
+            objs, axis=axis, index=None if ignore_index else True
+        )
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, Index):
         return Index._concat(objs)
     else:
-        raise ValueError("Unknown type %r" % typ)
+        raise ValueError(f"cannot concatenate object of type {typ}")
 
 
 def melt(

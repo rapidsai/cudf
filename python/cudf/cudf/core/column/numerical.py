@@ -1,12 +1,11 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
@@ -135,7 +134,7 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(self, dtype, **kwargs):
-        from cudf.core.column import string, as_column
+        from cudf.core.column import as_column, string
 
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
@@ -190,12 +189,6 @@ class NumericalColumn(column.ColumnBase):
             return out.cast(pa.bool_())
         else:
             return out
-
-    def min(self, dtype=None):
-        return libcudf.reduce.reduce("min", self, dtype=dtype)
-
-    def max(self, dtype=None):
-        return libcudf.reduce.reduce("max", self, dtype=dtype)
 
     def sum(self, dtype=None):
         return libcudf.reduce.reduce("sum", self, dtype=dtype)
@@ -333,7 +326,9 @@ class NumericalColumn(column.ColumnBase):
         """
         found = 0
         if len(self):
-            found = cudautils.find_first(self.data_array_view, value)
+            found = cudautils.find_first(
+                self.data_array_view, value, mask=self.mask
+            )
         if found == -1 and self.is_monotonic and closest:
             if value < self.min():
                 found = 0
@@ -341,7 +336,7 @@ class NumericalColumn(column.ColumnBase):
                 found = len(self)
             else:
                 found = cudautils.find_first(
-                    self.data_array_view, value, compare="gt"
+                    self.data_array_view, value, mask=self.mask, compare="gt",
                 )
                 if found == -1:
                     raise ValueError("value not found")
@@ -357,7 +352,9 @@ class NumericalColumn(column.ColumnBase):
         """
         found = 0
         if len(self):
-            found = cudautils.find_last(self.data_array_view, value)
+            found = cudautils.find_last(
+                self.data_array_view, value, mask=self.mask,
+            )
         if found == -1 and self.is_monotonic and closest:
             if value < self.min():
                 found = -1
@@ -365,7 +362,7 @@ class NumericalColumn(column.ColumnBase):
                 found = len(self) - 1
             else:
                 found = cudautils.find_last(
-                    self.data_array_view, value, compare="lt"
+                    self.data_array_view, value, mask=self.mask, compare="lt",
                 )
                 if found == -1:
                     raise ValueError("value not found")

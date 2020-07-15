@@ -3,11 +3,11 @@ import pandas as pd
 import pytest
 
 import dask
-import dask.dataframe as dd
-
-import cudf
+from dask import dataframe as dd
 
 import dask_cudf
+
+import cudf
 
 
 @pytest.mark.parametrize("aggregation", ["sum", "mean", "count", "min", "max"])

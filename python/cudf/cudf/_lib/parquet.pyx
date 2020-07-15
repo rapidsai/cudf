@@ -18,6 +18,7 @@ from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
+from libcpp cimport bool
 
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.table cimport Table
@@ -147,9 +148,9 @@ cpdef generate_pandas_metadata(Table table, index):
     json_str = md.decode("utf-8")
     return json_str
 
-cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
-                   row_group_count=None, skip_rows=None, num_rows=None,
-                   strings_to_categorical=False, use_pandas_metadata=True):
+cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
+                   skip_rows=None, num_rows=None, strings_to_categorical=False,
+                   use_pandas_metadata=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
@@ -160,7 +161,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     """
 
     cdef cudf_io_types.source_info source = make_source_info(
-        filepath_or_buffer)
+        filepaths_or_buffers)
 
     # Setup parquet reader arguments
     cdef read_parquet_args args = read_parquet_args(source)
@@ -174,9 +175,8 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
 
     args.skip_rows = skip_rows if skip_rows is not None else 0
     args.num_rows = num_rows if num_rows is not None else -1
-    args.row_group = row_group if row_group is not None else -1
-    args.row_group_count = row_group_count \
-        if row_group_count is not None else -1
+    if row_groups is not None:
+        args.row_groups = row_groups
     args.timestamp_type = cudf_types.data_type(cudf_types.type_id.EMPTY)
 
     # Read Parquet
@@ -191,6 +191,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     index_col = ''
     cdef map[string, string] user_data = c_out_table.metadata.user_data
     json_str = user_data[b'pandas'].decode('utf-8')
+    meta = None
     if json_str != "":
         meta = json.loads(json_str)
         if 'index_columns' in meta and len(meta['index_columns']) > 0:
@@ -200,6 +201,22 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
         Table.from_unique_ptr(move(c_out_table.tbl),
                               column_names=column_names)
     )
+
+    if df.empty and meta is not None:
+        cols_dtype_map = {}
+        for col in meta['columns']:
+            cols_dtype_map[col['name']] = col['numpy_type']
+
+        if not column_names:
+            column_names = [o['name'] for o in meta['columns']]
+            if index_col in cols_dtype_map:
+                column_names.remove(index_col)
+
+        for col in column_names:
+            df._data[col] = cudf.core.column.column_empty(
+                row_count=0,
+                dtype=np.dtype(cols_dtype_map[col])
+            )
 
     # Set the index column
     if index_col is not '' and isinstance(index_col, str):
@@ -329,11 +346,35 @@ cdef class ParquetWriter:
         with nogil:
             write_parquet_chunked(tv, self.state)
 
-    def close(self):
-        if self.state:
-            with nogil:
-                write_parquet_chunked_end(self.state)
-                self.state.reset()
+    def close(self, object metadata_file_path=None):
+        cdef unique_ptr[vector[uint8_t]] out_metadata_c
+        cdef bool return_meta
+        cdef string metadata_out_file_path
+
+        if not self.state:
+            return None
+
+        # Update metadata-collection options
+        if metadata_file_path is not None:
+            metadata_out_file_path = str.encode(metadata_file_path)
+            return_meta = True
+        else:
+            return_meta = False
+
+        with nogil:
+            out_metadata_c = move(
+                write_parquet_chunked_end(
+                    self.state, return_meta, metadata_out_file_path
+                )
+            )
+            self.state.reset()
+
+        if metadata_file_path is not None:
+            out_metadata_py = BufferArrayFromVector.from_unique_ptr(
+                move(out_metadata_c)
+            )
+            return np.asarray(out_metadata_py)
+        return None
 
     def __dealloc__(self):
         self.close()

@@ -134,6 +134,26 @@ class parquet_column_view {
         _physical_type = Type::INT64;
         _stats_dtype   = statistics_dtype::dtype_int64;
         break;
+      case cudf::type_id::UINT8:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::UINT_8;
+        _stats_dtype    = statistics_dtype::dtype_int8;
+        break;
+      case cudf::type_id::UINT16:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::UINT_16;
+        _stats_dtype    = statistics_dtype::dtype_int16;
+        break;
+      case cudf::type_id::UINT32:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::UINT_32;
+        _stats_dtype    = statistics_dtype::dtype_int32;
+        break;
+      case cudf::type_id::UINT64:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::UINT_64;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
       case cudf::type_id::FLOAT32:
         _physical_type = Type::FLOAT;
         _stats_dtype   = statistics_dtype::dtype_float32;
@@ -174,9 +194,9 @@ class parquet_column_view {
         _ts_scale       = -1000;
         break;
       case cudf::type_id::STRING:
-        _physical_type = Type::BYTE_ARRAY;
-        //_converted_type = ConvertedType::UTF8; // TBD
-        _stats_dtype = statistics_dtype::dtype_string;
+        _physical_type  = Type::BYTE_ARRAY;
+        _converted_type = ConvertedType::UTF8;
+        _stats_dtype    = statistics_dtype::dtype_string;
         break;
       default:
         _physical_type = UNDEFINED_TYPE;
@@ -942,7 +962,11 @@ void writer::write_chunked(table_view const &table, pq_chunked_state &state)
 }
 
 // Forward to implementation
-void writer::write_chunked_end(pq_chunked_state &state) { _impl->write_chunked_end(state); }
+std::unique_ptr<std::vector<uint8_t>> writer::write_chunked_end(
+  pq_chunked_state &state, bool return_filemetadata, const std::string &metadata_out_file_path)
+{
+  return _impl->write_chunked_end(state, return_filemetadata, metadata_out_file_path);
+}
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>> &metadata_list)

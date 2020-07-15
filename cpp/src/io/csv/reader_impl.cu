@@ -349,7 +349,12 @@ table_with_metadata reader::impl::read(size_t range_offset,
       if (column_types[active_col].id() == type_id::EMPTY) {
         column_types[active_col] = data_type{type_id::STRING};
       }
-      out_buffers.emplace_back(column_types[active_col], num_records, true, stream, mr_);
+      const bool is_final_allocation = column_types[active_col].id() != type_id::STRING;
+      out_buffers.emplace_back(column_types[active_col],
+                               num_records,
+                               true,
+                               stream,
+                               is_final_allocation ? mr_ : rmm::mr::get_default_resource());
       metadata.column_names.emplace_back(col_names[col]);
       active_col++;
     }
@@ -753,21 +758,23 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 }
 
 // Forward to implementation
-reader::reader(std::string filepath,
+reader::reader(std::vector<std::string> const &filepaths,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(nullptr, filepath, options, mr))
 {
+  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
+  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, mr);
 }
 
 // Forward to implementation
-reader::reader(std::unique_ptr<cudf::io::datasource> source,
+reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(source), "", options, mr))
 {
+  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, mr);
 }
 
 // Destructor within this translation unit
