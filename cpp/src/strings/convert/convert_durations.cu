@@ -16,8 +16,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/types.hpp>
-#include <strings/utilities.cuh>
 #include <strings/convert/utilities.cuh>
+#include <strings/utilities.cuh>
 
 #include <map>
 #include <vector>

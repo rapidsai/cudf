@@ -25,8 +25,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <strings/utilities.cuh>
 #include <strings/convert/utilities.cuh>
+#include <strings/utilities.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/iterator/counting_iterator.h>
