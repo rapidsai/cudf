@@ -57,33 +57,33 @@ namespace gpu {
  * @return uint64_t The position of the last character in the field, including the
  *  delimiter(s) following the field data
  */
-__device__ __inline__ uint64_t seek_field_end(const char* data,
-                                              ParseOptions const& opts,
-                                              uint64_t pos,
-                                              uint64_t stop)
+__device__ __inline__ char const* seek_field_end(char const* begin,
+                                                 char const* end,
+                                                 ParseOptions const& opts)
 {
   bool quotation = false;
+  auto it        = begin;
   while (true) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
     // may not output exact failures as PANDAS for malformed fields
-    if (data[pos] == opts.quotechar) {
+    if (*it == opts.quotechar) {
       quotation = !quotation;
     } else if (quotation == false) {
-      if (data[pos] == opts.delimiter) {
-        while (opts.multi_delimiter && pos < stop && data[pos + 1] == opts.delimiter) { ++pos; }
+      if (*it == opts.delimiter) {
+        while (opts.multi_delimiter && it < end && *(it + 1) == opts.delimiter) { ++it; }
         break;
-      } else if (data[pos] == opts.terminator) {
+      } else if (*it == opts.terminator) {
         break;
-      } else if (data[pos] == '\r' && (pos + 1 < stop && data[pos + 1] == '\n')) {
-        stop--;
+      } else if (*it == '\r' && (it + 1 < end && *(it + 1) == '\n')) {
+        --end;
         break;
       }
     }
-    if (pos >= stop) break;
-    pos++;
+    if (it >= end) break;
+    it++;
   }
-  return pos;
+  return it;
 }
 
 /**

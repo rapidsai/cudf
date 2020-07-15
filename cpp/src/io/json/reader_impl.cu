@@ -82,15 +82,13 @@ std::unique_ptr<table> aggregate_keys_info(std::unique_ptr<table> info)
 {
   auto const info_view = info->view();
   std::vector<groupby::aggregation_request> requests;
-  requests.emplace_back(groupby::aggregation_request());
-  requests[0].values = info_view.column(0);  // offsets
-  requests[0].aggregations.push_back(make_min_aggregation());
-  requests[0].aggregations.push_back(make_nth_element_aggregation(0));
+  requests.emplace_back(groupby::aggregation_request{info_view.column(0)});
+  requests.back().aggregations.emplace_back(make_min_aggregation());
+  requests.back().aggregations.emplace_back(make_nth_element_aggregation(0));
 
-  requests.emplace_back(groupby::aggregation_request());
-  requests[1].values = info_view.column(1);  // lengths
-  requests[1].aggregations.push_back(make_min_aggregation());
-  requests[1].aggregations.push_back(make_nth_element_aggregation(0));
+  requests.emplace_back(groupby::aggregation_request{info_view.column(1)});
+  requests.back().aggregations.emplace_back(make_min_aggregation());
+  requests.back().aggregations.emplace_back(make_nth_element_aggregation(0));
 
   // Aggregate by hash values
   groupby::groupby gb_obj(

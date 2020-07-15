@@ -72,32 +72,27 @@ enum class key_parse_state { PRE_KEY, KEY, POST_KEY, POST_KEY_QUOTE };
  * @brief Computes the JSON object key hash and moves the start offset past the key.
  *
  * @param[in] data Pointer to the device buffer containing the data to process
- * @param[in] opts Parsing options (e.g. delimiter and quotation character)
+ * @param[in] quotechar TODO
  * @param[in,out] start Offset of the first character in the range. The offset is updated to the
  * first character after the key.
  * @param[in] stop Offset of the first character after the range
  *
  * @return uint32_t Hash value of the key; zero if parsing failed
  */
-__device__ uint32_t parse_key(const char *data,
-                              const ParseOptions opts,
-                              uint64_t *start,
-                              uint64_t stop)
+__device__ uint32_t parse_key(const char *&begin, const char *end, char quotechar)
 {
   auto state        = key_parse_state::PRE_KEY;
-  auto key_start    = *start;
+  auto key_start    = begin;
   uint32_t hash_val = 0;
-  for (auto pos = *start; pos < stop; ++pos) {
-    if (state == key_parse_state::PRE_KEY && data[pos] == opts.quotechar) {
+  for (auto pos = begin; pos < end; ++pos) {
+    if (state == key_parse_state::PRE_KEY && *pos == quotechar) {
       state     = key_parse_state::KEY;
       key_start = pos + 1;
-    } else if (state == key_parse_state::KEY && data[pos] == opts.quotechar &&
-               data[pos - 1] != '\\') {
-      state = key_parse_state::POST_KEY;
-      hash_val =
-        MurmurHash3_32<cudf::string_view>{}(cudf::string_view(data + key_start, pos - key_start));
-    } else if (state == key_parse_state::POST_KEY && data[pos] == ':') {
-      *start = pos + 1;
+    } else if (state == key_parse_state::KEY && *pos == quotechar && *(pos - 1) != '\\') {
+      state    = key_parse_state::POST_KEY;
+      hash_val = MurmurHash3_32<cudf::string_view>{}(cudf::string_view(key_start, pos - key_start));
+    } else if (state == key_parse_state::POST_KEY && *pos == ':') {
+      begin = pos + 1;
       break;
     }
   }
@@ -368,22 +363,22 @@ __inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == '
  * @brief Scans a character stream within a range, and adjusts the start and end
  * indices of the range to ignore whitespace and quotation characters.
  *
- * @param[in] data The character stream to scan
- * @param[in,out] start The start index to adjust
- * @param[in,out] end The end index to adjust
+ * @param[in] start TODO
+ * @param[in] end TODO
  * @param[in] quotechar The character used to denote quotes
  *
- * @return Adjusted or unchanged start_idx and end_idx
+ * @return std::pair<char const *, char const *>
  */
-__inline__ __device__ void trim_field_start_end(const char *data,
-                                                uint64_t *start,
-                                                uint64_t *end,
-                                                char quotechar = '\0')
+__inline__ __device__ std::pair<char const *, char const *> trim_whitespaces_quotes(
+  char const *begin, char const *end, char quotechar = '\0')
 {
-  while ((*start < *end) && is_whitespace(data[*start])) { (*start)++; }
-  if ((*start < *end) && data[*start] == quotechar) { (*start)++; }
-  while ((*start <= *end) && is_whitespace(data[*end])) { (*end)--; }
-  if ((*start <= *end) && data[*end] == quotechar) { (*end)--; }
+  auto first = begin;
+  auto last  = end - 1;
+  while ((first < last) && is_whitespace(*first)) { first++; }
+  if ((first < last) && *first == quotechar) { first++; }
+  while ((first <= last) && is_whitespace(*last)) { last--; }
+  if ((first <= last) && *last == quotechar) { last--; }
+  return {first, last + 1};
 }
 
 /**
@@ -433,6 +428,30 @@ __device__ __inline__ bool is_like_float(
   return true;
 }
 
+struct field_descriptor {
+  int column;
+  char const *value_begin;
+  char const *value_end;
+};
+
+__device__ field_descriptor get_next_field_descriptor(const char *begin,
+                                                      const char *end,
+                                                      ParseOptions const &opts,
+                                                      int field_idx,
+                                                      bool are_rows_objects,
+                                                      col_map_type col_map)
+{
+  auto dst_col = field_idx;
+  if (are_rows_objects) {
+    auto const key_hash = parse_key(begin, end, opts.quotechar);
+    dst_col             = (*col_map.find(key_hash)).second;
+  }
+  auto const field_end = cudf::io::gpu::seek_field_end(begin, end, opts);
+  // Modify start & end to ignore whitespace and quotechars
+  auto field_value_range = trim_whitespaces_quotes(begin, field_end, opts.quotechar);
+  return {dst_col, field_value_range.first, field_value_range.second};
+}
+
 /**
  * @brief CUDA kernel that parses and converts plain text data into cuDF column data.
  *
@@ -476,14 +495,18 @@ __global__ void convert_data_to_columns_kernel(const char *data,
   for (int col = 0; col < num_columns && start < stop; col++) {
     auto dst_col = col;
     if (are_rows_objects) {
-      auto const key_hash = parse_key(data, opts, &start, stop);
+      auto begin          = data + start;
+      auto const key_hash = parse_key(begin, data + stop, opts.quotechar);
+      start               = begin - data;
       dst_col             = (*col_map.find(key_hash)).second;
     }
     // field_end is at the next delimiter/newline
-    auto const field_end = cudf::io::gpu::seek_field_end(data, opts, start, stop);
-    auto field_data_last = field_end - 1;
+    auto const field_end = cudf::io::gpu::seek_field_end(data + start, data + stop, opts) - data;
     // Modify start & end to ignore whitespace and quotechars
-    trim_field_start_end(data, &start, &field_data_last, opts.quotechar);
+    auto const field_value_range =
+      trim_whitespaces_quotes(data + start, data + field_end, opts.quotechar);
+    auto const field_data_last = field_value_range.second - data - 1;
+    start                      = field_value_range.first - data;
     // Empty fields are not legal values
     if (start <= field_data_last &&
         !serializedTrieContains(opts.naValuesTrie, data + start, field_end - start)) {
@@ -557,33 +580,26 @@ __global__ void detect_data_types_kernel(const char *data,
 
   int col = 0;
   for (; col < num_columns && start < stop; col++) {
-    auto dst_col = col;
-    if (are_rows_objects) {
-      auto const key_hash = parse_key(data, opts, &start, stop);
-      dst_col             = (*col_map.find(key_hash)).second;
-    }
-    auto field_start     = start;
-    auto const field_end = cudf::io::gpu::seek_field_end(data, opts, field_start, stop);
-    auto field_data_last = field_end - 1;
-    trim_field_start_end(data, &field_start, &field_data_last);
-    auto const field_len = field_data_last - field_start + 1;
-    // Advance the start offset
-    start = field_end + 1;
-
+    auto const desc =
+      get_next_field_descriptor(data + start, data + stop, opts, col, are_rows_objects, col_map);
+    auto const field_len       = desc.value_end - desc.value_begin;
+    auto const field_data_last = desc.value_end - 1;
+    // Advance the start offset; +1 to skip the delimiter
+    start = desc.value_end - data + 1;
     // Checking if the field is empty/valid
-    if (field_start > field_data_last ||
-        serializedTrieContains(opts.naValuesTrie, data + field_start, field_len)) {
+    if (desc.value_begin > field_data_last ||
+        serializedTrieContains(opts.naValuesTrie, desc.value_begin, field_len)) {
       // Increase the null count for array rows, where the null count is initialized to zero.
-      if (!are_rows_objects) { atomicAdd(&column_infos[dst_col].null_count, 1); }
+      if (!are_rows_objects) { atomicAdd(&column_infos[desc.column].null_count, 1); }
       continue;
     } else if (are_rows_objects) {
       // For files with object rows, null count is initialized to row count. The value is decreased
       // here for every valid field.
-      atomicAdd(&column_infos[dst_col].null_count, -1);
+      atomicAdd(&column_infos[desc.column].null_count, -1);
     }
     // Don't need counts to detect strings, any field in quotes is deduced to be a string
-    if (data[field_start] == opts.quotechar && data[field_data_last] == opts.quotechar) {
-      atomicAdd(&column_infos[dst_col].string_count, 1);
+    if (*desc.value_begin == opts.quotechar && *field_data_last == opts.quotechar) {
+      atomicAdd(&column_infos[desc.column].string_count, 1);
       continue;
     }
 
@@ -596,23 +612,23 @@ __global__ void detect_data_types_kernel(const char *data,
     int other_count    = 0;
 
     const bool maybe_hex =
-      ((field_len > 2 && data[field_start] == '0' && data[field_start + 1] == 'x') ||
-       (field_len > 3 && data[field_start] == '-' && data[field_start + 1] == '0' &&
-        data[field_start + 2] == 'x'));
-    for (auto pos = field_start; pos <= field_data_last; pos++) {
-      if (is_digit(data[pos], maybe_hex)) {
+      ((field_len > 2 && *desc.value_begin == '0' && *(desc.value_begin + 1) == 'x') ||
+       (field_len > 3 && *desc.value_begin == '-' && *(desc.value_begin + 1) == '0' &&
+        *(desc.value_begin + 2) == 'x'));
+    for (auto pos = desc.value_begin; pos <= field_data_last; ++pos) {
+      if (is_digit(*pos, maybe_hex)) {
         digit_count++;
         continue;
       }
       // Looking for unique characters that will help identify column types
-      switch (data[pos]) {
+      switch (*pos) {
         case '.': decimal_count++; break;
         case '-': dash_count++; break;
         case '/': slash_count++; break;
         case ':': colon_count++; break;
         case 'e':
         case 'E':
-          if (!maybe_hex && pos > field_start && pos < field_data_last) exponent_count++;
+          if (!maybe_hex && pos > desc.value_begin && pos < field_data_last) exponent_count++;
           break;
         default: other_count++; break;
       }
@@ -621,21 +637,21 @@ __global__ void detect_data_types_kernel(const char *data,
     // Integers have to have the length of the string
     int int_req_number_cnt = field_len;
     // Off by one if they start with a minus sign
-    if (data[field_start] == '-' && field_len > 1) { --int_req_number_cnt; }
+    if (*desc.value_begin == '-' && field_len > 1) { --int_req_number_cnt; }
     // Off by one if they are a hexadecimal number
     if (maybe_hex) { --int_req_number_cnt; }
-    if (serializedTrieContains(opts.trueValuesTrie, data + field_start, field_len) ||
-        serializedTrieContains(opts.falseValuesTrie, data + field_start, field_len)) {
-      atomicAdd(&column_infos[dst_col].bool_count, 1);
+    if (serializedTrieContains(opts.trueValuesTrie, desc.value_begin, field_len) ||
+        serializedTrieContains(opts.falseValuesTrie, desc.value_begin, field_len)) {
+      atomicAdd(&column_infos[desc.column].bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
-      atomicAdd(&column_infos[dst_col].int_count, 1);
+      atomicAdd(&column_infos[desc.column].int_count, 1);
     } else if (is_like_float(field_len, digit_count, decimal_count, dash_count, exponent_count)) {
-      atomicAdd(&column_infos[dst_col].float_count, 1);
+      atomicAdd(&column_infos[desc.column].float_count, 1);
     }
     // A date-time field cannot have more than 3 non-special characters
     // A number field cannot have more than one decimal point
     else if (other_count > 3 || decimal_count > 1) {
-      atomicAdd(&column_infos[dst_col].string_count, 1);
+      atomicAdd(&column_infos[desc.column].string_count, 1);
     } else {
       // A date field can have either one or two '-' or '\'; A legal combination will only have one
       // of them To simplify the process of auto column detection, we are not covering all the
@@ -643,13 +659,13 @@ __global__ void detect_data_types_kernel(const char *data,
       if ((dash_count > 0 && dash_count <= 2 && slash_count == 0) ||
           (dash_count == 0 && slash_count > 0 && slash_count <= 2)) {
         if (colon_count <= 2) {
-          atomicAdd(&column_infos[dst_col].datetime_count, 1);
+          atomicAdd(&column_infos[desc.column].datetime_count, 1);
         } else {
-          atomicAdd(&column_infos[dst_col].string_count, 1);
+          atomicAdd(&column_infos[desc.column].string_count, 1);
         }
       } else {
         // Default field type is string
-        atomicAdd(&column_infos[dst_col].string_count, 1);
+        atomicAdd(&column_infos[desc.column].string_count, 1);
       }
     }
   }
