@@ -164,6 +164,8 @@ class concurrent_unordered_map {
     CUDF_FUNC_RANGE();
     using Self = concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
 
+    // Note: need `(*p).destroy` instead of `p->destroy` here
+    // due to compiler bug: https://github.com/rapidsai/cudf/pull/5692
     auto deleter = [stream](Self* p) { (*p).destroy(stream); };
 
     return std::unique_ptr<Self, std::function<void(Self*)>>{
