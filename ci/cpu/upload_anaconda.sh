@@ -9,11 +9,9 @@ export CUDF_FILE=`conda build conda/recipes/cudf --python=$PYTHON --output`
 export DASK_CUDF_FILE=`conda build conda/recipes/dask-cudf --python=$PYTHON --output`
 export CUSTREAMZ_FILE=`conda build conda/recipes/custreamz --python=$PYTHON --output`
 
-SOURCE_BRANCH=master
 CUDA_REL=${CUDA_VERSION%.*}
 
-# Restrict uploads to master branch
-if [ ${GIT_BRANCH} != ${SOURCE_BRANCH} ]; then
+if [ ${BUILD_MODE} != "branch" ]; then
   echo "Skipping upload"
   return 0
 fi
