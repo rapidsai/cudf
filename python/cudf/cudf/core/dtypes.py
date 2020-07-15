@@ -131,7 +131,7 @@ class ListDtype(ExtensionDtype):
 
     @property
     def type(self):
-        return list
+        return pa.array
 
     @property
     def name(self):
