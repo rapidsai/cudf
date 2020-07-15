@@ -15,8 +15,11 @@
  */
 
 #include <cudf/ast/ast.cuh>
+#include <cudf/ast/operators.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -25,9 +28,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
-#include "cudf/ast/operators.cuh"
-#include "cudf/scalar/scalar.hpp"
-#include "cudf/scalar/scalar_factories.hpp"
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
