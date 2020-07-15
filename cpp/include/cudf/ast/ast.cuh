@@ -16,7 +16,6 @@
 #pragma once
 
 #include <thrust/detail/raw_pointer_cast.h>
-#include <thrust/device_vector.h>
 #include <algorithm>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
