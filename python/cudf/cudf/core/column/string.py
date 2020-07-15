@@ -45,6 +45,7 @@ from cudf._lib.strings.case import (
     to_upper as cpp_to_upper,
 )
 from cudf._lib.strings.char_types import (
+    filter_alphanum as cpp_filter_alphanum,
     is_alnum as cpp_is_alnum,
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
@@ -1670,6 +1671,41 @@ class StringMethods(object):
         dtype: object
         """
         return self._return_or_inplace(cpp_title(self._column), **kwargs)
+
+    def filter_alphanum(self, repl=None, keep=True, **kwargs):
+        """
+        Remove non-alphanumeric characters from strings in this column.
+
+        Parameters
+        ----------
+        repl : str
+            Optional string to use in place of removed characters.
+        keep : bool
+            Set to False to remove all alphanumeric characters instead
+            of keeping them.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Strings with only alphanumeric characters.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["pears £12", "plums $34", "Temp 72℉", "100K℧"])
+        >>> s.str.filter_alphanum(" ")
+        0    pears  12
+        1    plums  34
+        2     Temp 72
+        3        100K
+        dtype: object
+        """
+        if repl is None:
+            repl = ""
+
+        return self._return_or_inplace(
+            cpp_filter_alphanum(self._column, as_scalar(repl), keep), **kwargs,
+        )
 
     def slice_from(self, starts, stops, **kwargs):
         """
