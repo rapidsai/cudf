@@ -7,6 +7,7 @@ DataFrame
 ---------
 .. autoclass:: DataFrame
     :members:
+    :inherited-members:
     :exclude-members: serialize, deserialize
 
 ..
@@ -30,6 +31,12 @@ Strings
 .. autoclass:: StringMethods
     :members:
 
+General Functions
+-----------------
+.. currentmodule:: cudf.core.reshape
+.. autofunction:: cudf.concat
+
+
 Index
 -----
 .. currentmodule:: cudf.core.index
@@ -48,6 +55,12 @@ GenericIndex
 ------------
 .. currentmodule:: cudf.core.index
 .. autoclass:: GenericIndex
+    :members:
+
+MultiIndex
+----------
+.. currentmodule:: cudf.core.multiindex
+.. autoclass:: MultiIndex
     :members:
 
 Int8Index
