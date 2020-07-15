@@ -548,7 +548,8 @@ class Series(Frame, Serializable):
 
         See Also
         --------
-        concat : General function to concatenate DataFrame or Series objects.
+        cudf.concat : General function to concatenate DataFrame or
+            Series objects.
 
         Examples
         --------
@@ -1931,7 +1932,7 @@ class Series(Frame, Serializable):
 
         See also
         --------
-        cudf.core.dataframe.Dataframe.loc
+        cudf.core.dataframe.DataFrame.loc
         """
         return _SeriesLocIndexer(self)
 
@@ -1942,7 +1943,7 @@ class Series(Frame, Serializable):
 
         See also
         --------
-        cudf.core.dataframe.Dataframe.iloc
+        cudf.core.dataframe.DataFrame.iloc
         """
         return _SeriesIlocIndexer(self)
 

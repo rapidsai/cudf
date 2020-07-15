@@ -702,8 +702,8 @@ class Frame(libcudf.table.Table):
         -------
         Same type as caller
 
-        Examples:
-        ---------
+        Examples
+        --------
         >>> import cudf
         >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
         >>> df.where(df % 2 == 0, [-1, -1])
@@ -885,8 +885,8 @@ class Frame(libcudf.table.Table):
         -------
         Same type as caller
 
-        Examples:
-        ---------
+        Examples
+        --------
         >>> import cudf
         >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
         >>> df.mask(df % 2 == 0, [-1, -1])
@@ -1169,6 +1169,7 @@ class Frame(libcudf.table.Table):
         Compute numerical data ranks (1 through n) along axis.
         By default, equal values are assigned a rank that is the average of the
         ranks of those values.
+
         Parameters
         ----------
         axis : {0 or 'index', 1 or 'columns'}, default 0
@@ -1193,6 +1194,7 @@ class Frame(libcudf.table.Table):
         pct : bool, default False
             Whether or not to display the returned rankings in percentile
             form.
+
         Returns
         -------
         same type as caller

@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 from __future__ import division, print_function
 
 import pickle
@@ -172,8 +172,8 @@ class Index(Frame, Serializable):
 
         See Also
         --------
-        cudf.core.multiindex.get_level_values : Get values for a level
-            of a MultiIndex.
+        cudf.core.multiindex.MultiIndex.get_level_values : Get values for
+            a level of a MultiIndex.
 
         Notes
         -----
@@ -404,7 +404,7 @@ class Index(Frame, Serializable):
         --------
         Index.min : Return the minimum value in an Index.
         cudf.core.series.Series.max : Return the maximum value in a Series.
-        cudf.core.dataframe.Dataframe.max : Return the maximum values in
+        cudf.core.dataframe.DataFrame.max : Return the maximum values in
             a DataFrame.
 
         Examples
