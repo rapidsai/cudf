@@ -15,23 +15,23 @@
  */
 #pragma once
 
+#include <thrust/detail/raw_pointer_cast.h>
 #include <thrust/device_vector.h>
 #include <algorithm>
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <functional>
 #include <iterator>
 #include <type_traits>
-#include "cudf/column/column_device_view.cuh"
-#include "cudf/column/column_factories.hpp"
-#include "cudf/table/table_device_view.cuh"
-#include "cudf/types.hpp"
-#include "cudf/utilities/traits.hpp"
 #include "operators.cuh"
-#include "thrust/detail/raw_pointer_cast.h"
 
 namespace cudf {
 
