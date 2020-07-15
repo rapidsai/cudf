@@ -83,6 +83,107 @@ std::unique_ptr<column> all_characters_of_type(
   return results;
 }
 
+namespace {
+
+/**
+ * @brief Removes individual characters from a strings column based on character type.
+ *
+ * Types to remove are specified by `types_to_remove` OR
+ * types to not remove are specified by `types_to_keep`.
+ *
+ * This is called twice. The first pass calculates the size of each output string.
+ * The final pass copies the results to the output strings column memory.
+ */
+struct filter_chars_fn {
+  column_device_view const d_column;
+  character_flags_table_type const* d_flags;
+  string_character_types const types_to_remove;
+  string_character_types const types_to_keep;
+  string_view const d_replacement;  ///< optional replacement for removed characters
+  int32_t* d_offsets{};             ///< size of the output string stored here during first pass
+  char* d_chars{};                  ///< this is null only during the first pass
+
+  /**
+   * @brief Returns true if the given character should be replaced.
+   */
+  __device__ bool replace_char(char_utf8 ch)
+  {
+    auto const code_point = detail::utf8_to_codepoint(ch);
+    auto const flag       = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
+    if (flag == 0)  // all types pass unless specifically identified
+      return (types_to_remove == ALL_TYPES);
+    if (types_to_keep == ALL_TYPES)  // filter case
+      return (types_to_remove & flag) != 0;
+    return (types_to_keep & flag) == 0;  // keep case
+  }
+
+  __device__ void operator()(size_type idx)
+  {
+    if (d_column.is_null(idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
+    }
+    auto const d_str  = d_column.element<string_view>(idx);
+    auto const in_ptr = d_str.data();
+    auto out_ptr      = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    auto nbytes       = d_str.size_bytes();
+
+    for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
+      auto const char_size = bytes_in_char_utf8(*itr);
+      string_view const d_newchar =
+        replace_char(*itr) ? d_replacement : string_view(in_ptr + itr.byte_offset(), char_size);
+      nbytes += d_newchar.size_bytes() - char_size;
+      if (out_ptr) out_ptr = cudf::strings::detail::copy_string(out_ptr, d_newchar);
+    }
+    if (!out_ptr) d_offsets[idx] = nbytes;
+  }
+};
+
+}  // namespace
+
+std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
+                                                  string_character_types types_to_remove,
+                                                  string_scalar const& replacement,
+                                                  string_character_types types_to_keep,
+                                                  cudaStream_t stream,
+                                                  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(replacement.is_valid(), "Parameter replacement must be valid");
+  if (types_to_remove == ALL_TYPES)
+    CUDF_EXPECTS(types_to_keep != ALL_TYPES,
+                 "Parameters types_to_remove and types_to_keep must not be both ALL_TYPES");
+  else
+    CUDF_EXPECTS(types_to_keep == ALL_TYPES,
+                 "One of parameter types_to_remove and types_to_keep must be set to ALL_TYPES");
+
+  auto const strings_count = strings.size();
+  if (strings_count == 0) return make_empty_column(cudf::data_type{cudf::type_id::STRING});
+
+  auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
+  cudf::string_view d_replacement(replacement.data(), replacement.size());
+  filter_chars_fn filterer{*strings_column,
+                           detail::get_character_flags_table(),
+                           types_to_remove,
+                           types_to_keep,
+                           d_replacement};
+
+  // copy null mask from input column
+  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+
+  // this utility calls filterer to build the offsets and chars columns
+  auto children = cudf::strings::detail::make_strings_children(
+    filterer, strings_count, strings.null_count(), mr, stream);
+
+  // return new strings column
+  return make_strings_column(strings_count,
+                             std::move(children.first),
+                             std::move(children.second),
+                             strings.null_count(),
+                             std::move(null_mask),
+                             stream,
+                             mr);
+}
+
 std::unique_ptr<column> is_integer(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -179,6 +280,17 @@ std::unique_ptr<column> all_characters_of_type(strings_column_view const& string
 {
   CUDF_FUNC_RANGE();
   return detail::all_characters_of_type(strings, types, verify_types, mr);
+}
+
+std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
+                                                  string_character_types types_to_remove,
+                                                  string_scalar const& replacement,
+                                                  string_character_types types_to_keep,
+                                                  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::filter_characters_of_type(
+    strings, types_to_remove, replacement, types_to_keep, 0, mr);
 }
 
 std::unique_ptr<column> is_integer(strings_column_view const& strings,
