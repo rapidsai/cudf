@@ -49,7 +49,8 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
-                 "${GBENCH_LIBRARY_DIR}")
+                 "${GBENCH_LIBRARY_DIR}"
+                 "${RMM_LIBRARY}")
 
 ###################################################################################################
 # - column benchmarks -----------------------------------------------------------------------------
