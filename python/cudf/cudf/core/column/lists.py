@@ -35,16 +35,17 @@ class ListColumn(ColumnBase):
         return self.size
 
     @property
-    def values(self):
+    def elements(self):
         """
-        Column of values (may itself be a ListColumn)
+        Column containing the elements of each list (may itself be a
+        ListColumn)
         """
         return self.children[1]
 
     @property
     def offsets(self):
         """
-        Column of integer offsets to the values
+        Integer offsets to elements specifying each row of the ListColumn
         """
         return self.children[0]
 
@@ -67,9 +68,9 @@ class ListColumn(ColumnBase):
 
     def to_arrow(self):
         offsets = self.offsets.to_arrow()
-        values = self.values.to_arrow()
-        if len(values) == values.null_count:
-            values = pa.NullArray.from_pandas([None] * len(values))
+        elements = self.elements.to_arrow()
+        if len(elements) == elements.null_count:
+            elements = pa.NullArray.from_pandas([None] * len(elements))
         if self.nullable:
             nbuf = self.mask.to_host_array().view("int8")
             nbuf = pa.py_buffer(nbuf)
@@ -77,7 +78,7 @@ class ListColumn(ColumnBase):
         else:
             buffers = offsets.buffers()
         return pa.ListArray.from_buffers(
-            self.dtype.to_arrow(), len(self), buffers, children=[values],
+            self.dtype.to_arrow(), len(self), buffers, children=[elements],
         )
 
     def list(self, parent=None):
@@ -100,7 +101,7 @@ class ListMethods(ColumnMethodsMixin):
     @property
     def leaves(self):
         """
-        From a Series of (possibly nested) lists, obtain the values from
+        From a Series of (possibly nested) lists, obtain the elements from
         the innermost lists as a flat Series (one value per row).
 
         Returns
@@ -119,9 +120,9 @@ class ListMethods(ColumnMethodsMixin):
         5       6
         dtype: int64
         """
-        if type(self._column.values) is ListColumn:
-            return self._column.values.list(parent=self._parent).leaves
+        if type(self._column.elements) is ListColumn:
+            return self._column.elements.list(parent=self._parent).leaves
         else:
             return self._return_or_inplace(
-                self._column.values, retain_index=False
+                self._column.elements, retain_index=False
             )

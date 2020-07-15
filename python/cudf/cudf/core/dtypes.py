@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import pickle
 
 import numpy as np
@@ -108,15 +110,17 @@ class CategoricalDtype(ExtensionDtype):
 
 
 class ListDtype(ExtensionDtype):
-    def __init__(self, value_type):
-        if isinstance(value_type, ListDtype):
-            self._typ = pa.list_(value_type._typ)
+    def __init__(self, element_type):
+        if isinstance(element_type, ListDtype):
+            self._typ = pa.list_(element_type._typ)
         else:
-            value_type = cudf.utils.dtypes.np_to_pa_dtype(np.dtype(value_type))
-            self._typ = pa.list_(value_type)
+            element_type = cudf.utils.dtypes.np_to_pa_dtype(
+                np.dtype(element_type)
+            )
+            self._typ = pa.list_(element_type)
 
     @property
-    def value_type(self):
+    def element_type(self):
         if isinstance(self._typ.value_type, pa.ListType):
             return ListDtype.from_arrow(self._typ.value_type)
         else:
@@ -124,13 +128,15 @@ class ListDtype(ExtensionDtype):
 
     @property
     def leaf_type(self):
-        if isinstance(self.value_type, ListDtype):
-            return self.value_type.leaf_type
+        if isinstance(self.element_type, ListDtype):
+            return self.element_type.leaf_type
         else:
-            return self.value_type
+            return self.element_type
 
     @property
     def type(self):
+        # TODO: we should change this to return something like a
+        # ListDtypeType, once we figure out what that should look like
         return pa.array
 
     @property
@@ -157,7 +163,7 @@ class ListDtype(ExtensionDtype):
         return self._typ.equals(other._typ)
 
     def __repr__(self):
-        if isinstance(self.value_type, ListDtype):
-            return f"ListDtype({self.value_type.__repr__()})"
+        if isinstance(self.element_type, ListDtype):
+            return f"ListDtype({self.element_type.__repr__()})"
         else:
-            return f"ListDtype({self.value_type})"
+            return f"ListDtype({self.element_type})"
