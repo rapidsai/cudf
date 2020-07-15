@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,18 +82,56 @@ std::unique_ptr<table> rsplit(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Splits individual strings elements in to a list of tokens.
+ * @brief Splits individual strings elements into a list of strings.
  *
- * Each element generates an array of tokens that are stored in a
- * resulting list column.
+ * Each element generates an array of strings that are stored in an output
+ * lists column.
  *
- * The number of elements in the output list will be the same as the number of
+ * The number of elements in the output column will be the same as the number of
  * elements in the input column. Each individual list item will contain the
- * tokens for that row. The resulting number of tokens in each row can vary
- * from 0 to `maxsplit+1`.
+ * new strings for that row. The resulting number of strings in each row can vary
+ * from 0 to `maxsplit + 1`.
  *
  * The `delimiter` is searched within each string from beginning to end
  * and splitting stops when either `maxsplit` or the end of the string is reached.
+ *
+ * If a delimiter is not whitespace and occurs adjacent to another delimiter,
+ * an empty string is produced for that split occurrence. Likewise, a non-whitespace
+ * delimiter produces an empty string if it appears at the beginning or the end
+ * of a string.
+ *
+ * @code{.pseudo}
+ * s = ["a_bc_def_g", "a__bc", "_ab_cd", "ab_cd_"]
+ * s1 = split_record(s, "_")
+ * s1 is a lists column of strings:
+ *     [ ["a", "bc", "def", "g"],
+ *       ["a", "", "bc"],
+ *       ["", "ab", "cd"],
+ *       ["ab", "cd", ""] ]
+ * s2 = split_record(s, "_", 1)
+ * s2 is a lists column of strings:
+ *     [ ["a", "bc_def_g"],
+ *       ["a", "_bc"],
+ *       ["", "ab_cd"],
+ *       ["ab", "cd_"] ]
+ * @endcode
+ *
+ * A whitespace delimiter produces no empty strings.
+ * @code{.pseudo}
+ * s = ["a bc def", "a  bc", " ab cd", "ab cd "]
+ * s1 = split_record(s, "")
+ * s1 is a lists column of strings:
+ *     [ ["a", "bc", "def"],
+ *       ["a", "bc"],
+ *       ["ab", "cd"],
+ *       ["ab", "cd"] ]
+ * s2 = split_record(s, "", 1)
+ * s2 is a lists column of strings:
+ *     [ ["a", "bc def"],
+ *       ["a", "bc"],
+ *       ["ab", "cd"],
+ *       ["ab", "cd "] ]
+ * @endcode
  *
  * A null string element will result in a null list item for that row.
  *
@@ -105,8 +143,8 @@ std::unique_ptr<table> rsplit(
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
  * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return List column of strings
- *         Each vector of the list column holds splits from a single row
+ * @return Lists column of strings
+ *         Each vector of the lists column holds splits from a single row
  *         element of the input column.
  */
 std::unique_ptr<column> split_record(
@@ -116,19 +154,61 @@ std::unique_ptr<column> split_record(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief  Splits individual strings elements in to a list of tokens starting
+ * @brief  Splits individual strings elements into a list of strings starting
  * from the end of each string.
  *
- * Each element generates an array of tokens that are stored in a
- * resulting list column.
+ * Each element generates an array of strings that are stored in an output
+ * lists column.
  *
- * The number of elements in the output list will be the same as the number of
+ * The number of elements in the output column will be the same as the number of
  * elements in the input column. Each individual list item will contain the
- * tokens for that row. The resulting number of tokens in each row can vary
- * from 0 to `maxsplit+1`.
+ * new strings for that row. The resulting number of strings in each row can vary
+ * from 0 to `maxsplit + 1`.
  *
  * The `delimiter` is searched from end to beginning within each string
- * and splitting stops when either `maxsplit` or the end of the string is reached.
+ * and splitting stops when either `maxsplit` or the beginning of the string
+ * is reached.
+ *
+ * If a delimiter is not whitespace and occurs adjacent to another delimiter,
+ * an empty string is produced for that split occurrence. Likewise, a non-whitespace
+ * delimiter produces an empty string if it appears at the beginning or the end
+ * of a string.
+ *
+ * Note that `rsplit_record` and `split_record` produce equivalent results for
+ * the default `maxsplit` value.
+ *
+ * @code{.pseudo}
+ * s = ["a_bc_def_g", "a__bc", "_ab_cd", "ab_cd_"]
+ * s1 = rsplit_record(s, "_")
+ * s1 is a lists column of strings:
+ *     [ ["a", "bc", "def", "g"],
+ *       ["a", "", "bc"],
+ *       ["", "ab", "cd"],
+ *       ["ab", "cd", ""] ]
+ * s2 = rsplit_record(s, "_", 1)
+ * s2 is a lists column of strings:
+ *     [ ["a_bc_def", "g"],
+ *       ["a_", "bc"],
+ *       ["_ab", "cd"],
+ *       ["ab_cd", ""] ]
+ * @endcode
+ *
+ * A whitespace delimiter produces no empty strings.
+ * @code{.pseudo}
+ * s = ["a bc def", "a  bc", " ab cd", "ab cd "]
+ * s1 = rsplit_record(s, "")
+ * s1 is a lists column of strings:
+ *     [ ["a", "bc", "def"],
+ *       ["a", "bc"],
+ *       ["ab", "cd"],
+ *       ["ab", "cd"] ]
+ * s2 = rsplit_record(s, "", 1)
+ * s2 is a lists column of strings:
+ *     [ ["a bc", "def"],
+ *       ["a", "bc"],
+ *       [" ab", "cd"],
+ *       ["ab", "cd"] ]
+ * @endcode
  *
  * A null string element will result in a null list item for that row.
  *
@@ -140,8 +220,8 @@ std::unique_ptr<column> split_record(
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
  * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return List column of strings
- *         Each vector of the list column holds splits from a single row
+ * @return Lists column of strings
+ *         Each vector of the lists column holds splits from a single row
  *         element of the input column.
  */
 std::unique_ptr<column> rsplit_record(
