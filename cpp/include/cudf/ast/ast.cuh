@@ -621,6 +621,8 @@ std::unique_ptr<column> compute_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   // Linearize the AST
+  nvtxRangePush(__FUNCTION__);
+  nvtxMark("Linearizing...");
   auto expr_linearizer = linearizer(table);
   expr.get().accept(expr_linearizer);
   auto data_references         = expr_linearizer.get_data_references();
@@ -631,6 +633,7 @@ std::unique_ptr<column> compute_column(
   auto expr_data_type          = expr_linearizer.get_root_data_type();
 
   // Create device data
+  nvtxMark("Creating device data...");
   auto device_data_references =
     thrust::device_vector<detail::device_data_reference>(data_references);
   // TODO: Literals
@@ -662,16 +665,19 @@ std::unique_ptr<column> compute_column(
   */
 
   // Create table device view
+  nvtxMark("Creating table device view...");
   auto table_device   = table_device_view::create(table, stream);
   auto table_num_rows = table.num_rows();
 
   // Prepare output column
+  nvtxMark("Preparing output column...");
   auto output_column =
     make_fixed_width_column(expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   // Configure kernel parameters
+  nvtxMark("Configuring kernel parameters...");
   auto block_size = 1024;  // TODO: Dynamically determine block size based on shared memory limits
                            // and block size limits
   cudf::detail::grid_1d config(table_num_rows, block_size);
@@ -681,6 +687,7 @@ std::unique_ptr<column> compute_column(
   // std::cout << "Requesting " << shmem_size_per_block << " bytes of shared memory." << std::endl;
 
   // Execute the kernel
+  nvtxMark("Executing AST kernel...");
   compute_column_kernel<<<config.num_blocks,
                           config.num_threads_per_block,
                           shmem_size_per_block,
@@ -692,6 +699,7 @@ std::unique_ptr<column> compute_column(
                                     num_operators,
                                     num_intermediates,
                                     *mutable_output_device);
+  nvtxRangePop();
   return output_column;
 }
 
