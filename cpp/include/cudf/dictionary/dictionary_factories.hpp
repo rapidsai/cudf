@@ -50,9 +50,8 @@ namespace cudf {
  *
  * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices_column Indices to use for the new dictionary column.
- * @param mr Resource for allocating memory for the output.
- * @param stream Optional stream on which to issue all memory allocation and
- *               device kernels.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New dictionary column.
  */
 std::unique_ptr<column> make_dictionary_column(

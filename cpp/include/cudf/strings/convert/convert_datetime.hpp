@@ -50,8 +50,6 @@ namespace strings {
  *
  * Invalid formats are not checked. If the string contains unexpected
  * or insufficient characters, that output row entry's timestamp value is undefined.
- * Negative timestamp values are not currently supported. These would have
- * dates formatted before 1970-01-01.
  *
  * Any null string entry will result in a corresponding null row in the output column.
  *
@@ -66,7 +64,7 @@ namespace strings {
  * @param strings Strings instance for this operation.
  * @param timestamp_type The timestamp type used for creating the output column.
  * @param format String specifying the timestamp format in strings.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New datetime column.
  */
 std::unique_ptr<column> to_timestamps(
@@ -98,7 +96,6 @@ std::unique_ptr<column> to_timestamps(
  * | %%p | Only 'AM' or 'PM' |
  *
  * No checking is done for invalid formats or invalid timestamp values.
- * Negative timestamp values are not currently supported.
  * All timestamps values are formatted to UTC.
  *
  * Any null input entry will result in a corresponding null entry in the output column.
@@ -117,7 +114,7 @@ std::unique_ptr<column> to_timestamps(
  * @param timestamps Timestamp values to convert.
  * @param format The string specifying output format.
  *        Default format is "%Y-%m-%dT%H:%M:%SZ".
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with formatted timestamps.
  */
 std::unique_ptr<column> from_timestamps(

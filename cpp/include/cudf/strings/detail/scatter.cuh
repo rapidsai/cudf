@@ -44,8 +44,8 @@ namespace detail {
  * @param scatter_map Iterator of indices into the output column.
  * @param target The set of columns into which values from the source column
  *        are to be scattered.
- * @param mr The resource to use for all allocations
- * @param stream The stream to use for CUDA operations
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column.
  */
 template <typename SourceIterator, typename MapIterator>
@@ -61,7 +61,7 @@ std::unique_ptr<column> scatter(
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
   // create null mask -- caller must update this
-  rmm::device_buffer null_mask;
+  rmm::device_buffer null_mask{0, stream, mr};
   if (target.has_nulls()) null_mask = copy_bitmask(target.parent(), stream, mr);
 
   // create string vectors

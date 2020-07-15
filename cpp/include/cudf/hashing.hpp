@@ -30,7 +30,7 @@ namespace cudf {
  * @param input The table of columns to hash
  * @param initial_hash Optional vector of initial hash values for each column.
  * If this vector is empty then each element will be hashed as-is.
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @returns A column where each row is the hash of a column from the input
  */

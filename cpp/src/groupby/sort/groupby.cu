@@ -198,8 +198,14 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
         data_type(type_to_id<size_type>()),
         argmin_result.size(),
         static_cast<void const*>(argmin_result.template data<size_type>()));
-      auto transformed_result = cudf::detail::gather(
-        table_view({values}), null_removed_map, false, argmin_result.nullable(), false, mr, stream);
+      auto transformed_result =
+        cudf::detail::gather(table_view({values}),
+                             null_removed_map,
+                             argmin_result.nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
+                                                      : cudf::detail::out_of_bounds_policy::NULLIFY,
+                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                             mr,
+                             stream);
       return std::move(transformed_result->release()[0]);
     }
   }();
@@ -229,8 +235,14 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
         data_type(type_to_id<size_type>()),
         argmax_result.size(),
         static_cast<void const*>(argmax_result.template data<size_type>()));
-      auto transformed_result = cudf::detail::gather(
-        table_view({values}), null_removed_map, false, argmax_result.nullable(), false, mr, stream);
+      auto transformed_result =
+        cudf::detail::gather(table_view({values}),
+                             null_removed_map,
+                             argmax_result.nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
+                                                      : cudf::detail::out_of_bounds_policy::NULLIFY,
+                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                             mr,
+                             stream);
       return std::move(transformed_result->release()[0]);
     }
   }();

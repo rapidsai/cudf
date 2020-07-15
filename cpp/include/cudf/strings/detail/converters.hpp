@@ -26,7 +26,7 @@ namespace detail {
 /**
  * @copydoc to_integers(strings_column_view const&,data_type,rmm::mr::device_memory_resource*)
  *
- * @param stream Stream on which to execute kernels.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> to_integers(strings_column_view const& strings,
                                     data_type output_type,
@@ -36,7 +36,7 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
 /**
  * @copydoc from_integers(strings_column_view const&,rmm::mr::device_memory_resource*)
  *
- * @param stream Stream on which to execute kernels.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> from_integers(column_view const& integers,
                                       cudaStream_t stream,
@@ -45,7 +45,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
 /**
  * @copydoc to_floats(strings_column_view const&,data_type,rmm::mr::device_memory_resource*)
  *
- * @param stream Stream on which to execute kernels.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> to_floats(strings_column_view const& strings,
                                   data_type output_type,
@@ -55,7 +55,7 @@ std::unique_ptr<column> to_floats(strings_column_view const& strings,
 /**
  * @copydoc from_floats(strings_column_view const&,rmm::mr::device_memory_resource*)
  *
- * @param stream Stream on which to execute kernels.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> from_floats(column_view const& floats,
                                     cudaStream_t stream,
@@ -65,7 +65,7 @@ std::unique_ptr<column> from_floats(column_view const& floats,
  * @copydoc to_booleans(strings_column_view const&,string_scalar
  * const&,rmm::mr::device_memory_resource*)
  *
- * @param stream Stream on which to execute kernels.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> to_booleans(strings_column_view const& strings,
                                     string_scalar const& true_string,
@@ -76,7 +76,7 @@ std::unique_ptr<column> to_booleans(strings_column_view const& strings,
  * @copydoc from_booleans(strings_column_view const&,string_scalar const&,string_scalar
  * const&,rmm::mr::device_memory_resource*)
  *
- * @param stream Stream on which to execute kernels.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       string_scalar const& true_string,
@@ -88,7 +88,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
  * @copydoc to_timestamps(strings_column_view const&,data_type,std::string
  * const&,rmm::mr::device_memory_resource*)
  *
- * @param stream Stream on which to execute kernels.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
                                             data_type timestamp_type,
@@ -100,7 +100,7 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
  * @copydoc from_timestamps(strings_column_view const&,std::string
  * const&,rmm::mr::device_memory_resource*)
  *
- * @param stream Stream on which to execute kernels.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         std::string const& format,

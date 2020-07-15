@@ -28,8 +28,8 @@
 #include <rmm/device_buffer.hpp>
 
 #include <io/utilities/column_buffer.hpp>
-#include <io/utilities/datasource.hpp>
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/readers.hpp>
 
 namespace cudf {
@@ -52,7 +52,7 @@ class reader::impl {
 
   std::unique_ptr<datasource> source_;
   std::string filepath_;
-  std::shared_ptr<arrow::Buffer> buffer_;
+  std::unique_ptr<datasource::buffer> buffer_;
 
   const char *uncomp_data_ = nullptr;
   size_t uncomp_size_      = 0;
@@ -102,7 +102,7 @@ class reader::impl {
    *
    * Does not upload the entire file to the GPU
    *
-   * @param[in] stream Cuda stream to execute gpu operations on
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return void
    **/
@@ -124,7 +124,7 @@ class reader::impl {
    *
    * Sets the column_names_ data member
    *
-   * @param[in] stream Cuda stream to execute gpu operations on
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return void
    **/
@@ -135,7 +135,7 @@ class reader::impl {
    *
    * If user does not pass the data types, deduces types from the file content
    *
-   * @param[in] stream Cuda stream to execute gpu operations on
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return void
    **/
@@ -144,7 +144,7 @@ class reader::impl {
   /**
    * @brief Parse the input data and store results a table
    *
-   * @param[in] stream Cuda stream to execute gpu operations on
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return table_with_metadata struct
    **/
@@ -164,7 +164,7 @@ class reader::impl {
    *
    * @param[in] range_offset Number of bytes offset from the start
    * @param[in] range_size Bytes to read; use `0` for all remaining data
-   * @param[in] stream Cuda stream to execute gpu operations on
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Unique pointer to the table data
    **/

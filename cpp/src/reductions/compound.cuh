@@ -33,8 +33,8 @@ namespace compound {
  * @param[in] ddof   `Delta Degrees of Freedom` used for `std`, `var`.
  *                   The divisor used in calculations is N - ddof, where N
  *                   represents the number of elements.
- * @param[in] mr    The resource to use for all allocations
- * @param[in] stream cuda stream
+ * @param[in] mr     Device memory resource used to allocate the returned scalar's device memory
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @returns   Output scalar in device memory
  *
  * @tparam ElementType  the input column cudf dtype
@@ -57,10 +57,9 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
   Op compound_op{};
 
   if (col.has_nulls()) {
-    auto it =
-      thrust::make_transform_iterator(cudf::detail::make_null_replacement_iterator(
-                                        *dcol, compound_op.template get_identity<ElementType>()),
-                                      compound_op.template get_element_transformer<ResultType>());
+    auto it = thrust::make_transform_iterator(
+      dcol->pair_begin<ElementType, true>(),
+      compound_op.template get_null_replacing_element_transformer<ResultType>());
     result = detail::reduce<Op, decltype(it), ResultType>(
       it, col.size(), compound_op, valid_count, ddof, mr, stream);
   } else {

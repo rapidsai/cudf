@@ -28,7 +28,7 @@ namespace detail {
  * @copydoc concatenate(table_view const&,string_scalar const&,string_scalar
  * const&,rmm::mr::device_memory_resource*)
  *
- * @param stream Stream on which to run kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& separator,
@@ -40,7 +40,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
  * @copydoc join_strings(table_view const&,string_scalar const&,string_scalar
  * const&,rmm::mr::device_memory_resource*)
  *
- * @param stream Stream on which to run kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> join_strings(strings_column_view const& strings,
                                      string_scalar const& separator,

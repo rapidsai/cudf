@@ -19,16 +19,102 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <strings/utilities.cuh>
 
 namespace cudf {
 namespace detail {
 namespace {
 struct interleave_columns_functor {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> operator()(
-    Args&&... args)
+  std::enable_if_t<not cudf::is_fixed_width<T>() and not std::is_same<T, cudf::string_view>::value,
+                   std::unique_ptr<cudf::column>>
+  operator()(Args&&... args)
   {
-    CUDF_FAIL("Only fixed-width types are supported in interleave_columns.");
+    CUDF_FAIL("interleave_columns not supported for dictionary and list types.");
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::string_view>::value, std::unique_ptr<cudf::column>>
+  operator()(table_view const& strings_columns,
+             bool create_mask,
+             rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream = 0)
+  {
+    auto num_columns = strings_columns.num_columns();
+    if (num_columns == 1)  // Single strings column returns a copy
+      return std::make_unique<column>(*(strings_columns.begin()), stream, mr);
+
+    auto strings_count = strings_columns.num_rows();
+    if (strings_count == 0)  // All columns have 0 rows
+      return strings::detail::make_empty_strings_column(mr, stream);
+
+    // Create device views from the strings columns.
+    auto table       = table_device_view::create(strings_columns, stream);
+    auto d_table     = *table;
+    auto num_strings = num_columns * strings_count;
+
+    std::pair<rmm::device_buffer, size_type> valid_mask{{}, 0};
+    if (create_mask) {
+      // Create resulting null mask
+      valid_mask = cudf::detail::valid_if(
+        thrust::make_counting_iterator<size_type>(0),
+        thrust::make_counting_iterator<size_type>(num_strings),
+        [num_columns, d_table] __device__(size_type idx) {
+          auto source_row_idx = idx % num_columns;
+          auto source_col_idx = idx / num_columns;
+          return !d_table.column(source_row_idx).is_null(source_col_idx);
+        },
+        stream,
+        mr);
+    }
+
+    auto const null_count = valid_mask.second;
+
+    // Build offsets column by computing sizes of each string in the output
+    auto offsets_transformer = [num_columns, d_table] __device__(size_type idx) {
+      // First compute the column and the row this item belongs to
+      auto source_row_idx = idx % num_columns;
+      auto source_col_idx = idx / num_columns;
+      return d_table.column(source_row_idx).is_valid(source_col_idx)
+               ? d_table.column(source_row_idx).element<string_view>(source_col_idx).size_bytes()
+               : 0;
+    };
+    auto offsets_transformer_itr = thrust::make_transform_iterator(
+      thrust::make_counting_iterator<size_type>(0), offsets_transformer);
+    auto offsets_column = strings::detail::make_offsets_child_column(
+      offsets_transformer_itr, offsets_transformer_itr + num_strings, mr, stream);
+    auto d_results_offsets = offsets_column->view().template data<int32_t>();
+
+    // Create the chars column
+    size_type bytes = thrust::device_pointer_cast(d_results_offsets)[num_strings];
+    auto chars_column =
+      strings::detail::create_chars_child_column(num_strings, null_count, bytes, mr, stream);
+    // Fill the chars column
+    auto d_results_chars = chars_column->mutable_view().data<char>();
+    thrust::for_each_n(
+      rmm::exec_policy(stream)->on(stream),
+      thrust::make_counting_iterator<size_type>(0),
+      num_strings,
+      [num_columns, d_table, d_results_offsets, d_results_chars] __device__(size_type idx) {
+        auto source_row_idx = idx % num_columns;
+        auto source_col_idx = idx / num_columns;
+
+        // Do not write to buffer if the column value for this row is null
+        if (d_table.column(source_row_idx).is_null(source_col_idx)) return;
+
+        size_type offset = d_results_offsets[idx];
+        char* d_buffer   = d_results_chars + offset;
+        strings::detail::copy_string(
+          d_buffer, d_table.column(source_row_idx).element<string_view>(source_col_idx));
+      });
+
+    return make_strings_column(num_strings,
+                               std::move(offsets_column),
+                               std::move(chars_column),
+                               null_count,
+                               std::move(valid_mask.first),
+                               stream,
+                               mr);
   }
 
   template <typename T>

@@ -35,8 +35,7 @@ namespace cudf {
  * Returns empty `device_buffer` if the column is not nullable
  *
  * @param views Vector of column views whose bitmask will to be concatenated
- * @param mr Optional, the memory resource that will be used for allocating
- * the device memory for the new device_buffer
+ * @param mr Device memory resource used for allocating the new device_buffer
  * @return rmm::device_buffer A `device_buffer` containing the bitmasks of all
  * the column views in the views vector
  */
@@ -52,7 +51,7 @@ rmm::device_buffer concatenate_masks(
  *
  * @param columns_to_concat The column views to be concatenated into a single
  * column
- * @param mr Optional The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Unique pointer to a single table having all the rows from the
  * elements of `columns_to_concat` respectively in the same order.
  */
@@ -83,7 +82,7 @@ std::unique_ptr<column> concatenate(
  *
  * @param tables_to_concat The table views to be concatenated into a single
  * table
- * @param mr Optional The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return Unique pointer to a single table having all the rows from the
  * elements of `tables_to_concat` respectively in the same order.
  */

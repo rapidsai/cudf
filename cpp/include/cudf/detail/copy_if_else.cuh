@@ -150,8 +150,8 @@ __launch_bounds__(block_size) __global__
  * @param rhs         Begin iterator of rhs range
  * @param filter      Function of type `FilterFn` which determines for index `i` where to get the
  *                    corresponding output value from
- * @param mr          Memory resource to use for allocating the output
- * @param stream      CUDA stream to perform the computation in
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @return            A new column that contains the values from either `lhs` or `rhs` as determined
  *                    by `filter[i]`
  */

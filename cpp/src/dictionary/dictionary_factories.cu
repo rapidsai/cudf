@@ -25,7 +25,7 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
                                                cudaStream_t stream)
 {
   CUDF_EXPECTS(!keys_column.has_nulls(), "keys column must not have nulls");
-  if (keys_column.size() == 0) return make_empty_column(data_type{DICTIONARY32});
+  if (keys_column.size() == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
   CUDF_EXPECTS(indices_column.type().id() == cudf::type_id::INT32, "indices column must be INT32");
 
   auto keys_copy = std::make_unique<column>(keys_column, stream, mr);
@@ -36,14 +36,14 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
                            0,
                            indices_column.offset()};
   auto indices_copy = std::make_unique<column>(indices_view, stream, mr);
-  rmm::device_buffer null_mask;
+  rmm::device_buffer null_mask{0, stream, mr};
   auto null_count = indices_column.null_count();
   if (null_count) null_mask = copy_bitmask(indices_column, stream, mr);
 
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(indices_copy));
   children.emplace_back(std::move(keys_copy));
-  return std::make_unique<column>(data_type{DICTIONARY32},
+  return std::make_unique<column>(data_type{type_id::DICTIONARY32},
                                   indices_column.size(),
                                   rmm::device_buffer{0, stream, mr},
                                   std::move(null_mask),
@@ -64,7 +64,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(indices_column));
   children.emplace_back(std::move(keys_column));
-  return std::make_unique<column>(data_type{DICTIONARY32},
+  return std::make_unique<column>(data_type{type_id::DICTIONARY32},
                                   count,
                                   rmm::device_buffer{},
                                   std::move(null_mask),

@@ -35,7 +35,7 @@ static constexpr size_type warp_size{32};
 
 /**
  * @brief A kernel grid configuration construction gadget for simple
- * one-dimensional, with protection against integer overflow.
+ * one-dimensional kernels, with protection against integer overflow.
  */
 class grid_1d {
  public:
@@ -54,9 +54,9 @@ class grid_1d {
    * contain
    */
   grid_1d(cudf::size_type overall_num_elements,
-          cudf::size_type num_threads_per_block_,
+          cudf::size_type num_threads_per_block,
           cudf::size_type elements_per_thread = 1)
-    : num_threads_per_block(num_threads_per_block_),
+    : num_threads_per_block(num_threads_per_block),
       num_blocks(util::div_rounding_up_safe(overall_num_elements,
                                             elements_per_thread * num_threads_per_block))
   {
@@ -165,7 +165,7 @@ __global__ void single_thread_kernel(F f)
  *
  * @tparam Functor Device functor type
  * @param functor device functor object or device lambda function
- * @param stream stream to run the kernel
+ * @param stream CUDA stream used for the kernel launch
  */
 template <class Functor>
 void device_single_thread(Functor functor, cudaStream_t stream = 0)

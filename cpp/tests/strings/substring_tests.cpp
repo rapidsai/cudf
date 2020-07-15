@@ -150,13 +150,14 @@ INSTANTIATE_TEST_CASE_P(StringsSubstringsTest,
 
 TEST_F(StringsSubstringsTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_column = cudf::strings_column_view(zero_size_strings_column);
   auto results        = cudf::strings::slice_strings(strings_column, 1, 2);
   cudf::test::expect_strings_empty(results->view());
 
-  cudf::column_view starts_column(cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
-  cudf::column_view stops_column(cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
+  cudf::column_view starts_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
+  cudf::column_view stops_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
   results = cudf::strings::slice_strings(strings_column, starts_column, stops_column);
   cudf::test::expect_strings_empty(results->view());
 }
@@ -269,4 +270,321 @@ TEST_F(StringsSubstringsTest, Error)
   cudf::test::strings_column_wrapper strings{"this string intentionally left blank"};
   auto strings_column = cudf::strings_column_view(strings);
   EXPECT_THROW(cudf::strings::slice_strings(strings_column, 0, 0, 0), cudf::logic_error);
+}
+
+struct StringsSubstringsScalarDelimiterTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(StringsSubstringsScalarDelimiterTest, ZeroSizeStringsColumn)
+{
+  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto strings_view = cudf::strings_column_view(col0);
+
+  auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("foo"), 1);
+  cudf::test::expect_strings_empty(results->view());
+}
+
+TEST_F(StringsSubstringsScalarDelimiterTest, AllEmpty)
+{
+  auto strings_col  = cudf::test::strings_column_wrapper({"", "", "", "", ""});
+  auto strings_view = cudf::strings_column_view(strings_col);
+
+  auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", ""});
+
+  auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("e"), -1);
+  cudf::test::expect_columns_equal(*results, exp_results, true);
+}
+
+TEST_F(StringsSubstringsScalarDelimiterTest, EmptyDelimiter)
+{
+  auto strings_col = cudf::test::strings_column_wrapper(
+    {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
+  ;
+  auto strings_view = cudf::strings_column_view(strings_col);
+
+  auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
+                                                        {true, true, false, true, true, true});
+  auto results     = cudf::strings::slice_strings(strings_view, cudf::string_scalar(""), 1);
+  cudf::test::expect_columns_equal(*results, exp_results, true);
+}
+
+TEST_F(StringsSubstringsScalarDelimiterTest, ZeroCount)
+{
+  auto strings_col = cudf::test::strings_column_wrapper(
+    {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
+  ;
+  auto strings_view = cudf::strings_column_view(strings_col);
+
+  auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
+                                                        {true, true, false, true, true, true});
+
+  auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), 0);
+  cudf::test::expect_columns_equal(*results, exp_results, true);
+}
+
+TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
+{
+  auto strings_col = cudf::test::strings_column_wrapper(
+    {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
+  ;
+  auto strings_view = cudf::strings_column_view(strings_col);
+
+  {
+    auto exp_results = cudf::test::strings_column_wrapper({"H", "thes", "", "lease", "t", ""},
+                                                          {true, true, false, true, true, true});
+
+    auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), 1);
+    cudf::test::expect_columns_equal(*results, exp_results, true);
+  }
+
+  {
+    auto exp_results = cudf::test::strings_column_wrapper(
+      {"llo", "", "", "lease", "st strings", ""}, {true, true, false, true, true, true});
+
+    auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), -1);
+    cudf::test::expect_columns_equal(*results, exp_results, true);
+  }
+
+  {
+    auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), 2);
+    cudf::test::expect_columns_equal(*results, strings_view.parent(), true);
+  }
+
+  {
+    auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), -2);
+    cudf::test::expect_columns_equal(*results, strings_view.parent(), true);
+  }
+
+  {
+    auto col0 = cudf::test::strings_column_wrapper(
+      {"Hello LLollooogh", "oopppllo", "", "oppollo", "polo lop apploo po", ""},
+      {true, true, false, true, true, true});
+
+    auto exp_results = cudf::test::strings_column_wrapper({"Hello LL", "o", "", "opp", "pol", ""},
+                                                          {true, true, false, true, true, true});
+
+    auto results =
+      cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("o"), 2);
+    cudf::test::expect_columns_equal(*results, exp_results, true);
+  }
+
+  {
+    auto col0 = cudf::test::strings_column_wrapper(
+      {"Hello LLollooogh", "oopppllo", "", "oppollo", "polo lop apploo po", ""},
+      {true, true, false, true, true, true});
+
+    auto exp_results = cudf::test::strings_column_wrapper({"ogh", "pppllo", "", "llo", " po", ""},
+                                                          {true, true, false, true, true, true});
+
+    auto results =
+      cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("o"), -2);
+    cudf::test::expect_columns_equal(*results, exp_results, true);
+  }
+
+  {
+    auto col0 = cudf::test::strings_column_wrapper(
+      {"Héllo HélloHéllo", "Hélloééééé", "", "éééééé", "poloéé lopéé applooéé po", ""},
+      {true, true, false, true, true, true});
+
+    auto exp_results = cudf::test::strings_column_wrapper(
+      {"Héllo HélloHéllo", "Hélloééééé", "", "éééé", "poloéé lopéé apploo", ""},
+      {true, true, false, true, true, true});
+
+    auto results =
+      cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("éé"), 3);
+    cudf::test::expect_columns_equal(*results, exp_results, true);
+  }
+
+  {
+    auto col0 = cudf::test::strings_column_wrapper(
+      {"Héllo HélloHéllo", "Hélloééééé", "", "éééééé", "poloéé lopéé applooéé po", ""},
+      {true, true, false, true, true, true});
+
+    auto exp_results = cudf::test::strings_column_wrapper(
+      {"Héllo HélloHéllo", "Hélloééééé", "", "éééé", " lopéé applooéé po", ""},
+      {true, true, false, true, true, true});
+
+    auto results =
+      cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("éé"), -3);
+    cudf::test::expect_columns_equal(*results, exp_results, true);
+  }
+
+  {
+    auto col0 = cudf::test::strings_column_wrapper({"www.yahoo.com",
+                                                    "www.apache..org",
+                                                    "tennis...com",
+                                                    "nvidia....com",
+                                                    "google...........com",
+                                                    "microsoft...c.....co..m"});
+
+    auto exp_results = cudf::test::strings_column_wrapper(
+      {"www.yahoo.com", "www.apache.", "tennis..", "nvidia..", "google..", "microsoft.."});
+
+    auto results =
+      cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("."), 3);
+    cudf::test::expect_columns_equal(*results, exp_results, true);
+  }
+
+  {
+    auto col0 = cudf::test::strings_column_wrapper({"www.yahoo.com",
+                                                    "www.apache..org",
+                                                    "tennis..com",
+                                                    "nvidia....com",
+                                                    "google...........com",
+                                                    ".",
+                                                    "microsoft...c.....co..m"});
+
+    auto exp_results = cudf::test::strings_column_wrapper(
+      {"www.yahoo.com", "www.apache..org", "tennis..com", "..com", "..com", ".", "co..m"});
+
+    auto results =
+      cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar(".."), -2);
+    cudf::test::expect_columns_equal(*results, exp_results, true);
+  }
+}
+
+struct StringsSubstringsColumnDelimiterTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(StringsSubstringsColumnDelimiterTest, ZeroSizeStringsColumn)
+{
+  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto strings_view = cudf::strings_column_view(col0);
+
+  auto results = cudf::strings::slice_strings(strings_view, strings_view, 1);
+  // Check empty column
+  cudf::test::expect_strings_empty(results->view());
+}
+
+TEST_F(StringsSubstringsColumnDelimiterTest, GenerateExceptions)
+{
+  auto col0      = cudf::test::strings_column_wrapper({"", "", "", "", ""});
+  auto delim_col = cudf::test::strings_column_wrapper({"", "foo", "bar", "."});
+
+  EXPECT_THROW(cudf::strings::slice_strings(
+                 cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -1),
+               cudf::logic_error);
+}
+
+TEST_F(StringsSubstringsColumnDelimiterTest, ColumnAllEmpty)
+{
+  auto col0      = cudf::test::strings_column_wrapper({"", "", "", "", ""});
+  auto delim_col = cudf::test::strings_column_wrapper({"", "foo", "bar", ".", "/"});
+
+  auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", ""});
+
+  auto results = cudf::strings::slice_strings(
+    cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -1);
+  cudf::test::expect_columns_equal(*results, exp_results, true);
+}
+
+TEST_F(StringsSubstringsColumnDelimiterTest, DelimiterAllEmptyAndInvalid)
+{
+  auto col0 = cudf::test::strings_column_wrapper(
+    {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
+  auto delim_col = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
+                                                      {true, false, true, false, true, false});
+
+  auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
+                                                        {true, true, false, true, true, true});
+
+  auto results = cudf::strings::slice_strings(
+    cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 1);
+  cudf::test::expect_columns_equal(*results, exp_results, true);
+}
+
+TEST_F(StringsSubstringsColumnDelimiterTest, ZeroDelimiterCount)
+{
+  auto col0 = cudf::test::strings_column_wrapper(
+    {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
+  auto delim_col = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
+                                                      {true, false, true, false, true, false});
+
+  auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
+                                                        {true, true, false, true, true, true});
+
+  auto results = cudf::strings::slice_strings(
+    cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 0);
+  cudf::test::expect_columns_equal(*results, exp_results, true);
+}
+
+TEST_F(StringsSubstringsColumnDelimiterTest, SearchDelimiter)
+{
+  {
+    auto col0 = cudf::test::strings_column_wrapper(
+      {"H™élloi ™◎oo™ff™", "thesé", "", "lease™", "tést strings", "™"},
+      {true, true, false, true, true, true});
+    auto delim_col = cudf::test::strings_column_wrapper({"™", "™", "", "e", "t", "™"});
+
+    auto exp_results = cudf::test::strings_column_wrapper({"H", "thesé", "", "l", "", ""},
+                                                          {true, true, false, true, true, true});
+
+    auto results = cudf::strings::slice_strings(
+      cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 1);
+    cudf::test::expect_columns_equal(*results, exp_results, true);
+  }
+
+  {
+    auto col0      = cudf::test::strings_column_wrapper({"H™élloﬀ ﬀﬀi ™◎ooﬀ™ff™",
+                                                    "tﬀﬀhﬀesé",
+                                                    "",
+                                                    "lﬀ fooﬀ ffﬀ eaﬀse™",
+                                                    "tést ﬀstri.nﬀgs",
+                                                    "ﬀﬀ ™ ﬀﬀ ﬀ"},
+                                                   {true, true, false, true, true, true});
+    auto delim_col = cudf::test::strings_column_wrapper({"ﬀ™", "ﬀ", "", "ﬀ ", "t", "ﬀ ™"});
+
+    auto exp_results = cudf::test::strings_column_wrapper(
+      {"ff™", "esé", "", "eaﬀse™", "ri.nﬀgs", " ﬀﬀ ﬀ"}, {true, true, false, true, true, true});
+
+    auto results = cudf::strings::slice_strings(
+      cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -1);
+    cudf::test::expect_columns_equal(*results, exp_results, true);
+  }
+
+  {
+    auto col0 = cudf::test::strings_column_wrapper({"H™élloﬀ ﬀﬀi fooﬀ™ barﬀ™ gooﬀ™ ™◎ooﬀ™ff™",
+                                                    "tﬀﬀhﬀesé",
+                                                    "",
+                                                    "lﬀ fooﬀ ffﬀ eaﬀse™",
+                                                    "tést ﬀ™ffﬀ™ﬀ™ffﬀstri.ﬀ™ffﬀ™nﬀgs",
+                                                    "ﬀﬀ ™ ﬀﬀ ﬀ™ ﬀ™ﬀ™ﬀ™ ﬀ™ﬀ™ ﬀ"},
+                                                   {true, true, false, true, true, true});
+    auto delim_col = cudf::test::strings_column_wrapper({"ﬀ™", "ﬀ", "", "e ", "ﬀ™ff", "ﬀ™ﬀ™"},
+                                                        {true, true, false, true, true, true});
+
+    auto exp_results = cudf::test::strings_column_wrapper({"H™élloﬀ ﬀﬀi fooﬀ™ barﬀ™ goo",
+                                                           "tﬀﬀh",
+                                                           "",
+                                                           "lﬀ fooﬀ ffﬀ eaﬀse™",
+                                                           "tést ﬀ™ffﬀ™ﬀ™ffﬀstri.",
+                                                           "ﬀﬀ ™ ﬀﬀ ﬀ™ ﬀ™ﬀ™ﬀ™ ﬀ™ﬀ™ ﬀ"},
+                                                          {true, true, false, true, true, true});
+
+    auto results = cudf::strings::slice_strings(
+      cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 3);
+    cudf::test::expect_columns_equal(*results, exp_results, true);
+  }
+
+  {
+    auto col0 = cudf::test::strings_column_wrapper({"H™élloﬀ ﬀﬀi fooﬀ™ barﬀ™ gooﬀ™ ™◎ooﬀ™ff™",
+                                                    "tﬀﬀhﬀesé",
+                                                    "",
+                                                    "lﬀ fooﬀ ffﬀ eaﬀse™",
+                                                    "tést ﬀ™ffﬀ™ﬀ™ffﬀstri.ﬀ™ffﬀ™nﬀgs",
+                                                    "ﬀﬀ ™ ﬀﬀ ﬀ™ ﬀ™ﬀ™ﬀ™ ﬀ™ﬀ™ ﬀ"});
+    auto delim_col = cudf::test::strings_column_wrapper({"ﬀ™", "ﬀ", "", "e ", "ﬀ™ff", "ﬀ™ﬀ™"},
+                                                        {true, true, false, true, true, true});
+
+    auto exp_results = cudf::test::strings_column_wrapper({" gooﬀ™ ™◎ooﬀ™ff™",
+                                                           "ﬀhﬀesé",
+                                                           "",
+                                                           "lﬀ fooﬀ ffﬀ eaﬀse™",
+                                                           "ﬀ™ﬀ™ffﬀstri.ﬀ™ffﬀ™nﬀgs",
+                                                           "ﬀﬀ ™ ﬀﬀ ﬀ™ ﬀ™ﬀ™ﬀ™ ﬀ™ﬀ™ ﬀ"});
+
+    auto results = cudf::strings::slice_strings(
+      cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -3);
+    cudf::test::expect_columns_equal(*results, exp_results, true);
+  }
 }

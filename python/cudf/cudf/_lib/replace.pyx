@@ -160,6 +160,18 @@ def clamp(Column input_col, Scalar lo, Scalar hi):
     return Column.from_unique_ptr(move(c_result))
 
 
+def clip(Column input_col, object lo, object hi):
+    """
+    Clip the input_col such that values < lo will be replaced by lo
+    and > hi will be replaced by hi
+    """
+
+    lo_scalar = Scalar(lo, dtype=input_col.dtype if lo is None else None)
+    hi_scalar = Scalar(hi, dtype=input_col.dtype if hi is None else None)
+
+    return clamp(input_col, lo_scalar, hi_scalar)
+
+
 def normalize_nans_and_zeros_inplace(Column input_col):
     """
     Inplace normalizing

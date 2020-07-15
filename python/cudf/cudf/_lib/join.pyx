@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from collections import OrderedDict
+from itertools import chain
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -14,33 +15,12 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 cimport cudf._lib.cpp.join as cpp_join
 
-
-def compute_result_col_names(lhs, rhs, how):
-    if how in ('left', 'inner', 'outer'):
-        # the result columns are all the left columns (including common ones)
-        # + all the right columns (excluding the common ones)
-        result_col_names = [None] * len(lhs._data.keys() | rhs._data.keys())
-        ix = 0
-        for name in lhs._data.keys():
-            result_col_names[ix] = name
-            ix += 1
-        for name in rhs._data.keys():
-            if name not in lhs._data.keys():
-                nom = name
-                result_col_names[ix] = nom
-                ix += 1
-    elif how in ('leftsemi', 'leftanti'):
-        # the result columns are just all the left columns
-        result_col_names = list(lhs._data.keys())
-    return result_col_names
-
-
 cpdef join(Table lhs,
            Table rhs,
-           object left_on,
-           object right_on,
            object how,
            object method,
+           object left_on=None,
+           object right_on=None,
            bool left_index=False,
            bool right_index=False
            ):
@@ -222,3 +202,21 @@ cpdef join(Table lhs,
         index = None
     data_ordered_dict = OrderedDict(zip(result_col_names, all_cols_py))
     return Table(data=data_ordered_dict, index=index)
+
+
+def compute_result_col_names(lhs, rhs, how):
+    """
+    Determine the names of the data columns in the result of
+    a libcudf join, based on the original left and right frames
+    as well as the type of join that was performed.
+    """
+    if how in {"left", "inner", "outer", "leftsemi", "leftanti"}:
+        a = lhs._data.keys()
+        if how not in {"leftsemi", "leftanti"}:
+            return list(chain(a, (k for k in rhs._data.keys()
+                        if k not in lhs._data.keys())))
+        return list(a)
+    else:
+        raise NotImplementedError(
+            f"{how} merge not supported yet"
+        )

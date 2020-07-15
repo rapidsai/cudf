@@ -23,6 +23,7 @@
 
 #include "types.hpp"
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
 
 #include <memory>
@@ -71,37 +72,24 @@ class reader {
 
  public:
   /**
-   * @brief Constructor for a filepath to dataset.
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::string filepath,
+  explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor for a memory buffer to dataset.
+   * @brief Constructor from an array of datasources
    *
-   * @param buffer Pointer to whole dataset
-   * @param length Host buffer size in bytes
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(const char *buffer,
-                  size_t length,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor for an Arrow file to dataset.
-   *
-   * @param file Arrow file object of dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -113,7 +101,7 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -125,7 +113,7 @@ class reader {
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
    * @param metadata Optional location to return table metadata
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -175,37 +163,24 @@ class reader {
 
  public:
   /**
-   * @brief Constructor for a filepath to dataset.
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::string filepath,
+  explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor for a memory buffer to dataset.
+   * @brief Constructor from an array of datasources
    *
-   * @param buffer Pointer to whole dataset
-   * @param length Host buffer size in bytes
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(const char *buffer,
-                  size_t length,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor for an Arrow file to dataset.
-   *
-   * @param file Arrow file object of dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -320,7 +295,7 @@ struct reader_options {
                                      "nan",
                                      "null"};
   /// Cast timestamp columns to a specific type
-  data_type timestamp_type{EMPTY};
+  data_type timestamp_type{type_id::EMPTY};
 
   reader_options()                       = default;
   reader_options(reader_options const &) = default;
@@ -336,37 +311,24 @@ class reader {
 
  public:
   /**
-   * @brief Constructor for a filepath to dataset.
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::string filepath,
+  explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor for a memory buffer to dataset.
+   * @brief Constructor from an array of datasources
    *
-   * @param buffer Pointer to whole dataset
-   * @param length Host buffer size in bytes
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(const char *buffer,
-                  size_t length,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor for an Arrow file to dataset.
-   *
-   * @param file Arrow file object of dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -393,7 +355,7 @@ class reader {
    *
    * @param offset Byte offset from the start
    * @param size Number of bytes from the offset; set to 0 for all remaining
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -405,7 +367,7 @@ class reader {
    * @param skip_rows Number of rows to skip from the start
    * @param skip_rows_end Number of rows to skip from the end
    * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -425,7 +387,7 @@ struct reader_options {
   std::vector<std::string> columns;
   bool use_index     = true;
   bool use_np_dtypes = true;
-  data_type timestamp_type{EMPTY};
+  data_type timestamp_type{type_id::EMPTY};
   bool decimals_as_float    = true;
   int forced_decimals_scale = -1;
 
@@ -466,37 +428,24 @@ class reader {
 
  public:
   /**
-   * @brief Constructor for a filepath to dataset.
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::string filepath,
+  explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor for a memory buffer to dataset.
+   * @brief Constructor from an array of datasources
    *
-   * @param buffer Pointer to whole dataset
-   * @param length Host buffer size in bytes
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(const char *buffer,
-                  size_t length,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor for an Arrow file to dataset.
-   *
-   * @param file Arrow file object of dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -508,7 +457,7 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -519,7 +468,7 @@ class reader {
    *
    * @param stripe Index of the stripe
    * @param stripe_count Number of stripes to read
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
@@ -533,7 +482,7 @@ class reader {
    * @brief Reads and returns specific stripes.
    *
    * @param stripe_list Indices of the stripes to read
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
@@ -547,7 +496,7 @@ class reader {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
@@ -564,7 +513,7 @@ struct reader_options {
   std::vector<std::string> columns;
   bool strings_to_categorical = false;
   bool use_pandas_metadata    = false;
-  data_type timestamp_type{EMPTY};
+  data_type timestamp_type{type_id::EMPTY};
 
   reader_options()                       = default;
   reader_options(reader_options const &) = default;
@@ -599,37 +548,24 @@ class reader {
 
  public:
   /**
-   * @brief Constructor for a filepath to dataset.
+   * @brief Constructor from an array of file paths
    *
-   * @param filepath Path to whole dataset
+   * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::string filepath,
+  explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Constructor for a memory buffer to dataset.
+   * @brief Constructor from an array of datasources
    *
-   * @param buffer Pointer to whole dataset
-   * @param length Host buffer size in bytes
+   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(const char *buffer,
-                  size_t length,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor for an Arrow file to dataset.
-   *
-   * @param file Arrow file object of dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
@@ -641,38 +577,23 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
   table_with_metadata read_all(cudaStream_t stream = 0);
 
   /**
-   * @brief Reads a specific group of rows.
-   *
-   * @param row_group Index of the row group
-   * @param row_group_count Number of row groups to read
-   * @param stream Optional stream to use for device memory alloc and kernels
-   *
-   * @return The set of columns along with table metadata
-   *
-   * @throw cudf::logic_error if row group index is out of range
-   */
-  table_with_metadata read_row_group(size_type row_group,
-                                     size_type row_group_count = 1,
-                                     cudaStream_t stream       = 0);
-
-  /**
    * @brief Reads specific row groups.
    *
    * @param row_group_list Indices of the row groups
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
    * @throw cudf::logic_error if row group index is out of range
    */
-  table_with_metadata read_row_groups(const std::vector<size_type> &row_group_list,
+  table_with_metadata read_row_groups(std::vector<std::vector<size_type>> const &row_group_list,
                                       cudaStream_t stream = 0);
 
   /**
@@ -680,7 +601,7 @@ class reader {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param stream Optional stream to use for device memory alloc and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */

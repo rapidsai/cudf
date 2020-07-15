@@ -21,7 +21,7 @@ from cudf._lib.cpp.stream_compaction cimport (
     drop_nulls as cpp_drop_nulls,
     apply_boolean_mask as cpp_apply_boolean_mask,
     drop_duplicates as cpp_drop_duplicates,
-    unique_count as cpp_unique_count
+    distinct_count as cpp_distinct_count
 )
 
 
@@ -199,7 +199,7 @@ def drop_duplicates(Table source_table,
     )
 
 
-def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
+def distinct_count(Column source_column, ignore_nulls=True, nan_as_null=False):
     """
     Finds number of unique rows in `source_column`
 
@@ -229,7 +229,7 @@ def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
 
     cdef column_view source_column_view = source_column.view()
     with nogil:
-        count = cpp_unique_count(
+        count = cpp_distinct_count(
             source_column_view,
             cpp_null_handling,
             cpp_nan_handling

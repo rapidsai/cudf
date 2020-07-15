@@ -24,6 +24,8 @@ from cudf._lib.cpp.unary cimport (
     unary_op,
 )
 
+from cudf._lib.types cimport underlying_type_t_type_id
+
 cimport cudf._lib.cpp.unary as libcudf_unary
 
 
@@ -90,7 +92,13 @@ def is_valid(Column input):
 
 def cast(Column input, object dtype=np.float64):
     cdef column_view c_input = input.view()
-    cdef type_id tid = np_to_cudf_types[np.dtype(dtype)]
+    cdef type_id tid = (
+        <type_id> (
+            <underlying_type_t_type_id> (
+                np_to_cudf_types[np.dtype(dtype)]
+            )
+        )
+    )
     cdef data_type c_dtype = data_type(tid)
     cdef unique_ptr[column] c_result
 

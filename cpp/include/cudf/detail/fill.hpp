@@ -27,7 +27,7 @@ namespace detail {
 /**
  * @copydoc cudf::fill_in_place
  *
- * @param stream CUDA stream to run this function
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
@@ -38,7 +38,7 @@ void fill_in_place(mutable_column_view& destination,
 /**
  * @copydoc cudf::fill
  *
- * @param stream CUDA stream to run this function
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,

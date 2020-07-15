@@ -51,7 +51,7 @@ namespace nvtext {
  * @param strings Strings column tokenize.
  * @param delimiter UTF-8 characters used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings columns of tokens.
  */
 std::unique_ptr<cudf::column> tokenize(
@@ -85,7 +85,7 @@ std::unique_ptr<cudf::column> tokenize(
  *
  * @param strings Strings column to tokenize.
  * @param delimiters Strings used to separate individual strings into tokens.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings columns of tokens.
  */
 std::unique_ptr<cudf::column> tokenize(
@@ -114,7 +114,7 @@ std::unique_ptr<cudf::column> tokenize(
  * @param strings Strings column to use for this operation.
  * @param delimiter Strings used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT32 column of token counts.
  */
 std::unique_ptr<cudf::column> count_tokens(
@@ -144,12 +144,35 @@ std::unique_ptr<cudf::column> count_tokens(
  *
  * @param strings Strings column to use for this operation.
  * @param delimiters Strings used to separate each string into tokens.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT32 column of token counts.
  */
 std::unique_ptr<cudf::column> count_tokens(
   cudf::strings_column_view const& strings,
   cudf::strings_column_view const& delimiters,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Returns a single column of strings by converting each character to a string.
+ *
+ * Each string is converted to multiple strings -- one for each character.
+ * Note that a character maybe more than one byte.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["hello world", null, "goodbye"]
+ * t = character_tokenize(s)
+ * t is now ["h","e","l","l","o"," ","w","o","r","l","d","g","o","o","d","b","y","e"]
+ * @endcode
+ *
+ * All null row entries are ignored and the output contains all valid rows.
+ *
+ * @param strings Strings column to tokenize.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New strings columns of tokens.
+ */
+std::unique_ptr<cudf::column> character_tokenize(
+  cudf::strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of tokenize group

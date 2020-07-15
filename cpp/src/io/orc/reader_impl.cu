@@ -134,7 +134,7 @@ class metadata {
     const auto max_ps_size = std::min(len, static_cast<size_t>(256));
 
     // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
-    auto buffer            = source->get_buffer(len - max_ps_size, max_ps_size);
+    auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
     const size_t ps_length = buffer->data()[max_ps_size - 1];
     const uint8_t *ps_data = &buffer->data()[max_ps_size - ps_length - 1];
     ProtobufReader pb;
@@ -147,7 +147,7 @@ class metadata {
     decompressor = std::make_unique<OrcDecompressor>(ps.compression, ps.compressionBlockSize);
 
     // Read compressed filefooter section
-    buffer           = source->get_buffer(len - ps_length - 1 - ps.footerLength, ps.footerLength);
+    buffer           = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
     size_t ff_length = 0;
     auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
     pb.init(ff_data, ff_length);
@@ -229,7 +229,7 @@ class metadata {
         CUDF_EXPECTS(sf_comp_offset + sf_comp_length < source->size(),
                      "Invalid stripe information");
 
-        const auto buffer = source->get_buffer(sf_comp_offset, sf_comp_length);
+        const auto buffer = source->host_read(sf_comp_offset, sf_comp_length);
         size_t sf_length  = 0;
         auto sf_data      = decompressor->Decompress(buffer->data(), sf_comp_length, &sf_length);
         pb.init(sf_data, sf_length);
@@ -604,7 +604,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _selected_columns = _metadata->select_columns(options.columns, _has_timestamp_column);
 
   // Override output timestamp resolution if requested
-  if (options.timestamp_type.id() != EMPTY) { _timestamp_type = options.timestamp_type; }
+  if (options.timestamp_type.id() != type_id::EMPTY) { _timestamp_type = options.timestamp_type; }
 
   // Enable or disable attempt to use row index for parsing
   _use_index = options.use_index;
@@ -709,7 +709,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           len += stream_info[stream_count].length;
           stream_count++;
         }
-        const auto buffer = _source->get_buffer(offset, len);
+        const auto buffer = _source->host_read(offset, len);
         CUDA_TRY(cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream));
         CUDA_TRY(cudaStreamSynchronize(stream));
       }
@@ -833,28 +833,21 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 }
 
 // Forward to implementation
-reader::reader(std::string filepath,
+reader::reader(std::vector<std::string> const &filepaths,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(filepath), options, mr))
 {
+  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(datasource::create(filepaths[0]), options, mr);
 }
 
 // Forward to implementation
-reader::reader(const char *buffer,
-               size_t length,
+reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), options, mr))
 {
-}
-
-// Forward to implementation
-reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
-               reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), options, mr))
-{
+  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(std::move(sources[0]), options, mr);
 }
 
 // Destructor within this translation unit

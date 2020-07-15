@@ -7,3 +7,11 @@
     margin: 0.5em;
     content: ":";
 }
+
+.highlight:hover span#strike_button {
+    color:#767676;
+}
+
+span#strike_button {
+    color :#d0ced7;
+}

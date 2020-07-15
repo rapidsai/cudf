@@ -100,7 +100,6 @@ struct nunique_functor {
              cudaStream_t stream)
   {
     CUDF_FAIL("list_view group_nunique not supported yet");
-    return nullptr;
   }
 };
 }  // namespace

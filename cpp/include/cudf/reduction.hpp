@@ -51,7 +51,7 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * @param[in] col Input column view
  * @param[in] agg unique_ptr of the aggregation operator applied by the reduction
  * @param[in] output_dtype  The computation and output precision.
- * @param[in] mr The resource to use for all allocations
+ * @param[in] mr Device memory resource used to allocate the returned scalar's device memory
  * @returns  cudf::scalar the result value
  * If the reduction fails, the member is_valid of the output scalar
  * will contain `false`.
@@ -77,7 +77,7 @@ std::unique_ptr<scalar> reduce(
  * @param[in] null_handling Exclude null values when computing the result if
  * null_policy::EXCLUDE. Include nulls if null_policy::INCLUDE.
  * Any operation with a null results in a null.
- * @param[in] mr The resource to use for all allocations
+ * @param[in] mr Device memory resource used to allocate the returned scalar's device memory
  * @returns unique pointer to new output column
  */
 std::unique_ptr<column> scan(const column_view &input,

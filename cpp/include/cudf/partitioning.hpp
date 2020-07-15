@@ -54,8 +54,7 @@ namespace cudf {
  * @param partition_map Non-nullable column of integer values that map each row
  * in `t` to it's partition.
  * @param num_partitions The total number of partitions.
- * @param mr The resource used to allocate the device memory for the returned
- * table
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return Pair containing the reordered table and vector of `num_partitions +
  * 1` offsets to each partition such that the size of partition `i` is
  * determined by `offset[i+1] - offset[i]`.
@@ -79,7 +78,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
  * @param input The table to partition
  * @param columns_to_hash Indices of input columns to hash
  * @param num_partitions The number of partitions to use
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  *
  * @returns An output table and a vector of row offsets to each partition
  */
@@ -221,7 +220,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  * @param[in] input The input table to be round-robin partitioned
  * @param[in] num_partitions Number of partitions for the table
  * @param[in] start_partition Index of the 1st partition
- * @param[in] mr Device memory allocator
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *
  * @return A std::pair consisting of a unique_ptr to the partitioned table
  * and the partition offsets for each partition within the table.

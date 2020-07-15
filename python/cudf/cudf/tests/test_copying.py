@@ -6,13 +6,10 @@ import pytest
 
 import cudf
 from cudf.core import Series
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    ["bool", "int8", "int16", "int32", "int64", "float32", "float64", "str"],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
 def test_repeat(dtype):
     arr = np.random.rand(10) * 10
     repeats = np.random.randint(10, size=10)
@@ -41,9 +38,7 @@ def test_repeat_dataframe():
     assert_eq(psr["a"].repeat(repeats), gsr.repeat(repeats)["a"])
 
 
-@pytest.mark.parametrize(
-    "dtype", ["bool", "int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 def test_repeat_scalar(dtype):
     arr = np.random.rand(10) * 10
     repeats = 10

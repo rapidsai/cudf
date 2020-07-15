@@ -21,26 +21,25 @@ def test_categorical_basic():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     cudf_cat = as_index(cat)
 
-    pdsr = pd.Series(cat)
-    sr = Series(cat)
-    np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_array())
+    pdsr = pd.Series(cat, index=["p", "q", "r", "s", "t"])
+    sr = Series(cat, index=["p", "q", "r", "s", "t"])
+    assert_eq(pdsr.cat.codes, sr.cat.codes, check_dtype=False)
 
     # Test attributes
-    assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)
+    assert_eq(pdsr.cat.categories, sr.cat.categories)
     assert pdsr.cat.ordered == sr.cat.ordered
 
     np.testing.assert_array_equal(
         pdsr.cat.codes.values, sr.cat.codes.to_array()
     )
-    np.testing.assert_array_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
 
     string = str(sr)
     expect_str = """
-0 a
-1 a
-2 b
-3 c
-4 a
+p a
+q a
+r b
+s c
+t a
 """
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
     assert_eq(cat.codes, cudf_cat.codes.to_array())
@@ -51,14 +50,14 @@ def test_categorical_integer():
     pdsr = pd.Series(cat)
     sr = Series(cat)
     np.testing.assert_array_equal(
-        cat.codes, sr.cat.codes.to_array(fillna="pandas")
+        cat.codes, sr.cat.codes.astype(cat.codes.dtype).fillna(-1).to_array()
     )
     assert sr.null_count == 2
 
     np.testing.assert_array_equal(
-        pdsr.cat.codes.values, sr.cat.codes.fillna(-1).to_array()
+        pdsr.cat.codes.values,
+        sr.cat.codes.astype(pdsr.cat.codes.dtype).fillna(-1).to_array(),
     )
-    np.testing.assert_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
 
     string = str(sr)
     expect_str = """
@@ -145,7 +144,7 @@ def test_categorical_binary_add():
 
     with pytest.raises(TypeError) as raises:
         pdsr + pdsr
-    raises.match(r"Series cannot perform the operation \+")
+    raises.match("unsupported operand")
 
     with pytest.raises(TypeError) as raises:
         sr + sr
@@ -318,7 +317,6 @@ def test_categorical_empty():
     np.testing.assert_array_equal(
         pdsr.cat.codes.values, sr.cat.codes.to_array()
     )
-    np.testing.assert_array_equal(pdsr.cat.codes.dtype, sr.cat.codes.dtype)
 
 
 def test_categorical_set_categories():
@@ -473,6 +471,10 @@ def test_categorical_dataframe_slice_copy():
     [
         pd.Series([1, 2, 3, 89]),
         pd.Series([1, 2, 3, 89, 3, 1, 89], dtype="category"),
+        pd.Series(["1", "2", "3", "4", "5"], dtype="category"),
+        pd.Series(["1.0", "2.5", "3.001", "9"], dtype="category"),
+        pd.Series(["1", "2", "3", None, "4", "5"], dtype="category"),
+        pd.Series(["1.0", "2.5", "3.001", None, "9"], dtype="category"),
         pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
         pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
         pd.Series([1, 2, 3, 89, None, np.nan, np.NaN], dtype="float64"),
@@ -490,6 +492,8 @@ def test_categorical_dataframe_slice_copy():
         pd.CategoricalDtype(categories=["aa", "bb", "c"]),
         pd.CategoricalDtype(categories=["a", "bb", "c"]),
         pd.CategoricalDtype(categories=["a", "b", "c"]),
+        pd.CategoricalDtype(categories=["1", "2", "3", "4"]),
+        pd.CategoricalDtype(categories=["1.0", "2.5", "3.001", "9"]),
         pd.CategoricalDtype(categories=[]),
     ],
 )
@@ -553,7 +557,8 @@ def test_categorical_set_categories_categoricals(data, new_categories):
         ["a", "1", "2", "1", "a"],
         pd.Series(["a", "1", "22", "1", "aa"]),
         pd.Series(["a", "1", "22", "1", "aa"], dtype="category"),
-        pd.Series([1, 2, 3, 4], dtype="int64"),
+        pd.Series([1, 2, 3, -4], dtype="int64"),
+        pd.Series([1, 2, 3, 4], dtype="uint64"),
         pd.Series([1, 2.3, 3, 4], dtype="float"),
         [None, 1, None, 2, None],
         [],
@@ -603,14 +608,99 @@ def test_categorical_dtype(categories, ordered):
 @pytest.mark.parametrize(
     ("data", "expected"),
     [
-        (gd.Series([1]), np.int8),
-        (gd.Series([1, None]), np.int8),
-        (gd.Series(list(range(np.iinfo(np.int8).max))), np.int8),
-        (gd.Series(list(range(np.iinfo(np.int8).max)) + [None]), np.int8),
-        (gd.Series(list(range(np.iinfo(np.int16).max))), np.int16),
-        (gd.Series(list(range(np.iinfo(np.int16).max)) + [None]), np.int16),
+        (gd.Series([1]), np.uint8),
+        (gd.Series([1, None]), np.uint8),
+        (gd.Series(np.arange(np.iinfo(np.int8).max)), np.uint8),
+        (
+            gd.Series(np.append(np.arange(np.iinfo(np.int8).max), [None])),
+            np.uint8,
+        ),
+        (gd.Series(np.arange(np.iinfo(np.int16).max)), np.uint16),
+        (
+            gd.Series(np.append(np.arange(np.iinfo(np.int16).max), [None])),
+            np.uint16,
+        ),
+        (gd.Series(np.arange(np.iinfo(np.uint8).max)), np.uint8),
+        (
+            gd.Series(np.append(np.arange(np.iinfo(np.uint8).max), [None])),
+            np.uint8,
+        ),
+        (gd.Series(np.arange(np.iinfo(np.uint16).max)), np.uint16),
+        (
+            gd.Series(np.append(np.arange(np.iinfo(np.uint16).max), [None])),
+            np.uint16,
+        ),
     ],
 )
 def test_astype_dtype(data, expected):
     got = data.astype("category").cat.codes.dtype
     np.testing.assert_equal(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data,add",
+    [
+        ([1, 2, 3], [100, 11, 12]),
+        ([1, 2, 3], [0.01, 9.7, 15.0]),
+        ([0.0, 6.7, 10.0], [100, 11, 12]),
+        ([0.0, 6.7, 10.0], [0.01, 9.7, 15.0]),
+        (["a", "bd", "ef"], ["asdfsdf", "bddf", "eff"]),
+        ([1, 2, 3], []),
+        ([0.0, 6.7, 10.0], []),
+        (["a", "bd", "ef"], []),
+    ],
+)
+def test_add_categories(data, add):
+    pds = pd.Series(data, dtype="category")
+    gds = gd.Series(data, dtype="category")
+
+    expected = pds.cat.add_categories(add)
+    actual = gds.cat.add_categories(add)
+    assert_eq(
+        expected.cat.codes, actual.cat.codes.astype(expected.cat.codes.dtype)
+    )
+
+    # Need to type-cast pandas object to str due to mixed-type
+    # support in "object"
+    assert_eq(
+        expected.cat.categories.astype("str")
+        if (expected.cat.categories.dtype == "object")
+        else expected.cat.categories,
+        actual.cat.categories,
+    )
+
+
+@pytest.mark.parametrize(
+    "data,add",
+    [
+        ([1, 2, 3], [1, 3, 11]),
+        ([0.0, 6.7, 10.0], [1, 2, 0.0]),
+        (["a", "bd", "ef"], ["a", "bd", "a"]),
+    ],
+)
+def test_add_categories_error(data, add):
+    pds = pd.Series(data, dtype="category")
+    gds = gd.Series(data, dtype="category")
+
+    try:
+        pds.cat.add_categories(add)
+    except Exception as e:
+        with pytest.raises(type(e)):
+            gds.cat.add_categories(add)
+    else:
+        raise AssertionError(
+            f"Expected pandas .cat.add_categories to"
+            f" fail for {pds} and {add} inputs"
+        )
+
+
+def test_add_categories_mixed_error():
+    gds = gd.Series(["a", "bd", "ef"], dtype="category")
+
+    with pytest.raises(TypeError):
+        gds.cat.add_categories([1, 2, 3])
+
+    gds = gd.Series([1, 2, 3], dtype="category")
+
+    with pytest.raises(TypeError):
+        gds.cat.add_categories(["a", "bd", "ef"])

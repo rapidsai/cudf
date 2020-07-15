@@ -45,7 +45,7 @@ namespace strings {
  * @param start First character position to include in the search.
  * @param stop Last position (exclusive) to include in the search.
  *             Default of -1 will search to the end of the string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New integer column with character position values.
  */
 std::unique_ptr<column> find(strings_column_view const& strings,
@@ -73,7 +73,7 @@ std::unique_ptr<column> find(strings_column_view const& strings,
  * @param start First position to include in the search.
  * @param stop Last position (exclusive) to include in the search.
  *             Default of -1 will search starting at the end of the string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New integer column with character position values.
  */
 std::unique_ptr<column> rfind(
@@ -93,8 +93,8 @@ std::unique_ptr<column> rfind(
  *
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
- * @param mr Resource for allocating device memory.
- * @return New BOOL8 column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> contains(
   strings_column_view const& strings,
@@ -113,12 +113,34 @@ std::unique_ptr<column> contains(
  *
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
- * @param mr Resource for allocating device memory.
- * @return New BOOL8 column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> starts_with(
   strings_column_view const& strings,
   string_scalar const& target,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Returns a column of boolean values for each string where true indicates
+ * corresponding string in target column was found at the beginning of that string in
+ * the provided column.
+ *
+ * If `targets[i]` is not found at the beginning of a string in `strings[i]`, false is set for
+ * that row entry in the output column.
+ * If `targets[i]` is an empty string, true is returned for corresponding entry in the
+ * output column.
+ *
+ * Any null string entries in `targets` return corresponding null entries in the output columns.
+ *
+ * @param strings Strings instance for this operation.
+ * @param targets Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New type_id::BOOL8 column.
+ */
+std::unique_ptr<column> starts_with(
+  strings_column_view const& strings,
+  strings_column_view const& targets,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -133,14 +155,35 @@ std::unique_ptr<column> starts_with(
  *
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
- * @param mr Resource for allocating device memory.
- * @return New BOOL8 column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> ends_with(
   strings_column_view const& strings,
   string_scalar const& target,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Returns a column of boolean values for each string where true indicates
+ * corresponding string in target column was found at the end of that string in
+ * the provided column.
+ *
+ * If `targets[i]` is not found at the end of a string in `strings[i]`, false is set for
+ * that row entry in the output column.
+ * If `targets[i]` is an empty string, true is returned for the corresponding entry in the
+ * output column.
+ *
+ * Any null string entries in `targets` return corresponding null entries in the output columns.
+ *
+ * @param strings Strings instance for this operation.
+ * @param targets Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New type_id::BOOL8 column.
+ */
+std::unique_ptr<column> ends_with(
+  strings_column_view const& strings,
+  strings_column_view const& targets,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

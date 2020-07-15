@@ -51,7 +51,7 @@ enum class rank_method {
  * @param null_precedence The desired order of null compared to other elements
  * for each column.  Size must be equal to `input.num_columns()` or empty.
  * If empty, all columns will be sorted in `null_order::BEFORE`.
- * @param mr Optional, The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A non-nullable column of `size_type` elements containing the permuted row indices of
  * `input` if it were sorted
  */
@@ -106,7 +106,7 @@ bool is_sorted(cudf::table_view const& table,
  * elements for each column in `input`. Size must be equal to
  * `input.num_columns()` or empty. If empty, all columns will be sorted with
  * `null_order::BEFORE`.
- * @param mr The device memory resource used to allocate the returned table
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return New table containing the desired sorted order of `input`
  */
 std::unique_ptr<table> sort(table_view input,
@@ -131,7 +131,7 @@ std::unique_ptr<table> sort(table_view input,
  * elements for each column in `keys`. Size must be equal to
  * `keys.num_columns()` or empty. If empty, all columns will be sorted with
  * `null_order::BEFORE`.
- * @param mr The device memory resource used to allocate the returned table
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return The reordering of `values` determined by the lexicographic order of
  * the rows of `keys`.
  */
@@ -166,7 +166,7 @@ std::unique_ptr<table> sort_by_key(
  * @param null_precedence The desired order of null compared to other elements
  * for column
  * @param percentage flag to convert ranks to percentage in range (0,1}
- * @param mr The device memory resource used to allocate the returned column
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> A column of containing the rank of the each
  * element of the column of `input`. The output column type will be `size_type`
  * column by default or else `double` when `method=rank_method::AVERAGE` or

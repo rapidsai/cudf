@@ -41,9 +41,9 @@ namespace detail {
  *
  * @param strings Number Column of strings to apply the modifications on;
  * it is not modified in place; rather a new column is returned instead
- * @param mr Memory resource to use
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * (cannot be a default argument because of the variadic pack);
- * @param stream Stream to use for any kernel calls.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * (cannot be a default argument because of the variadic pack);
  * @param ...args Additional arguments to be forwarded to
  * the probe / execute constructors (can be empty);

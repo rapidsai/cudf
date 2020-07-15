@@ -1,5 +1,8 @@
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import datetime as dt
+import re
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -13,7 +16,7 @@ from pandas.util.testing import (
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import NUMERIC_TYPES, assert_eq
 
 
 def data1():
@@ -243,9 +246,7 @@ def test_issue_165():
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 def test_typecast_from_datetime(data, dtype):
     pd_data = pd.Series(data.copy())
     np_data = np.array(pd_data)
@@ -305,9 +306,7 @@ def test_string_timstamp_typecast_to_different_datetime_resolutions(
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
-@pytest.mark.parametrize(
-    "from_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("from_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize(
     "to_dtype",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
@@ -323,9 +322,7 @@ def test_typecast_to_datetime(data, from_dtype, to_dtype):
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
-@pytest.mark.parametrize(
-    "from_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("from_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize(
     "to_dtype",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
@@ -362,7 +359,7 @@ def test_typecast_from_datetime_to_datetime(data, from_dtype, to_dtype):
 @pytest.mark.parametrize("data", [numerical_data()])
 @pytest.mark.parametrize("nulls", ["some", "all"])
 def test_to_from_pandas_nulls(data, nulls):
-    pd_data = pd.Series(data.copy())
+    pd_data = pd.Series(data.copy().astype("datetime64[ns]"))
     if nulls == "some":
         # Fill half the values with NaT
         pd_data[list(range(0, len(pd_data), 2))] = np.datetime64("nat", "ns")
@@ -419,10 +416,7 @@ def test_datetime_unique(data, nulls):
     expected = psr.unique()
     got = gsr.unique()
 
-    # convert to int64 for equivalence testing
-    np.testing.assert_array_almost_equal(
-        got.to_pandas().astype(int), expected.astype(int)
-    )
+    assert_eq(pd.Series(expected), got.to_pandas())
 
 
 @pytest.mark.parametrize(
@@ -532,6 +526,224 @@ def test_datetime_dataframe():
     assert_eq(ps.isnull(), gs.isnull())
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        None,
+        [],
+        pd.Series([]),
+        pd.Index([]),
+        pd.Series([1, 2, 3]),
+        pd.Series([0, 1, -1]),
+        pd.Series([0, 1, -1, 100.3, 200, 47637289]),
+        pd.Series(["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"]),
+        [1, 2, 3, 100, -123, -1, 0, 1000000000000679367],
+        pd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]}),
+        pd.DataFrame(
+            {"year": ["2015", "2016"], "month": ["2", "3"], "day": [4, 5]}
+        ),
+        pd.DataFrame(
+            {
+                "year": [2015, 2016],
+                "month": [2, 3],
+                "day": [4, 5],
+                "minute": [1, 100],
+                "second": [90, 10],
+                "hour": [1, 0.5],
+            },
+            index=["a", "b"],
+        ),
+        pd.DataFrame(
+            {
+                "year": [],
+                "month": [],
+                "day": [],
+                "minute": [],
+                "second": [],
+                "hour": [],
+            },
+        ),
+        ["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"],
+        pd.Index([1, 2, 3, 4]),
+        pd.DatetimeIndex(
+            ["1970-01-01 00:00:00.000000001", "1970-01-01 00:00:00.000000002"],
+            dtype="datetime64[ns]",
+            freq=None,
+        ),
+        pd.DatetimeIndex([], dtype="datetime64[ns]", freq=None,),
+        pd.Series([1, 2, 3]).astype("datetime64[ns]"),
+        pd.Series([1, 2, 3]).astype("datetime64[us]"),
+        pd.Series([1, 2, 3]).astype("datetime64[ms]"),
+        pd.Series([1, 2, 3]).astype("datetime64[s]"),
+        pd.Series([1, 2, 3]).astype("datetime64[D]"),
+        1,
+        100,
+        17,
+        53.638435454,
+        np.array([1, 10, 15, 478925, 2327623467]),
+        np.array([0.3474673, -10, 15, 478925.34345, 2327623467]),
+    ],
+)
+@pytest.mark.parametrize("dayfirst", [True, False])
+@pytest.mark.parametrize("infer_datetime_format", [True, False])
+def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
+    pd_data = data
+    if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
+        gd_data = cudf.from_pandas(pd_data)
+    else:
+        if type(pd_data).__module__ == np.__name__:
+            gd_data = cp.array(pd_data)
+        else:
+            gd_data = pd_data
+
+    expected = pd.to_datetime(
+        pd_data, dayfirst=dayfirst, infer_datetime_format=infer_datetime_format
+    )
+    actual = cudf.to_datetime(
+        gd_data, dayfirst=dayfirst, infer_datetime_format=infer_datetime_format
+    )
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        "2",
+        ["1", "2", "3"],
+        ["1/1/1", "2/2/2", "1"],
+        pd.DataFrame(
+            {
+                "year": [2015, 2016],
+                "month": [2, 3],
+                "day": [4, 5],
+                "minute": [1, 100],
+                "second": [90, 10],
+                "hour": [1, 0],
+                "blablacol": [1, 1],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "month": [2, 3],
+                "day": [4, 5],
+                "minute": [1, 100],
+                "second": [90, 10],
+                "hour": [1, 0],
+            }
+        ),
+    ],
+)
+def test_to_datetime_errors(data):
+    pd_data = data
+    if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
+        gd_data = cudf.from_pandas(pd_data)
+    else:
+        gd_data = pd_data
+
+    try:
+        pd.to_datetime(pd_data)
+    except Exception as e:
+        with pytest.raises(type(e), match=re.escape(str(e))):
+            cudf.to_datetime(gd_data)
+    else:
+        raise AssertionError("Was expecting `pd.to_datetime` to fail")
+
+
+def test_to_datetime_not_implemented():
+
+    with pytest.raises(NotImplementedError):
+        cudf.to_datetime([], exact=False)
+
+    with pytest.raises(NotImplementedError):
+        cudf.to_datetime([], origin="julian")
+
+    with pytest.raises(NotImplementedError):
+        cudf.to_datetime([], yearfirst=True)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        1,
+        [],
+        pd.Series([]),
+        pd.Index([]),
+        pd.Series([1, 2, 3]),
+        pd.Series([1, 2.4, 3]),
+        pd.Series([0, 1, -1]),
+        pd.Series([0, 1, -1, 100, 200, 47637]),
+        [10, 12, 1200, 15003],
+        pd.DatetimeIndex([], dtype="datetime64[ns]", freq=None,),
+        pd.Index([1, 2, 3, 4]),
+    ],
+)
+@pytest.mark.parametrize("unit", ["D", "s", "ms", "us", "ns"])
+def test_to_datetime_units(data, unit):
+    pd_data = data
+    if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
+        gd_data = cudf.from_pandas(pd_data)
+    else:
+        gd_data = pd_data
+
+    expected = pd.to_datetime(pd_data, unit=unit)
+    actual = cudf.to_datetime(gd_data, unit=unit)
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data,format",
+    [
+        ("2012-10-11", None),
+        ("2012-10-11", "%Y-%m-%d"),
+        ("2012-10-11", "%Y-%d-%m"),
+        (["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"], None),
+        (["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"], "%Y-%m-%d"),
+        (["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"], "%Y-%d-%m"),
+        (["10-11-2012", "01-01-2010", "07-07-2016", "02-02-2014"], "%m-%d-%Y"),
+        (["10-11-2012", "01-01-2010", "07-07-2016", "02-02-2014"], "%d-%m-%Y"),
+        (["10-11-2012", "01-01-2010", "07-07-2016", "02-02-2014"], None),
+        (["2012/10/11", "2010/01/01", "2016/07/07", "2014/02/02"], None),
+        (["2012/10/11", "2010/01/01", "2016/07/07", "2014/02/02"], "%Y/%m/%d"),
+        (["2012/10/11", "2010/01/01", "2016/07/07", "2014/02/02"], "%Y/%d/%m"),
+        (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], "%m/%d/%Y"),
+        (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], "%d/%m/%Y"),
+        (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], None),
+    ],
+)
+@pytest.mark.parametrize("infer_datetime_format", [True, False])
+def test_to_datetime_format(data, format, infer_datetime_format):
+    pd_data = data
+    if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
+        gd_data = cudf.from_pandas(pd_data)
+    else:
+        gd_data = pd_data
+
+    expected = pd.to_datetime(
+        pd_data, format=format, infer_datetime_format=infer_datetime_format
+    )
+    actual = cudf.to_datetime(
+        gd_data, format=format, infer_datetime_format=infer_datetime_format
+    )
+
+    assert_eq(actual, expected)
+
+
+def test_datetime_can_cast_safely():
+
+    sr = cudf.Series(
+        ["1679-01-01", "2000-01-31", "2261-01-01"], dtype="datetime64[ms]"
+    )
+    assert sr._column.can_cast_safely(np.dtype("datetime64[ns]"))
+
+    sr = cudf.Series(
+        ["1677-01-01", "2000-01-31", "2263-01-01"], dtype="datetime64[ms]"
+    )
+
+    assert sr._column.can_cast_safely(np.dtype("datetime64[ns]")) is False
+
+
 # Cudf autocasts unsupported time_units
 @pytest.mark.parametrize(
     "dtype",
@@ -581,3 +793,26 @@ def test_datetime_scalar_timeunit_cast(timeunit):
     pdf["b"] = testscalar
 
     assert_eq(pdf, gdf)
+
+
+def test_str_null_to_datetime():
+    psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "NaT"])
+    gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", "NaT"])
+
+    assert_eq(psr.astype("datetime64[s]"), gsr.astype("datetime64[s]"))
+
+    psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", None])
+    gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", None])
+
+    assert_eq(psr.astype("datetime64[s]"), gsr.astype("datetime64[s]"))
+
+    psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
+    gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
+
+    try:
+        psr.astype("datetime64[s]")
+    except Exception:
+        with pytest.raises(ValueError):
+            gsr.astype("datetime64[s]")
+    else:
+        raise AssertionError("Expected psr.astype('datetime64[s]') to fail")

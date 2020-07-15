@@ -23,7 +23,7 @@ namespace detail {
 /**
  * @copydoc cudf::from_dlpack
  *
- * @param stream Optional stream on which to execute
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
@@ -33,7 +33,7 @@ std::unique_ptr<table> from_dlpack(
 /**
  * @copydoc cudf::to_dlpack
  *
- * @param stream Optional stream on which to execute
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 DLManagedTensor* to_dlpack(table_view const& input,
                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),

@@ -65,7 +65,7 @@ class writer::impl {
    *
    * @param filepath Filepath if storing dataset to a file
    * @param options Settings for controlling behavior
-   * @param mr Resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    **/
   explicit impl(std::unique_ptr<data_sink> sink,
                 writer_options const& options,
@@ -78,7 +78,7 @@ class writer::impl {
    * @param metadata The metadata associated with the table
    * @param return_filemetadata If true, return the raw parquet file metadata
    * @param metadata_out_file_path Column chunks file path to be set in the raw output metadata
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return unique_ptr to FileMetadata thrift message if requested
    **/
   std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
@@ -128,7 +128,7 @@ class writer::impl {
    * @param num_fragments Total number of fragments per column
    * @param num_rows Total number of rows
    * @param fragment_size Number of rows per fragment
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void init_page_fragments(hostdevice_vector<gpu::PageFragment>& frag,
                            hostdevice_vector<gpu::EncColumnDesc>& col_desc,
@@ -146,7 +146,7 @@ class writer::impl {
    * @param num_columns Total number of columns
    * @param num_fragments Total number of fragments per column
    * @param fragment_size Number of rows per fragment
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void gather_fragment_statistics(statistics_chunk* dst_stats,
                                   hostdevice_vector<gpu::PageFragment>& frag,
@@ -163,7 +163,7 @@ class writer::impl {
    * @param num_rowgroups Total number of rowgroups
    * @param num_columns Total number of columns
    * @param num_dictionaries Total number of dictionaries
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChunk>& chunks,
                                 hostdevice_vector<gpu::EncColumnDesc>& col_desc,
@@ -181,7 +181,7 @@ class writer::impl {
    * @param num_columns Total number of columns
    * @param num_pages Total number of pages
    * @param num_stats_bfr Number of statistics buffers
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
                           hostdevice_vector<gpu::EncColumnDesc>& col_desc,
@@ -207,7 +207,7 @@ class writer::impl {
    * @param comp_out compressor status array
    * @param page_stats optional page-level statistics (nullptr if none)
    * @param chunk_stats optional chunk-level statistics (nullptr if none)
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   void encode_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
                     gpu::EncPage* pages,

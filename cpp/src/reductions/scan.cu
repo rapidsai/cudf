@@ -4,7 +4,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 
-#include <rmm/rmm.h>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -183,8 +182,8 @@ struct ScanDispatcher {
    *
    * @param input     input column view
    * @param inclusive inclusive or exclusive scan
-   * @param mr The resource to use for all allocations
-   * @param stream The stream on which to execute all allocations and copies
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return
    *
    * @tparam T type of input column

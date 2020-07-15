@@ -58,8 +58,8 @@ class column {
    * and copies.
    *
    * @param other The `column` to copy
-   * @param stream The stream on which to execute all allocations and copies
-   * @param mr The resource to use for all allocations
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for all device memory allocations
    */
   column(column const& other,
          cudaStream_t stream,
@@ -113,9 +113,8 @@ class column {
    * This accounts for the `column_view`'s offset.
    *
    * @param view The view to copy
-   * @param stream The stream on which all allocations and copies will be
-   * executed
-   * @param mr The resource to use for all allocations
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for all device memory allocations
    */
   explicit column(column_view view,
                   cudaStream_t stream                 = 0,
@@ -306,7 +305,7 @@ class column {
   operator mutable_column_view() { return this->mutable_view(); };
 
  private:
-  data_type _type{EMPTY};           ///< Logical type of elements in the column
+  data_type _type{type_id::EMPTY};  ///< Logical type of elements in the column
   cudf::size_type _size{};          ///< The number of elements in the column
   rmm::device_buffer _data{};       ///< Dense, contiguous, type erased device memory
                                     ///< buffer containing the column elements

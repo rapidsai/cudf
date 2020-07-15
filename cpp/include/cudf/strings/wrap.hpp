@@ -56,7 +56,7 @@ namespace strings {
  *
  * @param[in] strings String column.
  * @param[in] width Maximum character width of a line within each string.
- * @param[in] mr Resource for allocating device memory.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  * @return Column of wrapped strings.
  */
 std::unique_ptr<column> wrap(strings_column_view const& strings,

@@ -167,8 +167,14 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
         data_type(type_to_id<size_type>()),
         arg_result->size(),
         static_cast<void const*>(arg_result->view().template data<size_type>()));
-      auto transformed_result = cudf::detail::gather(
-        table_view({col}), null_removed_map, false, arg_result->nullable(), false, mr, stream);
+      auto transformed_result =
+        cudf::detail::gather(table_view({col}),
+                             null_removed_map,
+                             arg_result->nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
+                                                    : cudf::detail::out_of_bounds_policy::NULLIFY,
+                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                             mr,
+                             stream);
       return std::move(transformed_result->release()[0]);
     };
 

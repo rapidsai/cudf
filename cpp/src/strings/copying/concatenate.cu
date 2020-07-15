@@ -236,17 +236,17 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
 
   // create chars column
   auto chars_column =
-    make_numeric_column(data_type{INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
+    make_numeric_column(data_type{type_id::INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
   auto d_new_chars = chars_column->mutable_view().data<char>();
   chars_column->set_null_count(0);
 
   // create offsets column
-  auto offsets_column =
-    make_numeric_column(data_type{INT32}, offsets_count, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_column = make_numeric_column(
+    data_type{type_id::INT32}, offsets_count, mask_state::UNALLOCATED, stream, mr);
   auto d_new_offsets = offsets_column->mutable_view().data<int32_t>();
   offsets_column->set_null_count(0);
 
-  rmm::device_buffer null_mask;
+  rmm::device_buffer null_mask{0, stream, mr};
   size_type null_count{};
   if (has_nulls) {
     null_mask = create_null_mask(strings_count, mask_state::UNINITIALIZED, stream, mr);

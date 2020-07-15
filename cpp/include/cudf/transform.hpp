@@ -40,7 +40,7 @@ namespace cudf {
  * @param unary_udf     The PTX/CUDA string of the unary function to apply
  * @param outout_type   The output type that is compatible with the output type in the UDF
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
- * @param mr            The memory resource to use for for all device allocations
+ * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The column resulting from applying the unary function to
  *                      every element of the input
  **/
@@ -58,7 +58,7 @@ std::unique_ptr<column> transform(
  * @throws cudf::logic_error if `input.type()` is a non-floating type
  *
  * @param input         An immutable view of the input column of floating-point type
- * @param mr            The memory resource to use for for all device allocations
+ * @param mr            Device memory resource used to allocate the returned bitmask.
  * @return A pair containing a `device_buffer` with the new bitmask and it's
  * null count obtained by replacing `NaN` in `input` with null.
  **/
@@ -75,7 +75,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * @throws cudf::logic_error if `input.type()` is a non-boolean type
  *
  * @param input        Boolean elements to convert to a bitmask.
- * @param mr            The memory resource used to allocate the returned bitmask.
+ * @param mr           Device memory resource used to allocate the returned bitmask.
  * @return A pair containing a `device_buffer` with the new bitmask and it's
  * null count obtained from input considering `true` represent `valid`/`1` and
  * `false` represent `invalid`/`0`.

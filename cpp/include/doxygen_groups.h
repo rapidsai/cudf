@@ -32,6 +32,7 @@
  *      @defgroup strings_classes Strings
  *      @defgroup dictionary_classes Dictionary
  *      @defgroup timestamp_classes Timestamp
+ *      @defgroup lists_classes Lists
  *   @}
  *   @defgroup table_classes Table
  *   @defgroup scalar_classes Scalar
@@ -113,6 +114,7 @@
  * @}
  * @defgroup io_apis IO
  * @{
+ *   @defgroup io_datasources Datasources
  *   @defgroup io_readers Readers
  *   @defgroup io_writers Writers
  * @}
@@ -121,6 +123,7 @@
  *   @defgroup nvtext_ngrams NGrams
  *   @defgroup nvtext_normalize Normalizing
  *   @defgroup nvtext_tokenize Tokenizing
+ *   @defgroup nvtext_replace Replacing
  * @}
  * @defgroup utility_apis Utilities
  * @{

@@ -7,7 +7,7 @@ from libcpp.map cimport map
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
-from pyarrow.includes.libarrow cimport RandomAccessFile
+from pyarrow.includes.libarrow cimport CRandomAccessFile
 from cudf._lib.cpp.table.table cimport table
 
 
@@ -36,7 +36,7 @@ cdef extern from "cudf/io/types.hpp" \
         ARROW_RANDOM_ACCESS_FILE \
             "cudf::io::io_type::ARROW_RANDOM_ACCESS_FILE"
         VOID "cudf::io::io_type::VOID"
-        USER_SINK "cudf::io::io_type::USER_SINK"
+        USER_IMPLEMENTED "cudf::io::io_type::USER_IMPLEMENTED"
 
     ctypedef enum statistics_freq:
         STATISTICS_NONE = 0,
@@ -58,16 +58,22 @@ cdef extern from "cudf/io/types.hpp" \
         unique_ptr[table] tbl
         table_metadata metadata
 
+    cdef cppclass host_buffer:
+        const char* data
+        size_t size
+
+        host_buffer()
+        host_buffer(const char* data, size_t size)
+
     cdef cppclass source_info:
         io_type type
-        string filepath
-        pair[const char*, size_t] buffer
-        shared_ptr[RandomAccessFile] file
+        vector[string] filepaths
+        vector[host_buffer] buffers
+        vector[shared_ptr[CRandomAccessFile]] files
 
         source_info() except +
-        source_info(const string filepath) except +
-        source_info(const char* host_buffer, size_t size) except +
-        source_info(const shared_ptr[RandomAccessFile] arrow_file) except +
+        source_info(const vector[string] &filepaths) except +
+        source_info(const vector[host_buffer] &host_buffers) except +
 
     cdef cppclass sink_info:
         io_type type

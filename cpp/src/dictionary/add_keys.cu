@@ -16,6 +16,7 @@
 
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -75,7 +76,7 @@ std::unique_ptr<column> add_keys(
     stream);
   // now create the indices column -- map old values to the new ones
   // gather([4,0,3,1,2,2,2,4,0],[0,1,2,3,5]) = [5,0,3,1,2,2,2,5,0]
-  column_view indices_view(data_type{INT32},
+  column_view indices_view(data_type{type_id::INT32},
                            dictionary_column.size(),
                            dictionary_column.indices().data<int32_t>(),
                            nullptr,
@@ -83,16 +84,15 @@ std::unique_ptr<column> add_keys(
                            dictionary_column.offset());
   auto table_indices = cudf::detail::gather(table_view{{map_indices->view()}},
                                             indices_view,
-                                            false,
-                                            true,
-                                            false,  // ignore out-of-bounds
+                                            cudf::detail::out_of_bounds_policy::IGNORE,
+                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
                                             mr,
                                             stream)
                          ->release();
   // the result may contain nulls if the input contains nulls and the corresponding index is
   // therefore invalid
   auto contents       = table_indices.front()->release();
-  auto indices_column = std::make_unique<column>(data_type{INT32},
+  auto indices_column = std::make_unique<column>(data_type{type_id::INT32},
                                                  dictionary_column.size(),
                                                  std::move(*(contents.data.release())),
                                                  rmm::device_buffer{0, stream, mr},
@@ -111,6 +111,7 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
                                  column_view const& keys,
                                  rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::add_keys(dictionary_column, keys, mr);
 }
 

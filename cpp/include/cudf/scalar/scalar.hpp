@@ -57,7 +57,7 @@ class scalar {
    * @brief Updates the validity of the value
    *
    * @param is_valid true: set the value to valid. false: set it to null
-   * @param stream The CUDA stream to do the operation in
+   * @param stream CUDA stream used for device memory operations.
    */
   void set_valid(bool is_valid, cudaStream_t stream = 0) { _is_valid.set_value(is_valid, stream); }
 
@@ -66,7 +66,7 @@ class scalar {
    *
    * @note Using the value when `is_valid() == false` is undefined behaviour
    *
-   * @param stream The CUDA stream to do the operation in
+   * @param stream CUDA stream used for device memory operations.
    * @return true Value is valid
    * @return false Value is invalid/null
    */
@@ -83,7 +83,7 @@ class scalar {
   bool const* validity_data() const { return _is_valid.data(); }
 
  protected:
-  data_type _type{EMPTY};                ///< Logical type of value in the scalar
+  data_type _type{type_id::EMPTY};       ///< Logical type of value in the scalar
   rmm::device_scalar<bool> _is_valid{};  ///< Device bool signifying validity
 
   scalar() = default;
@@ -96,8 +96,8 @@ class scalar {
    *
    * @param type Data type of the scalar
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   scalar(data_type type,
          bool is_valid                       = false,
@@ -126,7 +126,7 @@ class fixed_width_scalar : public scalar {
    * @brief Set the value of the scalar
    *
    * @param value New value of scalar
-   * @param stream The CUDA stream to do the operation in
+   * @param stream CUDA stream used for device memory operations.
    */
   void set_value(T value, cudaStream_t stream = 0)
   {
@@ -142,7 +142,7 @@ class fixed_width_scalar : public scalar {
   /**
    * @brief Get the value of the scalar
    *
-   * @param stream The CUDA stream to do the operation in
+   * @param stream CUDA stream used for device memory operations.
    */
   T value(cudaStream_t stream = 0) const { return _data.value(stream); }
 
@@ -166,8 +166,8 @@ class fixed_width_scalar : public scalar {
    *
    * @param value The initial value of the scalar
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   fixed_width_scalar(T value,
                      bool is_valid                       = true,
@@ -219,8 +219,8 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
    *
    * @param value The initial value of the scalar
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   numeric_scalar(T value,
                  bool is_valid                       = true,
@@ -254,7 +254,7 @@ class string_scalar : public scalar {
  public:
   using value_type = cudf::string_view;
 
-  string_scalar() : scalar(data_type(STRING)) {}
+  string_scalar() : scalar(data_type(type_id::STRING)) {}
   ~string_scalar()                          = default;
   string_scalar(string_scalar&& other)      = default;
   string_scalar(string_scalar const& other) = default;
@@ -266,14 +266,14 @@ class string_scalar : public scalar {
    *
    * @param value The value of the string
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   string_scalar(std::string const& string,
                 bool is_valid                       = true,
                 cudaStream_t stream                 = 0,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : scalar(data_type(STRING), is_valid), _data(string.data(), string.size(), stream, mr)
+    : scalar(data_type(type_id::STRING), is_valid), _data(string.data(), string.size(), stream, mr)
   {
   }
 
@@ -283,14 +283,15 @@ class string_scalar : public scalar {
    *
    * @param source string_view pointing string value to copy
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   string_scalar(value_type const& source,
                 bool is_valid                       = true,
                 cudaStream_t stream                 = 0,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : scalar(data_type(STRING), is_valid), _data(source.data(), source.size_bytes(), stream, mr)
+    : scalar(data_type(type_id::STRING), is_valid),
+      _data(source.data(), source.size_bytes(), stream, mr)
   {
   }
 
@@ -300,8 +301,8 @@ class string_scalar : public scalar {
    *
    * @param data device_scalar string_view pointing string value to copy
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
   string_scalar(rmm::device_scalar<value_type>& data,
                 bool is_valid                       = true,
@@ -319,14 +320,14 @@ class string_scalar : public scalar {
   /**
    * @brief Get the value of the scalar in a host std::string
    *
-   * @param stream The CUDA stream to do the operation in
+   * @param stream CUDA stream used for device memory operations.
    */
   std::string to_string(cudaStream_t stream = 0) const;
 
   /**
    * @brief Get the value of the scalar as a string_view
    *
-   * @param stream The CUDA stream to do the operation in
+   * @param stream CUDA stream used for device memory operations.
    */
   value_type value(cudaStream_t stream = 0) const { return value_type{data(), size()}; }
 
@@ -345,75 +346,92 @@ class string_scalar : public scalar {
 };
 
 /**
- * @brief An owning class to represent a timestamp value in device memory
+ * @brief An owning class to represent a timestamp/duration value in device memory
  *
  * @ingroup scalar_classes
  *
- * @tparam T the data type of the timestamp value
- * @see cudf/wrappers/timestamps.hpp for a list of allowed types
+ * @tparam T the data type of the timestamp/duration value
+ * @see cudf/wrappers/timestamps.hpp, cudf/wrappers/durations.hpp for a list of allowed types
  */
 template <typename T>
-class timestamp_scalar : public detail::fixed_width_scalar<T> {
-  static_assert(is_timestamp<T>(), "Unexpected non-timestamp type");
+class chrono_scalar : public detail::fixed_width_scalar<T> {
+  static_assert(is_chrono<T>(), "Unexpected non-chrono type");
 
  public:
-  timestamp_scalar()                              = default;
-  ~timestamp_scalar()                             = default;
-  timestamp_scalar(timestamp_scalar&& other)      = default;
-  timestamp_scalar(timestamp_scalar const& other) = default;
-  timestamp_scalar& operator=(timestamp_scalar const& other) = delete;
-  timestamp_scalar& operator=(timestamp_scalar&& other) = delete;
+  chrono_scalar()                           = default;
+  ~chrono_scalar()                          = default;
+  chrono_scalar(chrono_scalar&& other)      = default;
+  chrono_scalar(chrono_scalar const& other) = default;
+  chrono_scalar& operator=(chrono_scalar const& other) = delete;
+  chrono_scalar& operator=(chrono_scalar&& other) = delete;
 
   /**
-   * @brief Construct a new timestamp scalar object
+   * @brief Construct a new chrono scalar object
    *
    * @param value The initial value of the scalar
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
-  timestamp_scalar(T value,
-                   bool is_valid                       = true,
-                   cudaStream_t stream                 = 0,
-                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  chrono_scalar(T value,
+                bool is_valid                       = true,
+                cudaStream_t stream                 = 0,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
     : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
   {
   }
 
   /**
-   * @brief Construct a new timestamp scalar object from an integer
+   * @brief Construct a new chrono scalar object from an integer
    *
    * @param value Integer representing number of ticks since the UNIX epoch
    * @param is_valid Whether the value held by the scalar is valid
-   * @param stream The CUDA stream to do the allocation in
-   * @param mr The memory resource to use for allocation
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
    */
-  timestamp_scalar(typename T::duration::rep value,
-                   bool is_valid,
-                   cudaStream_t stream                 = 0,
-                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
+  chrono_scalar(typename T::rep value,
+                bool is_valid,
+                cudaStream_t stream                 = 0,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    : detail::fixed_width_scalar<T>(T{value}, is_valid, stream, mr)
   {
   }
 
   /**
-   * @brief Construct a new timestamp scalar object from existing device memory.
+   * @brief Construct a new chrono scalar object from existing device memory.
    *
    * @param[in] data The scalar's data in device memory
    * @param[in] is_valid Whether the value held by the scalar is valid
    */
-  timestamp_scalar(rmm::device_scalar<T>&& data,
-                   bool is_valid                       = true,
-                   cudaStream_t stream                 = 0,
-                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  chrono_scalar(rmm::device_scalar<T>&& data,
+                bool is_valid                       = true,
+                cudaStream_t stream                 = 0,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
     : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
   {
   }
+};
+
+template <typename T>
+struct timestamp_scalar : chrono_scalar<T> {
+  static_assert(is_timestamp<T>(), "Unexpected non-timestamp type");
+  using chrono_scalar<T>::chrono_scalar;
 
   /**
    * @brief Return the duration in number of ticks since the UNIX epoch.
    */
-  typename T::duration::rep ticks_since_epoch() { return this->value().time_since_epoch().count(); }
+  typename T::rep ticks_since_epoch() { return this->value().time_since_epoch().count(); }
+};
+
+template <typename T>
+struct duration_scalar : chrono_scalar<T> {
+  static_assert(is_duration<T>(), "Unexpected non-duration type");
+  using chrono_scalar<T>::chrono_scalar;
+
+  /**
+   * @brief Return the duration in number of ticks.
+   */
+  typename T::rep count() { return this->value().count(); }
 };
 
 }  // namespace cudf

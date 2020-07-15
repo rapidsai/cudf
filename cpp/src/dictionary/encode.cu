@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
@@ -37,8 +38,8 @@ std::unique_ptr<column> encode(column_view const& input_column,
                                rmm::mr::device_memory_resource* mr,
                                cudaStream_t stream)
 {
-  CUDF_EXPECTS(indices_type.id() == INT32, "only INT32 type for indices");
-  CUDF_EXPECTS(input_column.type().id() != DICTIONARY32,
+  CUDF_EXPECTS(indices_type.id() == type_id::INT32, "only type_id::INT32 type for indices");
+  CUDF_EXPECTS(input_column.type().id() != type_id::DICTIONARY32,
                "cannot encode a dictionary from a dictionary");
 
   // side effects of this function were are now dependent on:
@@ -71,8 +72,8 @@ std::unique_ptr<column> encode(column_view const& input_column,
                                                   std::vector<null_order>{null_order::AFTER},
                                                   mr,
                                                   stream);
-  // we should probably copy/cast to INT32 type if different
-  CUDF_EXPECTS(indices_column->type() == indices_type, "expecting INT32 indices type");
+  // we should probably copy/cast to type_id::INT32 type if different
+  CUDF_EXPECTS(indices_column->type() == indices_type, "expecting type_id::INT32 indices type");
 
   // create column with keys_column and indices_column
   return make_dictionary_column(std::move(keys_column),
@@ -89,6 +90,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
                                data_type indices_type,
                                rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::encode(input_column, indices_type, mr);
 }
 

@@ -44,14 +44,13 @@ namespace detail {
  *
  * @param column The column to dictionary encode.
  * @param indices_type The integer type to use for the indices.
- * @param mr Optional resource to use for device memory allocation.
- * @param stream Optional stream on which to issue all memory allocation and
- *               device kernels.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return Returns a dictionary column.
  */
 std::unique_ptr<column> encode(
   column_view const& column,
-  data_type indices_type              = data_type{INT32},
+  data_type indices_type              = data_type{type_id::INT32},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
@@ -66,9 +65,8 @@ std::unique_ptr<column> encode(
  * ```
  *
  * @param dictionary_column Existing dictionary column.
- * @param mr Resource for allocating memory for the output.
- * @param stream Optional stream on which to issue all memory allocation and
- *               device kernels.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New column with type matching the dictionary_column's keys.
  */
 std::unique_ptr<column> decode(

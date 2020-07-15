@@ -48,7 +48,7 @@ namespace dictionary {
  *
  * @param dictionary_column Existing dictionary column.
  * @param new_keys New keys to incorporate into the dictionary_column
- * @param mr Resource for allocating memory for the output.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
 std::unique_ptr<column> add_keys(
@@ -78,7 +78,7 @@ std::unique_ptr<column> add_keys(
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys_to_remove The keys to remove from the dictionary_column
- * @param mr Resource for allocating memory for the output.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
 std::unique_ptr<column> remove_keys(
@@ -99,7 +99,7 @@ std::unique_ptr<column> remove_keys(
  * @endcode
  *
  * @param dictionary_column Existing dictionary column.
- * @param mr Resource for allocating memory for the output.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
 std::unique_ptr<column> remove_unused_keys(
@@ -130,7 +130,7 @@ std::unique_ptr<column> remove_unused_keys(
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys New keys to use for the output column. Must not contain nulls.
- * @param mr Resource for allocating memory for the output.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
 std::unique_ptr<column> set_keys(

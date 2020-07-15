@@ -201,17 +201,17 @@ table_with_metadata reader::impl::read(size_t range_offset,
   }
 
   // Return an empty dataframe if no data and no column metadata to process
-  if (source_->empty() && (args_.names.empty() || args_.dtype.empty())) {
+  if (source_->is_empty() && (args_.names.empty() || args_.dtype.empty())) {
     return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
   }
 
   // Transfer source data to GPU
-  if (!source_->empty()) {
+  if (!source_->is_empty()) {
     const char *h_uncomp_data = nullptr;
     size_t h_uncomp_size      = 0;
 
     auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
-    auto buffer    = source_->get_buffer(range_offset, data_size);
+    auto buffer    = source_->host_read(range_offset, data_size);
 
     std::vector<char> h_uncomp_data_owner;
     if (compression_type_ == "none") {
@@ -347,9 +347,14 @@ table_with_metadata reader::impl::read(size_t range_offset,
     if (h_column_flags[col] & column_parse::enabled) {
       // Replace EMPTY dtype with STRING
       if (column_types[active_col].id() == type_id::EMPTY) {
-        column_types[active_col] = data_type{STRING};
+        column_types[active_col] = data_type{type_id::STRING};
       }
-      out_buffers.emplace_back(column_types[active_col], num_records, true, stream, mr_);
+      const bool is_final_allocation = column_types[active_col].id() != type_id::STRING;
+      out_buffers.emplace_back(column_types[active_col],
+                               num_records,
+                               true,
+                               stream,
+                               is_final_allocation ? mr_ : rmm::mr::get_default_resource());
       metadata.column_names.emplace_back(col_names[col]);
       active_col++;
     }
@@ -549,7 +554,7 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
 
   if (args_.dtype.empty()) {
     if (num_records == 0) {
-      dtypes.resize(num_active_cols, data_type{EMPTY});
+      dtypes.resize(num_active_cols, data_type{type_id::EMPTY});
     } else {
       d_column_flags = h_column_flags;
 
@@ -753,30 +758,23 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 }
 
 // Forward to implementation
-reader::reader(std::string filepath,
+reader::reader(std::vector<std::string> const &filepaths,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(nullptr, filepath, options, mr))
 {
+  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
+  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, mr);
 }
 
 // Forward to implementation
-reader::reader(const char *buffer,
-               size_t length,
+reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), "", options, mr))
 {
-}
-
-// Forward to implementation
-reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
-               reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), "", options, mr))
-{
+  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, mr);
 }
 
 // Destructor within this translation unit

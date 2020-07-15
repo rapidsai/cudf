@@ -23,7 +23,7 @@ namespace detail {
 /**
  * @copydoc cudf::transpose
  *
- * @param stream Optional CUDA stream on which to execute kernels
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::pair<std::unique_ptr<column>, table_view> transpose(
   table_view const& input,

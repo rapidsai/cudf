@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def test_series_replace():
@@ -21,6 +21,11 @@ def test_series_replace():
     sr3 = Series.from_pandas(psr3)
     sr4 = sr3.replace("one", "two")
     pd.testing.assert_series_equal(sr4.to_pandas(), psr4)
+
+    psr5 = psr3.replace("one", "five")
+    sr5 = sr3.replace("one", "five")
+
+    pd.testing.assert_series_equal(sr5.to_pandas(), psr5)
 
     # List input
     a6 = np.array([5, 6, 2, 3, 4])
@@ -154,12 +159,8 @@ def test_replace_strings():
     assert_eq(pdf.replace("a", "e"), gdf.replace("a", "e"))
 
 
-@pytest.mark.parametrize(
-    "data_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
-@pytest.mark.parametrize(
-    "fill_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("data_dtype", NUMERIC_TYPES)
+@pytest.mark.parametrize("fill_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("fill_type", ["scalar", "series"])
 @pytest.mark.parametrize("null_value", [None, np.nan])
 @pytest.mark.parametrize("inplace", [True, False])
@@ -299,7 +300,7 @@ def test_fillna_string(fill_type, inplace):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("data_dtype", ["int8", "int16", "int32", "int64"])
+@pytest.mark.parametrize("data_dtype", INTEGER_TYPES)
 def test_series_fillna_invalid_dtype(data_dtype):
     gdf = Series([1, 2, None, 3], dtype=data_dtype)
     fill_value = 2.5
@@ -312,9 +313,7 @@ def test_series_fillna_invalid_dtype(data_dtype):
     )
 
 
-@pytest.mark.parametrize(
-    "data_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("data_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("fill_value", [100, 100.0, 128.5])
 def test_series_where(data_dtype, fill_value):
     psr = pd.Series(list(range(10)), dtype=data_dtype)
@@ -454,14 +453,12 @@ def test_series_multiple_times_with_nulls():
         Series([1, 1, 1, None])
 
 
+@pytest.mark.parametrize("series_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize(
-    "series_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
-@pytest.mark.parametrize(
-    "replacement", [128, 128.0, 128.5, -32769, -32769.0, -32769.5]
+    "replacement", [128, 128.0, 128.5, 32769, 32769.0, 32769.5]
 )
 def test_numeric_series_replace_dtype(series_dtype, replacement):
-    psr = pd.Series([-2, -1, 0, 1, 2], dtype=series_dtype)
+    psr = pd.Series([0, 1, 2, 3, 4, 5], dtype=series_dtype)
     sr = Series.from_pandas(psr)
 
     # Both Scalar
@@ -476,10 +473,10 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
     # to_replace is a list, replacement is a scalar
     if sr.dtype.type(replacement) != replacement:
         with pytest.raises(TypeError):
-            sr.replace([-1, 1], replacement)
+            sr.replace([2, 3], replacement)
     else:
-        expect = psr.replace([-1, 1], replacement).astype(psr.dtype)
-        got = sr.replace([-1, 1], replacement)
+        expect = psr.replace([2, 3], replacement).astype(psr.dtype)
+        got = sr.replace([2, 3], replacement)
         assert_eq(expect, got)
 
     # If to_replace is a scalar and replacement is a list
@@ -491,16 +488,16 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
         sr.replace([0, 1], [replacement])
 
     # Both lists of equal length
-    if (np.dtype(type(replacement)).kind == "f" and sr.dtype.kind == "i") or (
-        sr.dtype.type(replacement) != replacement
-    ):
+    if (
+        np.dtype(type(replacement)).kind == "f" and sr.dtype.kind in {"i", "u"}
+    ) or (sr.dtype.type(replacement) != replacement):
         with pytest.raises(TypeError):
-            sr.replace([-1, 1], [replacement, replacement])
+            sr.replace([2, 3], [replacement, replacement])
     else:
-        expect = psr.replace([-1, 1], [replacement, replacement]).astype(
+        expect = psr.replace([2, 3], [replacement, replacement]).astype(
             psr.dtype
         )
-        got = sr.replace([-1, 1], [replacement, replacement])
+        got = sr.replace([2, 3], [replacement, replacement])
         assert_eq(expect, got)
 
 
@@ -591,3 +588,135 @@ def test_replace_inplace():
 
     with pytest.raises(TypeError):
         gdf.replace(-1, [])
+
+
+@pytest.mark.parametrize(
+    ("lower", "upper"),
+    [([2, 7.4], [4, 7.9]), ([2, 7.4], None), (None, [4, 7.9],)],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_clip(lower, upper, inplace):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3, 4, 5], "b": [7.1, 7.24, 7.5, 7.8, 8.11]}
+    )
+    gdf = DataFrame.from_pandas(pdf)
+
+    got = gdf.clip(lower=lower, upper=upper, inplace=inplace)
+    expect = pdf.clip(lower=lower, upper=upper, axis=1)
+
+    if inplace is True:
+        assert_eq(expect, gdf)
+    else:
+        assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    ("lower", "upper"), [("b", "d"), ("b", None), (None, "c"), (None, None)],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_category_clip(lower, upper, inplace):
+    data = ["a", "b", "c", "d", "e"]
+    pdf = pd.DataFrame({"a": data})
+    gdf = DataFrame.from_pandas(pdf)
+    gdf["a"] = gdf["a"].astype("category")
+
+    expect = pdf.clip(lower=lower, upper=upper)
+    got = gdf.clip(lower=lower, upper=upper, inplace=inplace)
+
+    if inplace is True:
+        assert_eq(expect, gdf.astype("str"))
+    else:
+        assert_eq(expect, got.astype("str"))
+
+
+@pytest.mark.parametrize(
+    ("lower", "upper"),
+    [([2, 7.4], [4, 7.9, "d"]), ([2, 7.4, "a"], [4, 7.9, "d"])],
+)
+def test_dataframe_exceptions_for_clip(lower, upper):
+    gdf = DataFrame({"a": [1, 2, 3, 4, 5], "b": [7.1, 7.24, 7.5, 7.8, 8.11]})
+
+    with pytest.raises(ValueError):
+        gdf.clip(lower=lower, upper=upper)
+
+
+@pytest.mark.parametrize(
+    ("data", "lower", "upper"),
+    [
+        ([1, 2, 3, 4, 5], 2, 4),
+        ([1, 2, 3, 4, 5], 2, None),
+        ([1, 2, 3, 4, 5], None, 4),
+        ([1, 2, 3, 4, 5], None, None),
+        ([1, 2, 3, 4, 5], 4, 2),
+        (["a", "b", "c", "d", "e"], "b", "d"),
+        (["a", "b", "c", "d", "e"], "b", None),
+        (["a", "b", "c", "d", "e"], None, "d"),
+        (["a", "b", "c", "d", "e"], "d", "b"),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_series_clip(data, lower, upper, inplace):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(data)
+
+    expect = psr.clip(lower=lower, upper=upper)
+    got = gsr.clip(lower=lower, upper=upper, inplace=inplace)
+
+    if inplace is True:
+        assert_eq(expect, gsr)
+    else:
+        assert_eq(expect, got)
+
+
+def test_series_exceptions_for_clip():
+
+    with pytest.raises(ValueError):
+        Series([1, 2, 3, 4]).clip([1, 2], [2, 3])
+
+    with pytest.raises(NotImplementedError):
+        Series([1, 2, 3, 4]).clip(1, 2, axis=0)
+
+
+@pytest.mark.parametrize(
+    ("data", "lower", "upper"),
+    [
+        ([1, 2, 3, 4, 5], 2, 4),
+        ([1, 2, 3, 4, 5], 2, None),
+        ([1, 2, 3, 4, 5], None, 4),
+        ([1, 2, 3, 4, 5], None, None),
+        (["a", "b", "c", "d", "e"], "b", "d"),
+        (["a", "b", "c", "d", "e"], "b", None),
+        (["a", "b", "c", "d", "e"], None, "d"),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_index_clip(data, lower, upper, inplace):
+    pdf = pd.DataFrame({"a": data})
+    index = DataFrame.from_pandas(pdf).set_index("a").index
+
+    expect = pdf.clip(lower=lower, upper=upper)
+    got = index.clip(lower=lower, upper=upper, inplace=inplace)
+
+    if inplace is True:
+        assert_eq(expect, index.to_frame(index=False))
+    else:
+        assert_eq(expect, got.to_frame(index=False))
+
+
+@pytest.mark.parametrize(
+    ("lower", "upper"), [([2, 3], [4, 5]), ([2, 3], None), (None, [4, 5],)],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_multiindex_clip(lower, upper, inplace):
+    df = pd.DataFrame({"a": [1, 2, 3, 4, 5], "b": [1, 2, 3, 4, 5]})
+    gdf = DataFrame.from_pandas(df)
+
+    index = gdf.set_index(["a", "b"]).index
+
+    expected = df.clip(lower=lower, upper=upper, inplace=inplace, axis=1)
+    got = index.clip(lower=lower, upper=upper, inplace=inplace)
+
+    if inplace is True:
+        assert_eq(df, index.to_frame(index=False))
+    else:
+        assert_eq(expected, got.to_frame(index=False))
