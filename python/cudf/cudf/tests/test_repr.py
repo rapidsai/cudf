@@ -23,6 +23,7 @@ def test_null_series(nrows, dtype):
     psrepr = ps.__repr__()
     psrepr = psrepr.replace("NaN", "null")
     psrepr = psrepr.replace("NaT", "null")
+    psrepr = psrepr.replace("<NA>", "null")
     if (
         dtype.startswith("int")
         or dtype.startswith("uint")

@@ -319,7 +319,9 @@ class Frame(libcudf.table.Table):
         reassign_categories(
             categories, out._index._data, indices[:first_data_column_position]
         )
-        if not isinstance(out._index, cudf.MultiIndex) and is_categorical_dtype(out._index._values.dtype):
+        if not isinstance(
+            out._index, cudf.MultiIndex
+        ) and is_categorical_dtype(out._index._values.dtype):
             out = out.set_index(as_index(out.index._values))
 
         # Reassign index and column names

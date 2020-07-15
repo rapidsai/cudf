@@ -36,7 +36,6 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
 )
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
-from cudf._lib.transform import bools_to_mask
 
 
 class ColumnBase(Column, Serializable):
@@ -1447,7 +1446,9 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         data = ColumnBase._concat(gpu_cols, dtype=new_dtype)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
-        if isinstance(arbitrary, pd.Series) and isinstance(arbitrary.array, pd.core.arrays.masked.BaseMaskedArray):
+        if isinstance(arbitrary, pd.Series) and isinstance(
+            arbitrary.array, pd.core.arrays.masked.BaseMaskedArray
+        ):
             return as_column(arbitrary.array)
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
@@ -1574,7 +1575,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             arb_dtype = arbitrary.dtype
         else:
             if arbitrary.dtype == pd.StringDtype():
-                arb_dtype = np.dtype('O')
+                arb_dtype = np.dtype("O")
             else:
                 arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
                 if arb_dtype != arbitrary.dtype.numpy_dtype:
@@ -1598,11 +1599,13 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
         cudf_dtype = arbitrary._data.dtype
 
-        data = Buffer(arbitrary._data.view('|u1'))
+        data = Buffer(arbitrary._data.view("|u1"))
         data = as_column(data, dtype=cudf_dtype)
 
         mask = arbitrary._mask
-        mask = bools_to_mask(as_column(mask).binary_operator('eq', np.bool_(False)))
+        mask = bools_to_mask(
+            as_column(mask).binary_operator("eq", np.bool_(False))
+        )
 
         data = data.set_mask(mask)
 

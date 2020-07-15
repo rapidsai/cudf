@@ -8,8 +8,8 @@ import pytest
 import cudf
 from cudf.core.column.column import as_column
 from cudf.tests.utils import assert_eq
-from cudf.utils.cudautils import expand_mask_bits
 from cudf.utils import dtypes as dtypeutils
+from cudf.utils.cudautils import expand_mask_bits
 
 dtypes = sorted(
     list(
@@ -309,63 +309,70 @@ def test_as_column_buffer(data, expected):
     assert_eq(cudf.Series(actual_column), cudf.Series(expected))
 
 
-@pytest.mark.parametrize('pd_dtype,expect_dtype', [
-    # TODO: Nullable float is coming
-    (pd.StringDtype(), np.dtype('O')),
-    (pd.UInt8Dtype(), np.dtype('uint8')),
-    (pd.UInt16Dtype(), np.dtype('uint16')),
-    (pd.UInt32Dtype(), np.dtype('uint32')),
-    (pd.UInt64Dtype(), np.dtype('uint64')),
-    (pd.Int8Dtype(), np.dtype('int8')),
-    (pd.Int16Dtype(), np.dtype('int16')),
-    (pd.Int32Dtype(), np.dtype('int32')),
-    (pd.Int64Dtype(), np.dtype('int64')),
-    (pd.BooleanDtype(), np.dtype('bool'))
-])
+@pytest.mark.parametrize(
+    "pd_dtype,expect_dtype",
+    [
+        # TODO: Nullable float is coming
+        (pd.StringDtype(), np.dtype("O")),
+        (pd.UInt8Dtype(), np.dtype("uint8")),
+        (pd.UInt16Dtype(), np.dtype("uint16")),
+        (pd.UInt32Dtype(), np.dtype("uint32")),
+        (pd.UInt64Dtype(), np.dtype("uint64")),
+        (pd.Int8Dtype(), np.dtype("int8")),
+        (pd.Int16Dtype(), np.dtype("int16")),
+        (pd.Int32Dtype(), np.dtype("int32")),
+        (pd.Int64Dtype(), np.dtype("int64")),
+        (pd.BooleanDtype(), np.dtype("bool")),
+    ],
+)
 def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
     if pd_dtype == pd.StringDtype():
-        data = ['a',pd.NA,'c',pd.NA ,'e']
+        data = ["a", pd.NA, "c", pd.NA, "e"]
     elif pd_dtype == pd.BooleanDtype():
         data = [True, pd.NA, False, pd.NA, True]
     else:
-        data = [1,pd.NA,3,pd.NA,5]
+        data = [1, pd.NA, 3, pd.NA, 5]
 
-    pd_data = pd.DataFrame.from_dict({'a': data}, dtype=pd_dtype)
+    pd_data = pd.DataFrame.from_dict({"a": data}, dtype=pd_dtype)
     gd_data = cudf.DataFrame.from_pandas(pd_data)
 
-    assert(gd_data['a'].dtype == expect_dtype)
+    assert gd_data["a"].dtype == expect_dtype
 
     # check mask
-    expect_mask = [True if x is not pd.NA else False for x in pd_data['a']]
-    got_mask = expand_mask_bits(len(gd_data), gd_data['a']._column.base_mask)
+    expect_mask = [True if x is not pd.NA else False for x in pd_data["a"]]
+    got_mask = expand_mask_bits(len(gd_data), gd_data["a"]._column.base_mask)
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 
-@pytest.mark.parametrize('pd_dtype,expect_dtype', [
-    # TODO: Nullable float is coming
-    (pd.StringDtype(), np.dtype('O')),
-    (pd.UInt8Dtype(), np.dtype('uint8')),
-    (pd.UInt16Dtype(), np.dtype('uint16')),
-    (pd.UInt32Dtype(), np.dtype('uint32')),
-    (pd.UInt64Dtype(), np.dtype('uint64')),
-    (pd.Int8Dtype(), np.dtype('int8')),
-    (pd.Int16Dtype(), np.dtype('int16')),
-    (pd.Int32Dtype(), np.dtype('int32')),
-    (pd.Int64Dtype(), np.dtype('int64')),
-    (pd.BooleanDtype(), np.dtype('bool'))
-])
+
+@pytest.mark.parametrize(
+    "pd_dtype,expect_dtype",
+    [
+        # TODO: Nullable float is coming
+        (pd.StringDtype(), np.dtype("O")),
+        (pd.UInt8Dtype(), np.dtype("uint8")),
+        (pd.UInt16Dtype(), np.dtype("uint16")),
+        (pd.UInt32Dtype(), np.dtype("uint32")),
+        (pd.UInt64Dtype(), np.dtype("uint64")),
+        (pd.Int8Dtype(), np.dtype("int8")),
+        (pd.Int16Dtype(), np.dtype("int16")),
+        (pd.Int32Dtype(), np.dtype("int32")),
+        (pd.Int64Dtype(), np.dtype("int64")),
+        (pd.BooleanDtype(), np.dtype("bool")),
+    ],
+)
 def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
     if pd_dtype == pd.StringDtype():
-        data = ['a',pd.NA,'c',pd.NA ,'e']
+        data = ["a", pd.NA, "c", pd.NA, "e"]
     elif pd_dtype == pd.BooleanDtype():
         data = [True, pd.NA, False, pd.NA, True]
     else:
-        data = [1,pd.NA,3,pd.NA,5]
+        data = [1, pd.NA, 3, pd.NA, 5]
 
     pd_data = pd.Series(data, dtype=pd_dtype)
     gd_data = cudf.Series.from_pandas(pd_data)
 
-    assert(gd_data.dtype == expect_dtype)
+    assert gd_data.dtype == expect_dtype
 
     # check mask
     expect_mask = [True if x is not pd.NA else False for x in pd_data]

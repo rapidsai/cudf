@@ -107,26 +107,28 @@ def assert_eq(left, right, allow_nullable_pd_types=True, **kwargs):
                 assert np.allclose(left, right, equal_nan=True)
     return True
 
+
 def demote_series_dtype(sr):
     """ Demote a pandas nullable extension dtype into
     a non-nullable numpy type, filling with the appropriate
     NA value
     """
-    in_dtype = sr.dtype
-    dtype_map = {v:k for k, v in dtypeutils.cudf_dtypes_to_pandas_dtypes.items()}
+    dtype_map = {
+        v: k for k, v in dtypeutils.cudf_dtypes_to_pandas_dtypes.items()
+    }
     out_dtype = dtype_map.get(sr.dtype, sr.dtype)
 
-    if out_dtype.kind in ('i', 'u'):
+    if out_dtype.kind in ("i", "u"):
         min_int = np.iinfo(out_dtype).min
         out_sr = sr.fillna(min_int)
         out_sr = out_sr.astype(out_dtype)
-    elif out_dtype.kind in ('O', 'b'):
-        if out_dtype.kind == 'b':
-            out_dtype = np.dtype('O')
+    elif out_dtype.kind in ("O", "b"):
+        if out_dtype.kind == "b":
+            out_dtype = np.dtype("O")
         out_sr = sr.astype(out_dtype)
         # instantiating pandas str/bool series with None still gets object
         # does NOT default to extension with pd.NA yet
-        out_sr[sr.isnull()] = None        
+        out_sr[sr.isnull()] = None
     else:
         out_sr = sr
     return out_sr

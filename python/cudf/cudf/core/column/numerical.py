@@ -16,7 +16,7 @@ from cudf.utils.dtypes import (
     min_signed_type,
     np_to_pa_dtype,
     numeric_normalize_types,
-    pd_dtype_from_cudf_dtype
+    pd_dtype_from_cudf_dtype,
 )
 
 
@@ -164,7 +164,9 @@ class NumericalColumn(column.ColumnBase):
     def to_pandas(self, index=None):
 
         arrow_data = self.to_arrow()
-        host_dtype = pd_dtype_from_cudf_dtype(self.dtype, has_nulls=self.has_nulls)
+        host_dtype = pd_dtype_from_cudf_dtype(
+            self.dtype, has_nulls=self.has_nulls
+        )
         if hasattr(host_dtype, "__from_arrow__"):
             pandas_array = host_dtype.__from_arrow__(arrow_data)
 

@@ -402,9 +402,7 @@ def test_csv_reader_usecols_int_char(tmpdir):
 
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
-    assert_eq(
-        df_out, out.to_pandas(), check_names=False
-    )
+    assert_eq(df_out, out.to_pandas(), check_names=False)
 
 
 def test_csv_reader_mangle_dupe_cols(tmpdir):

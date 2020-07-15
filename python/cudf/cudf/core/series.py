@@ -34,6 +34,7 @@ from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
+    cudf_dtypes_to_pandas_dtypes,
     is_datetime_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
@@ -984,7 +985,7 @@ class Series(Frame, Serializable):
             for idx, value in enumerate(preprocess):
                 if value is None:
                     lines[idx] = lines[idx].replace(" NaT", "null")
-        if preprocess.dtype == np.dtype('object'):
+        if preprocess.dtype == np.dtype("object"):
             for idx, value in enumerate(preprocess):
                 if value is None:
                     lines[idx] = lines[idx].replace("<NA>", "null")
@@ -1005,10 +1006,14 @@ class Series(Frame, Serializable):
             else:
                 lines = lines[:-1]
                 lines[-1] = lines[-1] + "\n"
-            lines[-1] = lines[-1] + "dtype: %s" % self.dtype
+            lines[-1] = lines[-1] + "dtype: %s" % (
+                self.dtype if self.dtype != np.dtype("object") else "string"
+            )
         else:
             lines = output.split(",")
-            return lines[0] + ", dtype: %s)" % self.dtype
+            return lines[0] + ", dtype: %s)" % (
+                self.dtype if self.dtype != np.dtype("object") else "string"
+            )
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             lines.append(category_memory)
         return "\n".join(lines)
