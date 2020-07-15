@@ -40,6 +40,7 @@
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
 - PR #5629 Add `ListColumn` and `ListDtype`
+- PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 
 ## Improvements
