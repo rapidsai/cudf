@@ -147,6 +147,12 @@ class Index(Frame, Serializable):
         """
         return super().drop_duplicates(keep=keep)
 
+    @property
+    def shape(self):
+        """Returns a tuple representing the dimensionality of the Index.
+        """
+        return (len(self),)
+
     def serialize(self):
         """Serialize into pickle format suitable for file storage or network
         transmission.
