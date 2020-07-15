@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import os
 from io import BytesIO
 
@@ -17,7 +19,7 @@ if not os.environ.get("RUN_HDFS_TESTS"):
 
 basedir = "/tmp/test-hdfs"
 host = "localhost"  # hadoop hostname
-port = 8020  # hadoop rpc port
+port = 9000  # hadoop rpc port
 
 
 @pytest.fixture
@@ -53,64 +55,122 @@ def test_read_csv(tmpdir, pdf, hdfs, test_url):
     with open(fname, mode="rb") as f:
         buffer = BytesIO(f.read())
     # Write to hdfs
-    hdfs.upload(basedir + "/file.csv", buffer)
+    hdfs.upload(basedir + "/test_csv_reader.csv", buffer)
 
     if test_url:
-        hd_fpath = "hdfs://{}:{}{}/file.csv".format(host, port, basedir)
+        hd_fpath = "hdfs://{}:{}{}/test_csv_reader.csv".format(
+            host, port, basedir
+        )
     else:
-        hd_fpath = "hdfs://{}/file.csv".format(basedir)
+        hd_fpath = "hdfs://{}/test_csv_reader.csv".format(basedir)
 
     got = cudf.read_csv(hd_fpath)
 
     # Read pandas from byte buffer
-    with hdfs.open(basedir + "/file.csv") as f:
+    with hdfs.open(basedir + "/test_csv_reader.csv") as f:
         expect = pd.read_csv(f)
 
     assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("test_url", [False, True])
-def test_write_csv(pdf, test_url):
+def test_write_csv(pdf, hdfs, test_url):
     gdf = cudf.from_pandas(pdf)
     if test_url:
-        hd_fpath = "hdfs://{}:{}{}/file.csv".format(host, port, basedir)
+        hd_fpath = "hdfs://{}:{}{}/test_csv_writer.csv".format(
+            host, port, basedir
+        )
     else:
-        hd_fpath = "hdfs://{}/file.csv".format(basedir)
+        hd_fpath = "hdfs://{}/test_csv_writer.csv".format(basedir)
 
-    with pytest.raises(
-        RuntimeError, match="write_csv: file could not be opened"
-    ):
-        gdf.to_csv(hd_fpath)
+    gdf.to_csv(hd_fpath, index=False)
+
+    assert hdfs.exists(f"{basedir}/test_csv_writer.csv")
+    with hdfs.open(f"{basedir}/test_csv_writer.csv", mode="rb") as f:
+        got = pd.read_csv(f, dtype=dict(pdf.dtypes))
+    assert_eq(pdf, got)
 
 
 @pytest.mark.parametrize("test_url", [False, True])
-def test_parquet(tmpdir, pdf, hdfs, test_url):
-    fname = tmpdir.mkdir("parquet").join("file.parq")
+def test_read_parquet(tmpdir, pdf, hdfs, test_url):
+    fname = tmpdir.mkdir("parquet").join("test_parquet_reader.parquet")
     # Write to local file system
     pdf.to_parquet(fname)
     # Read from local file system as buffer
     with open(fname, mode="rb") as f:
         buffer = BytesIO(f.read())
     # Write to hdfs
-    hdfs.upload(basedir + "/file.parq", buffer)
+    hdfs.upload(basedir + "/test_parquet_reader.parquet", buffer)
 
     if test_url:
-        hd_fpath = "hdfs://{}:{}{}/file.parq".format(host, port, basedir)
+        hd_fpath = "hdfs://{}:{}{}/test_parquet_reader.parquet".format(
+            host, port, basedir
+        )
     else:
-        hd_fpath = "hdfs://{}/file.parq".format(basedir)
+        hd_fpath = "hdfs://{}/test_parquet_reader.parquet".format(basedir)
 
     got = cudf.read_parquet(hd_fpath)
 
     # Read pandas from byte buffer
-    with hdfs.open(basedir + "/file.parq") as f:
+    with hdfs.open(basedir + "/test_parquet_reader.parquet") as f:
         expect = pd.read_parquet(f)
 
     assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("test_url", [False, True])
-def test_json(tmpdir, pdf, hdfs, test_url):
-    fname = tmpdir.mkdir("json").join("file.json")
+def test_write_parquet(pdf, hdfs, test_url):
+    gdf = cudf.from_pandas(pdf)
+    if test_url:
+        hd_fpath = "hdfs://{}:{}{}/test_parquet_writer.parquet".format(
+            host, port, basedir
+        )
+    else:
+        hd_fpath = "hdfs://{}/test_parquet_writer.parquet".format(basedir)
+
+    gdf.to_parquet(hd_fpath)
+
+    assert hdfs.exists(f"{basedir}/test_parquet_writer.parquet")
+    with hdfs.open(f"{basedir}/test_parquet_writer.parquet", mode="rb") as f:
+        got = pd.read_parquet(f)
+
+    assert_eq(pdf, got)
+
+
+@pytest.mark.xfail(
+    reason="Writing string columns with parition_cols is incorrect"
+)
+@pytest.mark.parametrize("test_url", [False, True])
+def test_write_parquet_partitioned(tmpdir, pdf, hdfs, test_url):
+    pdf.to_parquet(
+        path=tmpdir.join("pandas_parquet_writer_partitioned.parquet"),
+        index=False,
+        partition_cols=["Integer", "Boolean"],
+    )
+    gdf = cudf.from_pandas(pdf)
+    if test_url:
+        hd_fpath = "hdfs://{}:{}{}/test_parquet_partitioned.parquet".format(
+            host, port, basedir
+        )
+    else:
+        hd_fpath = "hdfs://{}/test_parquet_partitioned.parquet".format(basedir)
+    # Clear data written from previous runs
+    hdfs.rm(f"{basedir}/test_parquet_partitioned.parquet", recursive=True)
+    gdf.to_parquet(
+        hd_fpath, index=False, partition_cols=["Integer", "Boolean"]
+    )
+
+    assert hdfs.exists(f"{basedir}/test_parquet_partitioned.parquet")
+    got = pd.read_parquet(hd_fpath)
+    expect = pd.read_parquet(
+        tmpdir.join("pandas_parquet_writer_partitioned.parquet")
+    )
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("test_url", [False, True])
+def test_read_json(tmpdir, pdf, hdfs, test_url):
+    fname = tmpdir.mkdir("json").join("test_json_reader.json")
     # Write to local file system
     # Sorting by col_name now as pandas sorts by col name while reading json
 
@@ -119,24 +179,26 @@ def test_json(tmpdir, pdf, hdfs, test_url):
     with open(fname, mode="rb") as f:
         buffer = BytesIO(f.read())
     # Write to hdfs
-    hdfs.upload(basedir + "/file.json", buffer)
+    hdfs.upload(basedir + "/test_json_reader.json", buffer)
 
     if test_url:
-        hd_fpath = "hdfs://{}:{}{}/file.json".format(host, port, basedir)
+        hd_fpath = "hdfs://{}:{}{}/test_json_reader.json".format(
+            host, port, basedir
+        )
     else:
-        hd_fpath = "hdfs://{}/file.json".format(basedir)
+        hd_fpath = "hdfs://{}/test_json_reader.json".format(basedir)
 
     got = cudf.read_json(hd_fpath, engine="cudf", orient="records", lines=True)
 
     # Read pandas from byte buffer
-    with hdfs.open(basedir + "/file.json") as f:
+    with hdfs.open(basedir + "/test_json_reader.json") as f:
         expect = pd.read_json(f, lines=True)
 
     assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("test_url", [False, True])
-def test_orc(datadir, hdfs, test_url):
+def test_read_orc(datadir, hdfs, test_url):
     fname = datadir / "orc" / "TestOrcFile.testSnappy.orc"
     # Read from local file system as buffer
     with open(fname, mode="rb") as f:
@@ -155,7 +217,28 @@ def test_orc(datadir, hdfs, test_url):
 
 
 @pytest.mark.parametrize("test_url", [False, True])
-def test_avro(datadir, hdfs, test_url):
+def test_write_orc(pdf, hdfs, test_url):
+    # Orc writer doesn't support writing unsigned ints
+    pdf["Integer2"] = pdf["Integer2"].astype("int64")
+    gdf = cudf.from_pandas(pdf)
+    if test_url:
+        hd_fpath = "hdfs://{}:{}{}/test_orc_writer.orc".format(
+            host, port, basedir
+        )
+    else:
+        hd_fpath = "hdfs://{}/test_orc_writer.orc".format(basedir)
+
+    gdf.to_orc(hd_fpath)
+
+    assert hdfs.exists(f"{basedir}/test_orc_writer.orc")
+    with hdfs.open(f"{basedir}/test_orc_writer.orc", mode="rb") as f:
+        got = orc.ORCFile(f).read().to_pandas()
+
+    assert_eq(pdf, got)
+
+
+@pytest.mark.parametrize("test_url", [False, True])
+def test_read_avro(datadir, hdfs, test_url):
     fname = datadir / "avro" / "example.avro"
     # Read from local file system as buffer
     with open(fname, mode="rb") as f:
