@@ -15,10 +15,12 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/copying.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -223,7 +225,14 @@ struct create_column_from_view {
             std::enable_if_t<std::is_same<ColumnType, cudf::list_view>::value> * = nullptr>
   std::unique_ptr<column> operator()()
   {
-    CUDF_FAIL("list_view not supported yet");
+    auto lists_view = lists_column_view(view);
+    return make_lists_column(view.size(),
+                             std::make_unique<column>(lists_view.offsets(), stream, mr),
+                             std::make_unique<column>(lists_view.child(), stream, mr),
+                             view.null_count(),
+                             cudf::copy_bitmask(view, stream, mr),
+                             stream,
+                             mr);
   }
 };
 }  // anonymous namespace
