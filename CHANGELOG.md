@@ -36,7 +36,7 @@
 - PR #5536 Parquet reader - add support for multiple sources
 - PR #5607 Add Java bindings for duration types
 - PR #5612 Add `is_hex` strings API
-- PR #5625 string conversion to and from duration types
+- PR #5625 String conversion to and from duration types
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build

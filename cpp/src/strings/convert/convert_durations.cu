@@ -17,7 +17,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/types.hpp>
 #include <strings/utilities.cuh>
-#include "utilities.cuh"
+#include <strings/convert/utilities.cuh>
 
 #include <map>
 #include <vector>
@@ -432,7 +432,6 @@ struct parse_duration {
   format_item const* d_format_items;
   size_type items_count;
   type_id type;
-  // int8_t subsecond_precision;
 
   //
   __device__ int32_t str2int(const char* str, int8_t max_bytes, int8_t& actual_length)

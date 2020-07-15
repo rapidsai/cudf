@@ -34,7 +34,7 @@ namespace strings {
  * | Specifier | Description | Range |
  * | :-------: | ----------- | ---------------- |
  * | %%d | Days | -2,147,483,648 to 2,147,483,647 |
- * | %%+ | Optional '+' sign for hours in case of negative days: + | |
+ * | %%+ | Optional '+' sign for hours in case of negative days | `+`  |
  * | %%H | 24-hour of the day | 00 to 23 |
  * | %%M | Minute of the hour | 00 to 59 |
  * | %%S | Second of the minute | 00 to 59 |
@@ -77,7 +77,7 @@ std::unique_ptr<column> to_durations(
  * | Specifier | Description | Range |
  * | :-------: | ----------- | ---------------- |
  * | %%d | Days | -2,147,483,648 to 2,147,483,647 |
- * | %%+ | Optional '+' sign for hours in case of negative days: + | |
+ * | %%+ | Optional '+' sign for hours in case of negative days | `+`  |
  * | %%H | 24-hour of the day | 00 to 23 |
  * | %%M | Minute of the hour | 00 to 59 |
  * | %%S | Second of the minute | 00 to 59 |
