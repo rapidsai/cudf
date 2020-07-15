@@ -1,3 +1,7 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+from io import BufferedWriter, IOBase
+
 from pyarrow import orc as orc
 
 from dask import dataframe as dd
@@ -85,7 +89,10 @@ def read_orc(path, columns=None, storage_options=None, **kwargs):
 
 def write_orc_partition(df, path, fs, filename, compression=None):
     full_path = fs.sep.join([path, filename])
-    cudf.io.to_orc(df, full_path, compression=compression)
+    with fs.open(full_path, mode="wb") as out_file:
+        if not isinstance(out_file, IOBase):
+            out_file = BufferedWriter(out_file)
+        cudf.io.to_orc(df, out_file, compression=compression)
     return full_path
 
 

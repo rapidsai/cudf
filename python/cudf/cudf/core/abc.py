@@ -1,12 +1,20 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import abc
-import pickle
+import sys
 from abc import abstractmethod
 
 import rmm
 
 import cudf
+
+if sys.version_info < (3, 8):
+    try:
+        import pickle5 as pickle
+    except ImportError:
+        import pickle
+else:
+    import pickle
 
 
 class Serializable(abc.ABC):
