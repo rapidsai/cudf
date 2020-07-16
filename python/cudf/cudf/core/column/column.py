@@ -120,6 +120,9 @@ class ColumnBase(Column, Serializable):
     def __len__(self):
         return self.size
 
+    def __iter__(self):
+        cudf.utils.utils.raise_iteration_error(obj=self)
+
     def to_pandas(self):
         arr = self.data_array_view
         sr = pd.Series(arr.copy_to_host())
@@ -132,6 +135,26 @@ class ColumnBase(Column, Serializable):
             )
             sr[~mask_bytes] = None
         return sr
+
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the Column.
+        """
+        return self.data_array_view.copy_to_host()
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the Column.
+        """
+        if len(self) == 0:
+            return cupy.asarray([], dtype=self.dtype)
+
+        if self.has_nulls:
+            raise ValueError("Column must have no nulls.")
+
+        return cupy.asarray(self.data_array_view)
 
     def clip(self, lo, hi):
         if is_categorical_dtype(self):
