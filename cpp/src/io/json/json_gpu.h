@@ -43,7 +43,6 @@ using col_map_type = concurrent_unordered_map<uint32_t, cudf::size_type>;
  * @param[in] opts A set of parsing options
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
- * @returns void
  */
 void convert_json_to_columns(rmm::device_buffer const &input_data,
                              data_type *const dtypes,
@@ -70,7 +69,6 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
  * @param[in] num_records The number of rows
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
- * @returns void
  */
 void detect_data_types(ColumnInfo *column_infos,
                        const char *data,
