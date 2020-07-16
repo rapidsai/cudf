@@ -28,7 +28,7 @@ namespace io {
 namespace json {
 namespace gpu {
 
-using col_map_type = concurrent_unordered_map<uint32_t, uint32_t>;
+using col_map_type = concurrent_unordered_map<uint32_t, cudf::size_type>;
 /**
  * @brief Convert a buffer of input data (text) into raw cuDF column data.
  *

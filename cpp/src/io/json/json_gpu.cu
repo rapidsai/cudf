@@ -17,6 +17,7 @@
 #include "json_common.h"
 #include "json_gpu.h"
 
+#include <thrust/find.h>
 #include <rmm/device_buffer.hpp>
 
 #include <cudf/detail/utilities/hash_functions.cuh>
@@ -65,10 +66,6 @@ __device__ std::pair<char const *, char const *> limit_range_to_brackets(char co
   end--;
   return {begin, end};
 }
-/**
- * @brief Enumerator for states when parsing JSON object keys.
- */
-enum class key_parse_state { PRE_KEY, KEY, POST_KEY, POST_KEY_QUOTE };
 
 /**
  * @brief Computes the JSON object key hash and moves the start offset past the key.
@@ -81,25 +78,23 @@ enum class key_parse_state { PRE_KEY, KEY, POST_KEY, POST_KEY_QUOTE };
  *
  * @return uint32_t Hash value of the key; zero if parsing failed
  */
-__device__ uint32_t parse_key(const char *&begin, const char *end, char quotechar)
+__device__ std::pair<char const *, char const *> parse_next_key(const char *begin,
+                                                                const char *end,
+                                                                char quotechar)
 {
-  auto state        = key_parse_state::PRE_KEY;
-  auto key_start    = begin;
-  uint32_t hash_val = 0;
-  for (auto pos = begin; pos < end; ++pos) {
-    if (state == key_parse_state::PRE_KEY && *pos == quotechar) {
-      state     = key_parse_state::KEY;
-      key_start = pos + 1;
-    } else if (state == key_parse_state::KEY && *pos == quotechar && *(pos - 1) != '\\') {
-      state    = key_parse_state::POST_KEY;
-      hash_val = MurmurHash3_32<cudf::string_view>{}(cudf::string_view(key_start, pos - key_start));
-    } else if (state == key_parse_state::POST_KEY && *pos == ':') {
-      begin = pos + 1;
-      break;
-    }
-  }
-  return hash_val;
-}
+  // Key string starts after the first quote
+  auto const key_begin = thrust::find(thrust::seq, begin, end, quotechar) + 1;
+
+  // Key ends after the next unescaped quote
+  auto prev_ch       = ' ';
+  auto const key_end = thrust::find_if(thrust::seq, key_begin, end, [&] __device__(auto ch) {
+    auto res = (ch == quotechar && prev_ch != '\\');
+    prev_ch  = ch;
+    return res;
+  });
+
+  return {key_begin, key_end};
+}  // namespace
 
 /**
  * @brief Decodes a numeric value base on templated cudf type T with specified
@@ -425,28 +420,39 @@ __device__ __inline__ bool is_like_float(
 }
 
 struct field_descriptor {
-  int column;
+  cudf::size_type column;
   char const *value_begin;
   char const *value_end;
 };
 
-__device__ field_descriptor get_next_field_descriptor(const char *begin,
-                                                      const char *end,
-                                                      ParseOptions const &opts,
-                                                      int field_idx,
-                                                      bool are_rows_objects,
-                                                      col_map_type col_map)
+__device__ field_descriptor next_field_descriptor(const char *begin,
+                                                  const char *end,
+                                                  ParseOptions const &opts,
+                                                  cudf::size_type field_idx,
+                                                  bool are_rows_objects,
+                                                  col_map_type col_map)
 {
-  auto dst_col = field_idx;
-  if (are_rows_objects) {
-    auto const key_hash = parse_key(begin, end, opts.quotechar);
-    dst_col             = (*col_map.find(key_hash)).second;
-  }
-  auto const field_end = cudf::io::gpu::seek_field_end(begin, end, opts);
+  auto const desc_pre_trim =
+    !are_rows_objects
+      // No key - column and begin are trivial
+      ? field_descriptor{field_idx, begin, cudf::io::gpu::seek_field_end(begin, end, opts)}
+      : [&]() {
+          auto const key_range = parse_next_key(begin, end, opts.quotechar);
+          auto const key_hash  = MurmurHash3_32<cudf::string_view>{}(
+            cudf::string_view(key_range.first, key_range.second - key_range.first));
+          auto const column = (*col_map.find(key_hash)).second;
+
+          // Skip the colon between the key and the value
+          auto const value_begin = thrust::find(thrust::seq, key_range.second, end, ':') + 1;
+          return field_descriptor{
+            column, value_begin, cudf::io::gpu::seek_field_end(value_begin, end, opts)};
+        }();
+
   // Modify start & end to ignore whitespace and quotechars
-  auto field_value_range = trim_whitespaces_quotes(begin, field_end, opts.quotechar);
-  return {dst_col, field_value_range.first, field_value_range.second};
-}
+  auto const trimmed_value_range =
+    trim_whitespaces_quotes(desc_pre_trim.value_begin, desc_pre_trim.value_end, opts.quotechar);
+  return {desc_pre_trim.column, trimmed_value_range.first, trimmed_value_range.second};
+}  // namespace
 
 /**
  * @brief CUDA kernel that parses and converts plain text data into cuDF column data.
@@ -475,7 +481,7 @@ __global__ void convert_data_to_columns_kernel(const char *data,
                                                bool are_rows_objects,
                                                col_map_type col_map,
                                                void *const *output_columns,
-                                               int num_columns,
+                                               cudf::size_type num_columns,
                                                bitmask_type *const *valid_fields,
                                                cudf::size_type *num_valid_fields)
 {
@@ -487,11 +493,12 @@ __global__ void convert_data_to_columns_kernel(const char *data,
     auto const row_end   = data + ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
     return limit_range_to_brackets(row_begin, row_end);
   }();
+
   auto current = row_data_range.first;
   for (int input_field_index = 0;
        input_field_index < num_columns && current < row_data_range.second;
        input_field_index++) {
-    auto const desc = get_next_field_descriptor(
+    auto const desc = next_field_descriptor(
       current, row_data_range.second, opts, input_field_index, are_rows_objects, col_map);
     auto const value_len = desc.value_end - desc.value_begin;
 
@@ -569,11 +576,11 @@ __global__ void detect_data_types_kernel(const char *data,
   for (auto current = row_data_range.first;
        input_field_index < num_columns && current < row_data_range.second;
        input_field_index++) {
-    auto const desc = get_next_field_descriptor(
+    auto const desc = next_field_descriptor(
       current, row_data_range.second, opts, input_field_index, are_rows_objects, col_map);
     auto const value_len = desc.value_end - desc.value_begin;
 
-    // Advance the start offset; +1 to skip the delimiter
+    // Advance to the next field; +1 to skip the delimiter
     current = desc.value_end + 1;
 
     // Checking if the field is empty/valid
@@ -664,6 +671,11 @@ __global__ void detect_data_types_kernel(const char *data,
       atomicAdd(&column_infos[input_field_index].null_count, 1);
   }
 }
+
+/**
+ * @brief Enumerator for states when parsing JSON object keys.
+ */
+enum class key_parse_state { PRE_KEY, KEY, POST_KEY, POST_KEY_QUOTE };
 
 /**
  * @brief Cuda kernel that collects information about JSON object keys in the file.
