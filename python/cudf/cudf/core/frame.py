@@ -40,7 +40,10 @@ class Frame(libcudf.table.Table):
     def _mimic_inplace(self, result, inplace=False):
         if inplace:
             for col in self._data:
-                self._data[col]._mimic_inplace(result._data[col], inplace=True)
+                if col in result._data:
+                    self._data[col]._mimic_inplace(
+                        result._data[col], inplace=True
+                    )
             self._data = result._data
             self._index = result._index
         else:
