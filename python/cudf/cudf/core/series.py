@@ -2226,7 +2226,12 @@ class Series(Frame, Serializable):
         else:
             cats = pd.Series(cats)
         dtype = np.dtype(dtype)
-        return ((self == cat).fillna(False).astype(dtype) for cat in cats)
+        return (
+            self.isnull().astype(dtype)
+            if cat is None
+            else (self == cat).fillna(False).astype(dtype)
+            for cat in cats
+        )
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding
