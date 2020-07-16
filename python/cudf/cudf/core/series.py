@@ -111,9 +111,10 @@ class Series(Frame, Serializable):
         automatically exclude missing data (currently represented
         as null/NaN).
 
-        Operations between Series (+, -, /, , *) align values based on their
-        associated index values– they need not be the same length. The
-        result index will be the sorted union of the two indexes.
+        Operations between Series (`+`, `-`, `/`, `*`, `**`) align
+        values based on their associated index values-– they need
+        not be the same length. The result index will be the
+        sorted union of the two indexes.
 
         ``Series`` objects are used as columns of ``DataFrame``.
 
