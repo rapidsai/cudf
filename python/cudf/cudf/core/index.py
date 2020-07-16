@@ -91,8 +91,8 @@ class Index(Frame, Serializable):
         """Immutable, ordered and sliceable sequence of integer labels.
         The basic object storing row labels for all cuDF objects.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         data : array-like (1-dimensional)/ DataFrame
             If it is a DataFrame, it will return a MultiIndex
         dtype : NumPy dtype (default: object)
@@ -1688,8 +1688,8 @@ class NumericIndex(GenericIndex):
     """Immutable, ordered and sliceable sequence of labels.
     The basic object storing row labels for all cuDF objects.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     data : array-like (1-dimensional)
     dtype : NumPy dtype,
             but not used.
@@ -1795,8 +1795,8 @@ class DatetimeIndex(GenericIndex):
         If True parse dates in data with the year first order.
         This is not yet supported
 
-    Returns:
-    --------
+    Returns
+    -------
     DatetimeIndex
 
     Examples
@@ -1927,8 +1927,8 @@ class CategoricalIndex(GenericIndex):
     name : object, optional
         Name to be stored in the index.
 
-    Return
-    ------
+    Returns
+    -------
     CategoricalIndex
 
     Examples

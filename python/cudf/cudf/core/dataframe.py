@@ -160,10 +160,10 @@ class DataFrame(Frame, Serializable):
 
         >>> import cudf
         >>> df = cudf.DataFrame([
-            (5, "cats", "jump", np.nan),
-            (2, "dogs", "dig", 7.5),
-            (3, "cows", "moo", -2.1, "occasionally"),
-        ])
+        ... (5, "cats", "jump", np.nan),
+        ... (2, "dogs", "dig", 7.5),
+        ... (3, "cows", "moo", -2.1, "occasionally"),
+        ... ])
         >>> df
         0     1     2     3             4
         0  5  cats  jump  null          None
@@ -2678,7 +2678,7 @@ class DataFrame(Frame, Serializable):
         Examples
         --------
         >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
-                                'b': cudf.Series(['a', 'b', 'c'])})
+        ...                    'b': cudf.Series(['a', 'b', 'c'])})
         >>> a.take([0, 2, 2])
              a  b
         0  1.0  a
