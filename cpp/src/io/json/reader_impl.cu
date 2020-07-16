@@ -463,11 +463,10 @@ void set_null_count(size_type num_rows,
                     rmm::device_vector<cudf::io::json::ColumnInfo> &infos,
                     cudaStream_t stream)
 {
-  thrust::for_each(
-    rmm::exec_policy(stream)->on(stream),
-    infos.begin(),
-    infos.end(),
-    [num_rows] __device__(auto& info) { info.null_count = num_rows; });
+  thrust::for_each(rmm::exec_policy(stream)->on(stream),
+                   infos.begin(),
+                   infos.end(),
+                   [num_rows] __device__(auto &info) { info.null_count = num_rows; });
 }
 
 /**
