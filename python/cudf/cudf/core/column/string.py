@@ -4403,7 +4403,7 @@ class StringColumn(column.ColumnBase):
         pd_series = self.to_arrow().to_pandas()
         if index is not None:
             pd_series.index = index
-        return pd_series.astype(pd.StringDtype())
+        return pd_series.astype(pd.StringDtype(), copy=False)
 
     @property
     def values_host(self):
