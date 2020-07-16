@@ -125,9 +125,15 @@ from cudf._lib.strings.translate import translate as cpp_translate
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
+from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import can_convert_to_column, is_scalar, is_string_dtype
+from cudf.utils.dtypes import (
+    can_convert_to_column,
+    is_list_dtype,
+    is_scalar,
+    is_string_dtype,
+)
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -170,7 +176,7 @@ _numeric_to_str_typecast_functions = {
 }
 
 
-class StringMethods(object):
+class StringMethods(ColumnMethodsMixin):
     def __init__(self, column, parent=None):
         """
         Vectorized string functions for Series and Index.
@@ -180,6 +186,13 @@ class StringMethods(object):
         Patterned after Python’s string methods, with some
         inspiration from R’s stringr package.
         """
+        value_type = (
+            column.dtype.leaf_type if is_list_dtype(column) else column.dtype
+        )
+        if not is_string_dtype(value_type):
+            raise AttributeError(
+                "Can only use .str accessor with string values"
+            )
         self._column = column
         self._parent = parent
 
@@ -238,62 +251,6 @@ class StringMethods(object):
         out = str_cast.ip2int(self._column)
 
         return self._return_or_inplace(out, inplace=False)
-
-    def _return_or_inplace(self, new_col, **kwargs):
-        """
-        Returns an object of the type of the column owner or updates the column
-        of the owner (Series or Index) to mimic an inplace operation
-        """
-
-        inplace = kwargs.get("inplace", False)
-
-        if inplace:
-            self._parent._mimic_inplace(new_col, inplace=True)
-        else:
-            expand = kwargs.get("expand", False)
-            if expand or isinstance(
-                self._parent, (cudf.DataFrame, cudf.MultiIndex)
-            ):
-                # This branch indicates the passed as new_col
-                # is actually a table-like data
-                table = new_col
-                from cudf._lib.table import Table
-
-                if isinstance(table, Table):
-                    if isinstance(self._parent, cudf.Index):
-                        idx = self._parent._constructor_expanddim._from_table(
-                            table=table
-                        )
-                        idx.names = None
-                        return idx
-                    else:
-                        return self._parent._constructor_expanddim(
-                            data=table._data, index=self._parent.index
-                        )
-                else:
-                    return self._parent._constructor_expanddim(
-                        {index: value for index, value in enumerate(table)},
-                        index=self._parent.index,
-                    )
-            elif isinstance(self._parent, cudf.Series):
-                retain_index = kwargs.get("retain_index", True)
-                if retain_index:
-                    return cudf.Series(
-                        new_col,
-                        name=self._parent.name,
-                        index=self._parent.index,
-                    )
-                else:
-                    return cudf.Series(new_col, name=self._parent.name)
-            elif isinstance(self._parent, cudf.Index):
-                return cudf.core.index.as_index(
-                    new_col, name=self._parent.name
-                )
-            else:
-                if self._parent is None:
-                    return new_col
-                else:
-                    return self._parent._mimic_inplace(new_col, inplace=False)
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -3735,7 +3692,6 @@ class StringMethods(object):
         29    .
         dtype: object
         """
-
         result_col = cpp_character_tokenize(self._column)
         if self._parent is None:
             return result_col
