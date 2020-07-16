@@ -127,6 +127,29 @@ class ColumnBase(Column, Serializable):
             pd_series.index = index
         return pd_series
 
+    def __iter__(self):
+        cudf.utils.utils.raise_iteration_error(obj=self)
+
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the Column.
+        """
+        return self.data_array_view.copy_to_host()
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the Column.
+        """
+        if len(self) == 0:
+            return cupy.asarray([], dtype=self.dtype)
+
+        if self.has_nulls:
+            raise ValueError("Column must have no nulls.")
+
+        return cupy.asarray(self.data_array_view)
+
     def clip(self, lo, hi):
         if is_categorical_dtype(self):
             input_col = self.astype(self.categories.dtype)

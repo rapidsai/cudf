@@ -19,7 +19,10 @@ from cudf._lib.nvtext.ngrams_tokenize import (
     ngrams_tokenize as cpp_ngrams_tokenize,
 )
 from cudf._lib.nvtext.normalize import normalize_spaces as cpp_normalize_spaces
-from cudf._lib.nvtext.replace import replace_tokens as cpp_replace_tokens
+from cudf._lib.nvtext.replace import (
+    filter_tokens as cpp_filter_tokens,
+    replace_tokens as cpp_replace_tokens,
+)
 from cudf._lib.nvtext.subword_tokenize import (
     subword_tokenize as cpp_subword_tokenize,
 )
@@ -3922,6 +3925,75 @@ class StringMethods(ColumnMethodsMixin):
             **kwargs,
         )
 
+    def filter_tokens(
+        self, min_token_length, replacement=None, delimiter=None, **kwargs
+    ):
+        """
+        Remove tokens from within each string in the series that are
+        smaller than min_token_length and optionally replace them
+        with the replacement string.
+        Tokens are identified by the delimiter character provided.
+
+        Parameters
+        ----------
+        min_token_length: int
+            Minimum number of characters for a token to be retained
+            in the output string.
+
+        replacement : str
+            String used in place of removed tokens.
+
+        delimiter : str
+            The character(s) used to locate the tokens of each string.
+            Default is whitespace.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["this is me", "theme music", ""])
+        >>> sr.str.filter_tokens(3, replacement="_")
+        0       this _ _
+        1    theme music
+        2
+        dtype: object
+        >>> sr = cudf.Series(["this;is;me", "theme;music", ""])
+        >>> sr.str.filter_tokens(5,None,";")
+        0             ;;
+        1    theme;music
+        2
+        dtype: object
+        """
+
+        if replacement is None:
+            replacement = ""
+        elif not is_scalar(replacement):
+            raise TypeError(
+                f"Type of replacement should be a string,"
+                f" found {type(replacement)}"
+            )
+
+        if delimiter is None:
+            delimiter = ""
+        elif not is_scalar(delimiter):
+            raise TypeError(
+                f"Type of delimiter should be a string,"
+                f" found {type(delimiter)}"
+            )
+
+        return self._return_or_inplace(
+            cpp_filter_tokens(
+                self._column,
+                min_token_length,
+                as_scalar(replacement, dtype="str"),
+                as_scalar(delimiter, dtype="str"),
+            ),
+            **kwargs,
+        )
+
     def subword_tokenize(
         self,
         hash_file,
@@ -4288,6 +4360,22 @@ class StringColumn(column.ColumnBase):
         if index is not None:
             pd_series.index = index
         return pd_series
+
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the StringColumn.
+        """
+        return self.to_pandas().values
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the StringColumn.
+        """
+        raise NotImplementedError(
+            "String Arrays is not yet implemented in cudf"
+        )
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
