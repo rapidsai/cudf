@@ -3149,7 +3149,7 @@ class Series(Frame, Serializable):
         Return sample standard deviation of the Series.
 
         Normalized by N-1 by default. This can be changed using
-        the ddof argument
+        the `ddof` argument
 
         Parameters
         ----------

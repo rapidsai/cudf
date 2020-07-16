@@ -5836,7 +5836,7 @@ class DataFrame(Frame, Serializable):
         Return sample standard deviation of the DataFrame.
 
         Normalized by N-1 by default. This can be changed using
-        the ddof argument
+        the `ddof` argument
 
         Parameters
         ----------

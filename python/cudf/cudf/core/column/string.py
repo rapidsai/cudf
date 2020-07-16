@@ -2078,7 +2078,9 @@ class StringMethods(object):
         Examples
         --------
         >>> import cudf
-        >>> data = ["this is a regular sentence","https://docs.python.org/3/tutorial/index.html",None]      # noqa E501
+        >>> data = ["this is a regular sentence",
+        ... "https://docs.python.org/3/tutorial/index.html",
+        ... None]
         >>> s = cudf.Series(data)
         >>> s.str.rsplit(n=2)
                                                        0        1         2
