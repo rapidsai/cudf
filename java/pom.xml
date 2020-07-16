@@ -185,6 +185,12 @@
                                     <goal>jar-no-fork</goal>
                                 </goals>
                             </execution>
+                            <execution>
+                                <id>test-jars</id>
+                                <goals>
+                                    <goal>test-jar</goal>
+                                </goals>
+                            </execution>
                         </executions>
                     </plugin>
                     <plugin>
@@ -421,6 +427,16 @@
                     <!--Set by groovy script-->
                     <classifier>${cuda.classifier}</classifier>
                 </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>tests</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
