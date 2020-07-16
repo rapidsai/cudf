@@ -765,6 +765,7 @@ CUDA_HOST_DEVICE_CALLABLE bool operator>(fixed_point<Rep1, Rad1> const& lhs,
 }
 
 using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+using decimal64 = fixed_point<int64_t, Radix::BASE_10>;
 
 /** @} */  // end of group
 }  // namespace numeric
