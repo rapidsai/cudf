@@ -144,10 +144,10 @@ class DataFrame(Frame, Serializable):
         >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
         >>> n = 5
         >>> df = cudf.DataFrame({
-        >>> 'id': np.arange(n),
-        >>> 'datetimes': np.array(
-        >>> [(t0+ timedelta(seconds=x)) for x in range(n)])
-        >>> })
+        ... 'id': np.arange(n),
+        ... 'datetimes': np.array(
+        ... [(t0+ timedelta(seconds=x)) for x in range(n)])
+        ... })
         >>> df
             id                datetimes
         0    0  2018-10-07T12:00:00.000
@@ -2470,7 +2470,7 @@ class DataFrame(Frame, Serializable):
         >>> df['key'] = [0, 1, 2, 3, 4]
         >>> df['val'] = [float(i + 10) for i in range(5)]
         >>> df_new = df.reindex(index=[0, 3, 4, 5],
-                                columns=['key', 'val', 'sum'])
+        ...                     columns=['key', 'val', 'sum'])
         >>> print(df)
            key   val
         0    0  10.0
@@ -2940,10 +2940,9 @@ class DataFrame(Frame, Serializable):
         a dict / Series will be left as-is. Extra labels listed don’t throw an
         error.
 
-        DataFrame.rename supports two calling conventions
-
-        ``(index=index_mapper, columns=columns_mapper, ...)``
-        ``(mapper, axis={0/'index' or 1/'column'}, ...)``
+        ``DataFrame.rename`` supports two calling conventions:
+            - ``(index=index_mapper, columns=columns_mapper, ...)``
+            - ``(mapper, axis={0/'index' or 1/'column'}, ...)``
 
         We highly recommend using keyword arguments to clarify your intent.
 
@@ -5357,9 +5356,9 @@ class DataFrame(Frame, Serializable):
         >>> import cudf
         >>> import numpy as np
         >>> df = cudf.DataFrame({"Person":
-                   ["John", "Myla", "Lewis", "John", "Myla"],
-                   "Age": [24., np.nan, 21., 33, 26],
-                   "Single": [False, True, True, True, False]})
+        ...        ["John", "Myla", "Lewis", "John", "Myla"],
+        ...        "Age": [24., np.nan, 21., 33, 26],
+        ...        "Single": [False, True, True, True, False]})
         >>> df.count()
         Person    5
         Age       4
