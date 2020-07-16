@@ -47,7 +47,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private int refCount;
 
   /**
-   * Wrap an existing on device cudf::column with the corresponding ColumnVector.
+   * Wrap an existing on device cudf::column with the corresponding ColumnVector. The new
+   * ColumnVector takes ownership of the pointer and will free it when the ref count reaches zero.
    * @param nativePointer host address of the cudf::column object which will be
    *                      owned by this instance.
    */
