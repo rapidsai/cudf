@@ -400,6 +400,22 @@ def get_dummies(
         encodes all columns with dtype object or categorical
     dtype : str, optional
         output dtype, default 'uint8'
+
+    Exmaples
+    --------
+    >>> import cudf
+    >>> df = cudf.DataFrame({"a": ["value1", "value2", None], "b": [0, 0, 0]})
+    >>> cudf.get_dummies(df)
+       b  a_value1  a_value2
+    0  0         1         0
+    1  0         0         1
+    2  0         0         0
+
+    >>> cudf.get_dummies(df, dummy_na=True)
+       b  a_None  a_value1  a_value2
+    0  0       0         1         0
+    1  0       0         0         1
+    2  0       1         0         0
     """
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
