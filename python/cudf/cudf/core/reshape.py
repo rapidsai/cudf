@@ -7,12 +7,15 @@ import cudf
 from cudf.core import DataFrame, Index, Series
 from cudf.core.column import (
     CategoricalColumn,
-    StringColumn,
     as_column,
     build_categorical_column,
 )
 from cudf.utils import cudautils
-from cudf.utils.dtypes import is_categorical_dtype, is_list_like
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_list_like,
+    is_string_dtype,
+)
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -473,7 +476,7 @@ def get_dummies(
                 unique = df[name].unique()
 
             if dummy_na is False:
-                if not isinstance(unique, StringColumn):
+                if not is_string_dtype(unique):
                     unique = unique.nans_to_nulls()
                 unique = unique.dropna()
 
