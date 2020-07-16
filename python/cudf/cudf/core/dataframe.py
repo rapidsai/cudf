@@ -362,7 +362,8 @@ class DataFrame(Frame, Serializable):
             transpose = concat_df.T
 
         transpose._index = final_index
-        self._mimic_inplace(transpose, inplace=True)
+        self._data = transpose._data
+        self._index = transpose._index
 
         # If `columns` is passed, the result dataframe
         # contain a dataframe with only the
@@ -2918,13 +2919,6 @@ class DataFrame(Frame, Serializable):
         )
 
         return self._mimic_inplace(outdf, inplace=inplace)
-
-    def _mimic_inplace(self, result, inplace=False):
-        if inplace:
-            self._data = result._data
-            self._index = result._index
-        else:
-            return result
 
     def pop(self, item):
         """Return a column and drop it from the DataFrame.

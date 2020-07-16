@@ -217,13 +217,6 @@ class Index(Frame, Serializable):
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
 
-    def _mimic_inplace(self, other, inplace=False):
-        if inplace is True:
-            col = self._data[self.name]
-            col._mimic_inplace(other._data[other.name], inplace=True)
-        else:
-            return other
-
     def __iter__(self):
         cudf.utils.utils.raise_iteration_error(obj=self)
 
@@ -2102,7 +2095,7 @@ class StringIndex(GenericIndex):
     @copy_docstring(StringMethods.__init__)
     @property
     def str(self):
-        return self._values.str(parent=self)
+        return StringMethods(column=self._values, parent=self)
 
     @property
     def _constructor_expanddim(self):
