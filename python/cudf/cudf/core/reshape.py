@@ -491,7 +491,7 @@ def get_dummies(
             else:
                 unique = df[name].unique()
 
-            if dummy_na is False:
+            if not dummy_na:
                 if np.issubdtype(unique.dtype, np.floating):
                     unique = unique.nans_to_nulls()
                 unique = unique.dropna()
