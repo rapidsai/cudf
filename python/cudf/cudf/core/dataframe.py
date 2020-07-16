@@ -4990,8 +4990,8 @@ class DataFrame(Frame, Serializable):
         else:
             if len(columns) != num_cols:
                 raise ValueError(
-                    f"columns length expected {num_cols} but \
-                        found {len(columns)}"
+                    f"columns length expected {num_cols} but "
+                    f"found {len(columns)}"
                 )
             names = columns
 
@@ -5032,9 +5032,9 @@ class DataFrame(Frame, Serializable):
         DataFrame
         """
         warnings.warn(
-            "DataFrame.from_gpu_matrix will be removed in 0.16. \
-                Please use cudf.DataFrame() to create a DataFrame \
-                out of a gpu matrix",
+            "DataFrame.from_gpu_matrix will be removed in 0.16. "
+            "Please use cudf.DataFrame() to create a DataFrame "
+            "out of a gpu matrix",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -5049,8 +5049,8 @@ class DataFrame(Frame, Serializable):
         else:
             if len(columns) != data.shape[1]:
                 raise ValueError(
-                    f"columns length expected {data.shape[1]} but \
-                        found {len(columns)}"
+                    f"columns length expected {data.shape[1]} but "
+                    f"found {len(columns)}"
                 )
             names = columns
 
@@ -6146,32 +6146,32 @@ class DataFrame(Frame, Serializable):
             # for dask metadata compatibility
             skipna = kwargs.pop("skipna", None)
             if skipna not in (None, True, 1):
-                msg = "Row-wise operations currently do not \
-                    support `skipna=False`."
+                msg = "Row-wise operations currently do not "
+                "support `skipna=False`."
                 raise NotImplementedError(msg)
 
             level = kwargs.pop("level", None)
             if level not in (None,):
-                msg = "Row-wise operations currently do not \
-                    support `level`."
+                msg = "Row-wise operations currently do not "
+                "support `level`."
                 raise NotImplementedError(msg)
 
             numeric_only = kwargs.pop("numeric_only", None)
             if numeric_only not in (None, True):
-                msg = "Row-wise operations currently do not \
-                    support `numeric_only=False`."
+                msg = "Row-wise operations currently do not "
+                "support `numeric_only=False`."
                 raise NotImplementedError(msg)
 
             min_count = kwargs.pop("min_count", None)
             if min_count not in (None, 0):
-                msg = "Row-wise operations currently do not \
-                        support `min_count`."
+                msg = "Row-wise operations currently do not "
+                "support `min_count`."
                 raise NotImplementedError(msg)
 
             bool_only = kwargs.pop("bool_only", None)
             if bool_only not in (None, True):
-                msg = "Row-wise operations currently do not \
-                        support `bool_only`."
+                msg = "Row-wise operations currently do not "
+                "support `bool_only`."
                 raise NotImplementedError(msg)
 
             prepared = self._prepare_for_rowwise_op()
@@ -6224,8 +6224,7 @@ class DataFrame(Frame, Serializable):
 
         if not any(selection):
             raise ValueError(
-                "at least one of include or exclude must be \
-                             nonempty"
+                "at least one of include or exclude must be nonempty"
             )
 
         include, exclude = map(

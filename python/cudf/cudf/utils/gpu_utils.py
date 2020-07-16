@@ -1,3 +1,6 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+
 def validate_setup(check_dask=True):
     import os
 
@@ -106,14 +109,12 @@ def validate_setup(check_dask=True):
             from cudf.errors import UnSupportedCUDAError
 
             raise UnSupportedCUDAError(
-                "Please update your NVIDIA GPU Driver to support CUDA \
-                    Runtime.\n"
-                "Detected CUDA Runtime version : "
-                + str(cuda_runtime_version)
-                + "\n"
-                "Latest version of CUDA \
-                    supported by current NVIDIA GPU Driver : "
-                + str(cuda_driver_supported_rt_version)
+                f"Please update your NVIDIA GPU Driver to support CUDA "
+                f"Runtime.\n"
+                f"Detected CUDA Runtime version : {str(cuda_runtime_version)}"
+                f"\n"
+                f"Latest version of CUDA supported by current "
+                f"NVIDIA GPU Driver : {str(cuda_driver_supported_rt_version)}"
             )
 
     else:

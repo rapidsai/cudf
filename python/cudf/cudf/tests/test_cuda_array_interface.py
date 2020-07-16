@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import types
 from contextlib import ExitStack as does_not_raise
@@ -171,8 +171,8 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
 
 @pytest.mark.skipif(
     cupy.cuda.runtime.runtimeGetVersion() >= 10020,
-    reason="Pytorch doesn't support 10.2 cuda yet \
-        without building from source.",
+    reason="Pytorch doesn't support 10.2 cuda yet "
+    "without building from source.",
 )
 def test_cuda_array_interface_pytorch():
     torch = pytest.importorskip("torch")

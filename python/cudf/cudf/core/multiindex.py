@@ -373,8 +373,8 @@ class MultiIndex(Index):
                 )
             ):
                 raise TypeError(
-                    "values need to be a Multi-Index or set/list-like tuple \
-                        squences  when `level=None`."
+                    "values need to be a Multi-Index or set/list-like tuple "
+                    "squences  when `level=None`."
                 )
             else:
                 values_idx = cudf.MultiIndex.from_tuples(

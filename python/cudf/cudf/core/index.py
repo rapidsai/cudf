@@ -1971,8 +1971,8 @@ class CategoricalIndex(GenericIndex):
         if isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
             if categories is not None or ordered is not None:
                 raise ValueError(
-                    "Cannot specify `categories` or \
-                        `ordered` together with `dtype`."
+                    "Cannot specify `categories` or "
+                    "`ordered` together with `dtype`."
                 )
 
         if copy:

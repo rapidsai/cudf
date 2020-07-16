@@ -3697,8 +3697,7 @@ class Series(Frame, Serializable):
             np_array_q = np.asarray(q)
             if np.logical_or(np_array_q < 0, np_array_q > 1).any():
                 raise ValueError(
-                    "percentiles should all \
-                             be in the interval [0, 1]"
+                    "percentiles should all be in the interval [0, 1]"
                 )
 
         # Beyond this point, q either being scalar or list-like

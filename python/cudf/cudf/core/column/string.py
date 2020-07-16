@@ -719,8 +719,8 @@ class StringMethods(object):
 
         if can_convert_to_column(pat) and can_convert_to_column(repl):
             warnings.warn(
-                "`n` parameter is not supported when \
-                `pat` and `repl` are list-like inputs"
+                "`n` parameter is not supported when "
+                "`pat` and `repl` are list-like inputs"
             )
 
             return self._return_or_inplace(
@@ -2860,8 +2860,8 @@ class StringMethods(object):
             )
         elif break_long_words is None:
             warnings.warn(
-                "wrap current implementation defaults to \
-                    `break_long_words`=False"
+                "wrap current implementation defaults to "
+                "`break_long_words`=False"
             )
 
         break_on_hyphens = kwargs.get("break_on_hyphens", None)
@@ -2871,8 +2871,8 @@ class StringMethods(object):
             )
         elif break_on_hyphens is None:
             warnings.warn(
-                "wrap current implementation defaults to \
-                    `break_on_hyphens`=False"
+                "wrap current implementation defaults to "
+                "`break_on_hyphens`=False"
             )
 
         return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
@@ -3131,8 +3131,8 @@ class StringMethods(object):
         """
         if "na" in kwargs:
             warnings.warn(
-                "`na` parameter is not yet supported, \
-                as cudf uses native strings instead of Python objects"
+                "`na` parameter is not yet supported, "
+                "as cudf uses native strings instead of Python objects"
             )
 
         if pat is None:
@@ -3196,8 +3196,8 @@ class StringMethods(object):
         """
         if "na" in kwargs:
             warnings.warn(
-                "`na` parameter is not yet supported, \
-                as cudf uses native strings instead of Python objects"
+                "`na` parameter is not yet supported, "
+                "as cudf uses native strings instead of Python objects"
             )
 
         if pat is None:
@@ -3480,8 +3480,8 @@ class StringMethods(object):
 
         if "na" in kwargs:
             warnings.warn(
-                "`na` parameter is not yet supported, \
-                as cudf uses native strings instead of Python objects"
+                "`na` parameter is not yet supported, "
+                "as cudf uses native strings instead of Python objects"
             )
 
         return self._return_or_inplace(
@@ -4285,14 +4285,14 @@ class StringColumn(column.ColumnBase):
         elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
-                    "Could not convert strings to integer \
-                        type due to presence of non-integer values."
+                    "Could not convert strings to integer "
+                    "type due to presence of non-integer values."
                 )
         elif out_dtype.kind == "f":
             if not cpp_is_float(self).all():
                 raise ValueError(
-                    "Could not convert strings to float \
-                        type due to presence of non-floating values."
+                    "Could not convert strings to float "
+                    "type due to presence of non-floating values."
                 )
 
         result_col = _str_to_numeric_typecast_functions[out_dtype](
