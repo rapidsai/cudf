@@ -1106,7 +1106,9 @@ def column_empty(row_count, dtype="object", masked=False):
     else:
         mask = None
 
-    return build_column(data, dtype, mask=mask, children=children)
+    return build_column(
+        data, dtype, mask=mask, size=row_count, children=children
+    )
 
 
 def build_column(
