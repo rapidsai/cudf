@@ -2069,6 +2069,7 @@ class StringMethods(object):
         `NotImplementedError` if anything other than the default value is
         set. The handling of the n keyword depends on the number of
         found splits:
+
             - If found splits > n, make first n splits only
             - If found splits <= n, make all splits
             - If for a certain row the number of found splits < n,
