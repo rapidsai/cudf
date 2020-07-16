@@ -53,7 +53,6 @@ namespace {
  * @param[in,out] start Offset of the first character in the range
  * @param[in,out] stop Offset of the first character after the range
  *
- * @return void
  */
 __device__ std::pair<char const *, char const *> limit_range_to_brackets(char const *begin,
                                                                          char const *end)
@@ -464,7 +463,6 @@ __device__ field_descriptor get_next_field_descriptor(const char *begin,
  * @param[out] valid_fields The bitmaps indicating whether column fields are valid
  * @param[out] num_valid_fields The numbers of valid fields in columns
  *
- * @return void
  */
 __global__ void convert_data_to_columns_kernel(const char *data,
                                                size_t data_size,
@@ -544,7 +542,6 @@ __global__ void convert_data_to_columns_kernel(const char *data,
  * @param[in] num_records The number of rows
  * @param[out] column_infos The count for each column data type
  *
- * @returns void
  */
 __global__ void detect_data_types_kernel(const char *data,
                                          size_t data_size,
@@ -676,7 +673,6 @@ __global__ void detect_data_types_kernel(const char *data,
  * @param[out] keys_cnt Number of found keys in the file
  * @param[out] keys_info Information (offset, length, hash) for each found key
  *
- * @returns void
  */
 __global__ void collect_keys_info_kernel(const char *data,
                                          size_t data_size,
