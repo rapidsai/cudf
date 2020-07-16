@@ -19,7 +19,10 @@ from cudf._lib.nvtext.ngrams_tokenize import (
     ngrams_tokenize as cpp_ngrams_tokenize,
 )
 from cudf._lib.nvtext.normalize import normalize_spaces as cpp_normalize_spaces
-from cudf._lib.nvtext.replace import replace_tokens as cpp_replace_tokens
+from cudf._lib.nvtext.replace import (
+    filter_tokens as cpp_filter_tokens,
+    replace_tokens as cpp_replace_tokens,
+)
 from cudf._lib.nvtext.subword_tokenize import (
     subword_tokenize as cpp_subword_tokenize,
 )
@@ -45,6 +48,7 @@ from cudf._lib.strings.case import (
     to_upper as cpp_to_upper,
 )
 from cudf._lib.strings.char_types import (
+    filter_alphanum as cpp_filter_alphanum,
     is_alnum as cpp_is_alnum,
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
@@ -121,9 +125,15 @@ from cudf._lib.strings.translate import translate as cpp_translate
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
+from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import can_convert_to_column, is_scalar, is_string_dtype
+from cudf.utils.dtypes import (
+    can_convert_to_column,
+    is_list_dtype,
+    is_scalar,
+    is_string_dtype,
+)
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -166,7 +176,7 @@ _numeric_to_str_typecast_functions = {
 }
 
 
-class StringMethods(object):
+class StringMethods(ColumnMethodsMixin):
     def __init__(self, column, parent=None):
         """
         Vectorized string functions for Series and Index.
@@ -176,6 +186,13 @@ class StringMethods(object):
         Patterned after Python’s string methods, with some
         inspiration from R’s stringr package.
         """
+        value_type = (
+            column.dtype.leaf_type if is_list_dtype(column) else column.dtype
+        )
+        if not is_string_dtype(value_type):
+            raise AttributeError(
+                "Can only use .str accessor with string values"
+            )
         self._column = column
         self._parent = parent
 
@@ -234,62 +251,6 @@ class StringMethods(object):
         out = str_cast.ip2int(self._column)
 
         return self._return_or_inplace(out, inplace=False)
-
-    def _return_or_inplace(self, new_col, **kwargs):
-        """
-        Returns an object of the type of the column owner or updates the column
-        of the owner (Series or Index) to mimic an inplace operation
-        """
-
-        inplace = kwargs.get("inplace", False)
-
-        if inplace:
-            self._parent._mimic_inplace(new_col, inplace=True)
-        else:
-            expand = kwargs.get("expand", False)
-            if expand or isinstance(
-                self._parent, (cudf.DataFrame, cudf.MultiIndex)
-            ):
-                # This branch indicates the passed as new_col
-                # is actually a table-like data
-                table = new_col
-                from cudf._lib.table import Table
-
-                if isinstance(table, Table):
-                    if isinstance(self._parent, cudf.Index):
-                        idx = self._parent._constructor_expanddim._from_table(
-                            table=table
-                        )
-                        idx.names = None
-                        return idx
-                    else:
-                        return self._parent._constructor_expanddim(
-                            data=table._data, index=self._parent.index
-                        )
-                else:
-                    return self._parent._constructor_expanddim(
-                        {index: value for index, value in enumerate(table)},
-                        index=self._parent.index,
-                    )
-            elif isinstance(self._parent, cudf.Series):
-                retain_index = kwargs.get("retain_index", True)
-                if retain_index:
-                    return cudf.Series(
-                        new_col,
-                        name=self._parent.name,
-                        index=self._parent.index,
-                    )
-                else:
-                    return cudf.Series(new_col, name=self._parent.name)
-            elif isinstance(self._parent, cudf.Index):
-                return cudf.core.index.as_index(
-                    new_col, name=self._parent.name
-                )
-            else:
-                if self._parent is None:
-                    return new_col
-                else:
-                    return self._parent._mimic_inplace(new_col, inplace=False)
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -1670,6 +1631,41 @@ class StringMethods(object):
         dtype: object
         """
         return self._return_or_inplace(cpp_title(self._column), **kwargs)
+
+    def filter_alphanum(self, repl=None, keep=True, **kwargs):
+        """
+        Remove non-alphanumeric characters from strings in this column.
+
+        Parameters
+        ----------
+        repl : str
+            Optional string to use in place of removed characters.
+        keep : bool
+            Set to False to remove all alphanumeric characters instead
+            of keeping them.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Strings with only alphanumeric characters.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["pears £12", "plums $34", "Temp 72℉", "100K℧"])
+        >>> s.str.filter_alphanum(" ")
+        0    pears  12
+        1    plums  34
+        2     Temp 72
+        3        100K
+        dtype: object
+        """
+        if repl is None:
+            repl = ""
+
+        return self._return_or_inplace(
+            cpp_filter_alphanum(self._column, as_scalar(repl), keep), **kwargs,
+        )
 
     def slice_from(self, starts, stops, **kwargs):
         """
@@ -3696,7 +3692,6 @@ class StringMethods(object):
         29    .
         dtype: object
         """
-
         result_col = cpp_character_tokenize(self._column)
         if self._parent is None:
             return result_col
@@ -3925,6 +3920,75 @@ class StringMethods(object):
                 self._column,
                 targets_column,
                 replacements_column,
+                as_scalar(delimiter, dtype="str"),
+            ),
+            **kwargs,
+        )
+
+    def filter_tokens(
+        self, min_token_length, replacement=None, delimiter=None, **kwargs
+    ):
+        """
+        Remove tokens from within each string in the series that are
+        smaller than min_token_length and optionally replace them
+        with the replacement string.
+        Tokens are identified by the delimiter character provided.
+
+        Parameters
+        ----------
+        min_token_length: int
+            Minimum number of characters for a token to be retained
+            in the output string.
+
+        replacement : str
+            String used in place of removed tokens.
+
+        delimiter : str
+            The character(s) used to locate the tokens of each string.
+            Default is whitespace.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["this is me", "theme music", ""])
+        >>> sr.str.filter_tokens(3, replacement="_")
+        0       this _ _
+        1    theme music
+        2
+        dtype: object
+        >>> sr = cudf.Series(["this;is;me", "theme;music", ""])
+        >>> sr.str.filter_tokens(5,None,";")
+        0             ;;
+        1    theme;music
+        2
+        dtype: object
+        """
+
+        if replacement is None:
+            replacement = ""
+        elif not is_scalar(replacement):
+            raise TypeError(
+                f"Type of replacement should be a string,"
+                f" found {type(replacement)}"
+            )
+
+        if delimiter is None:
+            delimiter = ""
+        elif not is_scalar(delimiter):
+            raise TypeError(
+                f"Type of delimiter should be a string,"
+                f" found {type(delimiter)}"
+            )
+
+        return self._return_or_inplace(
+            cpp_filter_tokens(
+                self._column,
+                min_token_length,
+                as_scalar(replacement, dtype="str"),
                 as_scalar(delimiter, dtype="str"),
             ),
             **kwargs,
@@ -4296,6 +4360,22 @@ class StringColumn(column.ColumnBase):
         if index is not None:
             pd_series.index = index
         return pd_series
+
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the StringColumn.
+        """
+        return self.to_pandas().values
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the StringColumn.
+        """
+        raise NotImplementedError(
+            "String Arrays is not yet implemented in cudf"
+        )
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.

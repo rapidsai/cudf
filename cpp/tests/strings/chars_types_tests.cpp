@@ -226,20 +226,6 @@ TEST_F(StringsCharsTest, Numerics)
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCharsTest, EmptyStringsColumn)
-{
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-  auto results      = cudf::strings::all_characters_of_type(
-    strings_view, cudf::strings::string_character_types::ALPHANUM);
-  auto view = results->view();
-  EXPECT_EQ(cudf::type_id::BOOL8, view.type().id());
-  EXPECT_EQ(0, view.size());
-  EXPECT_EQ(0, view.null_count());
-  EXPECT_EQ(0, view.num_children());
-}
-
 TEST_F(StringsCharsTest, Integers)
 {
   cudf::test::strings_column_wrapper strings1(
@@ -302,4 +288,105 @@ TEST_F(StringsCharsTest, EmptyStrings)
   results = cudf::strings::is_float(strings_view);
   cudf::test::expect_columns_equal(*results, expected);
   EXPECT_FALSE(cudf::strings::all_float(strings_view));
+}
+
+TEST_F(StringsCharsTest, FilterCharTypes)
+{
+  // The example strings are based on issue 5520
+  cudf::test::strings_column_wrapper strings(
+    {"abc£def", "01234 56789", "℉℧ is not alphanumeric", "but Αγγλικά is", ""});
+  auto results =
+    cudf::strings::filter_characters_of_type(cudf::strings_column_view(strings),
+                                             cudf::strings::string_character_types::ALL_TYPES,
+                                             cudf::string_scalar(" "),
+                                             cudf::strings::string_character_types::ALPHANUM);
+  {
+    cudf::test::strings_column_wrapper expected(
+      {"abc def", "01234 56789", "   is not alphanumeric", "but Αγγλικά is", ""});
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+
+  results = cudf::strings::filter_characters_of_type(
+    cudf::strings_column_view(strings), cudf::strings::string_character_types::ALPHANUM);
+  {
+    cudf::test::strings_column_wrapper expected({"£", " ", "℉℧   ", "  ", ""});
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+
+  results = cudf::strings::filter_characters_of_type(cudf::strings_column_view(strings),
+                                                     cudf::strings::string_character_types::SPACE);
+  {
+    cudf::test::strings_column_wrapper expected(
+      {"abc£def", "0123456789", "℉℧isnotalphanumeric", "butΑγγλικάis", ""});
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+
+  results =
+    cudf::strings::filter_characters_of_type(cudf::strings_column_view(strings),
+                                             cudf::strings::string_character_types::ALL_TYPES,
+                                             cudf::string_scalar("+"),
+                                             cudf::strings::string_character_types::SPACE);
+  {
+    cudf::test::strings_column_wrapper expected(
+      {"+++++++", "+++++ +++++", "++ ++ +++ ++++++++++++", "+++ +++++++ ++", ""});
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+
+  results = cudf::strings::filter_characters_of_type(
+    cudf::strings_column_view(strings), cudf::strings::string_character_types::NUMERIC);
+  {
+    cudf::test::strings_column_wrapper expected(
+      {"abc£def", " ", "℉℧ is not alphanumeric", "but Αγγλικά is", ""});
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+
+  results =
+    cudf::strings::filter_characters_of_type(cudf::strings_column_view(strings),
+                                             cudf::strings::string_character_types::ALL_TYPES,
+                                             cudf::string_scalar(""),
+                                             cudf::strings::string_character_types::NUMERIC);
+  {
+    cudf::test::strings_column_wrapper expected({"", "0123456789", "", "", ""});
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+}
+
+TEST_F(StringsCharsTest, FilterCharTypesErrors)
+{
+  cudf::test::strings_column_wrapper strings({"strings left intentionally blank"});
+  EXPECT_THROW(
+    cudf::strings::filter_characters_of_type(cudf::strings_column_view(strings),
+                                             cudf::strings::string_character_types::ALL_TYPES,
+                                             cudf::string_scalar(""),
+                                             cudf::strings::string_character_types::ALL_TYPES),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf::strings::filter_characters_of_type(cudf::strings_column_view(strings),
+                                             cudf::strings::string_character_types::ALPHANUM,
+                                             cudf::string_scalar(""),
+                                             cudf::strings::string_character_types::NUMERIC),
+    cudf::logic_error);
+}
+
+TEST_F(StringsCharsTest, EmptyStringsColumn)
+{
+  cudf::test::strings_column_wrapper strings({});
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::all_characters_of_type(
+    strings_view, cudf::strings::string_character_types::ALPHANUM);
+  EXPECT_EQ(cudf::type_id::BOOL8, results->view().type().id());
+  EXPECT_EQ(0, results->view().size());
+
+  results = cudf::strings::is_integer(strings_view);
+  EXPECT_EQ(cudf::type_id::BOOL8, results->view().type().id());
+  EXPECT_EQ(0, results->view().size());
+
+  results = cudf::strings::is_float(strings_view);
+  EXPECT_EQ(cudf::type_id::BOOL8, results->view().type().id());
+  EXPECT_EQ(0, results->view().size());
+
+  results = cudf::strings::filter_characters_of_type(
+    strings_view, cudf::strings::string_character_types::NUMERIC);
+  EXPECT_EQ(cudf::type_id::STRING, results->view().type().id());
+  EXPECT_EQ(0, results->view().size());
 }

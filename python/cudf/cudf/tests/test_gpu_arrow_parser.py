@@ -2,21 +2,13 @@
 import logging
 
 import numpy as np
+import pyarrow as pa
 import pytest
 from numba import cuda
 
 import cudf
 from cudf.comm.gpuarrow import GpuArrowReader
 from cudf.tests.utils import INTEGER_TYPES
-
-try:
-    import pyarrow as pa
-
-    arrow_version = pa.__version__
-except ImportError as msg:
-    print("Failed to import pyarrow: {}".format(msg))
-    pa = None
-    arrow_version = None
 
 
 def make_gpu_parse_arrow_data_batch():
@@ -26,19 +18,13 @@ def make_gpu_parse_arrow_data_batch():
 
     dest_lat = pa.array(lat)
     dest_lon = pa.array(lon)
-    if arrow_version == "0.7.1":
-        dest_lat = dest_lat.cast(pa.float32())
-        dest_lon = dest_lon.cast(pa.float32())
+
     batch = pa.RecordBatch.from_arrays(
         [dest_lat, dest_lon], ["dest_lat", "dest_lon"]
     )
     return batch
 
 
-@pytest.mark.skipif(
-    arrow_version is None,
-    reason="need compatible pyarrow to generate test data",
-)
 def test_gpu_parse_arrow_data_cpu_schema():
     batch = make_gpu_parse_arrow_data_batch()
     schema_data = batch.schema.serialize()
@@ -70,10 +56,6 @@ def test_gpu_parse_arrow_data_cpu_schema():
     np.testing.assert_array_equal(lon, dct["dest_lon"].to_array())
 
 
-@pytest.mark.skipif(
-    arrow_version is None,
-    reason="need compatible pyarrow to generate test data",
-)
 def test_gpu_parse_arrow_data_gpu_schema():
     batch = make_gpu_parse_arrow_data_batch()
     schema_data = batch.schema.serialize()
@@ -107,10 +89,6 @@ def test_gpu_parse_arrow_data_gpu_schema():
     np.testing.assert_array_equal(lon, dct["dest_lon"].to_array())
 
 
-@pytest.mark.skipif(
-    arrow_version is None,
-    reason="need compatible pyarrow to generate test data",
-)
 def test_gpu_parse_arrow_data_bad_cpu_schema_good_gpu_schema():
     batch = make_gpu_parse_arrow_data_batch()
     schema_data = batch.schema.serialize()
@@ -199,10 +177,6 @@ def make_gpu_parse_arrow_cats_batch():
     return batch
 
 
-@pytest.mark.skipif(
-    arrow_version is None,
-    reason="need compatible pyarrow to generate test data",
-)
 def test_gpu_parse_arrow_cats():
     batch = make_gpu_parse_arrow_cats_batch()
 
@@ -234,7 +208,7 @@ def test_gpu_parse_arrow_cats():
     assert sr_idx.dtype == np.int32
     assert sr_name.dtype == "category"
     assert sr_weight.dtype == np.double
-    assert set(sr_name) == {"apple", "pear", "orange", "grape"}
+    assert set(sr_name.to_pandas()) == {"apple", "pear", "orange", "grape"}
 
     expected = get_expected_values()
     for i in range(len(sr_idx)):
@@ -250,10 +224,6 @@ def test_gpu_parse_arrow_cats():
         np.testing.assert_almost_equal(got_weight, exp_weight)
 
 
-@pytest.mark.skipif(
-    arrow_version is None,
-    reason="need compatible pyarrow to generate test data",
-)
 @pytest.mark.parametrize("dtype", INTEGER_TYPES)
 def test_gpu_parse_arrow_int(dtype):
 
@@ -283,13 +253,11 @@ def test_gpu_parse_arrow_int(dtype):
     columns = gar.to_dict()
     assert columns["depdelay"].dtype == dtype
     assert set(columns) == {"depdelay", "arrdelay"}
-    assert list(columns["depdelay"]) == list(depdelay.astype(dtype))
+    assert list(columns["depdelay"].to_pandas()) == list(
+        depdelay.astype(dtype)
+    )
 
 
-@pytest.mark.skipif(
-    arrow_version is None,
-    reason="need compatible pyarrow to generate test data",
-)
 @pytest.mark.parametrize(
     "dtype",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
