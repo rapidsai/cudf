@@ -501,7 +501,7 @@ def test_index_where(data, condition, other, error):
                 expect.codes,
                 got.codes.astype(expect.codes.dtype).fillna(-1).to_array(),
             )
-            assert tuple(expect.categories) == tuple(got.categories)
+            assert_eq(expect.categories, got.categories)
         else:
             assert_eq(
                 ps.where(ps_condition, other=ps_other)
@@ -1142,6 +1142,96 @@ def test_categorical_index_basic(data, categories, dtype, ordered, name):
     assert_eq(pindex, gindex)
 
 
+@pytest.mark.parametrize("n", [0, 2, 5, 10, None])
+@pytest.mark.parametrize("frac", [0.1, 0.5, 1, 2, None])
+@pytest.mark.parametrize("replace", [True, False])
+def test_index_sample_basic(n, frac, replace):
+    psr = pd.Series([1, 2, 3, 4, 5])
+    gindex = cudf.Index(psr)
+    random_state = 0
+
+    kind = None
+
+    try:
+        pout = psr.sample(
+            n=n, frac=frac, replace=replace, random_state=random_state
+        )
+    except BaseException as e:
+        kind = type(e)
+        msg = str(e)
+
+    if kind is not None:
+        with pytest.raises(kind, match=msg):
+            gout = gindex.sample(
+                n=n, frac=frac, replace=replace, random_state=random_state
+            )
+    else:
+        gout = gindex.sample(
+            n=n, frac=frac, replace=replace, random_state=random_state
+        )
+
+    if kind is not None:
+        return
+
+    assert pout.shape == gout.shape
+
+
+@pytest.mark.parametrize("n", [2, 5, 10, None])
+@pytest.mark.parametrize("frac", [0.5, 1, 2, None])
+@pytest.mark.parametrize("replace", [True, False])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_multiindex_sample_basic(n, frac, replace, axis):
+    # as we currently don't support column with same name
+    if axis == 1 and replace:
+        return
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+            "float": [0.05, 0.2, 0.3, 0.2, 0.25],
+            "int": [1, 3, 5, 4, 2],
+        },
+    )
+    mul_index = cudf.Index(DataFrame.from_pandas(pdf))
+    random_state = 0
+
+    kind = None
+
+    try:
+        pout = pdf.sample(
+            n=n,
+            frac=frac,
+            replace=replace,
+            random_state=random_state,
+            axis=axis,
+        )
+    except BaseException as e:
+        kind = type(e)
+        msg = str(e)
+
+    if kind is not None:
+        with pytest.raises(kind, match=msg):
+            gout = mul_index.sample(
+                n=n,
+                frac=frac,
+                replace=replace,
+                random_state=random_state,
+                axis=axis,
+            )
+    else:
+        gout = mul_index.sample(
+            n=n,
+            frac=frac,
+            replace=replace,
+            random_state=random_state,
+            axis=axis,
+        )
+
+    if kind is not None:
+        return
+
+    assert pout.shape == gout.shape
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1234,3 +1324,54 @@ def test_multiIndex_empty(pdi):
     gdi = cudf.from_pandas(pdi)
 
     assert_eq(pdi.empty, gdi.empty)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_drop_duplicates(data, dtype):
+    pdi = pd.Index(data, dtype=dtype)
+    gdi = cudf.Index(data, dtype=dtype)
+
+    assert_eq(pdi.drop_duplicates(), gdi.drop_duplicates())
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_tolist(data, dtype):
+    pdi = pd.Index(data, dtype=dtype)
+    gdi = cudf.Index(data, dtype=dtype)
+
+    assert_eq(pdi.tolist(), gdi.tolist())
+
+
+@pytest.mark.parametrize("data", [[], [1], [1, 2, 3]])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_iter_error(data, dtype):
+    gdi = cudf.Index(data, dtype=dtype)
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            f"{gdi.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        ),
+    ):
+        iter(gdi)
+
+
+@pytest.mark.parametrize("data", [[], [1], [1, 2, 3, 4, 5]])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_values_host(data, dtype):
+    gdi = cudf.Index(data, dtype=dtype)
+    pdi = pd.Index(data, dtype=dtype)
+
+    np.testing.assert_array_equal(gdi.values_host, pdi.values)

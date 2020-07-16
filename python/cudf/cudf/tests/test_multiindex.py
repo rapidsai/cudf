@@ -3,6 +3,9 @@
 """
 Test related to MultiIndex
 """
+import re
+
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -819,3 +822,60 @@ def test_multicolumn_set_item(pdf, pdfIndex):
     pdf["d"] = [1, 2, 3, 4, 5]
     gdf["d"] = [1, 2, 3, 4, 5]
     assert_eq(pdf, gdf)
+
+
+def test_multiindex_iter_error():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            f"{midx.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        ),
+    ):
+        iter(midx)
+
+
+def test_multiindex_values():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+
+    result = midx.values
+
+    assert isinstance(result, cp.ndarray)
+    np.testing.assert_array_equal(
+        result.get(), np.array([[1, 1], [1, 5], [3, 2], [4, 2], [5, 1]])
+    )
+
+
+def test_multiindex_values_host():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    pmidx = midx.to_pandas()
+
+    assert_eq(midx.values_host, pmidx.values)
+
+
+def test_multiindex_to_arrow():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape("MultiIndex.to_arrow() is not yet implemented"),
+    ):
+        midx.to_arrow()
