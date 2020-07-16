@@ -467,7 +467,7 @@ void set_null_count(size_type num_rows,
     rmm::exec_policy(stream)->on(stream),
     infos.begin(),
     infos.end(),
-    [num_rows] __device__(cudf::io::json::ColumnInfo & info) { info.null_count = num_rows; });
+    [num_rows] __device__(auto& info) { info.null_count = num_rows; });
 }
 
 /**
