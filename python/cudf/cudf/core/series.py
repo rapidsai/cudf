@@ -1715,11 +1715,84 @@ class Series(Frame, Serializable):
         """
         return self._column.has_nulls
 
-    def dropna(self):
+    def dropna(self, axis=0, inplace=False, how=None):
         """
         Return a Series with null values removed.
+
+        Parameters
+        ----------
+            axis : {0 or ‘index’}, default 0
+                There is only one axis to drop values from.
+            inplace : bool, default False
+                If True, do operation inplace and return None.
+            how : str, optional
+                Not in use. Kept for compatibility.
+
+        Returns
+        -------
+        Series
+            Series with null entries dropped from it.
+
+        See Also
+        --------
+        Series.isna : Indicate null values.
+
+        Series.notna : Indicate non-null values.
+
+        Series.fillna : Replace null values.
+
+        cudf.core.dataframe.DataFrame.dropna : Drop rows or columns which
+            contain null values.
+
+        cudf.core.index.Index.dropna : Drop null indices.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, 2, None])
+        >>> ser
+        0       1
+        1       2
+        2    null
+        dtype: int64
+
+        Drop null values from a Series.
+
+        >>> ser.dropna()
+        0    1
+        1    2
+        dtype: int64
+
+        Keep the Series with valid entries in the same variable.
+
+        >>> ser.dropna(inplace=True)
+        >>> ser
+        0    1
+        1    2
+        dtype: int64
+
+        Empty strings are not considered null values.
+        ``None`` is considered a null value.
+
+        >>> ser = cudf.Series(['', None, 'abc'])
+        >>> ser
+        0
+        1    None
+        2     abc
+        dtype: object
+        >>> ser.dropna()
+        0
+        2    abc
+        dtype: object
         """
-        return super().dropna(subset=[self.name])
+        if axis not in (0, "index"):
+            raise ValueError(
+                "Series.dropna supports only one axis to drop values from"
+            )
+
+        result = super().dropna(axis=axis)
+
+        return self._mimic_inplace(result, inplace=inplace)
 
     def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
         """
@@ -1732,7 +1805,7 @@ class Series(Frame, Serializable):
     def _mimic_inplace(self, result, inplace=False):
         if inplace:
             self._column._mimic_inplace(result._column, inplace=True)
-            self.index._mimic_inplace(result.index, inplace=True)
+            self._index = as_index(result.index)
             self._size = len(self._index)
             self.name = result.name
         else:

@@ -300,11 +300,64 @@ class Index(Frame, Serializable):
         col = self._data.pop(self.name)
         self._data[value] = col
 
-    def dropna(self):
+    def dropna(self, how="any"):
         """
-        Return a Series with null values removed.
+        Return an Index with null values removed.
+
+        Parameters
+        ----------
+            how : {‘any’, ‘all’}, default ‘any’
+                If the Index is a MultiIndex, drop the value when any or
+                all levels are NaN.
+
+        Returns
+        -------
+        valid : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index(['a', None, 'b', 'c'])
+        >>> index
+        StringIndex(['a' None 'b' 'c'], dtype='object')
+        >>> index.dropna()
+        StringIndex(['a' 'b' 'c'], dtype='object')
+
+        Using `dropna` on a `MultiIndex`:
+
+        >>> midx = cudf.MultiIndex(
+        ...         levels=[[1, None, 4, None], [1, 2, 5]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...     )
+        >>> midx
+        MultiIndex(levels=[0       1
+        1    null
+        2       4
+        3    null
+        dtype: int64, 0    1
+        1    2
+        2    5
+        dtype: int64],
+        codes=   x  y
+        0  0  0
+        1  0  2
+        2  1  1
+        3  2  1
+        4  3  0)
+        >>> midx.dropna()
+        MultiIndex(levels=[0    1
+        1    4
+        dtype: int64, 0    1
+        1    2
+        2    5
+        dtype: int64],
+        codes=   x  y
+        0  0  0
+        1  0  2
+        2  1  1)
         """
-        return super().dropna(subset=[self.name])
+        return super().dropna(how=how)
 
     def take(self, indices):
         """Gather only the specific subset of indices
@@ -1575,6 +1628,33 @@ class GenericIndex(Index):
         Return the number of elements in the underlying data.
         """
         return len(self)
+
+    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
+        """Fill null values with ``value`` without changing the series' type.
+
+        Parameters
+        ----------
+        value : scalar or Series-like
+            Value to use to fill nulls. If `value`'s dtype differs from the
+            series, the fill value will be cast to the column's dtype before
+            applying the fill. If Series-like, null values are filled with the
+            values in corresponding indices of the given Series.
+
+        Returns
+        -------
+        result : Series
+            Copy with nulls filled.
+        """
+        if method is not None:
+            raise NotImplementedError("The method keyword is not supported")
+        if limit is not None:
+            raise NotImplementedError("The limit keyword is not supported")
+        if axis:
+            raise NotImplementedError("The axis keyword is not supported")
+
+        data = as_index(self._values.fillna(value))
+
+        return self._mimic_inplace(data, inplace=inplace)
 
     def __repr__(self):
         from pandas._config import get_option

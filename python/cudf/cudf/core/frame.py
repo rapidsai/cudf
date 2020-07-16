@@ -1055,7 +1055,9 @@ class Frame(libcudf.table.Table):
 
         return tables
 
-    def dropna(self, axis=0, how="any", subset=None, thresh=None):
+    def dropna(
+        self, axis=0, how="any", thresh=None, subset=None, inplace=False
+    ):
         """
         Drops rows (or columns) containing nulls from a Column.
 
@@ -1069,23 +1071,104 @@ class Frame(libcudf.table.Table):
             any (default) drops rows (or columns) containing at least
             one null value. all drops only rows (or columns) containing
             *all* null values.
+        thresh: int, optional
+            If specified, then drops every row (or column) containing
+            less than `thresh` non-null values
         subset : list, optional
             List of columns to consider when dropping rows (all columns
             are considered by default). Alternatively, when dropping
             columns, subset is a list of rows to consider.
-        thresh: int, optional
-            If specified, then drops every row (or column) containing
-            less than `thresh` non-null values
-
+        inplace : bool, default False
+            If True, do operation inplace and return None.
 
         Returns
         -------
         Copy of the DataFrame with rows/columns containing nulls dropped.
+
+        See also
+        --------
+        cudf.core.dataframe.DataFrame.isna
+            Indicate null values.
+
+        cudf.core.dataframe.DataFrame.notna
+            Indicate non-null values.
+
+        cudf.core.dataframe.DataFrame.fillna
+            Replace null values.
+
+        cudf.core.series.Series.dropna
+            Drop null values.
+
+        cudf.core.index.Index.dropna
+            Drop null indices.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"name": ['Alfred', 'Batman', 'Catwoman'],
+        ...                    "toy": ['Batmobile', None, 'Bullwhip'],
+        ...                    "born": [np.datetime64("1940-04-25"),
+        ...                             np.datetime64("NaT"),
+        ...                             np.datetime64("NaT")]})
+        >>> df
+               name        toy       born
+        0    Alfred  Batmobile 1940-04-25
+        1    Batman       None       null
+        2  Catwoman   Bullwhip       null
+
+        Drop the rows where at least one element is null.
+
+        >>> df.dropna()
+             name        toy       born
+        0  Alfred  Batmobile 1940-04-25
+
+        Drop the columns where at least one element is null.
+
+        >>> df.dropna(axis='columns')
+               name
+        0    Alfred
+        1    Batman
+        2  Catwoman
+
+        Drop the rows where all elements are null.
+
+        >>> df.dropna(how='all')
+               name        toy       born
+        0    Alfred  Batmobile 1940-04-25
+        1    Batman       None       null
+        2  Catwoman   Bullwhip       null
+
+        Keep only the rows with at least 2 non-null values.
+
+        >>> df.dropna(thresh=2)
+               name        toy       born
+        0    Alfred  Batmobile 1940-04-25
+        2  Catwoman   Bullwhip       null
+
+        Define in which columns to look for null values.
+
+        >>> df.dropna(subset=['name', 'born'])
+             name        toy       born
+        0  Alfred  Batmobile 1940-04-25
+
+        Keep the DataFrame with valid entries in the same variable.
+
+        >>> df.dropna(inplace=True)
+        >>> df
+             name        toy       born
+        0  Alfred  Batmobile 1940-04-25
         """
         if axis == 0:
-            return self._drop_na_rows(how=how, subset=subset, thresh=thresh)
+            result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
         else:
-            return self._drop_na_columns(how=how, subset=subset, thresh=thresh)
+            result = self._drop_na_columns(
+                how=how, subset=subset, thresh=thresh
+            )
+
+        if isinstance(self, cudf.DataFrame):
+            return self._mimic_inplace(result, inplace=inplace)
+        else:
+            return result
 
     def _drop_na_rows(self, how="any", subset=None, thresh=None):
         """
