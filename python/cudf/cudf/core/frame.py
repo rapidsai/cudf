@@ -752,9 +752,7 @@ class Frame(libcudf.table.Table):
             if len(common_cols) > 0:
                 # If `self` and `cond` are having unequal index,
                 # then re-index `cond`.
-                if len(self.index) != len(cond.index) or any(
-                    self.index != cond.index
-                ):
+                if not self.index.equals(cond.index):
                     cond = cond.reindex(self.index)
             else:
                 if cond.shape != self.shape:
