@@ -86,7 +86,7 @@ public class NativeDepsLoader {
    *         }
    *     }
    * </pre>
-   * @param loadOrder the base name of the libraries. for example libfoo.so would be passed in as
+   * @param loadOrder the base name of the libraries. For example libfoo.so would be passed in as
    *                  "foo".  The libraries are loaded in the order provided.
    * @throws IOException on any error trying to load the libraries.
    */
