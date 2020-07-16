@@ -20,6 +20,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/lists/detail/slice.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/copying.hpp>
@@ -226,13 +227,8 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     auto lists_view = lists_column_view(view);
-    return make_lists_column(view.size(),
-                             std::make_unique<column>(lists_view.offsets(), stream, mr),
-                             std::make_unique<column>(lists_view.child(), stream, mr),
-                             view.null_count(),
-                             cudf::copy_bitmask(view, stream, mr),
-                             stream,
-                             mr);
+    return cudf::lists::detail::slice(
+      lists_view, view.offset(), view.offset() + view.size(), stream, mr);
   }
 };
 }  // anonymous namespace
