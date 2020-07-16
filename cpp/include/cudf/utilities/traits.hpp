@@ -339,7 +339,7 @@ constexpr inline bool is_timestamp(data_type type)
 template <typename T>
 constexpr inline bool is_fixed_point()
 {
-  return std::is_same<numeric::decimal32, T>::value;  // || std::is_same<decimal64, T>::value;
+  return std::is_same<numeric::decimal32, T>::value || std::is_same<numeric::decimal64, T>::value;
 }
 
 struct is_fixed_point_impl {
