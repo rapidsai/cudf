@@ -135,16 +135,17 @@ def test_onehot_get_dummies_multicol(n_cols):
     utils.assert_eq(encoded_expected, encoded_actual)
 
 
+@pytest.mark.parametrize("nan_as_null", [True, False])
 @pytest.mark.parametrize("dummy_na", [True, False])
-def test_onehost_get_dummies_dummy_na(dummy_na):
-    pdf = pd.DataFrame({"a": ["value1", "value2", None], "b": [0, 0, 0]})
-    df = DataFrame.from_pandas(pdf)
+def test_onehost_get_dummies_dummy_na(nan_as_null, dummy_na):
+    pdf = pd.DataFrame({"a": [0, 1, np.nan]})
+    df = DataFrame.from_pandas(pdf, nan_as_null=nan_as_null)
 
-    expected = pd.get_dummies(pdf, dummy_na=dummy_na)
-    got = cudf.get_dummies(df, dummy_na=dummy_na)
+    expected = pd.get_dummies(pdf, dummy_na=dummy_na, columns=["a"])
+    got = cudf.get_dummies(df, dummy_na=dummy_na, columns=["a"])
 
-    if dummy_na:
-        got = got.rename(columns={"a_None": "a_nan"})[expected.columns]
+    if dummy_na and nan_as_null:
+        got = got.rename(columns={"a_null": "a_nan"})[expected.columns]
 
     utils.assert_eq(expected, got)
 

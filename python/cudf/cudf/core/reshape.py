@@ -14,7 +14,6 @@ from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_list_like,
-    is_string_dtype,
 )
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
@@ -419,6 +418,23 @@ def get_dummies(
     0  0       0         1         0
     1  0       0         0         1
     2  0       1         0         0
+
+    >>> import numpy as np
+    >>> df = cudf.DataFrame({"a":cudf.Series([1, 2, np.nan, None],
+    ...                     nan_as_null=False)})
+    >>> df
+          a
+    0   1.0
+    1   2.0
+    2   NaN
+    3  null
+
+    >>> cudf.get_dummies(df, dummy_na=True, columns=["a"])
+       a_1.0  a_2.0  a_nan  a_null
+    0      1      0      0       0
+    1      0      1      0       0
+    2      0      0      1       0
+    3      0      0      0       1
     """
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
@@ -476,7 +492,7 @@ def get_dummies(
                 unique = df[name].unique()
 
             if dummy_na is False:
-                if not is_string_dtype(unique):
+                if np.issubdtype(unique.dtype, np.floating):
                     unique = unique.nans_to_nulls()
                 unique = unique.dropna()
 
