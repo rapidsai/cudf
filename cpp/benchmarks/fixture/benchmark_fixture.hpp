@@ -66,8 +66,9 @@ class benchmark : public ::benchmark::Fixture {
 
   virtual void TearDown(const ::benchmark::State& state)
   {
-    delete mr->get_upstream();
+    auto upstream = mr->get_upstream();
     delete mr;
+    delete upstream;
 
     rmm::mr::set_default_resource(nullptr);  // reset default resource to the initial resource
   }

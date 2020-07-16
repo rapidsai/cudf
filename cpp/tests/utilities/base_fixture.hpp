@@ -299,5 +299,6 @@ inline auto parse_cudf_test_opts(int argc, char **argv)
     } else {                                                            \
       delete resource;                                                  \
     }                                                                   \
+    rmm::mr::set_default_resource(nullptr);                             \
     return ret;                                                         \
   }
