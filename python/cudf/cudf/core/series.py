@@ -885,7 +885,8 @@ class Series(Frame, Serializable):
 
         Examples
         --------
-        >>> ser = cudf.Series(['alligator', 'bee', 'falcon', 'lion', 'monkey', 'parrot', 'shark', 'whale', 'zebra'])        # noqa E501
+        >>> ser = cudf.Series(['alligator', 'bee', 'falcon',
+        ... 'lion', 'monkey', 'parrot', 'shark', 'whale', 'zebra'])
         >>> ser
         0    alligator
         1          bee

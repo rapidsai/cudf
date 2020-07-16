@@ -1981,7 +1981,8 @@ class StringMethods(object):
         Examples
         --------
         >>> import cudf
-        >>> data = ["this is a regular sentence", "https://docs.python.org/index.html", None]       # noqa E501
+        >>> data = ["this is a regular sentence",
+        ...     "https://docs.python.org/index.html", None]
         >>> s = cudf.Series(data)
         >>> s
         0            this is a regular sentence
@@ -3506,7 +3507,8 @@ class StringMethods(object):
         1      e f.g
         2      4-5,6
         dtype: object
-        >>> data = ["https%3A%2F%2Frapids.ai%2Fstart.html", "https%3A%2F%2Fmedium.com%2Frapids-ai"]     # noqa E501
+        >>> data = ["https%3A%2F%2Frapids.ai%2Fstart.html",
+        ...     "https%3A%2F%2Fmedium.com%2Frapids-ai"]
         >>> s = cudf.Series(data)
         >>> s.str.url_decode()
         0    https://rapids.ai/start.html
@@ -3537,7 +3539,8 @@ class StringMethods(object):
         1        e%20f.g
         2        4-5%2C6
         dtype: object
-        >>> data = ["https://rapids.ai/start.html", "https://medium.com/rapids-ai"]         # noqa E501
+        >>> data = ["https://rapids.ai/start.html",
+        ...     "https://medium.com/rapids-ai"]
         >>> s = cudf.Series(data)
         >>> s.str.url_encode()
         0    https%3A%2F%2Frapids.ai%2Fstart.html
