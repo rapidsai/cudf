@@ -235,7 +235,6 @@ std::vector<std::string> reader::impl::get_json_object_keys(cudaStream_t stream)
  * @param[in] range_offset Number of bytes offset from the start
  * @param[in] range_size Bytes to read; use `0` for all remaining data
  *
- * @return void
  */
 void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
 {
@@ -265,7 +264,6 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
  * Sets the uncomp_data_ and uncomp_size_ data members
  * Loads the data into device memory if byte range parameters are not used
  *
- * @return void
  */
 void reader::impl::decompress_input()
 {
@@ -293,7 +291,6 @@ void reader::impl::decompress_input()
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
- * @return void
  */
 void reader::impl::set_record_starts(cudaStream_t stream)
 {
@@ -365,7 +362,6 @@ void reader::impl::set_record_starts(cudaStream_t stream)
  * Only rows that need to be parsed are copied, based on the byte range
  * Also updates the array of record starts to match the device data offset.
  *
- * @return void
  */
 void reader::impl::upload_data_to_device()
 {
@@ -412,7 +408,6 @@ void reader::impl::upload_data_to_device()
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
- * @return void
  */
 void reader::impl::set_column_names(cudaStream_t stream)
 {
@@ -482,7 +477,6 @@ void set_null_count(size_type num_rows,
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
- * @return void
  */
 void reader::impl::set_data_types(cudaStream_t stream)
 {

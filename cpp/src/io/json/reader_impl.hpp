@@ -94,7 +94,6 @@ class reader::impl {
    * @param[in] range_offset Number of bytes offset from the start
    * @param[in] range_size Bytes to read; use `0` for all remaining data
    *
-   * @return void
    */
   void ingest_raw_input(size_t range_offset, size_t range_size);
 
@@ -110,7 +109,6 @@ class reader::impl {
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
    *
-   * @return void
    */
   void decompress_input();
 
@@ -121,7 +119,6 @@ class reader::impl {
    *
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
-   * @return void
    */
   void set_record_starts(cudaStream_t stream);
 
@@ -132,7 +129,6 @@ class reader::impl {
    * Only rows that need to be parsed are copied, based on the byte range
    * Also updates the array of record starts to match the device data offset.
    *
-   * @return void
    */
   void upload_data_to_device();
 
@@ -143,7 +139,6 @@ class reader::impl {
    *
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
-   * @return void
    */
   void set_column_names(cudaStream_t stream);
 
@@ -154,7 +149,6 @@ class reader::impl {
    *
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
-   * @return void
    */
   void set_data_types(cudaStream_t stream);
 
