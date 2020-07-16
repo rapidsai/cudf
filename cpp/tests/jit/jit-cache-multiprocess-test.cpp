@@ -117,6 +117,6 @@ int main(int argc, char **argv)
   // the fork. So we hardcode the rmm_mode to "cuda"
   auto const rmm_mode = "cuda";
   auto resource       = cudf::test::create_memory_resource(rmm_mode);
-  rmm::mr::set_default_resource(resource.get());
+  rmm::mr::set_default_resource(resource);
   return RUN_ALL_TESTS();
 }

@@ -21,16 +21,19 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/cxxopts.hpp>
 
-#include <rmm/mr/device/cnmem_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/default_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <ftw.h>
 #include <random>
 
+using pool_mr = rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>;
+
 namespace cudf {
 namespace test {
+
 /**
  * @brief Base test fixture class from which all libcudf tests should inherit.
  *
@@ -234,12 +237,14 @@ class TempDirTestEnvironment : public ::testing::Environment {
  *        Accepted types are "pool", "cuda", and "managed" only.
  * @return Memory resource instance
  */
-inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(
-  std::string const &allocation_mode)
+inline rmm::mr::device_memory_resource *create_memory_resource(std::string const &allocation_mode)
 {
-  if (allocation_mode == "cuda") return std::make_unique<rmm::mr::cuda_memory_resource>();
-  if (allocation_mode == "pool") return std::make_unique<rmm::mr::cnmem_memory_resource>();
-  if (allocation_mode == "managed") return std::make_unique<rmm::mr::managed_memory_resource>();
+  if (allocation_mode == "cuda") return new rmm::mr::cuda_memory_resource();
+  if (allocation_mode == "pool") {
+    auto cuda_mr = new rmm::mr::cuda_memory_resource;
+    return new pool_mr(cuda_mr);
+  }
+  if (allocation_mode == "managed") return new rmm::mr::managed_memory_resource();
   CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }
 
@@ -285,6 +290,14 @@ inline auto parse_cudf_test_opts(int argc, char **argv)
     auto const cmd_opts = parse_cudf_test_opts(argc, argv);             \
     auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();       \
     auto resource       = cudf::test::create_memory_resource(rmm_mode); \
-    rmm::mr::set_default_resource(resource.get());                      \
-    return RUN_ALL_TESTS();                                             \
+    rmm::mr::set_default_resource(resource);                            \
+    auto ret = RUN_ALL_TESTS();                                         \
+    if (rmm_mode == "pool") {                                           \
+      auto upstream = static_cast<pool_mr *>(resource)->get_upstream(); \
+      delete resource;                                                  \
+      delete upstream;                                                  \
+    } else {                                                            \
+      delete resource;                                                  \
+    }                                                                   \
+    return ret;                                                         \
   }

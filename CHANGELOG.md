@@ -119,6 +119,7 @@
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
+- PR #5705 Use pool_memory_resource in fixtures in place of cnmem_memory_resource
 
 ## Bug Fixes
 
