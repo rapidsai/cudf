@@ -42,6 +42,7 @@
 - PR #5623 Add `is_ipv4` strings API
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
+- PR #5704 `fixed_point` Column Support (Part 1)
 
 ## Improvements
 
