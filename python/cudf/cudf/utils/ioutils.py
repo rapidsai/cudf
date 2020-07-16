@@ -1,9 +1,9 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import os
 import urllib
 import warnings
-from io import BytesIO, TextIOWrapper
+from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 
 import fsspec
 import fsspec.implementations.local
@@ -904,7 +904,7 @@ def _is_local_filesystem(fs):
 
 
 def get_filepath_or_buffer(
-    path_or_data, compression, iotypes=(BytesIO), **kwargs
+    path_or_data, compression, mode="rb", iotypes=(BytesIO), **kwargs
 ):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
@@ -916,6 +916,8 @@ def get_filepath_or_buffer(
         Path to data or the data itself.
     compression : str
         Type of compression algorithm for the content
+    mode : str
+        Mode in which file is opened
     iotypes : (), default (BytesIO)
         Object type to exclude from file-like check
 
@@ -930,8 +932,9 @@ def get_filepath_or_buffer(
         storage_options = kwargs.get("storage_options")
         # fsspec does not expanduser so handle here
         path_or_data = os.path.expanduser(path_or_data)
+
         fs, _, paths = fsspec.get_fs_token_paths(
-            path_or_data, mode="rb", storage_options=storage_options
+            path_or_data, mode=mode, storage_options=storage_options
         )
         if len(paths) == 0:
             raise IOError(f"{path_or_data} could not be resolved to any files")
@@ -957,6 +960,67 @@ def get_filepath_or_buffer(
         path_or_data = BytesIO(path_or_data.read())
 
     return path_or_data, compression
+
+
+def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
+    """
+    Return either a filepath string to data,
+    or a open file object to the output filesystem
+
+    Parameters
+    ----------
+    path_or_data : str, file-like object, bytes, ByteIO
+        Path to data or the data itself.
+    mode : str
+        Mode in which file is opened
+
+    Returns
+    -------
+    filepath_or_buffer : str,
+        Filepath string or buffer of data
+    """
+    if isinstance(path_or_data, str):
+        storage_options = kwargs.get("storage_options", {})
+        path_or_data = os.path.expanduser(path_or_data)
+        fs, _, _ = fsspec.get_fs_token_paths(
+            path_or_data, mode=mode or "w", storage_options=storage_options
+        )
+
+        if not _is_local_filesystem(fs):
+            filepath_or_buffer = fsspec.open(
+                path_or_data, mode=mode or "w", **(storage_options)
+            )
+            return filepath_or_buffer
+
+    return path_or_data
+
+
+def get_IOBase_writer(file_obj):
+    """
+    Parameters
+    ----------
+    file_obj : file-like object
+        Open file object for writing to any filesystem
+
+    Returns
+    -------
+    iobase_file_obj : file-like object
+        Open file object inheriting from io.IOBase
+    """
+    if not isinstance(file_obj, IOBase):
+        if "b" in file_obj.mode:
+            iobase_file_obj = BufferedWriter(file_obj)
+        else:
+            iobase_file_obj = TextIOWrapper(file_obj)
+        return iobase_file_obj
+
+    return file_obj
+
+
+def is_fsspec_open_file(file_obj):
+    if isinstance(file_obj, fsspec.core.OpenFile):
+        return True
+    return False
 
 
 def buffer_write_lines(buf, lines):

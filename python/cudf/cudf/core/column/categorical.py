@@ -964,6 +964,20 @@ class CategoricalColumn(column.ColumnBase):
             dictionary=self.categories.to_arrow(),
         )
 
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the CategoricalColumn.
+        """
+        return self.to_pandas().values
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the CategoricalColumn.
+        """
+        raise NotImplementedError("cudf.Categorical is not yet implemented")
+
     def unique(self):
         codes = self.as_numerical.unique()
         return column.build_categorical_column(
