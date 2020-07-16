@@ -1803,6 +1803,43 @@ class Frame(libcudf.table.Table):
         Returns
         -------
         1-D cupy array of insertion points
+
+        Examples
+        --------
+        >>> s = cudf.Series([1, 2, 3])
+        >>> s.searchsorted(4)
+        3
+        >>> s.searchsorted([0, 4])
+        array([0, 3], dtype=int32)
+        >>> s.searchsorted([1, 3], side='left')
+        array([0, 2], dtype=int32)
+        >>> s.searchsorted([1, 3], side='right')
+        array([1, 3], dtype=int32)
+
+        If the values are not monotonically sorted, wrong
+        locations may be returned:
+
+        >>> s = cudf.Series([2, 1, 3])
+        >>> s.searchsorted(1)
+        0   # wrong result, correct would be 1
+
+        >>> df = cudf.DataFrame({'a': [1, 3, 5, 7], 'b': [10, 12, 14, 16]})
+        >>> df
+           a   b
+        0  1  10
+        1  3  12
+        2  5  14
+        3  7  16
+        >>> values_df = cudf.DataFrame({'a': [0, 2, 5, 6],
+        ... 'b': [10, 11, 13, 15]})
+        >>> values_df
+           a   b
+        0  0  10
+        1  2  17
+        2  5  13
+        3  6  15
+        >>> df.searchsorted(values_df, ascending=False)
+        array([4, 4, 4, 0], dtype=int32)
         """
         # Call libcudf++ search_sorted primitive
         from cudf.utils.dtypes import is_scalar

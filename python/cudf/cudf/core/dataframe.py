@@ -1512,13 +1512,18 @@ class DataFrame(Frame, Serializable):
         >>> df = cudf.DataFrame({'angles': [0, 3, 4],
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df
+                   angles  degrees
+        circle          0      360
+        triangle        3      180
+        rectangle       4      360
         >>> df.rsub(1)
-                angles  degrees
+                   angles  degrees
         circle          1     -359
         triangle       -2     -179
         rectangle      -3     -359
         >>> df.rsub([1, 2])
-                angles  degrees
+                   angles  degrees
         circle          1     -358
         triangle       -2     -178
         rectangle      -3     -358
@@ -2094,18 +2099,23 @@ class DataFrame(Frame, Serializable):
         >>> df = cudf.DataFrame({'angles': [0, 3, 4],
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df
+                   angles  degrees
+        circle          0      360
+        triangle        3      180
+        rectangle       4      360
         >>> df.rtruediv(10)
-                    angles   degrees
+                     angles   degrees
         circle          inf  0.027778
         triangle   3.333333  0.055556
         rectangle  2.500000  0.027778
         >>> df.rdiv(10)
-                    angles   degrees
+                     angles   degrees
         circle          inf  0.027778
         triangle   3.333333  0.055556
         rectangle  2.500000  0.027778
         >>> 10 / df
-                    angles   degrees
+                     angles   degrees
         circle          inf  0.027778
         triangle   3.333333  0.055556
         rectangle  2.500000  0.027778
@@ -6238,6 +6248,57 @@ class DataFrame(Frame, Serializable):
             which columns to include based on dtypes
         exclude : str or list
             which columns to exclude based on dtypes
+
+        Returns
+        -------
+        DataFrame
+            The subset of the frame including the dtypes
+            in ``include`` and excluding the dtypes in ``exclude``.
+
+        Raises
+        ------
+        ValueError
+            - If both of ``include`` and ``exclude`` are empty
+            - If ``include`` and ``exclude`` have overlapping elements
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2] * 3,
+        ...                    'b': [True, False] * 3,
+        ...                    'c': [1.0, 2.0] * 3})
+        >>> df
+           a      b    c
+        0  1   True  1.0
+        1  2  False  2.0
+        2  1   True  1.0
+        3  2  False  2.0
+        4  1   True  1.0
+        5  2  False  2.0
+        >>> df.select_dtypes(include='bool')
+               b
+        0   True
+        1  False
+        2   True
+        3  False
+        4   True
+        5  False
+        >>> df.select_dtypes(include=['float64'])
+             c
+        0  1.0
+        1  2.0
+        2  1.0
+        3  2.0
+        4  1.0
+        5  2.0
+        >>> df.select_dtypes(exclude=['int'])
+               b    c
+        0   True  1.0
+        1  False  2.0
+        2   True  1.0
+        3  False  2.0
+        4   True  1.0
+        5  False  2.0
         """
 
         # code modified from:
