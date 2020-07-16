@@ -428,18 +428,19 @@ __device__ field_descriptor next_field_descriptor(const char *begin,
                                                   const char *end,
                                                   ParseOptions const &opts,
                                                   cudf::size_type field_idx,
-                                                  bool are_rows_objects,
-                                                  col_map_type col_map)
+                                                  col_map_type *col_map)
 {
   auto const desc_pre_trim =
-    !are_rows_objects
+    !col_map
       // No key - column and begin are trivial
       ? field_descriptor{field_idx, begin, cudf::io::gpu::seek_field_end(begin, end, opts)}
       : [&]() {
           auto const key_range = parse_next_key(begin, end, opts.quotechar);
           auto const key_hash  = MurmurHash3_32<cudf::string_view>{}(
             cudf::string_view(key_range.first, key_range.second - key_range.first));
-          auto const column = (*col_map.find(key_hash)).second;
+          auto const hash_col = col_map->find(key_hash);
+          // fall back to field index if not found (parsing error)
+          auto const column = (hash_col != col_map->end()) ? (*hash_col).second : field_idx;
 
           // Skip the colon between the key and the value
           auto const value_begin = thrust::find(thrust::seq, key_range.second, end, ':') + 1;
@@ -464,6 +465,7 @@ __device__ field_descriptor next_field_descriptor(const char *begin,
  * @param[in] num_records The number of lines/rows
  * @param[in] dtypes The data type of each column
  * @param[in] opts A set of parsing options
+ * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory
  * @param[out] output_columns The output column data
  * @param[in] num_columns The number of columns
  * @param[out] valid_fields The bitmaps indicating whether column fields are valid
@@ -476,8 +478,7 @@ __global__ void convert_data_to_columns_kernel(const char *data,
                                                cudf::size_type num_records,
                                                const data_type *dtypes,
                                                ParseOptions opts,
-                                               bool are_rows_objects,
-                                               col_map_type col_map,
+                                               col_map_type *col_map,
                                                void *const *output_columns,
                                                cudf::size_type num_columns,
                                                bitmask_type *const *valid_fields,
@@ -496,8 +497,8 @@ __global__ void convert_data_to_columns_kernel(const char *data,
   for (int input_field_index = 0;
        input_field_index < num_columns && current < row_data_range.second;
        input_field_index++) {
-    auto const desc = next_field_descriptor(
-      current, row_data_range.second, opts, input_field_index, are_rows_objects, col_map);
+    auto const desc =
+      next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
     auto const value_len = desc.value_end - desc.value_begin;
 
     current = desc.value_end + 1;
@@ -544,6 +545,7 @@ __global__ void convert_data_to_columns_kernel(const char *data,
  * @param[in] data Input data buffer
  * @param[in] data_size Size of the data buffer, in bytes
  * @param[in] opts A set of parsing options
+ * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory
  * @param[in] num_columns The number of columns of input data
  * @param[in] rec_starts The offset of each row in the input
  * @param[in] num_records The number of rows
@@ -553,8 +555,7 @@ __global__ void convert_data_to_columns_kernel(const char *data,
 __global__ void detect_data_types_kernel(const char *data,
                                          size_t data_size,
                                          const ParseOptions opts,
-                                         bool are_rows_objects,
-                                         col_map_type col_map,
+                                         col_map_type *col_map,
                                          int num_columns,
                                          const uint64_t *rec_starts,
                                          cudf::size_type num_records,
@@ -563,7 +564,8 @@ __global__ void detect_data_types_kernel(const char *data,
   auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
 
-  auto const row_data_range = [&]() {
+  auto const are_rows_objects = col_map != nullptr;
+  auto const row_data_range   = [&]() {
     auto const row_begin = data + rec_starts[rec_id];
     auto const row_end   = data + ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
     return limit_range_to_brackets(row_begin, row_end);
@@ -573,8 +575,8 @@ __global__ void detect_data_types_kernel(const char *data,
   for (auto current = row_data_range.first;
        input_field_index < num_columns && current < row_data_range.second;
        input_field_index++) {
-    auto const desc = next_field_descriptor(
-      current, row_data_range.second, opts, input_field_index, are_rows_objects, col_map);
+    auto const desc =
+      next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
     auto const value_len = desc.value_end - desc.value_begin;
 
     // Advance to the next field; +1 to skip the delimiter
@@ -743,8 +745,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
                              bitmask_type *const *valid_fields,
                              cudf::size_type *num_valid_fields,
                              ParseOptions const &opts,
-                             bool are_rows_objects,
-                             col_map_type col_map,
+                             col_map_type *col_map,
                              cudaStream_t stream)
 {
   int block_size;
@@ -761,7 +762,6 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
     num_records,
     dtypes,
     opts,
-    are_rows_objects,
     col_map,
     output_columns,
     num_columns,
@@ -779,8 +779,7 @@ void detect_data_types(ColumnInfo *column_infos,
                        const char *data,
                        size_t data_size,
                        const ParseOptions &options,
-                       bool are_rows_objects,
-                       col_map_type col_map,
+                       col_map_type *col_map,
                        int num_columns,
                        const uint64_t *rec_starts,
                        cudf::size_type num_records,
@@ -794,15 +793,8 @@ void detect_data_types(ColumnInfo *column_infos,
   // Calculate actual block count to use based on records count
   const int grid_size = (num_records + block_size - 1) / block_size;
 
-  detect_data_types_kernel<<<grid_size, block_size, 0, stream>>>(data,
-                                                                 data_size,
-                                                                 options,
-                                                                 are_rows_objects,
-                                                                 col_map,
-                                                                 num_columns,
-                                                                 rec_starts,
-                                                                 num_records,
-                                                                 column_infos);
+  detect_data_types_kernel<<<grid_size, block_size, 0, stream>>>(
+    data, data_size, options, col_map, num_columns, rec_starts, num_records, column_infos);
 
   CUDA_TRY(cudaGetLastError());
 }

@@ -75,9 +75,8 @@ class reader::impl {
 
   // the map is only used for files with rows in object format; initialize to a dummy value so the
   // map object can be passed to the kernel in any case
-  col_map_ptr_type column_names_hash_map = col_map_type::create(1);
-  // using a pointer here so a failure to initialize would be more apparent
-  std::unique_ptr<bool> are_rows_objects;
+  col_map_ptr_type key_to_col_idx_map;
+  std::unique_ptr<rmm::device_scalar<col_map_type>> d_key_col_map;
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;
@@ -85,6 +84,22 @@ class reader::impl {
   rmm::device_vector<SerialTrieNode> d_true_trie_;
   rmm::device_vector<SerialTrieNode> d_false_trie_;
   rmm::device_vector<SerialTrieNode> d_na_trie_;
+
+  /**
+   * @brief Sets the column map data member and makes a device copy to be used as a kernel
+   * parameter.
+   */
+  void set_column_map(col_map_ptr_type &&map)
+  {
+    key_to_col_idx_map = std::move(map);
+    d_key_col_map      = std::make_unique<rmm::device_scalar<col_map_type>>(*key_to_col_idx_map);
+  }
+  /**
+   * @brief Gets the pointer to the column hash map in the device memory.
+   *
+   * Returns `nullptr` if the map is not created.
+   */
+  auto get_column_map_device_ptr() { return key_to_col_idx_map ? d_key_col_map->data() : nullptr; }
 
   /**
    * @brief Ingest input JSON file/buffer, without decompression
@@ -100,9 +115,10 @@ class reader::impl {
   /**
    * @brief Extract the JSON objects keys from the input file with object rows.
    *
-   * @return std::vector<std::string> Array of key strings
+   * @return TODO
    */
-  std::vector<std::string> get_json_object_keys(cudaStream_t stream);
+  std::pair<std::vector<std::string>, col_map_ptr_type> get_json_object_keys_hashes(
+    cudaStream_t stream);
 
   /**
    * @brief Decompress the input data, if needed

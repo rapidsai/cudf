@@ -214,17 +214,17 @@ auto sort_keys_info_by_offset(std::unique_ptr<table> info)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
- * @return std::vector<std::string> Names of JSON object keys in the file
+ * @return Names of JSON object keys in the file
  */
-std::vector<std::string> reader::impl::get_json_object_keys(cudaStream_t stream)
+std::pair<std::vector<std::string>, col_map_ptr_type> reader::impl::get_json_object_keys_hashes(
+  cudaStream_t stream)
 {
   auto info            = create_json_keys_info_table(data_, rec_starts_, opts_, stream);
   auto aggregated_info = aggregate_keys_info(std::move(info));
   auto sorted_info     = sort_keys_info_by_offset(std::move(aggregated_info));
 
-  column_names_hash_map = create_col_names_hash_map(sorted_info->get_column(2).view(), stream);
-
-  return create_key_strings(uncomp_data_, sorted_info->view(), stream);
+  return {create_key_strings(uncomp_data_, sorted_info->view(), stream),
+          create_col_names_hash_map(sorted_info->get_column(2).view(), stream)};
 }
 
 /**
@@ -435,11 +435,11 @@ void reader::impl::set_column_names(cudaStream_t stream)
   CUDF_EXPECTS(first_curly_bracket != first_row.end() || first_square_bracket != first_row.end(),
                "Input data is not a valid JSON file.");
   // If the first opening bracket is '{', assume object format
-  // Note: must be initialized before data type inference
-  are_rows_objects = std::make_unique<bool>(first_curly_bracket < first_square_bracket);
-  if (*are_rows_objects) {
-    // use keys as column names
-    metadata.column_names = get_json_object_keys(stream);
+  if (first_curly_bracket < first_square_bracket) {
+    // use keys as column names if input rows are objects
+    auto keys_desc        = get_json_object_keys_hashes(stream);
+    metadata.column_names = keys_desc.first;
+    set_column_map(std::move(keys_desc.second));
   } else {
     int cols_found = 0;
     bool quotation = false;
@@ -519,14 +519,13 @@ void reader::impl::set_data_types(cudaStream_t stream)
                                                                   cudf::io::json::ColumnInfo{});
     // For object rows, it's not efficient for the kernel to determine which fields are missing in
     // each row. Set the null count to row count; kernel reduces this value for each valid field.
-    if (*are_rows_objects) set_null_count(rec_starts_.size(), d_column_infos, stream);
+    if (key_to_col_idx_map) set_null_count(rec_starts_.size(), d_column_infos, stream);
 
     cudf::io::json::gpu::detect_data_types(d_column_infos.data().get(),
                                            static_cast<const char *>(data_.data()),
                                            data_.size(),
                                            opts_,
-                                           *are_rows_objects,
-                                           *column_names_hash_map,
+                                           get_column_map_device_ptr(),
                                            num_columns,
                                            rec_starts_.data().get(),
                                            rec_starts_.size(),
@@ -595,8 +594,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
                                                d_valid.data().get(),
                                                d_valid_counts.data().get(),
                                                opts_,
-                                               *are_rows_objects,
-                                               *column_names_hash_map,
+                                               get_column_map_device_ptr(),
                                                stream);
   CUDA_TRY(cudaStreamSynchronize(stream));
   CUDA_TRY(cudaGetLastError());
