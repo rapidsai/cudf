@@ -369,7 +369,7 @@ class Index(Frame, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
-        return pd.Index(self._values.to_arrow().to_pandas(), name=self.name)
+        return pd.Index(self._values.to_pandas(), name=self.name)
 
     def to_arrow(self):
         """
@@ -2017,9 +2017,6 @@ class CategoricalIndex(GenericIndex):
         The categories of this categorical.
         """
         return self._values.cat().categories
-
-    def to_pandas(self):
-        return pd.Index(self._values.to_pandas(), name=self.name)
 
     @annotate("CATEGORICAL_INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):

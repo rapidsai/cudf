@@ -59,7 +59,7 @@ def count_zero(arr):
     return np.count_nonzero(arr == 0)
 
 
-def assert_eq(left, right, allow_nullable_pd_types=True, **kwargs):
+def assert_eq(left, right, **kwargs):
     """ Assert that two cudf-like things are equivalent
 
     This equality test works for pandas/cudf dataframes/series/indexes/scalars
@@ -77,13 +77,7 @@ def assert_eq(left, right, allow_nullable_pd_types=True, **kwargs):
         left = cupy.asnumpy(left)
     if isinstance(right, cupy.ndarray):
         right = cupy.asnumpy(right)
-    if (
-        allow_nullable_pd_types
-        and isinstance(left, (pd.Series, pd.DataFrame))
-        and left.__class__ == right.__class__
-    ):
-        left = maybe_demote_dtypes(left)
-        right = maybe_demote_dtypes(right)
+
     if isinstance(left, pd.DataFrame):
         tm.assert_frame_equal(left, right, **kwargs)
     elif isinstance(left, pd.Series):
@@ -106,41 +100,6 @@ def assert_eq(left, right, allow_nullable_pd_types=True, **kwargs):
             else:
                 assert np.allclose(left, right, equal_nan=True)
     return True
-
-
-def demote_series_dtype(sr):
-    """ Demote a pandas nullable extension dtype into
-    a non-nullable numpy type, filling with the appropriate
-    NA value
-    """
-    dtype_map = {
-        v: k for k, v in dtypeutils.cudf_dtypes_to_pandas_dtypes.items()
-    }
-    out_dtype = dtype_map.get(sr.dtype, sr.dtype)
-
-    if out_dtype.kind in ("i", "u"):
-        min_int = np.iinfo(out_dtype).min
-        out_sr = sr.fillna(min_int)
-        out_sr = out_sr.astype(out_dtype)
-    elif out_dtype.kind in ("O", "b"):
-        if out_dtype.kind == "b":
-            out_dtype = np.dtype("O")
-        out_sr = sr.astype(out_dtype)
-        # instantiating pandas str/bool series with None still gets object
-        # does NOT default to extension with pd.NA yet
-        out_sr[sr.isnull()] = None
-    else:
-        out_sr = sr
-    return out_sr
-
-
-def maybe_demote_dtypes(obj):
-    if isinstance(obj, pd.Series):
-        return demote_series_dtype(obj)
-    elif isinstance(obj, pd.DataFrame):
-        for col in obj.columns:
-            obj[col] = demote_series_dtype(obj[col])
-    return obj
 
 
 def assert_neq(left, right, **kwargs):
