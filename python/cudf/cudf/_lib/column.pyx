@@ -22,7 +22,7 @@ from rmm._lib.device_buffer cimport DeviceBuffer
 from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
 from cudf._lib.types cimport (
     underlying_type_t_type_id,
-    dtype_from_lists_column_view
+    dtype_from_column_view
 )
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.move cimport move
@@ -255,8 +255,12 @@ cdef class Column:
 
     @property
     def children(self):
+        if self.base_children is ():
+            return ()
         if self._children is None:
-            self._children = self.base_children
+            self._children = Column.from_unique_ptr(
+                make_unique[column](self.view())
+            ).base_children
         return self._children
 
     def set_base_children(self, value):
@@ -400,22 +404,8 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_unique_ptr(unique_ptr[column] c_col):
-
         size = c_col.get()[0].size()
-
-        cdef libcudf_types.type_id tid = c_col.get()[0].type().id()
-
-        cdef column_view cv = c_col.get()[0].view()
-
-        if tid == libcudf_types.type_id.LIST:
-            dtype = dtype_from_lists_column_view(
-                lists_column_view(c_col.get()[0].view())
-            )
-        else:
-            dtype = cudf_to_np_types[<underlying_type_t_type_id>(
-                c_col.get()[0].type().id()
-            )]
-
+        dtype = dtype_from_column_view(c_col.get()[0].view())
         has_nulls = c_col.get()[0].has_nulls()
 
         # After call to release(), c_col is unusable
@@ -464,9 +454,7 @@ cdef class Column:
 
         size = cv.size()
         offset = cv.offset()
-        dtype = cudf_to_np_types[
-            <underlying_type_t_type_id> (cv.type().id())
-        ]
+        dtype = dtype_from_column_view(cv)
 
         data_ptr = <uintptr_t>(cv.head[void]())
         data = None

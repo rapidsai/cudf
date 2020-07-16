@@ -6,7 +6,6 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.api.types import pandas_dtype
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
@@ -144,7 +143,7 @@ def is_categorical_dtype(obj):
     if hasattr(obj, "type"):
         if obj.type is CategoricalDtypeType:
             return True
-    return pandas_dtype(obj).type is CategoricalDtypeType
+    return pd.api.types.is_categorical_dtype(obj)
 
 
 def is_list_dtype(obj):

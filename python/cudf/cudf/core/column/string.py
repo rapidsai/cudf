@@ -4200,54 +4200,6 @@ class StringColumn(column.ColumnBase):
         # TODO: Implement dtype validation of the children here somehow
         super().set_base_children(value)
 
-    @property
-    def children(self):
-        if self._children is None:
-            if len(self.base_children) == 0:
-                self._children = ()
-            elif self.offset == 0 and self.base_children[0].size == (
-                self.size + 1
-            ):
-                self._children = self.base_children
-            else:
-                # First get the base columns for chars and offsets
-                chars_column = self.base_children[1]
-                offsets_column = self.base_children[0]
-
-                # Shift offsets column by the parent offset.
-                offsets_column = column.build_column(
-                    data=offsets_column.base_data,
-                    dtype=offsets_column.dtype,
-                    mask=offsets_column.base_mask,
-                    size=self.size + 1,
-                    offset=self.offset,
-                )
-
-                # Now run a subtraction binary op to shift all of the offsets
-                # by the respective number of characters relative to the
-                # parent offset
-                chars_offset = libcudf.copying.get_element(offsets_column, 0)
-                offsets_column = offsets_column.binary_operator(
-                    "sub", chars_offset
-                )
-
-                # Shift the chars offset by the new first element of the
-                # offsets column
-                chars_size = libcudf.copying.get_element(
-                    offsets_column, self.size
-                )
-
-                chars_column = column.build_column(
-                    data=chars_column.base_data,
-                    dtype=chars_column.dtype,
-                    mask=chars_column.base_mask,
-                    size=chars_size.value,
-                    offset=chars_offset.value,
-                )
-
-                self._children = (offsets_column, chars_column)
-        return self._children
-
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")
 

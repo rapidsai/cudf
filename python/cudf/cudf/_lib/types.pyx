@@ -10,6 +10,7 @@ from cudf._lib.types cimport (
     underlying_type_t_sorted,
     underlying_type_t_interpolation
 )
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 cimport cudf._lib.cpp.types as libcudf_types
 
@@ -135,3 +136,16 @@ cdef dtype_from_lists_column_view(lists_column_view lv):
                 <underlying_type_t_type_id> lv.child().type().id()
             ]
         )
+
+
+cdef dtype_from_column_view(column_view cv):
+    cdef libcudf_types.type_id tid = cv.type().id()
+    if tid == libcudf_types.type_id.LIST:
+        dtype = dtype_from_lists_column_view(
+            lists_column_view(cv)
+        )
+    else:
+        dtype = cudf_to_np_types[<underlying_type_t_type_id>(
+            tid
+        )]
+    return dtype
