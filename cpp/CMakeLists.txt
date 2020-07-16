@@ -563,6 +563,7 @@ add_library(cudf
             src/lists/copying/concatenate.cu
             src/lists/copying/gather.cu
             src/text/detokenize.cu
+            src/lists/copying/slice.cu
             src/text/generate_ngrams.cu
             src/text/normalize.cu
             src/text/tokenize.cu
