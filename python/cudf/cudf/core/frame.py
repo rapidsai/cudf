@@ -37,6 +37,15 @@ class Frame(libcudf.table.Table):
     def _from_table(cls, table):
         return cls(table._data, index=table._index)
 
+    def _mimic_inplace(self, result, inplace=False):
+        if inplace:
+            for col in self._data:
+                self._data[col]._mimic_inplace(result._data[col], inplace=True)
+            self._data = result._data
+            self._index = result._index
+        else:
+            return result
+
     @property
     def empty(self):
         """
@@ -743,9 +752,7 @@ class Frame(libcudf.table.Table):
             if len(common_cols) > 0:
                 # If `self` and `cond` are having unequal index,
                 # then re-index `cond`.
-                if len(self.index) != len(cond.index) or any(
-                    self.index != cond.index
-                ):
+                if not self.index.equals(cond.index):
                     cond = cond.reindex(self.index)
             else:
                 if cond.shape != self.shape:

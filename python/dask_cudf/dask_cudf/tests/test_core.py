@@ -10,9 +10,9 @@ import dask
 from dask import dataframe as dd
 from dask.dataframe.core import make_meta, meta_nonempty
 
-import dask_cudf as dgd
-
 import cudf
+
+import dask_cudf as dgd
 
 
 def test_from_cudf():
@@ -703,3 +703,14 @@ def test_dataframe_set_index():
     from cudf.tests.utils import assert_eq
 
     assert_eq(ddf.compute(), pddf.compute())
+
+
+def test_dataframe_describe():
+    random.seed(0)
+    df = cudf.datasets.randomdata(20)
+    pdf = df.to_pandas()
+
+    ddf = dgd.from_cudf(df, npartitions=4)
+    pddf = dd.from_pandas(pdf, npartitions=4)
+
+    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)

@@ -229,10 +229,12 @@ def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
         else:
             hash_ref = [989983842, 429364346, 1169108191]
         assert gdf["b"].dtype == np.dtype("int32")
-        assert list(gdf["b"]) == list(hash_ref)
+        assert_eq(
+            gdf["b"], cudf.Series(hash_ref, dtype=np.dtype("int32"), name="b")
+        )
     else:
         assert gdf["b"].dtype == np.dtype("object")
-        assert list(gdf["b"]) == list(df["b"])
+        assert_eq(gdf["b"], df["b"])
 
 
 @pytest.mark.parametrize("columns", [None, ["b"]])

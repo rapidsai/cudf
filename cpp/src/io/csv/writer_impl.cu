@@ -499,6 +499,8 @@ void writer::impl::write(table_view const& table,
     //
     column_to_strings_fn converter{options_, mr_};
     for (auto&& sub_view : vector_views) {
+      // Skip if the table has no rows
+      if (sub_view.num_rows() == 0) continue;
       std::vector<std::unique_ptr<column>> str_column_vec;
 
       // populate vector of string-converted columns:
@@ -512,8 +514,8 @@ void writer::impl::write(table_view const& table,
 
       // create string table view from str_column_vec:
       //
-      auto str_table_ptr = std::make_unique<cudf::table>(std::move(str_column_vec));
-      table_view str_table_view{std::move(*str_table_ptr)};
+      auto str_table_ptr  = std::make_unique<cudf::table>(std::move(str_column_vec));
+      auto str_table_view = str_table_ptr->view();
 
       // concatenate columns in each row into one big string column
       //(using null representation and delimiter):
@@ -522,9 +524,7 @@ void writer::impl::write(table_view const& table,
       auto str_concat_col =
         cudf::strings::concatenate(str_table_view, delimiter_str, options_.na_rep(), mr_);
 
-      strings_column_view strings_converted{std::move(*str_concat_col)};
-
-      write_chunked(strings_converted, metadata, stream);
+      write_chunked(str_concat_col->view(), metadata, stream);
     }
   }
 
