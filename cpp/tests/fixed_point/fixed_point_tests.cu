@@ -531,21 +531,23 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
-TEST_F(FixedPointTest, FixedPointSortedOrderGather)
+TYPED_TEST(FixedPointTestBothReps, FixedPointSortedOrderGather)
 {
-  auto const ZERO  = decimal32{0, scale_type{0}};
-  auto const ONE   = decimal32{1, scale_type{0}};
-  auto const TWO   = decimal32{2, scale_type{0}};
-  auto const THREE = decimal32{3, scale_type{0}};
-  auto const FOUR  = decimal32{4, scale_type{0}};
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  auto const input_vec  = std::vector<decimal32>{TWO, ONE, ZERO, FOUR, THREE};
+  auto const ZERO  = decimalXX{0, scale_type{0}};
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+
+  auto const input_vec  = std::vector<decimalXX>{TWO, ONE, ZERO, FOUR, THREE};
   auto const index_vec  = std::vector<cudf::size_type>{2, 1, 0, 4, 3};
-  auto const sorted_vec = std::vector<decimal32>{ZERO, ONE, TWO, THREE, FOUR};
+  auto const sorted_vec = std::vector<decimalXX>{ZERO, ONE, TWO, THREE, FOUR};
 
-  auto const input_col  = wrapper<decimal32>(input_vec.begin(), input_vec.end());
+  auto const input_col  = wrapper<decimalXX>(input_vec.begin(), input_vec.end());
   auto const index_col  = wrapper<cudf::size_type>(index_vec.begin(), index_vec.end());
-  auto const sorted_col = wrapper<decimal32>(sorted_vec.begin(), sorted_vec.end());
+  auto const sorted_col = wrapper<decimalXX>(sorted_vec.begin(), sorted_vec.end());
 
   auto const sorted_table = cudf::table_view{{sorted_col}};
   auto const input_table  = cudf::table_view{{input_col}};
@@ -559,6 +561,8 @@ TEST_F(FixedPointTest, FixedPointSortedOrderGather)
 
 TEST_F(FixedPointTest, FixedPointBinaryOpAdd)
 {
+  // using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
   auto const sz = std::size_t{1000};
 
   auto vec1       = std::vector<decimal32>(sz);
@@ -578,62 +582,68 @@ TEST_F(FixedPointTest, FixedPointBinaryOpAdd)
   auto const expected_col = wrapper<decimal32>(expected.begin(), expected.end());
 
   auto const result = cudf::binary_operation(
-    lhs, rhs, cudf::binary_operator::ADD, cudf::data_type(cudf::type_id::DECIMAL32));
+    lhs, rhs, cudf::binary_operator::ADD, static_cast<cudf::column_view>(lhs).type());
 
   cudf::test::expect_columns_equal(expected_col, result->view());
 }
 
-TEST_F(FixedPointTest, FixedPointConcatentate)
+TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
 {
-  auto vec = std::vector<decimal32>(1000);
-  std::iota(std::begin(vec), std::end(vec), decimal32{});
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  auto const a = wrapper<decimal32>(vec.begin(), /***/ vec.begin() + 300);
-  auto const b = wrapper<decimal32>(vec.begin() + 300, vec.begin() + 700);
-  auto const c = wrapper<decimal32>(vec.begin() + 700, vec.end());
+  auto vec = std::vector<decimalXX>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimalXX{});
+
+  auto const a = wrapper<decimalXX>(vec.begin(), /***/ vec.begin() + 300);
+  auto const b = wrapper<decimalXX>(vec.begin() + 300, vec.begin() + 700);
+  auto const c = wrapper<decimalXX>(vec.begin() + 700, vec.end());
 
   auto const fixed_point_columns = std::vector<cudf::column_view>{a, b, c};
   auto const results             = cudf::concatenate(fixed_point_columns);
-  auto const expected            = wrapper<decimal32>(vec.begin(), vec.end());
+  auto const expected            = wrapper<decimalXX>(vec.begin(), vec.end());
 
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(FixedPointTest, FixedPointReplace)
+TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
 {
-  auto const ONE = decimal32{1, scale_type{0}};
-  auto const TWO = decimal32{2, scale_type{0}};
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  auto const ONE = decimalXX{1, scale_type{0}};
+  auto const TWO = decimalXX{2, scale_type{0}};
   auto const sz  = std::size_t{1000};
 
-  auto vec1       = std::vector<decimal32>(sz);
-  auto const vec2 = std::vector<decimal32>(sz, TWO);
+  auto vec1       = std::vector<decimalXX>(sz);
+  auto const vec2 = std::vector<decimalXX>(sz, TWO);
 
   std::generate(vec1.begin(), vec1.end(), [&, i = 0]() mutable { return ++i % 2 ? ONE : TWO; });
 
-  auto const to_replace  = std::vector<decimal32>{ONE};
-  auto const replacement = std::vector<decimal32>{TWO};
+  auto const to_replace  = std::vector<decimalXX>{ONE};
+  auto const replacement = std::vector<decimalXX>{TWO};
 
-  auto const input_w       = wrapper<decimal32>(vec1.begin(), vec1.end());
-  auto const to_replace_w  = wrapper<decimal32>(to_replace.begin(), to_replace.end());
-  auto const replacement_w = wrapper<decimal32>(replacement.begin(), replacement.end());
-  auto const expected_w    = wrapper<decimal32>(vec2.begin(), vec2.end());
+  auto const input_w       = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const to_replace_w  = wrapper<decimalXX>(to_replace.begin(), to_replace.end());
+  auto const replacement_w = wrapper<decimalXX>(replacement.begin(), replacement.end());
+  auto const expected_w    = wrapper<decimalXX>(vec2.begin(), vec2.end());
 
-  auto const result = cudf::find_and_replace_all(input_w, to_replace_w, replacement_w, mr());
+  auto const result = cudf::find_and_replace_all(input_w, to_replace_w, replacement_w);
 
   cudf::test::expect_columns_equal(*result, expected_w);
 }
 
-TEST_F(FixedPointTest, FixedPointLowerBound)
+TYPED_TEST(FixedPointTestBothReps, FixedPointLowerBound)
 {
-  auto vec = std::vector<decimal32>(1000);
-  std::iota(std::begin(vec), std::end(vec), decimal32{});
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  auto const values = wrapper<decimal32>{decimal32{200, scale_type{0}},
-                                         decimal32{400, scale_type{0}},
-                                         decimal32{600, scale_type{0}},
-                                         decimal32{800, scale_type{0}}};
+  auto vec = std::vector<decimalXX>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimalXX{});
+
+  auto const values = wrapper<decimalXX>{decimalXX{200, scale_type{0}},
+                                         decimalXX{400, scale_type{0}},
+                                         decimalXX{600, scale_type{0}},
+                                         decimalXX{800, scale_type{0}}};
   auto const expect = wrapper<cudf::size_type>{200, 400, 600, 800};
-  auto const column = wrapper<decimal32>(vec.begin(), vec.end());
+  auto const column = wrapper<decimalXX>(vec.begin(), vec.end());
 
   auto result = cudf::lower_bound({cudf::table_view{{column}}},
                                   {cudf::table_view{{values}}},
@@ -643,17 +653,19 @@ TEST_F(FixedPointTest, FixedPointLowerBound)
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(FixedPointTest, FixedPointUpperBound)
+TYPED_TEST(FixedPointTestBothReps, FixedPointUpperBound)
 {
-  auto vec = std::vector<decimal32>(1000);
-  std::iota(std::begin(vec), std::end(vec), decimal32{});
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  auto const values = wrapper<decimal32>{decimal32{200, scale_type{0}},
-                                         decimal32{400, scale_type{0}},
-                                         decimal32{600, scale_type{0}},
-                                         decimal32{800, scale_type{0}}};
+  auto vec = std::vector<decimalXX>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimalXX{});
+
+  auto const values = wrapper<decimalXX>{decimalXX{200, scale_type{0}},
+                                         decimalXX{400, scale_type{0}},
+                                         decimalXX{600, scale_type{0}},
+                                         decimalXX{800, scale_type{0}}};
   auto const expect = wrapper<cudf::size_type>{201, 401, 601, 801};
-  auto const column = wrapper<decimal32>(vec.begin(), vec.end());
+  auto const column = wrapper<decimalXX>(vec.begin(), vec.end());
 
   auto result = cudf::upper_bound({cudf::table_view{{column}}},
                                   {cudf::table_view{{values}}},
@@ -663,61 +675,67 @@ TEST_F(FixedPointTest, FixedPointUpperBound)
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(FixedPointTest, FixedPointInterleave)
+TYPED_TEST(FixedPointTestBothReps, FixedPointInterleave)
 {
-  for (int i = 0; i > -4; --i) {
-    auto const ONE   = decimal32{1, scale_type{i}};
-    auto const TWO   = decimal32{2, scale_type{i}};
-    auto const THREE = decimal32{3, scale_type{i}};
-    auto const FOUR  = decimal32{4, scale_type{i}};
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-    auto const a = wrapper<decimal32>({ONE, THREE});
-    auto const b = wrapper<decimal32>({TWO, FOUR});
+  for (int i = 0; i > -4; --i) {
+    auto const ONE   = decimalXX{1, scale_type{i}};
+    auto const TWO   = decimalXX{2, scale_type{i}};
+    auto const THREE = decimalXX{3, scale_type{i}};
+    auto const FOUR  = decimalXX{4, scale_type{i}};
+
+    auto const a = wrapper<decimalXX>({ONE, THREE});
+    auto const b = wrapper<decimalXX>({TWO, FOUR});
 
     auto const input    = cudf::table_view{std::vector<cudf::column_view>{a, b}};
-    auto const expected = wrapper<decimal32>({ONE, TWO, THREE, FOUR});
+    auto const expected = wrapper<decimalXX>({ONE, TWO, THREE, FOUR});
     auto const actual   = cudf::interleave_columns(input);
 
     expect_columns_equal(expected, actual->view());
   }
 }
 
-TEST_F(FixedPointTest, FixedPointReductionProduct)
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProduct)
 {
-  auto const ONE   = decimal32{1, scale_type{0}};
-  auto const TWO   = decimal32{2, scale_type{0}};
-  auto const THREE = decimal32{3, scale_type{0}};
-  auto const FOUR  = decimal32{4, scale_type{0}};
-  auto const _24   = decimal32{24, scale_type{0}};
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  auto const in       = std::vector<decimal32>{ONE, TWO, THREE, FOUR};
-  auto const column   = wrapper<decimal32>(in.cbegin(), in.cend());
-  auto const expected = std::accumulate(in.cbegin(), in.cend(), ONE, std::multiplies<decimal32>());
-  auto const out_type = cudf::data_type{cudf::type_id::DECIMAL32};
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+  auto const _24   = decimalXX{24, scale_type{0}};
+
+  auto const in       = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+  auto const column   = wrapper<decimalXX>(in.cbegin(), in.cend());
+  auto const expected = std::accumulate(in.cbegin(), in.cend(), ONE, std::multiplies<decimalXX>());
+  auto const out_type = static_cast<cudf::column_view>(column).type();
 
   auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
-  auto const result_scalar = static_cast<cudf::scalar_type_t<decimal32>*>(result.get());
+  auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
   EXPECT_EQ(result_scalar->value(), expected);
   EXPECT_EQ(result_scalar->value(), _24);
 }
 
-TEST_F(FixedPointTest, FixedPointReductionSum)
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
 {
-  auto const ZERO  = decimal32{0, scale_type{0}};
-  auto const ONE   = decimal32{1, scale_type{0}};
-  auto const TWO   = decimal32{2, scale_type{0}};
-  auto const THREE = decimal32{3, scale_type{0}};
-  auto const FOUR  = decimal32{4, scale_type{0}};
-  auto const TEN   = decimal32{10, scale_type{0}};
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  auto const in       = std::vector<decimal32>{ONE, TWO, THREE, FOUR};
-  auto const column   = wrapper<decimal32>(in.cbegin(), in.cend());
-  auto const expected = std::accumulate(in.cbegin(), in.cend(), ZERO, std::plus<decimal32>());
-  auto const out_type = cudf::data_type{cudf::type_id::DECIMAL32};
+  auto const ZERO  = decimalXX{0, scale_type{0}};
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+  auto const TEN   = decimalXX{10, scale_type{0}};
+
+  auto const in       = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+  auto const column   = wrapper<decimalXX>(in.cbegin(), in.cend());
+  auto const expected = std::accumulate(in.cbegin(), in.cend(), ZERO, std::plus<decimalXX>());
+  auto const out_type = static_cast<cudf::column_view>(column).type();
 
   auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
-  auto const result_scalar = static_cast<cudf::scalar_type_t<decimal32>*>(result.get());
+  auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
   EXPECT_EQ(result_scalar->value(), expected);
   EXPECT_EQ(result_scalar->value(), TEN);
