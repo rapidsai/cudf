@@ -414,6 +414,17 @@ __inline__ __device__ numeric::decimal32 decode_value(const char *data,
   return numeric::decimal32{};
 }
 
+// The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
+template <>
+__inline__ __device__ numeric::decimal64 decode_value(const char *data,
+                                                      long start,
+                                                      long end,
+                                                      ParseOptions const &opts)
+{
+  return numeric::decimal64{};
+}
+
 /**
  * @brief Functor for converting CSV raw data to typed value.
  */
