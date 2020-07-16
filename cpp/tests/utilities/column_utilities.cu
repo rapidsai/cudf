@@ -427,8 +427,7 @@ struct column_view_printer {
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent);
   }
 
-  template <typename Element,
-            typename std::enable_if_t<std::is_same<Element, numeric::decimal32>::value>* = nullptr>
+  template <typename Element, typename std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
