@@ -8,7 +8,7 @@ DataFrame
 .. autoclass:: DataFrame
     :members:
     :inherited-members:
-    :exclude-members: serialize, deserialize
+    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict
 
 ..
   For cudf.concat function
@@ -23,7 +23,7 @@ Series
 .. autoclass:: Series
     :members:
     :inherited-members:
-    :exclude-members: serialize, deserialize, logical_not, logical_or, logical_and, remainder, sum_of_squares, fill, merge
+    :exclude-members: serialize, deserialize, logical_not, logical_or, logical_and, remainder, sum_of_squares, fill, merge, iteritems, items, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict
 
 Strings
 -------
@@ -44,7 +44,7 @@ Index
 .. autoclass:: Index
     :members:
     :inherited-members:
-    :exclude-members: serialize, deserialize, is_monotonic, is_monotonic_increasing, is_monotonic_decreasing
+    :exclude-members: serialize, deserialize, is_monotonic, is_monotonic_increasing, is_monotonic_decreasing, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 RangeIndex
 ----------
@@ -52,7 +52,7 @@ RangeIndex
 .. autoclass:: RangeIndex
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 GenericIndex
 ------------
@@ -60,6 +60,7 @@ GenericIndex
 .. autoclass:: GenericIndex
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 MultiIndex
 ----------
@@ -67,6 +68,7 @@ MultiIndex
 .. autoclass:: MultiIndex
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 Int8Index
 ---------
@@ -74,6 +76,7 @@ Int8Index
 .. autoclass:: Int8Index
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 Int16Index
 ----------
@@ -81,6 +84,7 @@ Int16Index
 .. autoclass:: Int16Index
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 Int32Index
 ----------
@@ -88,6 +92,7 @@ Int32Index
 .. autoclass:: Int32Index
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 Int64Index
 ----------
@@ -95,6 +100,7 @@ Int64Index
 .. autoclass:: Int64Index
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 UInt8Index
 ----------
@@ -102,6 +108,7 @@ UInt8Index
 .. autoclass:: UInt8Index
     :inherited-members:
     :members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 UInt16Index
 -----------
@@ -109,6 +116,7 @@ UInt16Index
 .. autoclass:: UInt16Index
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 UInt32Index
 -----------
@@ -116,6 +124,7 @@ UInt32Index
 .. autoclass:: UInt32Index
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 UInt64Index
 -----------
@@ -123,6 +132,7 @@ UInt64Index
 .. autoclass:: UInt64Index
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 Float32Index
 ------------
@@ -130,6 +140,7 @@ Float32Index
 .. autoclass:: Float32Index
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 Float64Index
 ------------
@@ -137,6 +148,7 @@ Float64Index
 .. autoclass:: Float64Index
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 CategoricalIndex
 ----------------
@@ -144,6 +156,7 @@ CategoricalIndex
 .. autoclass:: CategoricalIndex
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 StringIndex
 -----------
@@ -151,6 +164,7 @@ StringIndex
 .. autoclass:: StringIndex
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 DatetimeIndex
 -------------
@@ -158,6 +172,7 @@ DatetimeIndex
 .. autoclass:: DatetimeIndex
     :members:
     :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 Categories
 ----------
