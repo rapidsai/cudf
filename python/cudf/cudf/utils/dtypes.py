@@ -147,6 +147,17 @@ def is_categorical_dtype(obj):
     return pandas_dtype(obj).type is CategoricalDtypeType
 
 
+def is_list_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.ListDtype
+        or obj is cudf.core.dtypes.ListDtype
+        or type(obj) is cudf.core.column.ListColumn
+        or obj is cudf.core.column.ListColumn
+        or (isinstance(obj, str) and obj == cudf.core.dtypes.ListDtype.name)
+        or (hasattr(obj, "dtype") and is_list_dtype(obj.dtype))
+    )
+
+
 def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.
@@ -363,4 +374,10 @@ def check_cast_unsupported_dtype(dtype):
 
     raise NotImplementedError(
         "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)
+    )
+
+
+def is_mixed_with_object_dtype(lhs, rhs):
+    return (lhs.dtype == "object" and rhs.dtype != "object") or (
+        rhs.dtype == "object" and lhs.dtype != "object"
     )

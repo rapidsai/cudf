@@ -523,6 +523,45 @@ def test_text_replace_tokens_error_cases():
         sr.str.replace_tokens(["a"], ["s"], delimiter=["a", "b"])
 
 
+def test_text_filter_tokens():
+    sr = cudf.Series(["the quick brown fox jumped", "over the lazy dog", ""])
+
+    expected = cudf.Series([" quick brown  jumped", "   ", ""])
+    actual = sr.str.filter_tokens(5)
+    assert_eq(expected, actual)
+
+    expected = cudf.Series(["🔥 quick brown 🔥 jumped", "🔥 🔥 🔥 🔥", ""])
+    actual = sr.str.filter_tokens(5, "🔥")
+    assert_eq(expected, actual)
+
+    sr = cudf.Series(
+        ["All-we-need;is;🔥", "\tall-we-need0is;🌊", "all;we:need+is;🌬"]
+    )
+    expected = cudf.Series(
+        ["All-we-need;is;--", "\tall-we-need0is;--", "all;we:need+is;--"]
+    )
+    actual = sr.str.filter_tokens(2, "--", ";")
+    assert_eq(expected, actual)
+
+    assert_eq(sr, sr.str.filter_tokens(1))
+
+
+def test_text_filter_tokens_error_cases():
+    sr = cudf.Series(["abc", "def", ""])
+
+    with pytest.raises(
+        TypeError,
+        match="Type of replacement should be a string, found <class 'list'>",
+    ):
+        sr.str.filter_tokens(3, replacement=["a", "b"])
+
+    with pytest.raises(
+        TypeError,
+        match="Type of delimiter should be a string, found <class 'list'>",
+    ):
+        sr.str.filter_tokens(3, delimiter=["a", "b"])
+
+
 def test_text_subword_tokenize(tmpdir):
     sr = cudf.Series(
         [

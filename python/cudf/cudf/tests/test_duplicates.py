@@ -324,26 +324,24 @@ def test_dataframe_drop_duplicates_method():
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
-    assert tuple(gdf.drop_duplicates("n1")["n1"].reset_index(drop=True)) == (
-        1,
-        2,
-        3,
+    assert_eq(
+        gdf.drop_duplicates("n1")["n1"].reset_index(drop=True),
+        pdf.drop_duplicates("n1")["n1"].reset_index(drop=True),
     )
-    assert tuple(gdf.drop_duplicates("n2")["n2"].reset_index(drop=True)) == (
-        2,
-        3,
-        4,
-        5,
+    assert_eq(
+        gdf.drop_duplicates("n2")["n2"].reset_index(drop=True),
+        pdf.drop_duplicates("n2")["n2"].reset_index(drop=True),
     )
-    assert tuple(gdf.drop_duplicates("s1")["s1"].reset_index(drop=True)) == (
-        "a",
-        "b",
-        "c",
-        "d",
+    assert_eq(
+        gdf.drop_duplicates("s1")["s1"].reset_index(drop=True),
+        pdf.drop_duplicates("s1")["s1"].reset_index(drop=True),
     )
-    assert tuple(
-        gdf.drop_duplicates("s1", keep="last")["s1"].reset_index(drop=True)
-    ) == ("a", "b", "c", "d",)
+    assert_eq(
+        gdf.drop_duplicates("s1", keep="last")["s1"]
+        .sort_index()
+        .reset_index(drop=True),
+        pdf.drop_duplicates("s1", keep="last")["s1"].reset_index(drop=True),
+    )
     assert gdf.drop_duplicates("s1", inplace=True) is None
 
     gdf = cudf.DataFrame.from_pandas(pdf)
