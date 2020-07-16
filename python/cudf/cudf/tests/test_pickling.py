@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import pickle
 import sys
 
 import numpy as np
@@ -10,6 +9,14 @@ import pytest
 from cudf.core import DataFrame, GenericIndex, Series
 from cudf.core.buffer import Buffer
 from cudf.tests.utils import assert_eq
+
+if sys.version_info < (3, 8):
+    try:
+        import pickle5 as pickle
+    except ImportError:
+        import pickle
+else:
+    import pickle
 
 
 def check_serialization(df):
