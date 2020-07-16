@@ -73,5 +73,5 @@ def test_dtype_eq():
 def test_nested_dtype():
     dt = ListDtype(ListDtype("int32"))
     expect = ListDtype("int32")
-    got = dt.value_type
+    got = dt.element_type
     assert expect == got
