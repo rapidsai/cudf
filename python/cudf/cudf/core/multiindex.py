@@ -1072,12 +1072,3 @@ class MultiIndex(Index):
                 return cudf_func(*args, **kwargs)
         else:
             return NotImplemented
-
-    def _mimic_inplace(self, other, inplace=False):
-        if inplace is True:
-            for in_col, oth_col in zip(
-                self._source_data._columns, other._source_data._columns,
-            ):
-                in_col._mimic_inplace(oth_col, inplace=True)
-        else:
-            return other

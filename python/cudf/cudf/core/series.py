@@ -25,7 +25,8 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
-from cudf.core.column.string import StringMethods as StringMethods
+from cudf.core.column.lists import ListMethods
+from cudf.core.column.string import StringMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import SeriesGroupBy
@@ -37,6 +38,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
     is_datetime_dtype,
+    is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
     is_scalar,
@@ -981,6 +983,7 @@ class Series(Frame, Serializable):
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_datetime_dtype(preprocess.dtype)
+            and not is_list_dtype(preprocess.dtype)
         ):
             output = (
                 preprocess.astype("O").fillna("null").to_pandas().__repr__()
@@ -1617,12 +1620,17 @@ class Series(Frame, Serializable):
     @copy_docstring(CategoricalAccessor.__init__)
     @property
     def cat(self):
-        return self._column.cat(parent=self)
+        return CategoricalAccessor(column=self._column, parent=self)
 
     @copy_docstring(StringMethods.__init__)
     @property
     def str(self):
-        return self._column.str(parent=self)
+        return StringMethods(column=self._column, parent=self)
+
+    @copy_docstring(ListMethods.__init__)
+    @property
+    def list(self):
+        return ListMethods(column=self._column, parent=self)
 
     @property
     def dtype(self):
