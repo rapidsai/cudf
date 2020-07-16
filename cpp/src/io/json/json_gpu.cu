@@ -55,13 +55,15 @@ namespace {
  *
  * @return void
  */
-__device__ void limit_range_to_brackets(const char *data, uint64_t &start, uint64_t &stop)
+__device__ std::pair<char const *, char const *> limit_range_to_brackets(char const *begin,
+                                                                         char const *end)
 {
-  while (start < stop && data[start] != '[' && data[start] != '{') { start++; }
-  start++;
+  while (begin < end && *begin != '[' && *begin != '{') { begin++; }
+  begin++;
 
-  while (start < stop && data[stop - 1] != ']' && data[stop - 1] != '}') { stop--; }
-  stop--;
+  while (begin < end && *(end - 1) != ']' && *(end - 1) != '}') { end--; }
+  end--;
+  return {begin, end};
 }
 /**
  * @brief Enumerator for states when parsing JSON object keys.
@@ -289,24 +291,23 @@ struct ConvertFunctor {
    * is used by other types (ex. timestamp) that aren't 'booleable'.
    */
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(const char *data,
+  __host__ __device__ __forceinline__ bool operator()(char const *begin,
+                                                      char const *end,
                                                       void *output_columns,
                                                       cudf::size_type row,
-                                                      uint64_t start,
-                                                      uint64_t end,
                                                       const ParseOptions &opts)
   {
     T &value{static_cast<T *>(output_columns)[row]};
 
     // Check for user-specified true/false values first, where the output is
     // replaced with 1/0 respectively
-    const size_t field_len = end - start + 1;
-    if (serializedTrieContains(opts.trueValuesTrie, data + start, field_len)) {
+    const size_t field_len = end - begin;
+    if (serializedTrieContains(opts.trueValuesTrie, begin, field_len)) {
       value = 1;
-    } else if (serializedTrieContains(opts.falseValuesTrie, data + start, field_len)) {
+    } else if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
       value = 0;
     } else {
-      value = decode_value<T>(data, start, end, opts);
+      value = decode_value<T>(begin, 0, field_len - 1, opts);  // TODO: refactor this too
     }
 
     return true;
@@ -317,15 +318,11 @@ struct ConvertFunctor {
    * is not valid. In such case, the validity mask is set to zero too.
    */
   template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(const char *data,
-                                                      void *out_buffer,
-                                                      size_t row,
-                                                      uint64_t start,
-                                                      uint64_t end,
-                                                      ParseOptions const &opts)
+  __host__ __device__ __forceinline__ bool operator()(
+    char const *begin, char const *end, void *out_buffer, size_t row, ParseOptions const &opts)
   {
     auto &value{static_cast<T *>(out_buffer)[row]};
-    value = decode_value<T>(data, start, end, opts);
+    value = decode_value<T>(begin, 0, end - begin - 1, opts);
     return !std::isnan(value);
   }
 
@@ -336,15 +333,14 @@ struct ConvertFunctor {
   template <typename T,
             typename std::enable_if_t<!std::is_floating_point<T>::value and
                                       !std::is_integral<T>::value> * = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(const char *data,
+  __host__ __device__ __forceinline__ bool operator()(char const *begin,
+                                                      char const *end,
                                                       void *output_columns,
                                                       cudf::size_type row,
-                                                      uint64_t start,
-                                                      uint64_t end,
                                                       const ParseOptions &opts)
   {
     T &value{static_cast<T *>(output_columns)[row]};
-    value = decode_value<T>(data, start, end, opts);
+    value = decode_value<T>(begin, 0, end - begin - 1, opts);
 
     return true;
   }
@@ -486,59 +482,50 @@ __global__ void convert_data_to_columns_kernel(const char *data,
   const auto rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
 
-  auto start = rec_starts[rec_id];
-  // has the same semantics as end() in STL containers (one past last element)
-  auto stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
+  auto const row_data_range = [&]() {
+    auto const row_begin = data + rec_starts[rec_id];
+    auto const row_end   = data + ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
+    return limit_range_to_brackets(row_begin, row_end);
+  }();
+  auto current = row_data_range.first;
+  for (int input_field_index = 0;
+       input_field_index < num_columns && current < row_data_range.second;
+       input_field_index++) {
+    auto const desc = get_next_field_descriptor(
+      current, row_data_range.second, opts, input_field_index, are_rows_objects, col_map);
+    auto const value_len = desc.value_end - desc.value_begin;
 
-  limit_range_to_brackets(data, start, stop);
+    current = desc.value_end + 1;
 
-  for (int col = 0; col < num_columns && start < stop; col++) {
-    auto dst_col = col;
-    if (are_rows_objects) {
-      auto begin          = data + start;
-      auto const key_hash = parse_key(begin, data + stop, opts.quotechar);
-      start               = begin - data;
-      dst_col             = (*col_map.find(key_hash)).second;
-    }
-    // field_end is at the next delimiter/newline
-    auto const field_end = cudf::io::gpu::seek_field_end(data + start, data + stop, opts) - data;
-    // Modify start & end to ignore whitespace and quotechars
-    auto const field_value_range =
-      trim_whitespaces_quotes(data + start, data + field_end, opts.quotechar);
-    auto const field_data_last = field_value_range.second - data - 1;
-    start                      = field_value_range.first - data;
     // Empty fields are not legal values
-    if (start <= field_data_last &&
-        !serializedTrieContains(opts.naValuesTrie, data + start, field_end - start)) {
+    if (value_len > 0 && !serializedTrieContains(opts.naValuesTrie, desc.value_begin, value_len)) {
       // Type dispatcher does not handle strings
-      if (dtypes[dst_col].id() == type_id::STRING) {
-        auto str_list           = static_cast<string_pair *>(output_columns[dst_col]);
-        str_list[rec_id].first  = data + start;
-        str_list[rec_id].second = field_data_last - start + 1;
+      if (dtypes[desc.column].id() == type_id::STRING) {
+        auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
+        str_list[rec_id].first  = desc.value_begin;
+        str_list[rec_id].second = value_len;
 
         // set the valid bitmap - all bits were set to 0 to start
-        set_bit(valid_fields[dst_col], rec_id);
-        atomicAdd(&num_valid_fields[dst_col], 1);
+        set_bit(valid_fields[desc.column], rec_id);
+        atomicAdd(&num_valid_fields[desc.column], 1);
       } else {
-        if (cudf::type_dispatcher(dtypes[dst_col],
+        if (cudf::type_dispatcher(dtypes[desc.column],
                                   ConvertFunctor{},
-                                  data,
-                                  output_columns[dst_col],
+                                  desc.value_begin,
+                                  desc.value_end,
+                                  output_columns[desc.column],
                                   rec_id,
-                                  start,
-                                  field_data_last,
                                   opts)) {
           // set the valid bitmap - all bits were set to 0 to start
-          set_bit(valid_fields[dst_col], rec_id);
-          atomicAdd(&num_valid_fields[dst_col], 1);
+          set_bit(valid_fields[desc.column], rec_id);
+          atomicAdd(&num_valid_fields[desc.column], 1);
         }
       }
-    } else if (dtypes[dst_col].id() == type_id::STRING) {
-      auto str_list           = static_cast<string_pair *>(output_columns[dst_col]);
+    } else if (dtypes[desc.column].id() == type_id::STRING) {
+      auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
       str_list[rec_id].first  = nullptr;
       str_list[rec_id].second = 0;
     }
-    start = field_end + 1;
   }
 }
 
@@ -572,23 +559,25 @@ __global__ void detect_data_types_kernel(const char *data,
   auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
 
-  auto start = rec_starts[rec_id];
-  // has the same semantics as end() in STL containers (one past last element)
-  auto stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
+  auto const row_data_range = [&]() {
+    auto const row_begin = data + rec_starts[rec_id];
+    auto const row_end   = data + ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
+    return limit_range_to_brackets(row_begin, row_end);
+  }();
 
-  limit_range_to_brackets(data, start, stop);
+  int input_field_index = 0;
+  for (auto current = row_data_range.first;
+       input_field_index < num_columns && current < row_data_range.second;
+       input_field_index++) {
+    auto const desc = get_next_field_descriptor(
+      current, row_data_range.second, opts, input_field_index, are_rows_objects, col_map);
+    auto const value_len = desc.value_end - desc.value_begin;
 
-  int col = 0;
-  for (; col < num_columns && start < stop; col++) {
-    auto const desc =
-      get_next_field_descriptor(data + start, data + stop, opts, col, are_rows_objects, col_map);
-    auto const field_len       = desc.value_end - desc.value_begin;
-    auto const field_data_last = desc.value_end - 1;
     // Advance the start offset; +1 to skip the delimiter
-    start = desc.value_end - data + 1;
+    current = desc.value_end + 1;
+
     // Checking if the field is empty/valid
-    if (desc.value_begin > field_data_last ||
-        serializedTrieContains(opts.naValuesTrie, desc.value_begin, field_len)) {
+    if (value_len <= 0 || serializedTrieContains(opts.naValuesTrie, desc.value_begin, value_len)) {
       // Increase the null count for array rows, where the null count is initialized to zero.
       if (!are_rows_objects) { atomicAdd(&column_infos[desc.column].null_count, 1); }
       continue;
@@ -598,7 +587,7 @@ __global__ void detect_data_types_kernel(const char *data,
       atomicAdd(&column_infos[desc.column].null_count, -1);
     }
     // Don't need counts to detect strings, any field in quotes is deduced to be a string
-    if (*desc.value_begin == opts.quotechar && *field_data_last == opts.quotechar) {
+    if (*(desc.value_begin - 1) == opts.quotechar && *desc.value_end == opts.quotechar) {
       atomicAdd(&column_infos[desc.column].string_count, 1);
       continue;
     }
@@ -612,10 +601,10 @@ __global__ void detect_data_types_kernel(const char *data,
     int other_count    = 0;
 
     const bool maybe_hex =
-      ((field_len > 2 && *desc.value_begin == '0' && *(desc.value_begin + 1) == 'x') ||
-       (field_len > 3 && *desc.value_begin == '-' && *(desc.value_begin + 1) == '0' &&
+      ((value_len > 2 && *desc.value_begin == '0' && *(desc.value_begin + 1) == 'x') ||
+       (value_len > 3 && *desc.value_begin == '-' && *(desc.value_begin + 1) == '0' &&
         *(desc.value_begin + 2) == 'x'));
-    for (auto pos = desc.value_begin; pos <= field_data_last; ++pos) {
+    for (auto pos = desc.value_begin; pos < desc.value_end; ++pos) {
       if (is_digit(*pos, maybe_hex)) {
         digit_count++;
         continue;
@@ -628,24 +617,24 @@ __global__ void detect_data_types_kernel(const char *data,
         case ':': colon_count++; break;
         case 'e':
         case 'E':
-          if (!maybe_hex && pos > desc.value_begin && pos < field_data_last) exponent_count++;
+          if (!maybe_hex && pos > desc.value_begin && pos < desc.value_end - 1) exponent_count++;
           break;
         default: other_count++; break;
       }
     }
 
     // Integers have to have the length of the string
-    int int_req_number_cnt = field_len;
+    int int_req_number_cnt = value_len;
     // Off by one if they start with a minus sign
-    if (*desc.value_begin == '-' && field_len > 1) { --int_req_number_cnt; }
+    if (*desc.value_begin == '-' && value_len > 1) { --int_req_number_cnt; }
     // Off by one if they are a hexadecimal number
     if (maybe_hex) { --int_req_number_cnt; }
-    if (serializedTrieContains(opts.trueValuesTrie, desc.value_begin, field_len) ||
-        serializedTrieContains(opts.falseValuesTrie, desc.value_begin, field_len)) {
+    if (serializedTrieContains(opts.trueValuesTrie, desc.value_begin, value_len) ||
+        serializedTrieContains(opts.falseValuesTrie, desc.value_begin, value_len)) {
       atomicAdd(&column_infos[desc.column].bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
       atomicAdd(&column_infos[desc.column].int_count, 1);
-    } else if (is_like_float(field_len, digit_count, decimal_count, dash_count, exponent_count)) {
+    } else if (is_like_float(value_len, digit_count, decimal_count, dash_count, exponent_count)) {
       atomicAdd(&column_infos[desc.column].float_count, 1);
     }
     // A date-time field cannot have more than 3 non-special characters
@@ -671,7 +660,8 @@ __global__ void detect_data_types_kernel(const char *data,
   }
   if (!are_rows_objects) {
     // For array rows, mark missing fields as null
-    for (; col < num_columns; col++) atomicAdd(&column_infos[col].null_count, 1);
+    for (; input_field_index < num_columns; ++input_field_index)
+      atomicAdd(&column_infos[input_field_index].null_count, 1);
   }
 }
 
