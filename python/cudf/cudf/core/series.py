@@ -1729,12 +1729,12 @@ class Series(Frame, Serializable):
 
         Parameters
         ----------
-            axis : {0 or ‘index’}, default 0
-                There is only one axis to drop values from.
-            inplace : bool, default False
-                If True, do operation inplace and return None.
-            how : str, optional
-                Not in use. Kept for compatibility.
+        axis : {0 or ‘index’}, default 0
+            There is only one axis to drop values from.
+        inplace : bool, default False
+            If True, do operation inplace and return None.
+        how : str, optional
+            Not in use. Kept for compatibility.
 
         Returns
         -------
@@ -1780,7 +1780,7 @@ class Series(Frame, Serializable):
         dtype: int64
 
         Empty strings are not considered null values.
-        ``None`` is considered a null value.
+        `None` is considered a null value.
 
         >>> ser = cudf.Series(['', None, 'abc'])
         >>> ser
