@@ -498,7 +498,7 @@ TEST_F(JsonReaderTest, JsonLinesObjectsMissingData)
 
 TEST_F(JsonReaderTest, JsonLinesObjectsOutOfOrder)
 {
-  std::string data =
+  std::string const data =
     "{\"col1\":100, \"col2\":1.1, \"col3\":\"aaa\"}\n"
     "{\"col3\":\"bbb\", \"col1\":200, \"col2\":2.2}\n";
 

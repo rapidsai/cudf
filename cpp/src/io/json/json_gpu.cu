@@ -73,14 +73,15 @@ __device__ std::pair<char const *, char const *> limit_range_to_brackets(char co
  * @param[in] end pointer to the first character after the parsing range
  * @param[in] quotechar The character used to denote quotes
  *
- * @return Begin and end iterators of the key name
+ * @return Begin and end iterators of the key name; (end, end) if a key is not found
  */
 __device__ std::pair<char const *, char const *> parse_next_key(const char *begin,
                                                                 const char *end,
                                                                 char quotechar)
 {
-  // Key string starts after the first quote
+  // Key starts after the first quote
   auto const key_begin = thrust::find(thrust::seq, begin, end, quotechar) + 1;
+  if (key_begin > end) return {end, end};
 
   // Key ends after the next unescaped quote
   auto prev_ch       = ' ';
@@ -669,11 +670,6 @@ __global__ void detect_data_types_kernel(const char *data,
 }
 
 /**
- * @brief Enumerator for states when parsing JSON object keys.
- */
-enum class key_parse_state { PRE_KEY, KEY, POST_KEY, POST_KEY_QUOTE };
-
-/**
  * @brief Cuda kernel that collects information about JSON object keys in the file.
  *
  * @param[in] data Input data buffer
@@ -696,34 +692,27 @@ __global__ void collect_keys_info_kernel(const char *data,
   auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
 
-  auto const start = rec_starts[rec_id];
+  auto const begin = data + rec_starts[rec_id];
   // has the same semantics as end() in STL containers (one past last element)
-  auto const stop = ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
+  auto const end = data + ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
 
-  auto st              = key_parse_state::PRE_KEY;
-  auto last_name_start = start;
-  for (auto pos = start; pos < stop; ++pos) {
-    if (st == key_parse_state::PRE_KEY && data[pos] == opts.quotechar) {
-      st              = key_parse_state::KEY;
-      last_name_start = pos + 1;
-    } else if (st == key_parse_state::KEY && data[pos] == opts.quotechar && data[pos - 1] != '\\') {
-      st       = key_parse_state::POST_KEY;
-      auto idx = atomicAdd(keys_cnt, 1);
-      if (nullptr != keys_info) {
-        auto len                                    = pos - last_name_start;
-        keys_info->column(0).element<uint64_t>(idx) = last_name_start;
-        keys_info->column(1).element<uint16_t>(idx) = len;
-        keys_info->column(2).element<uint32_t>(idx) =
-          MurmurHash3_32<cudf::string_view>{}(cudf::string_view(data + last_name_start, len));
-      }
-    } else if (st == key_parse_state::POST_KEY && data[pos] == opts.quotechar) {
-      st = key_parse_state::POST_KEY_QUOTE;
-    } else if (st == key_parse_state::POST_KEY_QUOTE && data[pos] == opts.quotechar &&
-               data[pos - 1] != '\\') {
-      st = key_parse_state::POST_KEY;
-    } else if (st == key_parse_state::POST_KEY && data[pos] == opts.delimiter) {
-      st = key_parse_state::PRE_KEY;
+  auto current = begin;
+  while (current < end) {
+    auto const key_range = parse_next_key(current, end, opts.quotechar);
+    if (key_range.first == end) break;
+
+    auto const idx = atomicAdd(keys_cnt, 1);
+    if (nullptr != keys_info) {
+      auto const len                              = key_range.second - key_range.first;
+      keys_info->column(0).element<uint64_t>(idx) = key_range.first - data;
+      keys_info->column(1).element<uint16_t>(idx) = len;
+      keys_info->column(2).element<uint32_t>(idx) =
+        MurmurHash3_32<cudf::string_view>{}(cudf::string_view(key_range.first, len));
     }
+    // Skip the colon between the key and the value
+    current = thrust::find(thrust::seq, key_range.second, end, ':') + 1;
+    // Skip the field value (including delimiters)
+    current = cudf::io::gpu::seek_field_end(current, end, opts);
   }
 }
 
