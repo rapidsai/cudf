@@ -155,33 +155,26 @@ __device__ void dissect_duration(int64_t duration, int32_t* timeparts, type_id u
     return;
   }
 
-  // Specialized modulo expression that handles negative values.
-  // Examples:
-  //     modulo(1,60)    1
-  //     modulo(-1,60)  59
-  auto modulo_time = [](int64_t time, int64_t base) {
-    return static_cast<int32_t>(((time % base) + base) % base);
-  };
-
   duration_s seconds{0};
   if (units == type_id::DURATION_SECONDS) {
     seconds = duration_s(duration);
   } else if (units == type_id::DURATION_MILLISECONDS) {
     seconds                 = simt::std::chrono::floor<duration_s>(duration_ms(duration));
-    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000L);
+    timeparts[DU_SUBSECOND] = (duration_ms(duration)%duration_s(1)).count();
   } else if (units == type_id::DURATION_MICROSECONDS) {
     seconds                 = simt::std::chrono::floor<duration_s>(duration_us(duration));
-    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000L * 1000);
+    timeparts[DU_SUBSECOND] = (duration_us(duration)%duration_s(1)).count();
   } else if (units == type_id::DURATION_NANOSECONDS) {
     seconds                 = simt::std::chrono::floor<duration_s>(duration_ns(duration));
-    timeparts[DU_SUBSECOND] = modulo_time(duration, 1000L * 1000 * 1000);
+    timeparts[DU_SUBSECOND] = (duration_ns(duration)%duration_s(1)).count();
   }
   timeparts[DU_DAY] = simt::std::chrono::floor<duration_D>(seconds).count();
   timeparts[DU_HOUR] =
-    modulo_time(simt::std::chrono::floor<simt::std::chrono::hours>(seconds).count(), 24);
+    (simt::std::chrono::floor<simt::std::chrono::hours>(seconds) % duration_D(1)).count();
   timeparts[DU_MINUTE] =
-    modulo_time(simt::std::chrono::floor<simt::std::chrono::minutes>(seconds).count(), 60);
-  timeparts[DU_SECOND] = modulo_time(seconds.count(), 60);
+    (simt::std::chrono::floor<simt::std::chrono::minutes>(seconds) % simt::std::chrono::hours(1))
+      .count();
+  timeparts[DU_SECOND] =  (seconds % simt::std::chrono::minutes(1)).count();
 }
 
 template <typename T>
