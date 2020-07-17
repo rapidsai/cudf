@@ -64,6 +64,8 @@ from cudf.io import (
 )
 from cudf.utils.utils import set_allocator
 
+from cudf import testing
+
 cuda.set_memory_manager(rmm.RMMNumbaManager)
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 

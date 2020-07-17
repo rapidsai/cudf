@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import numbers
 import pickle
 import warnings
@@ -198,6 +198,10 @@ class MultiIndex(Index):
         if names is None:
             names = df.columns
         return MultiIndex.from_frame(df, names=names)
+
+    @property
+    def shape(self):
+        return (self._data.nrows, len(self._data.names))
 
     @property
     def _source_data(self):
@@ -667,16 +671,7 @@ class MultiIndex(Index):
         return MultiIndex(names=names, source_data=source_data)
 
     def __iter__(self):
-        self.n = 0
-        return self
-
-    def __next__(self):
-        if self.n < len(self.codes):
-            result = self[self.n]
-            self.n += 1
-            return result
-        else:
-            raise StopIteration
+        cudf.utils.utils.raise_iteration_error(obj=self)
 
     def __getitem__(self, index):
         # TODO: This should be a take of the _source_data only
@@ -763,6 +758,12 @@ class MultiIndex(Index):
         from cudf import DataFrame, MultiIndex
 
         source_data = [o._source_data for o in objs]
+
+        if len(source_data) > 1:
+            for index, obj in enumerate(source_data[1:]):
+                obj.columns = source_data[0].columns
+                source_data[index + 1] = obj
+
         source_data = DataFrame._concat(source_data)
         names = [None for x in source_data.columns]
         objs = list(filter(lambda o: o.names is not None, objs))
@@ -777,6 +778,69 @@ class MultiIndex(Index):
         pdi = pd.MultiIndex.from_tuples(tuples, names=names)
         result = cls.from_pandas(pdi)
         return result
+
+    def to_arrow(self):
+        raise NotImplementedError(
+            "MultiIndex.to_arrow() is not yet implemented"
+        )
+
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the MultiIndex.
+
+        Only the values in the MultiIndex will be returned.
+
+        Returns
+        -------
+        out : numpy.ndarray
+            The values of the MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(
+        ...         levels=[[1, 3, 4, 5], [1, 2, 5]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...     )
+        >>> midx.values_host
+        array([(1, 1), (1, 5), (3, 2), (4, 2), (5, 1)], dtype=object)
+        >>> type(midx.values_host)
+        <class 'numpy.ndarray'>
+        """
+        return self.to_pandas().values
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the MultiIndex.
+
+        Only the values in the MultiIndex will be returned.
+
+        Returns
+        -------
+        out: cupy.ndarray
+            The values of the MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(
+        ...         levels=[[1, 3, 4, 5], [1, 2, 5]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...     )
+        >>> midx.values
+        array([[1, 1],
+            [1, 5],
+            [3, 2],
+            [4, 2],
+            [5, 1]])
+        >>> type(midx.values)
+        <class 'cupy.core.core.ndarray'>
+        """
+        return self._source_data.values
 
     @classmethod
     def from_frame(cls, dataframe, names=None):
@@ -898,6 +962,83 @@ class MultiIndex(Index):
             temp_other = self.to_pandas()
         return temp_self.difference(temp_other, sort)
 
+    def append(self, other):
+        """
+        Append a collection of MultiIndex objects together
+
+        Parameters
+        ----------
+        other : MultiIndex or list/tuple of MultiIndex objects
+
+        Returns
+        -------
+        appended : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx1 = cudf.MultiIndex(
+        ... levels=[[1, 2], ['blue', 'red']],
+        ... codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+        >>> idx2 = cudf.MultiIndex(
+        ... levels=[[3, 4], ['blue', 'red']],
+        ... codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+        >>> idx1
+        MultiIndex(levels=[0    1
+        1    2
+        dtype: int64, 0    blue
+        1     red
+        dtype: object],
+        codes=   0  1
+        0  0  1
+        1  0  0
+        2  1  1
+        3  1  0)
+        >>> idx2
+        MultiIndex(levels=[0    3
+        1    4
+        dtype: int64, 0    blue
+        1     red
+        dtype: object],
+        codes=   0  1
+        0  0  1
+        1  0  0
+        2  1  1
+        3  1  0)
+        >>> idx1.append(idx2)
+        MultiIndex(levels=[0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64, 0    blue
+        1     red
+        dtype: object],
+        codes=   0  1
+        0  0  1
+        1  0  0
+        2  1  1
+        3  1  0
+        4  2  1
+        5  2  0
+        6  3  1
+        7  3  0)
+        """
+        if isinstance(other, (list, tuple)):
+            to_concat = [self]
+            to_concat.extend(other)
+        else:
+            to_concat = [self, other]
+
+        for obj in to_concat:
+            if not isinstance(obj, MultiIndex):
+                raise TypeError(
+                    f"all objects should be of type "
+                    f"MultiIndex for MultiIndex.append, "
+                    f"found object of type: {type(obj)}"
+                )
+
+        return MultiIndex._concat(to_concat)
+
     def nan_to_num(*args, **kwargs):
         return args[0]
 
@@ -931,12 +1072,3 @@ class MultiIndex(Index):
                 return cudf_func(*args, **kwargs)
         else:
             return NotImplemented
-
-    def _mimic_inplace(self, other, inplace=False):
-        if inplace is True:
-            for in_col, oth_col in zip(
-                self._source_data._columns, other._source_data._columns,
-            ):
-                in_col._mimic_inplace(oth_col, inplace=True)
-        else:
-            return other
