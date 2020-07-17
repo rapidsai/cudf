@@ -43,6 +43,7 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     is_string_dtype,
+    numeric_normalize_types,
 )
 from cudf.utils.utils import OrderedColumnDict
 
@@ -210,6 +211,9 @@ class DataFrame(Frame, Serializable):
             else:
                 self._index = as_index(index)
             if columns is not None:
+                if isinstance(columns, (cudf.Series, cudf.Index)):
+                    columns = columns.to_pandas()
+
                 self._data = ColumnAccessor(
                     OrderedDict.fromkeys(
                         columns,
@@ -220,10 +224,20 @@ class DataFrame(Frame, Serializable):
                 )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
-            if len(arr_interface["descr"]) == 1:
-                new_df = self._from_arrays(data, index=index, columns=columns)
+
+            # descr is an optional field of the _cuda_ary_iface_
+            if "descr" in arr_interface:
+                if len(arr_interface["descr"]) == 1:
+                    new_df = self._from_arrays(
+                        data, index=index, columns=columns
+                    )
+                else:
+                    new_df = self.from_records(
+                        data, index=index, columns=columns
+                    )
             else:
-                new_df = self.from_records(data, index=index, columns=columns)
+                new_df = self._from_arrays(data, index=index, columns=columns)
+
             self._data = new_df._data
             self._index = new_df._index
             self.columns = new_df.columns
@@ -246,6 +260,10 @@ class DataFrame(Frame, Serializable):
                     self._data = new_df._data
                     self._index = new_df._index
                     self.columns = new_df.columns
+                elif len(data) > 0 and isinstance(data[0], cudf.Series):
+                    self._init_from_series_list(
+                        data=data, columns=columns, index=index
+                    )
                 else:
                     self._init_from_list_like(
                         data, index=index, columns=columns
@@ -260,11 +278,110 @@ class DataFrame(Frame, Serializable):
         if dtype:
             self._data = self.astype(dtype)._data
 
+    def _init_from_series_list(self, data, columns, index):
+        if index is None:
+            # When `index` is `None`, the final index of
+            # resulting dataframe will be union of
+            # all Series's names.
+            final_index = as_index(_get_union_of_series_names(data))
+        else:
+            # When an `index` is passed, the final index of
+            # resulting dataframe will be whatever
+            # index passed, but will need
+            # shape validations - explained below
+            data_length = len(data)
+            index_length = len(index)
+            if data_length != index_length:
+                # If the passed `index` length doesn't match
+                # length of Series objects in `data`, we must
+                # check if `data` can be duplicated/expanded
+                # to match the length of index. For that we
+                # check if the length of index is a factor
+                # of length of data.
+                #
+                # 1. If yes, we extend data
+                # until length of data is equal to length of index.
+                # 2. If no, we throw an error stating the
+                # shape of resulting `data` and `index`
+
+                # Simple example
+                # >>> import pandas as pd
+                # >>> s = pd.Series([1, 2, 3])
+                # >>> pd.DataFrame([s], index=['a', 'b'])
+                #    0  1  2
+                # a  1  2  3
+                # b  1  2  3
+                # >>> pd.DataFrame([s], index=['a', 'b', 'c'])
+                #    0  1  2
+                # a  1  2  3
+                # b  1  2  3
+                # c  1  2  3
+                if index_length % data_length == 0:
+                    initial_data = data
+                    data = []
+                    for _ in range(int(index_length / data_length)):
+                        data.extend([o for o in initial_data])
+                else:
+                    raise ValueError(
+                        f"Shape of passed values is "
+                        f"{(data_length, len(data[0]))}, "
+                        f"indices imply {(index_length, len(data[0]))}"
+                    )
+
+            final_index = as_index(index)
+
+        series_lengths = list(map(lambda x: len(x), data))
+        data = numeric_normalize_types(*data)
+        if series_lengths.count(series_lengths[0]) == len(series_lengths):
+            # Calculating the final dataframe columns by
+            # getting union of all `index` of the Series objects.
+            final_columns = _get_union_of_indices([d.index for d in data])
+
+            for idx, series in enumerate(data):
+                if not series.index.is_unique:
+                    raise ValueError(
+                        "Reindexing only valid with uniquely valued Index "
+                        "objects"
+                    )
+                if not series.index.equals(final_columns):
+                    series = series.reindex(final_columns)
+                self._data[idx] = column.as_column(series._column)
+
+            # Setting `final_columns` to self._index so
+            # that the resulting `transpose` will be have
+            # columns set to `final_columns`
+            self._index = final_columns
+
+            transpose = self.T
+        else:
+            concat_df = cudf.concat(data, axis=1)
+
+            if concat_df.columns.dtype == "object":
+                concat_df.columns = concat_df.columns.astype("str")
+
+            transpose = concat_df.T
+
+        transpose._index = final_index
+        self._data = transpose._data
+        self._index = transpose._index
+
+        # If `columns` is passed, the result dataframe
+        # contain a dataframe with only the
+        # specified `columns` in the same order.
+        if columns:
+            for col_name in columns:
+                if col_name not in self._data:
+                    self._data[col_name] = column.column_empty(
+                        row_count=len(self), dtype=None, masked=True
+                    )
+            self._data = self._data.get_by_label(columns)
+
     def _init_from_list_like(self, data, index=None, columns=None):
         if index is None:
             index = RangeIndex(start=0, stop=len(data))
         else:
             index = as_index(index)
+
         self._index = as_index(index)
         data = list(itertools.zip_longest(*data))
 
@@ -2266,7 +2383,11 @@ class DataFrame(Frame, Serializable):
             columns = pd.Index(range(len(self._data.columns)))
         is_multiindex = isinstance(columns, pd.MultiIndex)
 
-        if not isinstance(columns, pd.Index):
+        if isinstance(
+            columns, (cudf.Series, cudf.Index, cudf.core.column.ColumnBase)
+        ):
+            columns = pd.Index(columns.to_array(), tupleize_cols=is_multiindex)
+        elif not isinstance(columns, pd.Index):
             columns = pd.Index(columns, tupleize_cols=is_multiindex)
 
         if not len(columns) == len(self._data.names):
@@ -2568,7 +2689,7 @@ class DataFrame(Frame, Serializable):
         Examples
         --------
         >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
-                                'b': pd.Series(['a', 'b', 'c'])})
+                                'b': cudf.Series(['a', 'b', 'c'])})
         >>> a.take([0, 2, 2])
              a  b
         0  1.0  a
@@ -2798,13 +2919,6 @@ class DataFrame(Frame, Serializable):
         )
 
         return self._mimic_inplace(outdf, inplace=inplace)
-
-    def _mimic_inplace(self, result, inplace=False):
-        if inplace:
-            self._data = result._data
-            self._index = result._index
-        else:
-            return result
 
     def pop(self, item):
         """Return a column and drop it from the DataFrame.
@@ -3077,12 +3191,15 @@ class DataFrame(Frame, Serializable):
         3         4      bird          0          1.0          0.0          0.0
         4         5      fish          2          0.0          0.0          1.0
         """
-        if hasattr(cats, "to_pandas"):
-            cats = cats.to_pandas()
+        if hasattr(cats, "to_arrow"):
+            cats = cats.to_arrow().to_pylist()
         else:
-            cats = pd.Series(cats)
+            cats = pd.Series(cats, dtype="object")
 
-        newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
+        newnames = [
+            prefix_sep.join([prefix, "null" if cat is None else str(cat)])
+            for cat in cats
+        ]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
         outdf = self.copy()
         for name, col in zip(newnames, newcols):
@@ -6326,6 +6443,13 @@ class DataFrame(Frame, Serializable):
         df.columns = self.columns
         return df
 
+    def to_dict(self, orient="dict", into=dict):
+        raise TypeError(
+            "Implicit conversion to a host memory via to_dict() is not "
+            "allowed, To explicitly construct a dictionary object, "
+            "consider using .to_pandas().to_dict()"
+        )
+
     def append(
         self, other, ignore_index=False, verify_integrity=False, sort=False
     ):
@@ -6616,3 +6740,28 @@ def extract_col(df, col):
         ):
             return df.index._data.columns[0]
         return df.index._data[col]
+
+
+def _get_union_of_indices(indexes):
+    if len(indexes) == 1:
+        return indexes[0]
+    else:
+        merged_index = cudf.core.Index._concat(indexes)
+        merged_index = merged_index.drop_duplicates()
+        _, inds = merged_index._values.sort_by_values()
+        return merged_index.take(inds)
+
+
+def _get_union_of_series_names(series_list):
+    names_list = []
+    unnamed_count = 0
+    for idx, series in enumerate(series_list):
+        if series.name is None:
+            names_list.append(f"Unnamed {unnamed_count}")
+            unnamed_count += 1
+        else:
+            names_list.append(series.name)
+    if unnamed_count == len(series_list):
+        names_list = [*range(len(series_list))]
+
+    return names_list
