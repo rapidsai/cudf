@@ -352,7 +352,7 @@ class Index(Frame, Serializable):
         """
         return self._values.any()
 
-    def to_pandas(self):
+    def to_pandas(self, nullable_pd_dtype=False):
         """
         Convert to a Pandas Index.
 
@@ -369,7 +369,7 @@ class Index(Frame, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
-        return pd.Index(self._values.to_pandas(), name=self.name)
+        return pd.Index(self._values.to_pandas(nullable_pd_dtype=False), name=self.name)
 
     def to_arrow(self):
         """
@@ -1419,7 +1419,7 @@ class RangeIndex(Index):
         """
         return self._values.to_gpu_array(fillna=fillna)
 
-    def to_pandas(self):
+    def to_pandas(self, nullable_pd_dtype=False):
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
@@ -1876,9 +1876,9 @@ class DatetimeIndex(GenericIndex):
     def weekday(self):
         return self.get_dt_field("weekday")
 
-    def to_pandas(self):
+    def to_pandas(self, nullable_pd_dtype=False):
         nanos = self._values.astype("datetime64[ns]")
-        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
+        return pd.DatetimeIndex(nanos.to_pandas(nullable_pd_dtype=False), name=self.name)
 
     def get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
@@ -2071,7 +2071,7 @@ class StringIndex(GenericIndex):
         out._initialize(values, **kwargs)
         return out
 
-    def to_pandas(self):
+    def to_pandas(self, nullable_pd_dtype=False):
         return pd.Index(self.to_array(), name=self.name, dtype="object")
 
     def take(self, indices):

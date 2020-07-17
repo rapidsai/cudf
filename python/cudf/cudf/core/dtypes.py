@@ -45,7 +45,7 @@ class CategoricalDtype(ExtensionDtype):
             categories=dtype.categories, ordered=dtype.ordered
         )
 
-    def to_pandas(self):
+    def to_pandas(self, nullable_pd_dtype=False):
         if self.categories is None:
             categories = None
         else:

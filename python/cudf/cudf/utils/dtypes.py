@@ -408,9 +408,3 @@ def is_mixed_with_object_dtype(lhs, rhs):
     return (lhs.dtype == "object" and rhs.dtype != "object") or (
         rhs.dtype == "object" and lhs.dtype != "object"
     )
-
-def pd_dtype_from_cudf_dtype(dtype, has_nulls=False):
-    if has_nulls == False:
-        return dtype
-    else:
-        return cudf_dtypes_to_pandas_dtypes.get(dtype, dtype)

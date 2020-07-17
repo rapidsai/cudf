@@ -1008,18 +1008,7 @@ class Series(Frame, Serializable):
             output = preprocess.to_pandas().__repr__()
 
         lines = output.split("\n")
-        if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
-            for idx, value in enumerate(preprocess):
-                if value is None:
-                    lines[idx] = lines[idx].replace(" NaN", "null")
-        if is_datetime_dtype(preprocess.dtype):
-            for idx, value in enumerate(preprocess):
-                if value is None:
-                    lines[idx] = lines[idx].replace(" NaT", "null")
-        if preprocess.dtype == np.dtype("object"):
-            for idx, value in enumerate(preprocess):
-                if value is None:
-                    lines[idx] = lines[idx].replace("<NA>", "null")
+
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             category_memory = lines[-1]
             lines = lines[:-1]
@@ -1037,14 +1026,10 @@ class Series(Frame, Serializable):
             else:
                 lines = lines[:-1]
                 lines[-1] = lines[-1] + "\n"
-            lines[-1] = lines[-1] + "dtype: %s" % (
-                self.dtype if self.dtype != np.dtype("object") else "string"
-            )
+            lines[-1] = lines[-1] + "dtype: %s" % self.dtype
         else:
             lines = output.split(",")
-            return lines[0] + ", dtype: %s)" % (
-                self.dtype if self.dtype != np.dtype("object") else "string"
-            )
+            return lines[0] + ", dtype: %s)" % self.dtype
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             lines.append(category_memory)
         return "\n".join(lines)
@@ -1892,7 +1877,7 @@ class Series(Frame, Serializable):
         """
         return self._column.to_gpu_array(fillna=fillna)
 
-    def to_pandas(self, index=True):
+    def to_pandas(self, index=True, nullable_pd_dtype=True):
         """
         Convert to a Pandas Series.
 
@@ -1919,7 +1904,7 @@ class Series(Frame, Serializable):
         """
         if index is True:
             index = self.index.to_pandas()
-        s = self._column.to_pandas(index=index)
+        s = self._column.to_pandas(index=index, nullable_pd_dtype=nullable_pd_dtype)
         s.name = self.name
         return s
 
