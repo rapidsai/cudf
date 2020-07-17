@@ -77,25 +77,24 @@ struct format_compiler {
   std::string format;
   rmm::device_uvector<format_item> d_items;
 
-  std::map<char, int8_t> specifier_lengths = {{'d', -1},
-                                              {'+', -1},  // only for negative days
-                                              {'H', 2},
-                                              {'M', 2},
-                                              {'S', 2},
-                                              {'u', -1},   // 0 or 6+1(dot)
-                                              {'f', -1}};  // 0 or <=9+1(dot) without trialing zeros
-
+  std::map<char, int8_t> specifier_lengths = {
+    {'-', -1},  // '-' if negative
+    // TODO {'D', -1},  // 1 to 11 (not in std::format)
+    {'H', 2},   // HH
+    {'I', 2},   // HH
+    {'M', 2},   // MM
+    {'S', -1},  // 2 to 13 SS[.mmm][uuu][nnn] (uuu,nnn are not in std::format)
+    {'p', 2},   // AM/PM
+    {'R', 5},   // 5 HH:MM
+    {'T', 8},   // 8 HH:MM:SS"
+    {'r', 11}   // HH:MM:SS AM/PM
+  };
   format_compiler(const char* format_, cudaStream_t stream) : format(format_), d_items(0, stream)
   {
     std::vector<format_item> items;
-    const char* str         = format.c_str();
-    auto length             = format.length();
-    const bool is_isoformat = str[0] == 'P';
-    if (is_isoformat) {
-      specifier_lengths['H'] = -1;
-      specifier_lengths['M'] = -1;
-      specifier_lengths['S'] = -1;
-    }
+    const char* str = format.c_str();
+    auto length     = format.length();
+    bool negative_sign{true};
     while (length > 0) {
       char ch = *str++;
       length--;
@@ -112,14 +111,25 @@ struct format_compiler {
         items.push_back(format_item::new_delimiter(ch));
         continue;
       }
-      if (ch >= '0' && ch <= '9') {
-        CUDF_EXPECTS(*str == 'f', "precision not supported for specifier: " + std::string(1, *str));
-        specifier_lengths[*str] = static_cast<int8_t>(ch - '0') + 1;  // +1 is for dot
-        ch                      = *str++;
+      if (ch == 'O') {
+        CUDF_EXPECTS(*str == 'H' || *str == 'M' || *str == 'S',
+                     "locale's alternative representation not supported for specifier: " +
+                       std::string(1, *str));
+        ch = *str++;
         length--;
+        items.push_back(format_item::new_specifier(ch, 2));  // without sign
+        continue;
       }
       CUDF_EXPECTS(specifier_lengths.find(ch) != specifier_lengths.end(),
                    "invalid format specifier: " + std::string(1, ch));
+
+      // negative sign should be present only once.
+      if (negative_sign) {
+        if (std::string("HIMSRT").find_first_of(ch) != std::string::npos) {
+          items.push_back(format_item::new_specifier('-', specifier_lengths['-']));
+          negative_sign = false;
+        }
+      }
 
       int8_t spec_length = specifier_lengths[ch];
       items.push_back(format_item::new_specifier(ch, spec_length));
@@ -203,21 +213,15 @@ struct duration_to_string_size_fn {
   __device__ int8_t format_length(char format_char, int32_t const* const timeparts) const
   {
     switch (format_char) {
-      case 'd': return count_digits(timeparts[DU_DAY]); break;
-      case '+': return timeparts[DU_DAY] < 0 ? 1 : 0; break;
-      case 'H': return count_digits(timeparts[DU_HOUR]); break;
-      case 'M': return count_digits(timeparts[DU_MINUTE]); break;
-      case 'S': return count_digits(timeparts[DU_SECOND]); break;
-      // 0 or 6 digits for pandas, include dot only if non-zero.
-      case 'u': return (timeparts[DU_SUBSECOND] == 0) ? 0 : 6 + 1; break;
-      // 0 or ns without trailing zeros
-      case 'f':
-        return (timeparts[DU_SUBSECOND] == 0) ? 0 : [units = type] {
-          if (units == type_id::DURATION_MILLISECONDS) return 3 + 1;  // +1 is for dot
-          if (units == type_id::DURATION_MICROSECONDS) return 6 + 1;  // +1 is for dot
-          if (units == type_id::DURATION_NANOSECONDS) return 9 + 1;   // +1 is for dot
+      case '-': return timeparts[DU_DAY]<0? 1: 0; break; // TODO FIXME
+      case 'D': return count_digits(timeparts[DU_DAY]); break;
+      case 'S':
+        return 2 + (timeparts[DU_SUBSECOND] == 0) ? 0 : [] {
+          if (simt::std::is_same_v<T, duration_ms>) return 3 + 1;  // +1 is for dot
+          if (simt::std::is_same_v<T, duration_us>) return 6 + 1;  // +1 is for dot
+          if (simt::std::is_same_v<T, duration_ns>) return 9 + 1;  // +1 is for dot
           return 0;
-        }() - count_trailing_zeros(timeparts[DU_SUBSECOND]);  // 3/6/9-trailing_zeros.
+        }();
         break;
       default: return 2;
     }
@@ -594,7 +598,6 @@ struct dispatch_to_durations_fn {
 
 }  // namespace
 
-// TODO skip days if non-zero days for non-ISO format.
 std::unique_ptr<column> from_durations(column_view const& durations,
                                        std::string const& format,
                                        cudaStream_t stream,
