@@ -123,6 +123,7 @@
 - PR #5684 Use `pickle5` in `Serializable` (when available)
 - PR #5708 Add support for `dummy_na` in `get_dummies`
 - PR #5709 Update java build to help cu-spacial with java bindings
+- PR #5713 Remove old NVTX utilities
 
 ## Bug Fixes
 
