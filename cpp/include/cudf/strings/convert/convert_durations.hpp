@@ -29,17 +29,14 @@ namespace strings {
  * @brief Returns a new duration column converting a strings column into
  * durations using the provided format pattern.
  *
- * The format pattern can include the following specifiers: "%d,%+,%H,%M,%S,%u,%f"
+ * The format pattern can include the following specifiers: "%D,%H,%M,%S"
  *
  * | Specifier | Description | Range |
  * | :-------: | ----------- | ---------------- |
- * | %%d | Days | -2,147,483,648 to 2,147,483,647 |
- * | %%+ | Optional '+' sign for hours in case of negative days | `+`  |
+ * | %%D | Days | -2,147,483,648 to 2,147,483,647 |
  * | %%H | 24-hour of the day | 00 to 23 |
  * | %%M | Minute of the hour | 00 to 59 |
- * | %%S | Second of the minute | 00 to 59 |
- * | %%u | 6-digit microsecond | 000000 to 999999 |
- * | %%f | 9-digit nanosecond | 000000000 to 999999999 |
+ * | %%S | Second of the minute | 00 to 59.999999999 |
  *
  * Other specifiers are not currently supported.
  *
@@ -76,16 +73,13 @@ std::unique_ptr<column> to_durations(
  *
  * | Specifier | Description | Range |
  * | :-------: | ----------- | ---------------- |
- * | %%d | Days | -2,147,483,648 to 2,147,483,647 |
- * | %%+ | Optional '+' sign for hours in case of negative days | `+`  |
+ * | %%D | Days | -2,147,483,648 to 2,147,483,647 |
  * | %%H | 24-hour of the day | 00 to 23 |
  * | %%M | Minute of the hour | 00 to 59 |
- * | %%S | Second of the minute | 00 to 59 |
- * | %%u | 6-digit microsecond | 000000 to 999999 |
- * | %%f | 9-digit nanosecond | 000000000 to 999999999 |
+ * | %%S | Second of the minute | 00 to 59.999999999 |
  *
  * Any format string starting with letter 'P' is considered iso format.
- * For Example: "P%dD%HH%MM%S%fS"
+ * For Example: "P%dD%HH%MM%SS"
  * https://en.wikipedia.org/wiki/ISO_8601#Durations
  * For ISO format, the leading zeros are not present for all specifiers and
  * trailing zeros are not present for "%f" specifier.
@@ -114,7 +108,7 @@ std::unique_ptr<column> to_durations(
  */
 std::unique_ptr<column> from_durations(
   column_view const& durations,
-  std::string const& format           = "%d days %+%H:%M:%S",
+  std::string const& format           = "%D days %H:%M:%S",
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of doxygen group
