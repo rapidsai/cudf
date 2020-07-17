@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 import numpy as np
 import pandas as pd
 
@@ -11,10 +10,7 @@ from cudf.core.column import (
     build_categorical_column,
 )
 from cudf.utils import cudautils
-from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_list_like,
-)
+from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -403,7 +399,7 @@ def get_dummies(
     dtype : str, optional
         output dtype, default 'uint8'
 
-    Exmaples
+    Examples
     --------
     >>> import cudf
     >>> df = cudf.DataFrame({"a": ["value1", "value2", None], "b": [0, 0, 0]})
