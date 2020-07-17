@@ -139,7 +139,7 @@ struct typed_binop_dispatch {
       resolve_input_data_reference<Element>(rhs, table, thread_intermediate_storage, row_index);
     auto typed_output =
       resolve_output_data_reference<Element>(output, table, thread_intermediate_storage, row_index);
-    *typed_output = ast_operator_dispatcher_numeric(op, do_binop<Element>{}, typed_lhs, typed_rhs);
+    *typed_output = ast_operator_dispatcher_typed(op, do_binop<Element>{}, typed_lhs, typed_rhs);
     /*
     if (row_index == 0) {
       printf("lhs index %i = %f, rhs index %i = %f, output index %i = %f\n",

@@ -21,6 +21,7 @@
 #include <cudf/utilities/error.hpp>
 #include <functional>
 #include <iterator>
+#include "cudf/ast/operators.hpp"
 
 namespace cudf {
 
@@ -118,17 +119,17 @@ cudf::size_type linearizer::visit(operator_expression const& expr)
       }
     });
   // Resolve node type
-  auto data_type = operand_types.at(0);
-  /* TODO: Need to fix. Can't support comparators yet.
   auto data_type = [&] {
-    const ast_operator oper = op;
-    if (cudf::ast::is_arithmetic_operator<oper>()) {
+    if (cudf::ast::is_arithmetic_operator(op)) {
       return operand_types.at(0);
-    } else {
-      return cudf::data_type(cudf::type_id::EMPTY);
+    } else if (cudf::ast::is_comparator(op)) {
+      return cudf::data_type(cudf::type_id::BOOL8);
+    } else if (cudf::ast::is_logical_operator(op)) {
+      return cudf::data_type(cudf::type_id::BOOL8);
     }
+    CUDF_FAIL("An invalid AST operator was provided.");
+    return cudf::data_type(cudf::type_id::EMPTY);
   }();
-  */
   // Push operator
   this->operators.push_back(op);
   // Push data reference
@@ -141,7 +142,7 @@ cudf::size_type linearizer::visit(operator_expression const& expr)
                                        operand_data_reference_indices.cend());
   this->operator_source_indices.push_back(index);
   return index;
-}
+}  // namespace ast
 
 cudf::data_type linearizer::get_root_data_type() const
 {

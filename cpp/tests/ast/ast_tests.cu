@@ -70,7 +70,7 @@ TEST_F(ASTTest, BasicASTEvaluation)
   auto expression_add =
     cudf::ast::binary_expression(cudf::ast::ast_operator::ADD, col_ref_a_0, col_ref_a_1);
   // auto expression_less =
-  //   cudf::ast::binary_expression(cudf::ast::ast_operator::LESS, col_ref_a_0, col_ref_a_1);
+  // cudf::ast::binary_expression(cudf::ast::ast_operator::LESS, col_ref_a_0, col_ref_a_1);
 
   auto expression_tree_1_1 =
     cudf::ast::binary_expression(cudf::ast::ast_operator::ADD, col_ref_a_0, col_ref_a_1);
