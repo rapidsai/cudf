@@ -52,8 +52,6 @@ TEST_F(StringsDurationsTest, FromToDurations)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::print(*results);
-  cudf::test::print(expected);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   //
@@ -191,8 +189,6 @@ TEST_F(StringsDurationsTest, DurationSeconds)
   auto new_durations = cudf::strings::to_durations(cudf::strings_column_view(expected),
                                                    cudf::data_type(cudf::type_to_id<T>()),
                                                    "%D days %H:%M:%S");
-  cudf::test::print(*new_durations);
-  cudf::test::print(durations);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations, durations);
 }
 

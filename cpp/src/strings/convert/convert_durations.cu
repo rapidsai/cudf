@@ -484,7 +484,7 @@ struct parse_duration {
       }
       value = (value * 10) + static_cast<int32_t>(chr - '0');
     }
-    actual_length = ptr - str;
+    actual_length += (ptr - str);
     return (*str == '-') ? -value : value;
   }
 
@@ -505,11 +505,12 @@ struct parse_duration {
       }
       value = (value * 10) + static_cast<int32_t>(chr - '0');
     }
-    actual_length = ptr - str;
+    auto parsed_length = ptr - str;
     // trailing zeros
     constexpr int64_t powers_of_ten[] = {
       1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
-    if (actual_length < fixed_width) value *= powers_of_ten[fixed_width - actual_length];
+    if (parsed_length < fixed_width) value *= powers_of_ten[fixed_width - parsed_length];
+    actual_length += parsed_length;
     return value;
   }
 
@@ -519,6 +520,7 @@ struct parse_duration {
   {
     auto ptr    = d_string.data();
     auto length = d_string.size_bytes();
+    int8_t hour_shift{0};
     for (size_t idx = 0; idx < items_count; ++idx) {
       auto item = d_format_items[idx];
       if (length < item.length) return 1;
@@ -536,24 +538,33 @@ struct parse_duration {
       switch (item.value) {
         case 'D': timeparts[DU_DAY] = str2int(ptr, 11, item_length); break;
         case '-': break;  // skip
-        case 'H': timeparts[DU_HOUR] = str2int(ptr, 2, item_length); break;
-        case 'I': timeparts[DU_MINUTE] = str2int(ptr, 2, item_length); break;
+        case 'H': timeparts[DU_HOUR] = str2int(ptr, 2, item_length); hour_shift=0; break;
+        case 'I': timeparts[DU_MINUTE] = str2int(ptr, 2, item_length); hour_shift=12; break;
         case 'M': timeparts[DU_MINUTE] = str2int(ptr, 2, item_length); break;
         case 'S':
           timeparts[DU_SECOND] = str2int(ptr, 2, item_length);
-          ptr += item_length;     // TODO FIXME
-          length -= item_length;  // TODO FIXME
-          item_length = 0;        // TODO FIXME
-          if (*ptr == '.') {
-            auto subsecond_precision = (item.length == -1) ? 9 : item.length - 1;  // +1 is for dot
-            auto subsecond = str2int_fixed(ptr + 1, subsecond_precision, length - 1, item_length);
-            constexpr int64_t powers_of_ten[] = {
-              1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
-            int64_t nanoseconds =
-              subsecond * powers_of_ten[9 - subsecond_precision];  // normalize to nanoseconds
-            timeparts[DU_SUBSECOND] = nanoseconds;
+          if (*(ptr+item_length) == '.') {
             item_length++;
+            int64_t nanoseconds      = str2int_fixed(
+              ptr + item_length, 9, length - item_length, item_length);  // normalize to nanoseconds
+            timeparts[DU_SUBSECOND] = nanoseconds;
           }
+          break;
+        case 'p':
+          if (*ptr == 'P' && *(ptr + 1) == 'M') hour_shift = 12;
+          item_length = 2;
+          break;
+        case 'R':
+          timeparts[DU_HOUR] = str2int(ptr, 2, item_length); hour_shift=0;
+          item_length++;
+          timeparts[DU_MINUTE] = str2int(ptr+item_length, 2, item_length);
+          break;
+        case 'T':
+          timeparts[DU_HOUR] = str2int(ptr, 2, item_length); hour_shift=0;
+          item_length++;
+          timeparts[DU_MINUTE] = str2int(ptr+item_length, 2, item_length);
+          item_length++;
+          timeparts[DU_SECOND] = str2int(ptr, 2, item_length);
           break;
         default: return 3;
       }
@@ -570,7 +581,9 @@ struct parse_duration {
       timeparts[DU_MINUTE]    = negate(timeparts[DU_MINUTE], timeparts[DU_NEGATIVE]);
       timeparts[DU_SECOND]    = negate(timeparts[DU_SECOND], timeparts[DU_NEGATIVE]);
       timeparts[DU_SUBSECOND] = negate(timeparts[DU_SUBSECOND], timeparts[DU_NEGATIVE]);
+      hour_shift = -hour_shift;
     }
+    timeparts[DU_HOUR] += hour_shift;
     return 0;
   }
 
