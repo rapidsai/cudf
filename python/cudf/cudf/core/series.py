@@ -2239,12 +2239,21 @@ class Series(Frame, Serializable):
             A sequence of new series for each category. Its length is
             determined by the length of ``cats``.
         """
-        if hasattr(cats, "to_pandas"):
+        if hasattr(cats, "to_arrow"):
             cats = cats.to_pandas()
         else:
-            cats = pd.Series(cats)
+            cats = pd.Series(cats, dtype="object")
         dtype = np.dtype(dtype)
-        return ((self == cat).fillna(False).astype(dtype) for cat in cats)
+
+        def encode(cat):
+            if cat is None:
+                return self.isnull()
+            elif np.issubdtype(type(cat), np.floating) and np.isnan(cat):
+                return self.__class__(libcudf.unary.is_nan(self._column))
+            else:
+                return (self == cat).fillna(False)
+
+        return [encode(cat).astype(dtype) for cat in cats]
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding
