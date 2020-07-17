@@ -4353,17 +4353,17 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     Parameters
     ----------
-        a : list-like, array-like or cudf.Series
-            Input sequence to compare.
-        b : list-like, array-like or cudf.Series
-            Input sequence to compare.
-        rtol : float
-            The relative tolerance.
-        atol : float
-            The absolute tolerance.
-        equal_nan : bool
-            If ``True``, null's in ``a`` will be considered equal
-            to null's in ``b``.
+    a : list-like, array-like or cudf.Series
+        Input sequence to compare.
+    b : list-like, array-like or cudf.Series
+        Input sequence to compare.
+    rtol : float
+        The relative tolerance.
+    atol : float
+        The absolute tolerance.
+    equal_nan : bool
+        If ``True``, null's in ``a`` will be considered equal
+        to null's in ``b``.
 
     Returns
     -------
@@ -4371,8 +4371,8 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     See Also
     --------
-        np.isclose : Returns a boolean array where two arrays are element-wise
-            equal within a tolerance.
+    np.isclose : Returns a boolean array where two arrays are element-wise
+        equal within a tolerance.
 
     Examples
     --------

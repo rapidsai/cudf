@@ -6691,6 +6691,11 @@ def from_pandas(obj, nan_as_null=None):
 
     Supports DataFrame, Series, Index, or MultiIndex.
 
+    Returns
+    -------
+    DataFrame/Series/Index/MultiIndex
+        Return type depends on the passed input.
+
     Raises
     ------
     TypeError for invalid input type.
@@ -6701,8 +6706,90 @@ def from_pandas(obj, nan_as_null=None):
     >>> import pandas as pd
     >>> data = [[0, 1], [1, 2], [3, 4]]
     >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
-    >>> cudf.from_pandas(pdf)
-    <cudf.DataFrame ncols=2 nrows=3 >
+    >>> pdf
+       a  b
+    0  0  1
+    1  1  2
+    2  3  4
+    >>> gdf = cudf.from_pandas(pdf)
+    >>> gdf
+       a  b
+    0  0  1
+    1  1  2
+    2  3  4
+    >>> type(gdf)
+    <class 'cudf.core.dataframe.DataFrame'>
+    >>> type(pdf)
+    <class 'pandas.core.frame.DataFrame'>
+
+    Converting a Pandas Series to cuDF Series:
+
+    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple')
+    >>> psr
+    0    a
+    1    b
+    2    c
+    3    d
+    Name: apple, dtype: object
+    >>> gsr = cudf.from_pandas(psr)
+    >>> gsr
+    0    a
+    1    b
+    2    c
+    3    d
+    Name: apple, dtype: object
+    >>> type(gsr)
+    <class 'cudf.core.series.Series'>
+    >>> type(psr)
+    <class 'pandas.core.series.Series'>
+
+    Converting a Pandas Index to cuDF Index:
+
+    >>> pidx = pd.Index([1, 2, 10, 20])
+    >>> pidx
+    Int64Index([1, 2, 10, 20], dtype='int64')
+    >>> gidx = cudf.from_pandas(pidx)
+    >>> gidx
+    Int64Index([1, 2, 10, 20], dtype='int64')
+    >>> type(gidx)
+    <class 'cudf.core.index.Int64Index'>
+    >>> type(pidx)
+    <class 'pandas.core.indexes.numeric.Int64Index'>
+
+    Converting a Pandas MultiIndex to cuDF MultiIndex:
+
+    >>> pmidx = pd.MultiIndex(
+    ...         levels=[[1, 3, 4, 5], [1, 2, 5]],
+    ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+    ...         names=["x", "y"],
+    ...     )
+    >>> pmidx
+    MultiIndex([(1, 1),
+                (1, 5),
+                (3, 2),
+                (4, 2),
+                (5, 1)],
+            names=['x', 'y'])
+    >>> gmidx = cudf.from_pandas(pmidx)
+    >>> gmidx
+    MultiIndex(levels=[0    1
+    1    3
+    2    4
+    3    5
+    dtype: int64, 0    1
+    1    2
+    2    5
+    dtype: int64],
+    codes=   x  y
+    0  0  0
+    1  0  2
+    2  1  1
+    3  2  1
+    4  3  0)
+    >>> type(gmidx)
+    <class 'cudf.core.multiindex.MultiIndex'>
+    >>> type(pmidx)
+    <class 'pandas.core.indexes.multi.MultiIndex'>
     """
     if isinstance(obj, pd.DataFrame):
         return DataFrame.from_pandas(obj, nan_as_null=nan_as_null)

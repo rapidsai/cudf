@@ -35,7 +35,14 @@ Strings
 General Functions
 -----------------
 .. currentmodule:: cudf.core.reshape
+
 .. autofunction:: cudf.concat
+.. autofunction:: cudf.from_pandas
+.. autofunction:: cudf.get_dummies
+.. autofunction:: cudf.isclose
+.. autofunction:: cudf.melt
+.. autofunction:: cudf.merge_sorted
+.. autofunction:: cudf.to_datetime
 
 
 Index
