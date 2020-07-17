@@ -219,7 +219,10 @@ def test_dataframe_join_combine_cats():
     expect.index = expect.index.astype("category")
     got = lhs.join(rhs, how="outer")
 
-    assert_eq(sorted(expect.index), sorted(got.index))
+    # TODO: Remove copying to host
+    # after https://github.com/rapidsai/cudf/issues/5676
+    # is implemented
+    assert_eq(expect.index.sort_values(), got.index.to_pandas().sort_values())
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
