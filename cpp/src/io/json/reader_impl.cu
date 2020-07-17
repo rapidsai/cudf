@@ -72,11 +72,11 @@ constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept
 }  // anonymous namespace
 
 /**
- * @brief Aggregate the table containing keys info by their hashes.
+ * @brief Aggregate the table containing keys info by their hash values.
  *
  * @param[in] info Table with columns containing key offsets, lengths and hashes, respectively
  *
- * @returns std::unique_ptr<table> Table with data aggregated by hashes
+ * @return Table with data aggregated by key hash values
  */
 std::unique_ptr<table> aggregate_keys_info(std::unique_ptr<table> info)
 {
@@ -640,7 +640,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
  * @param[in] range_size Bytes to read; use `0` for all remaining data
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
- * @return Unique pointer to the table data
+ * @return Table and its metadata
  */
 table_with_metadata reader::impl::read(size_t range_offset, size_t range_size, cudaStream_t stream)
 {

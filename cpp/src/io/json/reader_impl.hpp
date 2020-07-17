@@ -115,7 +115,7 @@ class reader::impl {
   /**
    * @brief Extract the JSON objects keys from the input file with object rows.
    *
-   * @return TODO
+   * @return Array of keys and a map that maps their hash values to column indices
    */
   std::pair<std::vector<std::string>, col_map_ptr_type> get_json_object_keys_hashes(
     cudaStream_t stream);
@@ -124,7 +124,6 @@ class reader::impl {
    * @brief Decompress the input data, if needed
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
-   *
    */
   void decompress_input();
 
@@ -134,7 +133,6 @@ class reader::impl {
    * Does not upload the entire file to the GPU
    *
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
-   *
    */
   void set_record_starts(cudaStream_t stream);
 
@@ -144,7 +142,6 @@ class reader::impl {
    * Sets the d_data_ data member.
    * Only rows that need to be parsed are copied, based on the byte range
    * Also updates the array of record starts to match the device data offset.
-   *
    */
   void upload_data_to_device();
 
@@ -154,7 +151,6 @@ class reader::impl {
    * Sets the column_names_ data member
    *
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
-   *
    */
   void set_column_names(cudaStream_t stream);
 
@@ -164,7 +160,6 @@ class reader::impl {
    * If user does not pass the data types, deduces types from the file content
    *
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
-   *
    */
   void set_data_types(cudaStream_t stream);
 
@@ -173,7 +168,7 @@ class reader::impl {
    *
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
-   * @return table_with_metadata struct
+   * @return Table and its metadata
    */
   table_with_metadata convert_data_to_table(cudaStream_t stream);
 
@@ -193,7 +188,7 @@ class reader::impl {
    * @param[in] range_size Bytes to read; use `0` for all remaining data
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
-   * @return Unique pointer to the table data
+   * @return Table and its metadata
    */
   table_with_metadata read(size_t range_offset, size_t range_size, cudaStream_t stream);
 };

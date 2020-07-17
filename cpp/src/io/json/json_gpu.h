@@ -43,7 +43,6 @@ using col_map_type = concurrent_unordered_map<uint32_t, cudf::size_type>;
  * @param[in] opts A set of parsing options
  * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- *
  */
 void convert_json_to_columns(rmm::device_buffer const &input_data,
                              data_type *const dtypes,
@@ -69,7 +68,6 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
  * @param[in] rec_starts The offset of each row in the input
  * @param[in] num_records The number of rows
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- *
  */
 void detect_data_types(ColumnInfo *column_infos,
                        const char *data,
@@ -92,8 +90,6 @@ void detect_data_types(ColumnInfo *column_infos,
  * @param[out] keys_cnt Number of found keys in the file
  * @param[out] keys_info Information (offset, length, hash) for each found key
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- *
- * @returns void
  */
 void collect_keys_info(const char *data,
                        size_t data_size,

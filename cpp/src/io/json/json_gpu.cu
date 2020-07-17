@@ -67,15 +67,13 @@ __device__ std::pair<char const *, char const *> limit_range_to_brackets(char co
 }
 
 /**
- * @brief Computes the JSON object key hash and moves the start offset past the key.
+ * @brief Find the next JSON object key and returns its range in the input data.
  *
- * @param[in] data Pointer to the device buffer containing the data to process
- * @param[in] quotechar TODO
- * @param[in,out] start Offset of the first character in the range. The offset is updated to the
- * first character after the key.
- * @param[in] stop Offset of the first character after the range
+ * @param[in] begin Pointer to the first character in the parsing range
+ * @param[in] end pointer to the first character after the parsing range
+ * @param[in] quotechar The character used to denote quotes
  *
- * @return uint32_t Hash value of the key; zero if parsing failed
+ * @return Begin and end iterators of the key name
  */
 __device__ std::pair<char const *, char const *> parse_next_key(const char *begin,
                                                                 const char *end,
@@ -350,14 +348,13 @@ struct ConvertFunctor {
 __inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == ' '; }
 
 /**
- * @brief Scans a character stream within a range, and adjusts the start and end
- * indices of the range to ignore whitespace and quotation characters.
+ * @brief Adjusts the range to ignore starting/trailing whitespace and quotation characters.
  *
- * @param[in] start TODO
- * @param[in] end TODO
- * @param[in] quotechar The character used to denote quotes
+ * @param[in] begin Pointer to the first character in the parsing range
+ * @param[in] end pointer to the first character after the parsing range
+ * @param[in] quotechar The character used to denote quotes; '\0' if none
  *
- * @return std::pair<char const *, char const *>
+ * @return Trimmed range
  */
 __inline__ __device__ std::pair<char const *, char const *> trim_whitespaces_quotes(
   char const *begin, char const *end, char quotechar = '\0')
