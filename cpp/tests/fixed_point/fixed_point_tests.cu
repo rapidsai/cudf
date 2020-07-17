@@ -559,27 +559,27 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointSortedOrderGather)
   cudf::test::expect_tables_equal(sorted_table, sorted->view());
 }
 
-TEST_F(FixedPointTest, FixedPointBinaryOpAdd)
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd)
 {
-  // using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
   auto const sz = std::size_t{1000};
 
-  auto vec1       = std::vector<decimal32>(sz);
-  auto const vec2 = std::vector<decimal32>(sz, decimal32{1, scale_type{-1}});
-  auto expected   = std::vector<decimal32>(sz);
+  auto vec1       = std::vector<decimalXX>(sz);
+  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{1, scale_type{-1}});
+  auto expected   = std::vector<decimalXX>(sz);
 
-  std::iota(std::begin(vec1), std::end(vec1), decimal32{});
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{});
 
   std::transform(std::cbegin(vec1),
                  std::cend(vec1),
                  std::cbegin(vec2),
                  std::begin(expected),
-                 std::plus<decimal32>());
+                 std::plus<decimalXX>());
 
-  auto const lhs          = wrapper<decimal32>(vec1.begin(), vec1.end());
-  auto const rhs          = wrapper<decimal32>(vec2.begin(), vec2.end());
-  auto const expected_col = wrapper<decimal32>(expected.begin(), expected.end());
+  auto const lhs          = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const rhs          = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected_col = wrapper<decimalXX>(expected.begin(), expected.end());
 
   auto const result = cudf::binary_operation(
     lhs, rhs, cudf::binary_operator::ADD, static_cast<cudf::column_view>(lhs).type());
