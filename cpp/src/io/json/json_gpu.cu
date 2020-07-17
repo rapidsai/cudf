@@ -464,6 +464,14 @@ __device__ field_descriptor next_field_descriptor(const char *begin,
   return {desc_pre_trim.column, trimmed_value_range.first, trimmed_value_range.second};
 }
 
+__device__ std::pair<char const *, char const *> get_row_data_range(
+  char const *data, size_t data_size, uint64_t const *row_starts, size_type num_rows, size_type row)
+{
+  auto const row_begin = data + row_starts[row];
+  auto const row_end   = data + ((row < num_rows - 1) ? row_starts[row + 1] : data_size);
+  return limit_range_to_brackets(row_begin, row_end);
+}
+
 /**
  * @brief CUDA kernel that parses and converts plain text data into cuDF column data.
  *
@@ -497,11 +505,7 @@ __global__ void convert_data_to_columns_kernel(const char *data,
   const auto rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
 
-  auto const row_data_range = [&]() {
-    auto const row_begin = data + rec_starts[rec_id];
-    auto const row_end   = data + ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
-    return limit_range_to_brackets(row_begin, row_end);
-  }();
+  auto const row_data_range = get_row_data_range(data, data_size, rec_starts, num_records, rec_id);
 
   auto current = row_data_range.first;
   for (int input_field_index = 0;
@@ -555,12 +559,12 @@ __global__ void convert_data_to_columns_kernel(const char *data,
  * @param[in] data Input data buffer
  * @param[in] data_size Size of the data buffer, in bytes
  * @param[in] opts A set of parsing options
- * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory
+ * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory.
+ * nullptr is passed when the input file does not consist of objects.
  * @param[in] num_columns The number of columns of input data
  * @param[in] rec_starts The offset of each row in the input
  * @param[in] num_records The number of rows
  * @param[out] column_infos The count for each column data type
- *
  */
 __global__ void detect_data_types_kernel(const char *data,
                                          size_t data_size,
@@ -575,11 +579,7 @@ __global__ void detect_data_types_kernel(const char *data,
   if (rec_id >= num_records) return;
 
   auto const are_rows_objects = col_map != nullptr;
-  auto const row_data_range   = [&]() {
-    auto const row_begin = data + rec_starts[rec_id];
-    auto const row_end   = data + ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
-    return limit_range_to_brackets(row_begin, row_end);
-  }();
+  auto const row_data_range = get_row_data_range(data, data_size, rec_starts, num_records, rec_id);
 
   int input_field_index = 0;
   for (auto current = row_data_range.first;
@@ -682,6 +682,34 @@ __global__ void detect_data_types_kernel(const char *data,
 }
 
 /**
+ * @brief Input data range filled by a field in key:value format.
+ */
+struct key_value_range {
+  char const *key_begin;
+  char const *key_end;
+  char const *value_begin;
+  char const *value_end;
+};
+
+/**
+ * @brief Parse the next field in key:value format and return ranges of its parts.
+ */
+__device__ key_value_range get_next_key_value_range(char const *begin,
+                                                    char const *end,
+                                                    ParseOptions const &opts)
+{
+  auto const key_range = parse_next_key(begin, end, opts.quotechar);
+
+  // Colon between the key and the value
+  auto const colon = thrust::find(thrust::seq, key_range.second, end, ':');
+  if (colon == end) return {end, end, end};
+
+  // Field value (including delimiters)
+  auto const value_end = cudf::io::gpu::seek_field_end(colon + 1, end, opts);
+  return {key_range.first, key_range.second, colon + 1, value_end};
+}
+
+/**
  * @brief Cuda kernel that collects information about JSON object keys in the file.
  *
  * @param[in] data Input data buffer
@@ -690,7 +718,7 @@ __global__ void detect_data_types_kernel(const char *data,
  * @param[in] rec_starts The offset of each row in the input
  * @param[in] num_records The number of rows
  * @param[out] keys_cnt Number of found keys in the file
- * @param[out] keys_info Information (offset, length, hash) for each found key
+ * @param[out] keys_info Information (offset, length, hash) for each found key (optional)
  *
  */
 __global__ void collect_keys_info_kernel(const char *data,
@@ -704,27 +732,22 @@ __global__ void collect_keys_info_kernel(const char *data,
   auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
 
-  auto const begin = data + rec_starts[rec_id];
-  // has the same semantics as end() in STL containers (one past last element)
-  auto const end = data + ((rec_id < num_records - 1) ? rec_starts[rec_id + 1] : data_size);
+  auto const row_data_range = get_row_data_range(data, data_size, rec_starts, num_records, rec_id);
 
-  auto current = begin;
-  while (current < end) {
-    auto const key_range = parse_next_key(current, end, opts.quotechar);
-    if (key_range.first == end) break;
-
+  auto advance = [&](const char *begin) {
+    return get_next_key_value_range(begin, row_data_range.second, opts);
+  };
+  for (auto field_range = advance(row_data_range.first);
+       field_range.key_begin < row_data_range.second;
+       field_range = advance(field_range.value_end)) {
     auto const idx = atomicAdd(keys_cnt, 1);
     if (nullptr != keys_info) {
-      auto const len                              = key_range.second - key_range.first;
-      keys_info->column(0).element<uint64_t>(idx) = key_range.first - data;
+      auto const len                              = field_range.key_end - field_range.key_begin;
+      keys_info->column(0).element<uint64_t>(idx) = field_range.key_begin - data;
       keys_info->column(1).element<uint16_t>(idx) = len;
       keys_info->column(2).element<uint32_t>(idx) =
-        MurmurHash3_32<cudf::string_view>{}(cudf::string_view(key_range.first, len));
+        MurmurHash3_32<cudf::string_view>{}(cudf::string_view(field_range.key_begin, len));
     }
-    // Skip the colon between the key and the value
-    current = thrust::find(thrust::seq, key_range.second, end, ':') + 1;
-    // Skip the field value (including delimiters)
-    current = cudf::io::gpu::seek_field_end(current, end, opts);
   }
 }
 
