@@ -419,5 +419,51 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
   }
 }
 
+template <typename T1>
+struct dispatch_second_type_impl {
+#pragma nv_exec_check_disable
+  template <typename T2, typename F, typename... Ts>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const noexcept
+  {
+    return f.template operator()<T1, T2>(std::forward<Ts>(args)...);
+  }
+};
+
+template <template <cudf::type_id> typename IdTypeMap>
+struct dispatch_second_type {
+#pragma nv_exec_check_disable
+  template <typename T1, typename F, typename... Ts>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(cudf::data_type type2,
+                                                      F&& f,
+                                                      Ts&&... args) const noexcept
+  {
+    return type_dispatcher<IdTypeMap>(
+      type2, dispatch_second_type_impl<T1>{}, std::forward<F>(f), std::forward<Ts>(args)...);
+  }
+};
+
+/**
+ * @brief Dispatches two type template parameters to a callable.
+ *
+ * This function expects a callable `f` with an `operator()` template accepting
+ * two typename template parameters `T1` and `T2`.
+ *
+ * @param type1 The `data_type` used to dispatch a type for the first template
+ * parameter of the callable `F`
+ * @param type2 The `data_type` used to dispatch a type for the second template
+ * parameter of the callable `F`
+ * @param args Parameter pack forwarded to the `operator()` invocation `F`.
+ */
+#pragma nv_exec_check_disable
+template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl, typename F, typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) dispatch_two_types(cudf::data_type type1,
+                                                                      cudf::data_type type2,
+                                                                      F&& f,
+                                                                      Ts&&... args)
+{
+  return type_dispatcher<IdTypeMap>(
+    type1, dispatch_second_type<IdTypeMap>{}, type2, std::forward<F>(f), std::forward<Ts>(args)...);
+}
+
 /** @} */  // end of group
 }  // namespace cudf
