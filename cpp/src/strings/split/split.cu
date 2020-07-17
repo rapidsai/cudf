@@ -493,7 +493,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   // boundary case: if no columns, return one null column (custrings issue #119)
   if (columns_count == 0) {
     results.push_back(
-      std::make_unique<column>(data_type{STRING},
+      std::make_unique<column>(data_type{type_id::STRING},
                                strings_count,
                                rmm::device_buffer{0, stream, mr},  // no data
                                create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr),
@@ -857,7 +857,7 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
   // boundary case: if no columns, return one null column (issue #119)
   if (columns_count == 0) {
     results.push_back(
-      std::make_unique<column>(data_type{STRING},
+      std::make_unique<column>(data_type{type_id::STRING},
                                strings_count,
                                rmm::device_buffer{0, stream, mr},  // no data
                                create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr),

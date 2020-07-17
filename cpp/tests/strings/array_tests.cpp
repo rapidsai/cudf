@@ -51,7 +51,8 @@ TEST_F(StringsColumnTest, Sort)
 
 TEST_F(StringsColumnTest, SortZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::detail::sort(strings_view, cudf::strings::detail::name);
   cudf::test::expect_strings_empty(results->view());
@@ -136,7 +137,8 @@ INSTANTIATE_TEST_CASE_P(SliceParms,
 
 TEST_F(StringsColumnTest, SliceZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::detail::slice(strings_view, 1, 2);
   cudf::test::expect_strings_empty(results->view());
@@ -163,8 +165,9 @@ TEST_F(StringsColumnTest, Gather)
 
 TEST_F(StringsColumnTest, GatherZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-  cudf::column_view map_view(cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view map_view(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
   auto results = cudf::gather(cudf::table_view{{zero_size_strings_column}}, map_view)->release();
   cudf::test::expect_strings_empty(results.front()->view());
 }
@@ -242,9 +245,10 @@ TEST_F(StringsColumnTest, ScatterScalar)
 
 TEST_F(StringsColumnTest, ScatterZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto source = cudf::strings_column_view(zero_size_strings_column);
-  cudf::column_view values(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view values(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto target = cudf::strings_column_view(values);
 
   rmm::device_vector<int32_t> scatter_map;

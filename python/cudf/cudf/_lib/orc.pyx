@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp cimport bool, int
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from cudf._lib.cpp.column.column cimport column
 
@@ -15,15 +16,17 @@ from cudf._lib.cpp.io.types cimport (
     sink_info,
     table_metadata,
     table_with_metadata,
+    data_sink,
 )
 from cudf._lib.cpp.types cimport (
     data_type, type_id, size_type
 )
 
-from cudf._lib.io.utils cimport make_source_info
+from cudf._lib.io.utils cimport make_source_info, make_sink_info
 from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
 from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types cimport underlying_type_t_type_id
 import numpy as np
 
 
@@ -49,7 +52,11 @@ cpdef read_orc(filepath_or_buffer, columns=None,
         (
             type_id.EMPTY
             if timestamp_type is None else
-            np_to_cudf_types[np.dtype(timestamp_type)]
+            <type_id>(
+                <underlying_type_t_type_id> (
+                    np_to_cudf_types[np.dtype(timestamp_type)]
+                )
+            )
         ),
         use_index,
         decimals_as_float,
@@ -67,7 +74,7 @@ cpdef read_orc(filepath_or_buffer, columns=None,
 
 
 cpdef write_orc(Table table,
-                filepath,
+                path_or_buf,
                 compression=None,
                 enable_statistics=False):
     """
@@ -88,13 +95,16 @@ cpdef write_orc(Table table,
         )
 
     cdef table_metadata metadata_ = table_metadata()
+    cdef unique_ptr[data_sink] data_sink_c
+    cdef sink_info sink_info_c = make_sink_info(path_or_buf, &data_sink_c)
+
     metadata_.column_names.reserve(len(table._column_names))
 
     for col_name in table._column_names:
         metadata_.column_names.push_back(str.encode(col_name))
 
     cdef write_orc_args c_write_orc_args = write_orc_args(
-        sink_info(<string>str(filepath).encode()),
+        sink_info_c,
         table.data_view(), &metadata_, compression_,
         <bool> (True if enable_statistics else False)
     )
@@ -121,7 +131,7 @@ cdef read_orc_args make_read_orc_args(filepath_or_buffer,
                                       bool decimals_as_float,
                                       size_type force_decimal_scale) except*:
     cdef read_orc_args args = read_orc_args(
-        make_source_info(filepath_or_buffer)
+        make_source_info([filepath_or_buffer])
     )
     args.stripe = stripe
     args.stripe_count = stripe_count

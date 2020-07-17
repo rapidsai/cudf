@@ -185,6 +185,12 @@
                                     <goal>jar-no-fork</goal>
                                 </goals>
                             </execution>
+                            <execution>
+                                <id>test-jars</id>
+                                <goals>
+                                    <goal>test-jar</goal>
+                                </goals>
+                            </execution>
                         </executions>
                     </plugin>
                     <plugin>
@@ -380,14 +386,6 @@
                             def proc = 'ldd ${native.build.path}/libcudfjni.so'.execute()
                             proc.consumeProcessOutput(sout, serr)
                             proc.waitForOrKill(10000)
-                            def librp = ~/librmm\\.so\\s+=>\\s+(.*)librmm.*\\.so\\s+.*/
-                            def m = librp.matcher(sout)
-                            if (m.find()) {
-                                pom.properties['native.deps.path'] = m.group(1)
-                            } else {
-                                fail("Could not find rmm as a dependency of libcudfjni out> $sout err> $serr")
-                            }
-
                             def libcudf = ~/libcudf\\.so\\s+=>\\s+(.*)libcudf.*\\.so\\s+.*/
                             def cudfm = libcudf.matcher(sout)
                             if (cudfm.find()) {
@@ -429,6 +427,16 @@
                     <!--Set by groovy script-->
                     <classifier>${cuda.classifier}</classifier>
                 </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>tests</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -467,14 +475,6 @@
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
                                         <include>libcudf.so</include>
-                                    </includes>
-                                </resource>
-                                <resource>
-                                    <!--Set by groovy script-->
-                                    <directory>${native.deps.path}</directory>
-                                    <includes>
-                                        <include>libboost_filesystem.so</include>
-                                        <include>librmm.so</include>
                                     </includes>
                                 </resource>
                             </resources>

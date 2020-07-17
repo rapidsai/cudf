@@ -1,5 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
-
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import numbers
 import pickle
 import warnings
@@ -11,6 +10,7 @@ import pandas as pd
 
 import cudf
 from cudf.core.column import column
+from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
 
 
@@ -19,22 +19,79 @@ class MultiIndex(Index):
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
 
-    Properties
-    ---
-    levels: Labels for each category in the index hierarchy.
-    codes: Assignment of individual items into the categories of the hierarchy.
-    names: Name for each level
+    Parameters
+    ----------
+    levels : sequence of arrays
+        The unique labels for each level.
+    labels : sequence of arrays
+        labels is depreciated, please use levels
+    codes: sequence of arrays
+        Integers for each level designating which label at each location.
+    sortorder : optional int
+        Not yet supported
+    names: optional sequence of objects
+        Names for each of the index levels.
+    copy : bool, default False
+        Copy the levels and codes.
+    verify_integrity : bool, default True
+        Check that the levels/codes are consistent and valid.
+        Not yet supported
+
+    Returns
+    -------
+    MultiIndex
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.MultiIndex(
+    ... levels=[[1, 2], ['blue', 'red']], codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+    MultiIndex(levels=[0    1
+    1    2
+    dtype: int64, 0    blue
+    1     red
+    dtype: object],
+    codes=   0  1
+    0  0  1
+    1  0  0
+    2  1  1
+    3  1  0)
+
     """
 
-    def __init__(
-        self, levels=None, codes=None, labels=None, names=None, **kwargs
-    ):
-        from cudf.core.series import Series
+    def __new__(
+        cls,
+        levels=None,
+        codes=None,
+        sortorder=None,
+        labels=None,
+        names=None,
+        dtype=None,
+        copy=False,
+        name=None,
+        **kwargs,
+    ) -> "MultiIndex":
         from cudf import DataFrame
+        from cudf.core.series import Series
 
-        super().__init__()
+        if sortorder is not None:
+            raise NotImplementedError("sortorder is not yet supported")
 
-        self._name = None
+        if name is not None:
+            raise NotImplementedError(
+                "Use `names`, `name` is not yet supported"
+            )
+
+        out = Frame.__new__(cls)
+        super(Index, out).__init__()
+
+        if copy:
+            if isinstance(codes, DataFrame):
+                codes = codes.copy()
+            if len(levels) > 0 and isinstance(levels[0], Series):
+                levels = [level.copy() for level in levels]
+
+        out._name = None
 
         column_names = []
         if labels:
@@ -60,21 +117,14 @@ class MultiIndex(Index):
             # try using those as the source_data column names:
             if len(dict.fromkeys(names)) == len(names):
                 source_data.columns = names
-            self._data = source_data._data
-            self.names = names
-            self._codes = codes
-            self._levels = levels
-            return
+            out._data = source_data._data
+            out.names = names
+            out._codes = codes
+            out._levels = levels
+            return out
 
         # name setup
-        if isinstance(
-            names,
-            (
-                Sequence,
-                pd.core.indexes.frozen.FrozenNDArray,
-                pd.core.indexes.frozen.FrozenList,
-            ),
-        ):
+        if isinstance(names, (Sequence, pd.core.indexes.frozen.FrozenList,),):
             if sum(x is None for x in names) > 1:
                 column_names = list(range(len(codes)))
             else:
@@ -88,47 +138,49 @@ class MultiIndex(Index):
             raise ValueError("Must pass non-zero number of levels/codes")
 
         if not isinstance(codes, DataFrame) and not isinstance(
-            codes[0], (Sequence, pd.core.indexes.frozen.FrozenNDArray)
+            codes[0], (Sequence, np.ndarray)
         ):
             raise TypeError("Codes is not a Sequence of sequences")
 
         if isinstance(codes, DataFrame):
-            self._codes = codes
+            out._codes = codes
         elif len(levels) == len(codes):
-            self._codes = DataFrame()
+            out._codes = DataFrame()
             for i, codes in enumerate(codes):
                 name = column_names[i] or i
                 codes = column.as_column(codes)
-                self._codes[name] = codes.astype(np.int64)
+                out._codes[name] = codes.astype(np.int64)
         else:
             raise ValueError(
                 "MultiIndex has unequal number of levels and "
                 "codes and is inconsistent!"
             )
 
-        self._levels = [Series(level) for level in levels]
-        self._validate_levels_and_codes(self._levels, self._codes)
+        out._levels = [Series(level) for level in levels]
+        out._validate_levels_and_codes(out._levels, out._codes)
 
         source_data = DataFrame()
-        for i, name in enumerate(self._codes.columns):
-            codes = as_index(self._codes[name]._column)
-            if -1 in self._codes[name].values:
+        for i, name in enumerate(out._codes.columns):
+            codes = as_index(out._codes[name]._column)
+            if -1 in out._codes[name].values:
                 # Must account for null(s) in _source_data column
                 level = DataFrame(
-                    {name: [None] + list(self._levels[i])},
-                    index=range(-1, len(self._levels[i])),
+                    {name: [None] + list(out._levels[i])},
+                    index=range(-1, len(out._levels[i])),
                 )
             else:
-                level = DataFrame({name: self._levels[i]})
+                level = DataFrame({name: out._levels[i]})
 
-            import cudf._lib as libcudf
+            from cudf import _lib as libcudf
 
             source_data[name] = libcudf.copying.gather(
                 level, codes._data.columns[0]
             )._data[name]
 
-        self._data = source_data._data
-        self.names = names
+        out._data = source_data._data
+        out.names = names
+
+        return out
 
     @property
     def names(self):
@@ -146,6 +198,10 @@ class MultiIndex(Index):
         if names is None:
             names = df.columns
         return MultiIndex.from_frame(df, names=names)
+
+    @property
+    def shape(self):
+        return (self._data.nrows, len(self._data.names))
 
     @property
     def _source_data(self):
@@ -251,6 +307,22 @@ class MultiIndex(Index):
         """
         return 2
 
+    def _get_level_label(self, level):
+        """ Get name of the level.
+
+        Parameters
+        ----------
+        level : int or level name
+            if level is name, it will be returned as it is
+            else if level is index of the level, then level
+            label will be returned as per the index.
+        """
+
+        if level in self._data.names:
+            return level
+        else:
+            return self._data.names[level]
+
     def isin(self, values, level=None):
         """Return a boolean array where the index values are in values.
 
@@ -354,9 +426,7 @@ class MultiIndex(Index):
     def _compute_validity_mask(self, index, row_tuple, max_length):
         """ Computes the valid set of indices of values in the lookup
         """
-        from cudf import DataFrame
-        from cudf import Series
-        from cudf import concat
+        from cudf import DataFrame, Series, concat
 
         lookup = DataFrame()
         for idx, row in enumerate(row_tuple):
@@ -415,8 +485,7 @@ class MultiIndex(Index):
         return self._compute_validity_mask(index, row_tuple, max_length)
 
     def _index_and_downcast(self, result, index, index_key):
-        from cudf import DataFrame
-        from cudf import Series
+        from cudf import DataFrame, Series
 
         if isinstance(index_key, (numbers.Number, slice)):
             index_key = [index_key]
@@ -479,7 +548,9 @@ class MultiIndex(Index):
     def _get_row_major(self, df, row_tuple):
         from cudf import Series
 
-        if pd.api.types.is_bool_dtype(row_tuple):
+        if pd.api.types.is_bool_dtype(
+            list(row_tuple) if isinstance(row_tuple, tuple) else row_tuple
+        ):
             return df[row_tuple]
 
         valid_indices = self._get_valid_indices_by_tuple(
@@ -550,8 +621,9 @@ class MultiIndex(Index):
 
     def take(self, indices):
         from collections.abc import Sequence
-        from cudf import Series
         from numbers import Integral
+
+        from cudf import Series
 
         if isinstance(indices, (Integral, Sequence)):
             indices = np.array(indices)
@@ -599,16 +671,7 @@ class MultiIndex(Index):
         return MultiIndex(names=names, source_data=source_data)
 
     def __iter__(self):
-        self.n = 0
-        return self
-
-    def __next__(self):
-        if self.n < len(self.codes):
-            result = self[self.n]
-            self.n += 1
-            return result
-        else:
-            raise StopIteration
+        cudf.utils.utils.raise_iteration_error(obj=self)
 
     def __getitem__(self, index):
         # TODO: This should be a take of the _source_data only
@@ -695,6 +758,12 @@ class MultiIndex(Index):
         from cudf import DataFrame, MultiIndex
 
         source_data = [o._source_data for o in objs]
+
+        if len(source_data) > 1:
+            for index, obj in enumerate(source_data[1:]):
+                obj.columns = source_data[0].columns
+                source_data[index + 1] = obj
+
         source_data = DataFrame._concat(source_data)
         names = [None for x in source_data.columns]
         objs = list(filter(lambda o: o.names is not None, objs))
@@ -709,6 +778,69 @@ class MultiIndex(Index):
         pdi = pd.MultiIndex.from_tuples(tuples, names=names)
         result = cls.from_pandas(pdi)
         return result
+
+    def to_arrow(self):
+        raise NotImplementedError(
+            "MultiIndex.to_arrow() is not yet implemented"
+        )
+
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the MultiIndex.
+
+        Only the values in the MultiIndex will be returned.
+
+        Returns
+        -------
+        out : numpy.ndarray
+            The values of the MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(
+        ...         levels=[[1, 3, 4, 5], [1, 2, 5]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...     )
+        >>> midx.values_host
+        array([(1, 1), (1, 5), (3, 2), (4, 2), (5, 1)], dtype=object)
+        >>> type(midx.values_host)
+        <class 'numpy.ndarray'>
+        """
+        return self.to_pandas().values
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the MultiIndex.
+
+        Only the values in the MultiIndex will be returned.
+
+        Returns
+        -------
+        out: cupy.ndarray
+            The values of the MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(
+        ...         levels=[[1, 3, 4, 5], [1, 2, 5]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...     )
+        >>> midx.values
+        array([[1, 1],
+            [1, 5],
+            [3, 2],
+            [4, 2],
+            [5, 1]])
+        >>> type(midx.values)
+        <class 'cupy.core.core.ndarray'>
+        """
+        return self._source_data.values
 
     @classmethod
     def from_frame(cls, dataframe, names=None):
@@ -803,8 +935,8 @@ class MultiIndex(Index):
             )
         return self._is_monotonic_decreasing
 
-    def argsort(self, ascending=True):
-        return self._source_data.argsort(ascending=ascending)
+    def argsort(self, ascending=True, **kwargs):
+        return self._source_data.argsort(ascending=ascending, **kwargs)
 
     def unique(self):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())
@@ -829,6 +961,83 @@ class MultiIndex(Index):
         if hasattr(other, "to_pandas"):
             temp_other = self.to_pandas()
         return temp_self.difference(temp_other, sort)
+
+    def append(self, other):
+        """
+        Append a collection of MultiIndex objects together
+
+        Parameters
+        ----------
+        other : MultiIndex or list/tuple of MultiIndex objects
+
+        Returns
+        -------
+        appended : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx1 = cudf.MultiIndex(
+        ... levels=[[1, 2], ['blue', 'red']],
+        ... codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+        >>> idx2 = cudf.MultiIndex(
+        ... levels=[[3, 4], ['blue', 'red']],
+        ... codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+        >>> idx1
+        MultiIndex(levels=[0    1
+        1    2
+        dtype: int64, 0    blue
+        1     red
+        dtype: object],
+        codes=   0  1
+        0  0  1
+        1  0  0
+        2  1  1
+        3  1  0)
+        >>> idx2
+        MultiIndex(levels=[0    3
+        1    4
+        dtype: int64, 0    blue
+        1     red
+        dtype: object],
+        codes=   0  1
+        0  0  1
+        1  0  0
+        2  1  1
+        3  1  0)
+        >>> idx1.append(idx2)
+        MultiIndex(levels=[0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64, 0    blue
+        1     red
+        dtype: object],
+        codes=   0  1
+        0  0  1
+        1  0  0
+        2  1  1
+        3  1  0
+        4  2  1
+        5  2  0
+        6  3  1
+        7  3  0)
+        """
+        if isinstance(other, (list, tuple)):
+            to_concat = [self]
+            to_concat.extend(other)
+        else:
+            to_concat = [self, other]
+
+        for obj in to_concat:
+            if not isinstance(obj, MultiIndex):
+                raise TypeError(
+                    f"all objects should be of type "
+                    f"MultiIndex for MultiIndex.append, "
+                    f"found object of type: {type(obj)}"
+                )
+
+        return MultiIndex._concat(to_concat)
 
     def nan_to_num(*args, **kwargs):
         return args[0]
@@ -863,12 +1072,3 @@ class MultiIndex(Index):
                 return cudf_func(*args, **kwargs)
         else:
             return NotImplemented
-
-    def _mimic_inplace(self, other, inplace=False):
-        if inplace is True:
-            for in_col, oth_col in zip(
-                self._source_data._columns, other._source_data._columns,
-            ):
-                in_col._mimic_inplace(oth_col, inplace=True)
-        else:
-            return other

@@ -40,7 +40,7 @@ column_view_base::column_view_base(data_type type,
 {
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
 
-  if (type.id() == EMPTY) {
+  if (type.id() == type_id::EMPTY) {
     _null_count = size;
     CUDF_EXPECTS(nullptr == data, "EMPTY column should have no data.");
     CUDF_EXPECTS(nullptr == null_mask, "EMPTY column should have no null mask.");
@@ -52,7 +52,7 @@ column_view_base::column_view_base(data_type type,
 
   CUDF_EXPECTS(offset >= 0, "Invalid offset.");
 
-  if ((null_count > 0) and (type.id() != EMPTY)) {
+  if ((null_count > 0) and (type.id() != type_id::EMPTY)) {
     CUDF_EXPECTS(nullptr != null_mask, "Invalid null mask for non-zero null count.");
   }
 }
@@ -85,7 +85,7 @@ column_view::column_view(data_type type,
                          std::vector<column_view> const& children)
   : detail::column_view_base{type, size, data, null_mask, null_count, offset}, _children{children}
 {
-  if (type.id() == EMPTY) {
+  if (type.id() == type_id::EMPTY) {
     CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
   }
 }
@@ -101,7 +101,7 @@ mutable_column_view::mutable_column_view(data_type type,
   : detail::column_view_base{type, size, data, null_mask, null_count, offset},
     mutable_children{children}
 {
-  if (type.id() == EMPTY) {
+  if (type.id() == type_id::EMPTY) {
     CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
   }
 }

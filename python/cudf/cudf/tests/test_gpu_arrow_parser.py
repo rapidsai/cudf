@@ -2,20 +2,13 @@
 import logging
 
 import numpy as np
+import pyarrow as pa
 import pytest
 from numba import cuda
 
 import cudf
 from cudf.comm.gpuarrow import GpuArrowReader
-
-try:
-    import pyarrow as pa
-
-    arrow_version = pa.__version__
-except ImportError as msg:
-    print("Failed to import pyarrow: {}".format(msg))
-    pa = None
-    arrow_version = None
+from cudf.tests.utils import INTEGER_TYPES
 
 
 def make_gpu_parse_arrow_data_batch():
@@ -25,20 +18,14 @@ def make_gpu_parse_arrow_data_batch():
 
     dest_lat = pa.array(lat)
     dest_lon = pa.array(lon)
-    if arrow_version == "0.7.1":
-        dest_lat = dest_lat.cast(pa.float32())
-        dest_lon = dest_lon.cast(pa.float32())
+
     batch = pa.RecordBatch.from_arrays(
         [dest_lat, dest_lon], ["dest_lat", "dest_lon"]
     )
     return batch
 
 
-@pytest.mark.skipif(
-    arrow_version is None,
-    reason="need compatible pyarrow to generate test data",
-)
-def test_gpu_parse_arrow_data():
+def test_gpu_parse_arrow_data_cpu_schema():
     batch = make_gpu_parse_arrow_data_batch()
     schema_data = batch.schema.serialize()
     recbatch_data = batch.serialize()
@@ -53,6 +40,72 @@ def test_gpu_parse_arrow_data():
 
     # test reader
     reader = GpuArrowReader(cpu_schema, gpu_data)
+    assert reader[0].name == "dest_lat"
+    assert reader[1].name == "dest_lon"
+    lat = reader[0].data.copy_to_host()
+    lon = reader[1].data.copy_to_host()
+    assert lat.size == 23
+    assert lon.size == 23
+    np.testing.assert_array_less(lat, 42)
+    np.testing.assert_array_less(27, lat)
+    np.testing.assert_array_less(lon, -76)
+    np.testing.assert_array_less(-105, lon)
+
+    dct = reader.to_dict()
+    np.testing.assert_array_equal(lat, dct["dest_lat"].to_array())
+    np.testing.assert_array_equal(lon, dct["dest_lon"].to_array())
+
+
+def test_gpu_parse_arrow_data_gpu_schema():
+    batch = make_gpu_parse_arrow_data_batch()
+    schema_data = batch.schema.serialize()
+    recbatch_data = batch.serialize()
+
+    # To ensure compatibility for OmniSci we're going to create this numpy
+    # array to be read-only as that's how numpy arrays created from foreign
+    # memory buffers will be set
+    cpu_schema = np.frombuffer(schema_data, dtype=np.uint8)
+    cpu_data = np.frombuffer(recbatch_data, dtype=np.uint8)
+    # Concatenate the schema and recordbatch into a single GPU buffer
+    gpu_data = cuda.to_device(np.concatenate([cpu_schema, cpu_data]))
+    del cpu_data
+    del cpu_schema
+
+    # test reader
+    reader = GpuArrowReader(None, gpu_data)
+    assert reader[0].name == "dest_lat"
+    assert reader[1].name == "dest_lon"
+    lat = reader[0].data.copy_to_host()
+    lon = reader[1].data.copy_to_host()
+    assert lat.size == 23
+    assert lon.size == 23
+    np.testing.assert_array_less(lat, 42)
+    np.testing.assert_array_less(27, lat)
+    np.testing.assert_array_less(lon, -76)
+    np.testing.assert_array_less(-105, lon)
+
+    dct = reader.to_dict()
+    np.testing.assert_array_equal(lat, dct["dest_lat"].to_array())
+    np.testing.assert_array_equal(lon, dct["dest_lon"].to_array())
+
+
+def test_gpu_parse_arrow_data_bad_cpu_schema_good_gpu_schema():
+    batch = make_gpu_parse_arrow_data_batch()
+    schema_data = batch.schema.serialize()
+    recbatch_data = batch.serialize()
+
+    # To ensure compatibility for OmniSci we're going to create this numpy
+    # array to be read-only as that's how numpy arrays created from foreign
+    # memory buffers will be set
+    cpu_schema = np.frombuffer(schema_data, dtype=np.uint8)
+    cpu_data = np.frombuffer(recbatch_data, dtype=np.uint8)
+    # Concatenate the schema and recordbatch into a single GPU buffer
+    gpu_data = cuda.to_device(np.concatenate([cpu_schema, cpu_data]))
+    del cpu_data
+    del cpu_schema
+
+    # test reader
+    reader = GpuArrowReader(b"", gpu_data)
     assert reader[0].name == "dest_lat"
     assert reader[1].name == "dest_lon"
     lat = reader[0].data.copy_to_host()
@@ -124,10 +177,6 @@ def make_gpu_parse_arrow_cats_batch():
     return batch
 
 
-@pytest.mark.skipif(
-    arrow_version is None,
-    reason="need compatible pyarrow to generate test data",
-)
 def test_gpu_parse_arrow_cats():
     batch = make_gpu_parse_arrow_cats_batch()
 
@@ -159,7 +208,7 @@ def test_gpu_parse_arrow_cats():
     assert sr_idx.dtype == np.int32
     assert sr_name.dtype == "category"
     assert sr_weight.dtype == np.double
-    assert set(sr_name) == {"apple", "pear", "orange", "grape"}
+    assert set(sr_name.to_pandas()) == {"apple", "pear", "orange", "grape"}
 
     expected = get_expected_values()
     for i in range(len(sr_idx)):
@@ -175,11 +224,7 @@ def test_gpu_parse_arrow_cats():
         np.testing.assert_almost_equal(got_weight, exp_weight)
 
 
-@pytest.mark.skipif(
-    arrow_version is None,
-    reason="need compatible pyarrow to generate test data",
-)
-@pytest.mark.parametrize("dtype", [np.int8, np.int16, np.int32, np.int64])
+@pytest.mark.parametrize("dtype", INTEGER_TYPES)
 def test_gpu_parse_arrow_int(dtype):
 
     depdelay = np.array([0, 0, -3, -2, 11, 6, -7, -4, 4, -3], dtype=dtype)
@@ -208,13 +253,11 @@ def test_gpu_parse_arrow_int(dtype):
     columns = gar.to_dict()
     assert columns["depdelay"].dtype == dtype
     assert set(columns) == {"depdelay", "arrdelay"}
-    assert list(columns["depdelay"]) == [0, 0, -3, -2, 11, 6, -7, -4, 4, -3]
+    assert list(columns["depdelay"].to_pandas()) == list(
+        depdelay.astype(dtype)
+    )
 
 
-@pytest.mark.skipif(
-    arrow_version is None,
-    reason="need compatible pyarrow to generate test data",
-)
 @pytest.mark.parametrize(
     "dtype",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
@@ -253,4 +296,4 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("cudf.gpuarrow").setLevel(logging.DEBUG)
 
-    test_gpu_parse_arrow_data()
+    test_gpu_parse_arrow_data_cpu_schema()

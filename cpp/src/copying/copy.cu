@@ -146,8 +146,8 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
                                      cudaStream_t stream)
 {
   CUDF_EXPECTS(lhs.type() == rhs.type(), "Both inputs must be of the same type");
-  CUDF_EXPECTS(boolean_mask.type() == data_type(BOOL8),
-               "Boolean mask column must be of type BOOL8");
+  CUDF_EXPECTS(boolean_mask.type() == data_type(type_id::BOOL8),
+               "Boolean mask column must be of type type_id::BOOL8");
 
   if (boolean_mask.size() == 0) { return cudf::make_empty_column(lhs.type()); }
 

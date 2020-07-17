@@ -198,7 +198,7 @@ def test_groupby_cats():
     df["cats"] = pd.Categorical(list("aabaacaab"))
     df["vals"] = np.random.random(len(df))
 
-    cats = np.asarray(list(df["cats"]))
+    cats = df["cats"].values_host
     vals = df["vals"].to_array()
 
     grouped = df.groupby(["cats"], as_index=False).mean()
@@ -207,10 +207,9 @@ def test_groupby_cats():
 
     got_cats = grouped["cats"]
 
-    for c, v in zip(got_cats, got_vals):
-        print(c, v)
-        expect = vals[cats == c].mean()
-        np.testing.assert_almost_equal(v, expect)
+    for i in range(len(got_vals)):
+        expect = vals[cats == got_cats[i]].mean()
+        np.testing.assert_almost_equal(got_vals[i], expect)
 
 
 def test_groupby_iterate_groups():
@@ -1047,15 +1046,13 @@ def test_raise_data_error():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
 
-    # we have to test that Pandas does this too:
     try:
         pdf.groupby("a").mean()
     except Exception as e:
-        typ = type(e)
-        msg = str(e)
-
-    with pytest.raises(typ, match=msg):
-        gdf.groupby("a").mean()
+        with pytest.raises(type(e), match=e.__str__()):
+            gdf.groupby("a").mean()
+    else:
+        raise AssertionError("Expected pandas groupby to fail")
 
 
 def test_drop_unsupported_multi_agg():
@@ -1109,3 +1106,29 @@ def test_groupby_apply_noempty_group():
         .apply(lambda x: x.iloc[[0, 1]])
         .reset_index(drop=True),
     )
+
+
+def test_reset_index_after_empty_groupby():
+    # GH #5475
+    pdf = pd.DataFrame({"a": [1, 2, 3]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").sum().reset_index(),
+        gdf.groupby("a").sum().reset_index(),
+    )
+
+
+def test_groupby_attribute_error():
+    err_msg = "Test error message"
+
+    class TestGroupBy(cudf.core.groupby.GroupBy):
+        @property
+        def _groupby(self):
+            raise AttributeError("Test error message")
+
+    a = cudf.DataFrame({"a": [1, 2], "b": [2, 3]})
+    gb = TestGroupBy(a, a["a"])
+
+    with pytest.raises(AttributeError, match=err_msg):
+        gb.sum()

@@ -45,25 +45,25 @@ class arrow_io_source : public datasource {
  public:
   explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file) : arrow_file(file) {}
 
-  std::unique_ptr<buffer> host_read(size_t position, size_t length) override
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    std::shared_ptr<arrow::Buffer> out;
-    CUDF_EXPECTS(arrow_file->ReadAt(position, length, &out).ok(), "Cannot read file data");
-    return std::make_unique<arrow_io_buffer>(out);
+    auto result = arrow_file->ReadAt(offset, size);
+    CUDF_EXPECTS(result.ok(), "Cannot read file data");
+    return std::make_unique<arrow_io_buffer>(result.ValueOrDie());
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t *dst) override
   {
-    int64_t bytes_out = 0;
-    CUDF_EXPECTS(arrow_file->ReadAt(offset, size, &bytes_out, dst).ok(), "Cannot read file data");
-    return bytes_out;
+    auto result = arrow_file->ReadAt(offset, size, dst);
+    CUDF_EXPECTS(result.ok(), "Cannot read file data");
+    return result.ValueOrDie();
   }
 
   size_t size() const override
   {
-    int64_t size;
-    CUDF_EXPECTS(arrow_file->GetSize(&size).ok(), "Cannot get file size");
-    return size;
+    auto result = arrow_file->GetSize();
+    CUDF_EXPECTS(result.ok(), "Cannot get file size");
+    return result.ValueOrDie();
   }
 
  private:
@@ -216,17 +216,18 @@ std::unique_ptr<datasource> datasource::create(const std::string &filepath,
   return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, size);
 }
 
-std::unique_ptr<datasource> datasource::create(const char *data, size_t size)
+std::unique_ptr<datasource> datasource::create(host_buffer const &buffer)
 {
   // Use Arrow IO buffer class for zero-copy reads of host memory
-  return std::make_unique<arrow_io_source>(
-    std::make_shared<arrow::io::BufferReader>(reinterpret_cast<const uint8_t *>(data), size));
+  return std::make_unique<arrow_io_source>(std::make_shared<arrow::io::BufferReader>(
+    reinterpret_cast<const uint8_t *>(buffer.data), buffer.size));
 }
 
-std::unique_ptr<datasource> datasource::create(std::shared_ptr<arrow::io::RandomAccessFile> file)
+std::unique_ptr<datasource> datasource::create(
+  std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
 {
   // Support derived classes of the top-level Arrow IO interface
-  return std::make_unique<arrow_io_source>(file);
+  return std::make_unique<arrow_io_source>(arrow_file);
 }
 
 std::unique_ptr<datasource> datasource::create(datasource *source)

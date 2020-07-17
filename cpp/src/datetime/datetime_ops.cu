@@ -187,7 +187,7 @@ std::unique_ptr<column> extract_year(column_view const& column, rmm::mr::device_
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::YEAR>,
-    cudf::INT16>(column, 0, mr);
+    cudf::type_id::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> extract_month(column_view const& column,
@@ -197,7 +197,7 @@ std::unique_ptr<column> extract_month(column_view const& column,
 
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::MONTH>,
-    cudf::INT16>(column, 0, mr);
+    cudf::type_id::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> extract_day(column_view const& column, rmm::mr::device_memory_resource* mr)
@@ -205,7 +205,7 @@ std::unique_ptr<column> extract_day(column_view const& column, rmm::mr::device_m
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::DAY>,
-    cudf::INT16>(column, 0, mr);
+    cudf::type_id::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> extract_weekday(column_view const& column,
@@ -214,7 +214,7 @@ std::unique_ptr<column> extract_weekday(column_view const& column,
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::WEEKDAY>,
-    cudf::INT16>(column, 0, mr);
+    cudf::type_id::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> extract_hour(column_view const& column, rmm::mr::device_memory_resource* mr)
@@ -222,7 +222,7 @@ std::unique_ptr<column> extract_hour(column_view const& column, rmm::mr::device_
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::HOUR>,
-    cudf::INT16>(column, 0, mr);
+    cudf::type_id::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> extract_minute(column_view const& column,
@@ -231,7 +231,7 @@ std::unique_ptr<column> extract_minute(column_view const& column,
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::MINUTE>,
-    cudf::INT16>(column, 0, mr);
+    cudf::type_id::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> extract_second(column_view const& column,
@@ -240,21 +240,22 @@ std::unique_ptr<column> extract_second(column_view const& column,
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::SECOND>,
-    cudf::INT16>(column, 0, mr);
+    cudf::type_id::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,
                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_datetime_op<detail::extract_last_day_of_month, cudf::TIMESTAMP_DAYS>(
-    column, 0, mr);
+  return detail::apply_datetime_op<detail::extract_last_day_of_month,
+                                   cudf::type_id::TIMESTAMP_DAYS>(column, 0, mr);
 }
 
 std::unique_ptr<column> day_of_year(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_datetime_op<detail::extract_day_num_of_year, cudf::INT16>(column, 0, mr);
+  return detail::apply_datetime_op<detail::extract_day_num_of_year, cudf::type_id::INT16>(
+    column, 0, mr);
 }
 
 }  // namespace datetime

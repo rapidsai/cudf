@@ -74,7 +74,6 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${GTEST_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
-                    "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}")
@@ -85,7 +84,6 @@ include_directories("${CMAKE_BINARY_DIR}/include"
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}")
 
@@ -159,7 +157,7 @@ ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 # - join tests ------------------------------------------------------------------------------------
 
 set(JOIN_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/join/cross_join_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/join/semi_join_tests.cpp")
 
@@ -169,7 +167,7 @@ ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 # - is_sorted tests -------------------------------------------------------------------------------
 
 set(IS_SORTED_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/sort/is_sorted_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/is_sorted_tests.cpp")
 
 ConfigureTest(IS_SORTED_TEST "${IS_SORTED_TEST_SRC}")
 
@@ -177,7 +175,7 @@ ConfigureTest(IS_SORTED_TEST "${IS_SORTED_TEST_SRC}")
 # - datetime tests --------------------------------------------------------------------------------
 
 set(DATETIME_OPS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/datetime/datetime_ops_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/datetime/datetime_ops_test.cpp")
 
 ConfigureTest(DATETIME_OPS_TEST "${DATETIME_OPS_TEST_SRC}")
 
@@ -213,7 +211,7 @@ ConfigureTest(HASH_MAP_TEST "${HASH_MAP_TEST_SRC}")
 
 set(QUANTILES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantile_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cpp")
 
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 
@@ -230,22 +228,22 @@ ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
 # - replace tests --------------------------------------------------------------------------
 
 set(REPLACE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cpp")
 
 ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
 
 set(REPLACE_NULLS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_nulls_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_nulls_tests.cpp")
 
 ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
 
 set(REPLACE_NANS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_nans_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_nans_tests.cpp")
 
 ConfigureTest(REPLACE_NANS_TEST "${REPLACE_NANS_TEST_SRC}")
 
 set(NORMALIZE_REPLACE_TEST_SRC
-	"${CMAKE_CURRENT_SOURCE_DIR}/replace/normalize_replace_tests.cu")
+	"${CMAKE_CURRENT_SOURCE_DIR}/replace/normalize_replace_tests.cpp")
 
 ConfigureTest(NORMALIZE_REPLACE_TEST "${NORMALIZE_REPLACE_TEST_SRC}")
 
@@ -266,7 +264,7 @@ ConfigureTest(FIXED_POINT_TEST "${FIXED_POINT_TEST_SRC}")
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cpp")
 
 ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 
@@ -277,7 +275,7 @@ set(BINARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binop-verify-input-test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binop-null-test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binop-integration-test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binop-generic-ptx-test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binop-generic-ptx-test.cpp")
 
 ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 
@@ -285,7 +283,7 @@ ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 # - unary transform tests -------------------------------------------------------------------------
 
 set(TRANSFORM_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/bools_to_mask.cpp")
 
@@ -296,7 +294,7 @@ ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
 set(JITCACHE_TEST_SRC
     "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/jit/jit-cache-test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/jit/jit-cache-test.cpp")
 
 ConfigureTest(JITCACHE_TEST "${JITCACHE_TEST_SRC}")
 
@@ -315,13 +313,13 @@ set(DECOMPRESSION_TEST_SRC
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
 
 set(CSV_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv_test.cpp")
 set(ORC_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/orc_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/orc_test.cpp")
 set(PARQUET_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_test.cpp")
 set(JSON_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/json_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/json_test.cpp")
 
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
@@ -349,15 +347,19 @@ ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
 # - copying tests ---------------------------------------------------------------------------------
 
 set(COPYING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_str_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_list_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/detail_gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/get_value_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/get_value_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/sample_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
@@ -368,7 +370,8 @@ ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 set(UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_utilities_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/lists_column_wrapper_tests.cpp")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 
@@ -376,7 +379,9 @@ ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 # - iterator tests --------------------------------------------------------------------------------
 
 set(ITERATOR_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/value_iterator_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/pair_iterator_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/scalar_iterator_test.cu")
 
 ConfigureTest(ITERATOR_TEST "${ITERATOR_TEST_SRC}")
 
@@ -392,7 +397,7 @@ ConfigureTest(DEVICE_ATOMICS_TEST  "${DEVICE_ATOMICS_TEST_SRC}")
 # - transpose tests -------------------------------------------------------------------------------
 
 set(TRANSPOSE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/transpose/transpose_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/transpose/transpose_test.cpp")
 
 ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
 
@@ -402,7 +407,7 @@ ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
 set(TABLE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/table/table_view_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/table/row_operators_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/row_operators_tests.cpp")
 
 ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
 
@@ -419,10 +424,10 @@ ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
 # - stream compaction tests -----------------------------------------------------------------------
 
 set(STREAM_COMPACTION_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_nulls_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_nans_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_duplicates_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_nulls_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_nans_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_duplicates_tests.cpp")
 
 ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
 
@@ -446,8 +451,8 @@ ConfigureTest(GROUPED_ROLLING_TEST "${GROUPED_ROLLING_TEST_SRC}")
 # - filling test ----------------------------------------------------------------------------------
 
 set(FILLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/fill_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeat_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/fill_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeat_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/sequence_tests.cpp")
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
@@ -464,8 +469,8 @@ ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 # - reshape test ----------------------------------------------------------------------------------
 
 set(RESHAPE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/interleave_columns_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/tile_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/interleave_columns_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/tile_tests.cpp")
 
 ConfigureTest(RESHAPE_TEST "${RESHAPE_TEST_SRC}")
 
@@ -535,7 +540,9 @@ set(TEXT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tokenize_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/normalize_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/replace_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/subword_tests.cpp")
 
 ConfigureTest(TEXT_TEST "${TEXT_TEST_SRC}")
 

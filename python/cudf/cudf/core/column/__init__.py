@@ -1,5 +1,7 @@
-from cudf.core.column.categorical import CategoricalColumn  # noqa: F401
-from cudf.core.column.column import (  # noqa: F401
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+from cudf.core.column.categorical import CategoricalColumn
+from cudf.core.column.column import (
     ColumnBase,
     as_column,
     build_categorical_column,
@@ -12,5 +14,6 @@ from cudf.core.column.column import (  # noqa: F401
     serialize_columns,
 )
 from cudf.core.column.datetime import DatetimeColumn  # noqa: F401
+from cudf.core.column.lists import ListColumn  # noqa: F401
 from cudf.core.column.numerical import NumericalColumn  # noqa: F401
 from cudf.core.column.string import StringColumn  # noqa: F401

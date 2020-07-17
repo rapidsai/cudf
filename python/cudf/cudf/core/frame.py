@@ -1,3 +1,4 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import functools
 import warnings
 from collections import OrderedDict
@@ -8,11 +9,12 @@ import pandas as pd
 from pandas.api.types import is_dtype_equal
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_column_like,
     is_numerical_dtype,
     is_scalar,
     min_scalar_type,
@@ -35,17 +37,75 @@ class Frame(libcudf.table.Table):
     def _from_table(cls, table):
         return cls(table._data, index=table._index)
 
+    def _mimic_inplace(self, result, inplace=False):
+        if inplace:
+            for col in self._data:
+                self._data[col]._mimic_inplace(result._data[col], inplace=True)
+            self._data = result._data
+            self._index = result._index
+        else:
+            return result
+
+    @property
+    def empty(self):
+        """
+        Indicator whether Frame is empty.
+
+        True if Frame is entirely empty (no items), meaning any
+        of the axes are of length 0.
+
+        Returns
+        -------
+        out : bool
+            If Frame is empty, return True, if not return False.
+        """
+        if self._num_columns == 0:
+            return True
+        return self._num_rows == 0
+
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
-    def _concat(cls, objs, axis=0, ignore_index=False):
+    def _concat(cls, objs, axis=0, ignore_index=False, sort=False):
 
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
-        objs = [f.copy(deep=False) for f in objs]
 
+        some_empty = False
+        result_index_length = 0
+        empty_counter = 0
+
+        for i, obj in enumerate(objs):
+            objs[i] = obj.copy(deep=False)
+            if ignore_index:
+                # If ignore_index is true, determine if
+                # all or some objs are empty(and have index).
+                # 1. If all objects are empty(and have index), we
+                # should set the index separately using RangeIndex.
+                # 2. If some objects are empty(and have index), we
+                # create empty columns later while populating `columns`
+                # variable. Detailed explanation of second case before
+                # allocation of `columns` variable below.
+                if obj.empty:
+                    empty_counter += 1
+                    if len(obj) > 0:
+                        some_empty = True
+                        result_index_length += len(obj)
+
+        # some_empty indicates there are dataframes in obj
+        # which are empty and have index.
+
+        # all_empty indicates all dataframes in obj which
+        # are empty and at least one of them have index.
+        if empty_counter == len(objs) and some_empty:
+            all_empty = True
+        else:
+            all_empty = False
+
+        from cudf.core.column.column import (
+            build_categorical_column,
+            column_empty,
+        )
         from cudf.core.index import as_index
-        from cudf.core.column.column import column_empty
-        from cudf.core.column.column import build_categorical_column
 
         # Create a dictionary of the common, non-null columns
         def get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
@@ -87,7 +147,10 @@ class Frame(libcudf.table.Table):
                         [col.dtype for col in cols], []
                     )
                 # If all categorical dtypes, combine the categories
-                elif all(is_categorical_dtype(col.dtype) for col in cols):
+                elif all(
+                    isinstance(col, cudf.core.column.CategoricalColumn)
+                    for col in cols
+                ):
                     # Combine and de-dupe the categories
                     categories[idx] = (
                         cudf.concat([col.cat().categories for col in cols])
@@ -115,8 +178,10 @@ class Frame(libcudf.table.Table):
                 for cols in list_of_columns:
                     # If column not in this df, fill with an all-null column
                     if idx >= len(cols) or cols[idx] is None:
-                        n = len(next(filter(lambda x: x is not None, cols)))
-                        cols[idx] = column_empty(n, dtype, masked=True)
+                        n = len(next(x for x in cols if x is not None))
+                        cols[idx] = column_empty(
+                            row_count=n, dtype=dtype, masked=True
+                        )
                     else:
                         # If column is categorical, rebase the codes with the
                         # combined categories, and cast the new codes to the
@@ -149,14 +214,52 @@ class Frame(libcudf.table.Table):
 
         # Get a list of the unique table column names
         names = [name for f in objs for name in f._column_names]
-        names = list(OrderedDict.fromkeys(names).keys())
+        names = OrderedDict.fromkeys(names).keys()
+
+        try:
+            if sort:
+                names = list(sorted(names))
+            else:
+                names = list(names)
+        except TypeError:
+            names = list(names)
 
         # Combine the index and table columns for each Frame into a
         # list of [...index_cols, ...table_cols]. If a table is
-        # missing a column, that list will have None in the slot instead
+        # missing a column:
+        # 1. when ignore_index is True and some_empty is False(which
+        # means there is no dataframe which is empty and has an index in
+        # objs) an empty column of length of the respective dataframe
+        # is added to the slot.
+        # 2. when ignore_index is False or some_empty is True list
+        # will have None in the slot instead
+
+        # When ignore_index is True, and if at least one of the
+        # dataframe in objs is empty and has and index set:
+        #
+        # 1. Do not ignore the index for index_cols being
+        # populated in columns[0]. Instead we will be ignoring the
+        # index in libcudf.concat.concat_tables api call. This is
+        # necessary for cast_cols_to_common_dtypes api.
+        # 2. Create an empty column and populate in columns[1] as
+        # index will be ignored by libcudf.concat.concat_tables
+        # and the corresponding empty column will be concatenated
+        # correctly.
+
         columns = [
-            ([] if ignore_index else list(f._index._data.columns))
-            + [f._data[name] if name in f._data else None for name in names]
+            (
+                []
+                if (ignore_index and not some_empty)
+                else list(f._index._data.columns)
+            )
+            + [
+                f._data[name]
+                if name in f._data
+                else column_empty(len(f), masked=True)
+                if (ignore_index and not some_empty)
+                else None
+                for name in names
+            ]
             for i, f in enumerate(objs)
         ]
 
@@ -182,21 +285,40 @@ class Frame(libcudf.table.Table):
         # names with their integer positions in the `cols` list
         tables = []
         for cols in columns:
-            table_cols = cols[first_data_column_position:]
-            table_names = indices[first_data_column_position:]
-            table = cls(data=dict(zip(table_names, table_cols)))
+            table_index = None
             if 1 == first_data_column_position:
-                table._index = as_index(cols[0])
+                table_index = as_index(cols[0])
             elif first_data_column_position > 1:
-                index_cols = cols[:first_data_column_position]
-                index_names = indices[:first_data_column_position]
-                table._index = cls(data=dict(zip(index_names, index_cols)))
-            tables.append(table)
+                table_index = libcudf.table.Table(
+                    data=dict(
+                        zip(
+                            indices[:first_data_column_position],
+                            cols[:first_data_column_position],
+                        )
+                    )
+                )
+            tables.append(
+                libcudf.table.Table(
+                    data=dict(
+                        zip(
+                            indices[first_data_column_position:],
+                            cols[first_data_column_position:],
+                        )
+                    ),
+                    index=table_index,
+                )
+            )
 
         # Concatenate the Tables
         out = cls._from_table(
             libcudf.concat.concat_tables(tables, ignore_index=ignore_index)
         )
+
+        if all_empty:
+            # When all the dataframes in objs are empty and either
+            # one of them have index and ignore_index is True, create
+            # a new RangeIndex and assign it to the result.
+            out._index = cudf.RangeIndex(result_index_length)
 
         # Reassign the categories for any categorical table cols
         reassign_categories(
@@ -630,9 +752,7 @@ class Frame(libcudf.table.Table):
             if len(common_cols) > 0:
                 # If `self` and `cond` are having unequal index,
                 # then re-index `cond`.
-                if len(self.index) != len(cond.index) or any(
-                    self.index != cond.index
-                ):
+                if not self.index.equals(cond.index):
                     cond = cond.reindex(self.index)
             else:
                 if cond.shape != self.shape:
@@ -654,7 +774,9 @@ class Frame(libcudf.table.Table):
             for column_name, other_column in zip(self._data.names, other):
                 input_col = self._data[column_name]
                 if column_name in cond._data:
-                    if is_categorical_dtype(input_col.dtype):
+                    if isinstance(
+                        input_col, cudf.core.column.CategoricalColumn
+                    ):
                         if np.isscalar(other_column):
                             try:
                                 other_column = input_col._encode(other_column)
@@ -670,7 +792,10 @@ class Frame(libcudf.table.Table):
                         input_col, other_column, cond._data[column_name]
                     )
 
-                    if is_categorical_dtype(self._data[column_name].dtype):
+                    if isinstance(
+                        self._data[column_name],
+                        cudf.core.column.CategoricalColumn,
+                    ):
                         result = build_categorical_column(
                             categories=self._data[column_name].categories,
                             codes=as_column(
@@ -707,7 +832,7 @@ class Frame(libcudf.table.Table):
                     """Array conditional must be same shape as self"""
                 )
             input_col = self._data[self.name]
-            if is_categorical_dtype(input_col.dtype):
+            if isinstance(input_col, cudf.core.column.CategoricalColumn):
                 if np.isscalar(other):
                     try:
                         other = input_col._encode(other)
@@ -882,11 +1007,10 @@ class Frame(libcudf.table.Table):
             )
 
         if kwargs.get("debug", False) == 1 and map_size is not None:
-            unique_count = map_index.unique_count()
-            if map_size < unique_count:
+            count = map_index.distinct_count()
+            if map_size < count:
                 raise ValueError(
-                    "ERROR: map_size must be >= %d (got %d)."
-                    % (unique_count, map_size)
+                    f"ERROR: map_size must be >= {count} (got {map_size})."
                 )
 
         tables = self._partition(map_index, map_size, keep_index)
@@ -1175,11 +1299,190 @@ class Frame(libcudf.table.Table):
 
     def __array__(self, dtype=None):
         raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
-            To explicitly construct a GPU array, consider using \
-            cupy.asarray(...)\nTo explicitly construct a \
-            host array, consider using .to_array()"
+            "Implicit conversion to a host NumPy array via __array__ is not "
+            "allowed, To explicitly construct a GPU array, consider using "
+            "cupy.asarray(...)\nTo explicitly construct a "
+            "host array, consider using .to_array()"
         )
+
+    def __arrow_array__(self, type=None):
+        raise TypeError(
+            "Implicit conversion to a host PyArrow Array via __arrow_array__ "
+            "is not allowed, To explicitly construct a PyArrow Array, "
+            "consider using .to_arrow()"
+        )
+
+    @annotate("SAMPLE", color="orange", domain="cudf_python")
+    def sample(
+        self,
+        n=None,
+        frac=None,
+        replace=False,
+        weights=None,
+        random_state=None,
+        axis=None,
+        keep_index=True,
+    ):
+        """Return a random sample of items from an axis of object.
+
+        You can use random_state for reproducibility.
+
+        Parameters
+        ----------
+        n : int, optional
+            Number of items from axis to return. Cannot be used with frac.
+            Default = 1 if frac = None.
+        frac : float, optional
+            Fraction of axis items to return. Cannot be used with n.
+        replace : bool, default False
+            Allow or disallow sampling of the same row more than once.
+            replace == True is not yet supported for axis = 1/"columns"
+        weights : str or ndarray-like, optional
+            Only supported for axis=1/"columns"
+        random_state : int or None, default None
+            Seed for the random number generator (if int), or None.
+            If None, a random seed will be chosen.
+        axis : {0 or ‘index’, 1 or ‘columns’, None}, default None
+            Axis to sample. Accepts axis number or name.
+            Default is stat axis for given data type
+            (0 for Series and DataFrames). Series and Index doesn't
+            support axis=1.
+
+        Returns
+        -------
+        Series or DataFrame or Index
+            A new object of same type as caller containing n items
+            randomly sampled from the caller object.
+
+         Example
+        -------
+        >>> import cudf as cudf
+        >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
+        >>> df.sample(3)
+           a
+        1  2
+        3  4
+        0  1
+
+        >>> sr = cudf.Series([1, 2, 3, 4, 5])
+        >>> sr.sample(10, replace=True)
+        1    4
+        3    1
+        2    4
+        0    5
+        0    1
+        4    5
+        4    1
+        0    2
+        0    3
+        3    2
+        dtype: int64
+
+        >>> df = cudf.DataFrame(
+        ... {"a":[1, 2], "b":[2, 3], "c":[3, 4], "d":[4, 5]})
+        >>> df.sample(2, axis=1)
+           a  c
+        0  1  3
+        1  2  4
+        """
+
+        if frac is not None and frac > 1 and not replace:
+            raise ValueError(
+                "Replace has to be set to `True` "
+                "when upsampling the population `frac` > 1."
+            )
+        elif frac is not None and n is not None:
+            raise ValueError(
+                "Please enter a value for `frac` OR `n`, not both"
+            )
+
+        if frac is None and n is None:
+            n = 1
+        elif frac is not None:
+            if axis is None or axis == 0 or axis == "index":
+                n = int(round(self.shape[0] * frac))
+            else:
+                n = int(round(self.shape[1] * frac))
+
+        if axis is None or axis == 0 or axis == "index":
+            if not replace and n > self.shape[0]:
+                raise ValueError(
+                    "Cannot take a larger sample than population "
+                    "when 'replace=False'"
+                )
+
+            if weights is not None:
+                raise NotImplementedError(
+                    "weights is not yet supported for axis=0/index"
+                )
+
+            seed = (
+                np.random.randint(np.iinfo(np.int64).max, dtype=np.int64)
+                if random_state is None
+                else np.int64(random_state)
+            )
+
+            result = self._from_table(
+                libcudf.copying.sample(
+                    self,
+                    n=n,
+                    replace=replace,
+                    seed=seed,
+                    keep_index=keep_index,
+                )
+            )
+            result._copy_categories(self)
+
+            return result
+        else:
+            if len(self.shape) != 2:
+                raise ValueError(
+                    f"No axis named {axis} for "
+                    f"object type {self.__class__}"
+                )
+
+            columns = np.asarray(self._data.names)
+            if not replace and n > columns.size:
+                raise ValueError(
+                    "Cannot take a larger sample "
+                    "than population when 'replace=False'"
+                )
+
+            if weights is not None:
+                if is_column_like(weights):
+                    weights = np.asarray(weights)
+                else:
+                    raise ValueError(
+                        "Strings can only be passed to weights "
+                        "when sampling from rows on a DataFrame"
+                    )
+
+                if columns.size != len(weights):
+                    raise ValueError(
+                        "Weights and axis to be sampled must be of same length"
+                    )
+
+                total_weight = weights.sum()
+                if total_weight != 1:
+                    if not isinstance(weights.dtype, float):
+                        weights = weights.astype("float64")
+                    weights = weights / total_weight
+
+            np.random.seed(random_state)
+            gather_map = np.random.choice(
+                columns, size=n, replace=replace, p=weights
+            )
+
+            if isinstance(self, cudf.MultiIndex):
+                # TODO: Need to update this once MultiIndex is refactored,
+                # should be able to treat it similar to other Frame object
+                result = cudf.Index(self._source_data[gather_map])
+            else:
+                result = self[gather_map]
+                if not keep_index:
+                    result.index = None
+
+            return result
 
     def drop_duplicates(
         self,
@@ -1255,7 +1558,8 @@ class Frame(libcudf.table.Table):
                     # Do not change the copy_data[name]
                     pass
 
-        result = self._from_table(Frame(copy_data, self.index))
+            result = self._from_table(Frame(copy_data, self._index))
+
         return result
 
     def _copy_categories(self, other, include_index=True):
@@ -1709,8 +2013,9 @@ class Frame(libcudf.table.Table):
 
 
 def _get_replacement_values(to_replace, replacement, col_name, column):
-    from cudf.utils import utils
     from pandas.api.types import is_dict_like
+
+    from cudf.utils import utils
 
     all_nan = False
 

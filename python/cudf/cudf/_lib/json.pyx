@@ -40,7 +40,7 @@ cpdef read_json(filepath_or_buffer, dtype,
         path_or_data = path_or_data.encode()
 
     # Setup arguments
-    cdef read_json_args args = read_json_args(make_source_info(path_or_data))
+    cdef read_json_args args = read_json_args(make_source_info([path_or_data]))
 
     args.lines = lines
     if compression is not None:
