@@ -357,6 +357,19 @@ struct column_gatherer_impl<list_view, MapItRoot> {
   }
 };
 
+template <typename MapItRoot>
+struct column_gatherer_impl<struct_view, MapItRoot> {
+  std::unique_ptr<column> operator()(column_view const& column,
+                                    MapItRoot gather_map_begin,
+                                    MapItRoot gather_map_end,
+                                    bool nullify_out_of_bounds,
+                                    cudaStream_t stream,
+                                    rmm::mr::device_memory_resource* mr)
+  {
+    CUDF_FAIL("Gather not yet supported on struct_view.");
+  }
+};
+
 /**
  * @brief Function object for gathering a type-erased
  * column. To be used with the cudf::type_dispatcher.

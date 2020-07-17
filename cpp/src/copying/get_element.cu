@@ -114,6 +114,16 @@ struct get_element_functor {
   {
     CUDF_FAIL("get_element_functor not supported for list_view");
   }
+
+  template <typename T, std::enable_if_t<std::is_same<T, struct_view>::value> *p = nullptr>
+  std::unique_ptr<scalar> operator()(
+    column_view const &input,
+    size_type index,
+    cudaStream_t stream                 = 0,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+  {
+    CUDF_FAIL("get_element_functor not supported for struct_view");
+  }
 };
 
 }  // namespace

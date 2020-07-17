@@ -19,6 +19,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/list_view.cuh>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>

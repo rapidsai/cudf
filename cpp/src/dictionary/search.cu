@@ -38,7 +38,8 @@ namespace detail {
 struct find_index_fn {
   template <typename Element,
             std::enable_if_t<not std::is_same<Element, dictionary32>::value and
-                             not std::is_same<Element, list_view>::value>* = nullptr>
+                             not std::is_same<Element, list_view>::value and
+                             not std::is_same<Element, struct_view>::value>* = nullptr>
   std::unique_ptr<numeric_scalar<int32_t>> operator()(dictionary_column_view const& input,
                                                       scalar const& key,
                                                       rmm::mr::device_memory_resource* mr,
@@ -77,6 +78,15 @@ struct find_index_fn {
                                                       cudaStream_t stream) const
   {
     CUDF_FAIL("list_view column cannot be the keys column of a dictionary");
+  }
+
+  template <typename Element, std::enable_if_t<std::is_same<Element, struct_view>::value>* = nullptr>
+  std::unique_ptr<numeric_scalar<int32_t>> operator()(dictionary_column_view const& input,
+                                                      scalar const& key,
+                                                      rmm::mr::device_memory_resource* mr,
+                                                      cudaStream_t stream) const
+  {
+    CUDF_FAIL("struct_view column cannot be the keys column of a dictionary");
   }
 };
 

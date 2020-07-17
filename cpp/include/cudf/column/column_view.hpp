@@ -335,6 +335,9 @@ class column_view : public detail::column_view_base {
    **/
   size_type num_children() const noexcept { return _children.size(); }
 
+  auto child_begin() const noexcept { return _children.begin(); }
+  auto child_end() const noexcept { return _children.end(); }
+
  private:
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data

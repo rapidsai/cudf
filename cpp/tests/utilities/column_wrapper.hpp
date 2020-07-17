@@ -956,5 +956,57 @@ class lists_column_wrapper : public detail::column_wrapper {
 
   bool root = false;
 };
+
+class structs_column_wrapper : public detail::column_wrapper
+{
+  public:
+
+    structs_column_wrapper(std::vector<std::unique_ptr<cudf::column>>&& child_columns, std::vector<bool> const& validity = {})
+    {
+      init(std::move(child_columns), validity);
+    }
+
+    structs_column_wrapper(std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers, std::vector<bool> const& validity = {})
+    {
+      std::vector<std::unique_ptr<cudf::column>> child_columns;
+      child_columns.reserve(child_column_wrappers.size());
+      std::transform(
+        child_column_wrappers.begin(), 
+        child_column_wrappers.end(), 
+        std::back_inserter(child_columns), 
+        [&](auto column_wrapper){return column_wrapper.get().release();}
+      );
+      init(std::move(child_columns), validity);
+    }
+
+    static auto ref(detail::column_wrapper& column_wrapper)
+    {
+      return std::ref(column_wrapper);
+    }
+
+  private:
+
+    void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns, std::vector<bool> const& validity)
+    {
+      size_type num_rows = child_columns.empty()? 0 : child_columns[0]->size();
+
+      CUDF_EXPECTS(
+        std::all_of(child_columns.begin(), child_columns.end(), [&](auto const& p_column) {return p_column->size() == num_rows;}), 
+        "All struct member columns must have the same row count."
+      );
+
+      CUDF_EXPECTS(
+        validity.size() <= 0 || static_cast<size_type>(validity.size()) == num_rows,
+        "Validity buffer must have as many elements as rows in the struct column."
+      );
+
+      wrapped = cudf::make_structs_column(
+        num_rows, 
+        std::move(child_columns), 
+        validity.size() <= 0? 0 : cudf::UNKNOWN_NULL_COUNT,
+        validity.size() <= 0? rmm::device_buffer{0} : detail::make_null_mask(validity.begin(), validity.end()));
+    }
+};
+
 }  // namespace test
 }  // namespace cudf

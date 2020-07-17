@@ -25,6 +25,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/lists/list_view.cuh>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -185,6 +186,19 @@ struct column_scalar_scatterer_impl<list_view, MapIterator> {
                                      cudaStream_t stream) const
   {
     CUDF_FAIL("scatter scalar to list_view not implemented");
+  }
+};
+
+template <typename MapIterator>
+struct column_scalar_scatterer_impl<struct_view, MapIterator> {
+  std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
+                                     MapIterator scatter_iter,
+                                     size_type scatter_rows,
+                                     column_view const& target,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream) const
+  {
+    CUDF_FAIL("scatter scalar to struct_view not implemented");
   }
 };
 

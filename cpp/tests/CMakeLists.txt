@@ -534,6 +534,14 @@ set(STRINGS_TEST_SRC
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 
 ###################################################################################################
+# - structs test ----------------------------------------------------------------------------------
+
+set(STRUCTS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/structs/structs_column_tests.cu")
+
+ConfigureTest(STRUCTS_TEST "${STRUCTS_TEST_SRC}")
+
+###################################################################################################
 # - nvtext test ----------------------------------------------------------------------------------
 
 set(TEXT_TEST_SRC

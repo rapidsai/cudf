@@ -70,6 +70,13 @@ void compare_scalar_functor::operator()<cudf::list_view>(cudf::scalar const& lhs
   CUDF_FAIL("Unsupported scalar compare type: list_view");
 }
 
+template <>
+void compare_scalar_functor::operator()<cudf::struct_view>(cudf::scalar const& lhs,
+                                                         cudf::scalar const& rhs)
+{
+  CUDF_FAIL("Unsupported scalar compare type: struct_view");
+}
+
 }  // anonymous namespace
 
 void expect_scalars_equal(cudf::scalar const& lhs, cudf::scalar const& rhs)

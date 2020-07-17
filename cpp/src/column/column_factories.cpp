@@ -190,6 +190,16 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::list
   CUDF_FAIL("TODO");
 }
 
+template <>
+std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::struct_view>(
+  scalar const& value,
+  size_type size,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream) const
+{
+  CUDF_FAIL("TODO. struct_view currently not supported.");
+}
+
 std::unique_ptr<column> make_column_from_scalar(scalar const& s,
                                                 size_type size,
                                                 rmm::mr::device_memory_resource* mr,

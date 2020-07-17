@@ -59,6 +59,7 @@ class column_view;
 class mutable_column_view;
 class string_view;
 class list_view;
+class struct_view;
 
 class scalar;
 template <typename T>
@@ -78,6 +79,8 @@ template <typename T>
 class duration_scalar_device_view;
 
 class list_scalar;
+
+class struct_scalar;
 
 class table;
 class table_view;
@@ -207,6 +210,7 @@ enum class type_id : int32_t {
   DICTIONARY32,            ///< Dictionary type using int32 indices
   STRING,                  ///< String elements
   LIST,                    ///< List elements
+  STRUCT,                  ///< Struct elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
 };

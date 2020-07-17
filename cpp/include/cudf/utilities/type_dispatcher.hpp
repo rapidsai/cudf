@@ -132,6 +132,7 @@ CUDF_TYPE_MAPPING(cudf::duration_us, type_id::DURATION_MICROSECONDS);
 CUDF_TYPE_MAPPING(cudf::duration_ns, type_id::DURATION_NANOSECONDS);
 CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
 CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
+CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT);
 
 template <typename T>
 struct type_to_scalar_type_impl {
@@ -182,6 +183,12 @@ template <>  // TODO: this is to get compilation working. list scalars will be i
 struct type_to_scalar_type_impl<cudf::list_view> {
   using ScalarType = cudf::list_scalar;
   // using ScalarDeviceType = cudf::list_scalar_device_view;
+};
+
+template <>  // TODO: Ditto, likewise.
+struct type_to_scalar_type_impl<cudf::struct_view> {
+  using ScalarType = cudf::struct_scalar;
+  // using ScalarDeviceType = cudf::struct_scalar_device_view; // CALEB: TODO!
 };
 
 #ifndef MAP_TIMESTAMP_SCALAR
@@ -399,6 +406,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
         std::forward<Ts>(args)...);
     case type_id::LIST:
       return f.template operator()<typename IdTypeMap<type_id::LIST>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::STRUCT:
+      return f.template operator()<typename IdTypeMap<type_id::STRUCT>::type>(
         std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
