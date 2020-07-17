@@ -419,6 +419,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
   }
 }
 
+namespace {
 template <typename T1>
 struct dispatch_second_type_impl {
 #pragma nv_exec_check_disable
@@ -441,6 +442,7 @@ struct dispatch_second_type {
       type2, dispatch_second_type_impl<T1>{}, std::forward<F>(f), std::forward<Ts>(args)...);
   }
 };
+}  // namespace
 
 /**
  * @brief Dispatches two type template parameters to a callable.
