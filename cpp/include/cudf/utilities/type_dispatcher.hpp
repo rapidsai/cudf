@@ -419,28 +419,30 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
   }
 }
 
+namespace detail {
 template <typename T1>
-struct dispatch_second_type_impl {
+struct dispatch_second_type {
 #pragma nv_exec_check_disable
   template <typename T2, typename F, typename... Ts>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const noexcept
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const
   {
     return f.template operator()<T1, T2>(std::forward<Ts>(args)...);
   }
 };
 
 template <template <cudf::type_id> typename IdTypeMap>
-struct dispatch_second_type {
+struct dispatch_first_type {
 #pragma nv_exec_check_disable
   template <typename T1, typename F, typename... Ts>
   CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(cudf::data_type type2,
                                                       F&& f,
-                                                      Ts&&... args) const noexcept
+                                                      Ts&&... args) const
   {
     return type_dispatcher<IdTypeMap>(
-      type2, dispatch_second_type_impl<T1>{}, std::forward<F>(f), std::forward<Ts>(args)...);
+      type2, detail::dispatch_second_type<T1>{}, std::forward<F>(f), std::forward<Ts>(args)...);
   }
 };
+}  // namespace detail
 
 /**
  * @brief Dispatches two type template parameters to a callable.
@@ -456,13 +458,16 @@ struct dispatch_second_type {
  */
 #pragma nv_exec_check_disable
 template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl, typename F, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) dispatch_two_types(cudf::data_type type1,
-                                                                      cudf::data_type type2,
-                                                                      F&& f,
-                                                                      Ts&&... args)
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_double_dispatcher(cudf::data_type type1,
+                                                                          cudf::data_type type2,
+                                                                          F&& f,
+                                                                          Ts&&... args)
 {
-  return type_dispatcher<IdTypeMap>(
-    type1, dispatch_second_type<IdTypeMap>{}, type2, std::forward<F>(f), std::forward<Ts>(args)...);
+  return type_dispatcher<IdTypeMap>(type1,
+                                    detail::dispatch_first_type<IdTypeMap>{},
+                                    type2,
+                                    std::forward<F>(f),
+                                    std::forward<Ts>(args)...);
 }
 
 /** @} */  // end of group
