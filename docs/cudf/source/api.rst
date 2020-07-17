@@ -196,6 +196,13 @@ GroupBy
     :members:
     :exclude-members: deserialize, serialize
 
+General utility functions
+-------------------------
+.. currentmodule:: cudf.testing
+
+.. automodule:: cudf.testing.testing
+    :members:
+
 
 
 IO
