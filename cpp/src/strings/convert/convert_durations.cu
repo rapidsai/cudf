@@ -193,9 +193,7 @@ struct duration_to_string_size_fn {
   {
     switch (format_char) {
       case '-': return timeparts[DU_NEGATIVE]; break;
-      case 'D':
-        return count_digits(timeparts[DU_DAY]) - (timeparts[DU_DAY] < 0);
-        break;  // TODO FIXME
+      case 'D': return count_digits(timeparts[DU_DAY]) - (timeparts[DU_DAY] < 0); break;
       case 'S':
         return 2 + (timeparts[DU_SUBSECOND] == 0 ? 0 : [] {
                  if (simt::std::is_same<T, duration_ms>::value) return 3 + 1;  // +1 is for dot
@@ -530,19 +528,22 @@ struct parse_duration {
         length -= item.length;
         continue;
       }
+      timeparts[DU_NEGATIVE] |= (*ptr == '-');
 
       // special logic for each specifier
+      // TODO parse_day, parse_hour, parse_minute, parse_second, parse_am_or_pm
       int8_t item_length{0};
       switch (item.value) {
         case 'D': timeparts[DU_DAY] = str2int(ptr, 11, item_length); break;
-        case '+':
-          if (*ptr == '+') item_length = 1;
-          break;  // skip
+        case '-': break;  // skip
         case 'H': timeparts[DU_HOUR] = str2int(ptr, 2, item_length); break;
+        case 'I': timeparts[DU_MINUTE] = str2int(ptr, 2, item_length); break;
         case 'M': timeparts[DU_MINUTE] = str2int(ptr, 2, item_length); break;
-        case 'S': timeparts[DU_SECOND] = str2int(ptr, 2, item_length); break;
-        case 'u':
-        case 'f':
+        case 'S':
+          timeparts[DU_SECOND] = str2int(ptr, 2, item_length);
+          ptr += item_length;     // TODO FIXME
+          length -= item_length;  // TODO FIXME
+          item_length = 0;        // TODO FIXME
           if (*ptr == '.') {
             auto subsecond_precision = (item.length == -1) ? 9 : item.length - 1;  // +1 is for dot
             auto subsecond = str2int_fixed(ptr + 1, subsecond_precision, length - 1, item_length);
@@ -558,6 +559,17 @@ struct parse_duration {
       }
       ptr += item_length;
       length -= item_length;
+    }
+    timeparts[DU_NEGATIVE] =
+      (timeparts[DU_NEGATIVE] || timeparts[DU_DAY] < 0 || timeparts[DU_HOUR] < 0 ||
+       timeparts[DU_MINUTE] < 0 || timeparts[DU_SECOND] < 0 || timeparts[DU_SUBSECOND] < 0);
+    auto negate = [](auto i, bool b) { return (i < 0 ? i : (b ? -i : i)); };
+    if (timeparts[DU_NEGATIVE]) {
+      timeparts[DU_DAY]       = negate(timeparts[DU_DAY], timeparts[DU_NEGATIVE]);
+      timeparts[DU_HOUR]      = negate(timeparts[DU_HOUR], timeparts[DU_NEGATIVE]);
+      timeparts[DU_MINUTE]    = negate(timeparts[DU_MINUTE], timeparts[DU_NEGATIVE]);
+      timeparts[DU_SECOND]    = negate(timeparts[DU_SECOND], timeparts[DU_NEGATIVE]);
+      timeparts[DU_SUBSECOND] = negate(timeparts[DU_SUBSECOND], timeparts[DU_NEGATIVE]);
     }
     return 0;
   }
