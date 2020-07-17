@@ -46,7 +46,10 @@ def read_csv(
     """{docstring}"""
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        filepath_or_buffer, compression, (BytesIO, StringIO), **kwargs
+        path_or_data=filepath_or_buffer,
+        compression=compression,
+        iotypes=(BytesIO, StringIO),
+        **kwargs,
     )
     return libcudf.csv.read_csv(
         filepath_or_buffer,
@@ -96,11 +99,16 @@ def to_csv(
     index=True,
     line_terminator="\n",
     chunksize=None,
+    **kwargs,
 ):
     """{docstring}"""
 
     if path is None:
         raise ValueError("path/filename not provided")
+
+    path_or_buf = ioutils.get_writer_filepath_or_buffer(
+        path_or_data=path, mode="w", **kwargs
+    )
 
     if index:
         from cudf import MultiIndex
@@ -123,12 +131,25 @@ def to_csv(
 
     rows_per_chunk = chunksize if chunksize else len(df)
 
-    return libcudf.csv.write_csv(
-        df,
-        path_or_buf=path,
-        sep=sep,
-        na_rep=na_rep,
-        header=header,
-        line_terminator=line_terminator,
-        rows_per_chunk=rows_per_chunk,
-    )
+    if ioutils.is_fsspec_open_file(path_or_buf):
+        with path_or_buf as file_obj:
+            file_obj = ioutils.get_IOBase_writer(file_obj)
+            libcudf.csv.write_csv(
+                df,
+                path_or_buf=file_obj,
+                sep=sep,
+                na_rep=na_rep,
+                header=header,
+                line_terminator=line_terminator,
+                rows_per_chunk=rows_per_chunk,
+            )
+    else:
+        libcudf.csv.write_csv(
+            df,
+            path_or_buf=path_or_buf,
+            sep=sep,
+            na_rep=na_rep,
+            header=header,
+            line_terminator=line_terminator,
+            rows_per_chunk=rows_per_chunk,
+        )

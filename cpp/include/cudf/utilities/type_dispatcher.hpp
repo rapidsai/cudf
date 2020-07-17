@@ -135,6 +135,7 @@ CUDF_TYPE_MAPPING(cudf::duration_ns, type_id::DURATION_NANOSECONDS);
 CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
 CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
 CUDF_TYPE_MAPPING(numeric::decimal32, type_id::DECIMAL32);
+CUDF_TYPE_MAPPING(numeric::decimal64, type_id::DECIMAL64);
 
 template <typename T>
 struct type_to_scalar_type_impl {
@@ -174,10 +175,16 @@ struct type_to_scalar_type_impl<cudf::string_view> {
   using ScalarDeviceType = cudf::string_scalar_device_view;
 };
 
-template <>  // TODO: this is a temporary solution for make_pair_iterator
+template <>
 struct type_to_scalar_type_impl<numeric::decimal32> {
   using ScalarType       = cudf::fixed_point_scalar<numeric::decimal32>;
   using ScalarDeviceType = cudf::fixed_point_scalar_device_view<numeric::decimal32>;
+};
+
+template <>
+struct type_to_scalar_type_impl<numeric::decimal64> {
+  using ScalarType       = cudf::fixed_point_scalar<numeric::decimal64>;
+  using ScalarDeviceType = cudf::fixed_point_scalar_device_view<numeric::decimal64>;
 };
 
 template <>  // TODO: this is a temporary solution for make_pair_iterator
@@ -411,6 +418,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
         std::forward<Ts>(args)...);
     case type_id::DECIMAL32:
       return f.template operator()<typename IdTypeMap<type_id::DECIMAL32>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::DECIMAL64:
+      return f.template operator()<typename IdTypeMap<type_id::DECIMAL64>::type>(
         std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
