@@ -234,7 +234,6 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader::impl::get_json_obj
  *
  * @param[in] range_offset Number of bytes offset from the start
  * @param[in] range_size Bytes to read; use `0` for all remaining data
- *
  */
 void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
 {
@@ -263,7 +262,6 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
  *
  * Sets the uncomp_data_ and uncomp_size_ data members
  * Loads the data into device memory if byte range parameters are not used
- *
  */
 void reader::impl::decompress_input()
 {
@@ -290,7 +288,6 @@ void reader::impl::decompress_input()
  * Does not upload the entire file to the GPU
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- *
  */
 void reader::impl::set_record_starts(cudaStream_t stream)
 {
@@ -407,7 +404,6 @@ void reader::impl::upload_data_to_device()
  * Sets the column_names_ data member
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- *
  */
 void reader::impl::set_column_names(cudaStream_t stream)
 {
@@ -475,7 +471,6 @@ void set_null_count(size_type num_rows,
  * If user does not pass the data types, deduces types from the file content
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- *
  */
 void reader::impl::set_data_types(cudaStream_t stream)
 {

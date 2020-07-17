@@ -49,12 +49,11 @@ namespace gpu {
  * Also iterates over (one or more) delimiter characters after the field.
  * Function applies to formats with field delimiters and line terminators.
  *
- * @param data The entire plain text data to read
+ * @param begin Pointer to the first character in the parsing range
+ * @param end pointer to the first character after the parsing range
  * @param opts A set of parsing options
- * @param pos Offset to start the seeking from
- * @param stop Offset of the end of the row
  *
- * @return uint64_t The position of the last character in the field, including the
+ * @return Pointer to the last character in the field, including the
  *  delimiter(s) following the field data
  */
 __device__ __inline__ char const* seek_field_end(char const* begin,
@@ -62,28 +61,30 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
                                                  ParseOptions const& opts)
 {
   bool quotation = false;
-  auto it        = begin;
+  auto current   = begin;
   while (true) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
     // may not output exact failures as PANDAS for malformed fields
-    if (*it == opts.quotechar) {
+    if (*current == opts.quotechar) {
       quotation = !quotation;
-    } else if (quotation == false) {
-      if (*it == opts.delimiter) {
-        while (opts.multi_delimiter && it < end && *(it + 1) == opts.delimiter) { ++it; }
+    } else if (!quotation) {
+      if (*current == opts.delimiter) {
+        while (opts.multi_delimiter && current < end && *(current + 1) == opts.delimiter) {
+          ++current;
+        }
         break;
-      } else if (*it == opts.terminator) {
+      } else if (*current == opts.terminator) {
         break;
-      } else if (*it == '\r' && (it + 1 < end && *(it + 1) == '\n')) {
+      } else if (*current == '\r' && (current + 1 < end && *(current + 1) == '\n')) {
         --end;
         break;
       }
     }
-    if (it >= end) break;
-    it++;
+    if (current >= end) break;
+    current++;
   }
-  return it;
+  return current;
 }
 
 /**

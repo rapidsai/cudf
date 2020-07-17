@@ -731,8 +731,8 @@ __device__ key_value_range get_next_key_value_range(char const *begin,
  * @param[in] opts A set of parsing options
  * @param[in] rec_starts The offset of each row in the input
  * @param[in] num_records The number of rows
- * @param[out] keys_cnt Number of found keys in the file
- * @param[out] keys_info Information (offset, length, hash) for each found key (optional)
+ * @param[out] keys_cnt Number of keys found in the file
+ * @param[out] keys_info optional, information (offset, length, hash) for each found key
  *
  */
 __global__ void collect_keys_info_kernel(const char *data,

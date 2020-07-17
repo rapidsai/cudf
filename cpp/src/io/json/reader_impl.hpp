@@ -44,8 +44,7 @@ using col_map_type     = cudf::io::json::gpu::col_map_type;
 using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_map_type *)>>;
 
 /**
- * @brief Class used to parse Json input and convert it into gdf columns
- *
+ * @brief Class used to parse Json input and convert it into gdf columns.
  */
 class reader::impl {
  public:
@@ -108,7 +107,6 @@ class reader::impl {
    *
    * @param[in] range_offset Number of bytes offset from the start
    * @param[in] range_size Bytes to read; use `0` for all remaining data
-   *
    */
   void ingest_raw_input(size_t range_offset, size_t range_size);
 
