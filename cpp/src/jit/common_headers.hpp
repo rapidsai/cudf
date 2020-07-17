@@ -39,7 +39,8 @@
 namespace cudf {
 namespace jit {
 
-const std::vector<std::string> compiler_flags{
+const std::vector<std::string> compiler_flags
+{
   "-std=c++14",
     // Have jitify prune unused global variables
     "-remove-unused-globals",
