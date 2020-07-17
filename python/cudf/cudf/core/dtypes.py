@@ -1,6 +1,10 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import pickle
 
+import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas.api.extensions import ExtensionDtype
 
 import cudf
@@ -103,3 +107,63 @@ class CategoricalDtype(ExtensionDtype):
             categories_header, categories_frames
         )
         return cls(categories=categories, ordered=ordered)
+
+
+class ListDtype(ExtensionDtype):
+    def __init__(self, element_type):
+        if isinstance(element_type, ListDtype):
+            self._typ = pa.list_(element_type._typ)
+        else:
+            element_type = cudf.utils.dtypes.np_to_pa_dtype(
+                np.dtype(element_type)
+            )
+            self._typ = pa.list_(element_type)
+
+    @property
+    def element_type(self):
+        if isinstance(self._typ.value_type, pa.ListType):
+            return ListDtype.from_arrow(self._typ.value_type)
+        else:
+            return np.dtype(self._typ.value_type.to_pandas_dtype()).name
+
+    @property
+    def leaf_type(self):
+        if isinstance(self.element_type, ListDtype):
+            return self.element_type.leaf_type
+        else:
+            return self.element_type
+
+    @property
+    def type(self):
+        # TODO: we should change this to return something like a
+        # ListDtypeType, once we figure out what that should look like
+        return pa.array
+
+    @property
+    def name(self):
+        return "list"
+
+    @classmethod
+    def from_arrow(cls, typ):
+        obj = object.__new__(cls)
+        obj._typ = typ
+        return obj
+
+    def to_arrow(self):
+        return self._typ
+
+    def to_pandas(self):
+        super().to_pandas(integer_object_nulls=True)
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == self.name
+        if type(other) is not ListDtype:
+            return False
+        return self._typ.equals(other._typ)
+
+    def __repr__(self):
+        if isinstance(self.element_type, ListDtype):
+            return f"ListDtype({self.element_type.__repr__()})"
+        else:
+            return f"ListDtype({self.element_type})"

@@ -14,6 +14,7 @@ from cudf._lib.nvtx import annotate
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_column_like,
     is_numerical_dtype,
     is_scalar,
     min_scalar_type,
@@ -35,6 +36,15 @@ class Frame(libcudf.table.Table):
     @classmethod
     def _from_table(cls, table):
         return cls(table._data, index=table._index)
+
+    def _mimic_inplace(self, result, inplace=False):
+        if inplace:
+            for col in self._data:
+                self._data[col]._mimic_inplace(result._data[col], inplace=True)
+            self._data = result._data
+            self._index = result._index
+        else:
+            return result
 
     @property
     def empty(self):
@@ -742,9 +752,7 @@ class Frame(libcudf.table.Table):
             if len(common_cols) > 0:
                 # If `self` and `cond` are having unequal index,
                 # then re-index `cond`.
-                if len(self.index) != len(cond.index) or any(
-                    self.index != cond.index
-                ):
+                if not self.index.equals(cond.index):
                     cond = cond.reindex(self.index)
             else:
                 if cond.shape != self.shape:
@@ -1303,6 +1311,178 @@ class Frame(libcudf.table.Table):
             "is not allowed, To explicitly construct a PyArrow Array, "
             "consider using .to_arrow()"
         )
+
+    @annotate("SAMPLE", color="orange", domain="cudf_python")
+    def sample(
+        self,
+        n=None,
+        frac=None,
+        replace=False,
+        weights=None,
+        random_state=None,
+        axis=None,
+        keep_index=True,
+    ):
+        """Return a random sample of items from an axis of object.
+
+        You can use random_state for reproducibility.
+
+        Parameters
+        ----------
+        n : int, optional
+            Number of items from axis to return. Cannot be used with frac.
+            Default = 1 if frac = None.
+        frac : float, optional
+            Fraction of axis items to return. Cannot be used with n.
+        replace : bool, default False
+            Allow or disallow sampling of the same row more than once.
+            replace == True is not yet supported for axis = 1/"columns"
+        weights : str or ndarray-like, optional
+            Only supported for axis=1/"columns"
+        random_state : int or None, default None
+            Seed for the random number generator (if int), or None.
+            If None, a random seed will be chosen.
+        axis : {0 or ‘index’, 1 or ‘columns’, None}, default None
+            Axis to sample. Accepts axis number or name.
+            Default is stat axis for given data type
+            (0 for Series and DataFrames). Series and Index doesn't
+            support axis=1.
+
+        Returns
+        -------
+        Series or DataFrame or Index
+            A new object of same type as caller containing n items
+            randomly sampled from the caller object.
+
+         Example
+        -------
+        >>> import cudf as cudf
+        >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
+        >>> df.sample(3)
+           a
+        1  2
+        3  4
+        0  1
+
+        >>> sr = cudf.Series([1, 2, 3, 4, 5])
+        >>> sr.sample(10, replace=True)
+        1    4
+        3    1
+        2    4
+        0    5
+        0    1
+        4    5
+        4    1
+        0    2
+        0    3
+        3    2
+        dtype: int64
+
+        >>> df = cudf.DataFrame(
+        ... {"a":[1, 2], "b":[2, 3], "c":[3, 4], "d":[4, 5]})
+        >>> df.sample(2, axis=1)
+           a  c
+        0  1  3
+        1  2  4
+        """
+
+        if frac is not None and frac > 1 and not replace:
+            raise ValueError(
+                "Replace has to be set to `True` "
+                "when upsampling the population `frac` > 1."
+            )
+        elif frac is not None and n is not None:
+            raise ValueError(
+                "Please enter a value for `frac` OR `n`, not both"
+            )
+
+        if frac is None and n is None:
+            n = 1
+        elif frac is not None:
+            if axis is None or axis == 0 or axis == "index":
+                n = int(round(self.shape[0] * frac))
+            else:
+                n = int(round(self.shape[1] * frac))
+
+        if axis is None or axis == 0 or axis == "index":
+            if not replace and n > self.shape[0]:
+                raise ValueError(
+                    "Cannot take a larger sample than population "
+                    "when 'replace=False'"
+                )
+
+            if weights is not None:
+                raise NotImplementedError(
+                    "weights is not yet supported for axis=0/index"
+                )
+
+            seed = (
+                np.random.randint(np.iinfo(np.int64).max, dtype=np.int64)
+                if random_state is None
+                else np.int64(random_state)
+            )
+
+            result = self._from_table(
+                libcudf.copying.sample(
+                    self,
+                    n=n,
+                    replace=replace,
+                    seed=seed,
+                    keep_index=keep_index,
+                )
+            )
+            result._copy_categories(self)
+
+            return result
+        else:
+            if len(self.shape) != 2:
+                raise ValueError(
+                    f"No axis named {axis} for "
+                    f"object type {self.__class__}"
+                )
+
+            columns = np.asarray(self._data.names)
+            if not replace and n > columns.size:
+                raise ValueError(
+                    "Cannot take a larger sample "
+                    "than population when 'replace=False'"
+                )
+
+            if weights is not None:
+                if is_column_like(weights):
+                    weights = np.asarray(weights)
+                else:
+                    raise ValueError(
+                        "Strings can only be passed to weights "
+                        "when sampling from rows on a DataFrame"
+                    )
+
+                if columns.size != len(weights):
+                    raise ValueError(
+                        "Weights and axis to be sampled must be of same length"
+                    )
+
+                total_weight = weights.sum()
+                if total_weight != 1:
+                    if not isinstance(weights.dtype, float):
+                        weights = weights.astype("float64")
+                    weights = weights / total_weight
+
+            np.random.seed(random_state)
+            gather_map = np.random.choice(
+                columns, size=n, replace=replace, p=weights
+            )
+
+            if isinstance(self, cudf.MultiIndex):
+                # TODO: Need to update this once MultiIndex is refactored,
+                # should be able to treat it similar to other Frame object
+                result = cudf.Index(self._source_data[gather_map])
+            else:
+                result = self[gather_map]
+                if not keep_index:
+                    result.index = None
+
+            return result
 
     def drop_duplicates(
         self,
