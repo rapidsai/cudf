@@ -484,6 +484,39 @@ class strings_column_wrapper : public detail::column_wrapper {
 
 /**
  * @brief `column_wrapper` derived class for wrapping columns of lists.
+ *
+ * Important note : due to the way initializer lists work, there is a
+ * non-obvious behavioral difference when declaring nested empty lists
+ * in different situations.  Specifically,
+ *
+ * - When compiled inside of a templated class function (such as a TYPED_TEST
+ *   cudf test wrapper), nested empty lists behave as they read, semantically.
+ *
+ * @code{.pseudo}
+ *   lists_column_wrapper<int> col{ {LCW{}} }
+ *   This yields a List<List<int>> column containing 1 row : a list
+ *   containing an empty list.
+ * @endcode
+ *
+ * - When compiled under other situations (a global function, or a non
+ *   templated class function), the behavior is different.
+ *
+ * @code{.pseudo}
+ *   lists_column_wrapper<int> col{ {LCW{}} }
+ *   This yields a List<int> column containing 1 row that is an empty
+ *   list.
+ * @endcode
+ *
+ * This only effects the initial nesting of the empty list. In summary, the
+ * correct way to declare an "Empty List" in the two cases are:
+ *
+ * @code{.pseudo}
+ *   // situation 1 (cudf TYPED_TEST case)
+ *   LCW{}
+ *   // situation 2 (cudf TEST_F case)
+ *   {LCW{}}
+ * @endcode
+ *
  */
 template <typename T>
 class lists_column_wrapper : public detail::column_wrapper {
@@ -673,12 +706,6 @@ class lists_column_wrapper : public detail::column_wrapper {
     build_from_non_nested(make_empty_column(cudf::data_type{cudf::type_to_id<T>()}));
   }
 
-  lists_column_wrapper(lists_column_wrapper<T> const& l) : column_wrapper{}
-  {
-    std::vector<bool> valids;
-    build_from_nested({l}, valids);
-  }
-
   /**
    * @brief Construct a lists column of nested lists from an initializer list of values
    * and a validity iterator.
@@ -807,8 +834,8 @@ class lists_column_wrapper : public detail::column_wrapper {
 
       children.push_back(cols[idx]);
     }
-    auto data = children.empty() ? make_empty_column(cudf::data_type{cudf::type_to_id<T>()})
-                                 : concatenate(children);
+    auto data =
+      children.empty() ? make_empty_column(cudf::data_type{child_id}) : concatenate(children);
 
     // construct the list column
     wrapped = make_lists_column(

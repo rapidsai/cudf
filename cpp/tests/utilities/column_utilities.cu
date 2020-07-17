@@ -224,6 +224,9 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     lists_column_view lhs_l(lhs);
     lists_column_view rhs_l(rhs);
 
+    CUDF_EXPECTS(lhs_l.size() == rhs_l.size(), "List column size mismatch");
+    if (lhs_l.size() == 0) { return; }
+
     // using the row_equality_operator directly on a list column is a bad idea for several
     // reasons:
     // - at the moment, the row_equality_operator doesn't support lists
