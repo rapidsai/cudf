@@ -73,9 +73,9 @@ __device__ std::pair<char const *, char const *> limit_range_to_brackets(char co
  *
  * @return Begin and end iterators of the key name; (`end`, `end`) if a key is not found
  */
-__device__ std::pair<char const *, char const *> parse_next_key(char const *begin,
-                                                                char const *end,
-                                                                char quotechar)
+__device__ std::pair<char const *, char const *> get_next_key(char const *begin,
+                                                              char const *end,
+                                                              char quotechar)
 {
   // Key starts after the first quote
   auto const key_begin = thrust::find(thrust::seq, begin, end, quotechar) + 1;
@@ -84,9 +84,9 @@ __device__ std::pair<char const *, char const *> parse_next_key(char const *begi
   // Key ends after the next unescaped quote
   auto prev_ch       = ' ';
   auto const key_end = thrust::find_if(thrust::seq, key_begin, end, [&] __device__(auto ch) {
-    auto res = (ch == quotechar && prev_ch != '\\');
-    prev_ch  = ch;
-    return res;
+    auto const is_unescaped_quote = (ch == quotechar && prev_ch != '\\');
+    prev_ch                       = ch;
+    return is_unescaped_quote;
   });
 
   return {key_begin, key_end};
@@ -414,6 +414,7 @@ __device__ __inline__ bool is_like_float(
 
   return true;
 }
+
 /**
  * @brief Contains information on a JSON file field.
  */
@@ -430,8 +431,8 @@ struct field_descriptor {
  * @param[in] end pointer to the first character after the parsing range
  * @param[in] opts The global parsing behavior options
  * @param[in] field_idx Index of the current field in the input row
- * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory
- *
+ * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory.
+ * nullptr is passed when the input file does not consist of objects.
  * @return Descriptor of the parsed field
  */
 __device__ field_descriptor next_field_descriptor(const char *begin,
@@ -441,11 +442,11 @@ __device__ field_descriptor next_field_descriptor(const char *begin,
                                                   col_map_type *col_map)
 {
   auto const desc_pre_trim =
-    !col_map
+    col_map == nullptr
       // No key - column and begin are trivial
       ? field_descriptor{field_idx, begin, cudf::io::gpu::seek_field_end(begin, end, opts)}
       : [&]() {
-          auto const key_range = parse_next_key(begin, end, opts.quotechar);
+          auto const key_range = get_next_key(begin, end, opts.quotechar);
           auto const key_hash  = MurmurHash3_32<cudf::string_view>{}(
             cudf::string_view(key_range.first, key_range.second - key_range.first));
           auto const hash_col = col_map->find(key_hash);
@@ -464,6 +465,19 @@ __device__ field_descriptor next_field_descriptor(const char *begin,
   return {desc_pre_trim.column, trimmed_value_range.first, trimmed_value_range.second};
 }
 
+/**
+ * @brief Returns the range that contains the data in a given row.
+ *
+ * Excludes the top-level brackets.
+ *
+ * @param[in] data Pointer to the JSON data in device memory
+ * @param[in] data_size Size of the data buffer, in bytes
+ * @param[in] rec_starts The offset of each row in the input
+ * @param[in] num_rows The number of lines/rows
+ * @param[in] row Index of the row for which the range is returned
+ *
+ * @return The begin and end iterators of the row data.
+ */
 __device__ std::pair<char const *, char const *> get_row_data_range(
   char const *data, size_t data_size, uint64_t const *row_starts, size_type num_rows, size_type row)
 {
@@ -479,16 +493,16 @@ __device__ std::pair<char const *, char const *> get_row_data_range(
  *
  * @param[in] data The entire data to read
  * @param[in] data_size Size of the data buffer, in bytes
- * @param[in] rec_starts The start of each data record
+ * @param[in] rec_starts The offset of each row in the input
  * @param[in] num_records The number of lines/rows
  * @param[in] dtypes The data type of each column
  * @param[in] opts A set of parsing options
- * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory
+ * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory.
+ * nullptr is passed when the input file does not consist of objects.
  * @param[out] output_columns The output column data
  * @param[in] num_columns The number of columns
  * @param[out] valid_fields The bitmaps indicating whether column fields are valid
  * @param[out] num_valid_fields The numbers of valid fields in columns
- *
  */
 __global__ void convert_data_to_columns_kernel(const char *data,
                                                size_t data_size,
@@ -508,7 +522,7 @@ __global__ void convert_data_to_columns_kernel(const char *data,
   auto const row_data_range = get_row_data_range(data, data_size, rec_starts, num_records, rec_id);
 
   auto current = row_data_range.first;
-  for (int input_field_index = 0;
+  for (size_type input_field_index = 0;
        input_field_index < num_columns && current < row_data_range.second;
        input_field_index++) {
     auto const desc =
@@ -559,7 +573,7 @@ __global__ void convert_data_to_columns_kernel(const char *data,
  * @param[in] data Input data buffer
  * @param[in] data_size Size of the data buffer, in bytes
  * @param[in] opts A set of parsing options
- * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory.
+ * @param[in] col_map Pointer to the (column name hash -> column index) map in device memory.
  * nullptr is passed when the input file does not consist of objects.
  * @param[in] num_columns The number of columns of input data
  * @param[in] rec_starts The offset of each row in the input
@@ -581,7 +595,7 @@ __global__ void detect_data_types_kernel(const char *data,
   auto const are_rows_objects = col_map != nullptr;
   auto const row_data_range = get_row_data_range(data, data_size, rec_starts, num_records, rec_id);
 
-  int input_field_index = 0;
+  size_type input_field_index = 0;
   for (auto current = row_data_range.first;
        input_field_index < num_columns && current < row_data_range.second;
        input_field_index++) {
@@ -682,7 +696,7 @@ __global__ void detect_data_types_kernel(const char *data,
 }
 
 /**
- * @brief Input data range filled by a field in key:value format.
+ * @brief Input data range that contains a field in key:value format.
  */
 struct key_value_range {
   char const *key_begin;
@@ -698,7 +712,7 @@ __device__ key_value_range get_next_key_value_range(char const *begin,
                                                     char const *end,
                                                     ParseOptions const &opts)
 {
-  auto const key_range = parse_next_key(begin, end, opts.quotechar);
+  auto const key_range = get_next_key(begin, end, opts.quotechar);
 
   // Colon between the key and the value
   auto const colon = thrust::find(thrust::seq, key_range.second, end, ':');
@@ -755,7 +769,6 @@ __global__ void collect_keys_info_kernel(const char *data,
 
 /**
  * @copydoc cudf::io::json::gpu::convert_json_to_columns
- *
  */
 void convert_json_to_columns(rmm::device_buffer const &input_data,
                              data_type *const dtypes,
@@ -794,7 +807,6 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
 
 /**
  * @copydoc cudf::io::json::gpu::detect_data_types
- *
  */
 void detect_data_types(ColumnInfo *column_infos,
                        const char *data,
