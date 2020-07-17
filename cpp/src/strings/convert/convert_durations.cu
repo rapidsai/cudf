@@ -184,25 +184,6 @@ struct duration_to_string_size_fn {
   size_type items_count;
   type_id type;
 
-  __device__ int8_t count_trailing_zeros(int n) const
-  {
-    int8_t zeros = 0;
-    if ((n % 100000000) == 0) {
-      zeros += 8;
-      n /= 100000000;
-    }
-    if ((n % 10000) == 0) {
-      zeros += 4;
-      n /= 10000;
-    }
-    if ((n % 100) == 0) {
-      zeros += 2;
-      n /= 100;
-    }
-    if ((n % 10) == 0) { zeros++; }
-    return zeros;
-  }
-
   __device__ int8_t format_length(char format_char, int32_t const* const timeparts) const
   {
     switch (format_char) {
