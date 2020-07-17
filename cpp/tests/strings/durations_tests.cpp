@@ -55,7 +55,6 @@ TEST_F(StringsDurationsTest, FromToDurations)
   cudf::test::print(*results);
   cudf::test::print(expected);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  return;
 
   //
   auto new_durations = cudf::strings::to_durations(cudf::strings_column_view(expected),
@@ -70,13 +69,21 @@ TEST_F(StringsDurationsTest, ISOFormat)
   cudf::test::fixed_width_column_wrapper<T> durations{
     T{1530705600L}, T{1582934461L}, T{1451430122L}, T{1318302183L}, T{-6105994200L}};
   auto results = cudf::strings::from_durations(durations, "P%DDT%HH%MM%SS");
-  cudf::test::strings_column_wrapper expected{
-    "P17716DT12H0M0S", "P18321DT0H1M1S", "P16798DT23H2M2S", "P15258DT3H3M3S", "P-70672DT18H30M0S"};
+  cudf::test::strings_column_wrapper expected{"P17716DT12H00M00S",
+                                              "P18321DT00H01M01S",
+                                              "P16798DT23H02M02S",
+                                              "P15258DT03H03M03S",
+                                              "P-70671DT05H30M00S"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  return;
 
   //
-  auto new_durations = cudf::strings::to_durations(
+  cudf::test::strings_column_wrapper string_iso{
+    "P17716DT12H0M0S", "P18321DT0H1M1S", "P16798DT23H2M2S", "P15258DT3H3M3S", "P-70671DT5H30M0S"};
+  auto new_durations = cudf::strings::to_durations(cudf::strings_column_view(string_iso),
+                                                   cudf::data_type(cudf::type_to_id<T>()),
+                                                   "P%DDT%HH%MM%SS");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations, durations);
+  new_durations = cudf::strings::to_durations(
     cudf::strings_column_view(expected), cudf::data_type(cudf::type_to_id<T>()), "P%DDT%HH%MM%SS");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations, durations);
 }
@@ -87,18 +94,25 @@ TEST_F(StringsDurationsTest, ISOFormatDaysOnly)
   cudf::test::fixed_width_column_wrapper<T> durations{
     T{17716L}, T{18321L}, T{16798L}, T{15258L}, T{-70672L}};
   auto results1 = cudf::strings::from_durations(durations, "P%DDT%HH%MM%SS");
-  cudf::test::strings_column_wrapper expected1{
-    "P17716DT0H0M0S", "P18321DT0H0M0S", "P16798DT0H0M0S", "P15258DT0H0M0S", "P-70672DT0H0M0S"};
+  cudf::test::strings_column_wrapper expected1{"P17716DT00H00M00S",
+                                               "P18321DT00H00M00S",
+                                               "P16798DT00H00M00S",
+                                               "P15258DT00H00M00S",
+                                               "P-70672DT00H00M00S"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results1, expected1);
 
   auto results2 = cudf::strings::from_durations(durations, "P%DD");
   cudf::test::strings_column_wrapper expected2{
     "P17716D", "P18321D", "P16798D", "P15258D", "P-70672D"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results2, expected2);
-  return;
 
   //
-  auto new_durations1 = cudf::strings::to_durations(
+  cudf::test::strings_column_wrapper string_iso{
+    "P17716DT0H0M0S", "P18321DT0H0M0S", "P16798DT0H0M0S", "P15258DT0H0M0S", "P-70672DT0H0M0S"};
+  auto new_durations1 = cudf::strings::to_durations(cudf::strings_column_view(string_iso),
+                                                    cudf::data_type(cudf::type_to_id<T>()),
+                                                    "P%DDT%HH%MM%SS");
+  new_durations1      = cudf::strings::to_durations(
     cudf::strings_column_view(expected1), cudf::data_type(cudf::type_to_id<T>()), "P%DDT%HH%MM%SS");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations1, durations);
   auto new_durations2 = cudf::strings::to_durations(
@@ -121,23 +135,36 @@ TEST_F(StringsDurationsTest, ISOFormatSubseconds)
                                                       T{-70672L}};
   // fully isoformat compliant.
   auto results = cudf::strings::from_durations(durations, "P%DDT%HH%MM%SS");
-  cudf::test::strings_column_wrapper expected{"P0DT0H0M0S",
-                                              "P0DT0H0M7S",
-                                              "P0DT0H0M0.000000011S",
-                                              "P0DT0H0M0.00000001S",
-                                              "P0DT0H0M0.000017716S",
-                                              "P0DT0H0M0.000018321S",
-                                              "P0DT0H0M0.000016798S",
-                                              "P0DT0H0M0.000015258S",
-                                              "P0DT0H0M0.015258S",
-                                              "P-1DT23H59M59.999929328S"};
+  cudf::test::strings_column_wrapper expected{"P0DT00H00M00S",
+                                              "P0DT00H00M07S",
+                                              "P0DT00H00M00.000000011S",
+                                              "P0DT00H00M00.000000010S",
+                                              "P0DT00H00M00.000017716S",
+                                              "P0DT00H00M00.000018321S",
+                                              "P0DT00H00M00.000016798S",
+                                              "P0DT00H00M00.000015258S",
+                                              "P0DT00H00M00.015258000S",
+                                              "P-0DT00H00M00.000070672S"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   return;
 
   //
-  auto new_durations = cudf::strings::to_durations(cudf::strings_column_view(expected),
+  cudf::test::strings_column_wrapper string_iso{"P0DT0H0M0S",
+                                                "P0DT0H0M7S",
+                                                "P0DT0H0M0.000000011S",
+                                                "P0DT0H0M0.00000001S",
+                                                "P0DT0H0M0.000017716S",
+                                                "P0DT0H0M0.000018321S",
+                                                "P0DT0H0M0.000016798S",
+                                                "P0DT0H0M0.000015258S",
+                                                "P0DT0H0M0.015258S",
+                                                "P-0DT0H0M0.000070672S"};
+  auto new_durations = cudf::strings::to_durations(cudf::strings_column_view(string_iso),
                                                    cudf::data_type(cudf::type_to_id<T>()),
                                                    "P%DDT%HH%MM%SS");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations, durations);
+  new_durations = cudf::strings::to_durations(
+    cudf::strings_column_view(expected), cudf::data_type(cudf::type_to_id<T>()), "P%DDT%HH%MM%SS");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations, durations);
 }
 
@@ -160,10 +187,12 @@ TEST_F(StringsDurationsTest, DurationSeconds)
                                               "-1 days 09:00:00",
                                               "-365 days 09:00:04"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  return;
+
   auto new_durations = cudf::strings::to_durations(cudf::strings_column_view(expected),
                                                    cudf::data_type(cudf::type_to_id<T>()),
                                                    "%D days %H:%M:%S");
+  cudf::test::print(*new_durations);
+  cudf::test::print(durations);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations, durations);
 }
 
@@ -191,7 +220,6 @@ TEST_F(StringsDurationsTest, DurationDays)
   auto new_durations = cudf::strings::to_durations(cudf::strings_column_view(expected),
                                                    cudf::data_type(cudf::type_to_id<T>()),
                                                    "%D days %H:%M:%S");
-                                                   return;
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations, durations);
 }
 
@@ -234,7 +262,6 @@ TEST_F(StringsDurationsTest, DurationMilliseconds)
                                                  "-70671 days 12:00:00.047"};
   auto results = cudf::strings::from_durations(durations_ms, "%D days %H:%M:%S");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_ms);
-  return;
 
   //
   results = cudf::strings::to_durations(cudf::strings_column_view(expected_ms_3f),
@@ -290,7 +317,6 @@ TEST_F(StringsDurationsTest, DurationMicroseconds)
                                                  "-70 days 16:06:57.600047"};
   auto results = cudf::strings::from_durations(durations_us, "%D days %H:%M:%S");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_us);
-  return;
 
   //
   cudf::test::fixed_width_column_wrapper<cudf::duration_us> durations_us_3f{us{-60000},
@@ -300,7 +326,7 @@ TEST_F(StringsDurationsTest, DurationMicroseconds)
                                                                             us{1451430122000},
                                                                             us{1451430122000},
                                                                             us{1318302183000},
-                                                                            us{-6106017601000}};
+                                                                            us{-6106017600000}};
   results = cudf::strings::to_durations(cudf::strings_column_view(expected_us_3f),
                                         cudf::data_type(cudf::type_to_id<us>()),
                                         "%D days %H:%M:%S");
@@ -341,8 +367,7 @@ TEST_F(StringsDurationsTest, DurationNanoseconds)
                                                  "18321 days 00:01:01.007008009",
                                                  "16798 days 23:02:02.421310209",
                                                  "15258 days 03:03:03.99977755",
-                                                 "-70672 days +11:59:59.952952953"};
-                                                 return;
+                                                 "-70671 days 12:00:00.047047047"};
 
   //
   results = cudf::strings::to_durations(cudf::strings_column_view(expected_ns_9f),
@@ -354,7 +379,7 @@ TEST_F(StringsDurationsTest, DurationNanoseconds)
     ns{1582934461007008000},
     ns{1451430122421310000},
     ns{1318302183999777000},
-    ns{-6106017600047048000}};
+    ns{-6106017600047047000}};
   results = cudf::strings::to_durations(cudf::strings_column_view(expected_ns_6f),
                                         cudf::data_type(cudf::type_to_id<ns>()),
                                         "%D days %H:%M:%S");
