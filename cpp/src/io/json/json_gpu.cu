@@ -43,17 +43,13 @@ using string_pair = std::pair<const char *, size_t>;
 
 namespace {
 /**
- * @brief CUDA Kernel that modifies the start and stop offsets to exclude
- * the sections outside of the top level brackets.
+ * @brief CUDA Kernel that adjusts the row range to exclude the character outside of the top level
+ * brackets.
  *
  * The top level brackets characters are excluded from the resulting range.
- * Parameter stop has the same semantics as end() in STL containers
- * (one past the last element)
  *
- * @param[in] data Pointer to the device buffer containing the data to process
- * @param[in,out] start Offset of the first character in the range
- * @param[in,out] stop Offset of the first character after the range
- *
+ * @param[in] begin Pointer to the first character in the row
+ * @param[in] end pointer to the first character after the row
  */
 __device__ std::pair<char const *, char const *> limit_range_to_brackets(char const *begin,
                                                                          char const *end)
@@ -67,16 +63,18 @@ __device__ std::pair<char const *, char const *> limit_range_to_brackets(char co
 }
 
 /**
- * @brief Find the next JSON object key and returns its range in the input data.
+ * @brief Find the first JSON object key in the range.
+ *
+ * Assumes that begin is not in the middle of a field.
  *
  * @param[in] begin Pointer to the first character in the parsing range
  * @param[in] end pointer to the first character after the parsing range
  * @param[in] quotechar The character used to denote quotes
  *
- * @return Begin and end iterators of the key name; (end, end) if a key is not found
+ * @return Begin and end iterators of the key name; (`end`, `end`) if a key is not found
  */
-__device__ std::pair<char const *, char const *> parse_next_key(const char *begin,
-                                                                const char *end,
+__device__ std::pair<char const *, char const *> parse_next_key(char const *begin,
+                                                                char const *end,
                                                                 char quotechar)
 {
   // Key starts after the first quote
@@ -92,7 +90,7 @@ __device__ std::pair<char const *, char const *> parse_next_key(const char *begi
   });
 
   return {key_begin, key_end};
-}  // namespace
+}
 
 /**
  * @brief Decodes a numeric value base on templated cudf type T with specified
@@ -300,7 +298,8 @@ struct ConvertFunctor {
     } else if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
       value = 0;
     } else {
-      value = decode_value<T>(begin, 0, field_len - 1, opts);  // TODO: refactor this too
+      // TODO: refactor decode_value to use pointers too
+      value = decode_value<T>(begin, 0, field_len - 1, opts);
     }
 
     return true;
@@ -415,13 +414,26 @@ __device__ __inline__ bool is_like_float(
 
   return true;
 }
-
+/**
+ * @brief Contains information on a JSON file field.
+ */
 struct field_descriptor {
   cudf::size_type column;
   char const *value_begin;
   char const *value_end;
 };
 
+/**
+ * @brief Parse the first field in the given range and return its descriptor.
+ *
+ * @param[in] begin Pointer to the first character in the parsing range
+ * @param[in] end pointer to the first character after the parsing range
+ * @param[in] opts The global parsing behavior options
+ * @param[in] field_idx Index of the current field in the input row
+ * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory
+ *
+ * @return Descriptor of the parsed field
+ */
 __device__ field_descriptor next_field_descriptor(const char *begin,
                                                   const char *end,
                                                   ParseOptions const &opts,
@@ -437,7 +449,7 @@ __device__ field_descriptor next_field_descriptor(const char *begin,
           auto const key_hash  = MurmurHash3_32<cudf::string_view>{}(
             cudf::string_view(key_range.first, key_range.second - key_range.first));
           auto const hash_col = col_map->find(key_hash);
-          // fall back to field index if not found (parsing error)
+          // Fall back to field index if not found (parsing error)
           auto const column = (hash_col != col_map->end()) ? (*hash_col).second : field_idx;
 
           // Skip the colon between the key and the value
@@ -450,7 +462,7 @@ __device__ field_descriptor next_field_descriptor(const char *begin,
   auto const trimmed_value_range =
     trim_whitespaces_quotes(desc_pre_trim.value_begin, desc_pre_trim.value_end, opts.quotechar);
   return {desc_pre_trim.column, trimmed_value_range.first, trimmed_value_range.second};
-}  // namespace
+}
 
 /**
  * @brief CUDA kernel that parses and converts plain text data into cuDF column data.
