@@ -105,7 +105,7 @@ enum class ast_operator {
 };
 
 /*
- * Default all traits to false.
+ * Default all operator traits to false.
  */
 template <ast_operator op, typename = void>
 struct is_binary_arithmetic_operator_trait_impl : std::false_type {
@@ -418,6 +418,13 @@ struct is_unary_arithmetic_operator_trait_impl<ast_operator::BIT_INVERT> : std::
 template <>
 struct is_unary_logical_operator_trait_impl<ast_operator::NOT> : std::true_type {
 };
+
+// Traits for valid operator / type combinations
+template <typename L, typename R, typename Op>
+using is_valid_binary_op = decltype(std::declval<Op>()(std::declval<L>(), std::declval<R>()));
+
+template <typename T, typename Op>
+using is_valid_unary_op = decltype(std::declval<Op>()(std::declval<T>()));
 
 // Operator dispatcher used for checking traits of operators and returning logical-valued operations
 template <typename Functor, typename... Ts>
