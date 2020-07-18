@@ -51,7 +51,7 @@ Index
 .. autoclass:: Index
     :members:
     :inherited-members:
-    :exclude-members: serialize, deserialize, is_monotonic, is_monotonic_increasing, is_monotonic_decreasing, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 RangeIndex
 ----------

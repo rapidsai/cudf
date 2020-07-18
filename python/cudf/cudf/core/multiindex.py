@@ -925,6 +925,10 @@ class MultiIndex(Index):
 
     @property
     def is_monotonic_increasing(self):
+        """
+        Return if the index is monotonic increasing
+        (only equal or increasing) values.
+        """
         if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = self._is_sorted(
                 ascending=None, null_position=None
@@ -933,6 +937,10 @@ class MultiIndex(Index):
 
     @property
     def is_monotonic_decreasing(self):
+        """
+        Return if the index is monotonic decreasing
+        (only equal or decreasing) values.
+        """
         if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = self._is_sorted(
                 ascending=[False] * len(self.levels), null_position=None
