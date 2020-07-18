@@ -145,6 +145,7 @@ INSTANTIATE_TEST_CASE_P(TestAllIds,
 
 TEST_P(IdDoubleDispatcherTest, IdToType)
 {
+  // Test double-dispatch of all types using the same type for both dispatches
   auto t = GetParam();
   EXPECT_TRUE(cudf::type_double_dispatcher(
     cudf::data_type{t}, cudf::data_type{t}, verify_double_dispatched_type{}, t, t));
@@ -160,7 +161,7 @@ INSTANTIATE_TEST_CASE_P(TestAllIds,
 
 TEST_P(IdFixedDoubleDispatcherTest, IdToType)
 {
-  // Test all types against one fixed type, in each direction
+  // Test double-dispatch of all types against one fixed type, in each direction
   auto t = GetParam();
   EXPECT_TRUE(cudf::type_double_dispatcher(cudf::data_type{t},
                                            cudf::data_type{cudf::type_to_id<float>()},
