@@ -116,7 +116,7 @@ int main(int argc, char **argv)
   // the cuda context to be created at rmmInitialize, which happens before
   // the fork. So we hardcode the rmm_mode to "cuda"
   auto const rmm_mode = "cuda";
-  auto resource       = cudf::test::create_memory_resource(rmm_mode);
-  rmm::mr::set_default_resource(resource.get());
+  auto resources      = cudf::test::create_memory_resources(rmm_mode);
+  rmm::mr::set_default_resource(resources.second.get());
   return RUN_ALL_TESTS();
 }

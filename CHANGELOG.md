@@ -122,7 +122,7 @@
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
-- PR #5678 Make libcudf no longer link to librmm as this is causing java build problems
+- PR #5678 Switch tests/benchmarks to use `pool_memory_resource`
 - PR #5708 Add support for `dummy_na` in `get_dummies`
 - PR #5709 Update java build to help cu-spacial with java bindings
 - PR #5713 Remove old NVTX utilities

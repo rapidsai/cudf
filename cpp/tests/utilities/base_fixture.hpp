@@ -21,10 +21,10 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/cxxopts.hpp>
 
-#include <rmm/mr/device/cnmem_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/default_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <ftw.h>
 #include <random>
@@ -228,18 +228,28 @@ class TempDirTestEnvironment : public ::testing::Environment {
  * issues since the environment objects are not destroyed until
  * after the runtime is shutdown.
  *
+ * TODO(rongou): simplify this once RMM supports ownership of upstream resources.
+ *
  * @throw cudf::logic_error if the `allocation_mode` is unsupported.
  *
  * @param allocation_mode String identifies which resource type.
  *        Accepted types are "pool", "cuda", and "managed" only.
- * @return Memory resource instance
+ * @return Memory resource instances
  */
-inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(
-  std::string const &allocation_mode)
+inline std::pair<std::unique_ptr<rmm::mr::device_memory_resource>,
+                 std::unique_ptr<rmm::mr::device_memory_resource>>
+create_memory_resources(std::string const &allocation_mode)
 {
-  if (allocation_mode == "cuda") return std::make_unique<rmm::mr::cuda_memory_resource>();
-  if (allocation_mode == "pool") return std::make_unique<rmm::mr::cnmem_memory_resource>();
-  if (allocation_mode == "managed") return std::make_unique<rmm::mr::managed_memory_resource>();
+  if (allocation_mode == "cuda")
+    return std::make_pair(nullptr, std::make_unique<rmm::mr::cuda_memory_resource>());
+  if (allocation_mode == "pool") {
+    auto cuda = std::make_unique<rmm::mr::cuda_memory_resource>();
+    return std::make_pair(
+      std::move(cuda),
+      std::make_unique<rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>>(cuda.get()));
+  }
+  if (allocation_mode == "managed")
+    return std::make_pair(nullptr, std::make_unique<rmm::mr::managed_memory_resource>());
   CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }
 
@@ -278,13 +288,13 @@ inline auto parse_cudf_test_opts(int argc, char **argv)
  * allocation mode used for creating the default memory resource.
  *
  */
-#define CUDF_TEST_PROGRAM_MAIN()                                        \
-  int main(int argc, char **argv)                                       \
-  {                                                                     \
-    ::testing::InitGoogleTest(&argc, argv);                             \
-    auto const cmd_opts = parse_cudf_test_opts(argc, argv);             \
-    auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();       \
-    auto resource       = cudf::test::create_memory_resource(rmm_mode); \
-    rmm::mr::set_default_resource(resource.get());                      \
-    return RUN_ALL_TESTS();                                             \
+#define CUDF_TEST_PROGRAM_MAIN()                                         \
+  int main(int argc, char **argv)                                        \
+  {                                                                      \
+    ::testing::InitGoogleTest(&argc, argv);                              \
+    auto const cmd_opts = parse_cudf_test_opts(argc, argv);              \
+    auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();        \
+    auto resources      = cudf::test::create_memory_resources(rmm_mode); \
+    rmm::mr::set_default_resource(resources.second.get());               \
+    return RUN_ALL_TESTS();                                              \
   }
