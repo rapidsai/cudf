@@ -579,16 +579,15 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
  */
 /* ----------------------------------------------------------------------------*/
 
-HostDecompressor *HostDecompressor::Create(int stream_type)
+std::unique_ptr<HostDecompressor> HostDecompressor::Create(int stream_type)
 {
-  HostDecompressor *decompressor;
   switch (stream_type) {
-    case IO_UNCOMP_STREAM_TYPE_GZIP: decompressor = new HostDecompressor_ZLIB(true); break;
-    case IO_UNCOMP_STREAM_TYPE_INFLATE: decompressor = new HostDecompressor_ZLIB(false); break;
-    case IO_UNCOMP_STREAM_TYPE_SNAPPY: decompressor = new HostDecompressor_SNAPPY(); break;
-    default: decompressor = nullptr; break;
+    case IO_UNCOMP_STREAM_TYPE_GZIP: return std::make_unique<HostDecompressor_ZLIB>(true);
+    case IO_UNCOMP_STREAM_TYPE_INFLATE: return std::make_unique<HostDecompressor_ZLIB>(false);
+    case IO_UNCOMP_STREAM_TYPE_SNAPPY: return std::make_unique<HostDecompressor_SNAPPY>();
+    default: return {};
   }
-  return decompressor;
+  return {};
 }
 
 }  // namespace io

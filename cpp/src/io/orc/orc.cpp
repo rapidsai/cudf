@@ -465,11 +465,6 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
   }
 }
 
-OrcDecompressor::~OrcDecompressor()
-{
-  if (m_decompressor) { delete m_decompressor; }
-}
-
 /* --------------------------------------------------------------------------*/
 /**
  * @Brief ORC block decompression

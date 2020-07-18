@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -54,7 +55,7 @@ class HostDecompressor {
   virtual ~HostDecompressor() {}
 
  public:
-  static HostDecompressor* Create(int stream_type);
+  static std::unique_ptr<HostDecompressor> Create(int stream_type);
 };
 
 }  // namespace io
