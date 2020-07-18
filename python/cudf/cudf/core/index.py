@@ -156,6 +156,8 @@ class Index(Frame, Serializable):
     def serialize(self):
         """Serialize into pickle format suitable for file storage or network
         transmission.
+
+        :meta private:
         """
         header = {}
         header["index_column"] = {}
@@ -245,7 +247,9 @@ class Index(Frame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """
+        """Convert from pickle format into Index
+
+        :meta private:
         """
         h = header["index_column"]
         idx_typ = pickle.loads(header["type-serialized"])
@@ -1384,7 +1388,10 @@ class RangeIndex(Index):
             return (self == other)._values.all()
 
     def serialize(self):
-        """Serialize Index file storage or network transmission.
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+
+        :meta private:
         """
         header = {}
         header["index_column"] = {}
@@ -1405,7 +1412,9 @@ class RangeIndex(Index):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """
+        """Convert from pickle format into RangeIndex
+
+        :meta private:
         """
         h = header["index_column"]
         name = pickle.loads(header["name"])

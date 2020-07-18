@@ -503,6 +503,11 @@ class DataFrame(Frame, Serializable):
         )
 
     def serialize(self):
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+
+        :meta private:
+        """
         header = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
@@ -521,6 +526,10 @@ class DataFrame(Frame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
+        """Convert from pickle format into DataFrame
+
+        :meta private:
+        """
         # Reconstruct the index
         index_frames = frames[: header["index_frame_count"]]
 

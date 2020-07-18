@@ -645,6 +645,8 @@ class MultiIndex(Index):
     def serialize(self):
         """Serialize into pickle format suitable for file storage or network
         transmission.
+
+        :meta private:
         """
         header = {}
         header["type-serialized"] = pickle.dumps(type(self))
@@ -657,6 +659,8 @@ class MultiIndex(Index):
     @classmethod
     def deserialize(cls, header, frames):
         """Convert from pickle format into Index
+
+        :meta private:
         """
         names = pickle.loads(header["names"])
 

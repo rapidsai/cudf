@@ -203,6 +203,11 @@ class GroupBy(Serializable):
         return self.agg(dict.fromkeys(self.obj._data.keys(), "nunique"))
 
     def serialize(self):
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+
+        :meta private:
+        """
         header = {}
         frames = []
 
@@ -227,6 +232,10 @@ class GroupBy(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
+        """Convert from pickle format into GroupBy object
+
+        :meta private:
+        """
 
         kwargs = header["kwargs"]
 
@@ -794,6 +803,11 @@ class _Grouping(Serializable):
         self.names.append(None)
 
     def serialize(self):
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+
+        :meta private:
+        """
         header = {}
         frames = []
         header["names"] = pickle.dumps(self.names)
@@ -807,6 +821,10 @@ class _Grouping(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
+        """Convert from pickle format into GroupBy object
+
+        :meta private:
+        """
         names = pickle.loads(header["names"])
         _named_columns = pickle.loads(header["_named_columns"])
         key_columns = cudf.core.column.deserialize_columns(

@@ -88,6 +88,11 @@ class CategoricalDtype(ExtensionDtype):
         raise NotImplementedError()
 
     def serialize(self):
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+
+        :meta private:
+        """
         header = {}
         frames = []
         header["ordered"] = self.ordered
@@ -99,6 +104,10 @@ class CategoricalDtype(ExtensionDtype):
 
     @classmethod
     def deserialize(cls, header, frames):
+        """Convert from pickle format into CategoricalDtype
+
+        :meta private:
+        """
         ordered = header["ordered"]
         categories_header = header["categories"]
         categories_frames = frames
