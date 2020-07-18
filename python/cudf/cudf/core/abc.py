@@ -28,6 +28,11 @@ class Serializable(abc.ABC):
         pass
 
     def device_serialize(self):
+        """Serialize into pickle format of device object
+        suitable for file storage or network transmission.
+
+        :meta private:
+        """
         header, frames = self.serialize()
         assert all(
             (type(f) in [cudf.core.buffer.Buffer, memoryview]) for f in frames
@@ -41,6 +46,11 @@ class Serializable(abc.ABC):
 
     @classmethod
     def device_deserialize(cls, header, frames):
+        """Convert from device object pickle
+        format into respective Object Type
+
+        :meta private:
+        """
         typ = pickle.loads(header["type-serialized"])
         frames = [
             cudf.core.buffer.Buffer(f) if c else memoryview(f)
@@ -57,6 +67,11 @@ class Serializable(abc.ABC):
         return obj
 
     def host_serialize(self):
+        """Serialize into pickle format of host object
+        suitable for file storage or network transmission.
+
+        :meta private:
+        """
         header, frames = self.device_serialize()
         frames = [
             f.to_host_array().data if c else memoryview(f)
@@ -66,6 +81,11 @@ class Serializable(abc.ABC):
 
     @classmethod
     def host_deserialize(cls, header, frames):
+        """Convert from host object pickle
+        format into respective Object Type
+
+        :meta private:
+        """
         frames = [
             rmm.DeviceBuffer.to_device(f) if c else f
             for c, f in zip(header["is-cuda"], map(memoryview, frames))
