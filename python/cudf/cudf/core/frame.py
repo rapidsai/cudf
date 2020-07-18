@@ -252,14 +252,7 @@ class Frame(libcudf.table.Table):
                 if (ignore_index and not some_empty)
                 else list(f._index._data.columns)
             )
-            + [
-                f._data[name]
-                if name in f._data
-                else column_empty(len(f), masked=True)
-                if (ignore_index and not some_empty)
-                else None
-                for name in names
-            ]
+            + [f._data[name] if name in f._data else None for name in names]
             for i, f in enumerate(objs)
         ]
 
