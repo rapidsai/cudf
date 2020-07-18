@@ -585,7 +585,6 @@ std::unique_ptr<HostDecompressor> HostDecompressor::Create(int stream_type)
     case IO_UNCOMP_STREAM_TYPE_GZIP: return std::make_unique<HostDecompressor_ZLIB>(true);
     case IO_UNCOMP_STREAM_TYPE_INFLATE: return std::make_unique<HostDecompressor_ZLIB>(false);
     case IO_UNCOMP_STREAM_TYPE_SNAPPY: return std::make_unique<HostDecompressor_SNAPPY>();
-    default: return {};
   }
   return {};
 }

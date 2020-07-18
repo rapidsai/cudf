@@ -439,7 +439,7 @@ PBW_END_STRUCT()
 /* ----------------------------------------------------------------------------*/
 
 OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
-  : m_kind(kind), m_log2MaxRatio(24), m_blockSize(blockSize), m_decompressor(nullptr)
+  : m_kind(kind), m_log2MaxRatio(24), m_blockSize(blockSize)
 {
   if (kind != NONE) {
     int stream_type;
@@ -457,9 +457,7 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
       case ZSTD: stream_type = IO_UNCOMP_STREAM_TYPE_ZSTD; break;
       default: stream_type = IO_UNCOMP_STREAM_TYPE_INFER;  // Will be treated as invalid
     }
-    m_decompressor = (stream_type != IO_UNCOMP_STREAM_TYPE_INFER)
-                       ? HostDecompressor::Create(stream_type)
-                       : nullptr;
+    m_decompressor = HostDecompressor::Create(stream_type);
   } else {
     m_log2MaxRatio = 0;
   }
