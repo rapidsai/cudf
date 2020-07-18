@@ -365,6 +365,8 @@ def read_csv(
     if index_col is not None and index_col is not False:
         if isinstance(index_col, int):
             df = df.set_index(df._data.get_by_index(index_col).names[0])
+            if names is None:
+                df._index.name = index_col
         else:
             df = df.set_index(index_col)
 
@@ -395,7 +397,7 @@ cpdef write_csv(
     cdef char delim_c = ord(sep)
     cdef string line_term_c = line_terminator.encode()
     cdef string na_c = na_rep.encode()
-    cdef int rows_per_hunk_c = rows_per_chunk
+    cdef int rows_per_chunk_c = rows_per_chunk
     cdef table_metadata metadata_ = table_metadata()
     cdef string true_value_c = 'True'.encode()
     cdef string false_value_c = 'False'.encode()
@@ -410,7 +412,7 @@ cpdef write_csv(
     cdef unique_ptr[write_csv_args] write_csv_args_c = (
         make_unique[write_csv_args](
             sink_info_c, input_table_view, na_c, include_header_c,
-            rows_per_hunk_c, line_term_c, delim_c, true_value_c,
+            rows_per_chunk_c, line_term_c, delim_c, true_value_c,
             false_value_c, &metadata_
         )
     )

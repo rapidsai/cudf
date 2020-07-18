@@ -486,8 +486,8 @@ add_library(cudf
             src/io/utilities/type_conversion.cu
             src/io/utilities/data_sink.cpp
             src/copying/gather.cu
-            src/utilities/nvtx/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/sample.cu
             src/copying/scatter.cu
             src/copying/shift.cu
             src/copying/copy.cu
