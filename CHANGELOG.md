@@ -21,7 +21,7 @@
 - PR #5364 Validate array interface during buffer construction
 - PR #5418 Add support for `DataFrame.info`
 - PR #5425 Add Python `Groupby.rolling()`
-- PR #5359 Add duration types 
+- PR #5359 Add duration types
 - PR #5434 Add nvtext function generate_character_grams
 - PR #5442 Add support for `cudf.isclose`
 - PR #5444 Remove usage of deprecated RMM APIs and headers.
@@ -29,15 +29,22 @@
 - PR #5488 Add plumbings for `.str.replace_tokens`
 - PR #5502 Add Unsigned int types support in dlpack
 - PR #5497 Add `.str.isinteger` & `.str.isfloat`
-- PR #5511 Port of clx subword tokenizer to cudf 
+- PR #5511 Port of clx subword tokenizer to cudf
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
+- PR #5668 Adding support for `cudf.testing`
+- PR #5460 Add support to write to remote filesystems
 - PR #5454 Add support for `DataFrame.append`, `Index.append`, `Index.difference` and `Index.empty`
 - PR #5536 Parquet reader - add support for multiple sources
+- PR #5654 Adding support for `cudf.DataFrame.sample` and `cudf.Series.sample`
 - PR #5607 Add Java bindings for duration types
 - PR #5612 Add `is_hex` strings API
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
+- PR #5674 Support JIT backend on PowerPC64
+- PR #5629 Add `ListColumn` and `ListDtype`
+- PR #5658 Add `filter_tokens` nvtext API
+- PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 
 ## Improvements
@@ -93,7 +100,7 @@
 - PR #5468 Add cudf::unique_count(table_view)
 - PR #5482 Use rmm::device_uvector in place of rmm::device_vector in copy_if
 - PR #5483 Add NVTX range calls to dictionary APIs
-- PR #5477 Add `is_index_type` trait 
+- PR #5477 Add `is_index_type` trait
 - PR #5487 Use sorted lists instead of sets for pytest parameterization
 - PR #5491 allow build libcudf in custom dir
 - PR #5501 Adding only unsigned types support for categorical column codes
@@ -115,6 +122,10 @@
 - PR #5643 Update `isort` to 5.0.4
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
+- PR #5684 Use `pickle5` in `Serializable` (when available)
+- PR #5708 Add support for `dummy_na` in `get_dummies`
+- PR #5709 Update java build to help cu-spacial with java bindings
+- PR #5713 Remove old NVTX utilities
 - PR #5720 Replace owning raw pointers with std::unique_ptr
 
 ## Bug Fixes
@@ -130,7 +141,7 @@
 - PR #5334 Fix pickling sizeof test
 - PR #5337 Fix broken alias from DataFrame.{at,iat} to {loc, iloc}
 - PR #5347 Fix APPLY_BOOLEAN_MASK_BENCH segfault
-- PR #5368 Fix loc indexing issue with `datetime` type index 
+- PR #5368 Fix loc indexing issue with `datetime` type index
 - PR #5367 Fix API for `cudf::repeat` in `cudf::cross_join`
 - PR #5377 Handle array of cupy scalars in to_column
 - PR #5326 Fix `DataFrame.__init__` for list of scalar inputs and related dask issue
@@ -145,7 +156,7 @@
 - PR #5399 Fix cpp compiler warnings of unreachable code
 - PR #5439 Fix nvtext ngrams_tokenize performance for multi-byte UTF8
 - PR #5446 Fix compile error caused by out-of-date PR merge (4990)
-- PR #5423 Fix any() reduction ignore nulls 
+- PR #5423 Fix any() reduction ignore nulls
 - PR #5459 Fix str.translate to convert table characters to UTF-8
 - PR #5480 Fix merge sort docs
 - PR #5465 Fix benchmark out of memory errors due to multiple initialization
@@ -169,12 +180,17 @@
 - PR #5619 Fix issue related to typecasting when using a `CategoricalDtype`
 - PR #5649 Fix issue when empty Dataframe with index are passed to `cudf.concat`
 - PR #5644 Fix issue related to Dataframe init when passing in `columns`
+- PR #5340 Disable iteration in cudf objects and add support for `DataFrame` initialization with list of `Series`
+- PR #5663 Move Duration types under Timestamps in doxygen Modules page
 - PR #5664 Update conda upload versions for new supported CUDA/Python
 - PR #5656 Fix issue with incorrect docker image being used in local build script
 - PR #5671 Fix chunksize issue with `DataFrame.to_csv`
 - PR #5672 Fix crash in parquet writer while writing large string data
+- PR #5692 Fix compilation issue with gcc 7.4.0 and CUDA 10.1
+- PR #5693 Add fix missing from PR 5656 to update local docker image to py3.7
+- PR #5703 Small fix for dataframe constructor with cuda array interface objects that don't have `descr` field
 
-# cuDF 0.14.0 (Date TBD)
+# cuDF 0.14.0 (03 Jun 2020)
 
 ## New Features
 
@@ -282,7 +298,7 @@
 - PR #4841 Remove unused `single_lane_block_popc_reduce` function
 - PR #4842 Added Java bindings for titlizing a String column
 - PR #4847 Replace legacy NVTX calls with "standalone" NVTX bindings calls
-- PR #4851 Performance improvements relating to `concat` 
+- PR #4851 Performance improvements relating to `concat`
 - PR #4852 Add NVTX range calls to strings and nvtext APIs
 - PR #4849 Update Java bindings to use new NVTX API
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
@@ -310,7 +326,7 @@
 - PR #4912 Drop old `valid` check in `element_indexing`
 - PR #4924 Properly handle npartition argument in rearrange_by_hash
 - PR #4918 Adding support for `cupy.ndarray` in `series.loc`
-- PR #4909 Added ability to transform a column using cuda method in Java bindings 
+- PR #4909 Added ability to transform a column using cuda method in Java bindings
 - PR #3259 Add .clang-format file & format all files
 - PR #4943 Fix-up error handling in GPU detection
 - PR #4917 Add support for casting unsupported `dtypes` of same kind
@@ -424,7 +440,7 @@
 - PR #4749 Setting `nan_as_null=True` while creating a column in DataFrame creation
 - PR #4761 Fix issues with `nan_as_null` in certain case
 - PR #4650 Fix type mismatch & result format issue in `searchsorted`
-- PR #4755 Fix Java build to deal with new quantiles API 
+- PR #4755 Fix Java build to deal with new quantiles API
 - PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays
 - PR #4756 Fix regex error checking for valid quantifier condition
 - PR #4777 Fix data pointer for column slices of zero length
@@ -448,7 +464,7 @@
 - PR #4883 Fix series get/set to match pandas
 - PR #4861 Fix to_integers illegal-memory-access with all-empty strings column
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
-- PR #4879 Fix output for `cudf.concat` with `axis=1` for pandas parity 
+- PR #4879 Fix output for `cudf.concat` with `axis=1` for pandas parity
 - PR #4838 Fix to support empty inputs to `replace` method
 - PR #4859 JSON reader: fix data type inference for string columns
 - PR #4868 Temporary fix to skip validation on Dask related runs
@@ -486,7 +502,7 @@
 - PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
 - PR #5057 Fix metadata_out parameter not reaching parquet `write_all`
 - PR #5076 Fix JNI code for null_policy enum change
-- PR #5031 grouped_time_range_rolling_window assumes ASC sort order 
+- PR #5031 grouped_time_range_rolling_window assumes ASC sort order
 - PR #5032 grouped_time_range_rolling_window should permit invocation without specifying grouping_keys
 - PR #5103 Fix `read_csv` issue with names and header
 - PR #5090 Fix losing nulls while creating DataFrame from dictionary
@@ -599,7 +615,7 @@
 - PR #4028 Port json.pyx to use new libcudf APIs
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
 - PR #3880 Add aggregation infrastructure support for cudf::reduce
-- PR #4059 Add aggregation infrastructure support for cudf::scan 
+- PR #4059 Add aggregation infrastructure support for cudf::scan
 - PR #4021 Change quantiles signature for clarity.
 - PR #4057 Handle offsets in cython Column class
 - PR #4045 Reorganize `libxx` directory
@@ -2041,7 +2057,7 @@
 
 - PR #821 Fix flake8 issues revealed by flake8 update
 - PR #808 Resolved renamed `d_columns_valids` variable name
-- PR #820 CSV Reader: fix the issue where reader adds additional rows when file uses 
+- PR #820 CSV Reader: fix the issue where reader adds additional rows when file uses
  as a line terminator
 - PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
 - PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file

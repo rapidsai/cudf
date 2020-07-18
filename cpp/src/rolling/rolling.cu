@@ -28,7 +28,6 @@
 #include <cudf/rolling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/nvtx_utils.hpp>
 #include <rolling/rolling_detail.hpp>
 #include <rolling/rolling_jit_detail.hpp>
 
@@ -290,8 +289,6 @@ struct rolling_window_launcher {
                             std::unique_ptr<aggregation> const& agg,
                             cudaStream_t stream)
   {
-    cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
-
     constexpr cudf::size_type block_size = 256;
     cudf::detail::grid_1d grid(input.size(), block_size);
 
@@ -322,8 +319,6 @@ struct rolling_window_launcher {
 
     // check the stream for debugging
     CHECK_CUDA(stream);
-
-    cudf::nvtx::range_pop();
 
     return valid_count;
   }
@@ -538,8 +533,6 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   if (input.has_nulls())
     CUDF_FAIL("Currently the UDF version of rolling window does NOT support inputs with nulls.");
 
-  cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
-
   min_periods = std::max(min_periods, 0);
 
   auto udf_agg = static_cast<udf_aggregation*>(agg.get());
@@ -609,19 +602,16 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   // check the stream for debugging
   CHECK_CUDA(stream);
 
-  cudf::nvtx::range_pop();
-
   return output;
 }
 
 /**
- * @copydoc cudf::rolling_window(
- *                                  column_view const& input,
- *                                  PrecedingWindowIterator preceding_window_begin,
- *                                  FollowingWindowIterator following_window_begin,
- *                                  size_type min_periods,
- *                                  std::unique_ptr<aggregation> const& agg,
- *                                  rmm::mr::device_memory_resource* mr)
+ * @copydoc cudf::rolling_window(column_view const& input,
+ *                               PrecedingWindowIterator preceding_window_begin,
+ *                               FollowingWindowIterator following_window_begin,
+ *                               size_type min_periods,
+ *                               std::unique_ptr<aggregation> const& agg,
+ *                               rmm::mr::device_memory_resource* mr)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -661,6 +651,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
+
   if (input.size() == 0) return empty_like(input);
   CUDF_EXPECTS((min_periods >= 0), "min_periods must be non-negative");
 
@@ -692,6 +683,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
+
   if (preceding_window.size() == 0 || following_window.size() == 0 || input.size() == 0)
     return empty_like(input);
 
@@ -731,6 +723,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                std::unique_ptr<aggregation> const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
+
   if (input.size() == 0) return empty_like(input);
 
   CUDF_EXPECTS((group_keys.num_columns() == 0 || group_keys.num_rows() == input.size()),
@@ -817,6 +811,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 }
 
 namespace {
+
 bool is_supported_range_frame_unit(cudf::data_type const& data_type)
 {
   auto id = data_type.id();
@@ -1138,6 +1133,8 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                           std::unique_ptr<aggregation> const& aggr,
                                                           rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
+
   if (input.size() == 0) return empty_like(input);
 
   CUDF_EXPECTS((group_keys.num_columns() == 0 || group_keys.num_rows() == input.size()),

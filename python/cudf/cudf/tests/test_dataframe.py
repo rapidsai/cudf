@@ -3,6 +3,7 @@ import array as arr
 import io
 import operator
 import random
+import re
 import textwrap
 
 import cupy
@@ -255,7 +256,7 @@ def test_dataframe_basic():
     gdf = DataFrame({"id": [0, 1], "val": [None, None]})
     gdf["val"] = gdf["val"].astype("int")
 
-    assert all(gdf["val"].isnull())
+    assert gdf["val"].isnull().all()
 
 
 def test_dataframe_drop_method():
@@ -505,7 +506,7 @@ def test_dataframe_to_string():
     df["c"] = masked
 
     # check data
-    values = list(masked)
+    values = masked.copy()
     validids = [0, 2, 3, 5]
     densearray = masked.to_array()
     np.testing.assert_equal(data[validids], densearray)
@@ -3625,10 +3626,11 @@ def test_series_values_host_property(data):
         [5.0, 7.0, 8.0],
         pytest.param(
             pd.Categorical(["a", "b", "c"]),
-            marks=pytest.mark.xfail(raises=TypeError),
+            marks=pytest.mark.xfail(raises=NotImplementedError),
         ),
         pytest.param(
-            ["m", "a", "d", "v"], marks=pytest.mark.xfail(raises=TypeError)
+            ["m", "a", "d", "v"],
+            marks=pytest.mark.xfail(raises=NotImplementedError),
         ),
     ],
 )
@@ -5080,9 +5082,7 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 .fillna(-1)
                 .to_array(),
             )
-            assert tuple(expect_where.cat.categories) == tuple(
-                got_where.cat.categories
-            )
+            assert_eq(expect_where.cat.categories, got_where.cat.categories)
 
             np.testing.assert_array_equal(
                 expect_mask.cat.codes,
@@ -5090,9 +5090,7 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 .fillna(-1)
                 .to_array(),
             )
-            assert tuple(expect_mask.cat.categories) == tuple(
-                got_mask.cat.categories
-            )
+            assert_eq(expect_mask.cat.categories, got_mask.cat.categories)
         else:
             assert_eq(
                 expect_where.fillna(-1),
@@ -5538,8 +5536,13 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
     if isinstance(data, cupy.core.ndarray):
         # pandas can't handle cupy arrays in general
         pd_data = data.get()
+
+        # additional test for building DataFrame with gpu array whose
+        # cuda array interface has no `descr` attribute
+        numba_data = cuda.as_cuda_array(data)
     else:
         pd_data = data
+        numba_data = None
 
     # verify with columns & index
     pdf = pd.DataFrame(pd_data, columns=cols, index=index)
@@ -5557,6 +5560,10 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
     gdf = DataFrame(gd_data)
 
     assert_eq(pdf, gdf, check_dtype=False)
+
+    if numba_data is not None:
+        gdf = DataFrame(numba_data)
+        assert_eq(pdf, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -6127,6 +6134,29 @@ def test_cudf_isclose_different_index():
     assert_eq(expected, gd.isclose(s1, s2))
 
 
+def test_dataframe_to_dict_error():
+    df = gd.DataFrame({"a": [1, 2, 3], "b": [9, 5, 3]})
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            r"Implicit conversion to a host memory via to_dict() is not "
+            r"allowed, To explicitly construct a dictionary object, "
+            r"consider using .to_pandas().to_dict()"
+        ),
+    ):
+        df.to_dict()
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            r"Implicit conversion to a host memory via to_dict() is not "
+            r"allowed, To explicitly construct a dictionary object, "
+            r"consider using .to_pandas().to_dict()"
+        ),
+    ):
+        df["a"].to_dict()
+
+
 @pytest.mark.parametrize(
     "df",
     [
@@ -6488,6 +6518,107 @@ def test_cudf_arrow_array_error():
         sr.__arrow_array__()
 
 
+@pytest.mark.parametrize("n", [0, 2, 5, 10, None])
+@pytest.mark.parametrize("frac", [0.1, 0.5, 1, 2, None])
+@pytest.mark.parametrize("replace", [True, False])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_dataframe_sample_basic(n, frac, replace, axis):
+    # as we currently don't support column with same name
+    if axis == 1 and replace:
+        return
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+            "float": [0.05, 0.2, 0.3, 0.2, 0.25],
+            "int": [1, 3, 5, 4, 2],
+        },
+        index=[1, 2, 3, 4, 5],
+    )
+    df = DataFrame.from_pandas(pdf)
+    random_state = 0
+
+    kind = None
+
+    try:
+        pout = pdf.sample(
+            n=n,
+            frac=frac,
+            replace=replace,
+            random_state=random_state,
+            axis=axis,
+        )
+    except BaseException as e:
+        kind = type(e)
+        msg = str(e)
+
+    if kind is not None:
+        with pytest.raises(kind, match=msg):
+            gout = df.sample(
+                n=n,
+                frac=frac,
+                replace=replace,
+                random_state=random_state,
+                axis=axis,
+            )
+    else:
+        gout = df.sample(
+            n=n,
+            frac=frac,
+            replace=replace,
+            random_state=random_state,
+            axis=axis,
+        )
+
+    if kind is not None:
+        return
+
+    assert pout.shape == gout.shape
+
+
+@pytest.mark.parametrize("replace", [True, False])
+def test_dataframe_reproducibility(replace):
+    df = DataFrame({"a": cupy.arange(0, 1024)})
+
+    expected = df.sample(1024, replace=replace, random_state=1)
+    out = df.sample(1024, replace=replace, random_state=1)
+
+    assert_eq(expected, out)
+
+
+@pytest.mark.parametrize("n", [0, 2, 5, 10, None])
+@pytest.mark.parametrize("frac", [0.1, 0.5, 1, 2, None])
+@pytest.mark.parametrize("replace", [True, False])
+def test_series_sample_basic(n, frac, replace):
+    psr = pd.Series([1, 2, 3, 4, 5])
+    sr = Series.from_pandas(psr)
+    random_state = 0
+
+    kind = None
+
+    try:
+        pout = psr.sample(
+            n=n, frac=frac, replace=replace, random_state=random_state
+        )
+    except BaseException as e:
+        kind = type(e)
+        msg = str(e)
+
+    if kind is not None:
+        with pytest.raises(kind, match=msg):
+            gout = sr.sample(
+                n=n, frac=frac, replace=replace, random_state=random_state
+            )
+    else:
+        gout = sr.sample(
+            n=n, frac=frac, replace=replace, random_state=random_state
+        )
+
+    if kind is not None:
+        return
+
+    assert pout.shape == gout.shape
+
+
 @pytest.mark.parametrize(
     "df",
     [
@@ -6549,3 +6680,206 @@ def test_dataframe_init_with_columns(data, columns):
         check_index_type=False if len(pdf.index) == 0 else True,
         check_dtype=False if pdf.empty and len(pdf.columns) else True,
     )
+
+
+@pytest.mark.parametrize(
+    "data, ignore_dtype",
+    [
+        ([pd.Series([1, 2, 3])], False),
+        ([pd.Series(index=[1, 2, 3])], False),
+        ([pd.Series(name="empty series name")], False),
+        ([pd.Series([1]), pd.Series([]), pd.Series([3])], False),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([]),
+                pd.Series([3], name="series that is named"),
+            ],
+            False,
+        ),
+        ([pd.Series([1, 2, 3], name="hi")] * 10, False),
+        ([pd.Series([1, 2, 3], name=None, index=[10, 11, 12])] * 10, False),
+        (
+            [
+                pd.Series([1, 2, 3], name=None, index=[10, 11, 12]),
+                pd.Series([1, 2, 30], name=None, index=[13, 144, 15]),
+            ],
+            True,
+        ),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([]),
+                pd.Series(index=[10, 11, 12]),
+            ],
+            False,
+        ),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([], name="abc"),
+                pd.Series(index=[10, 11, 12]),
+            ],
+            False,
+        ),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([1, -100, 200, -399, 400], name="abc"),
+                pd.Series([111, 222, 333], index=[10, 11, 12]),
+            ],
+            False,
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "columns", [None, ["0"], [0], ["abc"], [144, 13], [2, 1, 0]]
+)
+def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
+    gd_data = [gd.from_pandas(obj) for obj in data]
+
+    expected = pd.DataFrame(data, columns=columns)
+    actual = gd.DataFrame(gd_data, columns=columns)
+
+    if ignore_dtype:
+        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+    else:
+        assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data, ignore_dtype, index",
+    [
+        ([pd.Series([1, 2, 3])], False, ["a", "b", "c"]),
+        ([pd.Series(index=[1, 2, 3])], False, ["a", "b"]),
+        ([pd.Series(name="empty series name")], False, ["index1"]),
+        (
+            [pd.Series([1]), pd.Series([]), pd.Series([3])],
+            False,
+            ["0", "2", "1"],
+        ),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([]),
+                pd.Series([3], name="series that is named"),
+            ],
+            False,
+            ["_", "+", "*"],
+        ),
+        ([pd.Series([1, 2, 3], name="hi")] * 10, False, ["mean"] * 10),
+        (
+            [pd.Series([1, 2, 3], name=None, index=[10, 11, 12])] * 10,
+            False,
+            ["abc"] * 10,
+        ),
+        (
+            [
+                pd.Series([1, 2, 3], name=None, index=[10, 11, 12]),
+                pd.Series([1, 2, 30], name=None, index=[13, 144, 15]),
+            ],
+            True,
+            ["set_index_a", "set_index_b"],
+        ),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([]),
+                pd.Series(index=[10, 11, 12]),
+            ],
+            False,
+            ["a", "b", "c"],
+        ),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([], name="abc"),
+                pd.Series(index=[10, 11, 12]),
+            ],
+            False,
+            ["a", "v", "z"],
+        ),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([1, -100, 200, -399, 400], name="abc"),
+                pd.Series([111, 222, 333], index=[10, 11, 12]),
+            ],
+            False,
+            ["a", "v", "z"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "columns", [None, ["0"], [0], ["abc"], [144, 13], [2, 1, 0]]
+)
+def test_dataframe_init_from_series_list_with_index(
+    data, ignore_dtype, index, columns
+):
+    gd_data = [gd.from_pandas(obj) for obj in data]
+
+    expected = pd.DataFrame(data, columns=columns, index=index)
+    actual = gd.DataFrame(gd_data, columns=columns, index=index)
+
+    if ignore_dtype:
+        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+    else:
+        assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data, index",
+    [
+        ([pd.Series([1, 2]), pd.Series([1, 2])], ["a", "b", "c"]),
+        (
+            [
+                pd.Series([1, 0.324234, 32424.323, -1233, 34242]),
+                pd.Series([]),
+                pd.Series([3], name="series that is named"),
+            ],
+            ["_", "+"],
+        ),
+        ([pd.Series([1, 2, 3], name="hi")] * 10, ["mean"] * 9),
+    ],
+)
+def test_dataframe_init_from_series_list_with_index_error(data, index):
+    gd_data = [gd.from_pandas(obj) for obj in data]
+    try:
+        pd.DataFrame(data, index=index)
+    except Exception as e:
+        with pytest.raises(type(e), match=re.escape(str(e))):
+            gd.DataFrame(gd_data, index=index)
+    else:
+        raise AssertionError(
+            "expected pd.DataFrame to because of index mismatch "
+            "with data dimensions"
+        )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [pd.Series([1, 2, 3], index=["a", "a", "a"])],
+        [pd.Series([1, 2, 3], index=["a", "a", "a"])] * 4,
+        [
+            pd.Series([1, 2, 3], index=["a", "b", "a"]),
+            pd.Series([1, 2, 3], index=["b", "b", "a"]),
+        ],
+        [
+            pd.Series([1, 2, 3], index=["a", "b", "z"]),
+            pd.Series([1, 2, 3], index=["u", "b", "a"]),
+            pd.Series([1, 2, 3], index=["u", "b", "u"]),
+        ],
+    ],
+)
+def test_dataframe_init_from_series_list_duplicate_index_error(data):
+    gd_data = [gd.from_pandas(obj) for obj in data]
+    try:
+        pd.DataFrame(data)
+    except Exception as e:
+        with pytest.raises(ValueError, match=re.escape(str(e))):
+            gd.DataFrame(gd_data)
+    else:
+        raise AssertionError(
+            "expected pd.DataFrame to because of " "duplicates in index"
+        )

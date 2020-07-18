@@ -1,6 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
-
 import re
 
 import numpy as np
@@ -40,12 +38,7 @@ def test_series_init_dict(data):
     ],
 )
 def test_series_init_dict_lists(data):
-
-    with pytest.raises(
-        NotImplementedError,
-        match=re.escape("cudf doesn't support list like data types"),
-    ):
-        cudf.Series(data)
+    assert_eq(pd.Series(data), cudf.Series(data))
 
 
 @pytest.mark.parametrize(
@@ -280,3 +273,47 @@ def test_series_append_existing_buffers():
     np.testing.assert_equal(
         gs.to_array(), np.hstack([a6.to_array(), a5.to_array()])
     )
+
+
+def test_series_column_iter_error():
+    gs = cudf.Series([1, 2, 3])
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            f"{gs.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        ),
+    ):
+        iter(gs)
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            f"{gs.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        ),
+    ):
+        gs.items()
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            f"{gs.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        ),
+    ):
+        gs.iteritems()
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            f"{gs._column.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        ),
+    ):
+        iter(gs._column)

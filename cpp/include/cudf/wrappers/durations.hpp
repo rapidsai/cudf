@@ -30,7 +30,7 @@
 namespace cudf {
 
 /**
- * @addtogroup duration_classes Duration
+ * @addtogroup timestamp_classes Timestamp
  * @{
  */
 /**

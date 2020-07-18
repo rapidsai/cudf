@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 from __future__ import division, print_function
 
 import pickle
@@ -128,6 +128,31 @@ class Index(Frame, Serializable):
         """
         pass
 
+    def drop_duplicates(self, keep="first"):
+        """
+        Return Index with duplicate values removed
+
+        Parameters
+        ----------
+        keep : {‘first’, ‘last’, False}, default ‘first’
+            * ‘first’ : Drop duplicates except for the
+                first occurrence.
+            * ‘last’ : Drop duplicates except for the
+                last occurrence.
+            *  False : Drop all duplicates.
+
+        Returns
+        -------
+        deduplicated : Index
+        """
+        return super().drop_duplicates(keep=keep)
+
+    @property
+    def shape(self):
+        """Returns a tuple representing the dimensionality of the Index.
+        """
+        return (len(self),)
+
     def serialize(self):
         """Serialize into pickle format suitable for file storage or network
         transmission.
@@ -192,12 +217,31 @@ class Index(Frame, Serializable):
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
 
-    def _mimic_inplace(self, other, inplace=False):
-        if inplace is True:
-            col = self._data[self.name]
-            col._mimic_inplace(other._data[other.name], inplace=True)
-        else:
-            return other
+    def __iter__(self):
+        cudf.utils.utils.raise_iteration_error(obj=self)
+
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the Index.
+
+        Only the values in the Index will be returned.
+
+        Returns
+        -------
+        out : numpy.ndarray
+            The values of the Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, -10, 100, 20])
+        >>> index.values_host
+        array([  1, -10, 100,  20])
+        >>> type(index.values_host)
+        <class 'numpy.ndarray'>
+        """
+        return self._values.values_host
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -290,17 +334,17 @@ class Index(Frame, Serializable):
         Returns
         -------
         array : A cupy array of data in the Index.
-        """
-        if is_categorical_dtype(self.dtype) or np.issubdtype(
-            self.dtype, np.dtype("object")
-        ):
-            raise TypeError("Data must be numeric")
-        if len(self) == 0:
-            return cupy.asarray([], dtype=self.dtype)
-        if self._values.null_count > 0:
-            raise ValueError("Column must have no nulls.")
 
-        return cupy.asarray(self._values.data_array_view)
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, -10, 100, 20])
+        >>> index.values
+        array([  1, -10, 100,  20])
+        >>> type(index.values)
+        <class 'cupy.core.core.ndarray'>
+        """
+        return self._values.values
 
     def any(self):
         """
@@ -345,6 +389,20 @@ class Index(Frame, Serializable):
         ]
         """
         return self._values.to_arrow()
+
+    def tolist(self):
+        """
+        Return a list type from index data.
+
+        Returns
+        -------
+        list
+        """
+        # TODO: Raise error as part
+        # of https://github.com/rapidsai/cudf/issues/5689
+        return self.to_arrow().to_pylist()
+
+    to_list = tolist
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
@@ -1209,11 +1267,9 @@ class RangeIndex(Index):
 
     def __repr__(self):
         return (
-            "{}(start={}, stop={}".format(
-                self.__class__.__name__, self._start, self._stop
-            )
+            f"{self.__class__.__name__}(start={self._start}, stop={self._stop}"
             + (
-                ", name='{}'".format(str(self.name))
+                f", name={pd.io.formats.printing.default_pprint(self.name)}"
                 if self.name is not None
                 else ""
             )
@@ -2023,11 +2079,10 @@ class StringIndex(GenericIndex):
 
     def __repr__(self):
         return (
-            "{}({}, dtype='object'".format(
-                self.__class__.__name__, self._values.to_array()
-            )
+            f"{self.__class__.__name__}({self._values.to_array()},"
+            f" dtype='object'"
             + (
-                ", name='{}'".format(self.name)
+                f", name={pd.io.formats.printing.default_pprint(self.name)}"
                 if self.name is not None
                 else ""
             )
@@ -2037,7 +2092,7 @@ class StringIndex(GenericIndex):
     @copy_docstring(StringMethods.__init__)
     @property
     def str(self):
-        return self._values.str(parent=self)
+        return StringMethods(column=self._values, parent=self)
 
     @property
     def _constructor_expanddim(self):
