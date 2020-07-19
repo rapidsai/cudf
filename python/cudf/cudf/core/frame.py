@@ -37,6 +37,15 @@ class Frame(libcudf.table.Table):
     def _from_table(cls, table):
         return cls(table._data, index=table._index)
 
+    def _mimic_inplace(self, result, inplace=False):
+        if inplace:
+            for col in self._data:
+                self._data[col]._mimic_inplace(result._data[col], inplace=True)
+            self._data = result._data
+            self._index = result._index
+        else:
+            return result
+
     @property
     def empty(self):
         """

@@ -224,10 +224,20 @@ class DataFrame(Frame, Serializable):
                 )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
-            if len(arr_interface["descr"]) == 1:
-                new_df = self._from_arrays(data, index=index, columns=columns)
+
+            # descr is an optional field of the _cuda_ary_iface_
+            if "descr" in arr_interface:
+                if len(arr_interface["descr"]) == 1:
+                    new_df = self._from_arrays(
+                        data, index=index, columns=columns
+                    )
+                else:
+                    new_df = self.from_records(
+                        data, index=index, columns=columns
+                    )
             else:
-                new_df = self.from_records(data, index=index, columns=columns)
+                new_df = self._from_arrays(data, index=index, columns=columns)
+
             self._data = new_df._data
             self._index = new_df._index
             self.columns = new_df.columns
@@ -352,7 +362,8 @@ class DataFrame(Frame, Serializable):
             transpose = concat_df.T
 
         transpose._index = final_index
-        self._mimic_inplace(transpose, inplace=True)
+        self._data = transpose._data
+        self._index = transpose._index
 
         # If `columns` is passed, the result dataframe
         # contain a dataframe with only the
@@ -2909,13 +2920,6 @@ class DataFrame(Frame, Serializable):
 
         return self._mimic_inplace(outdf, inplace=inplace)
 
-    def _mimic_inplace(self, result, inplace=False):
-        if inplace:
-            self._data = result._data
-            self._index = result._index
-        else:
-            return result
-
     def pop(self, item):
         """Return a column and drop it from the DataFrame.
         """
@@ -3187,12 +3191,15 @@ class DataFrame(Frame, Serializable):
         3         4      bird          0          1.0          0.0          0.0
         4         5      fish          2          0.0          0.0          1.0
         """
-        if hasattr(cats, "to_pandas"):
-            cats = cats.to_pandas()
+        if hasattr(cats, "to_arrow"):
+            cats = cats.to_arrow().to_pylist()
         else:
-            cats = pd.Series(cats)
+            cats = pd.Series(cats, dtype="object")
 
-        newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
+        newnames = [
+            prefix_sep.join([prefix, "null" if cat is None else str(cat)])
+            for cat in cats
+        ]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
         outdf = self.copy()
         for name, col in zip(newnames, newcols):
