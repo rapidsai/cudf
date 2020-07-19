@@ -25,7 +25,8 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
-from cudf.core.column.string import StringMethods as StringMethods
+from cudf.core.column.lists import ListMethods
+from cudf.core.column.string import StringMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import SeriesGroupBy
@@ -37,6 +38,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
     is_datetime_dtype,
+    is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
     is_scalar,
@@ -977,6 +979,7 @@ class Series(Frame, Serializable):
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_datetime_dtype(preprocess.dtype)
+            and not is_list_dtype(preprocess.dtype)
         ):
             output = (
                 preprocess.astype("O").fillna("null").to_pandas().__repr__()
@@ -1575,12 +1578,17 @@ class Series(Frame, Serializable):
     @copy_docstring(CategoricalAccessor.__init__)
     @property
     def cat(self):
-        return self._column.cat(parent=self)
+        return CategoricalAccessor(column=self._column, parent=self)
 
     @copy_docstring(StringMethods.__init__)
     @property
     def str(self):
-        return self._column.str(parent=self)
+        return StringMethods(column=self._column, parent=self)
+
+    @copy_docstring(ListMethods.__init__)
+    @property
+    def list(self):
+        return ListMethods(column=self._column, parent=self)
 
     @property
     def dtype(self):
@@ -1686,15 +1694,6 @@ class Series(Frame, Serializable):
         result = super().drop_duplicates(keep=keep, ignore_index=ignore_index)
 
         return self._mimic_inplace(result, inplace=inplace)
-
-    def _mimic_inplace(self, result, inplace=False):
-        if inplace:
-            self._column._mimic_inplace(result._column, inplace=True)
-            self.index._mimic_inplace(result.index, inplace=True)
-            self._size = len(self._index)
-            self.name = result.name
-        else:
-            return result
 
     def fill(self, fill_value, begin=0, end=-1, inplace=False):
         return self._fill([fill_value], begin, end, inplace)
@@ -2240,12 +2239,21 @@ class Series(Frame, Serializable):
             A sequence of new series for each category. Its length is
             determined by the length of ``cats``.
         """
-        if hasattr(cats, "to_pandas"):
+        if hasattr(cats, "to_arrow"):
             cats = cats.to_pandas()
         else:
-            cats = pd.Series(cats)
+            cats = pd.Series(cats, dtype="object")
         dtype = np.dtype(dtype)
-        return ((self == cat).fillna(False).astype(dtype) for cat in cats)
+
+        def encode(cat):
+            if cat is None:
+                return self.isnull()
+            elif np.issubdtype(type(cat), np.floating) and np.isnan(cat):
+                return self.__class__(libcudf.unary.is_nan(self._column))
+            else:
+                return (self == cat).fillna(False)
+
+        return [encode(cat).astype(dtype) for cat in cats]
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding

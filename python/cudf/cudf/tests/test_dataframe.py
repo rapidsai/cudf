@@ -5536,8 +5536,13 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
     if isinstance(data, cupy.core.ndarray):
         # pandas can't handle cupy arrays in general
         pd_data = data.get()
+
+        # additional test for building DataFrame with gpu array whose
+        # cuda array interface has no `descr` attribute
+        numba_data = cuda.as_cuda_array(data)
     else:
         pd_data = data
+        numba_data = None
 
     # verify with columns & index
     pdf = pd.DataFrame(pd_data, columns=cols, index=index)
@@ -5555,6 +5560,10 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
     gdf = DataFrame(gd_data)
 
     assert_eq(pdf, gdf, check_dtype=False)
+
+    if numba_data is not None:
+        gdf = DataFrame(numba_data)
+        assert_eq(pdf, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize(
