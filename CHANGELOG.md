@@ -32,6 +32,7 @@
 - PR #5511 Port of clx subword tokenizer to cudf
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
+- PR #5668 Adding support for `cudf.testing`
 - PR #5460 Add support to write to remote filesystems
 - PR #5454 Add support for `DataFrame.append`, `Index.append`, `Index.difference` and `Index.empty`
 - PR #5536 Parquet reader - add support for multiple sources
@@ -40,11 +41,12 @@
 - PR #5612 Add `is_hex` strings API
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
-- PR #5645 Enforce pd.NA and Pandas nullable dtype parity
+- PR #5674 Support JIT backend on PowerPC64
 - PR #5629 Add `ListColumn` and `ListDtype`
 - PR #5658 Add `filter_tokens` nvtext API
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
+- PR #5645 Enforce pd.NA and Pandas nullable dtype parity
 
 ## Improvements
 
@@ -122,6 +124,9 @@
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
+- PR #5708 Add support for `dummy_na` in `get_dummies`
+- PR #5709 Update java build to help cu-spacial with java bindings
+- PR #5713 Remove old NVTX utilities
 
 ## Bug Fixes
 
