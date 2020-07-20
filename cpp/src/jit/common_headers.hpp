@@ -39,24 +39,26 @@
 namespace cudf {
 namespace jit {
 
-const std::vector<std::string> compiler_flags{
+const std::vector<std::string> compiler_flags
+{
   "-std=c++14",
-  // Have jitify prune unused global variables
-  "-remove-unused-globals",
-  // suppress all NVRTC warnings
-  "-w",
-  // force libcudacxx to not include system headers
-  "-D__CUDACC_RTC__",
-  // __CHAR_BIT__ is from GCC, but libcxx uses it
-  "-D__CHAR_BIT__=" + std::to_string(__CHAR_BIT__),
-  // enable temporary workarounds to compile libcudacxx with nvrtc
-  "-D_LIBCUDACXX_HAS_NO_CTIME",
-  "-D_LIBCUDACXX_HAS_NO_WCHAR",
-  "-D_LIBCUDACXX_HAS_NO_CFLOAT",
-  "-D_LIBCUDACXX_HAS_NO_STDINT",
-  "-D_LIBCUDACXX_HAS_NO_CSTDDEF",
-  "-D_LIBCUDACXX_HAS_NO_CLIMITS",
-  "-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS",
+    // Have jitify prune unused global variables
+    "-remove-unused-globals",
+    // suppress all NVRTC warnings
+    "-w",
+    // force libcudacxx to not include system headers
+    "-D__CUDACC_RTC__",
+    // __CHAR_BIT__ is from GCC, but libcxx uses it
+    "-D__CHAR_BIT__=" + std::to_string(__CHAR_BIT__),
+    // enable temporary workarounds to compile libcudacxx with nvrtc
+    "-D_LIBCUDACXX_HAS_NO_CTIME", "-D_LIBCUDACXX_HAS_NO_WCHAR", "-D_LIBCUDACXX_HAS_NO_CFLOAT",
+    "-D_LIBCUDACXX_HAS_NO_STDINT", "-D_LIBCUDACXX_HAS_NO_CSTDDEF", "-D_LIBCUDACXX_HAS_NO_CLIMITS",
+    "-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS",
+#if defined(__powerpc64__)
+    "-D__powerpc64__"
+#elif defined(__x86_64__)
+    "-D__x86_64__"
+#endif
 };
 
 const std::unordered_map<std::string, char const*> stringified_headers{

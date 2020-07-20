@@ -38,18 +38,64 @@ public class NativeDepsLoader {
   private static ClassLoader loader = NativeDepsLoader.class.getClassLoader();
   private static boolean loaded = false;
 
-  static synchronized void loadNativeDeps() {
+  /**
+   * Load the native libraries needed for libcudf, if not loaded already.
+   */
+  public static synchronized void loadNativeDeps() {
     if (!loaded) {
-      String os = System.getProperty("os.name");
-      String arch = System.getProperty("os.arch");
       try {
-        for (String toLoad : loadOrder) {
-          loadDep(os, arch, toLoad);
-        }
+        loadNativeDeps(loadOrder);
         loaded = true;
       } catch (Throwable t) {
         log.error("Could not load cudf jni library...", t);
       }
+    }
+  }
+
+  /**
+   * Allows other libraries to reuse the same native deps loading logic. Libraries will be searched
+   * for under ${os.arch}/${os.name}/ in the class path using the class loader for this class. It
+   * will also look for the libraries under ./target/native-deps/${os.arch}/${os.name} to help
+   * facilitate testing while building.
+   * <br/>
+   * Because this just loads the libraries and loading the libraries themselves needs to be a
+   * singleton operation it is recommended that any library using this provide their own wrapper
+   * function similar to
+   * <pre>
+   *     private static boolean loaded = false;
+   *     static synchronized void loadNativeDeps() {
+   *         if (!loaded) {
+   *             try {
+   *                 // If you also depend on the cudf liobrary being loaded, be sure it is loaded
+   *                 // first
+   *                 ai.rapids.cudf.NativeDepsLoader.loadNativeDeps();
+   *                 ai.rapids.cudf.NativeDepsLoader.loadNativeDeps(new String[]{...});
+   *                 loaded = true;
+   *             } catch (Throwable t) {
+   *                 log.error("Could not load ...", t);
+   *             }
+   *         }
+   *     }
+   * </pre>
+   * This function should be called from the static initialization block of any class that uses
+   * JNI. For example
+   * <pre>
+   *     public class UsesJNI {
+   *         static {
+   *             MyNativeDepsLoader.loadNativeDeps();
+   *         }
+   *     }
+   * </pre>
+   * @param loadOrder the base name of the libraries. For example libfoo.so would be passed in as
+   *                  "foo".  The libraries are loaded in the order provided.
+   * @throws IOException on any error trying to load the libraries.
+   */
+  public static void loadNativeDeps(String[] loadOrder) throws IOException {
+    String os = System.getProperty("os.name");
+    String arch = System.getProperty("os.arch");
+
+    for (String toLoad : loadOrder) {
+      loadDep(os, arch, toLoad);
     }
   }
 

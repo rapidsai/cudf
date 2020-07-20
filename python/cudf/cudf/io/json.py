@@ -28,7 +28,10 @@ def read_json(
         engine = "cudf" if lines else "pandas"
 
     path_or_buf, compression = ioutils.get_filepath_or_buffer(
-        path_or_buf, compression, (BytesIO, StringIO), **kwargs
+        path_or_data=path_or_buf,
+        compression=compression,
+        iotypes=(BytesIO, StringIO),
+        **kwargs,
     )
     if engine == "cudf":
         return cudf.DataFrame._from_table(
