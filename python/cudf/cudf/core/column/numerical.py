@@ -12,11 +12,11 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
+    cudf_dtypes_to_pandas_dtypes,
     min_column_type,
     min_signed_type,
     np_to_pa_dtype,
     numeric_normalize_types,
-    cudf_dtypes_to_pandas_dtypes,
 )
 
 
@@ -164,7 +164,9 @@ class NumericalColumn(column.ColumnBase):
     def to_pandas(self, index=None, nullable_pd_dtype=False):
         if nullable_pd_dtype:
             arrow_data = self.to_arrow()
-            host_dtype = cudf_dtypes_to_pandas_dtypes.get(self.dtype, self.dtype)
+            host_dtype = cudf_dtypes_to_pandas_dtypes.get(
+                self.dtype, self.dtype
+            )
             if hasattr(host_dtype, "__from_arrow__"):
                 pandas_array = host_dtype.__from_arrow__(arrow_data)
 

@@ -38,20 +38,20 @@ pa_pd_types_mapper = {
     pa.int16: pd.UInt8Dtype(),
     pa.int32: pd.UInt8Dtype(),
     pa.int64: pd.UInt8Dtype(),
-    pa.bool_: pd.UInt8Dtype()
+    pa.bool_: pd.UInt8Dtype(),
 }
 
 cudf_dtypes_to_pandas_dtypes = {
-    np.dtype('uint8'): pd.UInt8Dtype(),
-    np.dtype('uint16'): pd.UInt16Dtype(),
-    np.dtype('uint32'): pd.UInt32Dtype(),
-    np.dtype('uint64'): pd.UInt64Dtype(),
-    np.dtype('int8'): pd.Int8Dtype(),
-    np.dtype('int16'): pd.Int16Dtype(),
-    np.dtype('int32'): pd.Int32Dtype(),
-    np.dtype('int64'): pd.Int64Dtype(),
-    np.dtype('bool_'): pd.BooleanDtype(),
-    np.dtype('object'): pd.StringDtype()
+    np.dtype("uint8"): pd.UInt8Dtype(),
+    np.dtype("uint16"): pd.UInt16Dtype(),
+    np.dtype("uint32"): pd.UInt32Dtype(),
+    np.dtype("uint64"): pd.UInt64Dtype(),
+    np.dtype("int8"): pd.Int8Dtype(),
+    np.dtype("int16"): pd.Int16Dtype(),
+    np.dtype("int32"): pd.Int32Dtype(),
+    np.dtype("int64"): pd.Int64Dtype(),
+    np.dtype("bool_"): pd.BooleanDtype(),
+    np.dtype("object"): pd.StringDtype(),
 }
 
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
@@ -388,8 +388,6 @@ def check_cast_unsupported_dtype(dtype):
 
     if isinstance(dtype, pd.core.arrays.numpy_.PandasDtype):
         dtype = dtype.numpy_dtype
-    elif isinstance(dtype, pd.api.extensions.ExtensionDtype):
-        dtype = np.dtype(_pd_nullable_dtypes_to_cudf_dtypes[dtype])
     else:
         dtype = np.dtype(dtype)
 

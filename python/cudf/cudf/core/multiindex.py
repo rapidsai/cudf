@@ -867,7 +867,10 @@ class MultiIndex(Index):
         # 1. as_index() on each level, so DatetimeColumn becomes DatetimeIndex
         # 2. convert levels to numpy array so empty levels become Float64Index
         levels = np.array(
-            [as_index(level).to_pandas(nullable_pd_dtype=False) for level in self.levels]
+            [
+                as_index(level).to_pandas(nullable_pd_dtype=False)
+                for level in self.levels
+            ]
         )
 
         # Backwards compatibility:

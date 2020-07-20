@@ -37,7 +37,6 @@ from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
-    cudf_dtypes_to_pandas_dtypes,
     is_datetime_dtype,
     is_list_dtype,
     is_list_like,
@@ -1904,7 +1903,9 @@ class Series(Frame, Serializable):
         """
         if index is True:
             index = self.index.to_pandas()
-        s = self._column.to_pandas(index=index, nullable_pd_dtype=nullable_pd_dtype)
+        s = self._column.to_pandas(
+            index=index, nullable_pd_dtype=nullable_pd_dtype
+        )
         s.name = self.name
         return s
 
