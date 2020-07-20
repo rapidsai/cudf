@@ -30,11 +30,10 @@
 #include "cudf/types.hpp"
 
 template <typename T>
-using column_wrapper  = cudf::test::fixed_width_column_wrapper<T>;
-using strcol_wrapper  = cudf::test::strings_column_wrapper;
-using CVector         = std::vector<std::unique_ptr<cudf::column>>;
-using Table           = cudf::table;
-using ProbeOutputSide = cudf::hash_join::probe_output_side;
+using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
+using strcol_wrapper = cudf::test::strings_column_wrapper;
+using CVector        = std::vector<std::unique_ptr<cudf::column>>;
+using Table          = cudf::table;
 
 struct JoinTest : public cudf::test::BaseFixture {
 };
@@ -611,7 +610,6 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
-
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
 
@@ -1071,7 +1069,8 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     Table t0(std::move(cols0));
 
-    auto result = hash_join.inner_join(t0, {0, 1}, {{0, 0}, {1, 1}}, ProbeOutputSide::RIGHT);
+    auto result =
+      hash_join.inner_join(t0, {0, 1}, {{0, 0}, {1, 1}}, cudf::hash_join::probe_output_side::RIGHT);
     auto result_sort_order = cudf::sorted_order(result->view());
     auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
