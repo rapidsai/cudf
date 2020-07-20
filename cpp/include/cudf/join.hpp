@@ -384,8 +384,11 @@ class hash_join {
   hash_join& operator=(hash_join&&) = delete;
 
   /**
-   * @brief Construct a hash join object and build the internal hash table used for subsequent
-   * probe calls.
+   * @brief Construct a hash join object for subsequent probe calls.
+   *
+   * @note This object does *not* maintain the lifetime of `build`. It is the
+   * user's responsibility to ensure the `hash_join` object does not outlive the
+   * data viewed by the `build` `table_view`.
    *
    * @param build The build table, from which the hash table is built.
    * @param build_on The column indices from `build` to join on.
