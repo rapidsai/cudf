@@ -1577,10 +1577,24 @@ class GenericIndex(Index):
             preprocess = self
         if preprocess._values.nullable:
             output = (
-                self.__class__(preprocess._values.astype("O").fillna("null"))
+                cudf.Index(preprocess._values.astype("O").fillna("null"))
                 .to_pandas()
                 .__repr__()
             )
+            # Fix and correct the class name of the output
+            # string by finding first occurrence of "(" in the output
+            index_class_split_index = output.find("(")
+            output = self.__class__.__name__ + output[index_class_split_index:]
+
+            if not isinstance(self, StringIndex):
+                # We should remove all the single quotes
+                # from the output due to the type-cast to
+                # object dtype happening above.
+                # Note : The replacing of single quotes has
+                # to happen only incase of non-StringIndex types,
+                # as we want to preserve single quotes incase
+                # of StringIndex and it is valid to have them.
+                output = output.replace("'", "")
         else:
             output = preprocess.to_pandas().__repr__()
 
