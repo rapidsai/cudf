@@ -386,9 +386,8 @@ class hash_join {
   /**
    * @brief Construct a hash join object for subsequent probe calls.
    *
-   * @note This object does *not* maintain the lifetime of `build`. It is the
-   * user's responsibility to ensure the `hash_join` object does not outlive the
-   * data viewed by the `build` `table_view`.
+   * @note The `hash_join` object must not outlive the table viewed by `build`, else behavior is
+   * undefined.
    *
    * @param build The build table, from which the hash table is built.
    * @param build_on The column indices from `build` to join on.
