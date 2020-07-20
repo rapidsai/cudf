@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 import numpy as np
 import pandas as pd
 
@@ -11,10 +10,7 @@ from cudf.core.column import (
     build_categorical_column,
 )
 from cudf.utils import cudautils
-from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_list_like,
-)
+from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -89,6 +85,90 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     Returns
     -------
     A new object of like type with rows from each object in ``objs``.
+
+    Examples
+    --------
+    Combine two ``Series``.
+
+    >>> import cudf
+    >>> s1 = cudf.Series(['a', 'b'])
+    >>> s2 = cudf.Series(['c', 'd'])
+    >>> s1
+    0    a
+    1    b
+    dtype: object
+    >>> s2
+    0    c
+    1    d
+    dtype: object
+    >>> cudf.concat([s1, s2])
+    0    a
+    1    b
+    0    c
+    1    d
+    dtype: object
+
+    Clear the existing index and reset it in the
+    result by setting the ``ignore_index`` option to ``True``.
+
+    >>> cudf.concat([s1, s2], ignore_index=True)
+    0    a
+    1    b
+    2    c
+    3    d
+    dtype: object
+
+    Combine two DataFrame objects with identical columns.
+
+    >>> df1 = cudf.DataFrame([['a', 1], ['b', 2]],
+    ...                    columns=['letter', 'number'])
+    >>> df1
+      letter  number
+    0      a       1
+    1      b       2
+    >>> df2 = cudf.DataFrame([['c', 3], ['d', 4]],
+    ...                    columns=['letter', 'number'])
+    >>> df2
+      letter  number
+    0      c       3
+    1      d       4
+    >>> cudf.concat([df1, df2])
+      letter  number
+    0      a       1
+    1      b       2
+    0      c       3
+    1      d       4
+
+    Combine DataFrame objects with overlapping columns and return
+    everything. Columns outside the intersection will
+    be filled with ``null`` values.
+
+    >>> df3 = cudf.DataFrame([['c', 3, 'cat'], ['d', 4, 'dog']],
+    ...                    columns=['letter', 'number', 'animal'])
+    >>> df3
+    letter  number animal
+    0      c       3    cat
+    1      d       4    dog
+    >>> cudf.concat([df1, df3], sort=False)
+      letter  number animal
+    0      a       1   None
+    1      b       2   None
+    0      c       3    cat
+    1      d       4    dog
+
+    Combine ``DataFrame`` objects horizontally along the
+    x axis by passing in ``axis=1``.
+
+    >>> df4 = cudf.DataFrame([['bird', 'polly'], ['monkey', 'george']],
+    ...                    columns=['animal', 'name'])
+    >>> df4
+       animal    name
+    0    bird   polly
+    1  monkey  george
+    >>> cudf.concat([df1, df4], axis=1)
+      letter  number  animal    name
+    0      a       1    bird   polly
+    1      b       2  monkey  george
     """
 
     if not objs:
@@ -242,19 +322,36 @@ def melt(
     Examples
     --------
     >>> import cudf
-    >>> import numpy as np
-    >>> df = cudf.DataFrame({'A': {0: 1, 1: 1, 2: 5},
-    ...                      'B': {0: 1, 1: 3, 2: 6},
-    ...                      'C': {0: 1.0, 1: np.nan, 2: 4.0},
-    ...                      'D': {0: 2.0, 1: 5.0, 2: 6.0}})
-    >>> cudf.melt(frame=df, id_vars=['A', 'B'], value_vars=['C', 'D'])
-         A    B variable value
-    0    1    1        C   1.0
-    1    1    3        C
-    2    5    6        C   4.0
-    3    1    1        D   2.0
-    4    1    3        D   5.0
-    5    5    6        D   6.0
+    >>> df = cudf.DataFrame({'A': ['a', 'b', 'c'],
+    ...                      'B': [1, 3, 5],
+    ...                      'C': [2, 4, 6]})
+    >>> df
+       A  B  C
+    0  a  1  2
+    1  b  3  4
+    2  c  5  6
+    >>> cudf.melt(df, id_vars=['A'], value_vars=['B'])
+       A variable  value
+    0  a        B      1
+    1  b        B      3
+    2  c        B      5
+    >>> cudf.melt(df, id_vars=['A'], value_vars=['B', 'C'])
+       A variable  value
+    0  a        B      1
+    1  b        B      3
+    2  c        B      5
+    3  a        C      2
+    4  b        C      4
+    5  c        C      6
+
+    The names of ‘variable’ and ‘value’ columns can be customized:
+
+    >>> cudf.melt(df, id_vars=['A'], value_vars=['B'],
+    ...         var_name='myVarname', value_name='myValname')
+       A myVarname  myValname
+    0  a         B          1
+    1  b         B          3
+    2  c         B          5
     """
     assert col_level in (None,)
 
@@ -403,7 +500,7 @@ def get_dummies(
     dtype : str, optional
         output dtype, default 'uint8'
 
-    Exmaples
+    Examples
     --------
     >>> import cudf
     >>> df = cudf.DataFrame({"a": ["value1", "value2", None], "b": [0, 0, 0]})
