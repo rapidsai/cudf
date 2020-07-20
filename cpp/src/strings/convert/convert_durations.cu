@@ -445,6 +445,9 @@ struct dispatch_from_durations_fn {
   }
 };
 
+// TODO perf check by benchmark
+static const __device__ __constant__ int32_t powers_of_ten[10] = {
+  1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
 // this parses duration characters into a duration integer
 template <typename T>  // duration type
 struct parse_duration {
@@ -488,8 +491,6 @@ struct parse_duration {
     }
     auto parsed_length = ptr - str;
     // trailing zeros
-    constexpr int64_t powers_of_ten[] = {
-      1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
     if (parsed_length < fixed_width) value *= powers_of_ten[fixed_width - parsed_length];
     actual_length += parsed_length;
     return value;
