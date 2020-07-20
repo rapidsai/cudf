@@ -110,7 +110,7 @@ fi
 logger "Running benchmarks..."
 
 #Download GBench results Parser
-curl -L https://raw.githubusercontent.com/rapidsai/benchmark/master/parser/GBenchToASV.py --output GBenchToASV.py
+curl -L https://raw.githubusercontent.com/rapidsai/benchmark/main/parser/GBenchToASV.py --output GBenchToASV.py
 
 mkdir -p ${WORKSPACE}/tmp/benchmark
 touch ${WORKSPACE}/tmp/benchmark/benchmarks.txt
