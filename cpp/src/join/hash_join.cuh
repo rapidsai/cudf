@@ -197,7 +197,8 @@ struct hash_join::hash_join_impl {
   hash_join_impl& operator=(hash_join_impl&&) = delete;
 
  private:
-  cudf::table_view _build, _build_selected;
+  cudf::table_view _build;
+  cudf::table_view _build_selected;
   std::vector<size_type> _build_on;
   std::unique_ptr<cudf::detail::multimap_type, std::function<void(cudf::detail::multimap_type*)>>
     _hash_table;
