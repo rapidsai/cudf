@@ -339,6 +339,11 @@ class Series(Frame, Serializable):
         return cls(s)
 
     def serialize(self):
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+
+        :meta private:
+        """
         header = {}
         frames = []
         header["index"], index_frames = self._index.serialize()
@@ -403,7 +408,10 @@ class Series(Frame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
+        """Convert from pickle format into Series
 
+        :meta private:
+        """
         index_nframes = header["index_frame_count"]
         idx_typ = pickle.loads(header["index"]["type-serialized"])
         index = idx_typ.deserialize(header["index"], frames[:index_nframes])

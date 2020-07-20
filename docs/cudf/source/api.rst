@@ -10,12 +10,6 @@ DataFrame
     :inherited-members:
     :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict
 
-..
-  For cudf.concat function
-..
-.. automodule:: cudf.core.reshape
-    :members:
-
 Series
 ------
 .. currentmodule:: cudf.core.series
@@ -34,14 +28,8 @@ Strings
 
 General Functions
 -----------------
-.. currentmodule:: cudf.core.reshape
-
-.. autofunction:: cudf.concat
-.. autofunction:: cudf.from_pandas
-.. autofunction:: cudf.get_dummies
-.. autofunction:: cudf.isclose
-.. autofunction:: cudf.melt
-.. autofunction:: cudf.merge_sorted
+.. automodule:: cudf.core.reshape
+    :members:
 .. autofunction:: cudf.to_datetime
 
 
@@ -51,7 +39,7 @@ Index
 .. autoclass:: Index
     :members:
     :inherited-members:
-    :exclude-members: serialize, deserialize, is_monotonic, is_monotonic_increasing, is_monotonic_decreasing, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 RangeIndex
 ----------

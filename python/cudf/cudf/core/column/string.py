@@ -4417,6 +4417,11 @@ class StringColumn(column.ColumnBase):
         )
 
     def serialize(self):
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+
+        :meta private:
+        """
         header = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
         frames = []
@@ -4436,6 +4441,10 @@ class StringColumn(column.ColumnBase):
 
     @classmethod
     def deserialize(cls, header, frames):
+        """Convert from pickle format into StringColumn
+
+        :meta private:
+        """
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
 

@@ -999,6 +999,11 @@ class ColumnBase(Column, Serializable):
         )
 
     def serialize(self):
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+
+        :meta private:
+        """
         header = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
@@ -1018,6 +1023,10 @@ class ColumnBase(Column, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
+        """Convert from pickle format into Column
+
+        :meta private:
+        """
         dtype = header["dtype"]
         data = Buffer.deserialize(header["data"], [frames[0]])
         mask = None

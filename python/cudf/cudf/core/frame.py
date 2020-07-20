@@ -1177,10 +1177,7 @@ class Frame(libcudf.table.Table):
                 how=how, subset=subset, thresh=thresh
             )
 
-        if isinstance(self, cudf.DataFrame):
-            return self._mimic_inplace(result, inplace=inplace)
-        else:
-            return result
+        return self._mimic_inplace(result, inplace=inplace)
 
     def _drop_na_rows(self, how="any", subset=None, thresh=None):
         """

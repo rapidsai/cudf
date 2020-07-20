@@ -156,6 +156,8 @@ class Index(Frame, Serializable):
     def serialize(self):
         """Serialize into pickle format suitable for file storage or network
         transmission.
+
+        :meta private:
         """
         header = {}
         header["index_column"] = {}
@@ -245,7 +247,9 @@ class Index(Frame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """
+        """Convert from pickle format into Index
+
+        :meta private:
         """
         h = header["index_column"]
         idx_typ = pickle.loads(header["type-serialized"])
@@ -984,15 +988,26 @@ class Index(Frame, Serializable):
 
     @property
     def is_monotonic(self):
+        """
+        Alias for is_monotonic_increasing.
+        """
         return self.is_monotonic_increasing
 
     @property
     def is_monotonic_increasing(self):
-        raise (NotImplementedError)
+        """
+        Return if the index is monotonic increasing
+        (only equal or increasing) values.
+        """
+        return self._values.is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
-        raise (NotImplementedError)
+        """
+        Return if the index is monotonic decreasing
+        (only equal or decreasing) values.
+        """
+        return self._values.is_monotonic_decreasing
 
     @property
     def empty(self):
@@ -1384,7 +1399,10 @@ class RangeIndex(Index):
             return (self == other)._values.all()
 
     def serialize(self):
-        """Serialize Index file storage or network transmission.
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+
+        :meta private:
         """
         header = {}
         header["index_column"] = {}
@@ -1405,7 +1423,9 @@ class RangeIndex(Index):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """
+        """Convert from pickle format into RangeIndex
+
+        :meta private:
         """
         h = header["index_column"]
         name = pickle.loads(header["name"])
@@ -1707,29 +1727,6 @@ class GenericIndex(Index):
         Return if the index has unique values.
         """
         return self._values.is_unique
-
-    @property
-    def is_monotonic(self):
-        """
-        Alias for is_monotonic_increasing.
-        """
-        return self._values.is_monotonic
-
-    @property
-    def is_monotonic_increasing(self):
-        """
-        Return if the index is monotonic increasing
-        (only equal or increasing) values.
-        """
-        return self._values.is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        """
-        Return if the index is monotonic decreasing
-        (only equal or decreasing) values.
-        """
-        return self._values.is_monotonic_decreasing
 
     def get_slice_bound(self, label, side, kind):
         return self._values.get_slice_bound(label, side, kind)

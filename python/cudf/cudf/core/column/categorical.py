@@ -766,6 +766,11 @@ class CategoricalColumn(column.ColumnBase):
         return self._encode(item) in self.as_numerical
 
     def serialize(self):
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+
+        :meta private:
+        """
         header = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
@@ -784,6 +789,10 @@ class CategoricalColumn(column.ColumnBase):
 
     @classmethod
     def deserialize(cls, header, frames):
+        """Convert from pickle format into CategoricalColumn
+
+        :meta private:
+        """
         n_dtype_frames = header["dtype_frames_count"]
         dtype = CategoricalDtype.deserialize(
             header["dtype"], frames[:n_dtype_frames]
