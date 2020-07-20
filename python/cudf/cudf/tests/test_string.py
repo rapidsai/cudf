@@ -1113,6 +1113,51 @@ def test_string_char_types(type_op, data):
     assert_eq(getattr(gs.str, type_op)(), getattr(ps.str, type_op)())
 
 
+def test_string_filter_alphanum():
+    data = ["1234567890", "!@#$%^&*()", ",./<>?;:[]}{|+=", "abc DEF"]
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if str.isalnum(c):
+                rs = rs + c
+        expected.append(rs)
+
+    gs = Series(data)
+    assert_eq(gs.str.filter_alphanum(), Series(expected))
+
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if not str.isalnum(c):
+                rs = rs + c
+        expected.append(rs)
+    assert_eq(gs.str.filter_alphanum(keep=False), Series(expected))
+
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if str.isalnum(c):
+                rs = rs + c
+            else:
+                rs = rs + "*"
+        expected.append(rs)
+    assert_eq(gs.str.filter_alphanum("*"), Series(expected))
+
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if not str.isalnum(c):
+                rs = rs + c
+            else:
+                rs = rs + "*"
+        expected.append(rs)
+    assert_eq(gs.str.filter_alphanum("*", keep=False), Series(expected))
+
+
 @pytest.mark.parametrize(
     "case_op", ["title", "capitalize", "lower", "upper", "swapcase"]
 )
@@ -2082,6 +2127,41 @@ def test_string_int_to_ipv4():
 
     got = Series(gsr._column.int2ip())
 
+    assert_eq(expected, got)
+
+
+def test_string_isipv4():
+    gsr = Series(
+        [
+            "",
+            None,
+            "1...1",
+            "141.168.0.1",
+            "127.0.0.1",
+            "1.255.0.1",
+            "256.27.28.26",
+            "25.257.28.26",
+            "25.27.258.26",
+            "25.27.28.256",
+            "-1.0.0.0",
+        ]
+    )
+    got = gsr.str.isipv4()
+    expected = Series(
+        [
+            False,
+            None,
+            False,
+            True,
+            True,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+        ]
+    )
     assert_eq(expected, got)
 
 

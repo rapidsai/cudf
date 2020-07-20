@@ -1,4 +1,5 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+
 import warnings
 
 from fsspec.core import get_fs_token_paths
@@ -111,17 +112,19 @@ def write_to_dataset(
             full_path = fs.sep.join([prefix, outfile])
             write_df = sub_df.copy(deep=False)
             write_df.drop(columns=partition_cols, inplace=True)
-            if return_metadata:
-                metadata.append(
-                    write_df.to_parquet(
-                        full_path,
-                        index=preserve_index,
-                        metadata_file_path=fs.sep.join([subdir, outfile]),
-                        **kwargs,
+            with fs.open(full_path, mode="wb") as fil:
+                fil = ioutils.get_IOBase_writer(fil)
+                if return_metadata:
+                    metadata.append(
+                        write_df.to_parquet(
+                            fil,
+                            index=preserve_index,
+                            metadata_file_path=fs.sep.join([subdir, outfile]),
+                            **kwargs,
+                        )
                     )
-                )
-            else:
-                write_df.to_parquet(full_path, index=preserve_index, **kwargs)
+                else:
+                    write_df.to_parquet(fil, index=preserve_index, **kwargs)
 
     else:
         outfile = guid() + ".parquet"
@@ -190,7 +193,7 @@ def read_parquet(
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
         tmp_source, compression = ioutils.get_filepath_or_buffer(
-            source, None, **kwargs
+            path_or_data=source, compression=None, **kwargs
         )
         if compression is not None:
             raise ValueError(
@@ -251,14 +254,32 @@ def to_parquet(
                     + "supported by the gpu accelerated parquet writer"
                 )
 
-        return libparquet.write_parquet(
-            df,
-            path=path,
-            index=index,
-            compression=compression,
-            statistics=statistics,
-            metadata_file_path=metadata_file_path,
+        path_or_buf = ioutils.get_writer_filepath_or_buffer(
+            path, mode="wb", **kwargs
         )
+        if ioutils.is_fsspec_open_file(path_or_buf):
+            with path_or_buf as file_obj:
+                file_obj = ioutils.get_IOBase_writer(file_obj)
+                write_parquet_res = libparquet.write_parquet(
+                    df,
+                    path=file_obj,
+                    index=index,
+                    compression=compression,
+                    statistics=statistics,
+                    metadata_file_path=metadata_file_path,
+                )
+        else:
+            write_parquet_res = libparquet.write_parquet(
+                df,
+                path=path_or_buf,
+                index=index,
+                compression=compression,
+                statistics=statistics,
+                metadata_file_path=metadata_file_path,
+            )
+
+        return write_parquet_res
+
     else:
 
         # If index is empty set it to the expected default value of True
