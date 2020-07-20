@@ -36,15 +36,11 @@ enum {
   IO_UNCOMP_STREAM_TYPE_ZSTD    = 10,
 };
 
-void io_uncompress_single_h2d(const void* src,
-                              size_t src_size,
-                              int strm_type,
-                              std::vector<char>& dst);
+std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int strm_type);
 
-void getUncompressedHostData(const char* h_data,
-                             size_t num_bytes,
-                             const std::string& compression,
-                             std::vector<char>& h_uncomp_data);
+std::vector<char> getUncompressedHostData(const char* h_data,
+                                          size_t num_bytes,
+                                          const std::string& compression);
 
 class HostDecompressor {
  public:
