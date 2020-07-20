@@ -241,5 +241,5 @@ def sort_values(
     df4 = df3.map_partitions(M.sort_values, by)
     if not isinstance(divisions, gd.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
-        df4.divisions = tuple(divisions)
+        df4.divisions = divisions.tolist()
     return df4

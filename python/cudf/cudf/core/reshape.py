@@ -5,9 +5,16 @@ import pandas as pd
 
 import cudf
 from cudf.core import DataFrame, Index, Series
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.column import (
+    CategoricalColumn,
+    as_column,
+    build_categorical_column,
+)
 from cudf.utils import cudautils
-from cudf.utils.dtypes import is_categorical_dtype, is_list_like
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_list_like,
+)
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -363,7 +370,7 @@ def get_dummies(
     cats={},
     sparse=False,
     drop_first=False,
-    dtype="int8",
+    dtype="uint8",
 ):
     """ Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
@@ -380,7 +387,7 @@ def get_dummies(
     prefix_sep : str, dict, or sequence, optional, default '_'
         separator to use when appending prefixes
     dummy_na : boolean, optional
-        Right now this is NON-FUNCTIONAL argument in rapids.
+        Add a column to indicate Nones, if False Nones are ignored.
     cats : dict, optional
         dictionary mapping column names to sequences of integers representing
         that column's category. See `cudf.DataFrame.one_hot_encoding` for more
@@ -394,11 +401,41 @@ def get_dummies(
         columns. Note this is different from pandas default behavior, which
         encodes all columns with dtype object or categorical
     dtype : str, optional
-        output dtype, default 'int8'
-    """
-    if dummy_na:
-        raise NotImplementedError("dummy_na is not supported yet")
+        output dtype, default 'uint8'
 
+    Exmaples
+    --------
+    >>> import cudf
+    >>> df = cudf.DataFrame({"a": ["value1", "value2", None], "b": [0, 0, 0]})
+    >>> cudf.get_dummies(df)
+       b  a_value1  a_value2
+    0  0         1         0
+    1  0         0         1
+    2  0         0         0
+
+    >>> cudf.get_dummies(df, dummy_na=True)
+       b  a_None  a_value1  a_value2
+    0  0       0         1         0
+    1  0       0         0         1
+    2  0       1         0         0
+
+    >>> import numpy as np
+    >>> df = cudf.DataFrame({"a":cudf.Series([1, 2, np.nan, None],
+    ...                     nan_as_null=False)})
+    >>> df
+          a
+    0   1.0
+    1   2.0
+    2   NaN
+    3  null
+
+    >>> cudf.get_dummies(df, dummy_na=True, columns=["a"])
+       a_1.0  a_2.0  a_nan  a_null
+    0      1      0      0       0
+    1      0      1      0       0
+    2      0      0      1       0
+    3      0      0      0       1
+    """
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
@@ -449,10 +486,15 @@ def get_dummies(
     else:
         result_df = df.drop(labels=columns)
         for name in columns:
-            if hasattr(df[name]._column, "categories"):
+            if isinstance(df[name]._column, CategoricalColumn):
                 unique = df[name]._column.categories
             else:
                 unique = df[name].unique()
+
+            if not dummy_na:
+                if np.issubdtype(unique.dtype, np.floating):
+                    unique = unique.nans_to_nulls()
+                unique = unique.dropna()
 
             col_enc_df = df.one_hot_encoding(
                 name,
