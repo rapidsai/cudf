@@ -376,6 +376,22 @@ std::unique_ptr<cudf::table> cross_join(
  */
 class hash_join {
  public:
+  hash_join() = delete;
+  ~hash_join();
+  hash_join(hash_join const&) = delete;
+  hash_join(hash_join&&)      = delete;
+  hash_join& operator=(hash_join const&) = delete;
+  hash_join& operator=(hash_join&&) = delete;
+
+  /**
+   * @brief Construct a hash join object and build the internal hash table used for subsequent
+   * probe calls.
+   *
+   * @param build The build table, from which the hash table is built.
+   * @param build_on The column indices from `build` to join on.
+   */
+  hash_join(cudf::table_view const& build, std::vector<size_type> const& build_on);
+
   /**
    * @brief Side of the probe table in the joined table. Only applicable for inner join.
    */
@@ -415,13 +431,13 @@ class hash_join {
    * LEFT, `build(including common columns)+probe(excluding common columns)` if `probe_output_side`
    * is RIGHT,
    */
-  virtual std::unique_ptr<cudf::table> inner_join(
+  std::unique_ptr<cudf::table> inner_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     probe_output_side probe_output_side = hash_join::probe_output_side::LEFT,
     null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const;
 
   /**
    * @brief Performs a left join by probing in the internal hash table.
@@ -444,12 +460,12 @@ class hash_join {
    * specified by `build_on` and `probe_on`. The resulting table will be joined columns of
    * `probe(including common columns)+build(excluding common columns)`.
    */
-  virtual std::unique_ptr<cudf::table> left_join(
+  std::unique_ptr<cudf::table> left_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const;
 
   /**
    * @brief Performs a full join by probing in the internal hash table.
@@ -472,25 +488,16 @@ class hash_join {
    * specified by `build_on` and `probe_on`. The resulting table will be joined columns of
    * `probe(including common columns)+build(excluding common columns)`.
    */
-  virtual std::unique_ptr<cudf::table> full_join(
+  std::unique_ptr<cudf::table> full_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const = 0;
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const;
 
-  /**
-   * @brief Instantiates a hash join instance and build the internal hash table used for subsequent
-   * probe calls.
-   *
-   * @param build The build table, from which the hash table is built.
-   * @param build_on The column indices from `build` to join on.
-   * @return Hash join instance.
-   */
-  static std::unique_ptr<const hash_join> create(cudf::table_view const& build,
-                                                 std::vector<size_type> const& build_on);
-
-  virtual ~hash_join() = default;
+ private:
+  struct hash_join_impl;
+  const std::unique_ptr<const hash_join_impl> impl;
 };
 
 /** @} */  // end of group

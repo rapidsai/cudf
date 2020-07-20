@@ -185,9 +185,12 @@ get_trivial_left_join_indices(table_view const& left, bool flip_join_indices, cu
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 
-class hash_join_impl : public cudf::hash_join {
+}  // namespace detail
+
+struct hash_join::hash_join_impl {
  public:
-  hash_join_impl()                      = delete;
+  hash_join_impl() = delete;
+  ~hash_join_impl();
   hash_join_impl(hash_join_impl const&) = delete;
   hash_join_impl(hash_join_impl&&)      = delete;
   hash_join_impl& operator=(hash_join_impl const&) = delete;
@@ -196,7 +199,8 @@ class hash_join_impl : public cudf::hash_join {
  private:
   cudf::table_view _build, _build_selected;
   std::vector<size_type> _build_on;
-  std::unique_ptr<multimap_type, std::function<void(multimap_type*)>> _hash_table;
+  std::unique_ptr<cudf::detail::multimap_type, std::function<void(cudf::detail::multimap_type*)>>
+    _hash_table;
 
  public:
   /**
@@ -211,7 +215,7 @@ class hash_join_impl : public cudf::hash_join {
    * @param build The build table, from which the hash table is built.
    * @param build_on The column indices from `build` to join on.
    */
-  explicit hash_join_impl(cudf::table_view const& build, std::vector<size_type> const& build_on);
+  hash_join_impl(cudf::table_view const& build, std::vector<size_type> const& build_on);
 
   std::unique_ptr<cudf::table> inner_join(
     cudf::table_view const& probe,
@@ -219,21 +223,21 @@ class hash_join_impl : public cudf::hash_join {
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     cudf::hash_join::probe_output_side probe_output_side,
     null_equality compare_nulls,
-    rmm::mr::device_memory_resource* mr) const override;
+    rmm::mr::device_memory_resource* mr) const;
 
   std::unique_ptr<cudf::table> left_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls,
-    rmm::mr::device_memory_resource* mr) const override;
+    rmm::mr::device_memory_resource* mr) const;
 
   std::unique_ptr<cudf::table> full_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls,
-    rmm::mr::device_memory_resource* mr) const override;
+    rmm::mr::device_memory_resource* mr) const;
 
  private:
   /**
@@ -276,7 +280,7 @@ class hash_join_impl : public cudf::hash_join {
    * LEFT, `_build(including common columns)+probe(excluding common columns)` if `probe_output_side`
    * is RIGHT,
    */
-  template <join_kind JoinKind>
+  template <cudf::detail::join_kind JoinKind>
   std::unique_ptr<table> compute_hash_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
@@ -303,15 +307,13 @@ class hash_join_impl : public cudf::hash_join {
    *
    * @return Join output indices vector pair.
    */
-  template <join_kind JoinKind>
-  std::enable_if_t<JoinKind != join_kind::FULL_JOIN,
+  template <cudf::detail::join_kind JoinKind>
+  std::enable_if_t<JoinKind != cudf::detail::join_kind::FULL_JOIN,
                    std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>>
   probe_join_indices(cudf::table_view const& probe,
                      bool flip_join_indices,
                      null_equality compare_nulls,
                      cudaStream_t stream) const;
 };
-
-}  // namespace detail
 
 }  // namespace cudf

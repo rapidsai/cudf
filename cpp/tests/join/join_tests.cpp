@@ -86,14 +86,14 @@ void build_once_probe_multiple_parallel(
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
   RestArgs&&... args)
 {
-  auto hash_join = cudf::hash_join::create(right, right_on);
+  cudf::hash_join hash_join(right, right_on);
 
   std::vector<std::future<std::unique_ptr<Table>>> probe_threads(s_parallelism);
   std::vector<std::unique_ptr<Table>> results(s_parallelism);
   for (size_t i = 0; i < s_parallelism; i++) {
     probe_threads[i] = std::async(std::launch::async, [&]() {
       return probe_once<JoinKind>(
-        *hash_join, left, left_on, columns_in_common, std::forward<RestArgs>(args)...);
+        hash_join, left, left_on, columns_in_common, std::forward<RestArgs>(args)...);
     });
   }
   for (size_t i = 0; i < s_parallelism; i++) { results[i] = probe_threads[i].get(); }
