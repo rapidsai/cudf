@@ -1136,7 +1136,7 @@ def test_loc_datetime_index(sli, is_dataframe):
     assert_eq(expect, got)
 
 
-def test_iloc_list_series():
-    gsr = cudf.Series([[]], dtype="list")
-    psr = gsr.to_pandas()
-    assert_eq(gsr[[]], psr[[]])
+# def test_iloc_list_series():
+#     gsr = cudf.Series([[]], dtype="list")
+#     psr = gsr.to_pandas()
+#     assert_eq(gsr[[]], psr[[]])

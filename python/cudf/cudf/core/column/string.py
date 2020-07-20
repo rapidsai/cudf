@@ -1984,9 +1984,9 @@ class StringMethods(ColumnMethodsMixin):
 
         result_table = cpp_split(self._column, as_scalar(pat, "str"), n)
         if len(result_table._data) == 1:
-            if result_table._data[0].null_count == len(self._column):
+            if result_table._data[0].null_count == len(self._parent):
                 result_table = []
-            elif self._column.null_count == len(self._column):
+            if self._column.null_count == len(self._column):
                 result_table = [self._column.copy()]
 
         return self._return_or_inplace(result_table, **kwargs,)
@@ -4146,6 +4146,14 @@ class StringColumn(column.ColumnBase):
                 # bytes in the data buffer
                 size = children[0].size - 1
             size = size - offset
+
+        if len(children) == 0 and size != 0:
+            # all nulls-column:
+            offsets = cudf.core.column.as_column(
+                cupy.zeros(size + 1, dtype="int32")
+            )
+            chars = cudf.core.column.as_column([], dtype="int8")
+            children = (offsets, chars)
 
         super().__init__(
             None,
