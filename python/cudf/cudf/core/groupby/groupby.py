@@ -203,8 +203,14 @@ class GroupBy(Serializable):
         return self.agg(dict.fromkeys(self.obj._data.keys(), "nunique"))
 
     def serialize(self):
-        """Serialize into pickle format suitable for file storage or network
-        transmission.
+        """
+        Converts the GroupBy object into a header and list of Buffer/memoryview
+        objects for file storage or network transmission.
+
+        Returns
+        -------
+            header : dictionary containing any serializable metadata
+            frames : list of Buffer or memoryviews, commonly of length one
 
         :meta private:
         """
@@ -232,7 +238,20 @@ class GroupBy(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert from pickle format into GroupBy object
+        """Convert serialized header and frames back
+        into GroupBy object
+
+        Parameters
+        ----------
+        cls : class of object
+        header : dict
+            dictionary containing any serializable metadata
+        frames : list of Buffer or memoryview objects
+
+        Returns
+        -------
+        Deserialized GroupBy extracted
+        from frames and header
 
         :meta private:
         """
@@ -803,8 +822,15 @@ class _Grouping(Serializable):
         self.names.append(None)
 
     def serialize(self):
-        """Serialize into pickle format suitable for file storage or network
-        transmission.
+        """
+        Converts the _Grouping object into a header and list of
+        Buffer/memoryview objects for file storage or
+        network transmission.
+
+        Returns
+        -------
+            header : dictionary containing any serializable metadata
+            frames : list of Buffer or memoryviews, commonly of length one
 
         :meta private:
         """
@@ -821,7 +847,20 @@ class _Grouping(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert from pickle format into GroupBy object
+        """Convert serialized header and frames back
+        into _Grouping object
+
+        Parameters
+        ----------
+        cls : class of object
+        header : dict
+            dictionary containing any serializable metadata
+        frames : list of Buffer or memoryview objects
+
+        Returns
+        -------
+        Deserialized _Grouping extracted
+        from frames and header
 
         :meta private:
         """

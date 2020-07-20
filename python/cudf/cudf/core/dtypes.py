@@ -88,8 +88,15 @@ class CategoricalDtype(ExtensionDtype):
         raise NotImplementedError()
 
     def serialize(self):
-        """Serialize into pickle format suitable for file storage or network
-        transmission.
+        """
+        Converts the CategoricalDtype into a header and list of
+        Buffer/memoryview objects for file storage or
+        network transmission.
+
+        Returns
+        -------
+            header : dictionary containing any serializable metadata
+            frames : list of Buffer or memoryviews, commonly of length one
 
         :meta private:
         """
@@ -104,7 +111,20 @@ class CategoricalDtype(ExtensionDtype):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert from pickle format into CategoricalDtype
+        """Convert serialized header and frames back
+        into CategoricalDtype object
+
+        Parameters
+        ----------
+        cls : class of object
+        header : dict
+            dictionary containing any serializable metadata
+        frames : list of Buffer or memoryview objects
+
+        Returns
+        -------
+        Deserialized CategoricalDtype extracted
+        from frames and header
 
         :meta private:
         """

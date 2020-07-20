@@ -28,8 +28,13 @@ class Serializable(abc.ABC):
         pass
 
     def device_serialize(self):
-        """Serialize into pickle format of device object
-        suitable for file storage or network transmission.
+        """Converts the object into a header and list of Buffer/memoryview
+        objects for file storage or network transmission.
+
+        Returns
+        -------
+            header : dictionary containing any serializable metadata
+            frames : list of Buffer or memoryviews, commonly of length one
 
         :meta private:
         """
@@ -46,8 +51,20 @@ class Serializable(abc.ABC):
 
     @classmethod
     def device_deserialize(cls, header, frames):
-        """Convert from device object pickle
-        format into respective Object Type
+        """Convert serialized header and frames back
+        into respective Object Type
+
+        Parameters
+        ----------
+        cls : class of object
+        header : dict
+            dictionary containing any serializable metadata
+        frames : list of Buffer or memoryview objects
+
+        Returns
+        -------
+        Deserialized Object of type cls extracted
+        from frames and header
 
         :meta private:
         """
@@ -67,8 +84,13 @@ class Serializable(abc.ABC):
         return obj
 
     def host_serialize(self):
-        """Serialize into pickle format of host object
-        suitable for file storage or network transmission.
+        """Converts the object into a header and list of memoryview
+        objects for file storage or network transmission.
+
+        Returns
+        -------
+            header : dictionary containing any serializable metadata
+            frames : list of memoryviews, commonly of length one
 
         :meta private:
         """
@@ -81,8 +103,20 @@ class Serializable(abc.ABC):
 
     @classmethod
     def host_deserialize(cls, header, frames):
-        """Convert from host object pickle
-        format into respective Object Type
+        """Convert serialized header and frames back
+        into respective Object Type
+
+        Parameters
+        ----------
+        cls : class of object
+        header : dict
+            dictionary containing any serializable metadata
+        frames : list of memoryview objects
+
+        Returns
+        -------
+        Deserialized Object of type cls extracted
+        from frames and header
 
         :meta private:
         """

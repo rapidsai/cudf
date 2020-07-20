@@ -154,8 +154,14 @@ class Index(Frame, Serializable):
         return (len(self),)
 
     def serialize(self):
-        """Serialize into pickle format suitable for file storage or network
-        transmission.
+        """
+        Converts the Index into a header and list of Buffer/memoryview
+        objects for file storage or network transmission.
+
+        Returns
+        -------
+            header : dictionary containing any serializable metadata
+            frames : list of Buffer or memoryviews, commonly of length one
 
         :meta private:
         """
@@ -247,7 +253,20 @@ class Index(Frame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert from pickle format into Index
+        """Convert serialized header and frames back
+        into Index object
+
+        Parameters
+        ----------
+        cls : class of object
+        header : dict
+            dictionary containing any serializable metadata
+        frames : list of Buffer or memoryview objects
+
+        Returns
+        -------
+        Deserialized Index extracted
+        from frames and header
 
         :meta private:
         """
@@ -1399,8 +1418,14 @@ class RangeIndex(Index):
             return (self == other)._values.all()
 
     def serialize(self):
-        """Serialize into pickle format suitable for file storage or network
-        transmission.
+        """
+        Converts the Index into a header and list of Buffer/memoryview
+        objects for file storage or network transmission.
+
+        Returns
+        -------
+            header : dictionary containing any serializable metadata
+            frames : list of Buffer or memoryviews, commonly of length one
 
         :meta private:
         """
@@ -1423,7 +1448,20 @@ class RangeIndex(Index):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert from pickle format into RangeIndex
+        """Convert serialized header and frames back
+        into RangeIndex object
+
+        Parameters
+        ----------
+        cls : class of object
+        header : dict
+            dictionary containing any serializable metadata
+        frames : list of Buffer or memoryview objects
+
+        Returns
+        -------
+        Deserialized RangeIndex extracted
+        from frames and header
 
         :meta private:
         """
