@@ -1235,4 +1235,3 @@ def test_iloc_list_series():
     gsr = cudf.Series([[]], dtype="list")
     psr = gsr.to_pandas()
     assert_eq(gsr[[]], psr[[]])
-
