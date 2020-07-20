@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,11 @@ class hostdevice_vector {
  public:
   using value_type = T;
 
+  hostdevice_vector() { }
+
+  hostdevice_vector(hostdevice_vector &&v) { move(std::move(v)); }
+  void operator=(hostdevice_vector &&v) { move(std::move(v)); }    
+
   explicit hostdevice_vector(size_t max_size, cudaStream_t stream = 0)
     : hostdevice_vector(max_size, max_size, stream)
   {
@@ -50,8 +55,10 @@ class hostdevice_vector {
 
   ~hostdevice_vector()
   {
-    auto const free_result = cudaFreeHost(h_data);
-    assert(free_result == cudaSuccess);
+    if (max_elements != 0) {
+      auto const free_result = cudaFreeHost(h_data);
+      assert(free_result == cudaSuccess);
+    }
   }
 
   bool insert(const T &data)
@@ -76,7 +83,32 @@ class hostdevice_vector {
     return reinterpret_cast<T const *>(d_data.data()) + offset;
   }
 
+  void host_to_device(cudaStream_t stream)
+  {
+    cudaMemcpyAsync(d_data.data(), h_data, memory_size(), cudaMemcpyHostToDevice, stream);
+    cudaStreamSynchronize(stream);
+  }
+
+  void device_to_host(cudaStream_t stream)
+  {
+    cudaMemcpyAsync(h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream);
+    cudaStreamSynchronize(stream);
+  }
+
  private:
+  void move(hostdevice_vector &&v)
+  {
+    stream       = v.stream;
+    max_elements = v.max_elements;
+    num_elements = v.num_elements;
+    h_data       = v.h_data;
+    d_data       = std::move(v.d_data);
+
+    v.max_elements = 0;
+    v.num_elements = 0;
+    v.h_data       = nullptr;
+  }
+
   cudaStream_t stream = 0;
   size_t max_elements = 0;
   size_t num_elements = 0;

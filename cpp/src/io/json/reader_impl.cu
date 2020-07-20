@@ -474,7 +474,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
   for (size_t i = 0; i < num_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
 
-    out_columns.emplace_back(make_column(dtypes_[i], num_records, out_buffers[i]));
+    out_columns.emplace_back(make_column(out_buffers[i]));
   }
 
   CUDF_EXPECTS(!out_columns.empty(), "Error converting json input into gdf columns.\n");
