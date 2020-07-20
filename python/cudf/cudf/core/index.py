@@ -1595,6 +1595,7 @@ class GenericIndex(Index):
                 # as we want to preserve single quotes incase
                 # of StringIndex and it is valid to have them.
                 output = output.replace("'", "")
+            # TODO: Handle dtype
         else:
             output = preprocess.to_pandas().__repr__()
 
