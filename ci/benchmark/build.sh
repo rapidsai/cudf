@@ -122,11 +122,9 @@ while read BENCH;
 do
     nvidia-smi
     ./${BENCH} --benchmark_out=${BENCH}.json --benchmark_out_format=json
-done < ../benchmarks.txt
+done < ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 set -e
 
 python GBenchToASV.py -d ${GBENCH_BENCHMARKS_DIR} -t ${ASVRESULTS_DIR} -n libcudf -b branch-${MINOR_VERSION} 
-
-
 
 
