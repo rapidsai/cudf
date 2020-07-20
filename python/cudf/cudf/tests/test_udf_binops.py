@@ -49,4 +49,4 @@ def test_generic_ptx(dtype):
 
     result = lhs_arr ** 3 + rhs_arr
 
-    np.testing.assert_almost_equal(result, out_col)
+    np.testing.assert_almost_equal(result, out_col.to_array())

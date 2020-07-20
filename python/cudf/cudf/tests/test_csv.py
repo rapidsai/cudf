@@ -1,4 +1,4 @@
-# Copyright (c) 2018-20, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import csv
 import gzip
@@ -495,7 +495,7 @@ def test_csv_reader_NaN_values():
         na_values=custom_na_values,
     )
     assert df_int8.dtypes[0] == "int8"
-    assert all(val is None for val in df_int8["0"])
+    assert all(df_int8["0"][idx] is None for idx in range(len(df_int8["0"])))
 
     # data type detection should evaluate the column to object;
     # for data type detection, cells need to be completely empty,
@@ -1117,14 +1117,19 @@ def test_csv_reader_index_col():
     # using a column index
     cu_df = read_csv(StringIO(buffer), header=None, index_col=0)
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=0)
-    for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
-        assert str(cu_idx) == str(pd_idx)
+    assert_eq(cu_df.index, pd_df.index)
+
+    # using a column index with names
+    cu_df = read_csv(StringIO(buffer), header=None, index_col=0, names=names)
+    pd_df = pd.read_csv(
+        StringIO(buffer), header=None, index_col=0, names=names
+    )
+    assert_eq(cu_df.index, pd_df.index)
 
     # passing False to avoid using a column as index (no-op in cuDF)
     cu_df = read_csv(StringIO(buffer), header=None, index_col=False)
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
-    for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
-        assert str(cu_idx) == str(pd_idx)
+    assert_eq(cu_df.index, pd_df.index)
 
 
 @pytest.mark.parametrize(

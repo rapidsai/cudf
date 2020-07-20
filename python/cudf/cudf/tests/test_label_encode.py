@@ -39,7 +39,7 @@ def test_label_encode(nelem, dtype):
     # initialize data frame
     df["cats"] = _random(nelem, dtype)
     vals = df["cats"].unique()
-    lab = dict(zip(vals, range(len(vals))))
+    lab = dict({vals[i]: i for i in range(len(vals))})
 
     # label encode series
     ncol = df["cats"].label_encoding(cats=vals)
@@ -64,11 +64,13 @@ def test_label_encode_drop_one():
 
     # initialize data frame
     df["cats"] = np.random.randint(7, size=10, dtype=np.int32)
-    vals = list(df["cats"].unique())
+    vals = df["cats"].unique()
     # drop 1 randomly
-    del vals[random.randrange(len(vals))]
+    vals = vals[vals.index != random.randrange(len(vals))].reset_index(
+        drop=True
+    )
 
-    lab = dict(zip(vals, list(range(len(vals)))))
+    lab = dict({vals[i]: i for i in range(len(vals))})
 
     # label encode series
     ncol = df["cats"].label_encoding(cats=vals, dtype="float32")
