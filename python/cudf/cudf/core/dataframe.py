@@ -503,17 +503,6 @@ class DataFrame(Frame, Serializable):
         )
 
     def serialize(self):
-        """
-        Converts the DataFrame into a header and list of Buffer/memoryview
-        objects for file storage or network transmission.
-
-        Returns
-        -------
-            header : dictionary containing any serializable metadata
-            frames : list of Buffer or memoryviews, commonly of length one
-
-        :meta private:
-        """
         header = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
@@ -532,23 +521,6 @@ class DataFrame(Frame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert serialized header and frames back
-        into DataFrame object
-
-        Parameters
-        ----------
-        cls : class of object
-        header : dict
-            dictionary containing any serializable metadata
-        frames : list of Buffer or memoryview objects
-
-        Returns
-        -------
-        Deserialized DataFrame Object extracted
-        from frames and header
-
-        :meta private:
-        """
         # Reconstruct the index
         index_frames = frames[: header["index_frame_count"]]
 

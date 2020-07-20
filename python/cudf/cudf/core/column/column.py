@@ -999,17 +999,6 @@ class ColumnBase(Column, Serializable):
         )
 
     def serialize(self):
-        """
-        Converts the Column into a header and list of Buffer/memoryview
-        objects for file storage or network transmission.
-
-        Returns
-        -------
-            header : dictionary containing any serializable metadata
-            frames : list of Buffer or memoryviews, commonly of length one
-
-        :meta private:
-        """
         header = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
@@ -1029,23 +1018,6 @@ class ColumnBase(Column, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert serialized header and frames back
-        into Column object
-
-        Parameters
-        ----------
-        cls : class of object
-        header : dict
-            dictionary containing any serializable metadata
-        frames : list of Buffer or memoryview objects
-
-        Returns
-        -------
-        Deserialized Column extracted
-        from frames and header
-
-        :meta private:
-        """
         dtype = header["dtype"]
         data = Buffer.deserialize(header["data"], [frames[0]])
         mask = None

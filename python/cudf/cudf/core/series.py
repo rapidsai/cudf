@@ -339,17 +339,6 @@ class Series(Frame, Serializable):
         return cls(s)
 
     def serialize(self):
-        """
-        Converts the Series into a header and list of Buffer/memoryview
-        objects for file storage or network transmission.
-
-        Returns
-        -------
-            header : dictionary containing any serializable metadata
-            frames : list of Buffer or memoryviews, commonly of length one
-
-        :meta private:
-        """
         header = {}
         frames = []
         header["index"], index_frames = self._index.serialize()
@@ -414,23 +403,6 @@ class Series(Frame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert serialized header and frames back
-        into Series object
-
-        Parameters
-        ----------
-        cls : class of object
-        header : dict
-            dictionary containing any serializable metadata
-        frames : list of Buffer or memoryview objects
-
-        Returns
-        -------
-        Deserialized Series extracted
-        from frames and header
-
-        :meta private:
-        """
         index_nframes = header["index_frame_count"]
         idx_typ = pickle.loads(header["index"]["type-serialized"])
         index = idx_typ.deserialize(header["index"], frames[:index_nframes])

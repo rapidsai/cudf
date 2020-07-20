@@ -766,18 +766,6 @@ class CategoricalColumn(column.ColumnBase):
         return self._encode(item) in self.as_numerical
 
     def serialize(self):
-        """
-        Converts the CategoricalColumn into a header and list of
-        Buffer/memoryview objects for file storage or
-        network transmission.
-
-        Returns
-        -------
-            header : dictionary containing any serializable metadata
-            frames : list of Buffer or memoryviews, commonly of length one
-
-        :meta private:
-        """
         header = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
@@ -796,23 +784,6 @@ class CategoricalColumn(column.ColumnBase):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert serialized header and frames back
-        into CategoricalColumn object
-
-        Parameters
-        ----------
-        cls : class of object
-        header : dict
-            dictionary containing any serializable metadata
-        frames : list of Buffer or memoryview objects
-
-        Returns
-        -------
-        Deserialized CategoricalColumn extracted
-        from frames and header
-
-        :meta private:
-        """
         n_dtype_frames = header["dtype_frames_count"]
         dtype = CategoricalDtype.deserialize(
             header["dtype"], frames[:n_dtype_frames]

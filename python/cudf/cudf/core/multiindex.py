@@ -643,17 +643,6 @@ class MultiIndex(Index):
         return result
 
     def serialize(self):
-        """
-        Converts the MultiIndex into a header and list of Buffer/memoryview
-        objects for file storage or network transmission.
-
-        Returns
-        -------
-            header : dictionary containing any serializable metadata
-            frames : list of Buffer or memoryviews, commonly of length one
-
-        :meta private:
-        """
         header = {}
         header["type-serialized"] = pickle.dumps(type(self))
         header["names"] = pickle.dumps(self.names)
@@ -664,23 +653,6 @@ class MultiIndex(Index):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert serialized header and frames back
-        into MultiIndex object
-
-        Parameters
-        ----------
-        cls : class of object
-        header : dict
-            dictionary containing any serializable metadata
-        frames : list of Buffer or memoryview objects
-
-        Returns
-        -------
-        Deserialized MultiIndex extracted
-        from frames and header
-
-        :meta private:
-        """
         names = pickle.loads(header["names"])
 
         source_data_typ = pickle.loads(

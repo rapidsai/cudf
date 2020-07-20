@@ -154,17 +154,6 @@ class Index(Frame, Serializable):
         return (len(self),)
 
     def serialize(self):
-        """
-        Converts the Index into a header and list of Buffer/memoryview
-        objects for file storage or network transmission.
-
-        Returns
-        -------
-            header : dictionary containing any serializable metadata
-            frames : list of Buffer or memoryviews, commonly of length one
-
-        :meta private:
-        """
         header = {}
         header["index_column"] = {}
         # store metadata values of index separately
@@ -253,23 +242,6 @@ class Index(Frame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert serialized header and frames back
-        into Index object
-
-        Parameters
-        ----------
-        cls : class of object
-        header : dict
-            dictionary containing any serializable metadata
-        frames : list of Buffer or memoryview objects
-
-        Returns
-        -------
-        Deserialized Index extracted
-        from frames and header
-
-        :meta private:
-        """
         h = header["index_column"]
         idx_typ = pickle.loads(header["type-serialized"])
         name = pickle.loads(header["name"])
@@ -1418,17 +1390,6 @@ class RangeIndex(Index):
             return (self == other)._values.all()
 
     def serialize(self):
-        """
-        Converts the Index into a header and list of Buffer/memoryview
-        objects for file storage or network transmission.
-
-        Returns
-        -------
-            header : dictionary containing any serializable metadata
-            frames : list of Buffer or memoryviews, commonly of length one
-
-        :meta private:
-        """
         header = {}
         header["index_column"] = {}
 
@@ -1448,23 +1409,6 @@ class RangeIndex(Index):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert serialized header and frames back
-        into RangeIndex object
-
-        Parameters
-        ----------
-        cls : class of object
-        header : dict
-            dictionary containing any serializable metadata
-        frames : list of Buffer or memoryview objects
-
-        Returns
-        -------
-        Deserialized RangeIndex extracted
-        from frames and header
-
-        :meta private:
-        """
         h = header["index_column"]
         name = pickle.loads(header["name"])
         start = h["start"]
