@@ -495,6 +495,28 @@ struct parse_duration {
     return value;
   }
 
+  __device__ int8_t parse_2digit_int(const char* str, int8_t& actual_length)
+  {
+    const char* ptr = (*str == '-' || *str == '+') ? str + 1 : str;
+    int8_t value    = 0;
+    if (*ptr >= '0' && *ptr <= '9') value = (value * 10) + static_cast<int32_t>(*ptr++ - '0');
+    if (*ptr >= '0' && *ptr <= '9') value = (value * 10) + static_cast<int32_t>(*ptr++ - '0');
+    actual_length += (ptr - str);
+    return (*str == '-') ? -value : value;
+  }
+  inline __device__ int8_t parse_hour(const char* str, int8_t& actual_length)
+  {
+    return parse_2digit_int(str, actual_length);
+  }
+  inline __device__ int8_t parse_minute(const char* str, int8_t& actual_length)
+  {
+    return parse_2digit_int(str, actual_length);
+  }
+  inline __device__ int8_t parse_second(const char* str, int8_t& actual_length)
+  {
+    return parse_2digit_int(str, actual_length);
+  }
+
   // Walk the format_items to read the datetime string.
   // Returns 0 if all ok.
   __device__ int parse_into_parts(string_view const& d_string, duration_component* timeparts)
@@ -514,22 +536,18 @@ struct parse_duration {
       timeparts->is_negative |= (*ptr == '-');
 
       // special logic for each specifier
-      // TODO parse_day, parse_hour, parse_minute, parse_second, parse_am_or_pm
       int8_t item_length{0};
       switch (item.value) {
         case 'D': timeparts->day = str2int(ptr, 11, item_length); break;
         case '-': break;  // skip
-        case 'H':
-          timeparts->hour = str2int(ptr, 2, item_length);
+        case 'H':         // 24-hour
+          timeparts->hour = parse_hour(ptr, item_length);
           hour_shift      = 0;
           break;
-        case 'I':
-          timeparts->minute = str2int(ptr, 2, item_length);
-          hour_shift        = 12;
-          break;
-        case 'M': timeparts->minute = str2int(ptr, 2, item_length); break;
-        case 'S':
-          timeparts->second = str2int(ptr, 2, item_length);
+        case 'I': timeparts->hour = parse_hour(ptr, item_length); break;  // 12-hour
+        case 'M': timeparts->minute = parse_minute(ptr, item_length); break;
+        case 'S':  // [-]SS[.mmm][uuu][nnn]
+          timeparts->second = parse_second(ptr, item_length);
           if (*(ptr + item_length) == '.') {
             item_length++;
             int64_t nanoseconds = str2int_fixed(
@@ -537,23 +555,39 @@ struct parse_duration {
             timeparts->subsecond = nanoseconds;
           }
           break;
-        case 'p':
-          if (*ptr == 'P' && *(ptr + 1) == 'M') hour_shift = 12;
+        case 'p':  // AM/PM
+          if (*ptr == 'P' && *(ptr + 1) == 'M')
+            hour_shift = 12;
+          else
+            hour_shift = 0;
           item_length = 2;
           break;
-        case 'R':
-          timeparts->hour = str2int(ptr, 2, item_length);
+        case 'R':  // [-]HH:SS
+          timeparts->hour = parse_hour(ptr, item_length);
           hour_shift      = 0;
-          item_length++;
-          timeparts->minute = str2int(ptr + item_length, 2, item_length);
+          item_length++;  // :
+          timeparts->minute = parse_minute(ptr + item_length, item_length);
           break;
-        case 'T':
-          timeparts->hour = str2int(ptr, 2, item_length);
+        case 'T':  // [-]HH:MM:SS
+          timeparts->hour = parse_hour(ptr, item_length);
           hour_shift      = 0;
-          item_length++;
-          timeparts->minute = str2int(ptr + item_length, 2, item_length);
-          item_length++;
-          timeparts->second = str2int(ptr + item_length, 2, item_length);
+          item_length++;  // :
+          timeparts->minute = parse_minute(ptr + item_length, item_length);
+          item_length++;  // :
+          timeparts->second = parse_second(ptr + item_length, item_length);
+          break;
+        case 'r':  // hh:MM:SS AM/PM
+          timeparts->hour = parse_hour(ptr, item_length);
+          item_length++;  // :
+          timeparts->minute = parse_minute(ptr + item_length, item_length);
+          item_length++;  // :
+          timeparts->second = parse_second(ptr + item_length, item_length);
+          item_length++;  // space
+          if (*ptr == 'P' && *(ptr + 1) == 'M')
+            hour_shift = 12;
+          else
+            hour_shift = 0;
+          item_length += 2;
           break;
         default: return 3;
       }
