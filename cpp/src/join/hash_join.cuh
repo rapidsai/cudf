@@ -265,7 +265,7 @@ struct hash_join::hash_join_impl {
    * @param probe_on The column's indices from `probe` to join on.
    * Column `i` from `probe_on` will be compared against column `i` of `_build_on`.
    * @param columns_in_common is a vector of pairs of column indices into
-   * `_build` and `probe`, respectively, that are "in common". For "common"
+   * `probe` and `_build`, respectively, that are "in common". For "common"
    * columns, only a single output column will be produced, which is gathered
    * from `probe_on` columns. Else, for every column in `probe_on` and `_build_on`,
    * an output column will be produced. For each of these pairs (P, B), P

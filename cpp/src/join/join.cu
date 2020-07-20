@@ -38,9 +38,13 @@ std::unique_ptr<table> inner_join(
   // on the smaller table. Thus, if `left` is smaller than `right`, swap `left/right`.
   if (right.num_rows() > left.num_rows()) {
     cudf::hash_join hj_obj(left, left_on);
+    auto actual_columns_in_common = columns_in_common;
+    std::for_each(actual_columns_in_common.begin(), actual_columns_in_common.end(), [](auto& pair) {
+      std::swap(pair.first, pair.second);
+    });
     return hj_obj.inner_join(right,
                              right_on,
-                             columns_in_common,
+                             actual_columns_in_common,
                              cudf::hash_join::probe_output_side::RIGHT,
                              compare_nulls,
                              mr);

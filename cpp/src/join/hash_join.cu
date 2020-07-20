@@ -522,11 +522,11 @@ std::unique_ptr<table> hash_join::hash_join_impl::compute_hash_join(
   CUDF_EXPECTS(std::all_of(columns_in_common.begin(),
                            columns_in_common.end(),
                            [this, &probe_on](auto pair) {
-                             size_t b = std::find(_build_on.begin(), _build_on.end(), pair.first) -
-                                        _build_on.begin();
-                             size_t p = std::find(probe_on.begin(), probe_on.end(), pair.second) -
+                             size_t p = std::find(probe_on.begin(), probe_on.end(), pair.first) -
                                         probe_on.begin();
-                             return (b != _build_on.size()) && (p != probe_on.size()) && (b == p);
+                             size_t b = std::find(_build_on.begin(), _build_on.end(), pair.second) -
+                                        _build_on.begin();
+                             return (p != probe_on.size()) && (b != _build_on.size()) && (p == b);
                            }),
                "Invalid values passed to columns_in_common");
 

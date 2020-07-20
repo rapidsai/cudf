@@ -416,7 +416,7 @@ class hash_join {
    * @param probe The probe table, from which the tuples are probed.
    * @param probe_on The column indices from `probe` to join on.
    * @param columns_in_common is a vector of pairs of column indices into
-   * `build` and `probe`, respectively, that are "in common". For "common"
+   * `probe` and `build`, respectively, that are "in common". For "common"
    * columns, only a single output column will be produced, which is gathered
    * from `probe_on` columns or `build_on` columns if `probe_output_side` is LEFT or RIGHT.
    * Else, for every column in `probe_on` and `build_on`,
@@ -449,7 +449,7 @@ class hash_join {
    * @param probe The probe table, from which the tuples are probed.
    * @param probe_on The column indices from `probe` to join on.
    * @param columns_in_common is a vector of pairs of column indices into
-   * `build` and `probe`, respectively, that are "in common". For "common"
+   * `probe` and `build`, respectively, that are "in common". For "common"
    * columns, only a single output column will be produced, which is gathered
    * from `probe_on` columns. Else, for every column in `probe_on` and `build_on`,
    * an output column will be produced. For each of these pairs (P, B), P
@@ -477,7 +477,7 @@ class hash_join {
    * @param probe The probe table, from which the tuples are probed.
    * @param probe_on The column indices from `probe` to join on.
    * @param columns_in_common is a vector of pairs of column indices into
-   * `build` and `probe`, respectively, that are "in common". For "common"
+   * `probe` and `build`, respectively, that are "in common". For "common"
    * columns, only a single output column will be produced, which is gathered
    * from `probe_on` columns. Else, for every column in `probe_on` and `build_on`,
    * an output column will be produced. For each of these pairs (P, B), P
