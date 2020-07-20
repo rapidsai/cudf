@@ -439,10 +439,10 @@ PBW_END_STRUCT()
 /* ----------------------------------------------------------------------------*/
 
 OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
-  : m_kind(kind), m_log2MaxRatio(24), m_blockSize(blockSize)
+  : m_kind(kind), m_blockSize(blockSize)
 {
   if (kind != NONE) {
-    int stream_type;
+    int stream_type = IO_UNCOMP_STREAM_TYPE_INFER;  // Will be treated as invalid
     switch (kind) {
       case ZLIB:
         stream_type    = IO_UNCOMP_STREAM_TYPE_INFLATE;
@@ -455,7 +455,6 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
       case LZO: stream_type = IO_UNCOMP_STREAM_TYPE_LZO; break;
       case LZ4: stream_type = IO_UNCOMP_STREAM_TYPE_LZ4; break;
       case ZSTD: stream_type = IO_UNCOMP_STREAM_TYPE_ZSTD; break;
-      default: stream_type = IO_UNCOMP_STREAM_TYPE_INFER;  // Will be treated as invalid
     }
     m_decompressor = HostDecompressor::Create(stream_type);
   } else {

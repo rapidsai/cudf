@@ -382,7 +382,7 @@ void io_uncompress_single_h2d(const void *src,
     int zerr = cpu_inflate_vector(dst, comp_data, comp_len);
     if (zerr != 0) {
       dst.resize(0);
-      CUDF_EXPECTS(0, "Decompression: error in stream");
+      CUDF_FAIL("Decompression: error in stream");
     }
   } else if (strm_type == IO_UNCOMP_STREAM_TYPE_BZIP2) {
     size_t src_ofs = 0;
@@ -407,10 +407,10 @@ void io_uncompress_single_h2d(const void *src,
     } while (bz_err == BZ_OUTBUFF_FULL);
     if (bz_err != 0) {
       dst.resize(0);
-      CUDF_EXPECTS(0, "Decompression: error in stream");
+      CUDF_FAIL("Decompression: error in stream");
     }
   } else {
-    CUDF_EXPECTS(0, "Unsupported compressed stream type");
+    CUDF_FAIL("Unsupported compressed stream type");
   }
 }
 
@@ -586,7 +586,7 @@ std::unique_ptr<HostDecompressor> HostDecompressor::Create(int stream_type)
     case IO_UNCOMP_STREAM_TYPE_INFLATE: return std::make_unique<HostDecompressor_ZLIB>(false);
     case IO_UNCOMP_STREAM_TYPE_SNAPPY: return std::make_unique<HostDecompressor_SNAPPY>();
   }
-  return {};
+  CUDF_FAIL("Unsupported compression type");
 }
 
 }  // namespace io
