@@ -42,6 +42,7 @@
 - PR #5659 Added support for rapids-compose for Java bindings and other enhancements
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
+- PR #5674 Support JIT backend on PowerPC64
 - PR #5629 Add `ListColumn` and `ListDtype`
 - PR #5658 Add `filter_tokens` nvtext API
 - PR #5666 Add `filter_characters_of_type` strings API
@@ -126,6 +127,7 @@
 - PR #5708 Add support for `dummy_na` in `get_dummies`
 - PR #5709 Update java build to help cu-spacial with java bindings
 - PR #5713 Remove old NVTX utilities
+- PR #5702 Add inherited methods to python docs and other docs fixes
 
 ## Bug Fixes
 
@@ -166,6 +168,7 @@
 - PR #5489 Fix drop_nulls/boolean_mask corruption for large columns
 - PR #5504 Remove some java assertions that are not needed
 - PR #5516 Update gpuCI image in local build script
+- PR #5529 Fix issue with negative timestamp in orc writer
 - PR #5523 Handle `dtype` of `Buffer` objects when not passed explicitly
 - PR #5534 Fix the java build around type_id
 - PR #5564 Fix CudfEngine.read_metadata API in dask_cudf
