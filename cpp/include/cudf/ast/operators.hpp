@@ -101,7 +101,12 @@ enum class ast_operator {
   IS_NOT_NULL,        ///< Unary comparator returning whether the value is not null
   COTAN,              ///< Trigonometric cotangent
   CAST,               ///< Type cast operator (TODO: special case)
-  CHAR_LENGTH         ///< String length
+  CHAR_LENGTH,        ///< String length
+  RAND,               ///< Random number (nullary operator)
+  NOW,                ///< Current timestamp
+  ROW,                ///< Current row of the table
+  THREAD_ID,          ///< Could be useful for debugging
+  BLOCK_ID            ///< Could be useful for debugging
 };
 
 /*
