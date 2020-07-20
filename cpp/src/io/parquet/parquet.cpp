@@ -314,7 +314,8 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
         current_row_group = std::distance(md->schema.cbegin(), it);
 
         // if the schema index is already pointing at a nested type, we'll leave it alone.
-        if (column.schema_idx < 0 || md->schema[column.schema_idx].converted_type != parquet::LIST) {
+        if (column.schema_idx < 0 ||
+            md->schema[column.schema_idx].converted_type != parquet::LIST) {
           column.schema_idx = current_row_group;
         }
         column.leaf_schema_idx = current_row_group;
@@ -346,7 +347,7 @@ int CompactProtocolReader::WalkSchema(
     } else if (e->repetition_type == REPEATED) {
       ++max_def_level;
       ++max_rep_level;
-    } 
+    }
     e->max_definition_level = max_def_level;
     e->max_repetition_level = max_rep_level;
     e->parent_idx           = parent_idx;

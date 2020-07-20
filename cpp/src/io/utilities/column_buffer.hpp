@@ -137,8 +137,7 @@ std::unique_ptr<column> make_column(
   using str_pair = thrust::pair<const char*, size_type>;
 
   switch (buffer.type.id()) {
-    case type_id::STRING: 
-      return make_strings_column(buffer._strings, stream, mr);
+    case type_id::STRING: return make_strings_column(buffer._strings, stream, mr);
 
     case type_id::LIST: {
       // make offsets column

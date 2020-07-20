@@ -315,7 +315,7 @@ class aggregate_metadata {
   inline int get_nesting_depth(int col_index)
   {
     auto &pfm = per_file_metadata[0];
-    
+
     // see : the "Nested Types" section here
     // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
     int index = get_column_leaf_schema_index(col_index);
@@ -688,23 +688,24 @@ rmm::device_buffer reader::impl::decompress_page_data(
 /**
  * @copydoc cudf::io::detail::parquet::allocate_nesting_info
  */
-void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const&chunks,
-                                         hostdevice_vector<gpu::PageInfo> &pages,
-                                         hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,                                         
-                                         std::vector<std::vector<std::pair<int, bool>>>& col_nesting_info,
-                                         int num_columns,
-                                         cudaStream_t stream)
+void reader::impl::allocate_nesting_info(
+  hostdevice_vector<gpu::ColumnChunkDesc> const &chunks,
+  hostdevice_vector<gpu::PageInfo> &pages,
+  hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
+  std::vector<std::vector<std::pair<int, bool>>> &col_nesting_info,
+  int num_columns,
+  cudaStream_t stream)
 {
   // resize col_nesting_info
-  col_nesting_info.resize(num_columns);  
+  col_nesting_info.resize(num_columns);
 
   // compute total # of page_nesting infos needed and allocate space. doing this in one
   // buffer to keep it to a single gpu allocation
   int total_page_nesting_infos = 0;
-  for(size_t idx=0; idx<chunks.size(); idx++){
+  for (size_t idx = 0; idx < chunks.size(); idx++) {
     int col_index = chunks[idx].col_index;
     // the leaf schema represents the bottom of the nested hierarchy
-    auto &leaf_schema = _metadata->get_column_leaf_schema(col_index);
+    auto &leaf_schema              = _metadata->get_column_leaf_schema(col_index);
     int per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
     total_page_nesting_infos += (per_page_nesting_info_size * chunks[idx].num_data_pages);
   }
@@ -717,29 +718,29 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
 
   // update pointers in the PageInfos
   int target_page_index = 0;
-  int src_info_index = 0;
-  for(size_t idx=0; idx<chunks.size(); idx++){
-    int col_index = chunks[idx].col_index;
-    auto &leaf_schema = _metadata->get_column_leaf_schema(col_index);
+  int src_info_index    = 0;
+  for (size_t idx = 0; idx < chunks.size(); idx++) {
+    int col_index                  = chunks[idx].col_index;
+    auto &leaf_schema              = _metadata->get_column_leaf_schema(col_index);
     int per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
-    
+
     // skip my dict pages
     target_page_index += chunks[idx].num_dict_pages;
-    for(int p_idx=0; p_idx<chunks[idx].num_data_pages; p_idx++){      
+    for (int p_idx = 0; p_idx < chunks[idx].num_data_pages; p_idx++) {
       pages[target_page_index + p_idx].nesting = page_nesting_info.device_ptr() + src_info_index;
       pages[target_page_index + p_idx].max_nesting_depth = per_page_nesting_info_size;
-  
+
       src_info_index += per_page_nesting_info_size;
-    }    
+    }
     target_page_index += chunks[idx].num_data_pages;
   }
 
   // copy back to the gpu
-  pages.host_to_device(stream);  
+  pages.host_to_device(stream);
 
-  // fill in 
+  // fill in
   int nesting_info_index = 0;
-  for (size_t idx=0; idx<chunks.size(); idx++) {
+  for (size_t idx = 0; idx < chunks.size(); idx++) {
     int col_index = chunks[idx].col_index;
 
     // the leaf schema represents the bottom of the nested hierarchy
@@ -762,29 +763,30 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
 
       int d = cur_schema.max_definition_level;
 
-      // set nullability on the column 
-      if(repetition_type != REPEATED){
-        col_nesting_info[col_index][output_col_idx].second = repetition_type == OPTIONAL ? true : false;
+      // set nullability on the column
+      if (repetition_type != REPEATED) {
+        col_nesting_info[col_index][output_col_idx].second =
+          repetition_type == OPTIONAL ? true : false;
       }
 
       // initialize each page within the chunk
-      for(int p_idx=0; p_idx<chunks[idx].num_data_pages; p_idx++){
-        gpu::PageNestingInfo *pni = &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size)];
-        int input_index = d;
+      for (int p_idx = 0; p_idx < chunks[idx].num_data_pages; p_idx++) {
+        gpu::PageNestingInfo *pni =
+          &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size)];
+        int input_index  = d;
         int output_index = output_col_idx;
 
         // values indexed by definition level
         pni[input_index].d_remap = output_col_idx;
 
-        // REPEATED fields are not "real" output cudf columns. they just represent a level of nesting.
+        // REPEATED fields are not "real" output cudf columns. they just represent a level of
+        // nesting.
         if (repetition_type != REPEATED) {
           // values indexed by output column index
           pni[output_index].max_def_level = d;
           pni[output_index].size          = 0;
-          // definition 0 always remaps to column 0.  
-          if(output_index == 0){
-            pni[output_index].d_remap = 0;
-          }
+          // definition 0 always remaps to column 0.
+          if (output_index == 0) { pni[output_index].d_remap = 0; }
         }
       }
 
@@ -792,15 +794,13 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
 
       // if this was a REPEATED field, it represents a level of nesting, so
       // move up the output column
-      if(repetition_type == REPEATED){        
-        output_col_idx--;
-      }
+      if (repetition_type == REPEATED) { output_col_idx--; }
       schema_idx = cur_schema.parent_idx;
       cur_schema = _metadata->get_schema(schema_idx);
     }
 
     nesting_info_index += (per_page_nesting_info_size * chunks[idx].num_data_pages);
-  }  
+  }
 
   // copy nesting info to the device
   page_nesting_info.host_to_device(stream);
@@ -812,21 +812,17 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
 /**
  * @copydoc cudf::io::detail::parquet::preprocess_nested_columns
  */
-void reader::impl::preprocess_nested_columns(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-                                             hostdevice_vector<gpu::PageInfo> &pages,
-                                             hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
-                                             std::vector<std::vector<std::pair<int, bool>>>& nested_sizes,
-                                             size_t min_row,
-                                             size_t total_rows,
-                                             cudaStream_t stream)
-{  
+void reader::impl::preprocess_nested_columns(
+  hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+  hostdevice_vector<gpu::PageInfo> &pages,
+  hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
+  std::vector<std::vector<std::pair<int, bool>>> &nested_sizes,
+  size_t min_row,
+  size_t total_rows,
+  cudaStream_t stream)
+{
   // preprocess per-nesting level sizes by page
-  CUDA_TRY(gpu::PreprocessColumnData(pages,
-                                     chunks,
-                                     nested_sizes,
-                                     total_rows,                                     
-                                     min_row,
-                                     stream));
+  CUDA_TRY(gpu::PreprocessColumnData(pages, chunks, nested_sizes, total_rows, min_row, stream));
 
   CUDA_TRY(cudaStreamSynchronize(stream));
 }
@@ -859,8 +855,8 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
   rmm::device_vector<gpu::nvstrdesc_s> str_dict_index;
   if (total_str_dict_indexes > 0) { str_dict_index.resize(total_str_dict_indexes); }
 
-  std::vector<hostdevice_vector<uint32_t*>> chunk_nested_valids;
-  std::vector<hostdevice_vector<void*>> chunk_nested_data;
+  std::vector<hostdevice_vector<uint32_t *>> chunk_nested_valids;
+  std::vector<hostdevice_vector<void *>> chunk_nested_data;
 
   // Update chunks with pointers to column data.
   for (size_t c = 0, page_count = 0, str_ofs = 0; c < chunks.size(); c++) {
@@ -871,17 +867,17 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
 
     size_t max_depth = chunks[c].max_level[gpu::level_type::REPETITION];
 
-    // allocate (gpu) an array of pointers to validity data of size : nesting depth        
-    chunk_nested_valids.emplace_back(hostdevice_vector<uint32_t*>{max_depth+1});
-    hostdevice_vector<uint32_t*>& valids = chunk_nested_valids.back();
-    chunks[c].valid_map_base = valids.device_ptr();    
+    // allocate (gpu) an array of pointers to validity data of size : nesting depth
+    chunk_nested_valids.emplace_back(hostdevice_vector<uint32_t *>{max_depth + 1});
+    hostdevice_vector<uint32_t *> &valids = chunk_nested_valids.back();
+    chunks[c].valid_map_base              = valids.device_ptr();
 
-    // allocate (gpu) an array of pointers to out data of size : nesting depth 
-    chunk_nested_data.emplace_back(hostdevice_vector<void*>{max_depth+1});
-    hostdevice_vector<void*>& data = chunk_nested_data.back();
-    chunks[c].column_data_base = data.device_ptr();    
-    
-    // fill in the arrays on the host    
+    // allocate (gpu) an array of pointers to out data of size : nesting depth
+    chunk_nested_data.emplace_back(hostdevice_vector<void *>{max_depth + 1});
+    hostdevice_vector<void *> &data = chunk_nested_data.back();
+    chunks[c].column_data_base      = data.device_ptr();
+
+    // fill in the arrays on the host
     column_buffer *buf = &out_buffers[chunks[c].col_index];
     for (size_t idx = 0; idx <= max_depth; idx++) {
       valids[idx] = buf->null_mask();
@@ -894,7 +890,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
 
     // copy to the gpu
     valids.host_to_device(stream);
-    data.host_to_device(stream);    
+    data.host_to_device(stream);
 
     // column_data_base will always point to leaf data, even for nested types.
     page_count += chunks[c].max_num_pages;
@@ -905,34 +901,26 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
   if (total_str_dict_indexes > 0) {
     CUDA_TRY(gpu::BuildStringDictionaryIndex(chunks.device_ptr(), chunks.size(), stream));
   }
- 
-  CUDA_TRY(gpu::DecodePageData(pages,
-                               chunks,
-                               total_rows,
-                               min_row,
-                               stream));
-  pages.device_to_host(stream);  
+
+  CUDA_TRY(gpu::DecodePageData(pages, chunks, total_rows, min_row, stream));
+  pages.device_to_host(stream);
   page_nesting.device_to_host(stream);
 
-  // update null counts in the final column buffers 
+  // update null counts in the final column buffers
   for (size_t i = 0; i < pages.size(); i++) {
     gpu::PageInfo *pi = &pages[i];
-    if(pi->flags & gpu::PAGEINFO_FLAGS_DICTIONARY){
-      continue;
-    }
+    if (pi->flags & gpu::PAGEINFO_FLAGS_DICTIONARY) { continue; }
     gpu::ColumnChunkDesc *col = &chunks[pi->chunk_idx];
-    column_buffer *out = &out_buffers[col->col_index];
+    column_buffer *out        = &out_buffers[col->col_index];
 
-    int index = pi->nesting - page_nesting.device_ptr();
+    int index                 = pi->nesting - page_nesting.device_ptr();
     gpu::PageNestingInfo *pni = &page_nesting[index];
-        
-    int max_depth = col->max_level[gpu::level_type::REPETITION];    
-    for(int idx=0; idx<=max_depth; idx++){      
+
+    int max_depth = col->max_level[gpu::level_type::REPETITION];
+    for (int idx = 0; idx <= max_depth; idx++) {
       out->null_count() += pni[idx].value_count - pni[idx].valid_count;
 
-      if (idx < max_depth) {
-        out = &out->children[0];
-      }
+      if (idx < max_depth) { out = &out->children[0]; }
     }
   }
 }
@@ -1005,12 +993,12 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       auto const row_group_source = rg.source_index;
       auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
       auto const io_chunk_idx     = chunks.size();
-      bool terminating_rg = (remaining_rows - row_group.num_rows) == 0 ? true : false;
+      bool terminating_rg         = (remaining_rows - row_group.num_rows) == 0 ? true : false;
 
       for (size_t i = 0; i < num_columns; ++i) {
         auto col       = _selected_columns[i];
         auto &col_meta = row_group.columns[col.first].meta_data;
-        
+
         // the root schema (which in the case of nested types is different from the leaf schema).
         // the # of rows in the row group is relative to the root
         auto &root_schema = _metadata->get_column_schema(col.first);
@@ -1019,9 +1007,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         auto &leaf_schema = _metadata->get_column_leaf_schema(col.first);
 
         // this file contains nesting and will require a preprocess
-        if(_metadata->get_nesting_depth(col.first) > 1){
-          has_nesting = true;
-        }
+        if (_metadata->get_nesting_depth(col.first) > 1) { has_nesting = true; }
 
         // Spec requires each row group to contain exactly one chunk for every
         // column. If there are too many or too few, continue with best effort
@@ -1108,21 +1094,23 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // nesting information (sizes, etc) stored -per page-
       hostdevice_vector<gpu::PageNestingInfo> page_nesting_info;
-      // nesting information at the column level. 
+      // nesting information at the column level.
       // - total column size per nesting level
       // - nullability per nesting level
       std::vector<std::vector<std::pair<int, bool>>> col_nesting_info;
 
-      // even for flat schemas, we allocate 1 level of "nesting" info      
-      allocate_nesting_info(chunks, pages, page_nesting_info, col_nesting_info, num_columns, stream);
+      // even for flat schemas, we allocate 1 level of "nesting" info
+      allocate_nesting_info(
+        chunks, pages, page_nesting_info, col_nesting_info, num_columns, stream);
 
       // for nested schemas, we have to do some further preprocessing to determine:
       // - real column output sizes per level of nesting (in a flat schema, there's only 1 level of
       //   nesting and it's size is the row count)
       //
-      // - output buffer offset values per-page, per nesting-level for the purposes of decoding.      
-      if(has_nesting){      
-        preprocess_nested_columns(chunks, pages, page_nesting_info, col_nesting_info, skip_rows, num_rows, stream);
+      // - output buffer offset values per-page, per nesting-level for the purposes of decoding.
+      if (has_nesting) {
+        preprocess_nested_columns(
+          chunks, pages, page_nesting_info, col_nesting_info, skip_rows, num_rows, stream);
       }
 
       std::vector<column_buffer> out_buffers;
@@ -1165,17 +1153,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         else {
           // note : num_rows == # values for non-nested types
           bool is_nullable = leaf_schema.max_definition_level != 0;
-          out_buffers.emplace_back(column_buffer{column_types[i], num_rows, is_nullable, stream, _mr});
+          out_buffers.emplace_back(
+            column_buffer{column_types[i], num_rows, is_nullable, stream, _mr});
         }
       }
 
       // decoding of column data itself
       decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows, out_buffers, stream);
 
-      for (size_t i = 0; i < column_types.size(); ++i) {
+      for (size_t i = 0; i < column_types.size(); ++i) {}
 
-      }
-    
       // create the final output cudf columns
       for (size_t i = 0; i < column_types.size(); ++i) {
         out_columns.emplace_back(make_column(out_buffers[i], stream, _mr));

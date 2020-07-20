@@ -34,10 +34,10 @@ class hostdevice_vector {
  public:
   using value_type = T;
 
-  hostdevice_vector() { }
+  hostdevice_vector() {}
 
   hostdevice_vector(hostdevice_vector &&v) { move(std::move(v)); }
-  void operator=(hostdevice_vector &&v) { move(std::move(v)); }    
+  void operator=(hostdevice_vector &&v) { move(std::move(v)); }
 
   explicit hostdevice_vector(size_t max_size, cudaStream_t stream = 0)
     : hostdevice_vector(max_size, max_size, stream)

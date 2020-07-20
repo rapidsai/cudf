@@ -133,13 +133,13 @@ class reader::impl {
   /**
    * @brief Allocate nesting information storage for all pages and set pointers
    *        to it.
-   * 
-   * One large contiguous buffer of PageNestingInfo structs is allocated and 
+   *
+   * One large contiguous buffer of PageNestingInfo structs is allocated and
    * distributed among the PageInfo structs.
    *
    * Note that this gets called even in the flat schema case so that we have a
    * consistent place to store common information such as value counts, etc.
-   * 
+   *
    * @param chunks List of column chunk descriptors
    * @param pages List of page information
    * @param page_nesting_info The allocated nesting info structs.
@@ -147,36 +147,36 @@ class reader::impl {
    * @param num_columns Number of columns in the output
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
+  void allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const &chunks,
                              hostdevice_vector<gpu::PageInfo> &pages,
                              hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
-                             std::vector<std::vector<std::pair<int, bool>>>& col_nesting_info,
+                             std::vector<std::vector<std::pair<int, bool>>> &col_nesting_info,
                              int num_columns,
                              cudaStream_t stream);
 
   /**
-   * @brief Preprocess column information for nested schemas. 
-   * 
+   * @brief Preprocess column information for nested schemas.
+   *
    * There are several pieces of information we can't compute directly from row counts in
    * the parquet headers when dealing with nested schemas.
    * - The total sizes of all output columns at all nesting levels
-   * - The starting output buffer offset for each page, for each nesting level 
-   * 
+   * - The starting output buffer offset for each page, for each nesting level
+   *
    * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders)
-   * 
+   *
    * @param[in,out] chunks All chunks to be decoded
-   * @param[in,out] pages All pages to be decoded   
+   * @param[in,out] pages All pages to be decoded
    * @param[in,out] nested_info Per-output column nesting information (size, nullability)
    * @param[in] num_rows Maximum number of rows to read
    * @param[in] min_rows crop all rows below min_row
-   * @param[in] stream Cuda stream 
-   * 
+   * @param[in] stream Cuda stream
+   *
    * @return cudaSuccess if successful, a CUDA error code otherwise
    */
   void preprocess_nested_columns(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
                                  hostdevice_vector<gpu::PageInfo> &pages,
                                  hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
-                                 std::vector<std::vector<std::pair<int, bool>>>& nested_sizes,
+                                 std::vector<std::vector<std::pair<int, bool>>> &nested_sizes,
                                  size_t min_row,
                                  size_t total_rows,
                                  cudaStream_t stream);

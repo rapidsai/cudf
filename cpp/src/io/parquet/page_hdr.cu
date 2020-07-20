@@ -218,15 +218,15 @@ extern "C" __global__ void __launch_bounds__(128)
     PageInfo *page_info;
 
     if (!t) {
-      bs->base = bs->cur = bs->ck.compressed_data;
-      bs->end            = bs->base + bs->ck.compressed_size;
-      bs->page.chunk_idx = chunk;
+      bs->base = bs->cur  = bs->ck.compressed_data;
+      bs->end             = bs->base + bs->ck.compressed_size;
+      bs->page.chunk_idx  = chunk;
       bs->page.column_idx = bs->ck.col_index;
-      // this computation is only valid for flat schemas. for nested schemas, 
+      // this computation is only valid for flat schemas. for nested schemas,
       // they will be recomputed in the preprocess step by examining repetition and
       // definition levels
-      bs->page.chunk_row   = 0;      
-      bs->page.num_rows    = 0; 
+      bs->page.chunk_row = 0;
+      bs->page.num_rows  = 0;
     }
     num_values     = bs->ck.num_values;
     page_info      = bs->ck.page_info;
@@ -241,12 +241,12 @@ extern "C" __global__ void __launch_bounds__(128)
         // this computation is only valid for flat schemas. for nested schemas,
         // they will be recomputed in the preprocess step by examining repetition and
         // definition levels
-        bs->page.chunk_row += bs->page.num_rows;                
+        bs->page.chunk_row += bs->page.num_rows;
         bs->page.num_rows = 0;
         if (gpuParsePageHeader(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
             case DATA_PAGE:
-              // this computation is only valid for flat schemas. for nested schemas, 
+              // this computation is only valid for flat schemas. for nested schemas,
               // they will be recomputed in the preprocess step by examining repetition and
               // definition levels
               bs->page.num_rows = bs->page.num_input_values;
@@ -284,9 +284,9 @@ extern "C" __global__ void __launch_bounds__(128)
       chunks[chunk].num_dict_pages = dictionary_page_count;
 
       // if we are the last chunk, mark our last page as the terminator
-      if(chunks[chunk].terminator && chunks[chunk].page_info != nullptr){
+      if (chunks[chunk].terminator && chunks[chunk].page_info != nullptr) {
         int total_pages = data_page_count + dictionary_page_count;
-        chunks[chunk].page_info[total_pages-1].flags |= PAGEINFO_FLAGS_TERMINATOR;
+        chunks[chunk].page_info[total_pages - 1].flags |= PAGEINFO_FLAGS_TERMINATOR;
       }
     }
   }

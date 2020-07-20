@@ -70,7 +70,6 @@ inline __device__ T WarpReduceSum32(T acc)
   return acc + SHFL_XOR(acc, 16);
 }
 
-
 template <typename T>
 inline __device__ T WarpReduceOr2(T acc)
 {
