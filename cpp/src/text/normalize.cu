@@ -78,27 +78,45 @@ struct normalize_spaces_fn {
 struct codepoint_to_utf8_fn {
   cudf::column_device_view const d_strings;
   uint32_t const* cp_data;
+  int32_t const* d_cp_offsets{};
   int32_t const* d_offsets{};
   char* d_chars{};
 
-  __device__ void operator()(cudf::size_type idx)
+  __device__ cudf::size_type compute_output_size(uint32_t const* str_cps, uint32_t count)
   {
-    if (d_strings.is_null(idx)) return;
-    auto const d_str  = d_strings.element<cudf::string_view>(idx);
-    auto const offset = d_offsets[idx];
-    auto str_cps      = cp_data + offset;
-    char* out_ptr     = d_chars + offset;
-    auto const count  = d_offsets[idx + 1] - offset;
-    for (int32_t jdx = 0; jdx < count; ++jdx) {
+    cudf::size_type nbytes = 0;
+    for (uint32_t jdx = 0; jdx < count; ++jdx) {
       uint32_t code_point = *str_cps++;
-      printf("%d:0x%04x\n", jdx, code_point);
+      nbytes++;
+      nbytes += (code_point >= 0x0080);
+      nbytes += (code_point >= 0x0800);
+      nbytes += (code_point >= 0x010000);
+    }
+    return nbytes;
+  }
+
+  __device__ cudf::size_type operator()(cudf::size_type idx)
+  {
+    if (d_strings.is_null(idx)) return 0;
+    auto const d_str  = d_strings.element<cudf::string_view>(idx);
+    auto const offset = d_cp_offsets[idx];
+    auto const count  = d_cp_offsets[idx + 1] - offset;
+    auto str_cps      = cp_data + offset;
+    if (!d_chars) {
+      auto nbytes = compute_output_size(str_cps, count);
+      // printf("o%d:count=%d,nbytes=%d\n", idx, count, nbytes);
+      return nbytes;
+    }
+    char* out_ptr = d_chars + d_offsets[idx];
+    for (uint32_t jdx = 0; jdx < count; ++jdx) {
+      uint32_t code_point = *str_cps++;
+      // printf("c%d:0x%04x\n", jdx, code_point);
       if (code_point < 0x0080)  // ASCII range
         *out_ptr++ = static_cast<char>(code_point);
       else if (code_point < 0x0800) {  // create two-byte UTF-8
         // b00001xxx:byyyyyyyy => b110xxxyy:b10yyyyyy
         *out_ptr++ = static_cast<char>((((code_point << 2) & 0x001F00) | 0x00C000) >> 8);
         *out_ptr++ = static_cast<char>((code_point & 0x3F) | 0x0080);
-        printf("   %d:0x%02X:%02X\n", jdx, out_ptr[-2], out_ptr[-1]);
       } else if (code_point < 0x010000) {  // create three-byte UTF-8
         // bxxxxxxxx:byyyyyyyy => b1110xxxx:b10xxxxyy:b10yyyyyy
         *out_ptr++ = static_cast<char>((((code_point << 4) & 0x0F0000) | 0x00E00000) >> 16);
@@ -114,6 +132,7 @@ struct codepoint_to_utf8_fn {
         *out_ptr++ = static_cast<char>((code_point & 0x3F) | 0x0080);
       }
     }
+    return 0;
   }
 };
 
@@ -172,8 +191,8 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   auto const strings_count = strings.size();
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
+  // create the normalizer and call it
   data_normalizer normalizer(strings_count, strings.chars_size(), stream, do_lower_case);
-
   auto result = [&strings, &normalizer, stream] {
     auto const offsets   = strings.offsets();
     auto const d_offsets = offsets.data<uint32_t>() + strings.offset();
@@ -184,33 +203,34 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
   CUDF_EXPECTS(result.first.length <= std::numeric_limits<cudf::size_type>::max(),
                "output too large for strings column");
-  // convert result into strings column
-  uint32_t const* cp_chars   = result.first.gpu_ptr;
-  cudf::size_type chars_size = static_cast<cudf::size_type>(result.first.length);
-  int32_t const* cp_offsets  = reinterpret_cast<int32_t const*>(result.second.gpu_ptr);
 
-  auto offsets_column = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
-                                                  strings_count + 1,
-                                                  cudf::mask_state::UNALLOCATED,
-                                                  stream,
-                                                  mr);
-  auto d_offsets      = offsets_column->mutable_view().data<int32_t>();
-  auto const execpol  = rmm::exec_policy(stream);
-  thrust::copy(execpol->on(stream), cp_offsets, cp_offsets + strings_count + 1, d_offsets);
+  // convert the result into a strings column
+  uint32_t const* cp_chars  = result.first.gpu_ptr;
+  int32_t const* cp_offsets = reinterpret_cast<int32_t const*>(result.second.gpu_ptr);
+  auto strings_column       = cudf::column_device_view::create(strings.parent(), stream);
 
-  auto chars_column = cudf::strings::detail::create_chars_child_column(
-    strings_count, strings.null_count(), chars_size, mr, stream);
+  // build the offsets column (compute the output size of each string)
+  auto offsets_transformer_itr =
+    thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),
+                                    codepoint_to_utf8_fn{*strings_column, cp_chars, cp_offsets});
+  auto offsets_column = cudf::strings::detail::make_offsets_child_column(
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+  auto d_offsets = offsets_column->view().data<int32_t>();
+
+  // build the chars column
+  cudf::size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+  auto chars_column     = cudf::strings::detail::create_chars_child_column(
+    strings_count, strings.null_count(), bytes, mr, stream);
   auto d_chars = chars_column->mutable_view().data<char>();
 
-  auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
-
-  // copy tokens to the chars buffer
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
-                     thrust::make_counting_iterator<cudf::size_type>(0),
-                     strings_count,
-                     codepoint_to_utf8_fn{*strings_column, cp_chars, d_offsets, d_chars});
+  // convert the 4-byte code-point values into UTF-8 chars
+  thrust::for_each_n(
+    rmm::exec_policy(stream)->on(stream),
+    thrust::make_counting_iterator<cudf::size_type>(0),
+    strings_count,
+    codepoint_to_utf8_fn{*strings_column, cp_chars, cp_offsets, d_offsets, d_chars});
   chars_column->set_null_count(0);  // reset null count for child column
-  //
+
   return cudf::make_strings_column(strings_count,
                                    std::move(offsets_column),
                                    std::move(chars_column),
@@ -218,8 +238,6 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
                                    copy_bitmask(strings.parent(), stream, mr),
                                    stream,
                                    mr);
-
-  return nullptr;
 }
 
 }  // namespace detail

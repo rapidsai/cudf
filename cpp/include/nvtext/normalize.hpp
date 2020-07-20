@@ -54,15 +54,18 @@ std::unique_ptr<cudf::column> normalize_spaces(
 /**
  * @brief Normalizes strings characters for tokenizing.
  *
- * The strings are normalized by optionally converting to lower-case,
- * removing punctuation, replacing a select set of multi-byte characters,
- * and converting whitespace characters to spaces.
+ * The strings are normalized by adding spaces around punctuation,
+ * converting whitespace characters to spaces and optionally converting
+ * to lower-case and removing accents from characters.
+ *
+ * Also, padding (spaces) are added around characters in the CJK Unicode
+ * block: https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)
  *
  * This function requires 8x the number of bytes in the input strings
  * column as working memory.
  *
  * @param strings The input strings to tokenize.
- * @param do_lower_case If true, upper-case characters are converted
+ * @param do_lower_case If true, upper-case characters are converted to
  *        lower-case and accents are stripped from those characters.
  *        If false, accented and upper-case characters are not transformed.
  * @param mr Memory resource to allocate any returned objects.
