@@ -70,9 +70,13 @@ class Frame(libcudf.table.Table):
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
 
-        some_empty = False
+        # flag to indicate at least one empty input frame also has an index
+        empty_has_index = False
+        # length of output frame's RangeIndex if all input frames are empty,
+        # and at least one has an index
         result_index_length = 0
-        empty_counter = 0
+        # the number of empty input frames
+        num_empty_input_frames = 0
 
         for i, obj in enumerate(objs):
             objs[i] = obj.copy(deep=False)
@@ -86,20 +90,9 @@ class Frame(libcudf.table.Table):
                 # variable. Detailed explanation of second case before
                 # allocation of `columns` variable below.
                 if obj.empty:
-                    empty_counter += 1
-                    if len(obj) > 0:
-                        some_empty = True
-                        result_index_length += len(obj)
-
-        # some_empty indicates there are dataframes in obj
-        # which are empty and have index.
-
-        # all_empty indicates all dataframes in obj which
-        # are empty and at least one of them have index.
-        if empty_counter == len(objs) and some_empty:
-            all_empty = True
-        else:
-            all_empty = False
+                    num_empty_input_frames += 1
+                    result_index_length += len(obj)
+                    empty_has_index = empty_has_index or len(obj) > 0
 
         from cudf.core.column.column import (
             build_categorical_column,
@@ -113,7 +106,7 @@ class Frame(libcudf.table.Table):
             dtypes = dict()
             # A mapping of {idx: [...columns]}, where `[...columns]`
             # is a list of columns with at least one valid value for each
-            # column name across all input dataframes
+            # column name across all input frames
             non_null_columns = dict()
             for idx in col_idxs:
                 for cols in list_of_columns:
@@ -136,7 +129,7 @@ class Frame(libcudf.table.Table):
         def find_common_dtypes_and_categories(non_null_columns, dtypes):
             # A mapping of {idx: categories}, where `categories` is a
             # column of all the unique categorical values from each
-            # categorical column across all input dataframes
+            # categorical column across all input frames
             categories = dict()
             for idx, cols in non_null_columns.items():
                 # default to the first non-null dtype
@@ -226,7 +219,7 @@ class Frame(libcudf.table.Table):
 
         # Combine the index and table columns for each Frame into a list of
         # [...index_cols, ...table_cols].
-        # 
+        #
         # If any of the input frames have a non-empty index, include these
         # columns in the list of columns to concatenate, even if the input
         # frames are empty and `ignore_index=True`.
@@ -234,7 +227,7 @@ class Frame(libcudf.table.Table):
         columns = [
             (
                 []
-                if (ignore_index and not some_empty)
+                if (ignore_index and not empty_has_index)
                 else list(f._index._data.columns)
             )
             + [f._data[name] if name in f._data else None for name in names]
@@ -292,10 +285,10 @@ class Frame(libcudf.table.Table):
             libcudf.concat.concat_tables(tables, ignore_index=ignore_index)
         )
 
-        if all_empty:
-            # When all the dataframes in objs are empty and either
-            # one of them have index and ignore_index is True, create
-            # a new RangeIndex and assign it to the result.
+        # If ignore_index is True, all input frames are empty, and at
+        # least one input frame has an index, assign a new RangeIndex
+        # to the result frame.
+        if empty_has_index and num_empty_input_frames == len(objs):
             out._index = cudf.RangeIndex(result_index_length)
 
         # Reassign the categories for any categorical table cols
