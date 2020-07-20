@@ -95,7 +95,7 @@ def test_dataframe_replace():
     gdf1 = DataFrame.from_pandas(pdf1)
     pdf2 = pdf1.replace(0, 4)
     gdf2 = gdf1.replace(0, 4)
-    pd.testing.assert_frame_equal(gdf2.to_pandas(), pdf2)
+    assert_eq(gdf2, pdf2)
 
     # categorical
     pdf4 = pd.DataFrame(
@@ -105,25 +105,25 @@ def test_dataframe_replace():
     gdf4 = DataFrame.from_pandas(pdf4)
     pdf5 = pdf4.replace("two", "three")
     gdf5 = gdf4.replace("two", "three")
-    pd.testing.assert_frame_equal(gdf5.to_pandas(), pdf5)
+    assert_eq(gdf5, pdf5)
 
     # list input
     pdf6 = pdf1.replace([0, 1], [4, 5])
     gdf6 = gdf1.replace([0, 1], [4, 5])
-    pd.testing.assert_frame_equal(gdf6.to_pandas(), pdf6)
+    assert_eq(gdf6, pdf6)
 
     pdf7 = pdf1.replace([0, 1], 4)
     gdf7 = gdf1.replace([0, 1], 4)
-    pd.testing.assert_frame_equal(gdf7.to_pandas(), pdf7)
+    assert_eq(gdf7, pdf7)
 
     # dict input:
     pdf8 = pdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
     gdf8 = gdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
-    pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
+    assert_eq(gdf8, pdf8)
 
     pdf9 = pdf1.replace({"a": 0}, {"a": 4})
     gdf9 = gdf1.replace({"a": 0}, {"a": 4})
-    pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf9)
+    assert_eq(gdf9, pdf9)
 
 
 def test_dataframe_replace_with_nulls():
@@ -132,25 +132,25 @@ def test_dataframe_replace_with_nulls():
     gdf1 = DataFrame.from_pandas(pdf1)
     pdf2 = pdf1.replace(0, 4)
     gdf2 = gdf1.replace(0, None).fillna(4)
-    pd.testing.assert_frame_equal(gdf2.to_pandas(), pdf2)
+    assert_eq(gdf2, pdf2)
 
     # list input
     pdf6 = pdf1.replace([0, 1], [4, 5])
     gdf6 = gdf1.replace([0, 1], [4, None]).fillna(5)
-    pd.testing.assert_frame_equal(gdf6.to_pandas(), pdf6)
+    assert_eq(gdf6, pdf6)
 
     pdf7 = pdf1.replace([0, 1], 4)
     gdf7 = gdf1.replace([0, 1], None).fillna(4)
-    pd.testing.assert_frame_equal(gdf7.to_pandas(), pdf7)
+    assert_eq(gdf7, pdf7)
 
     # dict input:
     pdf8 = pdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
     gdf8 = gdf1.replace({"a": 0, "b": 0}, {"a": None, "b": 5}).fillna(4)
-    pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
+    assert_eq(gdf8, pdf8)
 
     gdf1 = DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, None]})
     gdf9 = gdf1.replace([0, 1], [4, 5]).fillna(3)
-    pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf6)
+    assert_eq(gdf9, pdf6)
 
 
 def test_replace_strings():

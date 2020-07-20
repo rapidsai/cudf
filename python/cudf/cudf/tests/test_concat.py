@@ -61,9 +61,7 @@ def test_concat_dataframe(index, nulls, axis):
     # DataFrame
     res = gd.concat([gdf, gdf2, gdf, gdf_empty1], axis=axis).to_pandas()
     sol = pd.concat([df, df2, df, df_empty1], axis=axis)
-    pd.util.testing.assert_frame_equal(
-        res, sol, check_names=False, check_categorical=False
-    )
+    assert_eq(res, sol, check_names=False, check_categorical=False)
 
     # Series
     for c in [i for i in ("x", "y", "z") if i != index]:
@@ -161,9 +159,7 @@ def test_concat_misordered_columns():
     res = gd.concat([gdf, gdf2]).to_pandas()
     sol = pd.concat([df, df2], sort=False)
 
-    pd.util.testing.assert_frame_equal(
-        res, sol, check_names=False, check_categorical=False
-    )
+    assert_eq(res, sol, check_names=False, check_categorical=False)
 
 
 @pytest.mark.parametrize("axis", [1, "columns"])
