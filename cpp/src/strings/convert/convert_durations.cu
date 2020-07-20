@@ -152,34 +152,24 @@ struct format_compiler {
   size_type items_count() const { return static_cast<size_type>(d_items.size()); }
 };
 
-__device__ void dissect_duration(int64_t duration, int32_t* timeparts, type_id units)
+template <typename T>
+__device__ void dissect_duration(T duration, int32_t* timeparts)
 {
-  timeparts[DU_NEGATIVE] = (duration < 0);
-  if (units == type_id::DURATION_DAYS) {
-    timeparts[DU_DAY] = static_cast<int32_t>(duration);
-    return;
-  }
+  timeparts[DU_NEGATIVE] = (duration < T{0});
+  timeparts[DU_DAY]      = simt::std::chrono::duration_cast<duration_D>(duration).count();
 
-  duration_s seconds{0};
-  if (units == type_id::DURATION_SECONDS) {
-    seconds = duration_s(duration);
-  } else if (units == type_id::DURATION_MILLISECONDS) {
-    seconds                 = simt::std::chrono::duration_cast<duration_s>(duration_ms(duration));
-    timeparts[DU_SUBSECOND] = (duration_ms(duration) % duration_s(1)).count();
-  } else if (units == type_id::DURATION_MICROSECONDS) {
-    seconds                 = simt::std::chrono::duration_cast<duration_s>(duration_us(duration));
-    timeparts[DU_SUBSECOND] = (duration_us(duration) % duration_s(1)).count();
-  } else if (units == type_id::DURATION_NANOSECONDS) {
-    seconds                 = simt::std::chrono::duration_cast<duration_s>(duration_ns(duration));
-    timeparts[DU_SUBSECOND] = (duration_ns(duration) % duration_s(1)).count();
-  }
-  timeparts[DU_DAY] = simt::std::chrono::duration_cast<duration_D>(seconds).count();
+  if (simt::std::is_same<T, duration_D>::value) return;
+
+  duration_s seconds = simt::std::chrono::duration_cast<duration_s>(duration);
   timeparts[DU_HOUR] =
     (simt::std::chrono::duration_cast<simt::std::chrono::hours>(seconds) % duration_D(1)).count();
   timeparts[DU_MINUTE] = (simt::std::chrono::duration_cast<simt::std::chrono::minutes>(seconds) %
                           simt::std::chrono::hours(1))
                            .count();
   timeparts[DU_SECOND] = (seconds % simt::std::chrono::minutes(1)).count();
+  if (not simt::std::is_same<T, duration_s>::value) {
+    timeparts[DU_SUBSECOND] = (duration % duration_s(1)).count();
+  }
 }
 
 template <typename T>
@@ -187,7 +177,6 @@ struct duration_to_string_size_fn {
   const column_device_view d_durations;
   const format_item* d_format_items;
   size_type items_count;
-  type_id type;
 
   __device__ int8_t format_length(char format_char, int32_t const* const timeparts) const
   {
@@ -211,7 +200,7 @@ struct duration_to_string_size_fn {
     if (d_durations.is_null(idx)) return 0;
     auto duration                   = d_durations.element<T>(idx);
     int32_t timeparts[DU_ARRAYSIZE] = {0};  // days, hours, minutes, seconds, subseconds(9)
-    dissect_duration(duration.count(), timeparts, type);
+    dissect_duration(duration, timeparts);
     return thrust::transform_reduce(
       thrust::seq,
       d_format_items,
@@ -236,15 +225,13 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
   using duration_to_string_size_fn<T>::d_durations;
   using duration_to_string_size_fn<T>::d_format_items;
   using duration_to_string_size_fn<T>::items_count;
-  using duration_to_string_size_fn<T>::type;
 
   duration_to_string_fn(const column_device_view d_durations,
                         const format_item* d_format_items,
                         size_type items_count,
-                        type_id type,
                         const int32_t* d_offsets,
                         char* d_chars)
-    : duration_to_string_size_fn<T>{d_durations, d_format_items, items_count, type},
+    : duration_to_string_size_fn<T>{d_durations, d_format_items, items_count},
       d_offsets(d_offsets),
       d_chars(d_chars)
   {
@@ -381,7 +368,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     if (d_durations.is_null(idx)) return;
     auto duration                   = d_durations.template element<T>(idx);
     int32_t timeparts[DU_ARRAYSIZE] = {0};  // days, hours, minutes, seconds, subseconds(9)
-    dissect_duration(duration.count(), timeparts, type);
+    dissect_duration(duration, timeparts);
     // convert to characters
     format_from_parts(timeparts, d_chars + d_offsets[idx]);
   }
@@ -413,8 +400,7 @@ struct dispatch_from_durations_fn {
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<int32_t>(0),
-      duration_to_string_size_fn<T>{
-        d_column, d_format_items, compiler.items_count(), durations.type().id()});
+      duration_to_string_size_fn<T>{d_column, d_format_items, compiler.items_count()});
     auto offsets_column = detail::make_offsets_child_column(
       offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
     auto offsets_view  = offsets_column->view();
@@ -435,12 +421,8 @@ struct dispatch_from_durations_fn {
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
-                       duration_to_string_fn<T>{d_column,
-                                                d_format_items,
-                                                compiler.items_count(),
-                                                durations.type().id(),
-                                                d_new_offsets,
-                                                d_chars});
+                       duration_to_string_fn<T>{
+                         d_column, d_format_items, compiler.items_count(), d_new_offsets, d_chars});
 
     //
     return make_strings_column(strings_count,
@@ -469,7 +451,6 @@ struct parse_duration {
   column_device_view const d_strings;
   format_item const* d_format_items;
   size_type items_count;
-  type_id type;
 
   //
   __device__ int32_t str2int(const char* str, int8_t max_bytes, int8_t& actual_length)
@@ -538,14 +519,20 @@ struct parse_duration {
       switch (item.value) {
         case 'D': timeparts[DU_DAY] = str2int(ptr, 11, item_length); break;
         case '-': break;  // skip
-        case 'H': timeparts[DU_HOUR] = str2int(ptr, 2, item_length); hour_shift=0; break;
-        case 'I': timeparts[DU_MINUTE] = str2int(ptr, 2, item_length); hour_shift=12; break;
+        case 'H':
+          timeparts[DU_HOUR] = str2int(ptr, 2, item_length);
+          hour_shift         = 0;
+          break;
+        case 'I':
+          timeparts[DU_MINUTE] = str2int(ptr, 2, item_length);
+          hour_shift           = 12;
+          break;
         case 'M': timeparts[DU_MINUTE] = str2int(ptr, 2, item_length); break;
         case 'S':
           timeparts[DU_SECOND] = str2int(ptr, 2, item_length);
-          if (*(ptr+item_length) == '.') {
+          if (*(ptr + item_length) == '.') {
             item_length++;
-            int64_t nanoseconds      = str2int_fixed(
+            int64_t nanoseconds = str2int_fixed(
               ptr + item_length, 9, length - item_length, item_length);  // normalize to nanoseconds
             timeparts[DU_SUBSECOND] = nanoseconds;
           }
@@ -555,16 +542,18 @@ struct parse_duration {
           item_length = 2;
           break;
         case 'R':
-          timeparts[DU_HOUR] = str2int(ptr, 2, item_length); hour_shift=0;
+          timeparts[DU_HOUR] = str2int(ptr, 2, item_length);
+          hour_shift         = 0;
           item_length++;
-          timeparts[DU_MINUTE] = str2int(ptr+item_length, 2, item_length);
+          timeparts[DU_MINUTE] = str2int(ptr + item_length, 2, item_length);
           break;
         case 'T':
-          timeparts[DU_HOUR] = str2int(ptr, 2, item_length); hour_shift=0;
+          timeparts[DU_HOUR] = str2int(ptr, 2, item_length);
+          hour_shift         = 0;
           item_length++;
-          timeparts[DU_MINUTE] = str2int(ptr+item_length, 2, item_length);
+          timeparts[DU_MINUTE] = str2int(ptr + item_length, 2, item_length);
           item_length++;
-          timeparts[DU_SECOND] = str2int(ptr, 2, item_length);
+          timeparts[DU_SECOND] = str2int(ptr + item_length, 2, item_length);
           break;
         default: return 3;
       }
@@ -581,31 +570,31 @@ struct parse_duration {
       timeparts[DU_MINUTE]    = negate(timeparts[DU_MINUTE], timeparts[DU_NEGATIVE]);
       timeparts[DU_SECOND]    = negate(timeparts[DU_SECOND], timeparts[DU_NEGATIVE]);
       timeparts[DU_SUBSECOND] = negate(timeparts[DU_SUBSECOND], timeparts[DU_NEGATIVE]);
-      hour_shift = -hour_shift;
+      hour_shift              = -hour_shift;
     }
     timeparts[DU_HOUR] += hour_shift;
     return 0;
   }
 
-  __device__ int64_t duration_from_parts(int32_t const* timeparts, type_id units)
+  __device__ int64_t duration_from_parts(int32_t const* timeparts)
   {
     int32_t days = timeparts[DU_DAY];
-    if (units == type_id::DURATION_DAYS) return days;
+    if (simt::std::is_same<T, duration_D>::value) return days;
 
     auto hour     = timeparts[DU_HOUR];
     auto minute   = timeparts[DU_MINUTE];
     auto second   = timeparts[DU_SECOND];
     auto duration = duration_D(days) + simt::std::chrono::hours(hour) +
                     simt::std::chrono::minutes(minute) + duration_s(second);
-    if (units == type_id::DURATION_SECONDS)
+    if (simt::std::is_same<T, duration_s>::value)
       return simt::std::chrono::duration_cast<duration_s>(duration).count();
 
     duration_ns subsecond(timeparts[DU_SUBSECOND]);  // ns
-    if (units == type_id::DURATION_MILLISECONDS) {
+    if (simt::std::is_same<T, duration_ms>::value) {
       return simt::std::chrono::duration_cast<duration_ms>(duration + subsecond).count();
-    } else if (units == type_id::DURATION_MICROSECONDS) {
+    } else if (simt::std::is_same<T, duration_us>::value) {
       return simt::std::chrono::duration_cast<duration_us>(duration + subsecond).count();
-    } else if (units == type_id::DURATION_NANOSECONDS)
+    } else if (simt::std::is_same<T, duration_ns>::value)
       return simt::std::chrono::duration_cast<duration_ns>(duration + subsecond).count();
     return simt::std::chrono::duration_cast<duration_ns>(duration + subsecond).count();
   }
@@ -619,7 +608,7 @@ struct parse_duration {
     int32_t timeparts[DU_ARRAYSIZE] = {0};
     if (parse_into_parts(d_str, timeparts)) return T{0};  // unexpected parse case
     //
-    return static_cast<T>(duration_from_parts(timeparts, type));
+    return static_cast<T>(duration_from_parts(timeparts));
   }
 };
 
@@ -633,7 +622,7 @@ struct dispatch_to_durations_fn {
     format_compiler compiler(format.c_str(), stream);
     auto d_items   = compiler.compiled_format_items();
     auto d_results = results_view.data<T>();
-    parse_duration<T> pfn{d_strings, d_items, compiler.items_count(), results_view.type().id()};
+    parse_duration<T> pfn{d_strings, d_items, compiler.items_count()};
     thrust::transform(rmm::exec_policy(stream)->on(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(results_view.size()),
