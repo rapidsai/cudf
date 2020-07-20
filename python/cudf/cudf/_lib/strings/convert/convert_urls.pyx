@@ -16,8 +16,8 @@ def url_decode(Column source_strings):
     """
     Decode each string in column. No format checking is performed.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -44,8 +44,8 @@ def url_encode(Column source_strings):
     and these characters: ‘.’,’_’,’-‘,’~’. Encoding converts to
     hex using UTF-8 encoded bytes.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
