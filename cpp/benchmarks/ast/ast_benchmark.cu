@@ -89,22 +89,20 @@ static void BM_ast_transform(benchmark::State& state)
     // TODO: Construct tree with two child expressions below each expression
   } else {
     // Construct tree that chains additions like (((a + b) + c) + d)
+    auto const op = cudf::ast::ast_operator::ADD;
     if (reuse_columns) {
-      expressions.push_back(cudf::ast::binary_expression(
-        cudf::ast::ast_operator::ADD, column_refs.at(0), column_refs.at(0)));
+      expressions.push_back(cudf::ast::binary_expression(op, column_refs.at(0), column_refs.at(0)));
       for (cudf::size_type i = 0; i < tree_levels - 1; i++) {
-        expressions.push_back(cudf::ast::binary_expression(
-          cudf::ast::ast_operator::ADD, expressions.back(), column_refs.at(0)));
+        expressions.push_back(
+          cudf::ast::binary_expression(op, expressions.back(), column_refs.at(0)));
       }
     } else {
-      expressions.push_back(cudf::ast::binary_expression(
-        cudf::ast::ast_operator::ADD, column_refs.at(0), column_refs.at(1)));
+      expressions.push_back(cudf::ast::binary_expression(op, column_refs.at(0), column_refs.at(1)));
       std::transform(std::next(column_refs.cbegin(), 2),
                      column_refs.cend(),
                      std::back_inserter(expressions),
                      [&](auto const& column_ref) {
-                       return cudf::ast::binary_expression(
-                         cudf::ast::ast_operator::ADD, expressions.back(), column_ref);
+                       return cudf::ast::binary_expression(op, expressions.back(), column_ref);
                      });
     }
   }
@@ -320,4 +318,78 @@ BENCHMARK_REGISTER_F(AST, ast_int32_imbalanced_reuse)
   ->Args({100'000'000, 5})
   ->Args({100'000'000, 10})
   ->Args({100'000'000, 20})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(AST, ast_double_imbalanced_unique)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 1})
+  ->Args({100'000, 2})
+  ->Args({100'000, 5})
+  ->Args({100'000, 10})
+  ->Args({100'000, 20})
+  ->Args({100'000, 50})
+  ->Args({100'000, 100})
+  ->Args({100'000, 200})
+  ->Args({200'000, 1})
+  ->Args({200'000, 2})
+  ->Args({200'000, 5})
+  ->Args({200'000, 10})
+  ->Args({200'000, 20})
+  ->Args({200'000, 50})
+  ->Args({200'000, 100})
+  ->Args({200'000, 200})
+  ->Args({500'000, 1})
+  ->Args({500'000, 2})
+  ->Args({500'000, 5})
+  ->Args({500'000, 10})
+  ->Args({500'000, 20})
+  ->Args({500'000, 50})
+  ->Args({500'000, 100})
+  ->Args({500'000, 200})
+  ->Args({1'000'000, 1})
+  ->Args({1'000'000, 2})
+  ->Args({1'000'000, 5})
+  ->Args({1'000'000, 10})
+  ->Args({1'000'000, 20})
+  ->Args({1'000'000, 50})
+  ->Args({1'000'000, 100})
+  ->Args({1'000'000, 200})
+  ->Args({2'000'000, 1})
+  ->Args({2'000'000, 2})
+  ->Args({2'000'000, 5})
+  ->Args({2'000'000, 10})
+  ->Args({2'000'000, 20})
+  ->Args({2'000'000, 50})
+  ->Args({2'000'000, 100})
+  ->Args({2'000'000, 200})
+  ->Args({5'000'000, 1})
+  ->Args({5'000'000, 2})
+  ->Args({5'000'000, 5})
+  ->Args({5'000'000, 10})
+  ->Args({5'000'000, 20})
+  ->Args({5'000'000, 50})
+  ->Args({5'000'000, 100})
+  ->Args({5'000'000, 200})
+  ->Args({10'000'000, 1})
+  ->Args({10'000'000, 2})
+  ->Args({10'000'000, 5})
+  ->Args({10'000'000, 10})
+  ->Args({10'000'000, 20})
+  ->Args({10'000'000, 50})
+  ->Args({10'000'000, 100})
+  ->Args({20'000'000, 1})
+  ->Args({20'000'000, 2})
+  ->Args({20'000'000, 5})
+  ->Args({20'000'000, 10})
+  ->Args({20'000'000, 20})
+  ->Args({20'000'000, 50})
+  ->Args({50'000'000, 1})
+  ->Args({50'000'000, 2})
+  ->Args({50'000'000, 5})
+  ->Args({50'000'000, 10})
+  ->Args({50'000'000, 20})
+  ->Args({100'000'000, 1})
+  ->Args({100'000'000, 2})
+  ->Args({100'000'000, 5})
+  ->Args({100'000'000, 10})
   ->UseManualTime();
