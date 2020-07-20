@@ -255,7 +255,9 @@ cdef class Column:
 
     @property
     def children(self):
-        if self.base_children is ():
+        if (self.offset == 0) and (self.size == self.base_size):
+            return self.base_children
+        if self.base_children == ():
             return ()
         if self._children is None:
             self._children = Column.from_unique_ptr(
