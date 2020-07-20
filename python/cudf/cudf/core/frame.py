@@ -224,27 +224,12 @@ class Frame(libcudf.table.Table):
         except TypeError:
             names = list(names)
 
-        # Combine the index and table columns for each Frame into a
-        # list of [...index_cols, ...table_cols]. If a table is
-        # missing a column:
-        # 1. when ignore_index is True and some_empty is False(which
-        # means there is no dataframe which is empty and has an index in
-        # objs) an empty column of length of the respective dataframe
-        # is added to the slot.
-        # 2. when ignore_index is False or some_empty is True list
-        # will have None in the slot instead
-
-        # When ignore_index is True, and if at least one of the
-        # dataframe in objs is empty and has and index set:
-        #
-        # 1. Do not ignore the index for index_cols being
-        # populated in columns[0]. Instead we will be ignoring the
-        # index in libcudf.concat.concat_tables api call. This is
-        # necessary for cast_cols_to_common_dtypes api.
-        # 2. Create an empty column and populate in columns[1] as
-        # index will be ignored by libcudf.concat.concat_tables
-        # and the corresponding empty column will be concatenated
-        # correctly.
+        # Combine the index and table columns for each Frame into a list of
+        # [...index_cols, ...table_cols].
+        # 
+        # If any of the input frames have a non-empty index, include these
+        # columns in the list of columns to concatenate, even if the input
+        # frames are empty and `ignore_index=True`.
 
         columns = [
             (

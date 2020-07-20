@@ -501,8 +501,13 @@ def test_concat_series_dataframe_input_str(objs):
             pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
             pd.DataFrame({"l": [10]}),
             pd.DataFrame({"l": [10]}, index=[200]),
+            pd.DataFrame({"cat": pd.Series(["two", "three"], dtype="category")}),
         ],
-        [pd.DataFrame([]), pd.DataFrame([], index=[100])],
+        [
+            pd.DataFrame([]),
+            pd.DataFrame([], index=[100]),
+            pd.DataFrame({"cat": pd.Series(["two", "three"], dtype="category")}),
+        ],
     ],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
