@@ -51,5 +51,27 @@ std::unique_ptr<cudf::column> normalize_spaces(
   cudf::strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Normalizes strings characters for tokenizing.
+ *
+ * The strings are normalized by optionally converting to lower-case,
+ * removing punctuation, replacing a select set of multi-byte characters,
+ * and converting whitespace characters to spaces.
+ *
+ * This function requires 8x the number of bytes in the input strings
+ * column as working memory.
+ *
+ * @param strings The input strings to tokenize.
+ * @param do_lower_case If true, upper-case characters are converted
+ *        lower-case and accents are stripped from those characters.
+ *        If false, accented and upper-case characters are not transformed.
+ * @param mr Memory resource to allocate any returned objects.
+ * @return Normalized strings column
+ */
+std::unique_ptr<cudf::column> normalize_characters(
+  cudf::strings_column_view const& strings,
+  bool do_lower_case,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** @} */  // end of group
 }  // namespace nvtext

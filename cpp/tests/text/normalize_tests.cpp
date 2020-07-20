@@ -29,7 +29,7 @@
 struct TextNormalizeTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(TextNormalizeTest, Normalize)
+TEST_F(TextNormalizeTest, NormalizeSpaces)
 {
   std::vector<const char*> h_strings{"the\t fox  jumped over the      dog",
                                      "the dog\f chased  the cat\r",
@@ -67,7 +67,25 @@ TEST_F(TextNormalizeTest, NormalizeEmptyTest)
 {
   auto strings = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
   cudf::strings_column_view strings_view(strings->view());
-  auto const results = nvtext::normalize_spaces(strings_view);
+  auto results = nvtext::normalize_spaces(strings_view);
   EXPECT_EQ(results->size(), 0);
-  EXPECT_EQ(results->has_nulls(), false);
+  results = nvtext::normalize_characters(strings_view, true);
+  EXPECT_EQ(results->size(), 0);
+  results = nvtext::normalize_characters(strings_view, false);
+  EXPECT_EQ(results->size(), 0);
+}
+
+TEST_F(TextNormalizeTest, NormalizeCharacters)
+{
+  // The example strings are based on issue 5520
+  cudf::test::strings_column_wrapper strings(
+    {"abc£def", "℉℧ is"});  // not alphanumeric", "but Αγγλικά is"});
+  cudf::strings_column_view strings_view(strings);
+  auto results = nvtext::normalize_characters(strings_view, false);
+  cudf::test::print(strings_view.offsets());
+  cudf::test::print(results->view());
+  cudf::strings_column_view results_view(results->view());
+  cudf::test::print(results_view.offsets());
+  // results = nvtext::normalize_characters(cudf::strings_column_view(strings), true);
+  // cudf::test::print(results->view());
 }
