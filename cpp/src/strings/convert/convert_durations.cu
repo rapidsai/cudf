@@ -32,14 +32,13 @@ namespace detail {
 namespace {
 
 // used to index values in a timeparts array
-enum duration_parse_component {
-  DU_DAY       = 0,
-  DU_HOUR      = 1,
-  DU_MINUTE    = 2,
-  DU_SECOND    = 3,
-  DU_SUBSECOND = 4,
-  DU_NEGATIVE  = 5,
-  DU_ARRAYSIZE = 6
+struct alignas(4) duration_component {
+  int32_t DU_DAY;
+  int32_t DU_SUBSECOND;
+  int8_t DU_HOUR;
+  int8_t DU_MINUTE;
+  int8_t DU_SECOND;
+  bool DU_NEGATIVE;
 };
 
 enum class format_char_type : int8_t {
@@ -153,22 +152,22 @@ struct format_compiler {
 };
 
 template <typename T>
-__device__ void dissect_duration(T duration, int32_t* timeparts)
+__device__ void dissect_duration(T duration, duration_component* timeparts)
 {
-  timeparts[DU_NEGATIVE] = (duration < T{0});
-  timeparts[DU_DAY]      = simt::std::chrono::duration_cast<duration_D>(duration).count();
+  timeparts->DU_NEGATIVE = (duration < T{0});
+  timeparts->DU_DAY      = simt::std::chrono::duration_cast<duration_D>(duration).count();
 
   if (simt::std::is_same<T, duration_D>::value) return;
 
   duration_s seconds = simt::std::chrono::duration_cast<duration_s>(duration);
-  timeparts[DU_HOUR] =
+  timeparts->DU_HOUR =
     (simt::std::chrono::duration_cast<simt::std::chrono::hours>(seconds) % duration_D(1)).count();
-  timeparts[DU_MINUTE] = (simt::std::chrono::duration_cast<simt::std::chrono::minutes>(seconds) %
+  timeparts->DU_MINUTE = (simt::std::chrono::duration_cast<simt::std::chrono::minutes>(seconds) %
                           simt::std::chrono::hours(1))
                            .count();
-  timeparts[DU_SECOND] = (seconds % simt::std::chrono::minutes(1)).count();
+  timeparts->DU_SECOND = (seconds % simt::std::chrono::minutes(1)).count();
   if (not simt::std::is_same<T, duration_s>::value) {
-    timeparts[DU_SUBSECOND] = (duration % duration_s(1)).count();
+    timeparts->DU_SUBSECOND = (duration % duration_s(1)).count();
   }
 }
 
@@ -178,13 +177,13 @@ struct duration_to_string_size_fn {
   const format_item* d_format_items;
   size_type items_count;
 
-  __device__ int8_t format_length(char format_char, int32_t const* const timeparts) const
+  __device__ int8_t format_length(char format_char, duration_component const* const timeparts) const
   {
     switch (format_char) {
-      case '-': return timeparts[DU_NEGATIVE]; break;
-      case 'D': return count_digits(timeparts[DU_DAY]) - (timeparts[DU_DAY] < 0); break;
+      case '-': return timeparts->DU_NEGATIVE; break;
+      case 'D': return count_digits(timeparts->DU_DAY) - (timeparts->DU_DAY < 0); break;
       case 'S':
-        return 2 + (timeparts[DU_SUBSECOND] == 0 ? 0 : [] {
+        return 2 + (timeparts->DU_SUBSECOND == 0 ? 0 : [] {
                  if (simt::std::is_same<T, duration_ms>::value) return 3 + 1;  // +1 is for dot
                  if (simt::std::is_same<T, duration_us>::value) return 6 + 1;  // +1 is for dot
                  if (simt::std::is_same<T, duration_ns>::value) return 9 + 1;  // +1 is for dot
@@ -198,9 +197,9 @@ struct duration_to_string_size_fn {
   __device__ size_type operator()(size_type idx)
   {
     if (d_durations.is_null(idx)) return 0;
-    auto duration                   = d_durations.element<T>(idx);
-    int32_t timeparts[DU_ARRAYSIZE] = {0};  // days, hours, minutes, seconds, subseconds(9)
-    dissect_duration(duration, timeparts);
+    auto duration                = d_durations.element<T>(idx);
+    duration_component timeparts = {0};  // days, hours, minutes, seconds, subseconds(9)
+    dissect_duration(duration, &timeparts);
     return thrust::transform_reduce(
       thrust::seq,
       d_format_items,
@@ -211,7 +210,7 @@ struct duration_to_string_size_fn {
         else if (item.length != -1)
           return item.length;
         else
-          return format_length(item.value, timeparts);
+          return format_length(item.value, &timeparts);
       },
       size_type{0},
       thrust::plus<size_type>());
@@ -264,46 +263,46 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return str;
   }
 
-  inline __device__ char* day(char* ptr, int32_t const* timeparts)
+  inline __device__ char* day(char* ptr, duration_component const* timeparts)
   {
-    return int2str(ptr, -1, timeparts[DU_DAY]);
+    return int2str(ptr, -1, timeparts->DU_DAY);
   }
 
-  inline __device__ char* hour_12(char* ptr, int32_t const* timeparts)
+  inline __device__ char* hour_12(char* ptr, duration_component const* timeparts)
   {
-    return int2str(ptr, 2, timeparts[DU_HOUR] % 12);
+    return int2str(ptr, 2, timeparts->DU_HOUR % 12);
   }
-  inline __device__ char* hour_24(char* ptr, int32_t const* timeparts)
+  inline __device__ char* hour_24(char* ptr, duration_component const* timeparts)
   {
-    return int2str(ptr, 2, timeparts[DU_HOUR]);
+    return int2str(ptr, 2, timeparts->DU_HOUR);
   }
-  inline __device__ char* am_or_pm(char* ptr, int32_t const* timeparts)
+  inline __device__ char* am_or_pm(char* ptr, duration_component const* timeparts)
   {
-    *ptr++ = (timeparts[DU_HOUR] / 12 == 0 ? 'A' : 'P');
+    *ptr++ = (timeparts->DU_HOUR / 12 == 0 ? 'A' : 'P');
     *ptr++ = 'M';
     return ptr;
   }
-  inline __device__ char* minute(char* ptr, int32_t const* timeparts)
+  inline __device__ char* minute(char* ptr, duration_component const* timeparts)
   {
-    return int2str(ptr, 2, timeparts[DU_MINUTE]);
+    return int2str(ptr, 2, timeparts->DU_MINUTE);
   }
-  inline __device__ char* second(char* ptr, int32_t const* timeparts)
+  inline __device__ char* second(char* ptr, duration_component const* timeparts)
   {
-    return int2str(ptr, 2, timeparts[DU_SECOND]);
+    return int2str(ptr, 2, timeparts->DU_SECOND);
   }
 
-  inline __device__ char* subsecond(char* ptr, int32_t const* timeparts)
+  inline __device__ char* subsecond(char* ptr, duration_component const* timeparts)
   {
-    if (timeparts[DU_SUBSECOND] == 0) return ptr;
+    if (timeparts->DU_SUBSECOND == 0) return ptr;
     char subsecond_digits[] = ".000000000";  // 9 max digits
     const int digits        = duration_to_string_size_fn<T>::format_length('S', timeparts) - 3;
-    int2str(subsecond_digits + 1, digits, timeparts[DU_SUBSECOND]);  // +1 is for dot
+    int2str(subsecond_digits + 1, digits, timeparts->DU_SUBSECOND);  // +1 is for dot
     ptr = copy_and_increment(ptr, subsecond_digits, digits + 1);
     return ptr;
   }
 
   // TODO argument order change
-  __device__ char* format_from_parts(int32_t const* timeparts, char* ptr)
+  __device__ char* format_from_parts(duration_component const* timeparts, char* ptr)
   {
     for (size_t idx = 0; idx < items_count; ++idx) {
       auto item = d_format_items[idx];
@@ -317,7 +316,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
           ptr = day(ptr, timeparts);
           break;
         case '-':  // - if value is negative
-          if (timeparts[DU_NEGATIVE]) *ptr++ = '-';
+          if (timeparts->DU_NEGATIVE) *ptr++ = '-';
           break;
         case 'H':  // 24-hour
           ptr = hour_24(ptr, timeparts);
@@ -366,11 +365,11 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
   __device__ void operator()(size_type idx)
   {
     if (d_durations.is_null(idx)) return;
-    auto duration                   = d_durations.template element<T>(idx);
-    int32_t timeparts[DU_ARRAYSIZE] = {0};  // days, hours, minutes, seconds, subseconds(9)
-    dissect_duration(duration, timeparts);
+    auto duration                = d_durations.template element<T>(idx);
+    duration_component timeparts = {0};  // days, hours, minutes, seconds, subseconds(9)
+    dissect_duration(duration, &timeparts);
     // convert to characters
-    format_from_parts(timeparts, d_chars + d_offsets[idx]);
+    format_from_parts(&timeparts, d_chars + d_offsets[idx]);
   }
 };
 
@@ -498,7 +497,7 @@ struct parse_duration {
 
   // Walk the format_items to read the datetime string.
   // Returns 0 if all ok.
-  __device__ int parse_into_parts(string_view const& d_string, int32_t* timeparts)
+  __device__ int parse_into_parts(string_view const& d_string, duration_component* timeparts)
   {
     auto ptr    = d_string.data();
     auto length = d_string.size_bytes();
@@ -512,30 +511,30 @@ struct parse_duration {
         length -= item.length;
         continue;
       }
-      timeparts[DU_NEGATIVE] |= (*ptr == '-');
+      timeparts->DU_NEGATIVE |= (*ptr == '-');
 
       // special logic for each specifier
       // TODO parse_day, parse_hour, parse_minute, parse_second, parse_am_or_pm
       int8_t item_length{0};
       switch (item.value) {
-        case 'D': timeparts[DU_DAY] = str2int(ptr, 11, item_length); break;
+        case 'D': timeparts->DU_DAY = str2int(ptr, 11, item_length); break;
         case '-': break;  // skip
         case 'H':
-          timeparts[DU_HOUR] = str2int(ptr, 2, item_length);
+          timeparts->DU_HOUR = str2int(ptr, 2, item_length);
           hour_shift         = 0;
           break;
         case 'I':
-          timeparts[DU_MINUTE] = str2int(ptr, 2, item_length);
+          timeparts->DU_MINUTE = str2int(ptr, 2, item_length);
           hour_shift           = 12;
           break;
-        case 'M': timeparts[DU_MINUTE] = str2int(ptr, 2, item_length); break;
+        case 'M': timeparts->DU_MINUTE = str2int(ptr, 2, item_length); break;
         case 'S':
-          timeparts[DU_SECOND] = str2int(ptr, 2, item_length);
+          timeparts->DU_SECOND = str2int(ptr, 2, item_length);
           if (*(ptr + item_length) == '.') {
             item_length++;
             int64_t nanoseconds = str2int_fixed(
               ptr + item_length, 9, length - item_length, item_length);  // normalize to nanoseconds
-            timeparts[DU_SUBSECOND] = nanoseconds;
+            timeparts->DU_SUBSECOND = nanoseconds;
           }
           break;
         case 'p':
@@ -543,54 +542,54 @@ struct parse_duration {
           item_length = 2;
           break;
         case 'R':
-          timeparts[DU_HOUR] = str2int(ptr, 2, item_length);
+          timeparts->DU_HOUR = str2int(ptr, 2, item_length);
           hour_shift         = 0;
           item_length++;
-          timeparts[DU_MINUTE] = str2int(ptr + item_length, 2, item_length);
+          timeparts->DU_MINUTE = str2int(ptr + item_length, 2, item_length);
           break;
         case 'T':
-          timeparts[DU_HOUR] = str2int(ptr, 2, item_length);
+          timeparts->DU_HOUR = str2int(ptr, 2, item_length);
           hour_shift         = 0;
           item_length++;
-          timeparts[DU_MINUTE] = str2int(ptr + item_length, 2, item_length);
+          timeparts->DU_MINUTE = str2int(ptr + item_length, 2, item_length);
           item_length++;
-          timeparts[DU_SECOND] = str2int(ptr + item_length, 2, item_length);
+          timeparts->DU_SECOND = str2int(ptr + item_length, 2, item_length);
           break;
         default: return 3;
       }
       ptr += item_length;
       length -= item_length;
     }
-    timeparts[DU_NEGATIVE] =
-      (timeparts[DU_NEGATIVE] || timeparts[DU_DAY] < 0 || timeparts[DU_HOUR] < 0 ||
-       timeparts[DU_MINUTE] < 0 || timeparts[DU_SECOND] < 0 || timeparts[DU_SUBSECOND] < 0);
+    timeparts->DU_NEGATIVE =
+      (timeparts->DU_NEGATIVE || timeparts->DU_DAY < 0 || timeparts->DU_HOUR < 0 ||
+       timeparts->DU_MINUTE < 0 || timeparts->DU_SECOND < 0 || timeparts->DU_SUBSECOND < 0);
     auto negate = [](auto i, bool b) { return (i < 0 ? i : (b ? -i : i)); };
-    if (timeparts[DU_NEGATIVE]) {
-      timeparts[DU_DAY]       = negate(timeparts[DU_DAY], timeparts[DU_NEGATIVE]);
-      timeparts[DU_HOUR]      = negate(timeparts[DU_HOUR], timeparts[DU_NEGATIVE]);
-      timeparts[DU_MINUTE]    = negate(timeparts[DU_MINUTE], timeparts[DU_NEGATIVE]);
-      timeparts[DU_SECOND]    = negate(timeparts[DU_SECOND], timeparts[DU_NEGATIVE]);
-      timeparts[DU_SUBSECOND] = negate(timeparts[DU_SUBSECOND], timeparts[DU_NEGATIVE]);
+    if (timeparts->DU_NEGATIVE) {
+      timeparts->DU_DAY       = negate(timeparts->DU_DAY, timeparts->DU_NEGATIVE);
+      timeparts->DU_HOUR      = negate(timeparts->DU_HOUR, timeparts->DU_NEGATIVE);
+      timeparts->DU_MINUTE    = negate(timeparts->DU_MINUTE, timeparts->DU_NEGATIVE);
+      timeparts->DU_SECOND    = negate(timeparts->DU_SECOND, timeparts->DU_NEGATIVE);
+      timeparts->DU_SUBSECOND = negate(timeparts->DU_SUBSECOND, timeparts->DU_NEGATIVE);
       hour_shift              = -hour_shift;
     }
-    timeparts[DU_HOUR] += hour_shift;
+    timeparts->DU_HOUR += hour_shift;
     return 0;
   }
 
-  __device__ int64_t duration_from_parts(int32_t const* timeparts)
+  __device__ int64_t duration_from_parts(duration_component const* timeparts)
   {
-    int32_t days = timeparts[DU_DAY];
+    int32_t days = timeparts->DU_DAY;
     if (simt::std::is_same<T, duration_D>::value) return days;
 
-    auto hour     = timeparts[DU_HOUR];
-    auto minute   = timeparts[DU_MINUTE];
-    auto second   = timeparts[DU_SECOND];
+    auto hour     = timeparts->DU_HOUR;
+    auto minute   = timeparts->DU_MINUTE;
+    auto second   = timeparts->DU_SECOND;
     auto duration = duration_D(days) + simt::std::chrono::hours(hour) +
                     simt::std::chrono::minutes(minute) + duration_s(second);
     if (simt::std::is_same<T, duration_s>::value)
       return simt::std::chrono::duration_cast<duration_s>(duration).count();
 
-    duration_ns subsecond(timeparts[DU_SUBSECOND]);  // ns
+    duration_ns subsecond(timeparts->DU_SUBSECOND);  // ns
     if (simt::std::is_same<T, duration_ms>::value) {
       return simt::std::chrono::duration_cast<duration_ms>(duration + subsecond).count();
     } else if (simt::std::is_same<T, duration_us>::value) {
@@ -606,10 +605,10 @@ struct parse_duration {
     string_view d_str = d_strings.element<string_view>(idx);
     if (d_str.empty()) return T{0};
     //
-    int32_t timeparts[DU_ARRAYSIZE] = {0};
-    if (parse_into_parts(d_str, timeparts)) return T{0};  // unexpected parse case
+    duration_component timeparts = {0};
+    if (parse_into_parts(d_str, &timeparts)) return T{0};  // unexpected parse case
     //
-    return static_cast<T>(duration_from_parts(timeparts));
+    return static_cast<T>(duration_from_parts(&timeparts));
   }
 };
 
