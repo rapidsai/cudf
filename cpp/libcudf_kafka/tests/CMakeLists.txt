@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(KAFKA_TESTS LANGUAGES C CXX CUDA)
-
-if(NOT CMAKE_CUDA_COMPILER)
-  message(SEND_ERROR "CMake cannot locate a CUDA compiler")
-endif()
+project(KAFKA_TESTS LANGUAGES C CXX)
 
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
@@ -40,10 +36,6 @@ endfunction(ConfigureTest)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
-    include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
-endif()
-
 include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}../../../tests"
@@ -70,10 +62,6 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 if(CONDA_LINK_DIRS)
     link_directories("${CONDA_LINK_DIRS}")
 endif(CONDA_LINK_DIRS)
-
-###################################################################################################
-### test sources ##################################################################################
-###################################################################################################
 
 ###################################################################################################
 # - create tests ----------------------------------------------------------------------------------

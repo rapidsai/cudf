@@ -144,7 +144,7 @@ fi
 ################################################################################
 # Configure, build, and install libcudf
 
-if buildAll || hasArg libcudf || hasArg libcudf_kafka; then
+if buildAll || hasArg libcudf; then
     mkdir -p ${LIB_BUILD_DIR}
     cd ${LIB_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
@@ -156,21 +156,6 @@ if buildAll || hasArg libcudf || hasArg libcudf_kafka; then
           -DPER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
           -DBUILD_CUDF_KAFKA=${BUILD_LIBCUDF_KAFKA} $REPODIR/cpp
-fi
-
-# Do not build libcudf_kafka with 'buildAll'
-if hasArg libcudf_kafka; then
-
-    cd ${LIB_BUILD_DIR}
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        make -j${PARALLEL_LEVEL} install_libcudf_kafka VERBOSE=${VERBOSE}
-    else
-        make -j${PARALLEL_LEVEL} libcudf_kafka VERBOSE=${VERBOSE}
-    fi
-
-    if [[ ${BUILD_TESTS} == "ON" ]]; then
-        make -j${PARALLEL_LEVEL} build_tests_libcudf_kafka VERBOSE=${VERBOSE}
-    fi
 fi
 
 if buildAll || hasArg libcudf; then
@@ -207,6 +192,33 @@ fi
 if buildAll || hasArg dask_cudf; then
 
     cd ${REPODIR}/python/dask_cudf
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        python setup.py install --single-version-externally-managed --record=record.txt
+    else
+        python setup.py build_ext --inplace
+    fi
+fi
+
+# Build libcudf_kafka library and cudf_kafka Python package
+if hasArg libcudf_kafka; then
+
+    KAFKA_LIB_BUILD_DIR=${KAFKA_LIB_BUILD_DIR:=${REPODIR}/cpp/libcudf_kafka/build}
+    mkdir -p ${KAFKA_LIB_BUILD_DIR}
+    cd ${KAFKA_LIB_BUILD_DIR}
+    cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $REPODIR/cpp/libcudf_kafka
+
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        make -j${PARALLEL_LEVEL} install_libcudf_kafka VERBOSE=${VERBOSE}
+    else
+        make -j${PARALLEL_LEVEL} libcudf_kafka VERBOSE=${VERBOSE}
+    fi
+
+    if [[ ${BUILD_TESTS} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_tests_libcudf_kafka VERBOSE=${VERBOSE}
+    fi
+
+    cd ${REPODIR}/python/cudf_kafka
     if [[ ${INSTALL_TARGET} != "" ]]; then
         python setup.py install --single-version-externally-managed --record=record.txt
     else

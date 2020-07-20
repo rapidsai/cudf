@@ -1,20 +1,19 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import os
 import shutil
 import sysconfig
 from distutils.sysconfig import get_python_lib
 
 import numpy as np
-import pyarrow as pa
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
 
 import versioneer
 
-install_requires = ["numba", "cython"]
+install_requires = ["cudf", "cython"]
 
-cython_files = ["cudf/**/*.pyx"]
+cython_files = ["cudf_kafka/**/*.pyx"]
 
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
 if not CUDA_HOME:
@@ -47,6 +46,7 @@ extensions = [
         include_dirs=[
             "../../cpp/include/cudf",
             "../../cpp/include",
+            "../../cpp/libcudf_kafka/include/cudf_kafka",
             os.path.join(CUDF_ROOT, "include"),
             os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
             os.path.join(
@@ -55,30 +55,34 @@ extensions = [
             ),
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
-            pa.get_include(),
             cuda_include_dir,
         ],
         library_dirs=(
-            pa.get_library_dirs()
-            + [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
+            [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
+            + [
+                os.path.join(
+                    os.path.join(os.sys.prefix, "libcudf_kafka"), "lib"
+                )
+            ]
         ),
-        libraries=["cudf"] + pa.get_libraries(),
+        libraries=["cudf", "cudf_kafka"],
         language="c++",
         extra_compile_args=["-std=c++14"],
     )
 ]
 
 setup(
-    name="cudf",
+    name="cudf_kafka",
     version=versioneer.get_version(),
-    description="cuDF - GPU Dataframe",
+    description="cuDF Kafka Datasource",
     url="https://github.com/rapidsai/cudf",
     author="NVIDIA Corporation",
     license="Apache 2.0",
     classifiers=[
         "Intended Audience :: Developers",
-        "Topic :: Database",
+        "Topic :: Streaming",
         "Topic :: Scientific/Engineering",
+        "Topic :: Apache Kafka",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.6",
@@ -95,8 +99,7 @@ setup(
     ),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf._lib*", "cudf._lib.io*", "cudf._cuda*"]),
-        ["*.pxd"],
+        find_packages(include=["cudf._lib*", "cudf._cuda*"]), ["*.pxd"],
     ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
