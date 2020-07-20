@@ -9,7 +9,7 @@ from libcpp.pair cimport pair
 from libcpp.string cimport string
 from cudf._lib.cpp.io.types cimport source_info, io_type, host_buffer
 from cudf._lib.cpp.io.types cimport sink_info, data_sink, datasource
-from cudf._lib.io.kafka cimport kafka_consumer
+from cudf._lib.io.datasource cimport Datasource
 
 import codecs
 import errno
@@ -26,8 +26,7 @@ cdef source_info make_source_info(list src) except*:
     cdef const unsigned char[::1] c_buffer
     cdef vector[host_buffer] c_host_buffers
     cdef vector[string] c_files
-    cdef kafka_consumer *consumer
-    cdef map[string, string] kafka_confs
+    cdef datasource * dsource
     empty_buffer = False
     if isinstance(src[0], bytes):
         empty_buffer = True
@@ -45,20 +44,10 @@ cdef source_info make_source_info(list src) except*:
     # Otherwise src is expected to be a numeric fd, string path, or PathLike.
     # TODO (ptaylor): Might need to update this check if accepted input types
     #                 change when UCX and/or cuStreamz support is added.
-    elif isinstance(src[0], cudf.io.kafka.KafkaDatasource):
-        for key, value in src[0].kafka_configs.items():
-            kafka_confs[str.encode(key)] = str.encode(value)
-        consumer = new kafka_consumer(kafka_confs,
-                                      src[0].topic.encode(),
-                                      src[0].partition,
-                                      src[0].start_offset,
-                                      src[0].end_offset,
-                                      src[0].batch_timeout,
-                                      src[0].delimiter.encode())
-        # I want a unique_ptr here, only a raw pointer is accepted however,
-        # probably best to move this logic up the stack and think
-        # about a "pool" of kafka connections
-        return source_info(<datasource *>consumer)
+    elif isinstance(src[0], Datasource):
+        print(type(src[0]))
+        print(type(src[0].c_datasource_two.get()))
+        # return source_info(<datasource *> dsource)
     elif isinstance(src[0], (int, float, complex, basestring, os.PathLike)):
         # If source is a file, return source_info where type=FILEPATH
         if not all(os.path.isfile(file) for file in src):
