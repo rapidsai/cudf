@@ -117,6 +117,7 @@ touch ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 ls ${GBENCH_BENCHMARKS_DIR} > ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 
 #Disable error aborting while tests run, failed tests will not generate data
+cd ${GBENCH_BENCHMARKS_DIR}
 set +e
 while read BENCH;
 do
@@ -125,6 +126,7 @@ do
 done < ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 set -e
 
+cd ${WORKSPACE}
 python GBenchToASV.py -d ${GBENCH_BENCHMARKS_DIR} -t ${ASVRESULTS_DIR} -n libcudf -b branch-${MINOR_VERSION} 
 
 
