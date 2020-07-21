@@ -391,6 +391,13 @@ class Series(Frame, Serializable):
         return 1
 
     @property
+    def size(self):
+        """
+        Return the number of elements in the underlying data.
+        """
+        return len(self)
+
+    @property
     def name(self):
         """Returns name of the Series.
         """
