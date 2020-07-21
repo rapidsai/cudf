@@ -13,24 +13,24 @@ def test_series_replace():
     a2 = np.array([5, 1, 2, 3, 4])
     sr1 = Series(a1)
     sr2 = sr1.replace(0, 5)
-    np.testing.assert_equal(sr2.to_array(), a2)
+    assert_eq(a2, sr2.to_array())
 
     # Categorical
     psr3 = pd.Series(["one", "two", "three"], dtype="category")
     psr4 = psr3.replace("one", "two")
     sr3 = Series.from_pandas(psr3)
     sr4 = sr3.replace("one", "two")
-    pd.testing.assert_series_equal(sr4.to_pandas(), psr4)
+    assert_eq(psr4, sr4)
 
     psr5 = psr3.replace("one", "five")
     sr5 = sr3.replace("one", "five")
 
-    pd.testing.assert_series_equal(sr5.to_pandas(), psr5)
+    assert_eq(psr5, sr5)
 
     # List input
     a6 = np.array([5, 6, 2, 3, 4])
     sr6 = sr1.replace([0, 1], [5, 6])
-    np.testing.assert_equal(sr6.to_array(), a6)
+    assert_eq(a6, sr6.to_array())
 
     with pytest.raises(TypeError):
         sr1.replace([0, 1], [5.5, 6.5])
@@ -38,7 +38,7 @@ def test_series_replace():
     # Series input
     a8 = np.array([5, 5, 5, 3, 4])
     sr8 = sr1.replace(sr1[:3], 5)
-    np.testing.assert_equal(sr8.to_array(), a8)
+    assert_eq(a8, sr8.to_array())
 
     # large input containing null
     sr9 = Series(list(range(400)) + [None])
@@ -68,12 +68,12 @@ def test_series_replace_with_nulls():
     a2 = np.array([-10, 1, 2, 3, 4])
     sr1 = Series(a1)
     sr2 = sr1.replace(0, None).fillna(-10)
-    np.testing.assert_equal(sr2.to_array(), a2)
+    assert_eq(a2, sr2.to_array())
 
     # List input
     a6 = np.array([-10, 6, 2, 3, 4])
     sr6 = sr1.replace([0, 1], [None, 6]).fillna(-10)
-    np.testing.assert_equal(sr6.to_array(), a6)
+    assert_eq(a6, sr6.to_array())
 
     sr1 = Series([0, 1, 2, 3, 4, None])
     with pytest.raises(TypeError):
@@ -82,11 +82,11 @@ def test_series_replace_with_nulls():
     # Series input
     a8 = np.array([-10, -10, -10, 3, 4, -10])
     sr8 = sr1.replace(sr1[:3], None).fillna(-10)
-    np.testing.assert_equal(sr8.to_array(), a8)
+    assert_eq(a8, sr8.to_array())
 
     a9 = np.array([-10, 6, 2, 3, 4, -10])
     sr9 = sr1.replace([0, 1], [None, 6]).fillna(-10)
-    np.testing.assert_equal(sr9.to_array(), a9)
+    assert_eq(a9, sr9.to_array())
 
 
 def test_dataframe_replace():
