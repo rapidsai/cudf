@@ -181,23 +181,25 @@ class MD5HashTest : public cudf::test::BaseFixture {
 
 TEST_F(MD5HashTest, MultiValue)
 {
-  strings_column_wrapper const strings_col({"",
-                                            "A 60 character string to test MD5's message padding algorithm",
-                                            "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the MD5 hash function. This string needed to be longer.",
-                                            "All work and no play makes Jack a dull boy",
-                                            "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
+  strings_column_wrapper const strings_col(
+    {"",
+     "A 60 character string to test MD5's message padding algorithm",
+     "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
+     "MD5 hash function. This string needed to be longer.",
+     "All work and no play makes Jack a dull boy",
+     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
   strings_column_wrapper const md5_string_results1({"d41d8cd98f00b204e9800998ecf8427e",
-                                                  "682240021651ae166d08fe2a014d5c09",
-                                                  "3669d5225fddbb34676312ca3b78bbd9",
-                                                  "c61a4185135eda043f35e92c3505e180",
-                                                  "52da74c75cb6575d25be29e66bd0adde"});
+                                                    "682240021651ae166d08fe2a014d5c09",
+                                                    "3669d5225fddbb34676312ca3b78bbd9",
+                                                    "c61a4185135eda043f35e92c3505e180",
+                                                    "52da74c75cb6575d25be29e66bd0adde"});
 
   strings_column_wrapper const md5_string_results2({"d41d8cd98f00b204e9800998ecf8427e",
-                                                  "e5a5682e82278e78dbaad9a689df7a73",
-                                                  "4121ab1bb6e84172fd94822645862ae9",
-                                                  "28970886501efe20164213855afe5850",
-                                                  "6bc1b872103cc6a02d882245b8516e2e"});
+                                                    "e5a5682e82278e78dbaad9a689df7a73",
+                                                    "4121ab1bb6e84172fd94822645862ae9",
+                                                    "28970886501efe20164213855afe5850",
+                                                    "6bc1b872103cc6a02d882245b8516e2e"});
 
   using limits = std::numeric_limits<int32_t>;
   fixed_width_column_wrapper<int32_t> const ints_col({0, 100, -100, limits::min(), limits::max()});
@@ -213,8 +215,8 @@ TEST_F(MD5HashTest, MultiValue)
                                                  ts::duration::min(),
                                                  ts::duration::max()});
 
-  auto const string_input1 = cudf::table_view({strings_col});
-  auto const string_input2 = cudf::table_view({strings_col, strings_col});
+  auto const string_input1      = cudf::table_view({strings_col});
+  auto const string_input2      = cudf::table_view({strings_col, strings_col});
   auto const md5_string_output1 = cudf::hash(string_input1, cudf::hash_id::HASH_MD5);
   auto const md5_string_output2 = cudf::hash(string_input2, cudf::hash_id::HASH_MD5);
   EXPECT_EQ(string_input1.num_rows(), md5_string_output1->size());
@@ -222,8 +224,8 @@ TEST_F(MD5HashTest, MultiValue)
   expect_columns_equal(md5_string_output1->view(), md5_string_results1);
   expect_columns_equal(md5_string_output2->view(), md5_string_results2);
 
-  auto const input1 = cudf::table_view({strings_col, ints_col, bools_col1, secs_col});
-  auto const input2 = cudf::table_view({strings_col, ints_col, bools_col2, secs_col});
+  auto const input1      = cudf::table_view({strings_col, ints_col, bools_col1, secs_col});
+  auto const input2      = cudf::table_view({strings_col, ints_col, bools_col2, secs_col});
   auto const md5_output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
   auto const md5_output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
   EXPECT_EQ(input1.num_rows(), md5_output1->size());
@@ -233,18 +235,21 @@ TEST_F(MD5HashTest, MultiValue)
 TEST_F(MD5HashTest, MultiValueNulls)
 {
   // Nulls with different values should be equal
-  strings_column_wrapper const strings_col1({"",
-                                            "Different but null!",
-                                            "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the MD5 hash function. This string needed to be longer.",
-                                            "All work and no play makes Jack a dull boy",
-                                            "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
-                                            {1, 0, 0, 1, 0});
-  strings_column_wrapper const strings_col2({"",
-                                            "A 60 character string to test MD5's message padding algorithm",
-                                            "Very different... but null",
-                                            "All work and no play makes Jack a dull boy",
-                                            ""},
-                                            {1, 0, 0, 1, 1}); //empty string is equivalent to null
+  strings_column_wrapper const strings_col1(
+    {"",
+     "Different but null!",
+     "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
+     "MD5 hash function. This string needed to be longer.",
+     "All work and no play makes Jack a dull boy",
+     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
+    {1, 0, 0, 1, 0});
+  strings_column_wrapper const strings_col2(
+    {"",
+     "A 60 character string to test MD5's message padding algorithm",
+     "Very different... but null",
+     "All work and no play makes Jack a dull boy",
+     ""},
+    {1, 0, 0, 1, 1});  // empty string is equivalent to null
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
@@ -335,7 +340,8 @@ TYPED_TEST(MD5HashTestFloatTyped, TestExtremes)
   T inf   = std::numeric_limits<T>::infinity();
 
   fixed_width_column_wrapper<T> const col1({T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
-  fixed_width_column_wrapper<T> const col2({T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
+  fixed_width_column_wrapper<T> const col2(
+    {T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});

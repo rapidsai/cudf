@@ -21,10 +21,24 @@ namespace cudf {
 namespace detail {
 
 const hex_to_char_mapping_type g_hex_to_char_mapping[] = {
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
-};
+  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 const md5_shift_constants_type g_md5_shift_constants[] = {
-  7, 12, 17, 22, 5,  9, 14, 20, 4, 11, 16, 23 , 6, 10, 15, 21,
+  7,
+  12,
+  17,
+  22,
+  5,
+  9,
+  14,
+  20,
+  4,
+  11,
+  16,
+  23,
+  6,
+  10,
+  15,
+  21,
 };
 
 const md5_hash_constants_type g_md5_hash_constants[] = {
@@ -43,7 +57,7 @@ std::mutex g_md5_hash_constants_mutex;
 std::mutex g_md5_shift_constants_mutex;
 
 hex_to_char_mapping_type* d_hex_to_char_mapping = nullptr;
-md5_hash_constants_type* d_md5_hash_constants = nullptr;
+md5_hash_constants_type* d_md5_hash_constants   = nullptr;
 md5_shift_constants_type* d_md5_shift_constants = nullptr;
 
 __device__ hex_to_char_mapping_type hex_to_char_mapping[sizeof(g_hex_to_char_mapping)];
@@ -58,7 +72,7 @@ const hex_to_char_mapping_type* get_hex_to_char_mapping()
   std::lock_guard<std::mutex> guard(g_hex_to_char_mapping_mutex);
   if (!d_hex_to_char_mapping) {
     CUDA_TRY(cudaMemcpyToSymbol(
-    hex_to_char_mapping, g_hex_to_char_mapping, sizeof(g_hex_to_char_mapping)));
+      hex_to_char_mapping, g_hex_to_char_mapping, sizeof(g_hex_to_char_mapping)));
     CUDA_TRY(cudaGetSymbolAddress((void**)&d_hex_to_char_mapping, hex_to_char_mapping));
   }
   return d_hex_to_char_mapping;
@@ -71,8 +85,8 @@ const md5_hash_constants_type* get_md5_hash_constants()
 {
   std::lock_guard<std::mutex> guard(g_md5_hash_constants_mutex);
   if (!d_md5_hash_constants) {
-    CUDA_TRY(cudaMemcpyToSymbol(
-      md5_hash_constants, g_md5_hash_constants, sizeof(g_md5_hash_constants)));
+    CUDA_TRY(
+      cudaMemcpyToSymbol(md5_hash_constants, g_md5_hash_constants, sizeof(g_md5_hash_constants)));
     CUDA_TRY(cudaGetSymbolAddress((void**)&d_md5_hash_constants, md5_hash_constants));
   }
   return d_md5_hash_constants;

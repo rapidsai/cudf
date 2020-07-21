@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column_view.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/hashing.hpp>
@@ -642,13 +642,10 @@ std::unique_ptr<column> hash(table_view const& input,
                              rmm::mr::device_memory_resource* mr,
                              cudaStream_t stream)
 {
-  switch(hash_function) {
-    case(hash_id::HASH_MURMUR3) :
-      return murmur_hash3_32(input, initial_hash, mr, stream);
-    case(hash_id::HASH_MD5) :
-      return md5_hash(input, mr, stream);
-    default :
-      return NULL; 
+  switch (hash_function) {
+    case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, mr, stream);
+    case (hash_id::HASH_MD5): return md5_hash(input, mr, stream);
+    default: return NULL;
   }
 }
 
@@ -657,16 +654,16 @@ std::unique_ptr<column> hash(table_view const& input,
  *
  * @tparam has_nulls Indicates the potential for null values in the column.
  **/
- template <bool has_nulls>
- class md5_element_hasher {
-  public:
-    template <typename T>
-    __device__ inline void operator()(column_device_view col,
-                                     size_type row_index,
-                                     md5_intermediate_data* hash_state,
-                                     const md5_hash_constants_type* hash_constants,
-                                     const md5_shift_constants_type* shift_constants)
-    {
+template <bool has_nulls>
+class md5_element_hasher {
+ public:
+  template <typename T>
+  __device__ inline void operator()(column_device_view col,
+                                    size_type row_index,
+                                    md5_intermediate_data* hash_state,
+                                    const md5_hash_constants_type* hash_constants,
+                                    const md5_shift_constants_type* shift_constants)
+  {
     if (!has_nulls || col.is_valid(row_index)) {
       MD5Hash<T>{}(col.element<T>(row_index), hash_state, hash_constants, shift_constants);
     }
@@ -674,10 +671,10 @@ std::unique_ptr<column> hash(table_view const& input,
 };
 
 std::unique_ptr<column> md5_hash(table_view const& input,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
+                                 rmm::mr::device_memory_resource* mr,
+                                 cudaStream_t stream)
 {
-  if(input.num_columns() == 0 || input.num_rows() == 0) {
+  if (input.num_columns() == 0 || input.num_rows() == 0) {
     const string_scalar string_128bit("d41d8cd98f00b204e9orig98ecf8427e");
     auto output = make_column_from_scalar(string_128bit, input.num_rows(), mr, stream);
     return output;
@@ -691,59 +688,69 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto offsets_view  = offsets_column->view();
   auto d_new_offsets = offsets_view.data<int32_t>();
 
-  auto chars_column =
-    strings::detail::create_chars_child_column(input.num_rows(), 0, input.num_rows()*32, mr, stream);
+  auto chars_column = strings::detail::create_chars_child_column(
+    input.num_rows(), 0, input.num_rows() * 32, mr, stream);
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
 
   rmm::device_buffer null_mask{0, stream, mr};
 
-  bool const nullable = has_nulls(input);
+  bool const nullable     = has_nulls(input);
   auto const device_input = table_device_view::create(input, stream);
 
   // Fetch hash constants
   const md5_shift_constants_type* shift_constants = get_md5_shift_constants();
-  const md5_hash_constants_type* hash_constants = get_md5_hash_constants();
-  const hex_to_char_mapping_type* hex_char_map = get_hex_to_char_mapping(); 
+  const md5_hash_constants_type* hash_constants   = get_md5_hash_constants();
+  const hex_to_char_mapping_type* hex_char_map    = get_hex_to_char_mapping();
 
   // Hash each row, hashing each element sequentially left to right
   thrust::for_each(
     rmm::exec_policy(stream)->on(stream),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(input.num_rows()),
-    [d_chars, device_input = *device_input, hash_constants = hash_constants, shift_constants = shift_constants, hex_char_map = hex_char_map, has_nulls = nullable] __device__ (auto row_index) {
+    [d_chars,
+     device_input    = *device_input,
+     hash_constants  = hash_constants,
+     shift_constants = shift_constants,
+     hex_char_map    = hex_char_map,
+     has_nulls       = nullable] __device__(auto row_index) {
       md5_intermediate_data hash_state;
-      for(int col_index = 0; col_index < device_input.num_columns(); col_index++) {
+      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
         if (!has_nulls) {
-          cudf::type_dispatcher(
-            device_input.column(col_index).type(),
-            md5_element_hasher<true>{},
-            device_input.column(col_index),
-            row_index, &hash_state, hash_constants, shift_constants);
+          cudf::type_dispatcher(device_input.column(col_index).type(),
+                                md5_element_hasher<true>{},
+                                device_input.column(col_index),
+                                row_index,
+                                &hash_state,
+                                hash_constants,
+                                shift_constants);
         } else {
-          cudf::type_dispatcher(
-            device_input.column(col_index).type(),
-            md5_element_hasher<false>{},
-            device_input.column(col_index),
-            row_index, &hash_state, hash_constants, shift_constants);
+          cudf::type_dispatcher(device_input.column(col_index).type(),
+                                md5_element_hasher<false>{},
+                                device_input.column(col_index),
+                                row_index,
+                                &hash_state,
+                                hash_constants,
+                                shift_constants);
         }
       }
-      finalize_md5_hash(&hash_state, d_chars + (row_index*32), hash_constants, shift_constants, hex_char_map);
+      finalize_md5_hash(
+        &hash_state, d_chars + (row_index * 32), hash_constants, shift_constants, hex_char_map);
     });
 
   return make_strings_column(input.num_rows(),
-    std::move(offsets_column),
-    std::move(chars_column),
-    0,
-    std::move(null_mask),
-    stream,
-    mr);
+                             std::move(offsets_column),
+                             std::move(chars_column),
+                             0,
+                             std::move(null_mask),
+                             stream,
+                             mr);
 }
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
-  std::vector<uint32_t> const& initial_hash,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
+                                        std::vector<uint32_t> const& initial_hash,
+                                        rmm::mr::device_memory_resource* mr,
+                                        cudaStream_t stream)
 {
   // TODO this should be UINT32
   auto output = make_numeric_column(

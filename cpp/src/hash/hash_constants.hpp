@@ -18,10 +18,10 @@
 namespace cudf {
 namespace detail {
 
-struct md5_intermediate_data{
+struct md5_intermediate_data {
   uint64_t message_length = 0;
-  uint32_t buffer_length = 0;
-  uint32_t hash_value[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
+  uint32_t buffer_length  = 0;
+  uint32_t hash_value[4]  = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
   uint8_t buffer[64];
 };
 
