@@ -79,7 +79,7 @@ struct format_compiler {
 
   std::map<char, int8_t> specifier_lengths = {
     {'-', -1},  // '-' if negative
-    {'D', -1},  // 1 to 11 (not in std::format) // TODO
+    {'D', -1},  // 1 to 11 (not in std::format)
     {'H', 2},   // HH
     {'I', 2},   // HH
     {'M', 2},   // MM
@@ -134,9 +134,9 @@ struct format_compiler {
       int8_t spec_length = specifier_lengths[ch];
       items.push_back(format_item::new_specifier(ch, spec_length));
     }
-    for (auto item : items) {
-      std::cout << int(item.item_type) << ":" << item.value << ":" << int(item.length) << "\n";
-    }
+    // for (auto item : items)
+    //  std::cout << int(item.item_type) << ":" << item.value << ":" << int(item.length) << "\n";
+
     // create program in device memory
     d_items.resize(items.size(), stream);
     CUDA_TRY(cudaMemcpyAsync(d_items.data(),
@@ -301,7 +301,6 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return ptr;
   }
 
-  // TODO argument order change
   __device__ char* format_from_parts(duration_component const* timeparts, char* ptr)
   {
     for (size_t idx = 0; idx < items_count; ++idx) {
@@ -406,8 +405,8 @@ struct dispatch_from_durations_fn {
     auto d_new_offsets = offsets_view.template data<int32_t>();
     rmm::device_vector<int32_t> ofst(offsets_transformer_itr,
                                      offsets_transformer_itr + strings_count);
-    thrust::copy(ofst.begin(), ofst.end(), std::ostream_iterator<int32_t>(std::cout, " "));
-    std::cout << "\n";
+    // thrust::copy(ofst.begin(), ofst.end(), std::ostream_iterator<int32_t>(std::cout, " "));
+    // std::cout << "\n";
 
     // build chars column
     auto const chars_bytes =
@@ -444,7 +443,6 @@ struct dispatch_from_durations_fn {
   }
 };
 
-// TODO perf check by benchmark
 static const __device__ __constant__ int32_t powers_of_ten[10] = {
   1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
 // this parses duration characters into a duration integer
@@ -610,7 +608,7 @@ struct parse_duration {
     return 0;
   }
 
-  __device__ int64_t duration_from_parts(duration_component const* timeparts)
+  inline __device__ int64_t duration_from_parts(duration_component const* timeparts)
   {
     int32_t days = timeparts->day;
     if (simt::std::is_same<T, duration_D>::value) return days;
