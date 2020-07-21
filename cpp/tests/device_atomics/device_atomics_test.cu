@@ -84,7 +84,7 @@ typename std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(std::vector<T> 
   auto ys = std::vector<typename T::rep>(xs.size());
   std::transform(
     xs.begin(), xs.end(), ys.begin(), [](T const& ts) { return ts.time_since_epoch().count(); });
-  return T{std::accumulate(ys.begin(), ys.end(), 0)};
+  return T{typename T::duration{std::accumulate(ys.begin(), ys.end(), 0)}};
 }
 
 template <typename T>
@@ -99,7 +99,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     // use transform from std::vector<int> instead.
     std::vector<T> v(vec_size);
     std::transform(v_input.begin(), v_input.end(), v.begin(), [](int x) {
-      T t(x);
+      T t = cudf::test::make_type_param_scalar<T>(x);
       return t;
     });
 
@@ -109,7 +109,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     exact[2] = *(std::max_element(v.begin(), v.end()));
 
     std::vector<T> result_init(9);  // +3 padding for int8 tests
-    result_init[0] = T{0};
+    result_init[0] = cudf::test::make_type_param_scalar<T>(0);
     result_init[1] = std::numeric_limits<T>::max();
     result_init[2] = std::numeric_limits<T>::min();
     result_init[3] = result_init[0];

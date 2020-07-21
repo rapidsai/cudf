@@ -58,11 +58,13 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
       return row;
   });
 
-  fixed_width_column_wrapper<TypeParam> leftColWrap2(sequence0, sequence0 + inputRows1);
+  fixed_width_column_wrapper<TypeParam, typename decltype(sequence0)::value_type> leftColWrap2(
+    sequence0, sequence0 + inputRows1);
 
   strings_column_wrapper rightColWrap1({"ac", "bd", "ce", "df", "eg", "fh", "gi", "hj"});
   cudf::size_type inputRows2 = static_cast<cudf::column_view const&>(rightColWrap1).size();
-  fixed_width_column_wrapper<TypeParam> rightColWrap2(sequence0, sequence0 + inputRows2);
+  fixed_width_column_wrapper<TypeParam, typename decltype(sequence0)::value_type> rightColWrap2(
+    sequence0, sequence0 + inputRows2);
 
   cudf::table_view left_view{{leftColWrap1, leftColWrap2}};
   cudf::table_view right_view{{rightColWrap1, rightColWrap2}};
@@ -102,7 +104,8 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
     else
       return row / 2;
   });
-  fixed_width_column_wrapper<TypeParam> expectedDataWrap2(seq_out2, seq_out2 + outputRows);
+  fixed_width_column_wrapper<TypeParam, typename decltype(seq_out2)::value_type> expectedDataWrap2(
+    seq_out2, seq_out2 + outputRows);
 
   auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
   auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
@@ -133,7 +136,8 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
       return 2 * row;
   });
 
-  fixed_width_column_wrapper<TypeParam> leftColWrap2(sequence_l, sequence_l + inputRows);
+  fixed_width_column_wrapper<TypeParam, typename decltype(sequence_l)::value_type> leftColWrap2(
+    sequence_l, sequence_l + inputRows);
 
   cudf::table_view left_view{{leftColWrap1, leftColWrap2, leftColWrap3}};
 
@@ -147,7 +151,8 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
     else
       return 2 * row + 1;
   });
-  fixed_width_column_wrapper<TypeParam> rightColWrap2(sequence_r, sequence_r + inputRows);
+  fixed_width_column_wrapper<TypeParam, typename decltype(sequence_r)::value_type> rightColWrap2(
+    sequence_r, sequence_r + inputRows);
 
   strings_column_wrapper rightColWrap3({"zx", "yw", "xv", "wu", "vt", "us", "tr", "sp"});
 
@@ -185,12 +190,12 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = (row % 2 == 0);
-      return static_cast<TypeParam>(ret);
+      return (row % 2 == 0) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(row);
+      return (row);
   });
-  fixed_width_column_wrapper<TypeParam> expectedDataWrap2(seq_out2, seq_out2 + outputRows);
+  fixed_width_column_wrapper<TypeParam, typename decltype(seq_out2)::value_type> expectedDataWrap2(
+    seq_out2, seq_out2 + outputRows);
 
   strings_column_wrapper expectedDataWrap3({"zy",
                                             "zx",
@@ -237,13 +242,15 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
       return row;
   });
 
-  fixed_width_column_wrapper<TypeParam> leftColWrap2(sequence0, sequence0 + inputRows);
+  fixed_width_column_wrapper<TypeParam, typename decltype(sequence0)::value_type> leftColWrap2(
+    sequence0, sequence0 + inputRows);
   cudf::table_view left_view{{leftColWrap1, leftColWrap2}};
 
   // data: "ac", "bd", "ce", "df" | valid: 1 1 1 0
   strings_column_wrapper rightColWrap1({"ac", "bd", "ce", "df", "eg", "fh", "gi", "hj"},
                                        {1, 1, 1, 1, 1, 1, 1, 0});
-  fixed_width_column_wrapper<TypeParam> rightColWrap2(sequence0, sequence0 + inputRows);
+  fixed_width_column_wrapper<TypeParam, typename decltype(sequence0)::value_type> rightColWrap2(
+    sequence0, sequence0 + inputRows);
 
   cudf::table_view right_view{{rightColWrap1, rightColWrap2}};
 
@@ -285,7 +292,8 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
     else
       return row / 2;
   });
-  fixed_width_column_wrapper<TypeParam> expectedDataWrap2(seq_out2, seq_out2 + outputRows);
+  fixed_width_column_wrapper<TypeParam, typename decltype(seq_out2)::value_type> expectedDataWrap2(
+    seq_out2, seq_out2 + outputRows);
 
   auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
   auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
@@ -315,7 +323,8 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
       return 2 * row;
   });
 
-  fixed_width_column_wrapper<TypeParam> leftColWrap2(sequence_l, sequence_l + inputRows);
+  fixed_width_column_wrapper<TypeParam, typename decltype(sequence_l)::value_type> leftColWrap2(
+    sequence_l, sequence_l + inputRows);
 
   cudf::table_view left_view{{leftColWrap1, leftColWrap2, leftColWrap3}};
 
@@ -330,7 +339,8 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
     else
       return 2 * row + 1;
   });
-  fixed_width_column_wrapper<TypeParam> rightColWrap2(sequence_r, sequence_r + inputRows);
+  fixed_width_column_wrapper<TypeParam, typename decltype(sequence_r)::value_type> rightColWrap2(
+    sequence_r, sequence_r + inputRows);
 
   strings_column_wrapper rightColWrap3({"zx", "yw", "xv", "wu", "vt", "us", "tr", "sp"},
                                        {1, 1, 1, 1, 1, 1, 1, 0});
@@ -370,12 +380,12 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = (row % 2 == 0);
-      return static_cast<TypeParam>(ret);
+      return (row % 2 == 0) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(row);
+      return (row);
   });
-  fixed_width_column_wrapper<TypeParam> expectedDataWrap2(seq_out2, seq_out2 + outputRows);
+  fixed_width_column_wrapper<TypeParam, typename decltype(seq_out2)::value_type> expectedDataWrap2(
+    seq_out2, seq_out2 + outputRows);
 
   strings_column_wrapper expectedDataWrap3({"zy",
                                             "zx",

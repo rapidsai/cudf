@@ -380,7 +380,19 @@ struct identity_initializer {
   }
 
   template <typename T, aggregation::Kind k>
-  T get_identity()
+  typename std::enable_if<cudf::is_timestamp_t<T>::value, T>::type get_identity()
+  {
+    if (k == aggregation::ARGMAX)
+      return T{typename T::duration(ARGMAX_SENTINEL)};
+    else if (k == aggregation::ARGMIN)
+      return T{typename T::duration(ARGMIN_SENTINEL)};
+    else
+      // In C++17, we can use compile time if and not make this function SFINAE
+      return identity_from_operator<T, k>();
+  }
+
+  template <typename T, aggregation::Kind k>
+  typename std::enable_if<!cudf::is_timestamp_t<T>::value, T>::type get_identity()
   {
     if (k == aggregation::ARGMAX)
       return static_cast<T>(ARGMAX_SENTINEL);

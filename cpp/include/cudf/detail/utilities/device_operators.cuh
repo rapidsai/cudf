@@ -46,7 +46,13 @@ struct DeviceSum {
     return lhs + rhs;
   }
 
-  template <typename T>
+  template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  static constexpr T identity()
+  {
+    return T{typename T::duration{0}};
+  }
+
+  template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
   static constexpr T identity()
   {
     return T{0};

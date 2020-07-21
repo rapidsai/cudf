@@ -33,13 +33,14 @@
 
 namespace cudf_io = cudf::io;
 
-template <typename T>
-using column_wrapper = typename std::conditional<std::is_same<T, cudf::string_view>::value,
-                                                 cudf::test::strings_column_wrapper,
-                                                 cudf::test::fixed_width_column_wrapper<T>>::type;
-using column         = cudf::column;
-using table          = cudf::table;
-using table_view     = cudf::table_view;
+template <typename T, typename SourceElementT = T>
+using column_wrapper =
+  typename std::conditional<std::is_same<T, cudf::string_view>::value,
+                            cudf::test::strings_column_wrapper,
+                            cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
+using column     = cudf::column;
+using table      = cudf::table;
+using table_view = cudf::table_view;
 
 // Global environment for temporary files
 auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
@@ -219,11 +220,12 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
 TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
 {
   auto sequence = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return TypeParam((std::rand() / 10000) * 1000); });
+    0, [](auto i) { return ((std::rand() / 10000) * 1000); });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 100;
-  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
@@ -244,12 +246,13 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
 TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls)
 {
   auto sequence = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return TypeParam((std::rand() / 10000) * 1000); });
+    0, [](auto i) { return ((std::rand() / 10000) * 1000); });
   auto validity =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i > 30) && (i < 60); });
 
   constexpr auto num_rows = 100;
-  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());

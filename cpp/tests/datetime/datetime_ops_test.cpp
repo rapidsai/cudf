@@ -31,7 +31,8 @@ struct NonTimestampTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
-using NonTimestampTypes = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::StringTypes>;
+using NonTimestampTypes =
+  cudf::test::Concat<cudf::test::NumericTypes, cudf::test::StringTypes, cudf::test::DurationTypes>;
 
 TYPED_TEST_CASE(NonTimestampTest, NonTimestampTypes);
 
@@ -54,6 +55,9 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
   EXPECT_THROW(extract_second(col), cudf::logic_error);
   EXPECT_THROW(last_day_of_month(col), cudf::logic_error);
   EXPECT_THROW(day_of_year(col), cudf::logic_error);
+  EXPECT_THROW(
+    add_months(col, cudf::column{cudf::data_type{cudf::type_id::INT16}, 0, rmm::device_buffer{0}}),
+    cudf::logic_error);
 }
 
 struct BasicDatetimeOpsTest : public cudf::test::BaseFixture {
@@ -65,23 +69,23 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
   using namespace cudf::datetime;
   using namespace simt::std::chrono;
 
-  auto timestamps_D = fixed_width_column_wrapper<cudf::timestamp_D>{
+  auto timestamps_D = cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, int32_t>({
     -1528,  // 1965-10-26 GMT
     17716,  // 2018-07-04 GMT
-    19382,  // 2023-01-25 GMT
-  };
+    19382   // 2023-01-25 GMT
+  });
 
-  auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s>{
+  auto timestamps_s = cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, int64_t>({
     -131968728,  // 1965-10-26 14:01:12 GMT
     1530705600,  // 2018-07-04 12:00:00 GMT
-    1674631932,  // 2023-01-25 07:32:12 GMT
-  };
+    1674631932   // 2023-01-25 07:32:12 GMT
+  });
 
-  auto timestamps_ms = fixed_width_column_wrapper<cudf::timestamp_ms>{
+  auto timestamps_ms = cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, int64_t>({
     -131968727238,  // 1965-10-26 14:01:12.762 GMT
     1530705600000,  // 2018-07-04 12:00:00.000 GMT
-    1674631932929,  // 2023-01-25 07:32:12.929 GMT
-  };
+    1674631932929   // 2023-01-25 07:32:12.929 GMT
+  });
 
   expect_columns_equal(*extract_year(timestamps_D),
                        fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
@@ -256,7 +260,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
-  auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s>{
+  auto timestamps_s = cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, int64_t>({
     662688000L,   // 1991-01-01 00:00:00 GMT
     949496401L,   // 2000-02-02 13:00:01 GMT - leap year
     4106854801L,  // 2100-02-21 01:00:01 GMT - not a leap year
@@ -267,11 +271,11 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
     1056931201L,  // 2003-06-30 00:00:01 GMT - already last day
     1031961599L,  // 2002-09-13 23:59:59 GMT
     0L,           // This is the UNIX epoch - 1970-01-01
-    -131968728L,  // 1965-10-26 14:01:12 GMT
-  };
+    -131968728L   // 1965-10-26 14:01:12 GMT
+  });
 
   expect_columns_equal(*last_day_of_month(timestamps_s),
-                       fixed_width_column_wrapper<cudf::timestamp_D>{
+                       cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, int32_t>({
                          7700,   // 1991-01-31
                          11016,  // 2000-02-29
                          47540,  // 2100-02-28
@@ -283,7 +287,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
                          11960,  // 2002-09-30
                          30,     // This is the UNIX epoch - when rounded up becomes 1970-01-31
                          -1523   // 1965-10-31
-                       },
+                       }),
                        true);
 }
 
@@ -296,7 +300,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
   // Time in days since epoch
   // Dates converted using epochconverter.com
   // Make some nullable fields as well
-  auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_D>{
+  auto timestamps_d = cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, int32_t>(
     {
       999,    // Random nullable field
       0,      // This is the UNIX epoch - 1970-01-01
@@ -305,13 +309,12 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
       3,      // Random nullable field
       66068,  // 2150-11-21 00:00:00 GMT
       22270,  // 2030-12-22 00:00:00 GMT
-      111,    // Random nullable field
+      111     // Random nullable field
     },
-    {false, true, true, true, false, true, true, false},
-  };
+    {false, true, true, true, false, true, true, false});
 
   expect_columns_equal(*last_day_of_month(timestamps_d),
-                       fixed_width_column_wrapper<cudf::timestamp_D>{
+                       cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, int32_t>(
                          {
                            999,    // Random nullable field
                            30,     // This is the UNIX epoch - when rounded up becomes 1970-01-31
@@ -320,10 +323,9 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
                            3,      // Random nullable field
                            66077,  // 2150-11-30
                            22279,  // 2030-12-31
-                           111,    // Random nullable field
+                           111     // Random nullable field
                          },
-                         {false, true, true, true, false, true, true, false},
-                       },
+                         {false, true, true, true, false, true, true, false}),
                        true);
 }
 
@@ -336,7 +338,7 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
   // Day number in the year
   // Dates converted using epochconverter.com
   // Make some nullable fields as well
-  auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_s>{
+  auto timestamps_d = cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, int64_t>(
     {
       999L,         // Random nullable field
       0L,           // This is the UNIX epoch - 1970-01-01
@@ -348,8 +350,7 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
       111L,         // Random nullable field
       -2180188800L  // 1900-11-30 00:00:00 GMT
     },
-    {false, true, true, true, false, true, true, false, true},
-  };
+    {false, true, true, true, false, true, true, false, true});
 
   expect_columns_equal(*day_of_year(timestamps_d),
                        fixed_width_column_wrapper<int16_t>{
@@ -379,6 +380,136 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithEmptyColumn)
   auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_s>{};
   auto out_col      = day_of_year(timestamps_d);
   EXPECT_EQ(out_col->size(), 0);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithInvalidColType)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace simt::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s = cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, int64_t>({
+    662688000L  // 1991-01-01 00:00:00 GMT
+  });
+
+  // Months has to be an INT16 type
+  auto months = cudf::test::fixed_width_column_wrapper<int32_t>({-2});
+
+  EXPECT_THROW(add_months(timestamps_s, months), cudf::logic_error);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithIncorrectColSizes)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace simt::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s = cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, int64_t>({
+    662688000L  // 1991-01-01 00:00:00 GMT
+  });
+
+  // Provide more number of months rows than timestamp rows
+  auto months = cudf::test::fixed_width_column_wrapper<int16_t>({-2, 3});
+
+  EXPECT_THROW(add_months(timestamps_s, months), cudf::logic_error);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSeconds)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace simt::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s = cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, int64_t>({
+    662688000L,   // 1991-01-01 00:00:00 GMT
+    949496401L,   // 2000-02-02 13:00:01 GMT - leap year
+    1056931201L,  // 2003-06-30 00:00:01 GMT - last day of month
+    1056964201L,  // 2003-06-30 09:10:01 GMT - last day of month
+    1056974401L,  // 2003-06-30 12:00:01 GMT - last day of month
+    1056994021L,  // 2003-06-30 17:27:01 GMT - last day of month
+    0L,           // This is the UNIX epoch - 1970-01-01
+    0L,           // This is the UNIX epoch - 1970-01-01
+    -131586588L,  // 1965-10-31 00:10:12 GMT
+    -131550590L,  // 1965-10-31 10:10:10 GMT
+    -131544000L,  // 1965-10-31 12:00:00 GMT
+    -131536728L   // 1965-10-31 14:01:12 GMT
+  });
+
+  auto months =
+    cudf::test::fixed_width_column_wrapper<int16_t>({-2, 6, -1, 1, -4, 8, -2, 10, 4, -20, 1, 3});
+
+  expect_columns_equal(*add_months(timestamps_s, months),
+                       cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, int64_t>({
+                         657417600L,   // 1990-11-01 00:00:00 GMT
+                         965221201L,   // 2000-08-02 13:00:01 GMT
+                         1054252801L,  // 2003-05-30 00:00:01 GMT
+                         1059556201L,  // 2003-07-30 09:10:01 GMT
+                         1046433601L,  // 2003-02-28 12:00:01 GMT
+                         1078075621L,  // 2004-02-29 17:27:01 GMT
+                         -5270400L,    // 1969-11-01
+                         26265600L,    // 1970-11-01
+                         -121218588L,  // 1966-02-28 00:10:12 GMT
+                         -184254590L,  // 1964-02-29 10:10:10 GMT
+                         -128952000L,  // 1965-11-30 12:00:00 GMT
+                         -123587928L   // 1966-01-31 14:01:12 GMT
+                       }),
+                       true);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSecondsAndNullValues)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace simt::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s = cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, int64_t>(
+    {
+      662688000L,   // 1991-01-01 00:00:00 GMT
+      949496401L,   // 2000-02-02 13:00:01 GMT - leap year
+      1056931201L,  // 2003-06-30 00:00:01 GMT - last day of month
+      1056964201L,  // 2003-06-30 09:10:01 GMT - last day of month
+      1056974401L,  // 2003-06-30 12:00:01 GMT - last day of month
+      1056994021L,  // 2003-06-30 17:27:01 GMT - last day of month
+      0L,           // This is the UNIX epoch - 1970-01-01
+      0L,           // This is the UNIX epoch - 1970-01-01
+      -131586588L,  // 1965-10-31 00:10:12 GMT
+      -131550590L,  // 1965-10-31 10:10:10 GMT
+      -131544000L,  // 1965-10-31 12:00:00 GMT
+      -131536728L   // 1965-10-31 14:01:12 GMT
+    },
+    {true, false, true, false, true, false, true, false, true, true, true, true});
+
+  auto months = cudf::test::fixed_width_column_wrapper<int16_t>(
+    {-2, 6, -1, 1, -4, 8, -2, 10, 4, -20, 1, 3},
+    {false, true, true, false, true, true, true, true, true, true, true, true});
+
+  expect_columns_equal(
+    *add_months(timestamps_s, months),
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, int64_t>(
+      {
+        0L,           // null value
+        0L,           // null value
+        1054252801L,  // 2003-05-30 00:00:01 GMT
+        0L,           // null value
+        1046433601L,  // 2003-02-28 12:00:01 GMT
+        0L,           // null value
+        -5270400L,    // 1969-11-01
+        0L,           // null value
+        -121218588L,  // 1966-02-28 00:10:12 GMT
+        -184254590L,  // 1964-02-29 10:10:10 GMT
+        -128952000L,  // 1965-11-30 12:00:00 GMT
+        -123587928L   // 1966-01-31 14:01:12 GMT
+      },
+      {false, false, true, false, true, false, true, false, true, true, true, true}),
+    true);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

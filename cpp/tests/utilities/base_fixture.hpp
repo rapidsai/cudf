@@ -130,7 +130,7 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()> * = nullptr>
+  template <typename TL = T, std::enable_if_t<!cudf::is_chrono<TL>()> * = nullptr>
   UniformRandomGenerator(T lower,
                          T upper,
                          uint64_t seed = detail::random_generator_incrementing_seed())
@@ -145,9 +145,9 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  template <typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()> * = nullptr>
-  UniformRandomGenerator(long lower,
-                         long upper,
+  template <typename TL = T, std::enable_if_t<cudf::is_chrono<TL>()> * = nullptr>
+  UniformRandomGenerator(typename TL::rep lower,
+                         typename TL::rep upper,
                          uint64_t seed = detail::random_generator_incrementing_seed())
     : dist{lower, upper}, rng{std::mt19937_64{seed}()}
   {
@@ -156,7 +156,17 @@ class UniformRandomGenerator {
   /**
    * @brief Returns the next random number.
    **/
-  T generate() { return T{dist(rng)}; }
+  template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()> * = nullptr>
+  T generate()
+  {
+    return T{dist(rng)};
+  }
+
+  template <typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()> * = nullptr>
+  T generate()
+  {
+    return T{typename T::duration{dist(rng)}};
+  }
 
  private:
   uniform_distribution dist{};  ///< Distribution

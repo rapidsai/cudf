@@ -49,7 +49,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
 
     cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
-    auto destination = cudf::test::fixed_width_column_wrapper<T>(
+    cudf::test::fixed_width_column_wrapper<T, int32_t> destination(
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(0) + size,
       cudf::test::make_counting_transform_iterator(0, destination_validity));
@@ -60,6 +60,8 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
       p_val = cudf::make_numeric_scalar(type);
     } else if (cudf::is_timestamp<T>()) {
       p_val = cudf::make_timestamp_scalar(type);
+    } else if (cudf::is_duration<T>()) {
+      p_val = cudf::make_duration_scalar(type);
     } else {
       EXPECT_TRUE(false);  // should not be reached
     }
@@ -67,10 +69,11 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
     static_cast<ScalarType*>(p_val.get())->set_value(value);
     static_cast<ScalarType*>(p_val.get())->set_valid(value_is_valid);
 
-    auto expected_elements = cudf::test::make_counting_transform_iterator(
-      0,
-      [begin, end, value](auto i) { return (i >= begin && i < end) ? value : static_cast<T>(i); });
-    auto expected = cudf::test::fixed_width_column_wrapper<T>(
+    auto expected_elements =
+      cudf::test::make_counting_transform_iterator(0, [begin, end, value](auto i) {
+        return (i >= begin && i < end) ? value : cudf::test::make_type_param_scalar<T>(i);
+      });
+    cudf::test::fixed_width_column_wrapper<T> expected(
       expected_elements,
       expected_elements + size,
       cudf::test::make_counting_transform_iterator(
@@ -98,7 +101,7 @@ TYPED_TEST(FillTypedTestFixture, SetSingle)
   using T = TypeParam;
 
   cudf::size_type index{9};
-  T value{1};
+  T value = cudf::test::make_type_param_scalar<TypeParam>(1);
 
   // First set it as valid
   this->test(index, index + 1, value, true);
@@ -113,7 +116,7 @@ TYPED_TEST(FillTypedTestFixture, SetAll)
 
   cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
-  T value{1};
+  T value = cudf::test::make_type_param_scalar<TypeParam>(1);
 
   // First set it as valid
   this->test(0, size, value, true);
@@ -128,7 +131,7 @@ TYPED_TEST(FillTypedTestFixture, SetRange)
 
   cudf::size_type begin{99};
   cudf::size_type end{299};
-  T value{1};
+  T value = cudf::test::make_type_param_scalar<TypeParam>(1);
 
   // First set it as valid
   this->test(begin, end, value, true);
@@ -145,7 +148,7 @@ TYPED_TEST(FillTypedTestFixture, SetRangeNullCount)
 
   cudf::size_type begin{10};
   cudf::size_type end{50};
-  T value{1};
+  T value = cudf::test::make_type_param_scalar<TypeParam>(1);
 
   // First set it as valid value
   this->test(begin, end, value, true, odd_valid);

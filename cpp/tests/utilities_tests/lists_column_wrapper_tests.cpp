@@ -33,6 +33,7 @@ struct ListColumnWrapperTestTyped : public cudf::test::BaseFixture {
 
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
+                                                  cudf::test::DurationTypes,
                                                   cudf::test::TimestampTypes>;
 TYPED_TEST_CASE(ListColumnWrapperTestTyped, FixedWidthTypesNotBool);
 
@@ -50,7 +51,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, List)
   //    2, 3
   //
   {
-    test::lists_column_wrapper<T> list{2, 3};
+    test::lists_column_wrapper<T, int32_t> list{2, 3};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
@@ -62,7 +63,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, List)
 
     auto data = lcv.child();
     EXPECT_EQ(data.size(), 2);
-    test::fixed_width_column_wrapper<T> e_data({2, 3});
+    test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3});
     test::expect_columns_equal(e_data, data);
   }
 
@@ -75,7 +76,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, List)
   //    2, 3
   //
   {
-    test::lists_column_wrapper<T> list{{2, 3}};
+    test::lists_column_wrapper<T, int32_t> list{{2, 3}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
@@ -87,7 +88,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, List)
 
     auto data = lcv.child();
     EXPECT_EQ(data.size(), 2);
-    test::fixed_width_column_wrapper<T> e_data({2, 3});
+    test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3});
     test::expect_columns_equal(e_data, data);
   }
 }
@@ -109,7 +110,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListWithValidity)
   //    2, NULL
   //
   {
-    test::lists_column_wrapper<T> list{{{2, 3}, valids}};
+    test::lists_column_wrapper<T, int32_t> list{{{2, 3}, valids}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
@@ -121,7 +122,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListWithValidity)
 
     auto data = lcv.child();
     EXPECT_EQ(data.size(), 2);
-    test::fixed_width_column_wrapper<T> e_data({2, 3}, valids);
+    test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3}, valids);
     test::expect_columns_equal(e_data, data);
   }
 
@@ -133,7 +134,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListWithValidity)
   // Children :
   //    2, NULL, 4, NULL, 6, NULL, 8
   {
-    test::lists_column_wrapper<T> list{{{2, 3}, valids}, {{4, 5}, valids}, {{6, 7, 8}, valids}};
+    test::lists_column_wrapper<T, int32_t> list{
+      {{2, 3}, valids}, {{4, 5}, valids}, {{6, 7, 8}, valids}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
@@ -145,7 +147,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListWithValidity)
 
     auto data = lcv.child();
     EXPECT_EQ(data.size(), 7);
-    test::fixed_width_column_wrapper<T> e_data({2, 3, 4, 5, 6, 7, 8}, valids);
+    test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3, 4, 5, 6, 7, 8}, valids);
     test::expect_columns_equal(e_data, data);
   }
 }
@@ -163,8 +165,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIterator)
   // Children :
   //    0, 1, 2, 3, 4
   //
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return static_cast<T>(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return cudf::test::make_type_param_scalar<T>(i); });
 
   test::lists_column_wrapper<T> list{sequence, sequence + 5};
 
@@ -178,7 +180,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIterator)
 
   auto data = lcv.child();
   EXPECT_EQ(data.size(), 5);
-  test::fixed_width_column_wrapper<T> e_data({0, 1, 2, 3, 4});
+  test::fixed_width_column_wrapper<T, int32_t> e_data({0, 1, 2, 3, 4});
   test::expect_columns_equal(e_data, data);
 }
 
@@ -198,8 +200,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIteratorWithValidity)
   // Children :
   //    0, NULL, 2, NULL, 4
   //
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return static_cast<T>(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return cudf::test::make_type_param_scalar<T>(i); });
 
   test::lists_column_wrapper<T> list{sequence, sequence + 5, valids};
 
@@ -213,7 +215,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIteratorWithValidity)
 
   auto data = lcv.child();
   EXPECT_EQ(data.size(), 5);
-  test::fixed_width_column_wrapper<T> e_data({0, 0, 2, 0, 4}, valids);
+  test::fixed_width_column_wrapper<T, int32_t> e_data({0, 0, 2, 0, 4}, valids);
   test::expect_columns_equal(e_data, data);
 }
 
@@ -234,7 +236,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfLists)
   //    Children :
   //      2, 3, 4, 5
   {
-    test::lists_column_wrapper<T> list{{{2, 3}, {4, 5}}};
+    test::lists_column_wrapper<T, int32_t> list{{{2, 3}, {4, 5}}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
@@ -255,7 +257,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfLists)
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 4);
-    test::fixed_width_column_wrapper<T> e_child_data({2, 3, 4, 5});
+    test::fixed_width_column_wrapper<T, int32_t> e_child_data({2, 3, 4, 5});
     test::expect_columns_equal(e_child_data, child_data);
   }
 
@@ -271,7 +273,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfLists)
   //    Children :
   //      1, 2, 3, 4, 5, 6, 7, 0, 8, 9, 10
   {
-    test::lists_column_wrapper<T> list{{{1, 2}, {3, 4}}, {{5, 6, 7}, {0}, {8}}, {{9, 10}}};
+    test::lists_column_wrapper<T, int32_t> list{{{1, 2}, {3, 4}}, {{5, 6, 7}, {0}, {8}}, {{9, 10}}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
@@ -292,7 +294,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfLists)
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 11);
-    test::fixed_width_column_wrapper<T> e_child_data({1, 2, 3, 4, 5, 6, 7, 0, 8, 9, 10});
+    test::fixed_width_column_wrapper<T, int32_t> e_child_data({1, 2, 3, 4, 5, 6, 7, 0, 8, 9, 10});
     test::expect_columns_equal(e_child_data, child_data);
   }
 }
@@ -318,7 +320,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListsWithValidity)
   //      2, NULL, 4, NULL
   {
     // equivalent to { {2, NULL}, {4, NULL} }
-    test::lists_column_wrapper<T> list{{{{2, 3}, valids}, {{4, 5}, valids}}};
+    test::lists_column_wrapper<T, int32_t> list{{{{2, 3}, valids}, {{4, 5}, valids}}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
@@ -339,7 +341,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListsWithValidity)
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 4);
-    test::fixed_width_column_wrapper<T> e_child_data({2, 3, 4, 5}, valids);
+    test::fixed_width_column_wrapper<T, int32_t> e_child_data({2, 3, 4, 5}, valids);
     test::expect_columns_equal(e_child_data, child_data);
   }
 
@@ -358,7 +360,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListsWithValidity)
   //      1, 2, 5, 6, 7, 8, 9, 10
   {
     // equivalent to  { {{1, 2}, NULL}, {{5, 6, 7}, NULL, {8}}, {{9, 10}} }
-    test::lists_column_wrapper<T> list{
+    test::lists_column_wrapper<T, int32_t> list{
       {{{1, 2}, {3, 4}}, valids}, {{{5, 6, 7}, {0}, {8}}, valids}, {{{9, 10}}, valids}};
 
     lists_column_view lcv(list);
@@ -381,7 +383,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListsWithValidity)
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 8);
-    test::fixed_width_column_wrapper<T> e_child_data({1, 2, 5, 6, 7, 8, 9, 10});
+    test::fixed_width_column_wrapper<T, int32_t> e_child_data({1, 2, 5, 6, 7, 8, 9, 10});
     test::expect_columns_equal(e_child_data, child_data);
   }
 }
@@ -413,8 +415,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListOfListsWithValidity)
   //        1, 2, 3, 4, 10, 20, 30, 40, 50, 60, 70, 0
   {
     // equivalent to  { {{{1, 2}, {3, 4}}, NULL}, {{{10, 20}, {30, 40}}, {{50, 60, 70}, {0}}} }
-    test::lists_column_wrapper<T> list{{{{{1, 2}, {3, 4}}, {{5, 6, 7}, {0}}}, valids},
-                                       {{{10, 20}, {30, 40}}, {{50, 60, 70}, {0}}}};
+    test::lists_column_wrapper<T, int32_t> list{{{{{1, 2}, {3, 4}}, {{5, 6, 7}, {0}}}, valids},
+                                                {{{10, 20}, {30, 40}}, {{50, 60, 70}, {0}}}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);
@@ -445,7 +447,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListOfListsWithValidity)
 
     auto child_child_data = child_childv.child();
     EXPECT_EQ(child_child_data.size(), 12);
-    test::fixed_width_column_wrapper<T> e_child_child_data(
+    test::fixed_width_column_wrapper<T, int32_t> e_child_child_data(
       {1, 2, 3, 4, 10, 20, 30, 40, 50, 60, 70, 0});
     test::expect_columns_equal(e_child_child_data, child_child_data);
   }
@@ -457,7 +459,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   using T = TypeParam;
 
   // to disambiguiate between {} == 0 and {} == List{0}
-  using LCW = test::lists_column_wrapper<T>;
+  using LCW = test::lists_column_wrapper<T, int32_t>;
 
   // List<T>, empty
   //
@@ -481,7 +483,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   // Children :
   {
     // equivalent to  {}
-    test::lists_column_wrapper<T> list{LCW{}};
+    test::lists_column_wrapper<T, int32_t> list{LCW{}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
@@ -500,7 +502,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   // Children :
   {
     // equivalent to  {}
-    test::lists_column_wrapper<T> list{LCW{}, LCW{}};
+    test::lists_column_wrapper<T, int32_t> list{LCW{}, LCW{}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);
@@ -521,7 +523,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   {
     // equivalent to  {{1, 2}, {}, {3, 4}}
 
-    test::lists_column_wrapper<T> list{{1, 2}, LCW{}, {3, 4}};
+    test::lists_column_wrapper<T, int32_t> list{{1, 2}, LCW{}, {3, 4}};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
@@ -533,7 +535,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
 
     auto child_data = lcv.child();
     EXPECT_EQ(child_data.size(), 4);
-    test::fixed_width_column_wrapper<T> e_child_data({1, 2, 3, 4});
+    test::fixed_width_column_wrapper<T, int32_t> e_child_data({1, 2, 3, 4});
     test::expect_columns_equal(e_child_data, child_data);
   }
 
@@ -550,7 +552,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   //     1, 2, 3, 4, 5, 6, 7, 8
   {
     // equivalent to  { {{}}, {{1, 2}, {}, {3, 4}}, {{}, {5, 6, 7, 8}, {}} }
-    test::lists_column_wrapper<T> list{
+    test::lists_column_wrapper<T, int32_t> list{
       {LCW{}}, {{1, 2}, LCW{}, {3, 4}}, {LCW{}, {5, 6, 7, 8}, LCW{}}};
 
     lists_column_view lcv(list);
@@ -572,7 +574,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 8);
-    test::fixed_width_column_wrapper<T> e_child_data({1, 2, 3, 4, 5, 6, 7, 8});
+    test::fixed_width_column_wrapper<T, int32_t> e_child_data({1, 2, 3, 4, 5, 6, 7, 8});
     test::expect_columns_equal(e_child_data, child_data);
   }
 }
@@ -583,7 +585,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   using T = TypeParam;
 
   // to disambiguiate between {} == 0 and {} == List{0}
-  using LCW = test::lists_column_wrapper<T>;
+  using LCW = test::lists_column_wrapper<T, int32_t>;
 
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
@@ -598,7 +600,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   // Children :
   {
     // equivalent to  {{}, NULL}
-    test::lists_column_wrapper<T> list{{LCW{}, LCW{}}, valids};
+    test::lists_column_wrapper<T, int32_t> list{{LCW{}, LCW{}}, valids};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);
@@ -620,7 +622,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   // Children :
   {
     // equivalent to  {{}, NULL, {}}
-    test::lists_column_wrapper<T> list{{LCW{}, {1, 2, 3}, LCW{}}, valids};
+    test::lists_column_wrapper<T, int32_t> list{{LCW{}, {1, 2, 3}, LCW{}}, valids};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
@@ -643,7 +645,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   //   1, 2, 3
   {
     // equivalent to  {{}, NULL, {1, 2, 3}}
-    test::lists_column_wrapper<T> list{{LCW{}, LCW{}, {1, 2, 3}}, valids};
+    test::lists_column_wrapper<T, int32_t> list{{LCW{}, LCW{}, {1, 2, 3}}, valids};
 
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
@@ -670,7 +672,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   //     5, 6, 7, 8
   {
     // equivalent to  { {{}}, NULL, {{}, {5, 6, 7, 8}, {}} }
-    test::lists_column_wrapper<T> list{
+    test::lists_column_wrapper<T, int32_t> list{
       {{LCW{}}, {{1, 2}, LCW{}, {3, 4}}, {LCW{}, {5, 6, 7, 8}, LCW{}}}, valids};
 
     lists_column_view lcv(list);
@@ -692,7 +694,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 4);
-    test::fixed_width_column_wrapper<T> e_child_data({5, 6, 7, 8});
+    test::fixed_width_column_wrapper<T, int32_t> e_child_data({5, 6, 7, 8});
     test::expect_columns_equal(e_child_data, child_data);
   }
 }
