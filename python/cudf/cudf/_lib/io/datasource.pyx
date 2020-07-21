@@ -5,5 +5,8 @@ from cudf._lib.cpp.io.types cimport datasource
 
 cdef class Datasource:
 
-    def __init__(self, datasource):
-        self.c_datasource = datasource
+    def __cinit__(self):
+        print("__cinit__ in Datasource.pyx")
+
+    cpdef init(self):
+        print("init() in Datasource.pyx")

@@ -5,3 +5,5 @@ from cudf._lib.cpp.io.types cimport datasource
 
 cdef class Datasource:
     cdef unique_ptr[datasource] c_datasource
+
+    cpdef init(self)

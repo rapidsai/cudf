@@ -28,14 +28,20 @@ class KafkaDatasource(Datasource):
         self.batch_timeout = batch_timeout
         self.delimiter = delimiter
 
+        print("kafka.py __init__ called")
+
+        # kafka_confs = {}
         # for key, value in src[0].kafka_configs.items():
         #     kafka_confs[str.encode(key)] = str.encode(value)
-        # c_datasource = make_unique[kafka_consumer](kafka_configs,
-        #                              topic,
-        #                              partition,
-        #                              start_offset,
-        #                              end_offset,
-        #                              batch_timeout,
-        #                              delimiter)
 
-        libkafka.C_KafkaDatasource().create()
+        # Create the underlying Cython Datasource object
+        # and populate self.c_datasource for source_info
+        self.c_datasource = libkafka.create(
+            kafka_configs,
+            topic.encode(),
+            partition,
+            start_offset,
+            end_offset,
+            batch_timeout,
+            delimiter.encode(),
+        )
