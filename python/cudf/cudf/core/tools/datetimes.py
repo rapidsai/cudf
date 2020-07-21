@@ -87,6 +87,8 @@ def to_datetime(
     Assembling a datetime from multiple columns of a DataFrame. The keys can be
     common abbreviations like ['year', 'month', 'day', 'minute', 'second',
     'ms', 'us', 'ns']) or plurals of the same
+
+    >>> import cudf
     >>> df = cudf.DataFrame({'year': [2015, 2016],
     ...                    'month': [2, 3],
     ...                    'day': [4, 5]})
