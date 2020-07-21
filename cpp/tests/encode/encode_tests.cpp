@@ -17,7 +17,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
 template <typename T>
