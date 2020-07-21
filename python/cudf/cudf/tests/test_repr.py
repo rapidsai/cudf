@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import numpy as np
 import pandas as pd
 import pytest
@@ -236,3 +236,77 @@ def test_generic_index(length, dtype):
     gsr = cudf.Series.from_pandas(psr)
 
     assert psr.index.__repr__() == gsr.index.__repr__()
+
+
+@pytest.mark.parametrize(
+    "index,expected_repr",
+    [
+        (
+            cudf.Index([1, 2, 3, None]),
+            "Int64Index([1, 2, 3, null], dtype='int64')",
+        ),
+        (
+            cudf.Index([None, 2.2, 3.324342, None]),
+            "Float64Index([null, 2.2, 3.324342, null], dtype='float64')",
+        ),
+        (
+            cudf.Index([None, None, None], name="hello"),
+            "Float64Index([null, null, null], dtype='float64', name='hello')",
+        ),
+        (
+            cudf.Index([None], name="hello"),
+            "Float64Index([null], dtype='float64', name='hello')",
+        ),
+        (
+            cudf.Index([None], dtype="int8", name="hello"),
+            "Int8Index([null], dtype='int8', name='hello')",
+        ),
+        (
+            cudf.Index([None] * 50, dtype="object"),
+            "StringIndex([None None None None None None None None "
+            "None None None None None None\n None None None None None None "
+            "None None None None None None None None\n None None None None "
+            "None None None None None None None None None None\n None None "
+            "None None None None None None], dtype='object')",
+        ),
+        (
+            cudf.Index([None] * 20, dtype="uint32"),
+            "UInt32Index([null, null, null, null, null, null, null, null, "
+            "null,\n       null, null, null, null, null, null, null, null, "
+            "null,\n       null, null],\n      dtype='uint32')",
+        ),
+        (
+            cudf.Index(
+                [None, 111, 22, 33, None, 23, 34, 2343, None], dtype="int16"
+            ),
+            "Int16Index([null, 111, 22, 33, null, 23, 34, 2343, null], "
+            "dtype='int16')",
+        ),
+        (
+            cudf.Index([1, 2, 3, None], dtype="category"),
+            "CategoricalIndex([1, 2, 3, null], categories=[1, 2, 3], "
+            "ordered=False, dtype='category')",
+        ),
+        (
+            cudf.Index([None, None], dtype="category"),
+            "CategoricalIndex([null, null], categories=[], ordered=False, "
+            "dtype='category')",
+        ),
+        (
+            cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[ms]")),
+            "DatetimeIndex([1970-01-01 00:00:00.010, 1970-01-01 00:00:00.020,"
+            "\n       1970-01-01 00:00:00.030, null],\n      "
+            "dtype='datetime64[ms]')",
+        ),
+        (
+            cudf.Index(np.array([None] * 10, dtype="datetime64[ms]")),
+            "DatetimeIndex([null, null, null, null, null, null, null, null, "
+            "null,\n       null],\n      dtype='datetime64[ms]')",
+        ),
+    ],
+)
+def test_generic_index_null(index, expected_repr):
+
+    actual_repr = index.__repr__()
+
+    assert expected_repr == actual_repr

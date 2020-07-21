@@ -1605,12 +1605,12 @@ class GenericIndex(Index):
             preprocess = concat([top, bottom])
         else:
             preprocess = self
-        if preprocess._values.nullable:
+
+        if isinstance(preprocess, CategoricalIndex):
+            output = preprocess.to_pandas().__repr__()
+            output = output.replace("nan", "null")
+        elif preprocess._values.nullable:
             output = self._clean_nulls_from_index().to_pandas().__repr__()
-            # Fix and correct the class name of the output
-            # string by finding first occurrence of "(" in the output
-            index_class_split_index = output.find("(")
-            output = self.__class__.__name__ + output[index_class_split_index:]
 
             if not isinstance(self, StringIndex):
                 # We should remove all the single quotes
@@ -1623,6 +1623,11 @@ class GenericIndex(Index):
                 output = output.replace("'", "")
         else:
             output = preprocess.to_pandas().__repr__()
+
+        # Fix and correct the class name of the output
+        # string by finding first occurrence of "(" in the output
+        index_class_split_index = output.find("(")
+        output = self.__class__.__name__ + output[index_class_split_index:]
 
         lines = output.split("\n")
 
