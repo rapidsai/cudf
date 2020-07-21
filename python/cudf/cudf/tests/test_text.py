@@ -71,7 +71,7 @@ def test_token_count(delimiter, expected_token_counts):
 
     assert type(expected) == type(actual)
     assert_series_equal(
-        expected.to_pandas(), actual.to_pandas(), check_dtype=False
+        expected.to_pandas(nullable_pd_dtype=False), actual.to_pandas(nullable_pd_dtype=False), check_dtype=False
     )
 
 

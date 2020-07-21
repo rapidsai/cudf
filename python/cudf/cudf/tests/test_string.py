@@ -67,7 +67,7 @@ def test_string_export(ps_gs):
     ps, gs = ps_gs
 
     expect = ps
-    got = gs.to_pandas()
+    got = gs.to_pandas(nullable_pd_dtype=False)
     assert_eq(expect, got)
 
     expect = np.array(ps)
@@ -1260,7 +1260,7 @@ def test_strings_rsplit(data, n, expand):
 
     pd.testing.assert_frame_equal(
         ps.str.rsplit(n=n, expand=expand).reset_index(),
-        gs.str.rsplit(n=n, expand=expand).to_pandas().reset_index(),
+        gs.str.rsplit(n=n, expand=expand).to_pandas(nullable_pd_dtype=False).reset_index(),
         check_index_type=False,
     )
     assert_eq(
@@ -1296,7 +1296,7 @@ def test_strings_split(data, n, expand):
 
     pd.testing.assert_frame_equal(
         ps.str.split(n=n, expand=expand).reset_index(),
-        gs.str.split(n=n, expand=expand).to_pandas().reset_index(),
+        gs.str.split(n=n, expand=expand).to_pandas(nullable_pd_dtype=False).reset_index(),
         check_index_type=False,
     )
 

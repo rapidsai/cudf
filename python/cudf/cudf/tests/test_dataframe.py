@@ -369,7 +369,7 @@ def test_dataframe_MI_rename():
         {"a": np.arange(10), "b": np.arange(10), "c": np.arange(10)}
     )
     gdg = gdf.groupby(["a", "b"]).count()
-    pdg = gdg.to_pandas()
+    pdg = gdg.to_pandas(nullable_pd_dtype=False)
 
     expect = pdg.rename(mapper={1: 5, 2: 6}, axis=0)
     got = gdg.rename(mapper={1: 5, 2: 6}, axis=0)
@@ -882,7 +882,7 @@ def test_dataframe_hash_partition_masked_value(nrows):
     parted = gdf.partition_by_hash(["key"], nparts=3)
     # Verify that the valid mask is correct
     for p in parted:
-        df = p.to_pandas()
+        df = p.to_pandas(nullable_pd_dtype=False)
         for row in df.itertuples():
             valid = bool(bytemask[row.key])
             expected_value = (
@@ -903,7 +903,7 @@ def test_dataframe_hash_partition_masked_keys(nrows):
     parted = gdf.partition_by_hash(["key"], nparts=3, keep_index=False)
     # Verify that the valid mask is correct
     for p in parted:
-        df = p.to_pandas()
+        df = p.to_pandas(nullable_pd_dtype=False)
         for row in df.itertuples():
             valid = bool(bytemask[row.val - 100])
             # val is key + 100
@@ -1061,8 +1061,8 @@ def test_concat_with_axis():
     midf2.index = gd.MultiIndex(
         levels=[[3, 4, 5], [2, 0]], codes=[[0, 1, 2], [1, 0, 1]]
     )
-    mipdf1 = midf1.to_pandas()
-    mipdf2 = midf2.to_pandas()
+    mipdf1 = midf1.to_pandas(nullable_pd_dtype=False)
+    mipdf2 = midf2.to_pandas(nullable_pd_dtype=False)
 
     assert_eq(gd.concat([midf1, midf2]), pd.concat([mipdf1, mipdf2]))
     assert_eq(gd.concat([midf2, midf1]), pd.concat([mipdf2, mipdf1]))
@@ -1082,8 +1082,8 @@ def test_concat_with_axis():
     gdf2 = gdf1[5:]
     gdg1 = gdf1.groupby(["x", "y"]).min()
     gdg2 = gdf2.groupby(["x", "y"]).min()
-    pdg1 = gdg1.to_pandas()
-    pdg2 = gdg2.to_pandas()
+    pdg1 = gdg1.to_pandas(nullable_pd_dtype=False)
+    pdg2 = gdg2.to_pandas(nullable_pd_dtype=False)
 
     assert_eq(gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
     assert_eq(gd.concat([gdg2, gdg1]), pd.concat([pdg2, pdg1]))
@@ -1091,8 +1091,8 @@ def test_concat_with_axis():
     # series multi index concat
     gdgz1 = gdg1.z
     gdgz2 = gdg2.z
-    pdgz1 = gdgz1.to_pandas()
-    pdgz2 = gdgz2.to_pandas()
+    pdgz1 = gdgz1.to_pandas(nullable_pd_dtype=False)
+    pdgz2 = gdgz2.to_pandas(nullable_pd_dtype=False)
 
     assert_eq(gd.concat([gdgz1, gdgz2]), pd.concat([pdgz1, pdgz2]))
     assert_eq(gd.concat([gdgz2, gdgz1]), pd.concat([pdgz2, pdgz1]))
@@ -1901,7 +1901,7 @@ def test_dataframe_multiindex_boolmask(mask):
         {"w": [3, 2, 1], "x": [1, 2, 3], "y": [0, 1, 0], "z": [1, 1, 1]}
     )
     gdg = gdf.groupby(["w", "x"]).count()
-    pdg = gdg.to_pandas()
+    pdg = gdg.to_pandas(nullable_pd_dtype=False)
     assert_eq(gdg[mask], pdg[mask])
 
 
@@ -2053,7 +2053,7 @@ def test_tail_for_string():
     gdf = DataFrame()
     gdf["id"] = Series(["a", "b"], dtype=np.object)
     gdf["v"] = Series([1, 2])
-    assert_eq(gdf.tail(3), gdf.to_pandas().tail(3))
+    assert_eq(gdf.tail(3), gdf.to_pandas(nullable_pd_dtype=False).tail(3))
 
 
 @pytest.mark.parametrize("drop", [True, False])
@@ -2140,7 +2140,7 @@ def test_dataframe_reindex_0(copy):
             "d": str,
         },
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     # Validate reindex returns a copy unmodified
     assert_eq(pdf.reindex(copy=True), gdf.reindex(copy=copy))
 
@@ -2151,7 +2151,7 @@ def test_dataframe_reindex_1(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     # Validate labels are used as index when axis defaults to 0
     assert_eq(pdf.reindex(index, copy=True), gdf.reindex(index, copy=copy))
 
@@ -2162,7 +2162,7 @@ def test_dataframe_reindex_2(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     # Validate labels are used as index when axis=0
     assert_eq(
         pdf.reindex(index, axis=0, copy=True),
@@ -2176,7 +2176,7 @@ def test_dataframe_reindex_3(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     # Validate labels are used as columns when axis=0
     assert_eq(
         pdf.reindex(columns, axis=1, copy=True),
@@ -2190,7 +2190,7 @@ def test_dataframe_reindex_4(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     # Validate labels are used as index when axis=0
     assert_eq(
         pdf.reindex(labels=index, axis=0, copy=True),
@@ -2204,7 +2204,7 @@ def test_dataframe_reindex_5(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     # Validate labels are used as columns when axis=1
     assert_eq(
         pdf.reindex(labels=columns, axis=1, copy=True),
@@ -2218,7 +2218,7 @@ def test_dataframe_reindex_6(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     # Validate labels are used as index when axis='index'
     assert_eq(
         pdf.reindex(labels=index, axis="index", copy=True),
@@ -2232,7 +2232,7 @@ def test_dataframe_reindex_7(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     # Validate labels are used as columns when axis='columns'
     assert_eq(
         pdf.reindex(labels=columns, axis="columns", copy=True),
@@ -2246,7 +2246,7 @@ def test_dataframe_reindex_8(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     # Validate reindexes labels when index=labels
     assert_eq(
         pdf.reindex(index=index, copy=True),
@@ -2260,7 +2260,7 @@ def test_dataframe_reindex_9(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     # Validate reindexes column names when columns=labels
     assert_eq(
         pdf.reindex(columns=columns, copy=True),
@@ -2275,7 +2275,7 @@ def test_dataframe_reindex_10(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     # Validate reindexes both labels and column names when
     # index=index_labels and columns=column_labels
     assert_eq(
@@ -2291,7 +2291,7 @@ def test_dataframe_reindex_change_dtype(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     # Validate reindexes both labels and column names when
     # index=index_labels and columns=column_labels
     assert_eq(
@@ -2334,7 +2334,7 @@ def test_series_float_reindex(copy):
 def test_series_string_reindex(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
     gdf = gd.datasets.randomdata(nrows=6, dtypes={"d": str})
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     assert_eq(pdf["d"].reindex(copy=True), gdf["d"].reindex(copy=copy))
     assert_eq(
         pdf["d"].reindex(index, copy=True), gdf["d"].reindex(index, copy=copy)
@@ -2517,7 +2517,7 @@ def test_select_dtype():
     gdf = gd.datasets.randomdata(
         nrows=20, dtypes={"a": "category", "b": int, "c": float, "d": str}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     assert_eq(pdf.select_dtypes("float64"), gdf.select_dtypes("float64"))
     assert_eq(pdf.select_dtypes(np.float64), gdf.select_dtypes(np.float64))
@@ -2564,7 +2564,7 @@ def test_select_dtype():
         pdf.select_dtypes(exclude=np.number, include=np.number)
 
     gdf = DataFrame({"A": [3, 4, 5], "C": [1, 2, 3], "D": ["a", "b", "c"]})
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     assert_eq(
         pdf.select_dtypes(include=["object", "int", "category"]),
         gdf.select_dtypes(include=["object", "int", "category"]),
@@ -2575,7 +2575,7 @@ def test_select_dtype():
     )
 
     gdf = gd.DataFrame({"a": range(10), "b": range(10, 20)})
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     assert_eq(
         pdf.select_dtypes(include=["category"]),
         gdf.select_dtypes(include=["category"]),
@@ -2611,7 +2611,7 @@ def test_select_dtype():
     gdf = gd.DataFrame(
         {"a": gd.Series([], dtype="int"), "b": gd.Series([], dtype="str")}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     assert_eq(
         pdf.select_dtypes(exclude=["object"]),
         gdf.select_dtypes(exclude=["object"]),
@@ -3305,7 +3305,7 @@ def test_as_column_types():
 
 def test_one_row_head():
     gdf = DataFrame({"name": ["carl"], "score": [100]}, index=[123])
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     head_gdf = gdf.head()
     head_pdf = pdf.head()
@@ -4471,7 +4471,7 @@ def test_df_constructor_dtype(dtype):
 )
 def test_rowwise_ops(data, op):
     gdf = data
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     if op in ("var", "std"):
         expected = getattr(pdf, op)(axis=1, ddof=0)
@@ -4522,7 +4522,7 @@ def test_insert(data):
 
 def test_cov():
     gdf = gd.datasets.randomdata(10)
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     assert_eq(pdf.cov(), gdf.cov())
 
@@ -4578,7 +4578,7 @@ def test_df_sr_binop(gsr, colnames, op):
     gdf = DataFrame(data)
     pdf = pd.DataFrame.from_dict(data)
 
-    psr = gsr.to_pandas()
+    psr = gsr.to_pandas(nullable_pd_dtype=False)
 
     expect = op(pdf, psr)
     got = op(gdf, gsr)
@@ -4617,7 +4617,7 @@ def test_df_sr_binop_col_order(gsr, op):
     gdf = DataFrame(data)
     pdf = pd.DataFrame.from_dict(data)
 
-    psr = gsr.to_pandas()
+    psr = gsr.to_pandas(nullable_pd_dtype=False)
 
     expect = op(pdf, psr).astype("float")
     out = op(gdf, gsr).astype("float")
@@ -5396,7 +5396,7 @@ def test_from_pandas_for_series_nan_as_null(nan_as_null):
 @pytest.mark.parametrize("copy", [True, False])
 def test_df_series_dataframe_astype_copy(copy):
     gdf = DataFrame({"col1": [1, 2], "col2": [3, 4]})
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     assert_eq(
         gdf.astype(dtype="float", copy=copy),
@@ -5405,7 +5405,7 @@ def test_df_series_dataframe_astype_copy(copy):
     assert_eq(gdf, pdf)
 
     gsr = Series([1, 2])
-    psr = gsr.to_pandas()
+    psr = gsr.to_pandas(nullable_pd_dtype=False)
 
     assert_eq(
         gsr.astype(dtype="float", copy=copy),
@@ -5414,7 +5414,7 @@ def test_df_series_dataframe_astype_copy(copy):
     assert_eq(gsr, psr)
 
     gsr = Series([1, 2])
-    psr = gsr.to_pandas()
+    psr = gsr.to_pandas(nullable_pd_dtype=False)
 
     actual = gsr.astype(dtype="int64", copy=copy)
     expected = psr.astype(dtype="int64", copy=copy)
@@ -5428,7 +5428,7 @@ def test_df_series_dataframe_astype_copy(copy):
 @pytest.mark.parametrize("copy", [True, False])
 def test_df_series_dataframe_astype_dtype_dict(copy):
     gdf = DataFrame({"col1": [1, 2], "col2": [3, 4]})
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     assert_eq(
         gdf.astype(dtype={"col1": "float"}, copy=copy),
@@ -5437,7 +5437,7 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     assert_eq(gdf, pdf)
 
     gsr = Series([1, 2])
-    psr = gsr.to_pandas()
+    psr = gsr.to_pandas(nullable_pd_dtype=False)
 
     assert_eq(
         gsr.astype(dtype={None: "float"}, copy=copy),
@@ -5452,7 +5452,7 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
         psr.astype(dtype={"a": "float"}, copy=copy)
 
     gsr = Series([1, 2])
-    psr = gsr.to_pandas()
+    psr = gsr.to_pandas(nullable_pd_dtype=False)
 
     actual = gsr.astype({None: "int64"}, copy=copy)
     expected = psr.astype({None: "int64"}, copy=copy)

@@ -18,7 +18,7 @@ def test_null_series(nrows, dtype):
     data = cudf.Series(np.random.randint(1, 9, size))
     column = data.set_mask(mask)
     sr = cudf.Series(column).astype(dtype)
-    ps = sr.to_pandas()
+    ps = sr.to_pandas(nullable_pd_dtype=False)
     pd.options.display.max_rows = int(nrows)
     psrepr = ps.__repr__()
     psrepr = psrepr.replace("NaN", "null")
