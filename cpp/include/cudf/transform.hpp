@@ -17,6 +17,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <arrow/api.h>
+#include <cudf/detail/transform.hpp>
 
 #include <memory>
 
@@ -83,5 +85,8 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+std::shared_ptr<arrow::Table> to_arrow(table_view input,
+                                       std::vector<std::string> const& column_names = {},
+                                       arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
 /** @} */  // end of group
 }  // namespace cudf

@@ -138,3 +138,15 @@ TEST_F(NaNsToNullFailTest, IntegerType)
 
   EXPECT_THROW(cudf::nans_to_nulls(input_column), cudf::logic_error);
 }
+
+TEST_F(NaNsToNullFailTest, Arrow){
+  std::vector<int32_t> input = {1, 2, 3, 4, 5, 6};
+  auto input_column = cudf::test::fixed_width_column_wrapper<int32_t>(input.begin(), input.end());
+  std::vector<int32_t> input2 = {1, 2, 7, 4, 5, 6};
+  std::vector<bool> mask = {1, 1, 1, 1, 0, 0};
+  auto input_column2 = cudf::test::fixed_width_column_wrapper<int32_t>(input2.begin(), input2.end(), mask.begin());
+  cudf::table_view input_table({input_column, input_column2}); 
+
+  auto arrow_table = cudf::to_arrow(input_table, {"a", "b"});
+  arrow::PrettyPrint(*arrow_table, arrow::PrettyPrintOptions{}, &std::cout);
+}
