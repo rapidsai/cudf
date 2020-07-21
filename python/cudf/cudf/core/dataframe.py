@@ -1135,6 +1135,19 @@ class DataFrame(Frame, Serializable):
             )
         return "\n".join(lines)
 
+    def _clean_nulls_from_dataframe(self, df):
+        for col in df._data:
+            if (
+                self._data[col].has_nulls
+                and not df._data[col].dtype == "O"
+                and not is_datetime_dtype(df._data[col].dtype)
+            ):
+                df[col] = df._data[col].astype("str").fillna("null")
+            else:
+                df[col] = df._data[col]
+
+        return df
+
     def _get_renderable_dataframe(self):
         """
         takes rows and columns from pandas settings or estimation from size.
@@ -1192,15 +1205,8 @@ class DataFrame(Frame, Serializable):
             lower = cudf.concat([lower_left, lower_right], axis=1)
             output = cudf.concat([upper, lower])
 
-        for col in output._data:
-            if (
-                self._data[col].has_nulls
-                and not self._data[col].dtype == "O"
-                and not is_datetime_dtype(self._data[col].dtype)
-            ):
-                output[col] = output._data[col].astype("str").fillna("null")
-            else:
-                output[col] = output._data[col]
+        output = self._clean_nulls_from_dataframe(output)
+        output._index = output._index._clean_nulls_from_index()
 
         return output
 

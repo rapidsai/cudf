@@ -938,8 +938,17 @@ class MultiIndex(Index):
     def argsort(self, ascending=True, **kwargs):
         return self._source_data.argsort(ascending=ascending, **kwargs)
 
+    def fillna(self, value):
+        return MultiIndex.from_frame(self._source_data.fillna(value))
+
     def unique(self):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())
+
+    def _clean_nulls_from_index(self):
+        index_df = self._source_data
+        return MultiIndex.from_frame(
+            index_df._clean_nulls_from_dataframe(index_df), names=self.names
+        )
 
     def memory_usage(self, deep=False):
         n = 0

@@ -972,6 +972,9 @@ class Series(Frame, Serializable):
             preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
+
+        preprocess.index = preprocess.index._clean_nulls_from_index()
+
         if (
             preprocess.nullable
             and not preprocess.dtype == "O"

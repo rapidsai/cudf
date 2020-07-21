@@ -299,6 +299,36 @@ class Index(Frame, Serializable):
         """
         return super().dropna(subset=[self.name])
 
+    def _clean_nulls_from_index(self):
+        if self._values.has_nulls:
+            return cudf.Index(
+                self._values.astype("str").fillna("null"), name=self.name
+            )
+        else:
+            return self.copy()
+
+    def fillna(self, value, downcast=None):
+        """
+        Fill null values with the specified value.
+
+        Parameters
+        ----------
+        value : scalar
+            Scalar value to use to fill nulls. This value cannot be a
+            list-likes.
+
+        downcast : dict, default is None
+            This Parameter is currently NON-FUNCTIONAL.
+
+        Returns
+        -------
+        filled : Index
+        """
+
+        data = self._values.fillna(value)
+
+        return as_index(data, name=self.name)
+
     def take(self, indices):
         """Gather only the specific subset of indices
 
@@ -1576,11 +1606,7 @@ class GenericIndex(Index):
         else:
             preprocess = self
         if preprocess._values.nullable:
-            output = (
-                cudf.Index(preprocess._values.astype("O").fillna("null"))
-                .to_pandas()
-                .__repr__()
-            )
+            output = self._clean_nulls_from_index().to_pandas().__repr__()
             # Fix and correct the class name of the output
             # string by finding first occurrence of "(" in the output
             index_class_split_index = output.find("(")
@@ -1595,22 +1621,22 @@ class GenericIndex(Index):
                 # as we want to preserve single quotes incase
                 # of StringIndex and it is valid to have them.
                 output = output.replace("'", "")
-            # TODO: Handle dtype
         else:
             output = preprocess.to_pandas().__repr__()
 
         lines = output.split("\n")
-        if len(lines) > 1:
-            tmp_meta = lines[-1]
-            prior_to_dtype = lines[-1].split("dtype")[0]
-            lines = lines[:-1]
-            lines.append(prior_to_dtype + "dtype='%s'" % self.dtype)
-            if self.name is not None:
-                lines[-1] = lines[-1] + ", name='%s'" % self.name
-            if "length" in tmp_meta:
-                lines[-1] = lines[-1] + ", length=%d)" % len(self)
-            else:
-                lines[-1] = lines[-1] + ")"
+
+        tmp_meta = lines[-1]
+        dtype_index = lines[-1].rfind(" dtype=")
+        prior_to_dtype = lines[-1][:dtype_index]
+        lines = lines[:-1]
+        lines.append(prior_to_dtype + " dtype='%s'" % self.dtype)
+        if self.name is not None:
+            lines[-1] = lines[-1] + ", name='%s'" % self.name
+        if "length" in tmp_meta:
+            lines[-1] = lines[-1] + ", length=%d)" % len(self)
+        else:
+            lines[-1] = lines[-1] + ")"
 
         return "\n".join(lines)
 
