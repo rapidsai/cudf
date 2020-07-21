@@ -20,4 +20,11 @@ cdef extern from "kafka_consumer.hpp" \
                        string delimiter) except +
 
 cdef class KafkaDatasource(Datasource):
-    pass
+
+    cdef map[string, string] kafka_configs
+    cdef string topic
+    cdef int32_t partition
+    cdef int64_t start_offset
+    cdef int64_t end_offset
+    cdef int32_t batch_timeout
+    cdef string delimiter

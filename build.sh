@@ -210,7 +210,7 @@ if hasArg libcudf_kafka; then
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $REPODIR/cpp/libcudf_kafka
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        make -j${PARALLEL_LEVEL} install_libcudf_kafka VERBOSE=${VERBOSE}
+        make -j${PARALLEL_LEVEL} install VERBOSE=${VERBOSE}
     else
         make -j${PARALLEL_LEVEL} libcudf_kafka VERBOSE=${VERBOSE}
     fi

@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(KAFKA_TESTS LANGUAGES C CXX)
+project(KAFKA_TESTS LANGUAGES C CXX CUDA)
+
+# TODO: Since we have no actual CUDA code in cudf_kafka this should be removed in the future
+# in favor of using FindCUDAToolkit to get the needed CUDA include headers
+if(NOT CMAKE_CUDA_COMPILER)
+  message(SEND_ERROR "CMake cannot locate a CUDA compiler")
+endif(NOT CMAKE_CUDA_COMPILER)
+
 
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
@@ -35,6 +42,10 @@ endfunction(ConfigureTest)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
+
+if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 
 include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"

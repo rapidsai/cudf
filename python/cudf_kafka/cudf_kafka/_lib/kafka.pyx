@@ -2,31 +2,12 @@
 
 from libcpp.string cimport string
 from libcpp.map cimport map
-from libc.stdint cimport int64_t
+from libc.stdint cimport int32_t, int64_t
 from cudf._lib.cpp.io.types cimport datasource
 from libcpp.memory cimport unique_ptr, make_unique
 from cudf_kafka._lib.kafka cimport kafka_consumer
 
 cdef class KafkaDatasource(Datasource):
-
-    def __init__(
-        self,
-        kafka_configs,
-        topic,
-        partition,
-        start_offset,
-        end_offset,
-        batch_timeout,
-        delimiter,
-    ):
-
-        self.kafka_configs = kafka_configs
-        self.topic = topic
-        self.partition = partition
-        self.start_offset = start_offset
-        self.end_offset = end_offset
-        self.batch_timeout = batch_timeout
-        self.delimiter = delimiter
 
     def __cinit__(self,
                   map[string, string] kafka_configs,
