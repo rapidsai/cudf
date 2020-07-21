@@ -1015,16 +1015,16 @@ TEST_F(CsvReaderTest, DatesWithWriter)
 {
   auto filepath = temp_env->get_temp_dir() + "DatesWithWriter.csv";
 
-  auto input_column = column_wrapper<cudf::timestamp_ms, int64_t>{983750400000,
-                                                                  1288483200000,
-                                                                  782611200000,
-                                                                  656208000000,
-                                                                  (long)0,
-                                                                  798163200000,
-                                                                  774144000000,
-                                                                  1149679230400,
-                                                                  1126875750400,
-                                                                  2764800000};
+  auto input_column = column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>{983750400000,
+                                                                                  1288483200000,
+                                                                                  782611200000,
+                                                                                  656208000000,
+                                                                                  (long)0,
+                                                                                  798163200000,
+                                                                                  774144000000,
+                                                                                  1149679230400,
+                                                                                  1126875750400,
+                                                                                  2764800000};
   cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
 
   // TODO need to add a dayfirst flag?

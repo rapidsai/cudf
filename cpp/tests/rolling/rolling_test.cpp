@@ -473,15 +473,15 @@ TEST_F(RollingErrorTest, WindowWrongDtype)
 TEST_F(RollingErrorTest, SumTimestampNotSupported)
 {
   constexpr size_type size{10};
-  fixed_width_column_wrapper<cudf::timestamp_D, int32_t> input_D(
+  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_s, int64_t> input_s(
+  fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ms, int64_t> input_ms(
+  fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_us, int64_t> input_us(
+  fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ns, int64_t> input_ns(
+  fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
 
   EXPECT_THROW(cudf::rolling_window(input_D, 2, 2, 0, cudf::make_sum_aggregation()),

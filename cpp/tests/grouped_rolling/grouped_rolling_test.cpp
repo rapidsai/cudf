@@ -503,15 +503,15 @@ TEST_F(GroupedRollingErrorTest, EmptyInput)
 TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported)
 {
   constexpr size_type size{10};
-  fixed_width_column_wrapper<cudf::timestamp_D, int32_t> input_D(
+  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_s, int64_t> input_s(
+  fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ms, int64_t> input_ms(
+  fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_us, int64_t> input_us(
+  fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ns, int64_t> input_ns(
+  fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
 
   // Construct table-view of grouping keys.
@@ -1161,7 +1161,7 @@ TYPED_TEST(GroupedTimeRangeRollingTest,
 
   // Timestamp column.
   std::vector<int32_t> timestamp_days_vec{0, 2, 3, 4, 5, 7, 0, 0, 1, 2, 3, 3, 0, 1, 2, 3, 3, 3};
-  fixed_width_column_wrapper<cudf::timestamp_D, int32_t> timestamp_days_ascending(
+  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> timestamp_days_ascending(
     timestamp_days_vec.begin(), timestamp_days_vec.end());
 
   this->run_test_col_agg(grouping_keys,
@@ -1201,7 +1201,7 @@ TYPED_TEST(GroupedTimeRangeRollingTest,
 
   // Timestamp column.
   std::vector<int32_t> timestamp_days_vec{0, 2, 3, 4, 5, 7, 0, 0, 1, 2, 3, 3, 0, 1, 2, 3, 3, 3};
-  fixed_width_column_wrapper<cudf::timestamp_D, int32_t> timestamp_days_descending(
+  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> timestamp_days_descending(
     timestamp_days_vec.rbegin(), timestamp_days_vec.rend());
   this->run_test_col_agg(grouping_keys,
                          timestamp_days_descending,
@@ -1229,7 +1229,7 @@ TYPED_TEST(GroupedTimeRangeRollingTest, SimplePartitionedStaticWindowsWithNoGrou
 
   // Timestamp column.
   std::vector<int32_t> timestamp_days_vec{0, 2, 3, 4, 5, 7};
-  fixed_width_column_wrapper<cudf::timestamp_D, int32_t> timestamp_days_ascending(
+  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> timestamp_days_ascending(
     timestamp_days_vec.begin(), timestamp_days_vec.end());
 
   this->run_test_col_agg(grouping_keys,
