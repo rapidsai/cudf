@@ -1432,9 +1432,6 @@ class RangeIndex(Index):
     @copy_docstring(Frame.size)
     @property
     def size(self):
-        """
-        Return the number of elements in the underlying data.
-        """
         return max(0, self._stop - self._start)
 
     def find_label_range(self, first, last):

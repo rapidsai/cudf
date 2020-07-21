@@ -82,13 +82,13 @@ class Frame(libcudf.table.Table):
 
         >>> df = cudf.DataFrame({'a': [10, 11, 12],
         ...         'b': ['hello', 'rapids', 'ai']})
-        >>> df.size
-        3
         >>> df
             a       b
         0  10   hello
         1  11  rapids
         2  12      ai
+        >>> df.size
+        6
         >>> df.index
         RangeIndex(start=0, stop=3)
         >>> df.index.size
@@ -132,9 +132,7 @@ class Frame(libcudf.table.Table):
         >>> midx.size
         5
         """
-        if self._num_columns == 0:
-            return 0
-        return self._num_rows
+        return self._num_columns * self._num_rows
 
     @property
     def empty(self):
