@@ -1652,26 +1652,20 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
+                    native_dtype = dtype
                     if dtype is None and pd.api.types.infer_dtype(
                         arbitrary
                     ) in ("mixed", "mixed-integer"):
-                        data = np.asarray(arbitrary, dtype="object")
-                        try:
-                            data = as_column(
-                                data, dtype=dtype, nan_as_null=nan_as_null
-                            )
-                        except BaseException:
-                            raise TypeError(
-                                "CUDF doesn't support incompatible mixed types"
-                            )
-                    else:
-                        data = np.asarray(
-                            arbitrary,
-                            dtype=dtype if dtype is None else np.dtype(dtype),
-                        )
-                        data = as_column(
-                            data, dtype=dtype, nan_as_null=nan_as_null
-                        )
+                        native_dtype = "object"
+                    data = np.asarray(
+                        arbitrary,
+                        dtype=native_dtype
+                        if native_dtype is None
+                        else np.dtype(native_dtype),
+                    )
+                    data = as_column(
+                        data, dtype=dtype, nan_as_null=nan_as_null
+                    )
     return data
 
 
