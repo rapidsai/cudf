@@ -879,3 +879,53 @@ def test_multiindex_to_arrow():
         match=re.escape("MultiIndex.to_arrow() is not yet implemented"),
     ):
         midx.to_arrow()
+
+
+@pytest.mark.parametrize(
+    "pdi, fill_value, expected",
+    [
+        (
+            pd.MultiIndex(
+                levels=[[1, 3, 4, None], [1, 2, 5]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+            5,
+            pd.MultiIndex(
+                levels=[[1, 3, 4, 5], [1, 2, 5]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+        ),
+        (
+            pd.MultiIndex(
+                levels=[[1, 3, 4, None], [1, None, 5]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+            100,
+            pd.MultiIndex(
+                levels=[[1, 3, 4, 100], [1, 100, 5]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+        ),
+        (
+            pd.MultiIndex(
+                levels=[["a", "b", "c", None], ["1", None, "5"]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+            "100",
+            pd.MultiIndex(
+                levels=[["a", "b", "c", "100"], ["1", "100", "5"]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+        ),
+    ],
+)
+def test_multiIndex_fillna(pdi, fill_value, expected):
+    gdi = cudf.from_pandas(pdi)
+
+    assert_eq(expected, gdi.fillna(fill_value))
