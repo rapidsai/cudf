@@ -54,12 +54,36 @@ std::unique_ptr<cudf::column> normalize_spaces(
 /**
  * @brief Normalizes strings characters for tokenizing.
  *
- * The strings are normalized by adding spaces around punctuation,
- * converting whitespace characters to spaces and optionally converting
- * to lower-case and removing accents from characters.
+ * This uses the normalizer that is built into the nvtext::subword_tokenize function
+ * which includes:
  *
- * Also, padding (spaces) are added around characters in the CJK Unicode
- * block: https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)
+ * - adding padding around punctuation (unicode category starts with "P")
+ *   as well as certain ASCII symbols like "^" and "$"
+ * - adding padding around the [CJK Unicode block
+ * characters](https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block))
+ * - changing whitespace (e.g. `"\t", "\n", "\r"`) to just space `" "`
+ * - removing control characters (unicode categories "Cc" and "Cf")
+ *
+ * The padding process here adds a single space before and after the character.
+ * Details on _unicode category_ can be found here:
+ * https://unicodebook.readthedocs.io/unicode.html#categories
+ *
+ * The `do_lower_case` parameter will lower-case and remove accents from characters.
+ * If `true`, lower-casing must also remove the accents -- the accents cannot be removed
+ * from upper-case characters without lower-casing it and lower-casing cannot be performed
+ * without also removing accents. However, if the accented character is already lower-case,
+ * then only the accent is removed.
+ *
+ * @code{.pseudo}
+ * s = ["éâîô\teaio", "ĂĆĖÑÜ", "ACENU", "$24.08", "[a,bb]"]
+ * s1 = normalize_characters(s,true)
+ * s1 is now ["eaio eaio", "acenu", "acenu", " $ 24 . 08", " [ a , bb ] "]
+ * s2 = normalize_characters(s,false)
+ * s2 is now ["éâîô eaio", "ĂĆĖÑÜ", "ACENU", " $ 24 . 08", " [ a , bb ] "]
+ * @endcode
+ *
+ * A null input element at row `i` produces a corresponding null entry
+ * for row `i` in the output column.
  *
  * This function requires 8x the number of bytes in the input strings
  * column as working memory.
