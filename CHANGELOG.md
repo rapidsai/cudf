@@ -194,7 +194,8 @@
 - PR #5692 Fix compilation issue with gcc 7.4.0 and CUDA 10.1
 - PR #5693 Add fix missing from PR 5656 to update local docker image to py3.7
 - PR #5703 Small fix for dataframe constructor with cuda array interface objects that don't have `descr` field
-- PR #5719 Fix Frame._concat() with categorical columns
+- PR #5719 Fix `Frame._concat()` with categorical columns
+- PR #5727 Fix `Index.__repr__` to allow representation of null values
 
 # cuDF 0.14.0 (03 Jun 2020)
 
