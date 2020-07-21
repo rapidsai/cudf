@@ -13,7 +13,7 @@ import versioneer
 
 install_requires = ["cudf", "cython"]
 
-cython_files = ["cudf_kafka/**/*.pyx"]
+cython_files = ["cudf_kafka/_lib/*.pyx"]
 
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
 if not CUDA_HOME:
@@ -97,9 +97,9 @@ setup(
             profile=False, language_level=3, embedsignature=True
         ),
     ),
-    packages=find_packages(include=["cudf", "cudf.*"]),
+    packages=find_packages(include=["cudf_kafka", "cudf_kafka.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf._lib*", "cudf._cuda*"]), ["*.pxd"],
+        find_packages(include=["cudf_kafka._lib*"]), ["*.pxd"],
     ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,

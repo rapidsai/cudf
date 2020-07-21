@@ -220,8 +220,9 @@ if hasArg libcudf_kafka; then
 
     cd ${REPODIR}/python/cudf_kafka
     if [[ ${INSTALL_TARGET} != "" ]]; then
+        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace
         python setup.py install --single-version-externally-managed --record=record.txt
     else
-        python setup.py build_ext --inplace
+        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
     fi
 fi

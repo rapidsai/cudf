@@ -103,9 +103,9 @@ fi
 
 logger "Build libcudf_kafka..."
 if [[ ${BUILD_MODE} == "pull-request" ]]; then
-    $WORKSPACE/build.sh clean libcudf_kafka tests
+    $WORKSPACE/build.sh libcudf_kafka tests
 else
-    $WORKSPACE/build.sh clean libcudf_kafka tests -l
+    $WORKSPACE/build.sh libcudf_kafka tests -l
 fi
 
 ################################################################################
