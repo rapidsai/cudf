@@ -322,7 +322,7 @@ endif(PER_THREAD_DEFAULT_STREAM)
 
 if(BUILD_TESTS)
     include(CTest)
-    include(ConfigureGoogleTest)
+    find_package(GTest REQUIRED)
 
     if(GTEST_FOUND)
         message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
