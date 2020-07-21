@@ -133,6 +133,7 @@ set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
 
 find_library(CUDF_LIBRARY "cudf"
     HINTS "$ENV{CUDF_ROOT}"
+          "$ENV{CUDF_ROOT}/lib"
           "$ENV{CONDA_PREFIX}/lib"
           "../../../../cpp/build")
 
@@ -226,5 +227,3 @@ endif(PER_THREAD_DEFAULT_STREAM)
 # - link libraries --------------------------------------------------------------------------------
 
 target_link_libraries(cudfjni cudf ${CUDART_LIBRARY} cuda nvrtc)
-
-
