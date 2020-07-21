@@ -1111,7 +1111,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
   using TypeLhs = cudf::timestamp_D;
   using TypeRhs = cudf::timestamp_D;
 
-  cudf::test::fixed_width_column_wrapper<TypeLhs, int32_t> ts_col(
+  cudf::test::fixed_width_column_wrapper<TypeLhs, TypeLhs::rep> ts_col(
     {
       999,    // Random nullable field
       0,      // This is the UNIX epoch - 1970-01-01
@@ -1327,7 +1327,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_tsD_tsD_N
   using TypeLhs = cudf::timestamp_D;
   using TypeRhs = cudf::timestamp_D;
 
-  cudf::test::fixed_width_column_wrapper<TypeLhs, int32_t> lhs_col({
+  cudf::test::fixed_width_column_wrapper<TypeLhs, TypeLhs::rep> lhs_col({
     0,      // This is the UNIX epoch - 1970-01-01
     44376,  // 2091-07-01 00:00:00 GMT
     47695,  // 2100-08-02 00:00:00 GMT
@@ -1335,7 +1335,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_tsD_tsD_N
     22270,  // 2030-12-22 00:00:00 GMT
   });
   ASSERT_EQ(column_view{lhs_col}.nullable(), false);
-  cudf::test::fixed_width_column_wrapper<TypeRhs, int32_t> rhs_col({
+  cudf::test::fixed_width_column_wrapper<TypeRhs, TypeRhs::rep> rhs_col({
     0,      // This is the UNIX epoch - 1970-01-01
     44380,  // Mismatched
     47695,  // 2100-08-02 00:00:00 GMT
@@ -1649,7 +1649,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI64_SI32_SI8)
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
 {
-  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, int32_t> lhs_col(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> lhs_col(
     {
       0,      // This is the UNIX epoch - 1970-01-01
       44376,  // 2091-07-01 00:00:00 GMT
@@ -1658,7 +1658,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
       22270,  // 2030-12-22 00:00:00 GMT
     },
     {true, false, true, true, false});
-  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, int32_t> rhs_col(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> rhs_col(
     {
       0,      // This is the UNIX epoch - 1970-01-01
       44380,  // Mismatched
@@ -1672,10 +1672,11 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
     lhs_col, rhs_col, cudf::binary_operator::NULL_MIN, data_type(type_to_id<cudf::timestamp_D>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, int32_t>(
-                         {0, 44380, 47695, 66068, 0}, {true, true, true, true, false}),
-                       true);
+  expect_columns_equal(
+    *op_col,
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>(
+      {0, 44380, 47695, 66068, 0}, {true, true, true, true, false}),
+    true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI32_SI64_SI8)
