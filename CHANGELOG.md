@@ -129,6 +129,7 @@
 - PR #5713 Remove old NVTX utilities
 - PR #5720 Replace owning raw pointers with std::unique_ptr
 - PR #5702 Add inherited methods to python docs and other docs fixes
+- PR #5733 Add support for `size` property in `Series`
 
 ## Bug Fixes
 
