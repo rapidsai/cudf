@@ -21,7 +21,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> encode(
                                                   null_equality::EQUAL,
                                                   mr,
                                                   stream)
-                      ->release();  // true == nulls are equal
+                      ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
   if (input_column.has_nulls()) {
