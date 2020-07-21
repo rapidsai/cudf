@@ -128,6 +128,6 @@ set -e
 
 rm ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 cd ${WORKSPACE}
-mv ${GBENCH_BENCHMARKS_DIR}/*.json ${WORKSPACE}/tmp/benchmark/
-python GBenchToASV.py -d ${WORKSPACE}/tmp/benchmark/ -t ${ASVRESULTS_DIR} -n libcudf -b branch-${MINOR_VERSION} 
+mv ${GBENCH_BENCHMARKS_DIR}/*.json /results
+python GBenchToASV.py -d /results -t ${ASVRESULTS_DIR} -n libcudf -b branch-${MINOR_VERSION} 
 
