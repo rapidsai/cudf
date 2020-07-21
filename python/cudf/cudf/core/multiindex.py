@@ -942,6 +942,58 @@ class MultiIndex(Index):
         return self._source_data.argsort(ascending=ascending, **kwargs)
 
     def fillna(self, value):
+        """
+        Fill null values with the specified value.
+
+        Parameters
+        ----------
+        value : scalar
+            Scalar value to use to fill nulls. This value cannot be a
+            list-likes.
+
+        Returns
+        -------
+        filled : MultiIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.MultiIndex(
+        ...         levels=[["a", "b", "c", None], ["1", None, "5"]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...       )
+        >>> index
+        MultiIndex(levels=[0       a
+        1       b
+        2       c
+        3    None
+        dtype: object, 0       1
+        1    None
+        2       5
+        dtype: object],
+        codes=   x  y
+        0  0  0
+        1  0  2
+        2  1  1
+        3  2  1
+        4  3  0)
+        >>> index.fillna('hello')
+        MultiIndex(levels=[0        a
+        1        b
+        2        c
+        3    hello
+        dtype: object, 0        1
+        1        5
+        2    hello
+        dtype: object],
+        codes=   x  y
+        0  0  0
+        1  0  1
+        2  1  2
+        3  2  2
+        4  3  0)
+        """
         return MultiIndex.from_frame(self._source_data.fillna(value))
 
     def unique(self):

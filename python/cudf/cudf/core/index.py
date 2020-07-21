@@ -371,7 +371,20 @@ class Index(Frame, Serializable):
         Returns
         -------
         filled : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, 2, None, 4])
+        >>> index
+        Int64Index([1, 2, null, 4], dtype='int64')
+        >>> index.fillna(3)
+        Int64Index([1, 2, 3, 4], dtype='int64')
         """
+        if downcast is not None:
+            raise NotImplementedError(
+                "`downcast` parameter is not yet supported"
+            )
 
         data = self._values.fillna(value)
 
