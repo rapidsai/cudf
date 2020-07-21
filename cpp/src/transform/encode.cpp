@@ -9,7 +9,7 @@
 namespace cudf {
 namespace detail {
 
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> codify(
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> encode(
   column_view const& input_column, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
   // side effects of this function were are now dependent on:
@@ -47,10 +47,10 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> codify(
 }
 }  // namespace detail
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> codify(
+std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
   cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
 {
-  return detail::codify(input, mr, 0);
+  return detail::encode(input, mr, 0);
 }
 
 }  // namespace cudf

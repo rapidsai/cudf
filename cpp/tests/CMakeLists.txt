@@ -577,10 +577,10 @@ set(DICTIONARY_TEST_SRC
 ###################################################################################################
 # - codfy tests -----------------------------------------------------------------------------------
 
-set(CODIFY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/codify/codify_tests.cpp")
+set(ENCODE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/encode/encode_tests.cpp")
 
-ConfigureTest(CODIFY_TEST "${CODIFY_TEST_SRC}")
+ConfigureTest(ENCODE_TEST "${ENCODE_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################

@@ -43,7 +43,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
 
   // this returns a column with no null entries
   // - it appears to ignore the null entries in the input and tries to place the value regardless
-  auto codified       = cudf::detail::codify(input_column, mr, stream);
+  auto codified       = cudf::detail::encode(input_column, mr, stream);
   auto keys_column    = std::move(codified.first);
   auto indices_column = std::move(codified.second);
 
