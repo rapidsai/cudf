@@ -373,8 +373,8 @@ class MultiIndex(Index):
                 )
             ):
                 raise TypeError(
-                    "values need to be a Multi-Index or set/list-like tuple \
-                        squences  when `level=None`."
+                    "values need to be a Multi-Index or set/list-like tuple "
+                    "squences  when `level=None`."
                 )
             else:
                 values_idx = cudf.MultiIndex.from_tuples(
@@ -643,9 +643,6 @@ class MultiIndex(Index):
         return result
 
     def serialize(self):
-        """Serialize into pickle format suitable for file storage or network
-        transmission.
-        """
         header = {}
         header["type-serialized"] = pickle.dumps(type(self))
         header["names"] = pickle.dumps(self.names)
@@ -656,8 +653,6 @@ class MultiIndex(Index):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert from pickle format into Index
-        """
         names = pickle.loads(header["names"])
 
         source_data_typ = pickle.loads(
@@ -924,6 +919,10 @@ class MultiIndex(Index):
 
     @property
     def is_monotonic_increasing(self):
+        """
+        Return if the index is monotonic increasing
+        (only equal or increasing) values.
+        """
         if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = self._is_sorted(
                 ascending=None, null_position=None
@@ -932,6 +931,10 @@ class MultiIndex(Index):
 
     @property
     def is_monotonic_decreasing(self):
+        """
+        Return if the index is monotonic decreasing
+        (only equal or decreasing) values.
+        """
         if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = self._is_sorted(
                 ascending=[False] * len(self.levels), null_position=None

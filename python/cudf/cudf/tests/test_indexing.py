@@ -698,7 +698,7 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     expect = do_slice(gdf.to_pandas())
     got = do_slice(gdf).to_pandas()
 
-    pd.testing.assert_frame_equal(expect, got)
+    assert_eq(expect, got)
 
 
 def test_dataframe_boolean_mask_with_None():

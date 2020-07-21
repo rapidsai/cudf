@@ -39,6 +39,7 @@
 - PR #5654 Adding support for `cudf.DataFrame.sample` and `cudf.Series.sample`
 - PR #5607 Add Java bindings for duration types
 - PR #5612 Add `is_hex` strings API
+- PR #5659 Added support for rapids-compose for Java bindings and other enhancements
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
 - PR #5674 Support JIT backend on PowerPC64
@@ -124,9 +125,13 @@
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
+- PR #5687 Change strings::split_record to return a lists column
 - PR #5708 Add support for `dummy_na` in `get_dummies`
 - PR #5709 Update java build to help cu-spacial with java bindings
 - PR #5713 Remove old NVTX utilities
+- PR #5726 Replace use of `assert_frame_equal` in tests with `assert_eq`
+- PR #5720 Replace owning raw pointers with std::unique_ptr
+- PR #5702 Add inherited methods to python docs and other docs fixes
 
 ## Bug Fixes
 
@@ -167,6 +172,7 @@
 - PR #5489 Fix drop_nulls/boolean_mask corruption for large columns
 - PR #5504 Remove some java assertions that are not needed
 - PR #5516 Update gpuCI image in local build script
+- PR #5529 Fix issue with negative timestamp in orc writer
 - PR #5523 Handle `dtype` of `Buffer` objects when not passed explicitly
 - PR #5534 Fix the java build around type_id
 - PR #5564 Fix CudfEngine.read_metadata API in dask_cudf
@@ -189,6 +195,7 @@
 - PR #5692 Fix compilation issue with gcc 7.4.0 and CUDA 10.1
 - PR #5693 Add fix missing from PR 5656 to update local docker image to py3.7
 - PR #5703 Small fix for dataframe constructor with cuda array interface objects that don't have `descr` field
+- PR #5719 Fix Frame._concat() with categorical columns
 
 # cuDF 0.14.0 (03 Jun 2020)
 

@@ -746,7 +746,7 @@ def test_dataframe_append_empty():
 
     assert len(gdf["newcol"]) == len(pdf)
     assert len(pdf["newcol"]) == len(pdf)
-    pd.testing.assert_frame_equal(gdf.to_pandas(), pdf)
+    assert_eq(gdf, pdf)
 
 
 def test_dataframe_setitem_from_masked_object():
@@ -795,7 +795,7 @@ def test_dataframe_append_to_empty():
     gdf["a"] = []
     gdf["b"] = [1, 2, 3]
 
-    pd.testing.assert_frame_equal(gdf.to_pandas(), pdf)
+    assert_eq(gdf, pdf)
 
 
 def test_dataframe_setitem_index_len1():
@@ -975,7 +975,7 @@ def test_concat_empty_dataframe(df_1, df_2):
     # ignoring dtypes as pandas upcasts int to float
     # on concatenation with empty dataframes
 
-    pd.testing.assert_frame_equal(got.to_pandas(), expect, check_dtype=False)
+    assert_eq(got, expect, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -1012,7 +1012,7 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
     for col in numeric_cols:
         got[col] = got[col].astype(np.float64).fillna(np.nan)
 
-    pd.testing.assert_frame_equal(got.to_pandas(), expect, check_dtype=False)
+    assert_eq(got, expect, check_dtype=False)
 
 
 @pytest.mark.parametrize("ser_1", [pd.Series([1, 2, 3]), pd.Series([])])
@@ -1021,7 +1021,7 @@ def test_concat_empty_series(ser_1, ser_2):
     got = gd.concat([Series(ser_1), Series(ser_2)])
     expect = pd.concat([ser_1, ser_2])
 
-    pd.testing.assert_series_equal(got.to_pandas(), expect)
+    assert_eq(got, expect)
 
 
 def test_concat_with_axis():
@@ -1122,13 +1122,13 @@ def test_from_pandas():
     gdf = gd.DataFrame.from_pandas(df)
     assert isinstance(gdf, gd.DataFrame)
 
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+    assert_eq(df, gdf)
 
     s = df.x
     gs = gd.Series.from_pandas(s)
     assert isinstance(gs, gd.Series)
 
-    pd.testing.assert_series_equal(s, gs.to_pandas())
+    assert_eq(s, gs)
 
 
 @pytest.mark.parametrize("dtypes", [int, float])
@@ -1179,33 +1179,33 @@ def test_from_gpu_matrix():
     df = pd.DataFrame(h_ary, columns=["a", "b", "c"])
     assert isinstance(gdf, gd.DataFrame)
 
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+    assert_eq(df, gdf)
 
     gdf = gd.DataFrame.from_gpu_matrix(d_ary)
     df = pd.DataFrame(h_ary)
     assert isinstance(gdf, gd.DataFrame)
 
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+    assert_eq(df, gdf)
 
     gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=["a", "b"])
     df = pd.DataFrame(h_ary, index=["a", "b"])
     assert isinstance(gdf, gd.DataFrame)
 
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+    assert_eq(df, gdf)
 
     gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=0)
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=0, drop=False)
     assert isinstance(gdf, gd.DataFrame)
 
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+    assert_eq(df, gdf)
 
     gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=1)
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=1, drop=False)
     assert isinstance(gdf, gd.DataFrame)
 
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+    assert_eq(df, gdf)
 
 
 def test_from_gpu_matrix_wrong_dimensions():
@@ -1233,8 +1233,8 @@ def test_index_in_dataframe_constructor():
     a = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0])
     b = gd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0])
 
-    pd.testing.assert_frame_equal(a, b.to_pandas())
-    assert pd.testing.assert_frame_equal(a.loc[4:], b.loc[4:].to_pandas())
+    assert_eq(a, b)
+    assert_eq(a.loc[4:], b.loc[4:])
 
 
 dtypes = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
@@ -1255,7 +1255,7 @@ def test_from_arrow(nelem, data_type):
     gdf = gd.DataFrame.from_arrow(padf)
     assert isinstance(gdf, gd.DataFrame)
 
-    pd.testing.assert_frame_equal(df, gdf.to_pandas())
+    assert_eq(df, gdf)
 
     s = pa.Array.from_pandas(df.a)
     gs = gd.Series.from_arrow(s)
@@ -1359,7 +1359,7 @@ def test_from_arrow_missing_categorical():
     gd_cat = gd.Series(pa_cat)
 
     assert isinstance(gd_cat, gd.Series)
-    pd.testing.assert_series_equal(
+    assert_eq(
         pd.Series(pa_cat.to_pandas()),  # PyArrow returns a pd.Categorical
         gd_cat.to_pandas(),
     )
