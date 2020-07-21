@@ -294,8 +294,9 @@ def test_generic_index(length, dtype):
         ),
         (
             cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[ms]")),
-            "DatetimeIndex([1970-01-01 00:00:00.010, 1970-01-01 00:00:00.020,"
-            "\n       1970-01-01 00:00:00.030, null],\n      "
+            "DatetimeIndex([1970-01-01 00:00:00.010000, "
+            "1970-01-01 00:00:00.020000,"
+            "\n       1970-01-01 00:00:00.030000, null],\n      "
             "dtype='datetime64[ms]')",
         ),
         (
@@ -310,3 +311,170 @@ def test_generic_index_null(index, expected_repr):
     actual_repr = index.__repr__()
 
     assert expected_repr == actual_repr
+
+
+@pytest.mark.parametrize(
+    "df,pandas_special_case",
+    [
+        (pd.DataFrame({"a": [1, 2, 3]}, index=[10, 20, None]), False),
+        (
+            pd.DataFrame(
+                {
+                    "a": [1, None, 3],
+                    "string_col": ["hello", "world", "rapids"],
+                },
+                index=[None, "a", "b"],
+            ),
+            True,
+        ),
+        (pd.DataFrame([], index=[None, "a", "b"]), False),
+        (pd.DataFrame({"aa": [None, None]}, index=[None, None]), False),
+        (pd.DataFrame({"aa": [1, 2, 3]}, index=[None, None, None]), False),
+        (
+            pd.DataFrame(
+                {"aa": [None, 2, 3]},
+                index=np.array([1, None, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {"aa": [None, 2, 3]},
+                index=np.array([1, None, None], dtype="datetime64[s]"),
+            ),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {"aa": [None, None, None]},
+                index=np.array([None, None, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {"aa": [1, None, 3]},
+                index=np.array([10, 15, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {"a": [1, 2, None], "v": [10, None, 22], "p": [100, 200, 300]}
+            ).set_index(["a", "v"]),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": [1, 2, None],
+                    "v": ["n", "c", "a"],
+                    "p": [None, None, None],
+                }
+            ).set_index(["a", "v"]),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": np.array([1, None, None], dtype="datetime64[ns]"),
+                    "v": ["n", "c", "a"],
+                    "p": [None, None, None],
+                }
+            ).set_index(["a", "v"]),
+            False,
+        ),
+    ],
+)
+def test_dataframe_null_index_repr(df, pandas_special_case):
+    pdf = df
+    gdf = cudf.from_pandas(pdf)
+
+    expected_repr = (
+        pdf.__repr__().replace("NaN", "null").replace("NaT", "null")
+    )
+    actual_repr = gdf.__repr__()
+
+    if pandas_special_case:
+        # Pandas inconsistently print StringIndex null values
+        # as `None` at some places and `NaN` at few other places
+        # Whereas cudf is consistent with strings `null` values
+        # to be printed as `None` everywhere.
+        actual_repr = gdf.__repr__().replace("None", "null")
+
+    assert expected_repr.split() == actual_repr.split()
+
+
+@pytest.mark.parametrize(
+    "sr,pandas_special_case",
+    [
+        (pd.Series([1, 2, 3], index=[10, 20, None]), False),
+        (pd.Series([1, None, 3], name="a", index=[None, "a", "b"]), True),
+        (pd.Series(None, index=[None, "a", "b"], dtype="float"), True),
+        (pd.Series([None, None], name="aa", index=[None, None]), False),
+        (pd.Series([1, 2, 3], index=[None, None, None]), False),
+        (
+            pd.Series(
+                [None, 2, 3],
+                index=np.array([1, None, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.Series(
+                [None, None, None],
+                index=np.array([None, None, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.Series(
+                [1, None, 3],
+                index=np.array([10, 15, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {"a": [1, 2, None], "v": [10, None, 22], "p": [100, 200, 300]}
+            ).set_index(["a", "v"])["p"],
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": [1, 2, None],
+                    "v": ["n", "c", "a"],
+                    "p": [None, None, None],
+                }
+            ).set_index(["a", "v"])["p"],
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": np.array([1, None, None], dtype="datetime64[ns]"),
+                    "v": ["n", "c", "a"],
+                    "p": [None, None, None],
+                }
+            ).set_index(["a", "v"])["p"],
+            False,
+        ),
+    ],
+)
+def test_series_null_index_repr(sr, pandas_special_case):
+    psr = sr
+    gsr = cudf.from_pandas(psr)
+
+    expected_repr = (
+        psr.__repr__().replace("NaN", "null").replace("NaT", "null")
+    )
+    actual_repr = gsr.__repr__()
+
+    if pandas_special_case:
+        # Pandas inconsistently print StringIndex null values
+        # as `None` at some places and `NaN` at few other places
+        # Whereas cudf is consistent with strings `null` values
+        # to be printed as `None` everywhere.
+        actual_repr = gsr.__repr__().replace("None", "null")
+    assert expected_repr.split() == actual_repr.split()

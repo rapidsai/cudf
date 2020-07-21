@@ -1981,6 +1981,17 @@ class DatetimeIndex(GenericIndex):
         )
         return as_index(out_column, name=self.name)
 
+    def _clean_nulls_from_index(self):
+        if self._values.has_nulls:
+            return cudf.Index(
+                column.as_column(
+                    self.to_pandas().fillna("null").astype("str")
+                ),
+                name=self.name,
+            )
+        else:
+            return self.copy()
+
 
 class CategoricalIndex(GenericIndex):
     """An categorical of orderable values that represent the indices of another
@@ -2185,6 +2196,14 @@ class StringIndex(GenericIndex):
     @property
     def _constructor_expanddim(self):
         return cudf.MultiIndex
+
+    def _clean_nulls_from_index(self):
+        if self._values.has_nulls:
+            return cudf.Index(
+                self._values.astype("str").fillna("None"), name=self.name
+            )
+        else:
+            return self.copy()
 
 
 def as_index(arbitrary, **kwargs):

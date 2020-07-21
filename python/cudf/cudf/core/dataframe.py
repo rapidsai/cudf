@@ -1125,7 +1125,7 @@ class DataFrame(Frame, Serializable):
         preprocessing converts NaT input values from numpy or pandas into
         null.
         """
-        output = output.to_pandas().__repr__().replace(" NaT", "null")
+        output = output.to_pandas().__repr__()
         lines = output.split("\n")
 
         if lines[-1].startswith("["):
@@ -1143,6 +1143,12 @@ class DataFrame(Frame, Serializable):
                 and not is_datetime_dtype(df._data[col].dtype)
             ):
                 df[col] = df._data[col].astype("str").fillna("null")
+            elif self._data[col].has_nulls and is_datetime_dtype(
+                df._data[col].dtype
+            ):
+                df[col] = column.as_column(
+                    df[col].to_pandas().fillna("null").astype("str")
+                )
             else:
                 df[col] = df._data[col]
 
