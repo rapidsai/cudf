@@ -7,11 +7,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from pandas.util.testing import (
-    assert_frame_equal,
-    assert_index_equal,
-    assert_series_equal,
-)
 
 import cudf
 from cudf.core import DataFrame, Series
@@ -164,7 +159,7 @@ def test_dt_series(data, field):
     gdf_data = Series(pd_data)
     base = getattr(pd_data.dt, field)
     test = getattr(gdf_data.dt, field).to_pandas().astype("int64")
-    assert_series_equal(base, test)
+    assert_eq(base, test)
 
 
 @pytest.mark.parametrize("data", [data1()])
@@ -172,9 +167,7 @@ def test_dt_series(data, field):
 def test_dt_index(data, field):
     pd_data = data.copy()
     gdf_data = DatetimeIndex(pd_data)
-    assert_index_equal(
-        getattr(gdf_data, field).to_pandas(), getattr(pd_data, field)
-    )
+    assert_eq(getattr(gdf_data, field), getattr(pd_data, field))
 
 
 def test_setitem_datetime():
@@ -214,34 +207,34 @@ def test_issue_165():
 
     base = df_pandas.query("dates==@start_date")
     test = df_cudf.query("dates==@start_date")
-    assert_frame_equal(base, test.to_pandas())
+    assert_eq(base, test)
     assert len(test) > 0
 
     mask = df_cudf.dates == start_date
     base_mask = df_pandas.dates == start_date
-    assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
+    assert_eq(mask, base_mask, check_names=False)
     assert mask.to_pandas().sum() > 0
 
     start_date_ts = pd.Timestamp(start_date)
     test = df_cudf.query("dates==@start_date_ts")
     base = df_pandas.query("dates==@start_date_ts")
-    assert_frame_equal(base, test.to_pandas())
+    assert_eq(base, test)
     assert len(test) > 0
 
     mask = df_cudf.dates == start_date_ts
     base_mask = df_pandas.dates == start_date_ts
-    assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
+    assert_eq(mask, base_mask, check_names=False)
     assert mask.to_pandas().sum() > 0
 
     start_date_np = np.datetime64(start_date_ts, "ns")
     test = df_cudf.query("dates==@start_date_np")
     base = df_pandas.query("dates==@start_date_np")
-    assert_frame_equal(base, test.to_pandas())
+    assert_eq(base, test)
     assert len(test) > 0
 
     mask = df_cudf.dates == start_date_np
     base_mask = df_pandas.dates == start_date_np
-    assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
+    assert_eq(mask, base_mask, check_names=False)
     assert mask.to_pandas().sum() > 0
 
 

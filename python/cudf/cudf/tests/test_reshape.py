@@ -61,9 +61,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     # cuDF's melt makes it Categorical because it doesn't support strings
     expect["variable"] = expect["variable"].astype("category")
 
-    pd.testing.assert_frame_equal(expect, got.to_pandas())
+    assert_eq(expect, got)
 
-    pd.testing.assert_frame_equal(expect, got_from_melt_method.to_pandas())
+    assert_eq(expect, got_from_melt_method)
 
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
