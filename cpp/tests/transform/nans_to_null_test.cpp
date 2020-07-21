@@ -22,6 +22,8 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/encode.hpp>
 
 template <typename T>
 struct NaNsToNullTest : public cudf::test::BaseFixture {
@@ -141,12 +143,22 @@ TEST_F(NaNsToNullFailTest, IntegerType)
 
 TEST_F(NaNsToNullFailTest, Arrow){
   std::vector<int32_t> input = {1, 2, 3, 4, 5, 6};
-  auto input_column = cudf::test::fixed_width_column_wrapper<int32_t>(input.begin(), input.end());
+  auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>(input.begin(), input.end());
   std::vector<int32_t> input2 = {1, 2, 7, 4, 5, 6};
   std::vector<bool> mask = {1, 1, 1, 1, 0, 0};
-  auto input_column2 = cudf::test::fixed_width_column_wrapper<int32_t>(input2.begin(), input2.end(), mask.begin());
-  cudf::table_view input_table({input_column, input_column2}); 
+  auto col2 = cudf::test::fixed_width_column_wrapper<int32_t>(input2.begin(), input2.end(), mask.begin());
+  auto valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  cudf::test::lists_column_wrapper<int> col3{{{0, 1, 2, 3}, valids}, {{4, 6}, valids}, {{4, 6}, valids}, {{7, 11}, valids}, {{9, 18}, valids}, {{1, 2}, valids}};
+  std::vector<std::string> strings{
+    "", "this", "is", "a", "column", "of"};
+  cudf::test::strings_column_wrapper col4(strings.begin(), strings.end());
+   cudf::test::strings_column_wrapper str(
+    {"fff", "aaa", "", "fff", "ccc", "aaa"});
+  auto col5 = cudf::dictionary::encode(str);
 
-  auto arrow_table = cudf::to_arrow(input_table, {"a", "b"});
+  cudf::table_view input_table({col1, col2, col3, col4, col5->view()}); 
+
+  auto arrow_table = cudf::to_arrow(input_table, {"a", "b", "c", "d", "c"});
   arrow::PrettyPrint(*arrow_table, arrow::PrettyPrintOptions{}, &std::cout);
 }

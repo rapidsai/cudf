@@ -26,43 +26,90 @@
 
 namespace cudf {
 namespace detail {
+    template<typename T>
+    std::shared_ptr<arrow::Buffer>
+    fetch_data_buffer(column_view input_view, arrow::MemoryPool* ar_mr) {
+        const int64_t data_size_in_bytes = sizeof(T) * input_view.size();
+        std::shared_ptr<arrow::Buffer> data_buffer;
+        
+        CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, data_size_in_bytes, &data_buffer).ok(), "Failed to allocate Arrow buffer for data");
+        cudaMemcpy(data_buffer->mutable_data(), input_view.data<T>(), data_size_in_bytes, cudaMemcpyDeviceToHost);
+
+
+        return data_buffer; 
+    }
+
+    std::shared_ptr<arrow::Buffer>
+    fetch_mask_buffer(column_view input_view, arrow::MemoryPool* ar_mr) {
+        const int64_t mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(input_view.size());
+        std::shared_ptr<arrow::Buffer> mask_buffer;
+        
+        if (input_view.has_nulls()) {
+            CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, mask_size_in_bytes, &mask_buffer).ok(), "Failed to allocate Arrow buffer for mask");
+            if (input_view.offset() > 0) {
+                cudaMemcpy(mask_buffer->mutable_data(), cudf::copy_bitmask(input_view).data(), mask_size_in_bytes, cudaMemcpyDeviceToHost);
+            } else {
+                cudaMemcpy(mask_buffer->mutable_data(), input_view.null_mask(), mask_size_in_bytes, cudaMemcpyDeviceToHost);
+            }
+
+            return mask_buffer;
+        }
+
+        return nullptr;
+    }
+
+
 struct dispatch_to_arrow {
     template <typename T>
     std::enable_if_t<is_fixed_width<T>(), std::shared_ptr<arrow::Array>>
     operator()(column_view input_view,
                cudf::type_id id,
                arrow::MemoryPool* ar_mr) {
-        const int64_t data_size_in_bytes = sizeof(T) * input_view.size();
-        const int64_t mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(input_view.size());
-        std::shared_ptr<arrow::Buffer> data_buffer;
-        std::shared_ptr<arrow::Buffer> mask_buffer;
+        
+        auto data_buffer = fetch_data_buffer<T>(input_view, ar_mr);
+        auto mask_buffer = fetch_mask_buffer(input_view, ar_mr);
 
-        std::cout<<"Before data allocate"<<std::endl;
-        CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, data_size_in_bytes, &data_buffer).ok(), "Failed to allocate Arrow buffer for data");
-        //cudaMemcpy(data_buffer->mutable_data(), const_cast<void*>(input_view.data<T>()), data_size_in_bytes, cudaMemcpyDeviceToHost);
-        cudaMemcpy(data_buffer->mutable_data(), input_view.data<T>(), data_size_in_bytes, cudaMemcpyDeviceToHost);
-
-        std::cout<<"Before mask allocate"<<std::endl;
-        if (input_view.has_nulls()) {
-            CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, mask_size_in_bytes, &mask_buffer).ok(), "Failed to allocate Arrow buffer for mask");
-            if (input_view.offset() > 0) {
-                cudaMemcpy(mask_buffer->mutable_data(), cudf::copy_bitmask(input_view).data(), mask_size_in_bytes, cudaMemcpyDeviceToHost);
-            } else {
-                //cudaMemcpy(mask_buffer->mutable_data(), const_cast<void*>(input_view.null_mask()), mask_size_in_bytes, cudaMemcpyDeviceToHost);
-                cudaMemcpy(mask_buffer->mutable_data(), input_view.null_mask(), mask_size_in_bytes, cudaMemcpyDeviceToHost);
-            }
-        }
-         
-        std::cout<<"Before calling to array"<<std::endl;
-        return to_arrow_array(id, static_cast<int64_t>(input_view.size()), data_buffer, input_view.has_nulls()? mask_buffer:NULLPTR, static_cast<int64_t>(input_view.null_count()));
+        return to_arrow_array(id, static_cast<int64_t>(input_view.size()), data_buffer, mask_buffer, static_cast<int64_t>(input_view.null_count()));
     }
 
+
     template <typename T>
-    std::enable_if_t<!is_fixed_width<T>(), std::shared_ptr<arrow::Array>>
+    std::enable_if_t<is_compound<T>(), std::shared_ptr<arrow::Array>>
     operator()(column_view input_view,
                cudf::type_id id,
                arrow::MemoryPool* ar_mr) {
-        CUDF_FAIL("Non fixed width is not yet supported");
+        
+        auto mask_buffer = fetch_mask_buffer(input_view, ar_mr);
+        std::vector<std::shared_ptr<arrow::Array>> child_arrays;
+
+        for (size_type i = 0; i < input_view.num_children(); i++) {
+            auto c = input_view.child(i);
+            child_arrays.emplace_back(type_dispatcher(c.type(), dispatch_to_arrow{}, c, c.type().id(), ar_mr));
+        }
+
+        if (std::is_same<T, cudf::string_view>::value) {
+             auto offset_buffer = child_arrays[0]->data()->buffers[1];
+             auto data_buffer = child_arrays[1]->data()->buffers[1];
+             //return to_arrow_array(id, static_cast<int64_t>(input_view.size()), offset_buffer, data_buffer, mask_buffer, static_cast<int64_t>(input_view.null_count()));
+             return std::make_shared<arrow::StringArray>(static_cast<int64_t>(input_view.size()), offset_buffer, data_buffer, mask_buffer, static_cast<int64_t>(input_view.null_count()));
+        } else if (std::is_same<T, cudf::dictionary32>::value){
+            // Update indices with bit mask buffer
+            auto indices = to_arrow_array(type_id::INT32, static_cast<int64_t>(input_view.size()), child_arrays[0]->data()->buffers[1], mask_buffer, static_cast<int64_t>(input_view.null_count()));
+            auto dictionary = child_arrays[1];
+            return std::make_shared<arrow::DictionaryArray>(arrow::dictionary(indices->type(), dictionary->type()), indices, dictionary);
+        } else {
+            auto offset_buffer = child_arrays[0]->data()->buffers[1];
+            auto data = child_arrays[1];
+            return std::make_shared<arrow::ListArray>(arrow::list(data->type()), static_cast<int64_t>(input_view.size()), offset_buffer, data, mask_buffer, static_cast<int64_t>(input_view.null_count()));
+        }
+    }
+
+    template <typename T>
+    std::enable_if_t<(!is_fixed_width<T>()) and (!is_compound<T>()), std::shared_ptr<arrow::Array>>
+    operator()(column_view input_view,
+               cudf::type_id id,
+               arrow::MemoryPool* ar_mr) {
+        CUDF_FAIL("Only fixed width and compund types are supported");
     }
 };
 

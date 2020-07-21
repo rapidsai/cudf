@@ -87,6 +87,16 @@ std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args) {
       return std::make_shared<arrow::FloatArray>(std::forward<Ts>(args)...);
     case type_id::FLOAT64:
       return std::make_shared<arrow::DoubleArray>(std::forward<Ts>(args)...);
+    case type_id::TIMESTAMP_DAYS:
+      return std::make_shared<arrow::Date32Array>(std::forward<Ts>(args)...);
+    case type_id::TIMESTAMP_MILLISECONDS:
+      return std::make_shared<arrow::Date64Array>(std::forward<Ts>(args)...);
+//    case type_id::STRING:
+//      return std::make_shared<arrow::StringArray>(std::forward<Ts>(args)...);
+//    case type_id::DICTIONARY32:
+//      return std::make_shared<arrow::DictionaryArray>(std::forward<Ts>(args)...);
+//    case type_id::LIST:
+//      return std::make_shared<arrow::ListArray>(std::forward<Ts>(args)...);
     default:
       CUDF_FAIL("Unsupported type_id conversion to arrow");
 }
