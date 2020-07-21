@@ -8,6 +8,7 @@ import pytest
 
 import cudf as gd
 from cudf.tests.utils import assert_eq
+from cudf.utils.dtypes import is_categorical_dtype
 
 
 def make_frames(index=None, nulls="none"):
@@ -477,6 +478,7 @@ def test_concat_series_dataframe_input_str(objs):
         pd.DataFrame({"l": [10]}),
         pd.DataFrame({"l": [10]}, index=[200]),
         pd.DataFrame([], index=[100]),
+        pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
     ],
 )
 @pytest.mark.parametrize(
@@ -495,8 +497,17 @@ def test_concat_series_dataframe_input_str(objs):
             pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
             pd.DataFrame({"l": [10]}),
             pd.DataFrame({"l": [10]}, index=[200]),
+            pd.DataFrame(
+                {"cat": pd.Series(["two", "three"], dtype="category")}
+            ),
         ],
-        [pd.DataFrame([]), pd.DataFrame([], index=[100])],
+        [
+            pd.DataFrame([]),
+            pd.DataFrame([], index=[100]),
+            pd.DataFrame(
+                {"cat": pd.Series(["two", "three"], dtype="category")}
+            ),
+        ],
     ],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -509,6 +520,10 @@ def test_concat_empty_dataframes(df, other, ignore_index):
     expected = pd.concat(other_pd, ignore_index=ignore_index)
     actual = gd.concat(other_gd, ignore_index=ignore_index)
     if expected.shape != df.shape:
+        for key, col in actual[actual.columns].iteritems():
+            if is_categorical_dtype(col.dtype):
+                expected[key] = expected[key].fillna("-1")
+                actual[key] = col.astype("str").fillna("-1")
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
     else:
         assert_eq(
