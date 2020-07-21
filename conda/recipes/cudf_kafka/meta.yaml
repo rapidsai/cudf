@@ -27,6 +27,7 @@ requirements:
   build:
     - cmake >=3.14.0
   host:
+    - libcudf_kafka {{ version }}
     - cudf {{ version }}
     - librdkafka=1.4.0
     - python-confluent-kafka

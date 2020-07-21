@@ -27,13 +27,11 @@ requirements:
   build:
     - cmake >=3.14.0
   host:
-    - cudf {{ version }}
+    - libcudf {{ version }}
     - librdkafka=1.4.0
-    - python-confluent-kafka
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - librdkafka=1.4.0
-    - python-confluent-kafka
 
 test:
   commands:
