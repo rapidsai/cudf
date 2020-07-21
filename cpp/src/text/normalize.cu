@@ -30,6 +30,7 @@
 #include <text/utilities/tokenize_ops.cuh>
 
 #include <thrust/for_each.h>
+#include <thrust/transform_reduce.h>
 #include <limits>
 
 namespace nvtext {
@@ -75,24 +76,37 @@ struct normalize_spaces_fn {
   }
 };
 
-struct codepoint_to_utf8_fn {
-  cudf::column_device_view const d_strings;
-  uint32_t const* cp_data;
-  int32_t const* d_cp_offsets{};
-  int32_t const* d_offsets{};
-  char* d_chars{};
+// code-point to multi-byte range limits
+constexpr uint32_t UTF8_1BYTE = 0x0080;
+constexpr uint32_t UTF8_2BYTE = 0x0800;
+constexpr uint32_t UTF8_3BYTE = 0x010000;
 
+/**
+ * @brief Convert code-point arrays into UTF-8 bytes for each string.
+ */
+struct codepoint_to_utf8_fn {
+  cudf::column_device_view const d_strings;  // input strings
+  uint32_t const* cp_data;                   // full code-point array
+  int32_t const* d_cp_offsets{};             // offsets to each string's code-point array
+  int32_t const* d_offsets{};                // offsets for the output strings
+  char* d_chars{};                           // buffer for the output strings column
+
+  /**
+   * @brief Return the number of bytes for the output string given its code-point array.
+   *
+   * @param str_cps code-points for the string
+   * @param count number of code-points in `str_cps`
+   * @return Number of bytes required for the output
+   */
   __device__ cudf::size_type compute_output_size(uint32_t const* str_cps, uint32_t count)
   {
-    cudf::size_type nbytes = 0;
-    for (uint32_t jdx = 0; jdx < count; ++jdx) {
-      uint32_t code_point = *str_cps++;
-      nbytes++;
-      nbytes += (code_point >= 0x0080);
-      nbytes += (code_point >= 0x0800);
-      nbytes += (code_point >= 0x010000);
-    }
-    return nbytes;
+    return thrust::transform_reduce(
+      thrust::seq,
+      str_cps,
+      str_cps + count,
+      [](auto cp) { return 1 + (cp >= UTF8_1BYTE) + (cp >= UTF8_2BYTE) + (cp >= UTF8_3BYTE); },
+      0,
+      thrust::plus<cudf::size_type>());
   }
 
   __device__ cudf::size_type operator()(cudf::size_type idx)
@@ -100,24 +114,20 @@ struct codepoint_to_utf8_fn {
     if (d_strings.is_null(idx)) return 0;
     auto const d_str  = d_strings.element<cudf::string_view>(idx);
     auto const offset = d_cp_offsets[idx];
-    auto const count  = d_cp_offsets[idx + 1] - offset;
-    auto str_cps      = cp_data + offset;
-    if (!d_chars) {
-      auto nbytes = compute_output_size(str_cps, count);
-      // printf("o%d:count=%d,nbytes=%d\n", idx, count, nbytes);
-      return nbytes;
-    }
+    auto const count  = d_cp_offsets[idx + 1] - offset;  // number of code-points
+    auto str_cps      = cp_data + offset;                // code-points for this string
+    if (!d_chars) return compute_output_size(str_cps, count);
+    // convert each code-point to 1-4 UTF-8 encoded bytes
     char* out_ptr = d_chars + d_offsets[idx];
     for (uint32_t jdx = 0; jdx < count; ++jdx) {
       uint32_t code_point = *str_cps++;
-      // printf("c%d:0x%04x\n", jdx, code_point);
-      if (code_point < 0x0080)  // ASCII range
+      if (code_point < UTF8_1BYTE)  // ASCII range
         *out_ptr++ = static_cast<char>(code_point);
-      else if (code_point < 0x0800) {  // create two-byte UTF-8
+      else if (code_point < UTF8_2BYTE) {  // create two-byte UTF-8
         // b00001xxx:byyyyyyyy => b110xxxyy:b10yyyyyy
         *out_ptr++ = static_cast<char>((((code_point << 2) & 0x001F00) | 0x00C000) >> 8);
         *out_ptr++ = static_cast<char>((code_point & 0x3F) | 0x0080);
-      } else if (code_point < 0x010000) {  // create three-byte UTF-8
+      } else if (code_point < UTF8_3BYTE) {  // create three-byte UTF-8
         // bxxxxxxxx:byyyyyyyy => b1110xxxx:b10xxxxyy:b10yyyyyy
         *out_ptr++ = static_cast<char>((((code_point << 4) & 0x0F0000) | 0x00E00000) >> 16);
         *out_ptr++ = static_cast<char>((((code_point << 2) & 0x003F00) | 0x008000) >> 8);
