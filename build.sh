@@ -42,9 +42,11 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafk
    then 'dask_cudf' targets
 "
 LIB_BUILD_DIR=${LIB_BUILD_DIR:=${REPODIR}/cpp/build}
+KAFKA_LIB_BUILD_DIR=${KAFKA_LIB_BUILD_DIR:=${REPODIR}/cpp/libcudf_kafka/build}
+CUDF_KAFKA_BUILD_DIR=${REPODIR}/python/cudf_kafka/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
-BUILD_DIRS="${LIB_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR}"
+BUILD_DIRS="${LIB_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR} ${KAFKA_LIB_BUILD_DIR} ${CUDF_KAFKA_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
 VERBOSE=""
@@ -202,8 +204,6 @@ fi
 
 # Build libcudf_kafka library
 if hasArg libcudf_kafka; then
-
-    KAFKA_LIB_BUILD_DIR=${KAFKA_LIB_BUILD_DIR:=${REPODIR}/cpp/libcudf_kafka/build}
     mkdir -p ${KAFKA_LIB_BUILD_DIR}
     cd ${KAFKA_LIB_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \

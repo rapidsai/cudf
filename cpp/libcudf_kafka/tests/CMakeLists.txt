@@ -41,6 +41,15 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
 endfunction(ConfigureTest)
 
 ###################################################################################################
+# cudf_kafka - librdkafka -------------------------------------------------------------------------
+
+find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
+find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
+
+message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
+message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
