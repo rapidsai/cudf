@@ -26,8 +26,7 @@ cdef source_info make_source_info(list src) except*:
     cdef const unsigned char[::1] c_buffer
     cdef vector[host_buffer] c_host_buffers
     cdef vector[string] c_files
-    cdef unique_ptr[datasource] unique_datasource
-    cdef datasource * dsource
+    cdef datasource * c_dsource
     empty_buffer = False
     if isinstance(src[0], bytes):
         empty_buffer = True
@@ -48,8 +47,7 @@ cdef source_info make_source_info(list src) except*:
     elif isinstance(src[0], Datasource):
         print(type(src[0]))
         print(type(src[0].c_datasource.get()))
-        # unique_datasource = <unique_ptr[datasource]> src[0].c_datasource
-        # return source_info(<datasource *> src[0].c_datasource.get())
+        return source_info(<datasource *> src[0].c_datasource.get())
     elif isinstance(src[0], (int, float, complex, basestring, os.PathLike)):
         # If source is a file, return source_info where type=FILEPATH
         if not all(os.path.isfile(file) for file in src):
