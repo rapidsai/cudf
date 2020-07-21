@@ -3,7 +3,6 @@
 import cupy
 import numpy as np
 import pytest
-from pandas.util.testing import assert_series_equal
 
 import cudf
 from cudf.tests.utils import assert_eq
@@ -42,7 +41,7 @@ def test_tokenize():
     actual = strings.str.tokenize()
 
     assert type(expected) == type(actual)
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -70,9 +69,7 @@ def test_token_count(delimiter, expected_token_counts):
     actual = strings.str.token_count(delimiter)
 
     assert type(expected) == type(actual)
-    assert_series_equal(
-        expected.to_pandas(), actual.to_pandas(), check_dtype=False
-    )
+    assert_eq(expected, actual, check_dtype=False)
 
 
 def test_normalize_spaces():
@@ -96,7 +93,7 @@ def test_normalize_spaces():
     actual = strings.str.normalize_spaces()
 
     assert type(expected) == type(actual)
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -139,7 +136,7 @@ def test_ngrams(n, separator, expected_values):
     actual = strings.str.ngrams(n=n, separator=separator)
 
     assert type(expected) == type(actual)
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -172,7 +169,7 @@ def test_character_ngrams(n, expected_values):
     actual = strings.str.character_ngrams(n=n)
 
     assert type(expected) == type(actual)
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -205,7 +202,7 @@ def test_ngrams_tokenize(n, separator, expected_values):
     actual = strings.str.ngrams_tokenize(n=n, separator=separator)
 
     assert type(expected) == type(actual)
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    assert_eq(expected, actual)
 
 
 def test_character_tokenize_series():
@@ -521,6 +518,45 @@ def test_text_replace_tokens_error_cases():
         match="Type of delimiter should be a string, found <class 'list'>",
     ):
         sr.str.replace_tokens(["a"], ["s"], delimiter=["a", "b"])
+
+
+def test_text_filter_tokens():
+    sr = cudf.Series(["the quick brown fox jumped", "over the lazy dog", ""])
+
+    expected = cudf.Series([" quick brown  jumped", "   ", ""])
+    actual = sr.str.filter_tokens(5)
+    assert_eq(expected, actual)
+
+    expected = cudf.Series(["🔥 quick brown 🔥 jumped", "🔥 🔥 🔥 🔥", ""])
+    actual = sr.str.filter_tokens(5, "🔥")
+    assert_eq(expected, actual)
+
+    sr = cudf.Series(
+        ["All-we-need;is;🔥", "\tall-we-need0is;🌊", "all;we:need+is;🌬"]
+    )
+    expected = cudf.Series(
+        ["All-we-need;is;--", "\tall-we-need0is;--", "all;we:need+is;--"]
+    )
+    actual = sr.str.filter_tokens(2, "--", ";")
+    assert_eq(expected, actual)
+
+    assert_eq(sr, sr.str.filter_tokens(1))
+
+
+def test_text_filter_tokens_error_cases():
+    sr = cudf.Series(["abc", "def", ""])
+
+    with pytest.raises(
+        TypeError,
+        match="Type of replacement should be a string, found <class 'list'>",
+    ):
+        sr.str.filter_tokens(3, replacement=["a", "b"])
+
+    with pytest.raises(
+        TypeError,
+        match="Type of delimiter should be a string, found <class 'list'>",
+    ):
+        sr.str.filter_tokens(3, delimiter=["a", "b"])
 
 
 def test_text_subword_tokenize(tmpdir):

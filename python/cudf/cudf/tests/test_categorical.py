@@ -177,8 +177,8 @@ def test_categorical_element_indexing():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    assert list(pdsr) == list(sr)
-    assert list(pdsr.cat.codes) == list(sr.cat.codes)
+    assert_eq(pdsr, sr)
+    assert_eq(pdsr.cat.codes, sr.cat.codes, check_dtype=False)
 
 
 def test_categorical_masking():
@@ -311,7 +311,7 @@ def test_categorical_empty():
     np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_array())
 
     # Test attributes
-    assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)
+    assert_eq(pdsr.cat.categories, sr.cat.categories)
     assert pdsr.cat.ordered == sr.cat.ordered
 
     np.testing.assert_array_equal(
@@ -423,8 +423,8 @@ def test_categorical_add_categories(pd_str_cat, inplace):
     pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
-    assert "d" in list(pd_sr_1.cat.categories)
-    assert "d" in list(cd_sr_1.cat.categories)
+    assert "d" in pd_sr_1.cat.categories.to_list()
+    assert "d" in cd_sr_1.cat.categories.to_list()
 
     assert_eq(pd_sr_1, cd_sr_1)
 
@@ -444,8 +444,8 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
     pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
-    assert "a" not in list(pd_sr_1.cat.categories)
-    assert "a" not in list(cd_sr_1.cat.categories)
+    assert "a" not in pd_sr_1.cat.categories.to_list()
+    assert "a" not in cd_sr_1.cat.categories.to_list()
 
     assert_eq(pd_sr_1, cd_sr_1)
 

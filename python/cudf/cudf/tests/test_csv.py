@@ -1,4 +1,4 @@
-# Copyright (c) 2018-20, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import csv
 import gzip
@@ -168,7 +168,7 @@ def test_csv_reader_numeric_data(dtype, nelem, tmpdir):
     out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes)
 
     assert len(out.columns) == len(df.columns)
-    pd.util.testing.assert_frame_equal(df, out.to_pandas())
+    assert_eq(df, out)
 
 
 @pytest.mark.parametrize("parse_dates", [["date2"], [0], ["date1", 1, "bad"]])
@@ -303,7 +303,7 @@ def test_csv_reader_skiprows_skipfooter(tmpdir):
 
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+    assert_eq(df_out, out)
 
 
 def test_csv_reader_negative_vals(tmpdir):
@@ -402,9 +402,7 @@ def test_csv_reader_usecols_int_char(tmpdir):
 
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
-    pd.util.testing.assert_frame_equal(
-        df_out, out.to_pandas(), check_names=False
-    )
+    assert_eq(df_out, out, check_names=False)
 
 
 def test_csv_reader_mangle_dupe_cols(tmpdir):
@@ -413,7 +411,7 @@ def test_csv_reader_mangle_dupe_cols(tmpdir):
     # Default: mangle_dupe_cols=True
     pd_df = pd.read_csv(StringIO(buffer))
     cu_df = read_csv(StringIO(buffer))
-    pd.util.testing.assert_frame_equal(cu_df.to_pandas(), pd_df)
+    assert_eq(cu_df, pd_df)
 
     # Pandas does not support mangle_dupe_cols=False
     cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=False)
@@ -495,7 +493,7 @@ def test_csv_reader_NaN_values():
         na_values=custom_na_values,
     )
     assert df_int8.dtypes[0] == "int8"
-    assert all(val is None for val in df_int8["0"])
+    assert all(df_int8["0"][idx] is None for idx in range(len(df_int8["0"])))
 
     # data type detection should evaluate the column to object;
     # for data type detection, cells need to be completely empty,
@@ -657,7 +655,7 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
         false_values=falses,
     )
 
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+    assert_eq(df_out, out)
 
 
 def test_csv_quotednumbers(tmpdir):
@@ -1056,7 +1054,7 @@ def test_csv_reader_delim_whitespace():
     # with header row
     cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
     pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
-    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+    assert_eq(pd_df, cu_df)
 
     # without header row
     cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
@@ -1087,7 +1085,7 @@ def test_csv_reader_header_quotation():
     cu_df = read_csv(StringIO(buffer))
     pd_df = pd.read_csv(StringIO(buffer))
     assert cu_df.shape == (1, 3)
-    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+    assert_eq(pd_df, cu_df)
 
     # test cases that fail with pandas
     buffer_pd_fail = '"1,one," , ",2,two" ,3\n4,5,6'
@@ -1112,19 +1110,24 @@ def test_csv_reader_index_col():
     # using a column name
     cu_df = read_csv(StringIO(buffer), names=names, index_col="int1")
     pd_df = pd.read_csv(StringIO(buffer), names=names, index_col="int1")
-    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+    assert_eq(pd_df, cu_df)
 
     # using a column index
     cu_df = read_csv(StringIO(buffer), header=None, index_col=0)
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=0)
-    for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
-        assert str(cu_idx) == str(pd_idx)
+    assert_eq(cu_df.index, pd_df.index)
+
+    # using a column index with names
+    cu_df = read_csv(StringIO(buffer), header=None, index_col=0, names=names)
+    pd_df = pd.read_csv(
+        StringIO(buffer), header=None, index_col=0, names=names
+    )
+    assert_eq(cu_df.index, pd_df.index)
 
     # passing False to avoid using a column as index (no-op in cuDF)
     cu_df = read_csv(StringIO(buffer), header=None, index_col=False)
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
-    for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
-        assert str(cu_idx) == str(pd_idx)
+    assert_eq(cu_df.index, pd_df.index)
 
 
 @pytest.mark.parametrize(

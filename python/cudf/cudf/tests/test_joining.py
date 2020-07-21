@@ -106,10 +106,8 @@ def test_dataframe_join_how(aa, bb, how, method):
             # TODO: What is the less hacky way?
             expect.index.name = "bob"
             got.index.name = "mary"
-            pd.util.testing.assert_frame_equal(
-                got.to_pandas()
-                .sort_values(got.columns.to_list())
-                .reset_index(drop=True),
+            assert_eq(
+                got.sort_values(got.columns.to_list()).reset_index(drop=True),
                 expect.sort_values(expect.columns.to_list()).reset_index(
                     drop=True
                 ),
@@ -183,11 +181,8 @@ def test_dataframe_join_cats():
     expect = lhs.to_pandas().join(rhs.to_pandas())
 
     # Note: pandas make an object Index after joining
-    pd.util.testing.assert_frame_equal(
-        got.sort_values(by="b")
-        .to_pandas()
-        .sort_index()
-        .reset_index(drop=True),
+    assert_eq(
+        got.sort_values(by="b").sort_index().reset_index(drop=True),
         expect.reset_index(drop=True),
     )
 
@@ -219,7 +214,10 @@ def test_dataframe_join_combine_cats():
     expect.index = expect.index.astype("category")
     got = lhs.join(rhs, how="outer")
 
-    assert_eq(sorted(expect.index), sorted(got.index))
+    # TODO: Remove copying to host
+    # after https://github.com/rapidsai/cudf/issues/5676
+    # is implemented
+    assert_eq(expect.index.sort_values(), got.index.to_pandas().sort_values())
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
@@ -319,7 +317,7 @@ def test_dataframe_merge_on(on):
         list(pddf_joined.columns)
     ).reset_index(drop=True)
 
-    pd.util.testing.assert_frame_equal(cdf_result, pdf_result, check_like=True)
+    assert_eq(cdf_result, pdf_result, check_like=True)
 
     merge_func_result_cdf = (
         join_result_cudf.to_pandas()
@@ -327,9 +325,7 @@ def test_dataframe_merge_on(on):
         .reset_index(drop=True)
     )
 
-    pd.util.testing.assert_frame_equal(
-        merge_func_result_cdf, cdf_result, check_like=True
-    )
+    assert_eq(merge_func_result_cdf, cdf_result, check_like=True)
 
 
 def test_dataframe_merge_on_unknown_column():

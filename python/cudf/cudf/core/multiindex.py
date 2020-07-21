@@ -373,8 +373,8 @@ class MultiIndex(Index):
                 )
             ):
                 raise TypeError(
-                    "values need to be a Multi-Index or set/list-like tuple \
-                        squences  when `level=None`."
+                    "values need to be a Multi-Index or set/list-like tuple "
+                    "squences  when `level=None`."
                 )
             else:
                 values_idx = cudf.MultiIndex.from_tuples(
@@ -643,9 +643,6 @@ class MultiIndex(Index):
         return result
 
     def serialize(self):
-        """Serialize into pickle format suitable for file storage or network
-        transmission.
-        """
         header = {}
         header["type-serialized"] = pickle.dumps(type(self))
         header["names"] = pickle.dumps(self.names)
@@ -656,8 +653,6 @@ class MultiIndex(Index):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert from pickle format into Index
-        """
         names = pickle.loads(header["names"])
 
         source_data_typ = pickle.loads(
@@ -671,16 +666,7 @@ class MultiIndex(Index):
         return MultiIndex(names=names, source_data=source_data)
 
     def __iter__(self):
-        self.n = 0
-        return self
-
-    def __next__(self):
-        if self.n < len(self.codes):
-            result = self[self.n]
-            self.n += 1
-            return result
-        else:
-            raise StopIteration
+        cudf.utils.utils.raise_iteration_error(obj=self)
 
     def __getitem__(self, index):
         # TODO: This should be a take of the _source_data only
@@ -788,6 +774,69 @@ class MultiIndex(Index):
         result = cls.from_pandas(pdi)
         return result
 
+    def to_arrow(self):
+        raise NotImplementedError(
+            "MultiIndex.to_arrow() is not yet implemented"
+        )
+
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the MultiIndex.
+
+        Only the values in the MultiIndex will be returned.
+
+        Returns
+        -------
+        out : numpy.ndarray
+            The values of the MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(
+        ...         levels=[[1, 3, 4, 5], [1, 2, 5]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...     )
+        >>> midx.values_host
+        array([(1, 1), (1, 5), (3, 2), (4, 2), (5, 1)], dtype=object)
+        >>> type(midx.values_host)
+        <class 'numpy.ndarray'>
+        """
+        return self.to_pandas().values
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the MultiIndex.
+
+        Only the values in the MultiIndex will be returned.
+
+        Returns
+        -------
+        out: cupy.ndarray
+            The values of the MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(
+        ...         levels=[[1, 3, 4, 5], [1, 2, 5]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...     )
+        >>> midx.values
+        array([[1, 1],
+            [1, 5],
+            [3, 2],
+            [4, 2],
+            [5, 1]])
+        >>> type(midx.values)
+        <class 'cupy.core.core.ndarray'>
+        """
+        return self._source_data.values
+
     @classmethod
     def from_frame(cls, dataframe, names=None):
         return cls(source_data=dataframe, names=names)
@@ -867,6 +916,10 @@ class MultiIndex(Index):
 
     @property
     def is_monotonic_increasing(self):
+        """
+        Return if the index is monotonic increasing
+        (only equal or increasing) values.
+        """
         if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = self._is_sorted(
                 ascending=None, null_position=None
@@ -875,6 +928,10 @@ class MultiIndex(Index):
 
     @property
     def is_monotonic_decreasing(self):
+        """
+        Return if the index is monotonic decreasing
+        (only equal or decreasing) values.
+        """
         if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = self._is_sorted(
                 ascending=[False] * len(self.levels), null_position=None
@@ -1018,12 +1075,3 @@ class MultiIndex(Index):
                 return cudf_func(*args, **kwargs)
         else:
             return NotImplemented
-
-    def _mimic_inplace(self, other, inplace=False):
-        if inplace is True:
-            for in_col, oth_col in zip(
-                self._source_data._columns, other._source_data._columns,
-            ):
-                in_col._mimic_inplace(oth_col, inplace=True)
-        else:
-            return other

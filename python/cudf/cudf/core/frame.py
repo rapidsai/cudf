@@ -37,18 +37,76 @@ class Frame(libcudf.table.Table):
     def _from_table(cls, table):
         return cls(table._data, index=table._index)
 
+    def _mimic_inplace(self, result, inplace=False):
+        if inplace:
+            for col in self._data:
+                if col in result._data:
+                    self._data[col]._mimic_inplace(
+                        result._data[col], inplace=True
+                    )
+            self._data = result._data
+            self._index = result._index
+        else:
+            return result
+
     @property
     def empty(self):
         """
-        Indicator whether Frame is empty.
+        Indicator whether DataFrame or Series is empty.
 
-        True if Frame is entirely empty (no items), meaning any
-        of the axes are of length 0.
+        True if DataFrame/Series is entirely empty (no items),
+        meaning any of the axes are of length 0.
 
         Returns
         -------
         out : bool
-            If Frame is empty, return True, if not return False.
+            If DataFrame/Series is empty, return True, if not return False.
+
+        Notes
+        -----
+        If DataFrame/Series contains only `null` values, it is still not
+        considered empty. See the example below.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'A' : []})
+        >>> df
+        Empty DataFrame
+        Columns: [A]
+        Index: []
+        >>> df.empty
+        True
+
+        If we only have `null` values in our DataFrame, it is
+        not considered empty! We will need to drop
+        the `null`'s to make the DataFrame empty:
+
+        >>> df = cudf.DataFrame({'A' : [None, None]})
+        >>> df
+              A
+        0  null
+        1  null
+        >>> df.empty
+        False
+        >>> df.dropna().empty
+        True
+
+        Non-empty and empty Series example:
+
+        >>> s = cudf.Series([1, 2, None])
+        >>> s
+        0       1
+        1       2
+        2    null
+        dtype: int64
+        >>> s.empty
+        False
+        >>> s = cudf.Series([])
+        >>> s
+        Series([], dtype: float64)
+        >>> s.empty
+        True
         """
         if self._num_columns == 0:
             return True
@@ -61,9 +119,13 @@ class Frame(libcudf.table.Table):
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
 
-        some_empty = False
+        # flag to indicate at least one empty input frame also has an index
+        empty_has_index = False
+        # length of output frame's RangeIndex if all input frames are empty,
+        # and at least one has an index
         result_index_length = 0
-        empty_counter = 0
+        # the number of empty input frames
+        num_empty_input_frames = 0
 
         for i, obj in enumerate(objs):
             objs[i] = obj.copy(deep=False)
@@ -77,20 +139,9 @@ class Frame(libcudf.table.Table):
                 # variable. Detailed explanation of second case before
                 # allocation of `columns` variable below.
                 if obj.empty:
-                    empty_counter += 1
-                    if len(obj) > 0:
-                        some_empty = True
-                        result_index_length += len(obj)
-
-        # some_empty indicates there are dataframes in obj
-        # which are empty and have index.
-
-        # all_empty indicates all dataframes in obj which
-        # are empty and at least one of them have index.
-        if empty_counter == len(objs) and some_empty:
-            all_empty = True
-        else:
-            all_empty = False
+                    num_empty_input_frames += 1
+                    result_index_length += len(obj)
+                    empty_has_index = empty_has_index or len(obj) > 0
 
         from cudf.core.column.column import (
             build_categorical_column,
@@ -104,7 +155,7 @@ class Frame(libcudf.table.Table):
             dtypes = dict()
             # A mapping of {idx: [...columns]}, where `[...columns]`
             # is a list of columns with at least one valid value for each
-            # column name across all input dataframes
+            # column name across all input frames
             non_null_columns = dict()
             for idx in col_idxs:
                 for cols in list_of_columns:
@@ -127,7 +178,7 @@ class Frame(libcudf.table.Table):
         def find_common_dtypes_and_categories(non_null_columns, dtypes):
             # A mapping of {idx: categories}, where `categories` is a
             # column of all the unique categorical values from each
-            # categorical column across all input dataframes
+            # categorical column across all input frames
             categories = dict()
             for idx, cols in non_null_columns.items():
                 # default to the first non-null dtype
@@ -215,42 +266,20 @@ class Frame(libcudf.table.Table):
         except TypeError:
             names = list(names)
 
-        # Combine the index and table columns for each Frame into a
-        # list of [...index_cols, ...table_cols]. If a table is
-        # missing a column:
-        # 1. when ignore_index is True and some_empty is False(which
-        # means there is no dataframe which is empty and has an index in
-        # objs) an empty column of length of the respective dataframe
-        # is added to the slot.
-        # 2. when ignore_index is False or some_empty is True list
-        # will have None in the slot instead
-
-        # When ignore_index is True, and if at least one of the
-        # dataframe in objs is empty and has and index set:
+        # Combine the index and table columns for each Frame into a list of
+        # [...index_cols, ...table_cols].
         #
-        # 1. Do not ignore the index for index_cols being
-        # populated in columns[0]. Instead we will be ignoring the
-        # index in libcudf.concat.concat_tables api call. This is
-        # necessary for cast_cols_to_common_dtypes api.
-        # 2. Create an empty column and populate in columns[1] as
-        # index will be ignored by libcudf.concat.concat_tables
-        # and the corresponding empty column will be concatenated
-        # correctly.
+        # If any of the input frames have a non-empty index, include these
+        # columns in the list of columns to concatenate, even if the input
+        # frames are empty and `ignore_index=True`.
 
         columns = [
             (
                 []
-                if (ignore_index and not some_empty)
+                if (ignore_index and not empty_has_index)
                 else list(f._index._data.columns)
             )
-            + [
-                f._data[name]
-                if name in f._data
-                else column_empty(len(f), masked=True)
-                if (ignore_index and not some_empty)
-                else None
-                for name in names
-            ]
+            + [f._data[name] if name in f._data else None for name in names]
             for i, f in enumerate(objs)
         ]
 
@@ -305,10 +334,10 @@ class Frame(libcudf.table.Table):
             libcudf.concat.concat_tables(tables, ignore_index=ignore_index)
         )
 
-        if all_empty:
-            # When all the dataframes in objs are empty and either
-            # one of them have index and ignore_index is True, create
-            # a new RangeIndex and assign it to the result.
+        # If ignore_index is True, all input frames are empty, and at
+        # least one input frame has an index, assign a new RangeIndex
+        # to the result frame.
+        if empty_has_index and num_empty_input_frames == len(objs):
             out._index = cudf.RangeIndex(result_index_length)
 
         # Reassign the categories for any categorical table cols
@@ -498,6 +527,7 @@ class Frame(libcudf.table.Table):
         Clipped DataFrame/Series/Index/MultiIndex
 
         Examples
+        --------
         >>> import cudf
         >>> df = cudf.DataFrame({"a":[1, 2, 3, 4], "b":['a', 'b', 'c', 'd']})
         >>> df.clip(lower=[2, 'b'], upper=[3, 'c'])
@@ -702,8 +732,8 @@ class Frame(libcudf.table.Table):
         -------
         Same type as caller
 
-        Examples:
-        ---------
+        Examples
+        --------
         >>> import cudf
         >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
         >>> df.where(df % 2 == 0, [-1, -1])
@@ -743,9 +773,7 @@ class Frame(libcudf.table.Table):
             if len(common_cols) > 0:
                 # If `self` and `cond` are having unequal index,
                 # then re-index `cond`.
-                if len(self.index) != len(cond.index) or any(
-                    self.index != cond.index
-                ):
+                if not self.index.equals(cond.index):
                     cond = cond.reindex(self.index)
             else:
                 if cond.shape != self.shape:
@@ -885,8 +913,8 @@ class Frame(libcudf.table.Table):
         -------
         Same type as caller
 
-        Examples:
-        ---------
+        Examples
+        --------
         >>> import cudf
         >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
         >>> df.mask(df % 2 == 0, [-1, -1])
@@ -1010,7 +1038,9 @@ class Frame(libcudf.table.Table):
 
         return tables
 
-    def dropna(self, axis=0, how="any", subset=None, thresh=None):
+    def dropna(
+        self, axis=0, how="any", thresh=None, subset=None, inplace=False
+    ):
         """
         Drops rows (or columns) containing nulls from a Column.
 
@@ -1024,23 +1054,101 @@ class Frame(libcudf.table.Table):
             any (default) drops rows (or columns) containing at least
             one null value. all drops only rows (or columns) containing
             *all* null values.
+        thresh: int, optional
+            If specified, then drops every row (or column) containing
+            less than `thresh` non-null values
         subset : list, optional
             List of columns to consider when dropping rows (all columns
             are considered by default). Alternatively, when dropping
             columns, subset is a list of rows to consider.
-        thresh: int, optional
-            If specified, then drops every row (or column) containing
-            less than `thresh` non-null values
-
+        inplace : bool, default False
+            If True, do operation inplace and return None.
 
         Returns
         -------
         Copy of the DataFrame with rows/columns containing nulls dropped.
+
+        See also
+        --------
+        cudf.core.dataframe.DataFrame.isna
+            Indicate null values.
+
+        cudf.core.dataframe.DataFrame.notna
+            Indicate non-null values.
+
+        cudf.core.dataframe.DataFrame.fillna
+            Replace null values.
+
+        cudf.core.series.Series.dropna
+            Drop null values.
+
+        cudf.core.index.Index.dropna
+            Drop null indices.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"name": ['Alfred', 'Batman', 'Catwoman'],
+        ...                    "toy": ['Batmobile', None, 'Bullwhip'],
+        ...                    "born": [np.datetime64("1940-04-25"),
+        ...                             np.datetime64("NaT"),
+        ...                             np.datetime64("NaT")]})
+        >>> df
+               name        toy       born
+        0    Alfred  Batmobile 1940-04-25
+        1    Batman       None       null
+        2  Catwoman   Bullwhip       null
+
+        Drop the rows where at least one element is null.
+
+        >>> df.dropna()
+             name        toy       born
+        0  Alfred  Batmobile 1940-04-25
+
+        Drop the columns where at least one element is null.
+
+        >>> df.dropna(axis='columns')
+               name
+        0    Alfred
+        1    Batman
+        2  Catwoman
+
+        Drop the rows where all elements are null.
+
+        >>> df.dropna(how='all')
+               name        toy       born
+        0    Alfred  Batmobile 1940-04-25
+        1    Batman       None       null
+        2  Catwoman   Bullwhip       null
+
+        Keep only the rows with at least 2 non-null values.
+
+        >>> df.dropna(thresh=2)
+               name        toy       born
+        0    Alfred  Batmobile 1940-04-25
+        2  Catwoman   Bullwhip       null
+
+        Define in which columns to look for null values.
+
+        >>> df.dropna(subset=['name', 'born'])
+             name        toy       born
+        0  Alfred  Batmobile 1940-04-25
+
+        Keep the DataFrame with valid entries in the same variable.
+
+        >>> df.dropna(inplace=True)
+        >>> df
+             name        toy       born
+        0  Alfred  Batmobile 1940-04-25
         """
         if axis == 0:
-            return self._drop_na_rows(how=how, subset=subset, thresh=thresh)
+            result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
         else:
-            return self._drop_na_columns(how=how, subset=subset, thresh=thresh)
+            result = self._drop_na_columns(
+                how=how, subset=subset, thresh=thresh
+            )
+
+        return self._mimic_inplace(result, inplace=inplace)
 
     def _drop_na_rows(self, how="any", subset=None, thresh=None):
         """
@@ -1169,6 +1277,7 @@ class Frame(libcudf.table.Table):
         Compute numerical data ranks (1 through n) along axis.
         By default, equal values are assigned a rank that is the average of the
         ranks of those values.
+
         Parameters
         ----------
         axis : {0 or 'index', 1 or 'columns'}, default 0
@@ -1193,6 +1302,7 @@ class Frame(libcudf.table.Table):
         pct : bool, default False
             Whether or not to display the returned rankings in percentile
             form.
+
         Returns
         -------
         same type as caller
@@ -1216,17 +1326,49 @@ class Frame(libcudf.table.Table):
         return self._from_table(out_rank_table).astype(np.float64)
 
     def repeat(self, repeats, axis=None):
-        """Repeats elements consecutively
+        """Repeats elements consecutively.
+
+        Returns a new object of caller type(DataFrame/Series/Index) where each
+        element of the current object is repeated consecutively a given
+        number of times.
 
         Parameters
         ----------
-        repeats : int, array, numpy array, or Column
-            the number of times to repeat each element
+        repeats : int, or array of ints
+            The number of repetitions for each element. This should
+            be a non-negative integer. Repeating 0 times will return
+            an empty object.
 
-        Example
+        Returns
         -------
-        >>> import cudf as cudf
-        >>> s = cudf.Series([0, 2]) # or DataFrame
+        Series/DataFrame/Index
+            A newly created object of same type as caller
+            with repeated elements.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3], 'b': [10, 20, 30]})
+        >>> df
+           a   b
+        0  1  10
+        1  2  20
+        2  3  30
+        >>> df.repeat(3)
+           a   b
+        0  1  10
+        0  1  10
+        0  1  10
+        1  2  20
+        1  2  20
+        1  2  20
+        2  3  30
+        2  3  30
+        2  3  30
+
+        Repeat on Series
+
+        >>> s = cudf.Series([0, 2])
         >>> s
         0    0
         1    2
@@ -1246,7 +1388,16 @@ class Frame(libcudf.table.Table):
         1    2
         1    2
         dtype: int64
-        >>>
+
+        Repeat on Index
+
+        >>> index = cudf.Index([10, 22, 33, 55])
+        >>> index
+        Int64Index([10, 22, 33, 55], dtype='int64')
+        >>> index.repeat(5)
+        Int64Index([10, 10, 10, 10, 10, 22, 22, 22, 22, 22, 33,
+                    33, 33, 33, 33, 55, 55, 55, 55, 55],
+                dtype='int64')
         """
         if axis is not None:
             raise NotImplementedError(
@@ -1347,8 +1498,8 @@ class Frame(libcudf.table.Table):
             A new object of same type as caller containing n items
             randomly sampled from the caller object.
 
-         Example
-        -------
+        Examples
+        --------
         >>> import cudf as cudf
         >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
         >>> df.sample(3)
@@ -1632,12 +1783,13 @@ class Frame(libcudf.table.Table):
         Interleave Series columns of a table into a single column.
 
         Converts the column major table `cols` into a row major column.
+
         Parameters
         ----------
         cols : input Table containing columns to interleave.
 
-        Example
-        -------
+        Examples
+        --------
         >>> df = DataFrame([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
         >>> df
         0    [A1, A2, A3]
@@ -1675,8 +1827,8 @@ class Frame(libcudf.table.Table):
         self : input Table containing columns to interleave.
         count : Number of times to tile "rows". Must be non-negative.
 
-        Example
-        -------
+        Examples
+        --------
         >>> df  = Dataframe([[8, 4, 7], [5, 2, 3]])
         >>> count = 2
         >>> df.tile(df, count)
@@ -1714,6 +1866,43 @@ class Frame(libcudf.table.Table):
         Returns
         -------
         1-D cupy array of insertion points
+
+        Examples
+        --------
+        >>> s = cudf.Series([1, 2, 3])
+        >>> s.searchsorted(4)
+        3
+        >>> s.searchsorted([0, 4])
+        array([0, 3], dtype=int32)
+        >>> s.searchsorted([1, 3], side='left')
+        array([0, 2], dtype=int32)
+        >>> s.searchsorted([1, 3], side='right')
+        array([1, 3], dtype=int32)
+
+        If the values are not monotonically sorted, wrong
+        locations may be returned:
+
+        >>> s = cudf.Series([2, 1, 3])
+        >>> s.searchsorted(1)
+        0   # wrong result, correct would be 1
+
+        >>> df = cudf.DataFrame({'a': [1, 3, 5, 7], 'b': [10, 12, 14, 16]})
+        >>> df
+           a   b
+        0  1  10
+        1  3  12
+        2  5  14
+        3  7  16
+        >>> values_df = cudf.DataFrame({'a': [0, 2, 5, 6],
+        ... 'b': [10, 11, 13, 15]})
+        >>> values_df
+           a   b
+        0  0  10
+        1  2  17
+        2  5  13
+        3  6  15
+        >>> df.searchsorted(values_df, ascending=False)
+        array([4, 4, 4, 0], dtype=int32)
         """
         # Call libcudf++ search_sorted primitive
         from cudf.utils.dtypes import is_scalar
@@ -1786,30 +1975,524 @@ class Frame(libcudf.table.Table):
         return libcudf.sort.order_by(self, ascending, na_position)
 
     def sin(self):
+        """
+        Get Trigonometric sine, element-wise.
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Result of the trigonometric operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([0.0, 0.32434, 0.5, 45, 90, 180, 360])
+        >>> ser
+        0      0.00000
+        1      0.32434
+        2      0.50000
+        3     45.00000
+        4     90.00000
+        5    180.00000
+        6    360.00000
+        dtype: float64
+        >>> ser.sin()
+        0    0.000000
+        1    0.318683
+        2    0.479426
+        3    0.850904
+        4    0.893997
+        5   -0.801153
+        6    0.958916
+        dtype: float64
+
+        `sin` operation on DataFrame:
+
+        >>> df = cudf.DataFrame({'first': [0.0, 5, 10, 15],
+        ...                      'second': [100.0, 360, 720, 300]})
+        >>> df
+           first  second
+        0    0.0   100.0
+        1    5.0   360.0
+        2   10.0   720.0
+        3   15.0   300.0
+        >>> df.sin()
+              first    second
+        0  0.000000 -0.506366
+        1 -0.958924  0.958916
+        2 -0.544021 -0.544072
+        3  0.650288 -0.999756
+
+        `sin` operation on Index:
+
+        >>> index = cudf.Index([-0.4, 100, -180, 90])
+        >>> index
+        Float64Index([-0.4, 100.0, -180.0, 90.0], dtype='float64')
+        >>> index.sin()
+        Float64Index([-0.3894183423086505, -0.5063656411097588,
+                    0.8011526357338306, 0.8939966636005579],
+                    dtype='float64')
+        """
         return self._unaryop("sin")
 
     def cos(self):
+        """
+        Get Trigonometric cosine, element-wise.
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Result of the trigonometric operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([0.0, 0.32434, 0.5, 45, 90, 180, 360])
+        >>> ser
+        0      0.00000
+        1      0.32434
+        2      0.50000
+        3     45.00000
+        4     90.00000
+        5    180.00000
+        6    360.00000
+        dtype: float64
+        >>> ser.cos()
+        0    1.000000
+        1    0.947861
+        2    0.877583
+        3    0.525322
+        4   -0.448074
+        5   -0.598460
+        6   -0.283691
+        dtype: float64
+
+        `cos` operation on DataFrame:
+
+        >>> df = cudf.DataFrame({'first': [0.0, 5, 10, 15],
+        ...                      'second': [100.0, 360, 720, 300]})
+        >>> df
+           first  second
+        0    0.0   100.0
+        1    5.0   360.0
+        2   10.0   720.0
+        3   15.0   300.0
+        >>> df.cos()
+              first    second
+        0  1.000000  0.862319
+        1  0.283662 -0.283691
+        2 -0.839072 -0.839039
+        3 -0.759688 -0.022097
+
+        `cos` operation on Index:
+
+        >>> index = cudf.Index([-0.4, 100, -180, 90])
+        >>> index
+        Float64Index([-0.4, 100.0, -180.0, 90.0], dtype='float64')
+        >>> index.cos()
+        Float64Index([ 0.9210609940028851,  0.8623188722876839,
+                    -0.5984600690578581, -0.4480736161291701],
+                    dtype='float64')
+        """
         return self._unaryop("cos")
 
     def tan(self):
+        """
+        Get Trigonometric tangent, element-wise.
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Result of the trigonometric operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([0.0, 0.32434, 0.5, 45, 90, 180, 360])
+        >>> ser
+        0      0.00000
+        1      0.32434
+        2      0.50000
+        3     45.00000
+        4     90.00000
+        5    180.00000
+        6    360.00000
+        dtype: float64
+        >>> ser.tan()
+        0    0.000000
+        1    0.336213
+        2    0.546302
+        3    1.619775
+        4   -1.995200
+        5    1.338690
+        6   -3.380140
+        dtype: float64
+
+        `tan` operation on DataFrame:
+
+        >>> df = cudf.DataFrame({'first': [0.0, 5, 10, 15],
+        ...                      'second': [100.0, 360, 720, 300]})
+        >>> df
+           first  second
+        0    0.0   100.0
+        1    5.0   360.0
+        2   10.0   720.0
+        3   15.0   300.0
+        >>> df.tan()
+              first     second
+        0  0.000000  -0.587214
+        1 -3.380515  -3.380140
+        2  0.648361   0.648446
+        3 -0.855993  45.244742
+
+        `tan` operation on Index:
+
+        >>> index = cudf.Index([-0.4, 100, -180, 90])
+        >>> index
+        Float64Index([-0.4, 100.0, -180.0, 90.0], dtype='float64')
+        >>> index.tan()
+        Float64Index([-0.4227932187381618,  -0.587213915156929,
+                    -1.3386902103511544, -1.995200412208242],
+                    dtype='float64')
+        """
         return self._unaryop("tan")
 
     def asin(self):
+        """
+        Get Trigonometric inverse sine, element-wise.
+
+        The inverse of sine so that, if y = x.sin(), then x = y.asin()
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Result of the trigonometric operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([-1, 0, 1, 0.32434, 0.5])
+        >>> ser.asin()
+        0   -1.570796
+        1    0.000000
+        2    1.570796
+        3    0.330314
+        4    0.523599
+        dtype: float64
+
+        `asin` operation on DataFrame:
+
+        >>> df = cudf.DataFrame({'first': [-1, 0, 0.5],
+        ...                      'second': [0.234, 0.3, 0.1]})
+        >>> df
+           first  second
+        0   -1.0   0.234
+        1    0.0   0.300
+        2    0.5   0.100
+        >>> df.asin()
+              first    second
+        0 -1.570796  0.236190
+        1  0.000000  0.304693
+        2  0.523599  0.100167
+
+        `asin` operation on Index:
+
+        >>> index = cudf.Index([-1, 0.4, 1, 0.3])
+        >>> index
+        Float64Index([-1.0, 0.4, 1.0, 0.3], dtype='float64')
+        >>> index.asin()
+        Float64Index([-1.5707963267948966, 0.41151684606748806,
+                    1.5707963267948966, 0.3046926540153975],
+                    dtype='float64')
+        """
         return self._unaryop("asin")
 
     def acos(self):
+        """
+        Get Trigonometric inverse cosine, element-wise.
+
+        The inverse of cos so that, if y = x.cos(), then x = y.acos()
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Result of the trigonometric operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([-1, 0, 1, 0.32434, 0.5])
+        >>> ser.acos()
+        0    3.141593
+        1    1.570796
+        2    0.000000
+        3    1.240482
+        4    1.047198
+        dtype: float64
+
+        `acos` operation on DataFrame:
+
+        >>> df = cudf.DataFrame({'first': [-1, 0, 0.5],
+        ...                      'second': [0.234, 0.3, 0.1]})
+        >>> df
+           first  second
+        0   -1.0   0.234
+        1    0.0   0.300
+        2    0.5   0.100
+        >>> df.acos()
+              first    second
+        0  3.141593  1.334606
+        1  1.570796  1.266104
+        2  1.047198  1.470629
+
+        `acos` operation on Index:
+
+        >>> index = cudf.Index([-1, 0.4, 1, 0, 0.3])
+        >>> index
+        Float64Index([-1.0, 0.4, 1.0, 0.0, 0.3], dtype='float64')
+        >>> index.acos()
+        Float64Index([ 3.141592653589793, 1.1592794807274085, 0.0,
+                    1.5707963267948966,  1.266103672779499],
+                    dtype='float64')
+        """
         return self._unaryop("acos")
 
     def atan(self):
+        """
+        Get Trigonometric inverse tangent, element-wise.
+
+        The inverse of tan so that, if y = x.tan(), then x = y.atan()
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Result of the trigonometric operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([-1, 0, 1, 0.32434, 0.5, -10])
+        >>> ser
+        0    -1.00000
+        1     0.00000
+        2     1.00000
+        3     0.32434
+        4     0.50000
+        5   -10.00000
+        dtype: float64
+        >>> ser.atan()
+        0   -0.785398
+        1    0.000000
+        2    0.785398
+        3    0.313635
+        4    0.463648
+        5   -1.471128
+        dtype: float64
+
+        `atan` operation on DataFrame:
+
+        >>> df = cudf.DataFrame({'first': [-1, -10, 0.5],
+        ...                      'second': [0.234, 0.3, 10]})
+        >>> df
+           first  second
+        0   -1.0   0.234
+        1  -10.0   0.300
+        2    0.5  10.000
+        >>> df.atan()
+              first    second
+        0 -0.785398  0.229864
+        1 -1.471128  0.291457
+        2  0.463648  1.471128
+
+        `atan` operation on Index:
+
+        >>> index = cudf.Index([-1, 0.4, 1, 0, 0.3])
+        >>> index
+        Float64Index([-1.0, 0.4, 1.0, 0.0, 0.3], dtype='float64')
+        >>> index.atan()
+        Float64Index([-0.7853981633974483,  0.3805063771123649,
+                                    0.7853981633974483, 0.0,
+                                    0.2914567944778671],
+                    dtype='float64')
+        """
         return self._unaryop("atan")
 
     def exp(self):
+        """
+        Get the exponential of all elements, element-wise.
+
+        Exponential is the inverse of the log function,
+        so that x.exp().log() = x
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Result of the element-wise exponential.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([-1, 0, 1, 0.32434, 0.5, -10, 100])
+        >>> ser
+        0     -1.00000
+        1      0.00000
+        2      1.00000
+        3      0.32434
+        4      0.50000
+        5    -10.00000
+        6    100.00000
+        dtype: float64
+        >>> ser.exp()
+        0    3.678794e-01
+        1    1.000000e+00
+        2    2.718282e+00
+        3    1.383117e+00
+        4    1.648721e+00
+        5    4.539993e-05
+        6    2.688117e+43
+        dtype: float64
+
+        `exp` operation on DataFrame:
+
+        >>> df = cudf.DataFrame({'first': [-1, -10, 0.5],
+        ...                      'second': [0.234, 0.3, 10]})
+        >>> df
+           first  second
+        0   -1.0   0.234
+        1  -10.0   0.300
+        2    0.5  10.000
+        >>> df.exp()
+              first        second
+        0  0.367879      1.263644
+        1  0.000045      1.349859
+        2  1.648721  22026.465795
+
+        `exp` operation on Index:
+
+        >>> index = cudf.Index([-1, 0.4, 1, 0, 0.3])
+        >>> index
+        Float64Index([-1.0, 0.4, 1.0, 0.0, 0.3], dtype='float64')
+        >>> index.exp()
+        Float64Index([0.36787944117144233,  1.4918246976412703,
+                      2.718281828459045, 1.0,  1.3498588075760032],
+                    dtype='float64')
+        """
         return self._unaryop("exp")
 
     def log(self):
+        """
+        Get the natural logarithm of all elements, element-wise.
+
+        Natural logarithm is the inverse of the exp function,
+        so that x.log().exp() = x
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Result of the element-wise natural logarithm.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([-1, 0, 1, 0.32434, 0.5, -10, 100])
+        >>> ser
+        0     -1.00000
+        1      0.00000
+        2      1.00000
+        3      0.32434
+        4      0.50000
+        5    -10.00000
+        6    100.00000
+        dtype: float64
+        >>> ser.log()
+        0         NaN
+        1        -inf
+        2    0.000000
+        3   -1.125963
+        4   -0.693147
+        5         NaN
+        6    4.605170
+        dtype: float64
+
+        `log` operation on DataFrame:
+
+        >>> df = cudf.DataFrame({'first': [-1, -10, 0.5],
+        ...                      'second': [0.234, 0.3, 10]})
+        >>> df
+           first  second
+        0   -1.0   0.234
+        1  -10.0   0.300
+        2    0.5  10.000
+        >>> df.log()
+              first    second
+        0       NaN -1.452434
+        1       NaN -1.203973
+        2 -0.693147  2.302585
+
+        `log` operation on Index:
+
+        >>> index = cudf.Index([10, 11, 500.0])
+        >>> index
+        Float64Index([10.0, 11.0, 500.0], dtype='float64')
+        >>> index.log()
+        Float64Index([2.302585092994046, 2.3978952727983707,
+                    6.214608098422191], dtype='float64')
+        """
         return self._unaryop("log")
 
     def sqrt(self):
+        """
+        Get the non-negative square-root of all elements, element-wise.
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Result of the non-negative
+            square-root of each element.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import cudf
+        >>> ser = cudf.Series([10, 25, 81, 1.0, 100])
+        >>> ser
+        0     10.0
+        1     25.0
+        2     81.0
+        3      1.0
+        4    100.0
+        dtype: float64
+        >>> ser.sqrt()
+        0     3.162278
+        1     5.000000
+        2     9.000000
+        3     1.000000
+        4    10.000000
+        dtype: float64
+
+        `sqrt` operation on DataFrame:
+
+        >>> df = cudf.DataFrame({'first': [-10.0, 100, 625],
+        ...                      'second': [1, 2, 0.4]})
+        >>> df
+           first  second
+        0  -10.0     1.0
+        1  100.0     2.0
+        2  625.0     0.4
+        >>> df.sqrt()
+           first    second
+        0    NaN  1.000000
+        1   10.0  1.414214
+        2   25.0  0.632456
+
+        `sqrt` operation on Index:
+
+        >>> index = cudf.Index([-10.0, 100, 625])
+        >>> index
+        Float64Index([-10.0, 100.0, 625.0], dtype='float64')
+        >>> index.sqrt()
+        Float64Index([nan, 10.0, 25.0], dtype='float64')
+        """
         return self._unaryop("sqrt")
 
     @staticmethod
