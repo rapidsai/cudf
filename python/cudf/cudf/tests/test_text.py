@@ -99,6 +99,40 @@ def test_normalize_spaces():
     assert_series_equal(expected.to_pandas(), actual.to_pandas())
 
 
+def test_normalize_characters():
+    strings = cudf.Series(
+        ["乾 \t 乿", "ĂĆCĖÑTÜATE", "âscénd, Descend", "", None, "Stock^ $1"]
+    )
+    expected = cudf.Series(
+        [
+            " 乾     乿 ",
+            "accentuate",
+            "ascend ,  descend",
+            "",
+            None,
+            "stock ^   $ 1",
+        ]
+    )
+
+    actual = strings.str.normalize_characters()
+    assert type(expected) == type(actual)
+    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+
+    expected = cudf.Series(
+        [
+            " 乾     乿 ",
+            "ĂĆCĖÑTÜATE",
+            "âscénd ,  Descend",
+            "",
+            None,
+            "Stock ^   $ 1",
+        ]
+    )
+    actual = strings.str.normalize_characters(do_lower=False)
+    assert type(expected) == type(actual)
+    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+
+
 @pytest.mark.parametrize(
     "n, separator, expected_values",
     [
