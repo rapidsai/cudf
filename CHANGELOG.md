@@ -195,6 +195,7 @@
 - PR #5693 Add fix missing from PR 5656 to update local docker image to py3.7
 - PR #5703 Small fix for dataframe constructor with cuda array interface objects that don't have `descr` field
 - PR #5719 Fix Frame._concat() with categorical columns
+- PR #5736 Disable unsigned type in ORC writer benchmarks
 
 # cuDF 0.14.0 (03 Jun 2020)
 
