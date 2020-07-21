@@ -450,6 +450,20 @@ constexpr inline bool is_fixed_width(data_type type)
 }
 
 /**
+ * @brief Indicates whether the type `T` is a "primitive type". Currently this
+ * is fixed width types not including fixed point
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a primitive type
+ * @return false  `T` is not a primitive type
+ **/
+template <typename T>
+constexpr inline bool is_primitive_type()
+{
+  return cudf::is_fixed_width<T>() && !cudf::is_fixed_point<T>();
+}
+
+/**
  * @brief Indicates whether the type `T` is a compound type.
  *
  * `column`s with "compound" elements are logically a single column of elements,
