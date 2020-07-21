@@ -48,7 +48,7 @@
 - PR #5658 Add `filter_tokens` nvtext API
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
-- PR #X    Add support for `add_months` API; force timestamp creation only with duration
+- PR #5735 Add support for `add_months` API; force timestamp creation only with duration
 
 ## Improvements
 
