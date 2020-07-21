@@ -39,6 +39,7 @@
 - PR #5654 Adding support for `cudf.DataFrame.sample` and `cudf.Series.sample`
 - PR #5607 Add Java bindings for duration types
 - PR #5612 Add `is_hex` strings API
+- PR #5659 Added support for rapids-compose for Java bindings and other enhancements
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
 - PR #5674 Support JIT backend on PowerPC64
