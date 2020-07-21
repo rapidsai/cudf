@@ -21,7 +21,7 @@ build:
     - PARALLEL_LEVEL
     - VERSION_SUFFIX
   run_exports:
-    - {{ pin_subpackage("libcudf_kafka", max_pin="x.x") }}
+    - {{ pin_subpackage("cudf_kafka", max_pin="x.x") }}
 
 requirements:
   build:
