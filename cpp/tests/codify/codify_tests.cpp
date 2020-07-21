@@ -21,33 +21,101 @@
 #include <tests/utilities/type_lists.hpp>
 
 template <typename T>
-class CodifyTypedTests : public cudf::test::BaseFixture {
+class CodifyNumericTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CodifyTypedTests, cudf::test::FixedWidthTypes);
+using NumericTypesNotBool =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
-TYPED_TEST(CodifyTypedTests, SingleNullCodify)
+TYPED_TEST_CASE(CodifyNumericTests, NumericTypesNotBool);
+
+TYPED_TEST(CodifyNumericTests, SingleNullCodify)
 {
-  using cudf::test::expect_tables_equal;
-  using cudf::test::fixed_width_column_wrapper;
-
-  fixed_width_column_wrapper<TypeParam> input({1}, {0});
-  fixed_width_column_wrapper<cudf::size_type> expect({0});
+  cudf::test::fixed_width_column_wrapper<TypeParam> input({1}, {0});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expect({0});
   auto const result = cudf::codify(input);
 
-  expect_columns_equal(result.second->view(), expect);
+  cudf::test::expect_columns_equal(result.second->view(), expect);
 }
 
-TYPED_TEST(CodifyTypedTests, EmptyCodify)
+TYPED_TEST(CodifyNumericTests, EmptyCodify)
 {
-  using cudf::test::expect_tables_equal;
-  using cudf::test::fixed_width_column_wrapper;
-
-  fixed_width_column_wrapper<TypeParam> input({});
-  fixed_width_column_wrapper<cudf::size_type> expect({});
+  cudf::test::fixed_width_column_wrapper<TypeParam> input({});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expect({});
   auto const result = cudf::codify(input);
 
-  expect_columns_equal(result.second->view(), expect);
+  cudf::test::expect_columns_equal(result.second->view(), expect);
+}
+
+TYPED_TEST(CodifyNumericTests, SimpleNoNulls)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 2, 3, 2, 3, 2, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expect{{0, 1, 2, 1, 2, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_keys{{1, 2, 3}};
+  auto const result = cudf::codify(input);
+
+  cudf::test::expect_columns_equal(result.first->view(), expect_keys);
+  cudf::test::expect_columns_equal(result.second->view(), expect);
+}
+
+TYPED_TEST(CodifyNumericTests, SimpleWithNulls)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 2, 3, 2, 3, 2, 1},
+                                                          {1, 1, 1, 0, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expect{{0, 1, 2, 3, 2, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_keys{{1, 2, 3}};
+  auto const result = cudf::codify(input);
+
+  cudf::test::expect_columns_equal(result.first->view(), expect_keys);
+  cudf::test::expect_columns_equal(result.second->view(), expect);
+}
+
+TYPED_TEST(CodifyNumericTests, UnorderedWithNulls)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam> input{{2, 1, 5, 1, 1, 3, 2},
+                                                          {0, 1, 1, 1, 0, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expect{{4, 0, 3, 0, 4, 2, 1}};
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_keys{{1, 2, 3, 5}};
+  auto const result = cudf::codify(input);
+
+  cudf::test::expect_columns_equal(result.first->view(), expect_keys);
+  cudf::test::expect_columns_equal(result.second->view(), expect);
+}
+
+struct CodifyStringTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(CodifyStringTest, SimpleNoNulls)
+{
+  cudf::test::strings_column_wrapper input{"a", "b", "c", "d", "a"};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expect{0, 1, 2, 3, 0};
+  cudf::test::strings_column_wrapper expect_keys{"a", "b", "c", "d"};
+  auto const result = cudf::codify(input);
+
+  cudf::test::expect_columns_equal(result.first->view(), expect_keys);
+  cudf::test::expect_columns_equal(result.second->view(), expect);
+}
+
+TEST_F(CodifyStringTest, SimpleWithNulls)
+{
+  cudf::test::strings_column_wrapper input{{"a", "b", "c", "d", "a"}, {1, 0, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expect{0, 3, 1, 2, 3};
+  cudf::test::strings_column_wrapper expect_keys{"a", "c", "d"};
+  auto const result = cudf::codify(input);
+
+  cudf::test::expect_columns_equal(result.first->view(), expect_keys);
+  cudf::test::expect_columns_equal(result.second->view(), expect);
+}
+
+TEST_F(CodifyStringTest, UnorderedWithNulls)
+{
+  cudf::test::strings_column_wrapper input{{"ef", "a", "c", "d", "ef", "a"}, {1, 0, 1, 1, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expect{3, 4, 1, 2, 4, 0};
+  cudf::test::strings_column_wrapper expect_keys{"a", "c", "d", "ef"};
+  auto const result = cudf::codify(input);
+
+  cudf::test::expect_columns_equal(result.first->view(), expect_keys);
+  cudf::test::expect_columns_equal(result.second->view(), expect);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
