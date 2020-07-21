@@ -1429,6 +1429,7 @@ class RangeIndex(Index):
         """
         return True
 
+    @copy_docstring(Frame.size)
     @property
     def size(self):
         """
@@ -1616,13 +1617,6 @@ class GenericIndex(Index):
 
     def __len__(self):
         return len(self._values)
-
-    @property
-    def size(self):
-        """
-        Return the number of elements in the underlying data.
-        """
-        return len(self)
 
     def __repr__(self):
         from pandas._config import get_option

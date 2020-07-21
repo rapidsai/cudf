@@ -615,10 +615,6 @@ class MultiIndex(Index):
     def is_contiguous(self):
         return True
 
-    @property
-    def size(self):
-        return len(self._source_data)
-
     def take(self, indices):
         from collections.abc import Sequence
         from numbers import Integral
