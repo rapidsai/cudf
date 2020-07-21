@@ -91,8 +91,8 @@ class Index(Frame, Serializable):
         """Immutable, ordered and sliceable sequence of integer labels.
         The basic object storing row labels for all cuDF objects.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         data : array-like (1-dimensional)/ DataFrame
             If it is a DataFrame, it will return a MultiIndex
         dtype : NumPy dtype (default: object)
@@ -154,9 +154,6 @@ class Index(Frame, Serializable):
         return (len(self),)
 
     def serialize(self):
-        """Serialize into pickle format suitable for file storage or network
-        transmission.
-        """
         header = {}
         header["index_column"] = {}
         # store metadata values of index separately
@@ -191,8 +188,8 @@ class Index(Frame, Serializable):
 
         See Also
         --------
-        cudf.core.multiindex.get_level_values : Get values for a level
-            of a MultiIndex.
+        cudf.core.multiindex.MultiIndex.get_level_values : Get values for
+            a level of a MultiIndex.
 
         Notes
         -----
@@ -245,8 +242,6 @@ class Index(Frame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """
-        """
         h = header["index_column"]
         idx_typ = pickle.loads(header["type-serialized"])
         name = pickle.loads(header["name"])
@@ -293,11 +288,64 @@ class Index(Frame, Serializable):
         col = self._data.pop(self.name)
         self._data[value] = col
 
-    def dropna(self):
+    def dropna(self, how="any"):
         """
-        Return a Series with null values removed.
+        Return an Index with null values removed.
+
+        Parameters
+        ----------
+            how : {‘any’, ‘all’}, default ‘any’
+                If the Index is a MultiIndex, drop the value when any or
+                all levels are NaN.
+
+        Returns
+        -------
+        valid : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index(['a', None, 'b', 'c'])
+        >>> index
+        StringIndex(['a' None 'b' 'c'], dtype='object')
+        >>> index.dropna()
+        StringIndex(['a' 'b' 'c'], dtype='object')
+
+        Using `dropna` on a `MultiIndex`:
+
+        >>> midx = cudf.MultiIndex(
+        ...         levels=[[1, None, 4, None], [1, 2, 5]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...     )
+        >>> midx
+        MultiIndex(levels=[0       1
+        1    null
+        2       4
+        3    null
+        dtype: int64, 0    1
+        1    2
+        2    5
+        dtype: int64],
+        codes=   x  y
+        0  0  0
+        1  0  2
+        2  1  1
+        3  2  1
+        4  3  0)
+        >>> midx.dropna()
+        MultiIndex(levels=[0    1
+        1    4
+        dtype: int64, 0    1
+        1    2
+        2    5
+        dtype: int64],
+        codes=   x  y
+        0  0  0
+        1  0  2
+        2  1  1)
         """
-        return super().dropna(subset=[self.name])
+        return super().dropna(how=how)
 
     def _clean_nulls_from_index(self):
         if self._values.has_nulls:
@@ -486,7 +534,7 @@ class Index(Frame, Serializable):
         --------
         Index.min : Return the minimum value in an Index.
         cudf.core.series.Series.max : Return the maximum value in a Series.
-        cudf.core.dataframe.Dataframe.max : Return the maximum values in
+        cudf.core.dataframe.DataFrame.max : Return the maximum values in
             a DataFrame.
 
         Examples
@@ -611,6 +659,7 @@ class Index(Frame, Serializable):
             Whether to sort the resulting index. By default, the
             values are attempted to be sorted, but any TypeError from
             incomparable elements is caught by cudf.
+
             * None : Attempt to sort the result, but catch any TypeErrors
               from comparing incomparable elements.
             * False : Do not sort the result.
@@ -960,15 +1009,26 @@ class Index(Frame, Serializable):
 
     @property
     def is_monotonic(self):
+        """
+        Alias for is_monotonic_increasing.
+        """
         return self.is_monotonic_increasing
 
     @property
     def is_monotonic_increasing(self):
-        raise (NotImplementedError)
+        """
+        Return if the index is monotonic increasing
+        (only equal or increasing) values.
+        """
+        return self._values.is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
-        raise (NotImplementedError)
+        """
+        Return if the index is monotonic decreasing
+        (only equal or decreasing) values.
+        """
+        return self._values.is_monotonic_decreasing
 
     @property
     def empty(self):
@@ -1077,6 +1137,15 @@ class Index(Frame, Serializable):
         Returns
         -------
         Same type as caller
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([4, 3, 2, 1, 0])
+        >>> index
+        Int64Index([4, 3, 2, 1, 0], dtype='int64')
+        >>> index.where(index > 2, 15)
+        Int64Index([4, 3, 15, 15, 15], dtype='int64')
         """
         return super().where(cond=cond, other=other)
 
@@ -1351,8 +1420,6 @@ class RangeIndex(Index):
             return (self == other)._values.all()
 
     def serialize(self):
-        """Serialize Index file storage or network transmission.
-        """
         header = {}
         header["index_column"] = {}
 
@@ -1372,8 +1439,6 @@ class RangeIndex(Index):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """
-        """
         h = header["index_column"]
         name = pickle.loads(header["name"])
         start = h["start"]
@@ -1691,29 +1756,6 @@ class GenericIndex(Index):
         """
         return self._values.is_unique
 
-    @property
-    def is_monotonic(self):
-        """
-        Alias for is_monotonic_increasing.
-        """
-        return self._values.is_monotonic
-
-    @property
-    def is_monotonic_increasing(self):
-        """
-        Return if the index is monotonic increasing
-        (only equal or increasing) values.
-        """
-        return self._values.is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        """
-        Return if the index is monotonic decreasing
-        (only equal or decreasing) values.
-        """
-        return self._values.is_monotonic_decreasing
-
     def get_slice_bound(self, label, side, kind):
         return self._values.get_slice_bound(label, side, kind)
 
@@ -1726,8 +1768,8 @@ class NumericIndex(GenericIndex):
     """Immutable, ordered and sliceable sequence of labels.
     The basic object storing row labels for all cuDF objects.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     data : array-like (1-dimensional)
     dtype : NumPy dtype,
             but not used.
@@ -1833,8 +1875,8 @@ class DatetimeIndex(GenericIndex):
         If True parse dates in data with the year first order.
         This is not yet supported
 
-    Returns:
-    --------
+    Returns
+    -------
     DatetimeIndex
 
     Examples
@@ -1965,8 +2007,8 @@ class CategoricalIndex(GenericIndex):
     name : object, optional
         Name to be stored in the index.
 
-    Return
-    ------
+    Returns
+    -------
     CategoricalIndex
 
     Examples
@@ -2000,8 +2042,8 @@ class CategoricalIndex(GenericIndex):
         if isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
             if categories is not None or ordered is not None:
                 raise ValueError(
-                    "Cannot specify `categories` or \
-                        `ordered` together with `dtype`."
+                    "Cannot specify `categories` or "
+                    "`ordered` together with `dtype`."
                 )
 
         if copy:
