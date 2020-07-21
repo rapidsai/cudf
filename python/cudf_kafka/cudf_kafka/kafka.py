@@ -1,8 +1,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-from cudf_kafka._lib.io import kafka as libkafka
-
 from cudf._lib.io.datasource import Datasource
 from cudf.utils import ioutils
+
+from cudf_kafka._lib import kafka as libkafka
 
 
 @ioutils.doc_kafka_datasource()

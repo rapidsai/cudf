@@ -46,8 +46,8 @@ cdef source_info make_source_info(list src) except*:
     #                 change when UCX and/or cuStreamz support is added.
     elif isinstance(src[0], Datasource):
         print(type(src[0]))
-        print(type(src[0].c_datasource_two.get()))
-        # return source_info(<datasource *> dsource)
+        # print(type(src[0].c_datasource_two.get()))
+        # return source_info(<datasource *> src[0])
     elif isinstance(src[0], (int, float, complex, basestring, os.PathLike)):
         # If source is a file, return source_info where type=FILEPATH
         if not all(os.path.isfile(file) for file in src):
