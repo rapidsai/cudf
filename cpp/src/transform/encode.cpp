@@ -12,7 +12,7 @@ namespace detail {
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> encode(
   column_view const& input_column, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
-  // side effects of this function were are now dependent on:
+  // side effects of this function we are now dependent on:
   // - resulting column elements are sorted ascending
   // - nulls are sorted to the beginning
   auto table_keys = cudf::detail::drop_duplicates(table_view{{input_column}},
@@ -21,7 +21,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> encode(
                                                   null_equality::EQUAL,
                                                   mr,
                                                   stream)
-                      ->release();  // true == nulls are equal
+                      ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
   if (input_column.has_nulls()) {
