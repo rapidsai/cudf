@@ -1032,7 +1032,7 @@ extern "C" __global__ void __launch_bounds__(1024)
     ((volatile uint32_t *)&ck0)[t] = ((const uint32_t *)&chunks[ck0_id])[t];
   }
   __syncthreads();
-  cid     = ss.strm_type;
+  cid     = ss.stream_type;
   dst_ptr = ck0.streams[cid] + ck0.strm_len[cid];
   for (uint32_t g = 1; g < ss.num_chunks; g++) {
     uint8_t *src_ptr;
@@ -1092,7 +1092,7 @@ extern "C" __global__ void __launch_bounds__(256)
     ((volatile uint32_t *)&ss)[t] = ((const uint32_t *)&strm_desc[strm_id])[t];
   }
   __syncthreads();
-  if (t == 0) { uncomp_base_g = chunks[ss.first_chunk_id].streams[ss.strm_type]; }
+  if (t == 0) { uncomp_base_g = chunks[ss.first_chunk_id].streams[ss.stream_type]; }
   __syncthreads();
   src        = uncomp_base_g;
   dst        = compressed_bfr + ss.bfr_offset;
