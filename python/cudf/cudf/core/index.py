@@ -1429,7 +1429,6 @@ class RangeIndex(Index):
         """
         return True
 
-    @copy_docstring(Frame.size)
     @property
     def size(self):
         return max(0, self._stop - self._start)

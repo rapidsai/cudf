@@ -12,7 +12,6 @@ import cudf
 from cudf.core.column import column
 from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
-from cudf.utils.docutils import copy_docstring
 
 
 class MultiIndex(Index):
@@ -616,7 +615,6 @@ class MultiIndex(Index):
     def is_contiguous(self):
         return True
 
-    @copy_docstring(Frame.size)
     @property
     def size(self):
         return len(self)
