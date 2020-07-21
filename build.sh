@@ -17,8 +17,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [-v] [-g] [-n] [-h] [-l]
+VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [-v] [-g] [-n] [-h] [-l]
    clean                - remove all existing build artifacts and configuration (start
                           over)
    libcudf              - build the cudf C++ code only
@@ -27,6 +27,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafk
    benchmarks           - build benchmarks
    tests                - build tests
    libcudf_kafka        - build the libcudf_kafka C++ code only
+   cudf_kafka           - build the cudf_kafka Python package
    -v                   - verbose build mode
    -g                   - build for debug
    -n                   - no install step
@@ -199,7 +200,7 @@ if buildAll || hasArg dask_cudf; then
     fi
 fi
 
-# Build libcudf_kafka library and cudf_kafka Python package
+# Build libcudf_kafka library
 if hasArg libcudf_kafka; then
 
     KAFKA_LIB_BUILD_DIR=${KAFKA_LIB_BUILD_DIR:=${REPODIR}/cpp/libcudf_kafka/build}
@@ -217,7 +218,10 @@ if hasArg libcudf_kafka; then
     if [[ ${BUILD_TESTS} == "ON" ]]; then
         make -j${PARALLEL_LEVEL} build_tests_libcudf_kafka VERBOSE=${VERBOSE}
     fi
+fi
 
+# build cudf_kafka Python package
+if hasArg cudf_kafka; then
     cd ${REPODIR}/python/cudf_kafka
     if [[ ${INSTALL_TARGET} != "" ]]; then
         PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace
@@ -226,3 +230,4 @@ if hasArg libcudf_kafka; then
         PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
     fi
 fi
+

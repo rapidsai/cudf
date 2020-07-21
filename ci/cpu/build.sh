@@ -62,6 +62,9 @@ source ci/cpu/dask-cudf/build_dask_cudf.sh
 
 logger "Build conda pkg for custreamz..."
 source ci/cpu/custreamz/build_custreamz.sh
+
+logger "Build conda pkg for cudf_kafka..."
+source ci/cpu/cudf_kafka/build_cudf_kafka.sh
 ################################################################################
 # UPLOAD - Conda packages
 ################################################################################

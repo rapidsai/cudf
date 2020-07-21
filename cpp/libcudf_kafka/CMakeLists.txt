@@ -156,14 +156,3 @@ install(TARGETS cudf_kafka
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
         DESTINATION include
         COMPONENT cudf_kafka)
-
-add_custom_target(install_libcudf_kafka
-        COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf_kafka -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
-        DEPENDS cudf_kafka)
-
-add_custom_target(build_tests_libcudf_kafka
-                    DEPENDS ${CUDF_KAFKA_TEST_LIST})
-
-add_custom_target(test_libcudf_kafka
-                    COMMAND ctest
-                    DEPENDS build_tests_libcudf_kafka)

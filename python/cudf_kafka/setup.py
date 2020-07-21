@@ -33,6 +33,9 @@ if not os.path.isdir(CUDA_HOME):
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
 CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
+CUDF_KAFKA_ROOT = os.environ.get(
+    "CUDF_KAFKA_ROOT", "../../libcudf_kafka/build"
+)
 
 try:
     nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
@@ -57,14 +60,7 @@ extensions = [
             np.get_include(),
             cuda_include_dir,
         ],
-        library_dirs=(
-            [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
-            + [
-                os.path.join(
-                    os.path.join(os.sys.prefix, "libcudf_kafka"), "lib"
-                )
-            ]
-        ),
+        library_dirs=([get_python_lib(), os.path.join(os.sys.prefix, "lib")]),
         libraries=["cudf", "cudf_kafka"],
         language="c++",
         extra_compile_args=["-std=c++14"],
