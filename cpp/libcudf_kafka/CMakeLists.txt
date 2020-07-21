@@ -79,20 +79,20 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 ###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
-#if(BUILD_TESTS)
-#    include(CTest)
-#    include(ConfigureGoogleTest)
-#
-#    if(GTEST_FOUND)
-#        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-#        include_directories(${GTEST_INCLUDE_DIR})
-#        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
-#    else()
-#        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
-#    endif(GTEST_FOUND)
-#endif(BUILD_TESTS)
-#        
-#message(STATUS "CUDF_KAFKA_TEST_LIST set to: ${CUDF_KAFKA_TEST_LIST}")
+if(BUILD_TESTS)
+    include(CTest)
+    include(ConfigureGoogleTest)
+
+    if(GTEST_FOUND)
+        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+        include_directories(${GTEST_INCLUDE_DIR})
+        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+    else()
+        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+    endif(GTEST_FOUND)
+endif(BUILD_TESTS)
+        
+message(STATUS "CUDF_KAFKA_TEST_LIST set to: ${CUDF_KAFKA_TEST_LIST}")
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
