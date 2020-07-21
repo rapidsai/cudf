@@ -18,7 +18,10 @@ from cudf._lib.nvtext.generate_ngrams import (
 from cudf._lib.nvtext.ngrams_tokenize import (
     ngrams_tokenize as cpp_ngrams_tokenize,
 )
-from cudf._lib.nvtext.normalize import normalize_spaces as cpp_normalize_spaces
+from cudf._lib.nvtext.normalize import (
+    normalize_characters as cpp_normalize_characters,
+    normalize_spaces as cpp_normalize_spaces,
+)
 from cudf._lib.nvtext.replace import (
     filter_tokens as cpp_filter_tokens,
     replace_tokens as cpp_replace_tokens,
@@ -3614,6 +3617,55 @@ class StringMethods(ColumnMethodsMixin):
         """
         return self._return_or_inplace(
             cpp_normalize_spaces(self._column), **kwargs
+        )
+
+    def normalize_characters(self, do_lower=True, **kwargs):
+        """
+        Normalizes strings characters for tokenizing.
+
+        This uses the normalizer that is built into the
+        subword_tokenize function which includes:
+
+            - adding padding around punctuation (unicode category starts with
+              "P") as well as certain ASCII symbols like "^" and "$"
+            - adding padding around the CJK Unicode block characters
+            - changing whitespace (e.g. `"\t", "\n", "\r"`) to space `" "`
+            - removing control characters (unicode categories "Cc" and "Cf")
+
+        The `do_lower_case` parameter will lower-case and remove accents
+        from characters. If `True`, lower-casing must also remove the
+        accents -- the accents cannot be removed from upper-case characters
+        without lower-casing it and lower-casing cannot be performed
+        without also removing accents. However, if the accented character
+        is already lower-case, then only the accent is removed.
+
+        Parameters
+        ----------
+        do_lower : bool, Default is True
+            If set to true, characters will be lower-cased and
+            accents will be removed.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["héllo, \\tworld","ĂĆCĖÑTED","$99])
+        >>> ser.str.normalize_characters()
+        0    hello ,  world
+        1          accented
+        2              $ 99
+        dtype: object
+        >>> ser.str.normalize_characters(do_lower=False)
+        0    héllo ,  world
+        1          ĂĆCĖÑTED
+        2              $ 99
+        dtype: object
+        """
+        return self._return_or_inplace(
+            cpp_normalize_characters(self._column, do_lower), **kwargs
         )
 
     def tokenize(self, delimiter=" ", **kwargs):
