@@ -87,6 +87,8 @@ def to_datetime(
     Assembling a datetime from multiple columns of a DataFrame. The keys can be
     common abbreviations like ['year', 'month', 'day', 'minute', 'second',
     'ms', 'us', 'ns']) or plurals of the same
+
+    >>> import cudf
     >>> df = cudf.DataFrame({'year': [2015, 2016],
     ...                    'month': [2, 3],
     ...                    'day': [4, 5]})
@@ -119,9 +121,9 @@ def to_datetime(
             if len(req):
                 req = ",".join(req)
                 raise ValueError(
-                    "to assemble mappings requires at least that "
+                    f"to assemble mappings requires at least that "
                     f"[year, month, day] be specified: [{req}] "
-                    "is missing"
+                    f"is missing"
                 )
 
             # replace passed column name with values in _unit_map
@@ -133,8 +135,8 @@ def to_datetime(
             if len(excess):
                 excess = ",".join(excess)
                 raise ValueError(
-                    f"extra keys have been passed to the \
-                        datetime assemblage: [{excess}]"
+                    f"extra keys have been passed to the "
+                    f"datetime assemblage: [{excess}]"
                 )
 
             new_series = (

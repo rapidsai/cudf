@@ -1,5 +1,4 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -220,7 +219,10 @@ def test_dataframe_join_combine_cats():
     expect.index = expect.index.astype("category")
     got = lhs.join(rhs, how="outer")
 
-    assert_eq(sorted(expect.index), sorted(got.index))
+    # TODO: Remove copying to host
+    # after https://github.com/rapidsai/cudf/issues/5676
+    # is implemented
+    assert_eq(expect.index.sort_values(), got.index.to_pandas().sort_values())
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
@@ -486,8 +488,9 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
 
 def test_safe_merging_with_left_empty():
     import numpy as np
-    from cudf import DataFrame
     import pandas as pd
+
+    from cudf import DataFrame
 
     np.random.seed(0)
 

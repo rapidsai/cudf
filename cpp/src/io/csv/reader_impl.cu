@@ -219,10 +219,8 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_uncomp_data = reinterpret_cast<const char *>(buffer->data());
       h_uncomp_size = buffer->size();
     } else {
-      getUncompressedHostData(reinterpret_cast<const char *>(buffer->data()),
-                              buffer->size(),
-                              compression_type_,
-                              h_uncomp_data_owner);
+      h_uncomp_data_owner = getUncompressedHostData(
+        reinterpret_cast<const char *>(buffer->data()), buffer->size(), compression_type_);
       h_uncomp_data = h_uncomp_data_owner.data();
       h_uncomp_size = h_uncomp_data_owner.size();
     }
@@ -758,21 +756,23 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 }
 
 // Forward to implementation
-reader::reader(std::string filepath,
+reader::reader(std::vector<std::string> const &filepaths,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(nullptr, filepath, options, mr))
 {
+  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
+  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, mr);
 }
 
 // Forward to implementation
-reader::reader(std::unique_ptr<cudf::io::datasource> source,
+reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(source), "", options, mr))
 {
+  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, mr);
 }
 
 // Destructor within this translation unit

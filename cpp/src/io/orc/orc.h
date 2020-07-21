@@ -238,7 +238,6 @@ class ProtobufWriter {
 class OrcDecompressor {
  public:
   OrcDecompressor(CompressionKind kind, uint32_t blockSize);
-  ~OrcDecompressor();
   const uint8_t *Decompress(const uint8_t *srcBytes, size_t srcLen, size_t *dstLen);
   uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
   uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
@@ -250,10 +249,10 @@ class OrcDecompressor {
   uint32_t GetBlockSize() const { return m_blockSize; }
 
  protected:
-  CompressionKind m_kind;
-  uint32_t m_log2MaxRatio;  // log2 of maximum compression ratio
-  uint32_t m_blockSize;
-  HostDecompressor *m_decompressor;
+  CompressionKind const m_kind;
+  uint32_t m_log2MaxRatio = 24;  // log2 of maximum compression ratio
+  uint32_t const m_blockSize;
+  std::unique_ptr<HostDecompressor> m_decompressor;
   std::vector<uint8_t> m_buf;
 };
 

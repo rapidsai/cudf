@@ -1,3 +1,6 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+
 def validate_setup(check_dask=True):
     import os
 
@@ -7,16 +10,17 @@ def validate_setup(check_dask=True):
     if not check_dask and "DASK_PARENT" in os.environ:
         return
 
+    import warnings
+
     from cudf._cuda.gpu import (
-        getDeviceCount,
-        driverGetVersion,
-        runtimeGetVersion,
-        getDeviceAttribute,
         CudaDeviceAttr,
         CUDARuntimeError,
         deviceGetName,
+        driverGetVersion,
+        getDeviceAttribute,
+        getDeviceCount,
+        runtimeGetVersion,
     )
-    import warnings
 
     try:
         gpus_count = getDeviceCount()
@@ -50,12 +54,11 @@ def validate_setup(check_dask=True):
                 CudaDeviceAttr.cudaDevAttrComputeCapabilityMinor, 0
             )
             warnings.warn(
-                "You will need a GPU with NVIDIA Pascal™ or newer architecture"
-                "\nDetected GPU 0: " + device_name + "\n"
-                "Detected Compute Capability: "
-                + str(major_version)
-                + "."
-                + str(minor_version)
+                f"You will need a GPU with NVIDIA Pascal™ or "
+                f"newer architecture"
+                f"\nDetected GPU 0: {device_name} \n"
+                f"Detected Compute Capability: "
+                f"{major_version}.{minor_version}"
             )
 
         cuda_runtime_version = runtimeGetVersion()
@@ -69,10 +72,9 @@ def validate_setup(check_dask=True):
             minor_version = cuda_runtime_version % 100
             major_version = (cuda_runtime_version - minor_version) // 1000
             raise UnSupportedCUDAError(
-                "Detected CUDA Runtime version is {0}.{1}"
-                "Please update your CUDA Runtime to 10.0 or above".format(
-                    major_version, str(minor_version)[0]
-                )
+                f"Detected CUDA Runtime version is "
+                f"{major_version}.{str(minor_version)[0]}"
+                f"Please update your CUDA Runtime to 10.0 or above"
             )
 
         cuda_driver_supported_rt_version = driverGetVersion()
@@ -91,10 +93,10 @@ def validate_setup(check_dask=True):
             from cudf.errors import UnSupportedCUDAError
 
             raise UnSupportedCUDAError(
-                "We couldn't detect the GPU driver\
-            properly. Please follow the linux installation guide to\
-            ensure your driver is properly installed.\
-            : https://docs.nvidia.com/cuda/cuda-installation-guide-linux/"
+                "We couldn't detect the GPU driver "
+                "properly. Please follow the linux installation guide to "
+                "ensure your driver is properly installed "
+                ": https://docs.nvidia.com/cuda/cuda-installation-guide-linux/"
             )
 
         elif cuda_driver_supported_rt_version >= cuda_runtime_version:
@@ -105,14 +107,12 @@ def validate_setup(check_dask=True):
             from cudf.errors import UnSupportedCUDAError
 
             raise UnSupportedCUDAError(
-                "Please update your NVIDIA GPU Driver to support CUDA \
-                    Runtime.\n"
-                "Detected CUDA Runtime version : "
-                + str(cuda_runtime_version)
-                + "\n"
-                "Latest version of CUDA \
-                    supported by current NVIDIA GPU Driver : "
-                + str(cuda_driver_supported_rt_version)
+                f"Please update your NVIDIA GPU Driver to support CUDA "
+                f"Runtime.\n"
+                f"Detected CUDA Runtime version : {cuda_runtime_version}"
+                f"\n"
+                f"Latest version of CUDA supported by current "
+                f"NVIDIA GPU Driver : {cuda_driver_supported_rt_version}"
             )
 
     else:

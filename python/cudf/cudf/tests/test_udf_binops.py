@@ -1,14 +1,13 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
 from __future__ import division
 
 import numba
 import numpy as np
 import pytest
 
-import cudf._lib as libcudf
-import cudf.utils.dtypes as dtypeutils
+from cudf import _lib as libcudf
 from cudf.core import Series
+from cudf.utils import dtypes as dtypeutils
 
 try:
     # Numba >= 0.49
@@ -50,4 +49,4 @@ def test_generic_ptx(dtype):
 
     result = lhs_arr ** 3 + rhs_arr
 
-    np.testing.assert_almost_equal(result, out_col)
+    np.testing.assert_almost_equal(result, out_col.to_array())

@@ -70,11 +70,12 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Table class makes a copy of the array of cudfColumns passed to it. The class will decrease the
-   * refcount on itself and all its contents when closed and free resources if refcount is zero
+   * Create a Table from an array of existing on device cudf::column pointers. Ownership of the
+   * columns is transferred to the ColumnVectors held by the new Table. In the case of an exception
+   * the columns will be deleted.
    * @param cudfColumns - Array of nativeHandles
    */
-  Table(long[] cudfColumns) {
+  public Table(long[] cudfColumns) {
     assert cudfColumns != null && cudfColumns.length > 0 : "CudfColumns can't be null or empty";
     this.columns = new ColumnVector[cudfColumns.length];
     try {
@@ -349,16 +350,21 @@ public final class Table implements AutoCloseable {
                                        boolean[] areNullsSmallest) throws CudfException;
 
   private static native long[] leftJoin(long leftTable, int[] leftJoinCols, long rightTable,
-                                        int[] rightJoinCols) throws CudfException;
+                                        int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
-                                         int[] rightJoinCols) throws CudfException;
+                                         int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] fullJoin(long leftTable, int[] leftJoinCols, long rightTable,
+                                         int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
-      int[] rightJoinCols) throws CudfException;
+      int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] leftAntiJoin(long leftTable, int[] leftJoinCols, long rightTable,
-      int[] rightJoinCols) throws CudfException;
+      int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] crossJoin(long leftTable, long rightTable) throws CudfException;
 
   private static native long[] concatenate(long[] cudfTablePointers) throws CudfException;
 
@@ -933,6 +939,17 @@ public final class Table implements AutoCloseable {
       assert valueTable.columns[i].getType() == this.getColumn(i).getType() :
           "Input and values tables' data types do not match";
     }
+  }
+
+  /**
+   * Joins two tables all of the left against all of the right. Be careful as this
+   * gets very big and you can easily use up all of the GPUs memory.
+   * @param right the right table
+   * @return the joined table.  The order of the columns returned will be left columns,
+   * right columns.
+   */
+  public Table crossJoin(Table right) {
+    return new Table(Table.crossJoin(this.nativeHandle, right.nativeHandle));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1610,12 +1627,45 @@ public final class Table implements AutoCloseable {
      * Table t2 ...
      * Table result = t1.onColumns(0,1).leftJoin(t2.onColumns(2,3));
      * @param rightJoinIndices - Indices of the right table to join on
+     * @param compareNullsEqual - Whether null join-key values should match or not.
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
+     */
+    public Table leftJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
+      return new Table(Table.leftJoin(operation.table.nativeHandle, operation.indices,
+          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
+          compareNullsEqual));
+    }
+
+    /**
+     * Joins two tables on the join columns that are passed in.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).leftJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
      * @return the joined table.  The order of the columns returned will be join columns,
      * left non-join columns, right non-join columns.
      */
     public Table leftJoin(TableOperation rightJoinIndices) {
-      return new Table(Table.leftJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
+        return leftJoin(rightJoinIndices, true);
+    }
+
+    /**
+     * Joins two tables on the join columns that are passed in.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).innerJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @param compareNullsEqual - Whether null join-key values should match or not.
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
+     */
+    public Table innerJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
+      return new Table(Table.innerJoin(operation.table.nativeHandle, operation.indices,
+          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
+          compareNullsEqual));
     }
 
     /**
@@ -1629,8 +1679,55 @@ public final class Table implements AutoCloseable {
      * left non-join columns, right non-join columns.
      */
     public Table innerJoin(TableOperation rightJoinIndices) {
-      return new Table(Table.innerJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
+      return innerJoin(rightJoinIndices, true);
+    }
+
+    /**
+     * Joins two tables on the join columns that are passed in.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).fullJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @param compareNullsEqual - Whether null join-key values should match or not.
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
+     */
+    public Table fullJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
+      return new Table(Table.fullJoin(operation.table.nativeHandle, operation.indices,
+              rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
+              compareNullsEqual));
+    }
+
+    /**
+     * Joins two tables on the join columns that are passed in.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).fullJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
+     */
+    public Table fullJoin(TableOperation rightJoinIndices) {
+      return fullJoin(rightJoinIndices, true);
+    }
+
+    /**
+     * Performs a semi-join between a left table and a right table, returning only the rows from
+     * the left table that match rows in the right table on the join keys.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).leftSemiJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @param compareNullsEqual - Whether null join-key values should match or not.
+     * @return the left semi-joined table.
+     */
+    public Table leftSemiJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
+      return new Table(Table.leftSemiJoin(operation.table.nativeHandle, operation.indices,
+          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
+          compareNullsEqual));
     }
 
     /**
@@ -1644,8 +1741,24 @@ public final class Table implements AutoCloseable {
      * @return the left semi-joined table.
      */
     public Table leftSemiJoin(TableOperation rightJoinIndices) {
-      return new Table(Table.leftSemiJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
+      return leftSemiJoin(rightJoinIndices, true);
+    }
+
+    /**
+     * Performs an anti-join between a left table and a right table, returning only the rows from
+     * the left table that do not match rows in the right table on the join keys.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).leftAntiJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @param compareNullsEqual - Whether null join-key values should match or not.
+     * @return the left anti-joined table.
+     */
+    public Table leftAntiJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
+      return new Table(Table.leftAntiJoin(operation.table.nativeHandle, operation.indices,
+          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
+          compareNullsEqual));
     }
 
     /**
@@ -1659,8 +1772,7 @@ public final class Table implements AutoCloseable {
      * @return the left anti-joined table.
      */
     public Table leftAntiJoin(TableOperation rightJoinIndices) {
-      return new Table(Table.leftAntiJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
+      return leftAntiJoin(rightJoinIndices, true);
     }
 
     /**
