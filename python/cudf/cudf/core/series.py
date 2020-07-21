@@ -1004,7 +1004,7 @@ class Series(Frame, Serializable):
         elif is_datetime_dtype(preprocess.dtype):
             output = preprocess.to_pandas().fillna("null").__repr__()
         else:
-            output = preprocess.to_pandas().__repr__()
+            output = preprocess.to_pandas(nullable_pd_dtype=False).__repr__()
 
         lines = output.split("\n")
 
