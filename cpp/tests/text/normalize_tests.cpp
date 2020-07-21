@@ -77,20 +77,49 @@ TEST_F(TextNormalizeTest, NormalizeEmptyTest)
 
 TEST_F(TextNormalizeTest, NormalizeCharacters)
 {
-  // The example strings are based on issue 5520
-  cudf::test::strings_column_wrapper strings(
-    {"abc£def", "éè â îô\taeio", "\tĂĆĖÑ  Ü", "ACEN U", "P^NP", "$4.00", "[a,b]"});
+  // These include punctuation, accents, whitespace, and CJK characters
+  std::vector<const char*> h_strings{"abc£def",
+                                     nullptr,
+                                     "éè â îô\taeio",
+                                     "\tĂĆĖÑ  Ü",
+                                     "ACEN U",
+                                     "P^NP",
+                                     "$41.07",
+                                     "[a,b]",
+                                     "丏丟",
+                                     ""};
+  auto validity =
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
   cudf::strings_column_view strings_view(strings);
   {
     auto results = nvtext::normalize_characters(strings_view, true);
-    cudf::test::strings_column_wrapper expected(
-      {"abc£def", "ee a io aeio", " acen  u", "acen u", "p ^ np", " $ 4 . 00", " [ a , b ] "});
+    cudf::test::strings_column_wrapper expected({"abc£def",
+                                                 "",
+                                                 "ee a io aeio",
+                                                 " acen  u",
+                                                 "acen u",
+                                                 "p ^ np",
+                                                 " $ 41 . 07",
+                                                 " [ a , b ] ",
+                                                 " 丏  丟 ",
+                                                 ""},
+                                                validity);
     cudf::test::expect_columns_equal(*results, expected);
   }
   {
     auto results = nvtext::normalize_characters(cudf::strings_column_view(strings), false);
-    cudf::test::strings_column_wrapper expected(
-      {"abc£def", "éè â îô aeio", " ĂĆĖÑ  Ü", "ACEN U", "P ^ NP", " $ 4 . 00", " [ a , b ] "});
+    cudf::test::strings_column_wrapper expected({"abc£def",
+                                                 "",
+                                                 "éè â îô aeio",
+                                                 " ĂĆĖÑ  Ü",
+                                                 "ACEN U",
+                                                 "P ^ NP",
+                                                 " $ 41 . 07",
+                                                 " [ a , b ] ",
+                                                 " 丏  丟 ",
+                                                 ""},
+                                                validity);
     cudf::test::expect_columns_equal(*results, expected);
   }
 }
