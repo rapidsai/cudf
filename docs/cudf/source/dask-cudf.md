@@ -1,7 +1,7 @@
 Multi-GPU with Dask-cuDF
 ========================
 
-cuDF is a single-GPU library. For Multi-GPU cuDF solutions we use [Dask](https://dask.org/) and the [dask-cudf package](https://github.com/rapidsai/dask-cudf), which is able to scale cuDF across multiple GPUs on a single machine, or multiple GPUs across many machines in a cluster.
+cuDF is a single-GPU library. For Multi-GPU cuDF solutions we use [Dask](https://dask.org/) and the [dask-cudf package](https://github.com/rapidsai/cudf/tree/main/python/dask_cudf), which is able to scale cuDF across multiple GPUs on a single machine, or multiple GPUs across many machines in a cluster.
 
 [Dask DataFrame](http://docs.dask.org/en/latest/dataframe.html) was originally designed to scale Pandas, orchestrating many Pandas DataFrames spread across many CPUs into a cohesive parallel DataFrame. Because cuDF currently implements only a subset of Pandas’s API, not all Dask DataFrame operations work with cuDF.
 
