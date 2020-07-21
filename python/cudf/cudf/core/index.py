@@ -389,7 +389,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.as_index([-3, 10, 15, 20])
+        >>> idx = cudf.Index([-3, 10, 15, 20])
         >>> idx
         Int64Index([-3, 10, 15, 20], dtype='int64')
         >>> idx.to_pandas()
@@ -408,7 +408,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.as_index([-3, 10, 15, 20])
+        >>> idx = cudf.Index([-3, 10, 15, 20])
         >>> idx.to_arrow()
         <pyarrow.lib.Int64Array object at 0x7fcaa6f53440>
         [
@@ -467,7 +467,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.as_index([3, 2, 1])
+        >>> idx = cudf.Index([3, 2, 1])
         >>> idx.min()
         1
         """
@@ -492,7 +492,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.as_index([3, 2, 1])
+        >>> idx = cudf.Index([3, 2, 1])
         >>> idx.max()
         3
         """
@@ -510,7 +510,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.as_index([3, 2, 1])
+        >>> idx = cudf.Index([3, 2, 1])
         >>> idx.sum()
         6
         """
