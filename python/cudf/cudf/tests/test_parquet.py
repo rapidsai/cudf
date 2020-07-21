@@ -1,5 +1,4 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import os
 import pathlib
 import random
@@ -11,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from pyarrow import parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
@@ -229,10 +229,12 @@ def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
         else:
             hash_ref = [989983842, 429364346, 1169108191]
         assert gdf["b"].dtype == np.dtype("int32")
-        assert list(gdf["b"]) == list(hash_ref)
+        assert_eq(
+            gdf["b"], cudf.Series(hash_ref, dtype=np.dtype("int32"), name="b")
+        )
     else:
         assert gdf["b"].dtype == np.dtype("object")
-        assert list(gdf["b"]) == list(df["b"])
+        assert_eq(gdf["b"], df["b"])
 
 
 @pytest.mark.parametrize("columns", [None, ["b"]])
@@ -769,6 +771,24 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
         gdf.to_parquet(dir1, partition_cols=cols)
 
 
+def test_parquet_writer_chunked_metadata(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    test_path = "test/path"
+
+    writer = ParquetWriter(gdf_fname)
+    writer.write_table(simple_gdf)
+    writer.write_table(simple_gdf)
+    meta_byte_array = writer.close(metadata_file_path=test_path)
+    fmd = pq.ParquetFile(BytesIO(meta_byte_array)).metadata
+
+    assert fmd.num_rows == 2 * len(simple_gdf)
+    assert fmd.num_row_groups == 2
+
+    for r in range(fmd.num_row_groups):
+        for c in range(fmd.num_columns):
+            assert fmd.row_group(r).column(c).file_path == test_path
+
+
 def test_write_read_cudf(tmpdir, pdf):
     file_path = tmpdir.join("cudf.parquet")
     if "col_category" in pdf.columns:
@@ -806,3 +826,23 @@ def test_write_cudf_read_pandas_pyarrow(tmpdir, pdf):
     ).to_pandas()
 
     assert_eq(cudf_res, pd_res, check_index_type=False if pdf.empty else True)
+
+
+def test_parquet_writer_criteo(tmpdir):
+    # To run this test, download the day 0 of criteo dataset from
+    # http://labs.criteo.com/2013/12/download-terabyte-click-logs/
+    # and place the uncompressed dataset in the home directory
+    fname = os.path.expanduser("~/day_0")
+    if not os.path.isfile(fname):
+        pytest.skip("Local criteo day 0 tsv file is not found")
+
+    cudf_path = tmpdir.join("cudf.parquet")
+
+    cont_names = ["I" + str(x) for x in range(1, 14)]
+    cat_names = ["C" + str(x) for x in range(1, 27)]
+    cols = ["label"] + cont_names + cat_names
+
+    df = cudf.read_csv(fname, sep="\t", names=cols, byte_range=(0, 1000000000))
+    df = df.drop(columns=cont_names)
+
+    df.to_parquet(cudf_path)

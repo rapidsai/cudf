@@ -673,7 +673,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
           ss->first_chunk_id = (group * num_columns + i);
           ss->num_chunks     = (stripe_group_end - group);
           ss->column_id      = i;
-          ss->strm_type      = k;
+          ss->stream_type    = k;
         }
       }
     }
@@ -921,10 +921,10 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
                                      std::vector<Stream> &streams,
                                      cudaStream_t stream)
 {
-  const auto length                                  = strm_desc.stream_size;
-  streams[chunk.strm_id[strm_desc.strm_type]].length = length;
+  const auto length                                    = strm_desc.stream_size;
+  streams[chunk.strm_id[strm_desc.stream_type]].length = length;
   if (length != 0) {
-    const auto *stream_in = (compression_kind_ == NONE) ? chunk.streams[strm_desc.strm_type]
+    const auto *stream_in = (compression_kind_ == NONE) ? chunk.streams[strm_desc.stream_type]
                                                         : (compressed_data + strm_desc.bfr_offset);
     CUDA_TRY(cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
