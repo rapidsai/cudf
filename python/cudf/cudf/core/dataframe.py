@@ -4373,7 +4373,7 @@ class DataFrame(Frame, Serializable):
                 column_head, space
             )
             if show_counts:
-                counts = self.count().tolist()
+                counts = self.count().to_pandas().tolist()
                 if len(cols) != len(counts):
                     raise AssertionError(
                         f"Columns must equal "

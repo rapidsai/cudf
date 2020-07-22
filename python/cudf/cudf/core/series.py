@@ -855,9 +855,12 @@ class Series(Frame, Serializable):
         -------
         list
         """
-        # TODO: Raise error as part
-        # of https://github.com/rapidsai/cudf/issues/5689
-        return self.to_arrow().to_pylist()
+
+        raise TypeError(
+            "Implicit conversion to a host memory via tolist() is not "
+            "allowed, To explicitly construct a python list object, "
+            "consider using .to_pandas().tolist()"
+        )
 
     to_list = tolist
 

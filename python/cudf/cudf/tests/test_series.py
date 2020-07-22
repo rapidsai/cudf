@@ -317,3 +317,33 @@ def test_series_column_iter_error():
         ),
     ):
         iter(gs._column)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1.0, 2.0, None, 4.0, 5.0],
+        ["a", "b", "c", "d", "e"],
+        ["a", "b", None, "d", "e"],
+        [None, None, None, None, None],
+        np.array(["1991-11-20", "2004-12-04"], dtype=np.datetime64),
+        np.array(["1991-11-20", None], dtype=np.datetime64),
+        np.array(
+            ["1991-11-20 05:15:00", "2004-12-04 10:00:00"], dtype=np.datetime64
+        ),
+        np.array(["1991-11-20 05:15:00", None], dtype=np.datetime64),
+    ],
+)
+def test_series_tolist(data):
+    psr = pd.Series(data)
+    gsr = cudf.from_pandas(psr)
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "Implicit conversion to a host memory via tolist() is not "
+            "allowed, To explicitly construct a python list object, "
+            "consider using .to_pandas().tolist()"
+        ),
+    ):
+        gsr.tolist()
