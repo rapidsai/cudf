@@ -263,6 +263,15 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return str;
   }
 
+  __device__ char* int_to_2digitstr(char* str, int min_digits, int8_t value)
+  {
+    assert(value = > -99 && value <= 99);
+    value  = std::abs(value);
+    str[0] = '0' + value / 10;
+    str[1] = '0' + std::abs(value % 10);
+    return str + 2;
+  }
+
   inline __device__ char* day(char* ptr, duration_component const* timeparts)
   {
     return int2str(ptr, -1, timeparts->day);
@@ -270,11 +279,11 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
 
   inline __device__ char* hour_12(char* ptr, duration_component const* timeparts)
   {
-    return int2str(ptr, 2, timeparts->hour % 12);
+    return int_to_2digitstr(ptr, 2, timeparts->hour % 12);
   }
   inline __device__ char* hour_24(char* ptr, duration_component const* timeparts)
   {
-    return int2str(ptr, 2, timeparts->hour);
+    return int_to_2digitstr(ptr, 2, timeparts->hour);
   }
   inline __device__ char* am_or_pm(char* ptr, duration_component const* timeparts)
   {
@@ -284,21 +293,24 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
   }
   inline __device__ char* minute(char* ptr, duration_component const* timeparts)
   {
-    return int2str(ptr, 2, timeparts->minute);
+    return int_to_2digitstr(ptr, 2, timeparts->minute);
   }
   inline __device__ char* second(char* ptr, duration_component const* timeparts)
   {
-    return int2str(ptr, 2, timeparts->second);
+    return int_to_2digitstr(ptr, 2, timeparts->second);
   }
 
   inline __device__ char* subsecond(char* ptr, duration_component const* timeparts)
   {
     if (timeparts->subsecond == 0) return ptr;
-    char subsecond_digits[] = ".000000000";  // 9 max digits
-    const int digits        = duration_to_string_size_fn<T>::format_length('S', timeparts) - 3;
-    int2str(subsecond_digits + 1, digits, timeparts->subsecond);  // +1 is for dot
-    ptr = copy_and_increment(ptr, subsecond_digits, digits + 1);
-    return ptr;
+    const int digits = duration_to_string_size_fn<T>::format_length('S', timeparts) - 3;
+    *ptr             = '.';
+    auto value       = timeparts->subsecond;
+    for (int idx = digits; idx > 0; idx--) {
+      *(ptr + idx) = '0' + std::abs(value % 10);
+      value /= 10;
+    }
+    return ptr + digits + 1;
   }
 
   __device__ char* format_from_parts(duration_component const* timeparts, char* ptr)
@@ -445,6 +457,7 @@ struct dispatch_from_durations_fn {
 
 static const __device__ __constant__ int32_t powers_of_ten[10] = {
   1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
+
 // this parses duration characters into a duration integer
 template <typename T>  // duration type
 struct parse_duration {
