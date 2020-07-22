@@ -61,7 +61,7 @@ extensions = [
             cuda_include_dir,
         ],
         library_dirs=([get_python_lib(), os.path.join(os.sys.prefix, "lib")]),
-        libraries=["cudf"],
+        libraries=["cudf", "cudf_kafka"],
         language="c++",
         extra_compile_args=["-std=c++14"],
     )
