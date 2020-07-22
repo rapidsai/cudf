@@ -104,12 +104,12 @@ def transform(Column input, op):
     return Column.from_unique_ptr(move(c_output))
 
 
-def codify(Column input):
+def encode(Column input):
     cdef column_view c_input = input.view()
     cdef pair[unique_ptr[column], unique_ptr[column]] c_result
 
     with nogil:
-        c_result = move(libcudf_transform.codify(c_input))
+        c_result = move(libcudf_transform.encode(c_input))
 
     return (Column.from_unique_ptr(move(c_result.first)),
             Column.from_unique_ptr(move(c_result.second)))

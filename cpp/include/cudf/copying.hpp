@@ -750,6 +750,7 @@ std::pair<std::unique_ptr<cudf::column>, cudf::table_view> scatter_to_table(
   column_view const& column_labels,
   size_type num_output_rows,
   size_type num_output_columns,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Indicates whether a row can be sampled more than once.
@@ -791,7 +792,6 @@ std::unique_ptr<table> sample(
   size_type const n,
   sample_with_replacement replacement = sample_with_replacement::FALSE,
   int64_t const seed                  = 0,
->>>>>>> 66c581076b151d1e7409212284f01e7c20aa725f
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */

@@ -5,7 +5,7 @@ import pandas as pd
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.vector cimport vector
-from libc.stdint cimport int32_t
+from libc.stdint cimport int32_t, int64_t
 from libcpp.pair cimport pair
 
 from cudf._lib.column cimport Column
@@ -670,8 +670,16 @@ def scatter_to_table(
     cdef column_view row_labels_view = row_labels.view()
     cdef column_view column_labels_view = column_labels.view()
 
-    cdef size_type num_output_rows = row_labels.max() + 1
-    cdef size_type num_output_columns = column_labels.max() + 1
+    cdef size_type num_output_rows = 0
+    cdef size_type num_output_columns = 0
+
+    if len(row_labels):
+        num_output_rows = row_labels.max() + 1
+    if len(column_labels):
+        num_output_columns = column_labels.max() + 1
+
+    if not (num_output_rows or num_output_columns):
+        return Table({})
 
     cdef pair[unique_ptr[column], table_view] c_output
 
@@ -689,6 +697,7 @@ def scatter_to_table(
         owner=Column.from_unique_ptr(move(c_output.first)),
         column_names=names
     )
+    return result
 
 
 def sample(Table input, size_type n,
@@ -717,4 +726,3 @@ def sample(Table input, size_type n,
             else input._index_names
         )
     )
-    return result

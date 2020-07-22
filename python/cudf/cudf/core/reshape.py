@@ -706,8 +706,8 @@ def pivot(df, index=None, columns=None, values=None):
 
     columns_column = df._data[columns]
 
-    index_labels, index_idx = index_column.codify()
-    columns_labels, columns_idx = columns_column.codify()
+    index_labels, index_idx = index_column.encode()
+    columns_labels, columns_idx = columns_column.encode()
     column_names = columns_labels.to_pandas()
 
     # the result of pivot always has a multicolumn

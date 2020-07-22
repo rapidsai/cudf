@@ -50,7 +50,7 @@ struct column_to_table_scatterer {
   {
     // Generate a column of all nulls:
     std::unique_ptr<column> target_column;
-    if (input.type() == data_type{STRING}) {
+    if (input.type() == data_type{type_id::STRING}) {
       target_column =
         std::make_unique<column>(input.type(),
                                  num_output_rows * num_output_columns,
@@ -157,6 +157,7 @@ std::pair<std::unique_ptr<column>, table_view> scatter_to_table(column_view cons
 {
   CUDF_FUNC_RANGE();
 
+  CUDF_EXPECTS(num_output_columns, "Expected at least one input column");
   return type_dispatcher(row_labels.type(),
                          dispatch_map_type{},
                          input,

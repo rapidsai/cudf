@@ -31,6 +31,6 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         bool is_ptx
     ) except +
 
-    cdef pair[unique_ptr[column], unique_ptr[column]] codify(
+    cdef pair[unique_ptr[column], unique_ptr[column]] encode(
         column_view input
     ) except +
