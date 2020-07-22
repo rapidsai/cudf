@@ -472,7 +472,7 @@ cdef class Column:
 
         mask_ptr = <uintptr_t>(cv.null_mask())
         mask = None
-        if mask_ptr:
+        if cv.has_nulls():
             if column_owner:
                 mask_owner = mask_owner.base_mask
             if mask_owner is None:
