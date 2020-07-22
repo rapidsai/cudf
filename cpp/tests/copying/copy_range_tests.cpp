@@ -70,14 +70,14 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNulls)
   auto target_end = target_begin + (source_end - source_begin);
   auto row_diff   = source_begin - target_begin;
 
-  auto target = cudf::test::fixed_width_column_wrapper<T>(
+  cudf::test::fixed_width_column_wrapper<T, int32_t> target(
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(0) + size,
     cudf::test::make_counting_transform_iterator(0, all_valid));
 
   auto source_elements =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
-  auto source = cudf::test::fixed_width_column_wrapper<T>(
+  cudf::test::fixed_width_column_wrapper<T, typename decltype(source_elements)::value_type> source(
     source_elements,
     source_elements + size,
     cudf::test::make_counting_transform_iterator(0, even_valid));
@@ -86,12 +86,13 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNulls)
     cudf::test::make_counting_transform_iterator(0, [target_begin, target_end, row_diff](auto i) {
       return ((i >= target_begin) && (i < target_end)) ? (i + row_diff) * 2 : i;
     });
-  auto expected = cudf::test::fixed_width_column_wrapper<T>(
-    expected_elements,
-    expected_elements + size,
-    cudf::test::make_counting_transform_iterator(0, [target_begin, target_end, row_diff](auto i) {
-      return ((i >= target_begin) && (i < target_end)) ? even_valid(i + row_diff) : all_valid(i);
-    }));
+  cudf::test::fixed_width_column_wrapper<T, typename decltype(expected_elements)::value_type>
+    expected(
+      expected_elements,
+      expected_elements + size,
+      cudf::test::make_counting_transform_iterator(0, [target_begin, target_end, row_diff](auto i) {
+        return ((i >= target_begin) && (i < target_end)) ? even_valid(i + row_diff) : all_valid(i);
+      }));
 
   cudf::mutable_column_view target_view{target};
   this->test(source, expected, target_view, source_begin, source_end, target_begin);
@@ -108,19 +109,20 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyNoNulls)
   auto target_end = target_begin + (source_end - source_begin);
   auto row_diff   = source_begin - target_begin;
 
-  auto target = cudf::test::fixed_width_column_wrapper<T>(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(0) + size);
+  cudf::test::fixed_width_column_wrapper<T, int32_t> target(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + size);
 
   auto source_elements =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
-  auto source = cudf::test::fixed_width_column_wrapper<T>(source_elements, source_elements + size);
+  cudf::test::fixed_width_column_wrapper<T, typename decltype(source_elements)::value_type> source(
+    source_elements, source_elements + size);
 
   auto expected_elements =
     cudf::test::make_counting_transform_iterator(0, [target_begin, target_end, row_diff](auto i) {
       return ((i >= target_begin) && (i < target_end)) ? (i + row_diff) * 2 : i;
     });
-  auto expected =
-    cudf::test::fixed_width_column_wrapper<T>(expected_elements, expected_elements + size);
+  cudf::test::fixed_width_column_wrapper<T, typename decltype(expected_elements)::value_type>
+    expected(expected_elements, expected_elements + size);
 
   cudf::mutable_column_view target_view{target};
   this->test(source, expected, target_view, source_begin, source_end, target_begin);
@@ -139,7 +141,7 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
   auto target_end = target_begin + (source_end - source_begin);
   auto row_diff   = (source_offset + source_begin) - (target_offset + target_begin);
 
-  auto target = cudf::test::fixed_width_column_wrapper<T>(
+  cudf::test::fixed_width_column_wrapper<T, int32_t> target(
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(0) + size,
     cudf::test::make_counting_transform_iterator(0, all_valid));
@@ -154,7 +156,7 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
 
   auto source_elements =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
-  auto source = cudf::test::fixed_width_column_wrapper<T>(
+  cudf::test::fixed_width_column_wrapper<T, typename decltype(source_elements)::value_type> source(
     source_elements,
     source_elements + size,
     cudf::test::make_counting_transform_iterator(0, even_valid));
@@ -167,15 +169,15 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
                ? (i + row_diff) * 2
                : i;
     });
-  auto expected = cudf::test::fixed_width_column_wrapper<T>(
-    expected_elements,
-    expected_elements + size,
-    cudf::test::make_counting_transform_iterator(
-      0, [target_offset, target_begin, target_end, row_diff](auto i) {
-        return ((i >= target_offset + target_begin) && (i < target_offset + target_end))
-                 ? even_valid(i + row_diff)
-                 : all_valid(i);
-      }));
+  cudf::test::fixed_width_column_wrapper<T, typename decltype(expected_elements)::value_type>
+    expected(expected_elements,
+             expected_elements + size,
+             cudf::test::make_counting_transform_iterator(
+               0, [target_offset, target_begin, target_end, row_diff](auto i) {
+                 return ((i >= target_offset + target_begin) && (i < target_offset + target_end))
+                          ? even_valid(i + row_diff)
+                          : all_valid(i);
+               }));
 
   auto expected_slice = cudf::slice(expected, std::vector<cudf::size_type>{target_offset, size})[0];
 

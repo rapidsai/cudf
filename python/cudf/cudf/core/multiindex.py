@@ -617,7 +617,7 @@ class MultiIndex(Index):
 
     @property
     def size(self):
-        return len(self._source_data)
+        return len(self)
 
     def take(self, indices):
         from collections.abc import Sequence
