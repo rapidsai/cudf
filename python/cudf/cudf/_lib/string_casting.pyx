@@ -7,6 +7,7 @@ from cudf._lib.move cimport move
 from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types cimport underlying_type_t_type_id
 
 from cudf.core.column.column import as_column
 
@@ -28,11 +29,13 @@ from cudf._lib.cpp.strings.convert.convert_floats cimport (
 from cudf._lib.cpp.strings.convert.convert_integers cimport (
     to_integers as cpp_to_integers,
     from_integers as cpp_from_integers,
-    hex_to_integers as cpp_hex_to_integers
+    hex_to_integers as cpp_hex_to_integers,
+    is_hex as cpp_is_hex
 )
 from cudf._lib.cpp.strings.convert.convert_ipv4 cimport (
     ipv4_to_integers as cpp_ipv4_to_integers,
-    integers_to_ipv4 as cpp_integers_to_ipv4
+    integers_to_ipv4 as cpp_integers_to_ipv4,
+    is_ipv4 as cpp_is_ipv4
 )
 from cudf._lib.cpp.strings.convert.convert_urls cimport (
     url_encode as cpp_url_encode,
@@ -61,7 +64,11 @@ def floating_to_string(Column input_col):
 def string_to_floating(Column input_col, object out_type):
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
-    cdef type_id tid = np_to_cudf_types[out_type]
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[out_type]
+        )
+    )
     cdef data_type c_out_type = data_type(tid)
     with nogil:
         c_result = move(
@@ -76,8 +83,8 @@ def dtos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type double to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type double
 
     Returns
@@ -92,8 +99,8 @@ def stod(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to double
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -108,8 +115,8 @@ def ftos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type float to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type double
 
     Returns
@@ -124,8 +131,8 @@ def stof(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to float
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -150,7 +157,11 @@ def integer_to_string(Column input_col):
 def string_to_integer(Column input_col, object out_type):
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
-    cdef type_id tid = np_to_cudf_types[out_type]
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[out_type]
+        )
+    )
     cdef data_type c_out_type = data_type(tid)
     with nogil:
         c_result = move(
@@ -165,8 +176,8 @@ def i8tos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type int8 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type int8
 
     Returns
@@ -181,8 +192,8 @@ def stoi8(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to int8
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -197,8 +208,8 @@ def i16tos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type int16 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type int16
 
     Returns
@@ -213,8 +224,8 @@ def stoi16(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to int16
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -229,8 +240,8 @@ def itos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type int32 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type int32
 
     Returns
@@ -245,8 +256,8 @@ def stoi(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to int32
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -261,8 +272,8 @@ def ltos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type int64 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type int64
 
     Returns
@@ -277,8 +288,8 @@ def stol(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to int64
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -293,8 +304,8 @@ def ui8tos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type uint8 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type uint8
 
     Returns
@@ -309,8 +320,8 @@ def stoui8(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to uint8
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -325,8 +336,8 @@ def ui16tos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type uint16 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type uint16
 
     Returns
@@ -341,8 +352,8 @@ def stoui16(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to uint16
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -357,8 +368,8 @@ def uitos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type uint32 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type uint32
 
     Returns
@@ -373,8 +384,8 @@ def stoui(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to uint32
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -389,8 +400,8 @@ def ultos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type uint64 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type uint64
 
     Returns
@@ -405,8 +416,8 @@ def stoul(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to uint64
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -421,8 +432,8 @@ def _to_booleans(Column input_col, object string_true="True"):
     """
     Converting/Casting input column of type string to boolean column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
     string_true : string that represents True
 
@@ -457,8 +468,8 @@ def _from_booleans(
     """
     Converting/Casting input column of type boolean to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type boolean
     string_true : string that represents True
     string_false : string that represents False
@@ -498,8 +509,8 @@ def int2timestamp(
     Converting/Casting input date-time column to string
     column with specified format
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type timestamp in integer format
 
     Returns
@@ -528,8 +539,8 @@ def timestamp2int(
     Converting/Casting input string column to date-time column with specified
     timestamp_format
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -540,7 +551,11 @@ def timestamp2int(
     if input_col.size == 0:
         return as_column([], dtype=kwargs.get('dtype'))
     cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = np_to_cudf_types[kwargs.get('dtype')]
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[kwargs.get('dtype')]
+        )
+    )
     cdef data_type out_type = data_type(tid)
     cdef string c_timestamp_format = kwargs.get('format').encode('UTF-8')
     cdef unique_ptr[column] c_result
@@ -558,8 +573,8 @@ def int2ip(Column input_col, **kwargs):
     """
     Converting/Casting integer column to string column in ipv4 format
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input integer column
 
     Returns
@@ -581,8 +596,8 @@ def ip2int(Column input_col, **kwargs):
     """
     Converting string ipv4 column to integer column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input string column
 
     Returns
@@ -600,13 +615,30 @@ def ip2int(Column input_col, **kwargs):
     return Column.from_unique_ptr(move(c_result))
 
 
+def is_ipv4(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that have strings in IPv4 format. This format is nnn.nnn.nnn.nnn
+    where nnn is integer digits in [0,255].
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    with nogil:
+        c_result = move(cpp_is_ipv4(
+            source_view
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
 def htoi(Column input_col, **kwargs):
     """
     Converting input column of type string having hex values
     to integer of out_type
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
     out_type : The type of integer column expected
 
@@ -616,7 +648,11 @@ def htoi(Column input_col, **kwargs):
     """
 
     cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = np_to_cudf_types[kwargs.get('dtype', np.dtype("int64"))]
+    cdef type_id tid = <type_id> (
+        <underlying_type_t_type_id> (
+            np_to_cudf_types[kwargs.get('dtype', np.dtype("int64"))]
+        )
+    )
     cdef data_type c_out_type = data_type(tid)
 
     cdef unique_ptr[column] c_result
@@ -624,5 +660,21 @@ def htoi(Column input_col, **kwargs):
         c_result = move(
             cpp_hex_to_integers(input_column_view,
                                 c_out_type))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def is_hex(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that have hex characters.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    with nogil:
+        c_result = move(cpp_is_hex(
+            source_view
+        ))
 
     return Column.from_unique_ptr(move(c_result))

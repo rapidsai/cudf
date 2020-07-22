@@ -3,7 +3,7 @@
 from rmm._lib.device_buffer cimport device_buffer
 
 from libcpp cimport bool
-from libc.stdint cimport int32_t
+from libc.stdint cimport int32_t, int64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
@@ -156,10 +156,21 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         size_type index
     ) except +
 
-    pair[unique_ptr[column], table_view] scatter_to_table(
+    cdef pair[unique_ptr[column], table_view] scatter_to_table(
         const column_view& input,
         const column_view& row_labels,
         const column_view& column_labels,
         size_type num_output_rows,
         size_type num_output_columns
+    ) except +
+
+    ctypedef enum sample_with_replacement:
+        FALSE 'cudf::sample_with_replacement::FALSE',
+        TRUE 'cudf::sample_with_replacement::TRUE',
+
+    cdef unique_ptr[table] sample (
+        table_view input,
+        size_type n,
+        sample_with_replacement replacement,
+        int64_t seed
     ) except +

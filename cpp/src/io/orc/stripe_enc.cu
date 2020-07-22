@@ -764,10 +764,13 @@ extern "C" __global__ void __launch_bounds__(512)
             int32_t ts_scale = kTimeScale[min(s->chunk.scale, 9)];
             int64_t seconds  = ts / ts_scale;
             int32_t nanos    = (ts - seconds * ts_scale);
-            if (nanos < 0) {
-              seconds += 1;
-              nanos += ts_scale;
-            }
+            // There is a bug in the ORC spec such that for negative timestamps, it is understood
+            // between the writer and reader that nanos will be adjusted to their positive component
+            // but the negative seconds will be left alone. This means that -2.6 is encoded as
+            // seconds = -2 and nanos = 1+(-0.6) = 0.4
+            // This leads to an error in decoding time where -1 < time (s) < 0
+            // Details: https://github.com/rapidsai/cudf/pull/5529#issuecomment-648768925
+            if (nanos < 0) { nanos += ts_scale; }
             s->vals.i64[nz_idx] = seconds - kORCTimeToUTC;
             if (nanos != 0) {
               // Trailing zeroes are encoded in the lower 3-bits
@@ -1029,7 +1032,7 @@ extern "C" __global__ void __launch_bounds__(1024)
     ((volatile uint32_t *)&ck0)[t] = ((const uint32_t *)&chunks[ck0_id])[t];
   }
   __syncthreads();
-  cid     = ss.strm_type;
+  cid     = ss.stream_type;
   dst_ptr = ck0.streams[cid] + ck0.strm_len[cid];
   for (uint32_t g = 1; g < ss.num_chunks; g++) {
     uint8_t *src_ptr;
@@ -1089,7 +1092,7 @@ extern "C" __global__ void __launch_bounds__(256)
     ((volatile uint32_t *)&ss)[t] = ((const uint32_t *)&strm_desc[strm_id])[t];
   }
   __syncthreads();
-  if (t == 0) { uncomp_base_g = chunks[ss.first_chunk_id].streams[ss.strm_type]; }
+  if (t == 0) { uncomp_base_g = chunks[ss.first_chunk_id].streams[ss.stream_type]; }
   __syncthreads();
   src        = uncomp_base_g;
   dst        = compressed_bfr + ss.bfr_offset;

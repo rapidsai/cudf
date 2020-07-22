@@ -94,7 +94,7 @@ std::unique_ptr<column> rfind(
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New BOOL8 column.
+ * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> contains(
   strings_column_view const& strings,
@@ -114,7 +114,7 @@ std::unique_ptr<column> contains(
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New BOOL8 column.
+ * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> starts_with(
   strings_column_view const& strings,
@@ -136,7 +136,7 @@ std::unique_ptr<column> starts_with(
  * @param strings Strings instance for this operation.
  * @param targets Strings instance for this operation.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New BOOL8 column.
+ * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> starts_with(
   strings_column_view const& strings,
@@ -156,7 +156,7 @@ std::unique_ptr<column> starts_with(
  * @param strings Strings instance for this operation.
  * @param target UTF-8 encoded string to search for in each string.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New BOOL8 column.
+ * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> ends_with(
   strings_column_view const& strings,
@@ -178,7 +178,7 @@ std::unique_ptr<column> ends_with(
  * @param strings Strings instance for this operation.
  * @param targets Strings instance for this operation.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New BOOL8 column.
+ * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> ends_with(
   strings_column_view const& strings,

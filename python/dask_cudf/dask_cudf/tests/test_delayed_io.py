@@ -7,9 +7,9 @@ from pandas.util.testing import assert_frame_equal
 
 from dask.delayed import delayed
 
-import cudf as gd
-
 import dask_cudf as dgd
+
+import cudf as gd
 
 
 @delayed

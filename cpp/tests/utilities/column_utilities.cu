@@ -375,9 +375,19 @@ static auto numeric_to_string_precise(T value)
   return o.str();
 }
 
+static auto duration_suffix(cudf::duration_D) { return " days"; }
+
+static auto duration_suffix(cudf::duration_s) { return " seconds"; }
+
+static auto duration_suffix(cudf::duration_ms) { return " milliseconds"; }
+
+static auto duration_suffix(cudf::duration_us) { return " microseconds"; }
+
+static auto duration_suffix(cudf::duration_ns) { return " nanoseconds"; }
+
 std::string get_nested_type_str(cudf::column_view const& view)
 {
-  if (view.type().id() == cudf::LIST) {
+  if (view.type().id() == cudf::type_id::LIST) {
     lists_column_view lcv(view);
     return cudf::jit::get_type_name(view.type()) + "<" +
            (lcv.size() > 0 ? get_nested_type_str(lcv.child()) : "") + ">";
@@ -458,7 +468,7 @@ struct column_view_printer {
     cudf::dictionary_column_view dictionary(col);
     if (col.size() == 0) return;
     std::vector<std::string> keys    = to_strings(dictionary.keys());
-    std::vector<std::string> indices = to_strings({cudf::data_type{cudf::INT32},
+    std::vector<std::string> indices = to_strings({cudf::data_type{cudf::type_id::INT32},
                                                    dictionary.size(),
                                                    dictionary.indices().head<int32_t>(),
                                                    dictionary.null_mask(),
@@ -472,12 +482,32 @@ struct column_view_printer {
     }
   }
 
+  // Print the tick counts with the units
   template <typename Element, typename std::enable_if_t<is_duration<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
   {
-    CUDF_FAIL("duration printing not supported yet");
+    auto h_data = cudf::test::to_host<Element>(col);
+
+    out.resize(col.size());
+
+    if (col.nullable()) {
+      std::transform(thrust::make_counting_iterator(size_type{0}),
+                     thrust::make_counting_iterator(col.size()),
+                     out.begin(),
+                     [&h_data](auto idx) {
+                       return bit_is_set(h_data.second.data(), idx)
+                                ? numeric_to_string_precise(h_data.first[idx].count()) +
+                                    duration_suffix(h_data.first[idx])
+                                : std::string("NULL");
+                     });
+
+    } else {
+      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
+        return numeric_to_string_precise(el.count()) + duration_suffix(el);
+      });
+    }
   }
 
   template <typename Element,

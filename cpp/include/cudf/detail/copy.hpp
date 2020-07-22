@@ -149,5 +149,17 @@ std::unique_ptr<column> copy_if_else(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
+/**
+ * @copydoc cudf::sample
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<table> sample(table_view const& input,
+                              size_type const n,
+                              sample_with_replacement replacement = sample_with_replacement::FALSE,
+                              int64_t const seed                  = 0,
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                              cudaStream_t stream                 = 0);
+
 }  // namespace detail
 }  // namespace cudf

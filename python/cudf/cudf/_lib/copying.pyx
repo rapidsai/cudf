@@ -364,7 +364,7 @@ def table_slice(Table input_table, object indices, bool keep_index=True):
         )
 
     num_of_result_cols = c_result.size()
-    result =[
+    result = [
         Table.from_table_view(
             c_result[i],
             input_table,
@@ -374,7 +374,8 @@ def table_slice(Table input_table, object indices, bool keep_index=True):
                     keep_index is True)
                 else None
             )
-        ) for i in range(num_of_result_cols)]
+        ) for i in range(num_of_result_cols)
+    ]
 
     return result
 
@@ -686,4 +687,32 @@ def scatter_to_table(
         c_output.second,
         owner=Column.from_unique_ptr(move(c_output.first)),
         column_names=range(num_output_columns)
+    )
+
+
+def sample(Table input, size_type n,
+           bool replace, int64_t seed, bool keep_index=True):
+    cdef table_view tbl_view = (
+        input.view() if keep_index else input.data_view()
+    )
+    cdef cpp_copying.sample_with_replacement replacement
+
+    if replace:
+        replacement = cpp_copying.sample_with_replacement.TRUE
+    else:
+        replacement = cpp_copying.sample_with_replacement.FALSE
+
+    cdef unique_ptr[table] c_output
+    with nogil:
+        c_output = move(
+            cpp_copying.sample(tbl_view, n, replacement, seed)
+        )
+
+    return Table.from_unique_ptr(
+        move(c_output),
+        column_names=input._column_names,
+        index_names=(
+            None if keep_index is False
+            else input._index_names
+        )
     )

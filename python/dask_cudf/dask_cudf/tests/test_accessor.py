@@ -3,11 +3,12 @@ import pandas as pd
 import pytest
 from pandas.util.testing import assert_series_equal
 
-import dask.dataframe as dd
-
-from cudf import DataFrame, Series
+from dask import dataframe as dd
 
 import dask_cudf as dgd
+
+from cudf import DataFrame, Series
+from cudf.tests.utils import assert_eq
 
 #############################################################################
 #                        Datetime Accessor                                  #
@@ -119,10 +120,9 @@ def test_categorical_basic(data):
     # Test attributes
     assert pdsr.cat.ordered == dsr.cat.ordered
 
-    assert tuple(pdsr.cat.categories) == tuple(dsr.cat.categories)
+    assert_eq(pdsr.cat.categories, dsr.cat.categories)
 
-    np.testing.assert_array_equal(pdsr.cat.codes.data, result.to_array())
-    np.testing.assert_array_equal(pdsr.cat.codes.dtype, dsr.cat.codes.dtype)
+    np.testing.assert_array_equal(pdsr.cat.codes.values, result.to_array())
 
     string = str(result)
     expect_str = """
@@ -133,7 +133,6 @@ def test_categorical_basic(data):
 4 a
 """
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
-    from cudf.tests.utils import assert_eq
 
     df = DataFrame()
     df["a"] = ["xyz", "abc", "def"] * 10

@@ -49,7 +49,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
 
     cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
-    auto destination = cudf::test::fixed_width_column_wrapper<T>(
+    cudf::test::fixed_width_column_wrapper<T, int32_t> destination(
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(0) + size,
       cudf::test::make_counting_transform_iterator(0, destination_validity));
@@ -60,6 +60,8 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
       p_val = cudf::make_numeric_scalar(type);
     } else if (cudf::is_timestamp<T>()) {
       p_val = cudf::make_timestamp_scalar(type);
+    } else if (cudf::is_duration<T>()) {
+      p_val = cudf::make_duration_scalar(type);
     } else {
       EXPECT_TRUE(false);  // should not be reached
     }
@@ -70,13 +72,13 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
     auto expected_elements = cudf::test::make_counting_transform_iterator(
       0,
       [begin, end, value](auto i) { return (i >= begin && i < end) ? value : static_cast<T>(i); });
-    auto expected = cudf::test::fixed_width_column_wrapper<T>(
-      expected_elements,
-      expected_elements + size,
-      cudf::test::make_counting_transform_iterator(
-        0, [begin, end, value_is_valid, destination_validity](auto i) {
-          return (i >= begin && i < end) ? value_is_valid : destination_validity(i);
-        }));
+    cudf::test::fixed_width_column_wrapper<T, typename decltype(expected_elements)::value_type>
+      expected(expected_elements,
+               expected_elements + size,
+               cudf::test::make_counting_transform_iterator(
+                 0, [begin, end, value_is_valid, destination_validity](auto i) {
+                   return (i >= begin && i < end) ? value_is_valid : destination_validity(i);
+                 }));
 
     // test out-of-place version first
 
@@ -277,8 +279,8 @@ class FillErrorTestFixture : public cudf::test::BaseFixture {
 
 TEST_F(FillErrorTestFixture, InvalidInplaceCall)
 {
-  auto p_val_int   = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
-  using T_int      = cudf::id_to_type<cudf::INT32>;
+  auto p_val_int   = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+  using T_int      = cudf::id_to_type<cudf::type_id::INT32>;
   using ScalarType = cudf::scalar_type_t<T_int>;
   static_cast<ScalarType*>(p_val_int.get())->set_value(5);
   static_cast<ScalarType*>(p_val_int.get())->set_valid(false);
@@ -300,8 +302,8 @@ TEST_F(FillErrorTestFixture, InvalidInplaceCall)
 
 TEST_F(FillErrorTestFixture, InvalidRange)
 {
-  auto p_val       = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
-  using T          = cudf::id_to_type<cudf::INT32>;
+  auto p_val       = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+  using T          = cudf::id_to_type<cudf::type_id::INT32>;
   using ScalarType = cudf::scalar_type_t<T>;
   static_cast<ScalarType*>(p_val.get())->set_value(5);
 
@@ -345,8 +347,8 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
 {
   cudf::size_type size{100};
 
-  auto p_val       = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
-  using T          = cudf::id_to_type<cudf::INT32>;
+  auto p_val       = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+  using T          = cudf::id_to_type<cudf::type_id::INT32>;
   using ScalarType = cudf::scalar_type_t<T>;
   static_cast<ScalarType*>(p_val.get())->set_value(5);
 

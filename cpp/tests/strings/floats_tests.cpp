@@ -73,7 +73,7 @@ TEST_F(StringsConvertTest, ToFloats32)
                                 infval};
 
   auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::to_floats(strings_view, cudf::data_type{cudf::FLOAT32});
+  auto results = cudf::strings::to_floats(strings_view, cudf::data_type{cudf::type_id::FLOAT32});
 
   cudf::test::fixed_width_column_wrapper<float> expected(
     h_expected.begin(),
@@ -156,7 +156,7 @@ TEST_F(StringsConvertTest, ToFloats64)
                                  infval};
 
   auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::to_floats(strings_view, cudf::data_type{cudf::FLOAT64});
+  auto results = cudf::strings::to_floats(strings_view, cudf::data_type{cudf::type_id::FLOAT64});
 
   cudf::test::fixed_width_column_wrapper<double> expected(
     h_expected.begin(),
@@ -196,21 +196,24 @@ TEST_F(StringsConvertTest, FromFloats64)
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnFloat)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::FLOAT32}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_column(
+    cudf::data_type{cudf::type_id::FLOAT32}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::from_floats(zero_size_column);
   cudf::test::expect_strings_empty(results->view());
 }
 
 TEST_F(StringsConvertTest, ZeroSizeFloatsColumn)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::to_floats(zero_size_column, cudf::data_type{cudf::FLOAT32});
+  cudf::column_view zero_size_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto results =
+    cudf::strings::to_floats(zero_size_column, cudf::data_type{cudf::type_id::FLOAT32});
   EXPECT_EQ(0, results->size());
 }
 
 TEST_F(StringsConvertTest, FromToFloatsError)
 {
-  auto dtype  = cudf::data_type{cudf::INT32};
+  auto dtype  = cudf::data_type{cudf::type_id::INT32};
   auto column = cudf::make_numeric_column(dtype, 100);
   EXPECT_THROW(cudf::strings::from_floats(column->view()), cudf::logic_error);
 

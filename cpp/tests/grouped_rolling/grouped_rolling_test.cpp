@@ -208,9 +208,9 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                  cudf::make_row_number_aggregation());
 
     // >>> test UDFs <<<
-    if (input.type() == cudf::data_type{cudf::INT32} && !input.has_nulls()) {
-      auto cuda_udf_agg =
-        cudf::make_udf_aggregation(cudf::udf_type::CUDA, cuda_func, cudf::data_type{cudf::INT64});
+    if (input.type() == cudf::data_type{cudf::type_id::INT32} && !input.has_nulls()) {
+      auto cuda_udf_agg = cudf::make_udf_aggregation(
+        cudf::udf_type::CUDA, cuda_func, cudf::data_type{cudf::type_id::INT64});
       run_test_col(keys,
                    input,
                    expected_grouping,
@@ -219,8 +219,8 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                    min_periods,
                    cuda_udf_agg);
 
-      auto ptx_udf_agg =
-        cudf::make_udf_aggregation(cudf::udf_type::PTX, ptx_func, cudf::data_type{cudf::INT64});
+      auto ptx_udf_agg = cudf::make_udf_aggregation(
+        cudf::udf_type::PTX, ptx_func, cudf::data_type{cudf::type_id::INT64});
       run_test_col(keys,
                    input,
                    expected_grouping,
@@ -536,7 +536,10 @@ TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported)
     cudf::logic_error);
 }
 
-TYPED_TEST_CASE(GroupedRollingTest, cudf::test::FixedWidthTypes);
+// TODO: Use cudf::FixedWidthTypes when this is supported for duration types
+using FixedWidthWithoutDurationTypes =
+  cudf::test::Concat<cudf::test::NumericTypes, cudf::test::TimestampTypes>;
+TYPED_TEST_CASE(GroupedRollingTest, FixedWidthWithoutDurationTypes);
 
 TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
 {
@@ -809,7 +812,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     size_type const& following_window_in_days,
     size_type min_periods)
   {
-    assert(timestamp_column.type().id() == cudf::TIMESTAMP_DAYS);  // Testing with DAYS.
+    assert(timestamp_column.type().id() == cudf::type_id::TIMESTAMP_DAYS);  // Testing with DAYS.
 
     auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
 
@@ -880,7 +883,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     size_type const& following_window_in_days,
     size_type min_periods)
   {
-    assert(timestamp_column.type().id() == cudf::TIMESTAMP_DAYS);  // Testing with DAYS.
+    assert(timestamp_column.type().id() == cudf::type_id::TIMESTAMP_DAYS);  // Testing with DAYS.
 
     auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
 
@@ -954,7 +957,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                                                         size_type const& following_window_in_days,
                                                         size_type min_periods)
   {
-    assert(timestamp_column.type().id() == cudf::TIMESTAMP_DAYS);  // Testing with DAYS.
+    assert(timestamp_column.type().id() == cudf::type_id::TIMESTAMP_DAYS);  // Testing with DAYS.
 
     auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
 
@@ -1126,7 +1129,10 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(GroupedTimeRangeRollingTest, cudf::test::FixedWidthTypes);
+// TODO: Use cudf::FixedWidthTypes when this is supported for duration types
+using FixedWidthWithoutDurationTypes =
+  cudf::test::Concat<cudf::test::NumericTypes, cudf::test::TimestampTypes>;
+TYPED_TEST_CASE(GroupedTimeRangeRollingTest, FixedWidthWithoutDurationTypes);
 
 TYPED_TEST(GroupedTimeRangeRollingTest,
            SimplePartitionedStaticWindowsWithGroupKeysAndTimeRangesAscending)
