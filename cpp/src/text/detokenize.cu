@@ -17,7 +17,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/sorting.hpp>
@@ -26,10 +25,11 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 #include <nvtext/tokenize.hpp>
 #include <strings/utilities.cuh>
 
-#include <thrust/transform_scan.h>
 #include <rmm/device_uvector.hpp>
 
 namespace nvtext {
@@ -73,6 +73,56 @@ struct detokenizer_fn {
   }
 };
 
+/**
+ * @brief Identifies indexes where the row value changes.
+ */
+template <typename IndexType>
+struct index_changed_fn {
+  IndexType const* d_rows;
+  int32_t const* d_row_map;
+  __device__ bool operator()(cudf::size_type idx)
+  {
+    return (idx == 0) || (d_rows[d_row_map[idx]] != d_rows[d_row_map[idx - 1]]);
+  }
+};
+
+/**
+ * @brief This is a type-dispatch function to convert the row indices
+ * into token offsets.
+ */
+struct token_row_offsets_fn {
+  cudf::column_view const row_indices;
+  cudf::column_view const sorted_indices;
+  cudf::size_type const tokens_counts;
+
+  template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> operator()(cudaStream_t stream) const
+  {
+    // the number of output strings is in the last entry of the sorted row indices
+    int32_t const last_entry =
+      cudf::detail::get_value<int32_t>(sorted_indices, tokens_counts - 1, stream);
+    auto const output_count = cudf::detail::get_value<T>(row_indices, last_entry, stream) + 1;
+    auto tokens_offsets =
+      std::make_unique<rmm::device_uvector<cudf::size_type>>(output_count + 1, stream);
+    index_changed_fn<T> pfn{row_indices.data<T>(), sorted_indices.template data<int32_t>()};
+    thrust::copy_if(rmm::exec_policy(stream)->on(stream),
+                    thrust::make_counting_iterator<cudf::size_type>(0),
+                    thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
+                    tokens_offsets->begin(),
+                    pfn);
+    // set the last element to the total number of tokens
+    tokens_offsets->set_element(output_count, tokens_counts, stream);
+    return tokens_offsets;
+  }
+
+  // non-integral types throw an exception
+  template <typename T, typename... Args, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> operator()(Args&&... args) const
+  {
+    CUDF_FAIL("The detokenize indices parameter must be an integer type.");
+  }
+};
+
 }  // namespace
 
 std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& strings,
@@ -86,54 +136,43 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
                "Parameter row_indices must be the same size as the input column");
   CUDF_EXPECTS(row_indices.has_nulls() == false, "Parameter row_indices must not have nulls");
 
-  auto tokens_count = strings.size();
-  if (tokens_count == 0)  // if no strings, return an empty column
+  auto tokens_counts = strings.size();
+  if (tokens_counts == 0)  // if no input strings, return an empty column
     return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
-  auto execpol        = rmm::exec_policy(stream);
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
-  auto d_strings      = *strings_column;
-
-  auto d_rows      = row_indices.data<int32_t>();  // TODO: this is type-dispatchable
-  auto sorted_rows = cudf::stable_sorted_order(cudf::table_view({row_indices}));
-  auto d_row_map   = sorted_rows->view().data<int32_t>();
-
-  // the number of output strings is the last entry
-  int32_t last_entry =
-    cudf::detail::get_value<int32_t>(sorted_rows->view(), tokens_count - 1, stream);
-  auto output_count = cudf::detail::get_value<int32_t>(row_indices, last_entry, stream) + 1;
+  // the indices may not be in order so we need to sort them
+  auto sorted_rows     = cudf::stable_sorted_order(cudf::table_view({row_indices}));
+  auto const d_row_map = sorted_rows->view().data<int32_t>();
 
   // create offsets for the tokens for each output string
-  rmm::device_uvector<cudf::size_type> token_offsets(output_count + 1, stream);
-  thrust::copy_if(execpol->on(stream),
-                  thrust::make_counting_iterator<cudf::size_type>(0),
-                  thrust::make_counting_iterator<cudf::size_type>(tokens_count),
-                  token_offsets.begin(),
-                  [output_count, d_rows, d_row_map] __device__(cudf::size_type idx) {
-                    return (idx == 0) || (d_rows[d_row_map[idx]] != d_rows[d_row_map[idx - 1]]);
-                  });
-  token_offsets.set_element(output_count, tokens_count, stream);
+  auto tokens_offsets =
+    cudf::type_dispatcher(row_indices.type(),
+                          token_row_offsets_fn{row_indices, sorted_rows->view(), tokens_counts},
+                          stream);
+  auto const output_count = tokens_offsets->size() - 1;  // number of output strings
 
-  // create output strings offsets by calculating size of each output string
+  // create output strings offsets by calculating the size of each output string
   cudf::string_view const d_separator(separator.data(), separator.size());
   auto offsets_transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<int32_t>(0),
-    detokenizer_fn{d_strings, d_row_map, token_offsets.data(), d_separator});
+    thrust::make_counting_iterator<cudf::size_type>(0),
+    detokenizer_fn{*strings_column, d_row_map, tokens_offsets->data(), d_separator});
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + output_count, mr, stream);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
-  // build the chars column - append each source token to the appropriate output string
+  // build the chars column - append each source token to the appropriate output row
   cudf::size_type const total_bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), output_count, stream);
   auto chars_column =
     cudf::strings::detail::create_chars_child_column(output_count, 0, total_bytes, mr, stream);
-  char* const d_chars = chars_column->mutable_view().data<char>();
+  auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
-    execpol->on(stream),
+    rmm::exec_policy(stream)->on(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     output_count,
-    detokenizer_fn{d_strings, d_row_map, token_offsets.data(), d_separator, d_offsets, d_chars});
+    detokenizer_fn{
+      *strings_column, d_row_map, tokens_offsets->data(), d_separator, d_offsets, d_chars});
   chars_column->set_null_count(0);
 
   // make the output strings column from the offsets and chars column
