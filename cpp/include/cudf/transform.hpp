@@ -91,7 +91,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  * The result column is such that keys[result[i]] == input[i],
  * where `keys` is the set of distinct values in `input` in sorted ascending order.
  * If nulls are present in the input column, they are encoded as the
- * integer `k+1`, where `k` is the number of distinct non-null values.
+ * integer `k`, where `k` is the number of distinct non-null values.
  *
  * Examples:
  * @code{.pseudo}
