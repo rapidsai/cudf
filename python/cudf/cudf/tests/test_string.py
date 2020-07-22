@@ -1113,6 +1113,51 @@ def test_string_char_types(type_op, data):
     assert_eq(getattr(gs.str, type_op)(), getattr(ps.str, type_op)())
 
 
+def test_string_filter_alphanum():
+    data = ["1234567890", "!@#$%^&*()", ",./<>?;:[]}{|+=", "abc DEF"]
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if str.isalnum(c):
+                rs = rs + c
+        expected.append(rs)
+
+    gs = Series(data)
+    assert_eq(gs.str.filter_alphanum(), Series(expected))
+
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if not str.isalnum(c):
+                rs = rs + c
+        expected.append(rs)
+    assert_eq(gs.str.filter_alphanum(keep=False), Series(expected))
+
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if str.isalnum(c):
+                rs = rs + c
+            else:
+                rs = rs + "*"
+        expected.append(rs)
+    assert_eq(gs.str.filter_alphanum("*"), Series(expected))
+
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if not str.isalnum(c):
+                rs = rs + c
+            else:
+                rs = rs + "*"
+        expected.append(rs)
+    assert_eq(gs.str.filter_alphanum("*", keep=False), Series(expected))
+
+
 @pytest.mark.parametrize(
     "case_op", ["title", "capitalize", "lower", "upper", "swapcase"]
 )
@@ -1213,9 +1258,9 @@ def test_strings_rsplit(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
 
-    pd.testing.assert_frame_equal(
+    assert_eq(
         ps.str.rsplit(n=n, expand=expand).reset_index(),
-        gs.str.rsplit(n=n, expand=expand).to_pandas().reset_index(),
+        gs.str.rsplit(n=n, expand=expand).reset_index(),
         check_index_type=False,
     )
     assert_eq(
@@ -1249,9 +1294,9 @@ def test_strings_split(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
 
-    pd.testing.assert_frame_equal(
+    assert_eq(
         ps.str.split(n=n, expand=expand).reset_index(),
-        gs.str.split(n=n, expand=expand).to_pandas().reset_index(),
+        gs.str.split(n=n, expand=expand).reset_index(),
         check_index_type=False,
     )
 

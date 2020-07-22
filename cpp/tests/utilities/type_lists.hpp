@@ -148,16 +148,16 @@ using DurationTypes =
   cudf::test::Types<duration_D, duration_s, duration_ms, duration_us, duration_ns>;
 
 /**
- * @brief Provides a list of all chrono types supported in libcudf for use
- * in a GTest typed test.
+ * @brief Provides a list of all chrono types supported in libcudf for use in a
+ * GTest typed test.
  *
  * Example:
  * ```
- * // Invokes all typed fixture tests for all chrono types in libcudf
+ * // Invokes all typed fixture tests for all numeric types in libcudf
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ChronoTypes);
  * ```
- **/
-using ChronoTypes = Concat<DurationTypes, TimestampTypes>;
+ */
+using ChronoTypes = Concat<TimestampTypes, DurationTypes>;
 
 /**
  * @brief Provides a list of all string types supported in libcudf for use in a
@@ -247,6 +247,15 @@ static constexpr std::array<cudf::type_id, 5> timestamp_type_ids{
   detail::types_to_ids<TimestampTypes>()};
 
 /**
+ * @brief `std::array` of all duration `cudf::type_id`s
+ *
+ * This can be used for iterating over `type_id`s for custom testing, or used in
+ * GTest value-parameterized tests.
+ **/
+static constexpr std::array<cudf::type_id, 5> duration_type_ids{
+  detail::types_to_ids<DurationTypes>()};
+
+/**
  * @brief `std::array` of all non-numeric `cudf::type_id`s
  *
  * This can be used for iterating over `type_id`s for custom testing, or used in
@@ -265,6 +274,7 @@ static constexpr std::array<cudf::type_id, 12> non_numeric_type_ids{
   cudf::type_id::DURATION_MICROSECONDS,
   cudf::type_id::DURATION_NANOSECONDS,
   cudf::type_id::STRING};
+
 /**
  * @brief `std::array` of all non-fixed-width `cudf::type_id`s
  *

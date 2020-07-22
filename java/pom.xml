@@ -144,8 +144,10 @@
         <skipNativeCopy>false</skipNativeCopy>
         <cxx11.abi.value>ON</cxx11.abi.value>
         <cxx.flags/>
+        <CMAKE_EXPORT_COMPILE_COMMANDS>OFF</CMAKE_EXPORT_COMPILE_COMMANDS>
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
         <PER_THREAD_DEFAULT_STREAM>OFF</PER_THREAD_DEFAULT_STREAM>
+        <native.build.path>${project.build.directory}/cmake-build</native.build.path>
     </properties>
 
     <profiles>
@@ -183,6 +185,12 @@
                                 <id>attach-sources</id>
                                 <goals>
                                     <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>test-jars</id>
+                                <goals>
+                                    <goal>test-jar</goal>
                                 </goals>
                             </execution>
                         </executions>
@@ -255,7 +263,7 @@
               </includes>
             </resource>
             <resource>
-                <directory>${basedir}/target/native-deps/</directory>
+                <directory>${project.build.directory}/native-deps/</directory>
             </resource>
         </resources>
         <pluginManagement>
@@ -344,6 +352,7 @@
                                     <arg value="-DPER_THREAD_DEFAULT_STREAM=${PER_THREAD_DEFAULT_STREAM}" />
                                     <arg value="-DCMAKE_CXX11_ABI=${cxx11.abi.value}"/>
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
+                                    <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
@@ -421,6 +430,16 @@
                     <!--Set by groovy script-->
                     <classifier>${cuda.classifier}</classifier>
                 </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>tests</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -446,7 +465,7 @@
                         <configuration>
                             <overwrite>true</overwrite>
                             <skip>${skipNativeCopy}</skip>
-                            <outputDirectory>${basedir}/target/native-deps/${os.arch}/${os.name}</outputDirectory>
+                            <outputDirectory>${project.build.directory}/native-deps/${os.arch}/${os.name}</outputDirectory>
                             <resources>
                                 <resource>
                                     <directory>${native.build.path}</directory>
