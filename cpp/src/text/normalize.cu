@@ -215,11 +215,13 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
                "output too large for strings column");
 
   // convert the result into a strings column
+  // - the cp_chars are the new 4-byte code-point values for all the characters in the output
+  // - the cp_offsets identify which code-points go with which strings
   uint32_t const* cp_chars  = result.first.gpu_ptr;
   int32_t const* cp_offsets = reinterpret_cast<int32_t const*>(result.second.gpu_ptr);
   auto strings_column       = cudf::column_device_view::create(strings.parent(), stream);
 
-  // build the offsets column (compute the output size of each string)
+  // build the output offsets column: compute the output size of each string
   auto offsets_transformer_itr =
     thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),
                                     codepoint_to_utf8_fn{*strings_column, cp_chars, cp_offsets});
@@ -227,13 +229,14 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
-  // build the chars column
-  cudf::size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column     = cudf::strings::detail::create_chars_child_column(
-    strings_count, strings.null_count(), bytes, mr, stream);
+  // create the output chars column
+  cudf::size_type output_bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto chars_column = cudf::strings::detail::create_chars_child_column(
+    strings_count, strings.null_count(), output_bytes, mr, stream);
   auto d_chars = chars_column->mutable_view().data<char>();
 
-  // convert the 4-byte code-point values into UTF-8 chars
+  // build the chars output data: convert the 4-byte code-point values into UTF-8 chars
   thrust::for_each_n(
     rmm::exec_policy(stream)->on(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),

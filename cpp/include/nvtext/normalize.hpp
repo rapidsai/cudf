@@ -88,7 +88,7 @@ std::unique_ptr<cudf::column> normalize_spaces(
  * This function requires 8x the number of bytes in the input strings
  * column as working memory.
  *
- * @param strings The input strings to tokenize.
+ * @param strings The input strings to normalize.
  * @param do_lower_case If true, upper-case characters are converted to
  *        lower-case and accents are stripped from those characters.
  *        If false, accented and upper-case characters are not transformed.
