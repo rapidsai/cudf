@@ -132,6 +132,7 @@
 - PR #5726 Replace use of `assert_frame_equal` in tests with `assert_eq`
 - PR #5720 Replace owning raw pointers with std::unique_ptr
 - PR #5702 Add inherited methods to python docs and other docs fixes
+- PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
 
 ## Bug Fixes
 

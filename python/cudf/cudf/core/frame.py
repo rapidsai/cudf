@@ -50,6 +50,91 @@ class Frame(libcudf.table.Table):
             return result
 
     @property
+    def size(self):
+        """
+        Return the number of elements in the underlying data.
+
+        Returns
+        -------
+        size : Size of the DataFrame / Index / Series / MultiIndex
+
+        Examples
+        --------
+        Size of an empty dataframe is 0.
+
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df
+        Empty DataFrame
+        Columns: []
+        Index: []
+        >>> df.size
+        0
+        >>> df = cudf.DataFrame(index=[1, 2, 3])
+        >>> df
+        Empty DataFrame
+        Columns: []
+        Index: [1, 2, 3]
+        >>> df.size
+        0
+
+        DataFrame with values
+
+        >>> df = cudf.DataFrame({'a': [10, 11, 12],
+        ...         'b': ['hello', 'rapids', 'ai']})
+        >>> df
+            a       b
+        0  10   hello
+        1  11  rapids
+        2  12      ai
+        >>> df.size
+        6
+        >>> df.index
+        RangeIndex(start=0, stop=3)
+        >>> df.index.size
+        3
+
+        Size of an Index
+
+        >>> index = cudf.Index([])
+        >>> index
+        Float64Index([], dtype='float64')
+        >>> index.size
+        0
+        >>> index = cudf.Index([1, 2, 3, 10])
+        >>> index
+        Int64Index([1, 2, 3, 10], dtype='int64')
+        >>> index.size
+        4
+
+        Size of a MultiIndex
+
+        >>> midx = cudf.MultiIndex(
+        ...                 levels=[["a", "b", "c", None], ["1", None, "5"]],
+        ...                 codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...                 names=["x", "y"],
+        ...             )
+        >>> midx
+        MultiIndex(levels=[0       a
+        1       b
+        2       c
+        3    None
+        dtype: object, 0       1
+        1    None
+        2       5
+        dtype: object],
+        codes=   x  y
+        0  0  0
+        1  0  2
+        2  1  1
+        3  2  1
+        4  3  0)
+        >>> midx.size
+        5
+        """
+        return self._num_columns * self._num_rows
+
+    @property
     def empty(self):
         """
         Indicator whether DataFrame or Series is empty.
@@ -108,9 +193,7 @@ class Frame(libcudf.table.Table):
         >>> s.empty
         True
         """
-        if self._num_columns == 0:
-            return True
-        return self._num_rows == 0
+        return self.size == 0
 
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")

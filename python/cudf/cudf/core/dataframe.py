@@ -5140,7 +5140,7 @@ class DataFrame(Frame, Serializable):
         if columns is not None:
             data = dict(zip(columns, cols))
         else:
-            data = dict(zip(range(len(cols)), cols))
+            data = dict(enumerate(cols))
 
         return cls(data=data, index=index,)
 
