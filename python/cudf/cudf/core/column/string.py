@@ -3629,7 +3629,7 @@ class StringMethods(ColumnMethodsMixin):
             - adding padding around punctuation (unicode category starts with
               "P") as well as certain ASCII symbols like "^" and "$"
             - adding padding around the CJK Unicode block characters
-            - changing whitespace (e.g. `"\t", "\n", "\r"`) to space `" "`
+            - changing whitespace (e.g. ``\\t``, ``\\n``, ``\\r``) to space
             - removing control characters (unicode categories "Cc" and "Cf")
 
         The `do_lower_case` parameter will lower-case and remove accents
