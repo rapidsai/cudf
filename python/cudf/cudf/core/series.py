@@ -512,7 +512,7 @@ class Series(Frame, Serializable):
     def __copy__(self, deep=True):
         return self.copy(deep)
 
-    def __deepcopy__(self, memo={}):
+    def __deepcopy__(self, memo=None):
         if memo is None:
             memo = {}
         return self.copy()

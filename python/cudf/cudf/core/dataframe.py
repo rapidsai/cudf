@@ -2790,7 +2790,7 @@ class DataFrame(Frame, Serializable):
     def __copy__(self):
         return self.copy(deep=True)
 
-    def __deepcopy__(self, memo={}):
+    def __deepcopy__(self, memo=None):
         """
         Parameters
         ----------
