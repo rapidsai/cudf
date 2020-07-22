@@ -148,12 +148,11 @@ using DurationTypes =
   cudf::test::Types<duration_D, duration_s, duration_ms, duration_us, duration_ns>;
 
 /**
- * @brief Provides a list of all chrono types supported in libcudf for use in a
- * GTest typed test.
+ * @brief Provides a list of all chrono types supported in libcudf for use in a GTest typed test.
  *
  * Example:
  * ```
- * // Invokes all typed fixture tests for all numeric types in libcudf
+ * // Invokes all typed fixture tests for all chrono types in libcudf
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ChronoTypes);
  * ```
  */
