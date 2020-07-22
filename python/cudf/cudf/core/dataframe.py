@@ -1118,13 +1118,11 @@ class DataFrame(Frame, Serializable):
 
     def _clean_renderable_dataframe(self, output):
         """
-        the below is permissible: null in a datetime to_pandas() becomes
-        NaT, which is then replaced with null in this processing step.
-        It is not possible to have a mix of nulls and NaTs in datetime
-        columns because we do not support NaT - pyarrow as_column
-        preprocessing converts NaT input values from numpy or pandas into
-        null.
+        This method takes in partial/preprocessed dataframe
+        and returns correct representation of it with correct
+        dimensions (rows x columns)
         """
+
         output = output.to_pandas().__repr__()
         lines = output.split("\n")
 
@@ -1136,6 +1134,28 @@ class DataFrame(Frame, Serializable):
         return "\n".join(lines)
 
     def _clean_nulls_from_dataframe(self, df):
+        """
+        This function converts all na values to `null` for representation
+        as a string in `__repr__`.
+
+        `null` representation is handled as following for different types:
+            - For ``object`` dtype all `na`/`null` values are represented
+                as `None`.
+            - For ``datetime64`` dtypes all `NaN`/`NaT` values are represented
+                as `null`. Because, null in a datetime to_pandas() becomes NaT,
+                which is then replaced with null in this processing step.
+                It is not possible to have a mix of nulls and NaTs in datetime
+                columns because we do not support NaT - pyarrow as_column
+                preprocessing converts NaT input values from numpy or pandas
+                into null.
+            - For all other dtypes null values are represented as `null`.
+
+        Since we utilize Pandas `__repr__` at all places in our code
+        for formatting purposes, we convert columns to `str` dtype for
+        filling with `null` values, except for datetime dtype column - where
+        we fill `null` and then convert to `str` dtype for representation
+        purposeses.
+        """
         for col in df._data:
             if (
                 self._data[col].has_nulls

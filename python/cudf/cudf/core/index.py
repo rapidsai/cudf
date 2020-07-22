@@ -348,6 +348,15 @@ class Index(Frame, Serializable):
         return super().dropna(how=how)
 
     def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in Index object
+        to `null` as a preprocessing step to `__repr__` methods.
+
+        This will involve changing type of Index object
+        to StringIndex but it is the responsibility of the `__repr__`
+        methods using this method to replace or handle representation
+        of the actual types correctly.
+        """
         if self._values.has_nulls:
             return cudf.Index(
                 self._values.astype("str").fillna("null"), name=self.name
@@ -1993,6 +2002,20 @@ class DatetimeIndex(GenericIndex):
         return as_index(out_column, name=self.name)
 
     def _clean_nulls_from_index(self):
+        """
+        Convert all null/NaT values(if any) in DatetimeIndex object
+        to `null` as a preprocessing step to `__repr__` methods.
+
+        This will involve changing type of Index object
+        to StringIndex but it is the responsibility of the `__repr__`
+        methods using this method to replace or handle representation
+        of the actual types correctly.
+
+        Note: We must not convert Datetime object to_pandas first as
+        this involves in expanded string representation of the
+        datetime values, instead we must perform `fillna` before
+        the type-cast operation.
+        """
         if self._values.has_nulls:
             return cudf.Index(
                 column.as_column(
@@ -2209,6 +2232,10 @@ class StringIndex(GenericIndex):
         return cudf.MultiIndex
 
     def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in Index object
+        to `None` as a preprocessing step to `__repr__` methods.
+        """
         if self._values.has_nulls:
             return cudf.Index(
                 self._values.astype("str").fillna("None"), name=self.name

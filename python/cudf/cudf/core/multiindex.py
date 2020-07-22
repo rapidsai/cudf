@@ -1001,6 +1001,10 @@ class MultiIndex(Index):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())
 
     def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in MultiIndex object
+        to `null` as a preprocessing step to `__repr__` methods.
+        """
         index_df = self._source_data
         return MultiIndex.from_frame(
             index_df._clean_nulls_from_dataframe(index_df), names=self.names
