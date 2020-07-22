@@ -359,7 +359,7 @@ class Index(Frame, Serializable):
         """
         if self._values.has_nulls:
             return cudf.Index(
-                self._values.astype("str").fillna("null"), name=self.name
+                self._values.astype("str").fillna("<NA>"), name=self.name
             )
         else:
             return self.copy()
@@ -1683,7 +1683,7 @@ class GenericIndex(Index):
 
         if isinstance(preprocess, CategoricalIndex):
             output = preprocess.to_pandas().__repr__()
-            output = output.replace("nan", "null")
+            output = output.replace("nan", "<NA>")
         elif preprocess._values.nullable:
             output = self._clean_nulls_from_index().to_pandas().__repr__()
 
@@ -2009,7 +2009,7 @@ class DatetimeIndex(GenericIndex):
         if self._values.has_nulls:
             return cudf.Index(
                 column.as_column(
-                    self.to_pandas().fillna("null").astype("str")
+                    self.to_pandas().fillna("<NA>").astype("str")
                 ),
                 name=self.name,
             )

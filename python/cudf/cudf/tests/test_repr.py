@@ -21,15 +21,15 @@ def test_null_series(nrows, dtype):
     ps = sr.to_pandas()
     pd.options.display.max_rows = int(nrows)
     psrepr = ps.__repr__()
-    psrepr = psrepr.replace("NaN", "null")
-    psrepr = psrepr.replace("NaT", "null")
+    psrepr = psrepr.replace("NaN", "<NA>")
+    psrepr = psrepr.replace("NaT", "<NA>")
     if (
         dtype.startswith("int")
         or dtype.startswith("uint")
         or dtype.startswith("long")
     ):
         psrepr = psrepr.replace(
-            str(sr._column.default_na_value()) + "\n", "null\n"
+            str(sr._column.default_na_value()) + "\n", "<NA>\n"
         )
 
     print(psrepr)
@@ -59,8 +59,8 @@ def test_null_dataframe(ncols):
     pdf = gdf.to_pandas()
     pd.options.display.max_columns = int(ncols)
     pdfrepr = pdf.__repr__()
-    pdfrepr = pdfrepr.replace("NaN", "null")
-    pdfrepr = pdfrepr.replace("NaT", "null")
+    pdfrepr = pdfrepr.replace("NaN", "<NA>")
+    pdfrepr = pdfrepr.replace("NaT", "<NA>")
     print(pdf)
     print(gdf)
     assert pdfrepr.split() == gdf.__repr__().split()
@@ -243,23 +243,23 @@ def test_generic_index(length, dtype):
     [
         (
             cudf.Index([1, 2, 3, None]),
-            "Int64Index([1, 2, 3, null], dtype='int64')",
+            "Int64Index([1, 2, 3, <NA>], dtype='int64')",
         ),
         (
             cudf.Index([None, 2.2, 3.324342, None]),
-            "Float64Index([null, 2.2, 3.324342, null], dtype='float64')",
+            "Float64Index([<NA>, 2.2, 3.324342, <NA>], dtype='float64')",
         ),
         (
             cudf.Index([None, None, None], name="hello"),
-            "Float64Index([null, null, null], dtype='float64', name='hello')",
+            "Float64Index([<NA>, <NA>, <NA>], dtype='float64', name='hello')",
         ),
         (
             cudf.Index([None], name="hello"),
-            "Float64Index([null], dtype='float64', name='hello')",
+            "Float64Index([<NA>], dtype='float64', name='hello')",
         ),
         (
             cudf.Index([None], dtype="int8", name="hello"),
-            "Int8Index([null], dtype='int8', name='hello')",
+            "Int8Index([<NA>], dtype='int8', name='hello')",
         ),
         (
             cudf.Index([None] * 50, dtype="object"),
@@ -271,38 +271,38 @@ def test_generic_index(length, dtype):
         ),
         (
             cudf.Index([None] * 20, dtype="uint32"),
-            "UInt32Index([null, null, null, null, null, null, null, null, "
-            "null,\n       null, null, null, null, null, null, null, null, "
-            "null,\n       null, null],\n      dtype='uint32')",
+            "UInt32Index([<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
+            "<NA>,\n       <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
+            "<NA>,\n       <NA>, <NA>],\n      dtype='uint32')",
         ),
         (
             cudf.Index(
                 [None, 111, 22, 33, None, 23, 34, 2343, None], dtype="int16"
             ),
-            "Int16Index([null, 111, 22, 33, null, 23, 34, 2343, null], "
+            "Int16Index([<NA>, 111, 22, 33, <NA>, 23, 34, 2343, <NA>], "
             "dtype='int16')",
         ),
         (
             cudf.Index([1, 2, 3, None], dtype="category"),
-            "CategoricalIndex([1, 2, 3, null], categories=[1, 2, 3], "
+            "CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], "
             "ordered=False, dtype='category')",
         ),
         (
             cudf.Index([None, None], dtype="category"),
-            "CategoricalIndex([null, null], categories=[], ordered=False, "
+            "CategoricalIndex([<NA>, <NA>], categories=[], ordered=False, "
             "dtype='category')",
         ),
         (
             cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[ms]")),
             "DatetimeIndex([1970-01-01 00:00:00.010000, "
             "1970-01-01 00:00:00.020000,"
-            "\n       1970-01-01 00:00:00.030000, null],\n      "
+            "\n       1970-01-01 00:00:00.030000, <NA>],\n      "
             "dtype='datetime64[ms]')",
         ),
         (
             cudf.Index(np.array([None] * 10, dtype="datetime64[ms]")),
-            "DatetimeIndex([null, null, null, null, null, null, null, null, "
-            "null,\n       null],\n      dtype='datetime64[ms]')",
+            "DatetimeIndex([<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
+            "<NA>,\n       <NA>],\n      dtype='datetime64[ms]')",
         ),
     ],
 )
@@ -391,7 +391,7 @@ def test_dataframe_null_index_repr(df, pandas_special_case):
     gdf = cudf.from_pandas(pdf)
 
     expected_repr = (
-        pdf.__repr__().replace("NaN", "null").replace("NaT", "null")
+        pdf.__repr__().replace("NaN", "<NA>").replace("NaT", "<NA>")
     )
     actual_repr = gdf.__repr__()
 
@@ -400,7 +400,7 @@ def test_dataframe_null_index_repr(df, pandas_special_case):
         # as `None` at some places and `NaN` at few other places
         # Whereas cudf is consistent with strings `null` values
         # to be printed as `None` everywhere.
-        actual_repr = gdf.__repr__().replace("None", "null")
+        actual_repr = gdf.__repr__().replace("None", "<NA>")
 
     assert expected_repr.split() == actual_repr.split()
 
@@ -467,7 +467,7 @@ def test_series_null_index_repr(sr, pandas_special_case):
     gsr = cudf.from_pandas(psr)
 
     expected_repr = (
-        psr.__repr__().replace("NaN", "null").replace("NaT", "null")
+        psr.__repr__().replace("NaN", "<NA>").replace("NaT", "<NA>")
     )
     actual_repr = gsr.__repr__()
 
@@ -476,5 +476,5 @@ def test_series_null_index_repr(sr, pandas_special_case):
         # as `None` at some places and `NaN` at few other places
         # Whereas cudf is consistent with strings `null` values
         # to be printed as `None` everywhere.
-        actual_repr = gsr.__repr__().replace("None", "null")
+        actual_repr = gsr.__repr__().replace("None", "<NA>")
     assert expected_repr.split() == actual_repr.split()

@@ -17,7 +17,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
+from pandas._config import get_option
 from pandas.api.types import is_dict_like
+from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 
 import cudf
@@ -1124,7 +1126,25 @@ class DataFrame(Frame, Serializable):
         dimensions (rows x columns)
         """
 
-        output = output.to_pandas().__repr__()
+        max_rows = get_option("display.max_rows")
+        min_rows = get_option("display.min_rows")
+        max_cols = get_option("display.max_columns")
+        max_colwidth = get_option("display.max_colwidth")
+        show_dimensions = get_option("display.show_dimensions")
+        if get_option("display.expand_frame_repr"):
+            width, _ = console.get_console_size()
+        else:
+            width = None
+
+        output = output.to_pandas().to_string(
+            max_rows=max_rows,
+            min_rows=min_rows,
+            max_cols=max_cols,
+            line_width=width,
+            max_colwidth=max_colwidth,
+            show_dimensions=show_dimensions,
+        )
+
         lines = output.split("\n")
 
         if lines[-1].startswith("["):
@@ -1163,12 +1183,12 @@ class DataFrame(Frame, Serializable):
                 and not df._data[col].dtype == "O"
                 and not is_datetime_dtype(df._data[col].dtype)
             ):
-                df[col] = df._data[col].astype("str").fillna("null")
+                df[col] = df._data[col].astype("str").fillna("<NA>")
             elif self._data[col].has_nulls and is_datetime_dtype(
                 df._data[col].dtype
             ):
                 df[col] = column.as_column(
-                    df[col].to_pandas().fillna("null").astype("str")
+                    df[col].to_pandas().fillna("<NA>").astype("str")
                 )
             else:
                 df[col] = df._data[col]
