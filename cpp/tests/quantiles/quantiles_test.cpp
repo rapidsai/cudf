@@ -51,8 +51,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnZeroRows)
 {
   using T = TypeParam;
 
-  auto input_a = fixed_width_column_wrapper<T>({});
-  auto input   = table_view({input_a});
+  fixed_width_column_wrapper<T> input_a({});
+  auto input = table_view({input_a});
 
   EXPECT_THROW(quantiles(input, {0.0f}), logic_error);
 }
@@ -61,8 +61,8 @@ TYPED_TEST(QuantilesTest, TestZeroRequestedQuantiles)
 {
   using T = TypeParam;
 
-  auto input_a = fixed_width_column_wrapper<T>({1}, {1});
-  auto input   = table_view(std::vector<column_view>{input_a});
+  fixed_width_column_wrapper<T, int32_t> input_a({1}, {1});
+  auto input = table_view(std::vector<column_view>{input_a});
 
   auto actual   = quantiles(input, {});
   auto expected = empty_like(input);
@@ -74,9 +74,9 @@ TYPED_TEST(QuantilesTest, TestMultiColumnOrderCountMismatch)
 {
   using T = TypeParam;
 
-  auto input_a = fixed_width_column_wrapper<T>({});
-  auto input_b = fixed_width_column_wrapper<T>({});
-  auto input   = table_view({input_a});
+  fixed_width_column_wrapper<T> input_a({});
+  fixed_width_column_wrapper<T> input_b({});
+  auto input = table_view({input_a});
 
   EXPECT_THROW(quantiles(input,
                          {0.0f},
@@ -91,9 +91,9 @@ TYPED_TEST(QuantilesTest, TestMultiColumnNullOrderCountMismatch)
 {
   using T = TypeParam;
 
-  auto input_a = fixed_width_column_wrapper<T>({});
-  auto input_b = fixed_width_column_wrapper<T>({});
-  auto input   = table_view({input_a});
+  fixed_width_column_wrapper<T> input_a({});
+  fixed_width_column_wrapper<T> input_b({});
+  auto input = table_view({input_a});
 
   EXPECT_THROW(quantiles(input,
                          {0.0f},
@@ -108,9 +108,9 @@ TYPED_TEST(QuantilesTest, TestMultiColumnArithmeticInterpolation)
 {
   using T = TypeParam;
 
-  auto input_a = fixed_width_column_wrapper<T>({});
-  auto input_b = fixed_width_column_wrapper<T>({});
-  auto input   = table_view({input_a});
+  fixed_width_column_wrapper<T> input_a({});
+  fixed_width_column_wrapper<T> input_b({});
+  auto input = table_view({input_a});
 
   EXPECT_THROW(quantiles(input, {0.0f}, interpolation::LINEAR), logic_error);
 
@@ -126,7 +126,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
      "D", "B", "D", "B", "C", "C", "A", "D", "B", "A", "A", "A"},
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
 
-  auto input_b = fixed_width_column_wrapper<T>(
+  fixed_width_column_wrapper<T, int32_t> input_b(
     {4, 3, 5, 0, 1, 0, 4, 1, 5, 3, 0, 5, 2, 4, 3, 2, 1, 2, 3, 0, 5, 1, 4, 2},
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
 
@@ -140,7 +140,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
 
   auto expected_a = strings_column_wrapper({"A", "C", "C", "B", "D"}, {1, 1, 1, 1, 1});
 
-  auto expected_b = fixed_width_column_wrapper<T>({5, 5, 1, 5, 0}, {1, 1, 1, 1, 1});
+  fixed_width_column_wrapper<T, int32_t> expected_b({5, 5, 1, 5, 0}, {1, 1, 1, 1, 1});
 
   auto expected = table_view({expected_a, expected_b});
 
@@ -156,7 +156,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
      "D", "B", "D", "B", "C", "C", "A", "D", "B", "A", "A", "A"},
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
 
-  auto input_b = fixed_width_column_wrapper<T>(
+  fixed_width_column_wrapper<T, int32_t> input_b(
     {4, 3, 5, 0, 1, 0, 4, 1, 5, 3, 0, 5, 2, 4, 3, 2, 1, 2, 3, 0, 5, 1, 4, 2},
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
 
@@ -167,7 +167,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
 
   auto expected_a = strings_column_wrapper({"C", "D", "C", "D", "A"}, {1, 1, 1, 1, 1});
 
-  auto expected_b = fixed_width_column_wrapper<T>({4, 2, 1, 4, 2}, {1, 1, 1, 1, 1});
+  fixed_width_column_wrapper<T, int32_t> expected_b({4, 2, 1, 4, 2}, {1, 1, 1, 1, 1});
 
   auto expected = table_view({expected_a, expected_b});
 
