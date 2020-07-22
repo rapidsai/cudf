@@ -17,6 +17,9 @@
 
 #include <cmath>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <simt/type_traits>
 #include <type_traits>
 #include <utility>
 
@@ -425,11 +428,14 @@ struct is_unary_logical_operator_trait_impl<ast_operator::NOT> : std::true_type 
 };
 
 // Traits for valid operator / type combinations
-template <typename L, typename R, typename Op>
-using is_valid_binary_op = decltype(std::declval<Op>()(std::declval<L>(), std::declval<R>()));
+template <typename Op, typename LHS, typename RHS>
+constexpr bool is_valid_binary_op = simt::std::is_invocable<Op, LHS, RHS>::value;
+// using is_valid_binary_op = decltype(std::declval<Op>()(std::declval<L>(), std::declval<R>()));
 
-template <typename T, typename Op>
+/*
+template <typename Op, typename T>
 using is_valid_unary_op = decltype(std::declval<Op>()(std::declval<T>()));
+*/
 
 // Operator dispatcher used for checking traits of operators and returning logical-valued operations
 template <typename Functor, typename... Ts>
@@ -450,7 +456,8 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher_bool(
     case ast_operator::TRUE_DIV:
       return f.template operator()<ast_operator::TRUE_DIV>(std::forward<Ts>(args)...);
     case ast_operator::FLOOR_DIV:
-      return f.template operator()<ast_operator::FLOOR_DIV>(std::forward<Ts>(args)...);
+      rrturn f.template op
+      r  erator()<ast_operator::FLOOR_DIV>(std::forward<Ts>(args)...);
     case ast_operator::MOD:
       return f.template operator()<ast_operator::MOD>(std::forward<Ts>(args)...);
     case ast_operator::PYMOD:
@@ -717,6 +724,172 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher_typed
                                                       std::forward<Ts>(args)...);
     */
     default: return T0(0);  // TODO: Error handling?
+  }
+}
+
+// Operator dispatcher used for returning data_type-valued operations
+template <typename Functor, typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher_data_type(
+  ast_operator op, Functor&& f, Ts&&... args)
+{
+  // We capture the first argument's type in T0 so we can construct a "default" value of the correct
+  // (matching) type.
+  switch (op) {
+    case ast_operator::ADD:
+      return f.template operator()<ast_operator::ADD>(std::forward<Ts>(args)...);
+    case ast_operator::SUB:
+      return f.template operator()<ast_operator::SUB>(std::forward<Ts>(args)...);
+    case ast_operator::MUL:
+      return f.template operator()<ast_operator::MUL>(std::forward<Ts>(args)...);
+    case ast_operator::DIV:
+      return f.template operator()<ast_operator::DIV>(std::forward<Ts>(args)...);
+    /*
+    case ast_operator::TRUE_DIV:
+      return f.template operator()<ast_operator::TRUE_DIV>(std::forward<T0>(arg0),
+                                                           std::forward<Ts>(args)...);
+    case ast_operator::FLOOR_DIV:
+      return f.template operator()<ast_operator::FLOOR_DIV>(std::forward<T0>(arg0),
+                                                            std::forward<Ts>(args)...);
+    case ast_operator::MOD:
+      return f.template operator()<ast_operator::MOD>(std::forward<T0>(arg0),
+                                                      std::forward<Ts>(args)...);
+    case ast_operator::PYMOD:
+      return f.template operator()<ast_operator::PYMOD>(std::forward<T0>(arg0),
+                                                        std::forward<Ts>(args)...);
+    case ast_operator::POW:
+      return f.template operator()<ast_operator::POW>(std::forward<T0>(arg0),
+                                                      std::forward<Ts>(args)...);
+    case ast_operator::EQUAL:
+      return f.template operator()<ast_operator::EQUAL>(std::forward<T0>(arg0),
+                                                        std::forward<Ts>(args)...);
+    case ast_operator::NOT_EQUAL:
+      return f.template operator()<ast_operator::NOT_EQUAL>(std::forward<T0>(arg0),
+                                                            std::forward<Ts>(args)...);
+    case ast_operator::LESS:
+      return f.template operator()<ast_operator::LESS>(std::forward<T0>(arg0),
+                                                       std::forward<Ts>(args)...);
+    case ast_operator::GREATER:
+      return f.template operator()<ast_operator::GREATER>(std::forward<T0>(arg0),
+                                                          std::forward<Ts>(args)...);
+    case ast_operator::LESS_EQUAL:
+      return f.template operator()<ast_operator::LESS_EQUAL>(std::forward<T0>(arg0),
+                                                             std::forward<Ts>(args)...);
+    case ast_operator::GREATER_EQUAL:
+      return f.template operator()<ast_operator::GREATER_EQUAL>(std::forward<T0>(arg0),
+                                                                std::forward<Ts>(args)...);
+    case ast_operator::BITWISE_AND:
+      return f.template operator()<ast_operator::BITWISE_AND>(std::forward<T0>(arg0),
+                                                              std::forward<Ts>(args)...);
+    case ast_operator::BITWISE_OR:
+      return f.template operator()<ast_operator::BITWISE_OR>(std::forward<T0>(arg0),
+                                                             std::forward<Ts>(args)...);
+    case ast_operator::BITWISE_XOR:
+      return f.template operator()<ast_operator::BITWISE_XOR>(std::forward<T0>(arg0),
+                                                              std::forward<Ts>(args)...);
+    case ast_operator::LOGICAL_AND:
+      return f.template operator()<ast_operator::LOGICAL_AND>(std::forward<T0>(arg0),
+                                                              std::forward<Ts>(args)...);
+    case ast_operator::LOGICAL_OR:
+      return f.template operator()<ast_operator::LOGICAL_OR>(std::forward<T0>(arg0),
+                                                             std::forward<Ts>(args)...);
+    case ast_operator::COALESCE:
+      return f.template operator()<ast_operator::COALESCE>(std::forward<T0>(arg0),
+                                                           std::forward<Ts>(args)...);
+    case ast_operator::SHIFT_LEFT:
+      return f.template operator()<ast_operator::SHIFT_LEFT>(std::forward<T0>(arg0),
+                                                             std::forward<Ts>(args)...);
+    case ast_operator::SHIFT_RIGHT:
+      return f.template operator()<ast_operator::SHIFT_RIGHT>(std::forward<T0>(arg0),
+                                                              std::forward<Ts>(args)...);
+    case ast_operator::SHIFT_RIGHT_UNSIGNED:
+      return f.template operator()<ast_operator::SHIFT_RIGHT_UNSIGNED>(std::forward<T0>(arg0),
+                                                                       std::forward<Ts>(args)...);
+    case ast_operator::LOG_BASE:
+      return f.template operator()<ast_operator::LOG_BASE>(std::forward<T0>(arg0),
+                                                           std::forward<Ts>(args)...);
+    case ast_operator::ATAN2:
+      return f.template operator()<ast_operator::ATAN2>(std::forward<T0>(arg0),
+                                                        std::forward<Ts>(args)...);
+    case ast_operator::PMOD:
+      return f.template operator()<ast_operator::PMOD>(std::forward<T0>(arg0),
+                                                       std::forward<Ts>(args)...);
+    case ast_operator::NULL_EQUALS:
+      return f.template operator()<ast_operator::NULL_EQUALS>(std::forward<T0>(arg0),
+                                                              std::forward<Ts>(args)...);
+    case ast_operator::NULL_MAX:
+      return f.template operator()<ast_operator::NULL_MAX>(std::forward<T0>(arg0),
+                                                           std::forward<Ts>(args)...);
+    case ast_operator::NULL_MIN:
+      return f.template operator()<ast_operator::NULL_MIN>(std::forward<T0>(arg0),
+                                                           std::forward<Ts>(args)...);
+    case ast_operator::SIN:
+      return f.template operator()<ast_operator::SIN>(std::forward<T0>(arg0),
+                                                      std::forward<Ts>(args)...);
+    case ast_operator::COS:
+      return f.template operator()<ast_operator::COS>(std::forward<T0>(arg0),
+                                                      std::forward<Ts>(args)...);
+    case ast_operator::TAN:
+      return f.template operator()<ast_operator::TAN>(std::forward<T0>(arg0),
+                                                      std::forward<Ts>(args)...);
+    case ast_operator::ARCSIN:
+      return f.template operator()<ast_operator::ARCSIN>(std::forward<T0>(arg0),
+                                                         std::forward<Ts>(args)...);
+    case ast_operator::ARCCOS:
+      return f.template operator()<ast_operator::ARCCOS>(std::forward<T0>(arg0),
+                                                         std::forward<Ts>(args)...);
+    case ast_operator::ARCTAN:
+      return f.template operator()<ast_operator::ARCTAN>(std::forward<T0>(arg0),
+                                                         std::forward<Ts>(args)...);
+    case ast_operator::SINH:
+      return f.template operator()<ast_operator::SINH>(std::forward<T0>(arg0),
+                                                       std::forward<Ts>(args)...);
+    case ast_operator::COSH:
+      return f.template operator()<ast_operator::COSH>(std::forward<T0>(arg0),
+                                                       std::forward<Ts>(args)...);
+    case ast_operator::TANH:
+      return f.template operator()<ast_operator::TANH>(std::forward<T0>(arg0),
+                                                       std::forward<Ts>(args)...);
+    case ast_operator::ARCSINH:
+      return f.template operator()<ast_operator::ARCSINH>(std::forward<T0>(arg0),
+                                                          std::forward<Ts>(args)...);
+    case ast_operator::ARCCOSH:
+      return f.template operator()<ast_operator::ARCCOSH>(std::forward<T0>(arg0),
+                                                          std::forward<Ts>(args)...);
+    case ast_operator::ARCTANH:
+      return f.template operator()<ast_operator::ARCTANH>(std::forward<T0>(arg0),
+                                                          std::forward<Ts>(args)...);
+    case ast_operator::EXP:
+      return f.template operator()<ast_operator::EXP>(std::forward<T0>(arg0),
+                                                      std::forward<Ts>(args)...);
+    case ast_operator::LOG:
+      return f.template operator()<ast_operator::LOG>(std::forward<T0>(arg0),
+                                                      std::forward<Ts>(args)...);
+    case ast_operator::SQRT:
+      return f.template operator()<ast_operator::SQRT>(std::forward<T0>(arg0),
+                                                       std::forward<Ts>(args)...);
+    case ast_operator::CBRT:
+      return f.template operator()<ast_operator::CBRT>(std::forward<T0>(arg0),
+                                                       std::forward<Ts>(args)...);
+    case ast_operator::CEIL:
+      return f.template operator()<ast_operator::CEIL>(std::forward<T0>(arg0),
+                                                       std::forward<Ts>(args)...);
+    case ast_operator::FLOOR:
+      return f.template operator()<ast_operator::FLOOR>(std::forward<T0>(arg0),
+                                                        std::forward<Ts>(args)...);
+    case ast_operator::ABS:
+      return f.template operator()<ast_operator::ABS>(std::forward<T0>(arg0),
+                                                      std::forward<Ts>(args)...);
+    case ast_operator::RINT:
+      return f.template operator()<ast_operator::RINT>(std::forward<T0>(arg0),
+                                                       std::forward<Ts>(args)...);
+    case ast_operator::BIT_INVERT:
+      return f.template operator()<ast_operator::BIT_INVERT>(std::forward<T0>(arg0),
+                                                             std::forward<Ts>(args)...);
+    case ast_operator::NOT:
+      return f.template operator()<ast_operator::NOT>(std::forward<T0>(arg0),
+                                                      std::forward<Ts>(args)...);
+    */
+    default: return 0;  // TODO: Error handling?
   }
 }
 
@@ -1094,6 +1267,131 @@ struct do_binop {
     return binop<OP>{}(lhs, rhs);
   }
 };
+
+template <ast_operator op>
+struct operator_functor {
+};
+
+template <>
+struct operator_functor<ast_operator::ADD> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs + rhs)
+  {
+    return lhs + rhs;
+  }
+};
+
+namespace detail {
+/*
+template <typename T1, typename T2>
+struct dispatch_operator {
+#pragma nv_exec_check_disable
+  template <ast_operator op, typename F, typename... Ts>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const
+  {
+    return f.template operator()<op, T1, T2>(std::forward<Ts>(args)...);
+  }
+};
+
+struct dispatch_operator_types {
+#pragma nv_exec_check_disable
+  template <typename T1, typename T2, typename F, typename... Ts>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(ast_operator op, F&& f, Ts&&... args) const
+  {
+    return ast_operator_dispatcher_typed(
+      op, detail::dispatch_operator<T1, T2>{}, std::forward<F>(f), std::forward<Ts>(args)...);
+  }
+};
+*/
+
+template <typename OperatorFunctor>
+struct dispatch_operator_functor_types {
+  template <typename LHS,
+            typename RHS,
+            std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(LHS lhs, RHS rhs)
+  {
+    return OperatorFunctor{}(lhs, rhs);
+  }
+
+  template <typename LHS,
+            typename RHS,
+            std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(LHS lhs, RHS rhs)
+  {
+#ifndef __CUDA_ARCH__
+    CUDF_FAIL("Invalid binary operation.");
+#else
+    release_assert(false && "Invalid binary operation.");
+
+    // The following code will never be reached, but the compiler generates a
+    // warning if there isn't a return value.
+
+    // Need to find out what the return type is in order to have a default
+    // return value and solve the compiler warning for lack of a default
+    // return
+    return 0;
+#endif
+  }
+};
+
+struct dispatch_op {
+  template <ast_operator op,
+            typename... Ts,
+            std::enable_if_t<is_valid_binary_op<operator_functor<op>, Ts...>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(cudf::data_type lhs_t,
+                                                      cudf::data_type rhs_t,
+                                                      Ts&&... args)
+  {
+    return type_double_dispatcher(lhs_t,
+                                  rhs_t,
+                                  detail::dispatch_operator_functor_types<operator_functor<op>>{},
+                                  std::forward<Ts>(args)...);
+  }
+  template <ast_operator op,
+            typename... Ts,
+            std::enable_if_t<!is_valid_binary_op<operator_functor<op>, Ts...>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(cudf::data_type lhs_t,
+                                                      cudf::data_type rhs_t,
+                                                      Ts&&... args)
+  {
+    // TODO: Error
+    return 0;
+  }
+};
+
+}  // namespace detail
+
+/**
+ * @brief Dispatches two type template parameters to a callable.
+ *
+ * This function expects a callable `f` with an `operator()` template accepting
+ * two typename template parameters `T1` and `T2`.
+ *
+ * @param type1 The `data_type` used to dispatch a type for the first template
+ * parameter of the callable `F`
+ * @param type2 The `data_type` used to dispatch a type for the second template
+ * parameter of the callable `F`
+ * @param args Parameter pack forwarded to the `operator()` invocation `F`.
+ */
+#pragma nv_exec_check_disable
+template <typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher(ast_operator op,
+                                                                           cudf::data_type lhs_t,
+                                                                           cudf::data_type rhs_t,
+                                                                           Ts&&... args)
+{
+  return ast_operator_dispatcher_data_type(
+    op, detail::dispatch_op{}, lhs_t, rhs_t, std::forward<Ts>(args)...);
+  /*
+  return type_double_dispatcher(lhs_t,
+                                rhs_t,
+                                detail::dispatch_operator_types{},
+                                op,
+                                std::forward<F>(f),
+                                std::forward<Ts>(args)...);
+                                */
+}
 
 }  // namespace ast
 

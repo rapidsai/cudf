@@ -28,6 +28,9 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
+#include <type_traits>
+#include "cudf/types.hpp"
+#include "cudf/wrappers/timestamps.hpp"
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
@@ -96,6 +99,23 @@ TEST_F(ASTTest, BasicASTEvaluation)
   // cudf::test::expect_columns_equal(expect_less, result_less->view(), true);
   cudf::test::expect_columns_equal(expect_tree_1, result_tree_1->view(), true);
   cudf::test::expect_columns_equal(expect_tree_2, result_tree_2->view(), true);
+
+  static_assert(
+    cudf::ast::
+      is_valid_binary_op<cudf::ast::operator_functor<cudf::ast::ast_operator::ADD>, float, int>,
+    "Same int");
+  static_assert(
+    cudf::ast::
+      is_valid_binary_op<cudf::ast::operator_functor<cudf::ast::ast_operator::ADD>, int, int>,
+    "This should be true");
+  cudf::timestamp_D a = 32;
+  float b             = 12;
+  auto thing          = cudf::ast::ast_operator_dispatcher(cudf::ast::ast_operator::ADD,
+                                                  cudf::data_type(cudf::type_id::TIMESTAMP_DAYS),
+                                                  cudf::data_type(cudf::type_id::FLOAT32),
+                                                  a,
+                                                  b);
+  EXPECT_EQ(thing, 44);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
