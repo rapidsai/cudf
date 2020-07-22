@@ -28,7 +28,7 @@ namespace detail {
 namespace {
 
 struct get_element_functor {
-  template <typename T, std::enable_if_t<is_fixed_width<T>() && !is_fixed_point<T>()> *p = nullptr>
+  template <typename T, std::enable_if_t<is_primitive_type<T>()> *p = nullptr>
   std::unique_ptr<scalar> operator()(
     column_view const &input,
     size_type index,
