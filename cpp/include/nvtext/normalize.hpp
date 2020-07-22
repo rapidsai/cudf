@@ -68,11 +68,11 @@ std::unique_ptr<cudf::column> normalize_spaces(
  * Details on _unicode category_ can be found here:
  * https://unicodebook.readthedocs.io/unicode.html#categories
  *
- * The `do_lower_case` parameter will lower-case and remove accents from characters.
- * If `true`, lower-casing must also remove the accents -- the accents cannot be removed
- * from upper-case characters without lower-casing it and lower-casing cannot be performed
- * without also removing accents. However, if the accented character is already lower-case,
- * then only the accent is removed.
+ * If `do_lower_case = true`, lower-casing also removes the accents. The
+ * accents cannot be removed from upper-case characters without lower-casing
+ * and lower-casing cannot be performed without also removing accents.
+ * However, if the accented character is already lower-case, then only the
+ * accent is removed.
  *
  * @code{.pseudo}
  * s = ["éâîô\teaio", "ĂĆĖÑÜ", "ACENU", "$24.08", "[a,bb]"]

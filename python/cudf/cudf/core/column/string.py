@@ -3632,18 +3632,18 @@ class StringMethods(ColumnMethodsMixin):
             - changing whitespace (e.g. ``\\t``, ``\\n``, ``\\r``) to space
             - removing control characters (unicode categories "Cc" and "Cf")
 
-        The `do_lower_case` parameter will lower-case and remove accents
-        from characters. If `True`, lower-casing must also remove the
-        accents -- the accents cannot be removed from upper-case characters
-        without lower-casing it and lower-casing cannot be performed
-        without also removing accents. However, if the accented character
-        is already lower-case, then only the accent is removed.
+        If `do_lower_case = true`, lower-casing also removes the accents.
+        The accents cannot be removed from upper-case characters without
+        lower-casing and lower-casing cannot be performed without also
+        removing accents. However, if the accented character is already
+        lower-case, then only the accent is removed.
 
         Parameters
         ----------
         do_lower : bool, Default is True
-            If set to true, characters will be lower-cased and
-            accents will be removed.
+            If set to True, characters will be lower-cased and accents
+            will be removed. If False, accented and upper-case characters
+            are not transformed.
 
         Returns
         -------
@@ -3652,7 +3652,7 @@ class StringMethods(ColumnMethodsMixin):
         Examples
         --------
         >>> import cudf
-        >>> ser = cudf.Series(["héllo, \\tworld","ĂĆCĖÑTED","$99])
+        >>> ser = cudf.Series(["héllo, \\tworld","ĂĆCĖÑTED","$99"])
         >>> ser.str.normalize_characters()
         0    hello ,  world
         1          accented
