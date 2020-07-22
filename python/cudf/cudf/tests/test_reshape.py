@@ -325,3 +325,30 @@ def test_series_merge_sorted(nparts, key, na_position, ascending):
     )
 
     assert_eq(expect.reset_index(drop=True), result.reset_index(drop=True))
+
+
+@pytest.mark.parametrize(
+    "index, column, data",
+    [
+        ([], [], []),
+        ([0], [0], [0]),
+        ([0, 0], [0, 1], [1, 2]),
+        ([0, 1], [0, 0], [1, 2]),
+        ([0, 1], [0, 1], [1, 2]),
+    ],
+)
+def test_pivot_simple(index, column, data):
+    pdf = pd.DataFrame({"index": index, "column": column, "data": data})
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    expect = pdf.pivot("index", "column")
+    got = gdf.pivot("index", "column")
+
+    check_index_and_columns = expect.shape != (0, 0)
+    assert_eq(
+        expect,
+        got,
+        check_dtype=False,
+        check_index_type=check_index_and_columns,
+        check_column_type=check_index_and_columns,
+    )
