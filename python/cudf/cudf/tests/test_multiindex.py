@@ -879,3 +879,91 @@ def test_multiindex_to_arrow():
         match=re.escape("MultiIndex.to_arrow() is not yet implemented"),
     ):
         midx.to_arrow()
+
+
+@pytest.mark.parametrize(
+    "pdi",
+    [
+        pd.MultiIndex(
+            levels=[[], [], []],
+            codes=[[], [], []],
+            names=["one", "two", "three"],
+        ),
+        pd.MultiIndex.from_tuples(
+            list(
+                zip(
+                    *[
+                        [
+                            "bar",
+                            "bar",
+                            "baz",
+                            "baz",
+                            "foo",
+                            "foo",
+                            "qux",
+                            "qux",
+                        ],
+                        [
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                        ],
+                    ]
+                )
+            )
+        ),
+    ],
+)
+def test_multiIndex_empty(pdi):
+    gdi = cudf.from_pandas(pdi)
+
+    assert_eq(pdi.empty, gdi.empty)
+
+
+@pytest.mark.parametrize(
+    "pdi",
+    [
+        pd.MultiIndex(
+            levels=[[], [], []],
+            codes=[[], [], []],
+            names=["one", "two", "three"],
+        ),
+        pd.MultiIndex.from_tuples(
+            list(
+                zip(
+                    *[
+                        [
+                            "bar",
+                            "bar",
+                            "baz",
+                            "baz",
+                            "foo",
+                            "foo",
+                            "qux",
+                            "qux",
+                        ],
+                        [
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                        ],
+                    ]
+                )
+            )
+        ),
+    ],
+)
+def test_multiIndex_size(pdi):
+    gdi = cudf.from_pandas(pdi)
+
+    assert_eq(pdi.size, gdi.size)
