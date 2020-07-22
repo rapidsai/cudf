@@ -69,6 +69,24 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
 }
 
+template <typename Element, typename InputIterator>
+void generate_sequence(
+  InputIterator begin,
+  InputIterator end,
+  typename std::enable_if<!cudf::is_duration_t<Element>::value>::type* = nullptr)
+{
+  std::iota(begin, end, 0);
+}
+
+template <typename Element, typename InputIterator>
+void generate_sequence(
+  InputIterator begin,
+  InputIterator end,
+  typename std::enable_if<cudf::is_duration_t<Element>::value>::type* = nullptr)
+{
+  std::iota(begin, end, Element{0});
+}
+
 TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
 {
   using T = TypeParam;
