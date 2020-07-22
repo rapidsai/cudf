@@ -599,5 +599,6 @@ def test_drop_duplicates_multi_index():
 
     for col in gdf.columns:
         assert_df(
-            gdf[col].drop_duplicates().to_pandas(nullable_pd_dtype=False), pdf[col].drop_duplicates()
+            gdf[col].drop_duplicates().to_pandas(nullable_pd_dtype=False),
+            pdf[col].drop_duplicates(),
         )

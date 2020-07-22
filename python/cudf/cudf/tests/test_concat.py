@@ -60,13 +60,17 @@ def test_concat_dataframe(index, nulls, axis):
     df_empty1 = gdf_empty1.to_pandas(nullable_pd_dtype=False)
 
     # DataFrame
-    res = gd.concat([gdf, gdf2, gdf, gdf_empty1], axis=axis).to_pandas(nullable_pd_dtype=False)
+    res = gd.concat([gdf, gdf2, gdf, gdf_empty1], axis=axis).to_pandas(
+        nullable_pd_dtype=False
+    )
     sol = pd.concat([df, df2, df, df_empty1], axis=axis)
     assert_eq(res, sol, check_names=False, check_categorical=False)
 
     # Series
     for c in [i for i in ("x", "y", "z") if i != index]:
-        res = gd.concat([gdf[c], gdf2[c], gdf[c]], axis=axis).to_pandas(nullable_pd_dtype=False)
+        res = gd.concat([gdf[c], gdf2[c], gdf[c]], axis=axis).to_pandas(
+            nullable_pd_dtype=False
+        )
         sol = pd.concat([df[c], df2[c], df[c]], axis=axis)
         assert_eq(res, sol, check_names=False, check_categorical=False)
 

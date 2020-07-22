@@ -239,7 +239,9 @@ def test_groupby_apply():
     df["val1"] = np.random.random(nelem)
     df["val2"] = np.random.random(nelem)
 
-    expect_grpby = df.to_pandas(nullable_pd_dtype=False).groupby(["key1", "key2"], as_index=False)
+    expect_grpby = df.to_pandas(nullable_pd_dtype=False).groupby(
+        ["key1", "key2"], as_index=False
+    )
     got_grpby = df.groupby(["key1", "key2"])
 
     def foo(df):
@@ -262,7 +264,9 @@ def test_groupby_apply_grouped():
     df["val1"] = np.random.random(nelem)
     df["val2"] = np.random.random(nelem)
 
-    expect_grpby = df.to_pandas(nullable_pd_dtype=False).groupby(["key1", "key2"], as_index=False)
+    expect_grpby = df.to_pandas(nullable_pd_dtype=False).groupby(
+        ["key1", "key2"], as_index=False
+    )
     got_grpby = df.groupby(["key1", "key2"])
 
     def foo(key1, val1, com1, com2):
@@ -740,7 +744,10 @@ def test_groupby_sort():
 
     assert_eq(
         pdf.groupby(["c", "b"], sort=False).sum().sort_index(),
-        gdf.groupby(["c", "b"], sort=False).sum().to_pandas(nullable_pd_dtype=False).sort_index(),
+        gdf.groupby(["c", "b"], sort=False)
+        .sum()
+        .to_pandas(nullable_pd_dtype=False)
+        .sort_index(),
     )
 
 

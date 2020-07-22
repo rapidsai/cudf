@@ -71,6 +71,7 @@ def test_token_count(delimiter, expected_token_counts):
     assert type(expected) == type(actual)
     assert_eq(expected, actual, check_dtype=False)
 
+
 def test_normalize_spaces():
     strings = cudf.Series(
         [
