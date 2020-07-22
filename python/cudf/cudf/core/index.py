@@ -362,7 +362,7 @@ class Index(Frame, Serializable):
                 self._values.astype("str").fillna("<NA>"), name=self.name
             )
         else:
-            return self.copy()
+            return self
 
     def fillna(self, value, downcast=None):
         """
@@ -2014,7 +2014,7 @@ class DatetimeIndex(GenericIndex):
                 name=self.name,
             )
         else:
-            return self.copy()
+            return self
 
 
 class CategoricalIndex(GenericIndex):
@@ -2231,7 +2231,7 @@ class StringIndex(GenericIndex):
                 self._values.astype("str").fillna("None"), name=self.name
             )
         else:
-            return self.copy()
+            return self
 
 
 def as_index(arbitrary, **kwargs):
