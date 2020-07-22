@@ -26,6 +26,7 @@ requirements:
     - cython >=0.29,<0.30
     - setuptools
     - numpy
+    - cudf {{ version }}
   host:
     - libcudf_kafka {{ version }}
     - cudf {{ version }}

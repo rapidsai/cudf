@@ -5,4 +5,5 @@ from cudf._lib.cpp.io.types cimport datasource
 
 cdef class Datasource:
     cdef datasource* get_datasource(self) except *:
-        raise Exception("get_datasource() should not be directly invoked here")
+        raise NotImplementedError("get_datasource() should not "
+                                  + "be directly invoked here")

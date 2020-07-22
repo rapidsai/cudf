@@ -33,11 +33,6 @@ if [ "$UPLOAD_LIBCUDF" == "1" ]; then
   echo "Upload libcudf"
   echo ${LIBCUDF_FILE}
   anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${LIBCUDF_FILE}
-
-  test -e ${LIBCUDF_KAFKA_FILE}
-  echo "Upload libcudf_kafka"
-  echo ${LIBCUDF_KAFKA_FILE}
-  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${LIBCUDF_KAFKA_FILE}
 fi
 
 if [ "$UPLOAD_CUDF" == "1" ]; then
@@ -54,13 +49,23 @@ if [ "$UPLOAD_CUDF" == "1" ]; then
   echo ${DASK_CUDF_FILE}
   anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${DASK_CUDF_FILE}
 
-  test -e ${CUDF_KAFKA_FILE}
-  echo "Upload cudf_kafka"
-  echo ${CUDF_KAFKA_FILE}
-  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUDF_KAFKA_FILE}
-
   test -e ${CUSTREAMZ_FILE}
   echo "Upload custreamz"
   echo ${CUSTREAMZ_FILE}
   anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUSTREAMZ_FILE}
+fi
+
+if [ "$UPLOAD_KAFKA" == "1" ]; then
+  LABEL_OPTION="--label main"
+  echo "LABEL_OPTION=${LABEL_OPTION}"
+
+  test -e ${LIBCUDF_KAFKA_FILE}
+  echo "Upload libcudf_kafka"
+  echo ${LIBCUDF_KAFKA_FILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${LIBCUDF_KAFKA_FILE}
+
+  test -e ${CUDF_KAFKA_FILE}
+  echo "Upload cudf_kafka"
+  echo ${CUDF_KAFKA_FILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUDF_KAFKA_FILE}
 fi
