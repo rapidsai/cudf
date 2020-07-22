@@ -3918,7 +3918,7 @@ class Series(Frame, Serializable):
             data = _format_stats_values(data)
 
             return Series(
-                data=data, index=names, nan_as_null=False, name=self.name
+                data=data, index=names, nan_as_null=False, name=self.name,
             )
 
         def describe_categorical(self):
