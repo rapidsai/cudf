@@ -496,7 +496,10 @@ TEST_F(RollingErrorTest, SumTimestampNotSupported)
                cudf::logic_error);
 }
 
-TYPED_TEST_CASE(RollingTest, cudf::test::FixedWidthTypes);
+// TODO: Use cudf::FixedWidthTypes when this is supported for duration types
+using FixedWidthWithoutDurationTypes =
+  cudf::test::Concat<cudf::test::NumericTypes, cudf::test::TimestampTypes>;
+TYPED_TEST_CASE(RollingTest, FixedWidthWithoutDurationTypes);
 
 // simple example from Pandas docs
 TYPED_TEST(RollingTest, SimpleStatic)

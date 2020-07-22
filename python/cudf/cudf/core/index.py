@@ -1431,9 +1431,6 @@ class RangeIndex(Index):
 
     @property
     def size(self):
-        """
-        Return the number of elements in the underlying data.
-        """
         return max(0, self._stop - self._start)
 
     def find_label_range(self, first, last):
@@ -1616,13 +1613,6 @@ class GenericIndex(Index):
 
     def __len__(self):
         return len(self._values)
-
-    @property
-    def size(self):
-        """
-        Return the number of elements in the underlying data.
-        """
-        return len(self)
 
     def __repr__(self):
         from pandas._config import get_option

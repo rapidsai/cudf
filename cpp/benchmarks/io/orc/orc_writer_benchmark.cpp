@@ -36,6 +36,9 @@ class OrcWrite : public cudf::benchmark {
 template <typename T>
 void ORC_write(benchmark::State& state)
 {
+  // ORC does not support unsigned int types
+  if (std::is_unsigned<T>::value and not std::is_same<T, bool>::value) return;
+
   int64_t const total_bytes      = state.range(0);
   cudf::size_type const num_cols = state.range(1);
   cudf_io::compression_type const compression =
