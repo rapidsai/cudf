@@ -536,10 +536,7 @@ TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported)
     cudf::logic_error);
 }
 
-// TODO: Use cudf::FixedWidthTypes when this is supported for duration types
-using FixedWidthWithoutDurationTypes =
-  cudf::test::Concat<cudf::test::NumericTypes, cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(GroupedRollingTest, FixedWidthWithoutDurationTypes);
+TYPED_TEST_CASE(GroupedRollingTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
 {
