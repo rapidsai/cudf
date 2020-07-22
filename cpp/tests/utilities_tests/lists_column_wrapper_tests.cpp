@@ -456,7 +456,9 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   using namespace cudf;
   using T = TypeParam;
 
-  // to disambiguiate between {} == 0 and {} == List{0}
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
   using LCW = test::lists_column_wrapper<T>;
 
   // List<T>, empty
@@ -582,7 +584,9 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   using namespace cudf;
   using T = TypeParam;
 
-  // to disambiguiate between {} == 0 and {} == List{0}
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
   using LCW = test::lists_column_wrapper<T>;
 
   auto valids = cudf::test::make_counting_transform_iterator(
@@ -694,6 +698,384 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
     EXPECT_EQ(child_data.size(), 4);
     test::fixed_width_column_wrapper<T> e_child_data({5, 6, 7, 8});
     test::expect_columns_equal(e_child_data, child_data);
+  }
+}
+
+TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
+{
+  using namespace cudf;
+  using T = TypeParam;
+
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
+  using LCW = test::lists_column_wrapper<T>;
+
+  // List<List<List<T>>>:
+  // Length : 3
+  // Offsets : 0, 1, 2, 2
+  // Children :
+  //  List<List<T>>:
+  //  Length : 2
+  //  Offsets : 0, 1, 1
+  //  Children :
+  //      List<T>:
+  //      Length : 1
+  //      Offsets : 0, 0
+  //      Children :
+  {
+    test::lists_column_wrapper<T> list{{{LCW{}}}, {LCW{}}, LCW{}};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 3);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 2, 2});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 2);
+
+    auto child_offsets = childv.offsets();
+    EXPECT_EQ(child_offsets.size(), 3);
+    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 1, 1});
+    test::expect_columns_equal(e_child_offsets, child_offsets);
+
+    auto child_child = childv.child();
+    lists_column_view child_childv(child_child);
+    EXPECT_EQ(child_childv.size(), 1);
+
+    auto child_child_offsets = child_childv.offsets();
+    EXPECT_EQ(child_child_offsets.size(), 2);
+    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 0});
+    test::expect_columns_equal(e_child_child_offsets, child_child_offsets);
+
+    auto child_child_data = child_childv.child();
+    EXPECT_EQ(child_child_data.size(), 0);
+  }
+
+  // List<List<List<T>>>:
+  // Length : 3
+  // Offsets : 0, 0, 1, 2
+  // Children :
+  //   List<List<T>>:
+  //   Length : 2
+  //   Offsets : 0, 0, 1
+  //   Children :
+  //     List<T>:
+  //       Length : 1
+  //       Offsets : 0, 0
+  //       Children :
+  {
+    test::lists_column_wrapper<T> list{LCW{}, {LCW{}}, {{LCW{}}}};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 3);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 1, 2});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 2);
+
+    auto child_offsets = childv.offsets();
+    EXPECT_EQ(child_offsets.size(), 3);
+    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 0, 1});
+    test::expect_columns_equal(e_child_offsets, child_offsets);
+
+    auto child_child = childv.child();
+    lists_column_view child_childv(child_child);
+    EXPECT_EQ(child_childv.size(), 1);
+
+    auto child_child_offsets = child_childv.offsets();
+    EXPECT_EQ(child_child_offsets.size(), 2);
+    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 0});
+    test::expect_columns_equal(e_child_child_offsets, child_child_offsets);
+
+    auto child_child_data = child_childv.child();
+    EXPECT_EQ(child_child_data.size(), 0);
+  }
+
+  // List<List<List<T>>>:
+  // Length : 3
+  // Offsets : 0, 0, 1, 2
+  // Children :
+  //   List<List<T>>:
+  //   Length : 2
+  //   Offsets : 0, 1, 1
+  //   Children :
+  //       List<T>:
+  //       Length : 1
+  //       Offsets : 0, 3
+  //       Children :
+  //         1, 2, 3
+  {
+    // { {}, {{{1,2,3}}}, {{}} }
+    test::lists_column_wrapper<T> list{LCW{}, {{{1, 2, 3}}}, {LCW{}}};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 3);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 1, 2});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 2);
+
+    auto child_offsets = childv.offsets();
+    EXPECT_EQ(child_offsets.size(), 3);
+    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 1, 1});
+    test::expect_columns_equal(e_child_offsets, child_offsets);
+
+    auto child_child = childv.child();
+    lists_column_view child_childv(child_child);
+    EXPECT_EQ(child_childv.size(), 1);
+
+    auto child_child_offsets = child_childv.offsets();
+    EXPECT_EQ(child_child_offsets.size(), 2);
+    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 3});
+    test::expect_columns_equal(e_child_child_offsets, child_child_offsets);
+
+    auto child_child_data = child_childv.child();
+    EXPECT_EQ(child_child_data.size(), 3);
+    test::fixed_width_column_wrapper<T> e_child_child_data({1, 2, 3});
+    test::expect_columns_equal(e_child_child_data, child_child_data);
+  }
+
+  // List<List<List<T>>>:
+  // Length : 3
+  // Offsets : 0, 1, 2, 2
+  // Null count: 1
+  // 011
+  // Children :
+  // List<List<T>>:
+  // Length : 2
+  // Offsets : 0, 1, 1
+  // Children :
+  //   List<T>:
+  //   Length : 1
+  //   Offsets : 0, 0
+  //   Children :
+  {
+    // { {{{}}}, {{}}, null }
+    std::vector<bool> valids{true, true, false};
+    test::lists_column_wrapper<T> list{{{{LCW{}}}, {LCW{}}, LCW{}}, valids.begin()};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 3);
+    EXPECT_EQ(lcv.null_count(), 1);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 2, 2});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 2);
+
+    auto child_offsets = childv.offsets();
+    EXPECT_EQ(child_offsets.size(), 3);
+    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 1, 1});
+    test::expect_columns_equal(e_child_offsets, child_offsets);
+
+    auto child_child = childv.child();
+    lists_column_view child_childv(child_child);
+    EXPECT_EQ(child_childv.size(), 1);
+
+    auto child_child_offsets = child_childv.offsets();
+    EXPECT_EQ(child_child_offsets.size(), 2);
+    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 0});
+    test::expect_columns_equal(e_child_child_offsets, child_child_offsets);
+  }
+
+  // List<List<List<T>>>:
+  // Length : 3
+  // Offsets : 0, 1, 1, 2
+  // Null count: 1
+  // 101
+  // Children :
+  // List<List<T>>:
+  // Length : 1
+  // Offsets : 0, 1
+  // Children :
+  //   List<T>:
+  //   Length : 1
+  //   Offsets : 0, 0
+  //   Children :
+  {
+    // { {{{}}}, null, {} }
+    std::vector<bool> valids{true, false, true};
+    test::lists_column_wrapper<T> list{{{{LCW{}}}, {LCW{}}, LCW{}}, valids.begin()};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 3);
+    EXPECT_EQ(lcv.null_count(), 1);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 1, 1});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 1);
+
+    auto child_offsets = childv.offsets();
+    EXPECT_EQ(child_offsets.size(), 2);
+    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 1});
+    test::expect_columns_equal(e_child_offsets, child_offsets);
+
+    auto child_child = childv.child();
+    lists_column_view child_childv(child_child);
+    EXPECT_EQ(child_childv.size(), 1);
+
+    auto child_child_offsets = child_childv.offsets();
+    EXPECT_EQ(child_child_offsets.size(), 2);
+    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 0});
+    test::expect_columns_equal(e_child_child_offsets, child_child_offsets);
+  }
+
+  // List<List<T>>:
+  // Length : 3
+  // Offsets : 0, 0, 1, 1
+  // Null count: 1
+  // 110
+  // Children :
+  //   List<T>:
+  //   Length : 1
+  //   Offsets : 0, 0
+  //   Children :
+  {
+    // { null, {{}}, {} }
+    std::vector<bool> valids{false, true, true};
+    test::lists_column_wrapper<T> list{{{{LCW{}}}, {LCW{}}, LCW{}}, valids.begin()};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 3);
+    EXPECT_EQ(lcv.null_count(), 1);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 1, 1});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 1);
+
+    auto child_offsets = childv.offsets();
+    EXPECT_EQ(child_offsets.size(), 2);
+    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 0});
+    test::expect_columns_equal(e_child_offsets, child_offsets);
+  }
+
+  // List<List<>>:
+  // Length : 3
+  // Offsets : 0, 0, 0, 0
+  // Null count: 3
+  // 000
+  // Children :
+  //   List<>:
+  //   Length : 0
+  //   Offsets :
+  //   Children :
+  {
+    // { null, null, null }
+    std::vector<bool> valids{false, false, false};
+    test::lists_column_wrapper<T> list{{{{LCW{}}}, {LCW{}}, LCW{}}, valids.begin()};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 3);
+    EXPECT_EQ(lcv.null_count(), 3);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 0, 0});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 0);
+  }
+
+  // List<List<>>:
+  // Length : 3
+  // Offsets : 0, 0, 0, 0
+  // Null count: 3
+  // 000
+  // Children :
+  //   List<>:
+  //   Length : 0
+  //   Offsets :
+  //   Children :
+  {
+    // { null, null, null }
+    std::vector<bool> valids{false, false, false};
+    test::lists_column_wrapper<T> list{{LCW{}, {{LCW{}}}, {LCW{}}}, valids.begin()};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 3);
+    EXPECT_EQ(lcv.null_count(), 3);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 0, 0});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 0);
+  }
+
+  // List<List<List<>>>:
+  // Length : 3
+  // Offsets : 0, 1, 2, 2
+  // Children :
+  //   List<List<>>:
+  //   Length : 2
+  //   Offsets : 0, 0, 0
+  //   Null count: 1
+  //   10
+  //   Children :
+  //      List<>:
+  //      Length : 0
+  //      Offsets :
+  //      Children :
+  {
+    // { {null}, {{}}, {} }
+    std::vector<bool> valids{false};
+    test::lists_column_wrapper<T> list{{{{LCW{}}}, valids.begin()}, {LCW{}}, LCW{}};
+
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 3);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 2, 2});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 2);
+    EXPECT_EQ(childv.null_count(), 1);
+
+    auto child_offsets = childv.offsets();
+    EXPECT_EQ(child_offsets.size(), 3);
+    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 0, 0});
+    test::expect_columns_equal(e_child_offsets, child_offsets);
+
+    auto child_child = childv.child();
+    lists_column_view child_childv(child_child);
+    EXPECT_EQ(child_childv.size(), 0);
   }
 }
 
@@ -903,5 +1285,25 @@ TEST_F(ListColumnWrapperTest, ListOfListOfBools)
     test::fixed_width_column_wrapper<bool> e_child_child_data(
       {false, true, true, true, true, false, true, true, true, false, true});
     test::expect_columns_equal(e_child_child_data, child_child_data);
+  }
+}
+
+TEST_F(ListColumnWrapperTest, MismatchedHierarchies)
+{
+  using namespace cudf;
+
+  using T = int;
+  using L = test::lists_column_wrapper<T>;
+
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
+  using LCW = test::lists_column_wrapper<T>;
+
+  // trying to build a column out of a List<List<int>> column, and a List<int> column
+  // is not valid if the leaf lists are not empty.
+  {
+    auto expect_failure = []() { test::lists_column_wrapper<T> list{{{1, 2, 3}}, {4, 5}}; };
+    EXPECT_THROW(expect_failure(), cudf::logic_error);
   }
 }

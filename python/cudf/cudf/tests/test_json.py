@@ -248,8 +248,7 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
     cu_df = cudf.read_json(
         str(fname), compression=in_comp, lines=True, dtype=["int", "int"]
     )
-
-    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+    assert_eq(pd_df, cu_df)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")

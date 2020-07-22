@@ -30,6 +30,7 @@ const char* kernel =
     #include <simt/limits>
     #include <cudf/utilities/bit.hpp>
     #include <cudf/wrappers/timestamps.hpp>
+    #include <cudf/wrappers/durations.hpp>
     #include "operation.h"
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>

@@ -365,16 +365,39 @@ constexpr inline bool is_duration(data_type type)
 }
 
 /**
- * @brief Indicates whether the type `T` is a cudf chrono type.
+ * @brief Indicates whether the type `T` is a chrono type.
  *
  * @tparam T  The type to verify
- * @return true `T` is a chrono type
- * @return false  `T` is not a chrono type
+ * @return true `T` is a duration or a timestamp type
+ * @return false  `T` is neither a duration nor a timestamp type
  **/
 template <typename T>
 constexpr inline bool is_chrono()
 {
-  return cudf::is_timestamp<T>() || cudf::is_duration<T>();
+  return is_duration<T>() || is_timestamp<T>();
+}
+
+struct is_chrono_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_chrono<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a chrono `data_type`.
+ *
+ * Chrono types include cudf timestamp types, which represent a point in time, and cudf
+ * duration types that represent a time interval.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a chrono type
+ * @return false `type` is not a chrono type
+ **/
+constexpr inline bool is_chrono(data_type type)
+{
+  return cudf::type_dispatcher(type, is_chrono_impl{});
 }
 
 /**
@@ -502,4 +525,17 @@ constexpr inline bool is_nested(data_type type)
 }
 
 /** @} */
+
+template <typename From, typename To>
+struct is_convertible : std::is_convertible<From, To> {
+};
+
+// This will ensure that timestamps can be promoted to a higher precision. Presently, they can't
+// do that due to nvcc/gcc compiler issues
+template <typename Duration1, typename Duration2>
+struct is_convertible<cudf::detail::timestamp<Duration1>, cudf::detail::timestamp<Duration2>>
+  : std::is_convertible<typename cudf::detail::time_point<Duration1>::duration,
+                        typename cudf::detail::time_point<Duration2>::duration> {
+};
+
 }  // namespace cudf
