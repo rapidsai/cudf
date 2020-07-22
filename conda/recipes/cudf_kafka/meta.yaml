@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -20,27 +20,25 @@ build:
     - CUDAHOSTCXX
     - PARALLEL_LEVEL
     - VERSION_SUFFIX
-  run_exports:
-    - {{ pin_subpackage("cudf_kafka", max_pin="x.x") }}
 
 requirements:
   build:
     - cmake >=3.14.0
-    - cython >=0.29,<0.30
-    - setuptools
   host:
     - libcudf_kafka {{ version }}
     - cudf {{ version }}
-    - librdkafka=1.4.0
     - python-confluent-kafka
+    - cython >=0.29,<0.30
+    - setuptools
+    - numpy
   run:
-    - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
-    - librdkafka=1.4.0
+    - libcudf_kafka {{ version }}
     - python-confluent-kafka
+    - cudf {{ version }}
 
 test:
   commands:
-    - test -f $PREFIX/lib/libcudf_kafka.so
+    - python -c "import cudf_kafka"
 
 about:
   home: http://rapids.ai/

@@ -20,17 +20,12 @@ build:
     - CUDAHOSTCXX
     - PARALLEL_LEVEL
     - VERSION_SUFFIX
-  run_exports:
-    - {{ pin_subpackage("libcudf_kafka", max_pin="x.x") }}
 
 requirements:
   build:
     - cmake >=3.14.0
   host:
     - libcudf {{ version }}
-    - librdkafka=1.4.0
-  run:
-    - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - librdkafka=1.4.0
 
 test:

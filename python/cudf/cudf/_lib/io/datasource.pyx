@@ -4,4 +4,5 @@ from libcpp.memory cimport unique_ptr
 from cudf._lib.cpp.io.types cimport datasource
 
 cdef class Datasource:
-    pass
+    cdef datasource* get_datasource(self) except +:
+        pass

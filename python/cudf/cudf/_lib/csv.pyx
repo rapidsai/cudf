@@ -329,9 +329,7 @@ def read_csv(
 
     if isinstance(datasource, StringIO):
         datasource = datasource.read().encode()
-    elif isinstance(datasource, str) and not os.path.isfile(
-        datasource
-    ):
+    elif isinstance(datasource, str) and not os.path.isfile(datasource):
         datasource = datasource.encode()
 
     validate_args(delimiter, sep, delim_whitespace, decimal, thousands,

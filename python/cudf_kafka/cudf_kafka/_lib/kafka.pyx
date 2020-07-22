@@ -12,10 +12,10 @@ cdef class KafkaDatasource(Datasource):
     def __cinit__(self,
                   map[string, string] kafka_configs,
                   string topic,
-                  int partition,
+                  int32_t partition,
                   int64_t start_offset,
                   int64_t end_offset,
-                  int batch_timeout,
+                  int32_t batch_timeout,
                   string delimiter,):
         self.c_datasource = <unique_ptr[datasource]> \
             make_unique[kafka_consumer](kafka_configs,

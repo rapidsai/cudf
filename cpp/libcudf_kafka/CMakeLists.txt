@@ -81,6 +81,8 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 ###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
+# TODO: This is currently using a nearly duplicate Google Test Module due to CMake source limitations.
+# this should be standardized in the future to use the same Google Test Module as cudf
 if(BUILD_TESTS)
     include(CTest)
     include(ConfigureGoogleTest)
@@ -147,14 +149,4 @@ message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
 target_link_libraries(cudf_kafka ${RDKAFKA++_LIBRARY})
 include_directories("${RDKAFKA_INCLUDE}")
 
-###################################################################################################
-# - cudf_kafka Install ----------------------------------------------------------------------------
 target_link_libraries(cudf_kafka cudf)
-
-install(TARGETS cudf_kafka
-        DESTINATION lib
-        COMPONENT cudf_kafka)
-
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
-        DESTINATION include
-        COMPONENT cudf_kafka)

@@ -3,6 +3,8 @@
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libc.stdint cimport int32_t, int64_t
+from cudf._lib.cpp.io.types cimport datasource
+from libcpp.memory cimport unique_ptr
 from cudf._lib.io.datasource cimport Datasource
 
 
@@ -21,6 +23,7 @@ cdef extern from "kafka_consumer.hpp" \
 
 cdef class KafkaDatasource(Datasource):
 
+    cdef unique_ptr[datasource] c_datasource
     cdef map[string, string] kafka_configs
     cdef string topic
     cdef int32_t partition
