@@ -187,8 +187,11 @@ std::unique_ptr<cudf::column> character_tokenize(
  * Example:
  * s = ["hello", "world", "one", "two", "three"]
  * r = [0, 0, 1, 1, 1]
- * t = detokenize(s)
- * t is now ["hello world", "one two three"]
+ * s1 = detokenize(s,r)
+ * s1 is now ["hello world", "one two three"]
+ * r = [0, 2, 1, 1, 0]
+ * s2 = detokenize(s,r)
+ * s2 is now ["hello three", "one two", "world"]
  * @endcode
  *
  * All null row entries are ignored and the output contains all valid rows.
