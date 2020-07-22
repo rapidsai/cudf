@@ -92,11 +92,13 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  * where `keys` is the set of distinct values in `input` in sorted order.
  *
  * Examples:
+ * @code{.pseudo}
  * input: {'a', 'b', 'b', 'a'}
  * output: [{'a', 'b'}, {0, 1, 1, 0}]
  *
  * input: {1, 3, 1, 2, 9}
  * output: [{1, 2, 3, 9}, {0, 2, 0, 1, 3}]
+ * @endcode
  *
  * @param input        Column containing values to be encoded
  * @param mr           Device memory resource used to allocate the returned columns.
