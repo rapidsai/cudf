@@ -103,7 +103,7 @@ struct dispatch_unary_cast_to {
   // Disallow conversions between timestamps and numeric
   template <
     typename TargetT,
-    typename std::enable_if_t<cudf::is_fixed_width<TargetT>() &&
+    typename std::enable_if_t<cudf::is_fixed_width<TargetT>() && !cudf::is_fixed_point<TargetT>() &&
                               !(cudf::is_timestamp<SourceT>() && is_numeric<TargetT>()) &&
                               !(cudf::is_timestamp<TargetT>() && is_numeric<SourceT>())>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
@@ -130,7 +130,7 @@ struct dispatch_unary_cast_to {
 
   template <
     typename TargetT,
-    typename std::enable_if_t<!cudf::is_fixed_width<TargetT>() ||
+    typename std::enable_if_t<!cudf::is_fixed_width<TargetT>() || cudf::is_fixed_point<TargetT>() ||
                               (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>()) ||
                               (cudf::is_timestamp<TargetT>() && is_numeric<SourceT>())>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
@@ -139,6 +139,8 @@ struct dispatch_unary_cast_to {
   {
     if (!cudf::is_fixed_width<TargetT>())
       CUDF_FAIL("Column type must be numeric or chrono");
+    else if (cudf::is_fixed_point<TargetT>())
+      CUDF_FAIL("Fixed point unary ops currently not supported");
     else if (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>())
       CUDF_FAIL("Timestamps can be created only from duration");
     else
@@ -151,12 +153,20 @@ struct dispatch_unary_cast_from {
 
   dispatch_unary_cast_from(column_view inp) : input(inp) {}
 
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T, typename std::enable_if_t<cudf::is_primitive_type<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
     return type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, mr, stream);
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(data_type type,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    CUDF_FAIL("Fixed point unary ops not supported yet");
   }
 
   template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
