@@ -43,7 +43,7 @@ namespace test {
  * `thrust::counting_iterator`.
  *
  * Example:
- * ```
+ * @code{.cpp}
  * // Returns square of the value of the counting iterator
  * auto iter = make_counting_transform_iterator(0, [](auto i){ return (i * i);});
  * iter[0] == 0
@@ -51,7 +51,7 @@ namespace test {
  * iter[2] == 4
  * ...
  * iter[n] == n * n
- * ```
+ * @endcode
  *
  * @param start The starting value of the counting iterator
  * @param f The unary function to apply to the counting iterator.
@@ -103,22 +103,77 @@ class column_wrapper {
 };
 
 /**
+ * @brief Convert between source and target types when they differ and where possible.
+ **/
+template <typename From, typename To>
+struct fixed_width_type_converter {
+  // Are the types same - simply copy elements from [begin, end) to out
+  template <typename FromT = From,
+            typename ToT   = To,
+            typename InputIterator,
+            typename OutputIterator,
+            typename std::enable_if<std::is_same<FromT, ToT>::value, void>::type* = nullptr>
+  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  {
+    std::copy(begin, end, out);
+  }
+
+  // Are the types convertible or can target be constructed from source?
+  template <typename FromT = From,
+            typename ToT   = To,
+            typename InputIterator,
+            typename OutputIterator,
+            typename std::enable_if<!std::is_same<FromT, ToT>::value &&
+                                      (cudf::is_convertible<FromT, ToT>::value ||
+                                       std::is_constructible<ToT, FromT>::value),
+                                    void>::type* = nullptr>
+  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  {
+    std::transform(begin, end, out, [](auto const& e) { return static_cast<ToT>(e); });
+  }
+
+#if 0
+  // This is to be used when timestamp disallows construction from tick counts; presently,
+  // this conflicts with the convertible/constructible overload
+  // Convert integral values to timestamps
+  template <
+    typename FromT                        = From,
+    typename ToT                       = To,
+    typename InputIterator, typename OutputIterator,
+    typename std::enable_if<std::is_integral<FromT>::value && cudf::is_timestamp_t<ToT>::value,
+                            void>::type* = nullptr>
+  void operator()(InputIterator begin,
+                  InputIterator end,
+                  OutputIterator out
+                  ) const
+  {
+      std::transform(
+      begin, end, out, [](auto const& e) { return ToT{typename ToT::duration{e}}; });
+  }
+#endif
+};
+
+/**
  * @brief Creates a `device_buffer` containing the elements in the range
  * `[begin,end)`.
  *
- *
+ * @tparam ElementTo The type of element that is being created
+ * @tparam ElementFrom The type of element that is used to create elements of type `ElementTo`
  * @tparam InputIterator Iterator type for `begin` and `end`
  * @param begin Begining of the sequence of elements
  * @param end End of the sequence of elements
  * @return rmm::device_buffer Buffer containing all elements in the range
  *`[begin,end)`
  **/
-template <typename Element, typename InputIterator>
+template <typename ElementTo, typename ElementFrom, typename InputIterator>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
-  static_assert(cudf::is_fixed_width<Element>(), "Unexpected non-fixed width type.");
-  thrust::host_vector<Element> elements(begin, end);
-  return rmm::device_buffer{elements.data(), elements.size() * sizeof(Element)};
+  static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
+  cudf::size_type size = std::distance(begin, end);
+  thrust::host_vector<ElementTo> elements;
+  elements.reserve(size);
+  fixed_width_type_converter<ElementFrom, ElementTo>{}(begin, end, elements.begin());
+  return rmm::device_buffer{elements.data(), size * sizeof(ElementTo)};
 }
 
 /**
@@ -199,9 +254,11 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, Validity
  * @brief `column_wrapper` derived class for wrapping columns of fixed-width
  * elements.
  *
- * @tparam Element The fixed-width element type
+ * @tparam ElementTo The fixed-width element type that is created
+ * @tparam SourceElementT The fixed-width element type that is used to create elements of type
+ * `ElementTo`
  **/
-template <typename ElementTo>
+template <typename ElementTo, typename SourceElementT = ElementTo>
 class fixed_width_column_wrapper : public detail::column_wrapper {
  public:
   /**
@@ -210,9 +267,10 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   fixed_width_column_wrapper() : column_wrapper{}
   {
     std::vector<ElementTo> empty;
-    wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
-                                   0,
-                                   detail::make_elements<ElementTo>(empty.begin(), empty.end())});
+    wrapped.reset(new cudf::column{
+      cudf::data_type{cudf::type_to_id<ElementTo>()},
+      0,
+      detail::make_elements<ElementTo, SourceElementT>(empty.begin(), empty.end())});
   }
 
   /**
@@ -220,11 +278,11 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * range `[begin,end)`.
    *
    * Example:
-   * ```c++
+   * @code{.cpp}
    * // Creates a non-nullable column of INT32 elements with 5 elements: {0, 2, 4, 6, 8}
    * auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
    * fixed_width_column_wrapper<int32_t> w(elements, elements + 5);
-   * ```
+   * @endcode
    *
    * Note: similar to `std::vector`, this "range" constructor should be used
    *       with parentheses `()` and not braces `{}`. The latter should only
@@ -239,7 +297,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
     cudf::size_type size = std::distance(begin, end);
     wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
-                                   detail::make_elements<ElementTo>(begin, end)});
+                                   detail::make_elements<ElementTo, SourceElementT>(begin, end)});
   }
 
   /**
@@ -250,12 +308,12 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * If `v[i] == true`, element `i` is valid, else it is null.
    *
    * Example:
-   * ```c++
+   * @code{.cpp}
    * // Creates a nullable column of INT32 elements with 5 elements: {null, 1, null, 3, null}
    * auto elements = make_counting_transform_iterator(0, [](auto i){return i;});
    * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
    * fixed_width_column_wrapper<int32_t> w(elements, elements + 5, validity);
-   * ```
+   * @endcode
    *
    * Note: similar to `std::vector`, this "range" constructor should be used
    *       with parentheses `()` and not braces `{}`. The latter should only
@@ -273,7 +331,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 
     wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
-                                   detail::make_elements<ElementTo>(begin, end),
+                                   detail::make_elements<ElementTo, SourceElementT>(begin, end),
                                    detail::make_null_mask(v, v + size),
                                    cudf::UNKNOWN_NULL_COUNT});
   }
@@ -283,10 +341,10 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * initializer list.
    *
    * Example:
-   * ```c++
+   * @code{.cpp}
    * // Creates a non-nullable INT32 column with 4 elements: {1, 2, 3, 4}
    * fixed_width_column_wrapper<int32_t> w{{1, 2, 3, 4}};
-   * ```
+   * @endcode
    *
    * @param element_list The list of elements
    **/
@@ -305,10 +363,10 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * the element is null.
    *
    * Example:
-   * ```c++
+   * @code{.cpp}
    * // Creates a nullable INT32 column with 4 elements: {1, NULL, 3, NULL}
    * fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}};
-   * ```
+   * @endcode
    *
    * @param elements The list of elements
    * @param validity The list of validity indicator booleans
@@ -326,11 +384,11 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * indicate the validity of each element.
    *
    * Example:
-   * ```c++
+   * @code{.cpp}
    * // Creates a nullable INT32 column with 4 elements: {NULL, 1, NULL, 3}
    * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
    * fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, validity}
-   * ```
+   * @endcode
    *
    * @tparam ValidityIterator Dereferencing a ValidityIterator must be
    * convertible to `bool`
@@ -340,6 +398,32 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   template <typename ValidityIterator, typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> element_list, ValidityIterator v)
     : fixed_width_column_wrapper(std::cbegin(element_list), std::cend(element_list), v)
+  {
+  }
+
+  /**
+   * @brief Construct a nullable column of the fixed-width elements in the range
+   * `[begin,end)` using a validity initializer list to indicate the validity of each element.
+   *
+   * The validity of each element is determined by an `initializer_list` of
+   * booleans where `true` indicates the element is valid, and `false` indicates
+   * the element is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable column of INT32 elements with 5 elements: {null, 1, null, 3, null}
+   * fixed_width_column_wrapper<int32_t> w(elements, elements + 5, {0, 1, 0, 1, 0});
+   * @endcode
+   *
+   * @param begin The beginning of the sequence of elements
+   * @param end The end of the sequence of elements
+   * @param validity The list of validity indicator booleans
+   **/
+  template <typename InputIterator>
+  fixed_width_column_wrapper(InputIterator begin,
+                             InputIterator end,
+                             std::initializer_list<bool> const& validity)
+    : fixed_width_column_wrapper(begin, end, std::cbegin(validity))
   {
   }
 };
@@ -357,12 +441,12 @@ class strings_column_wrapper : public detail::column_wrapper {
    *`std::string` and a column will be created containing all of the strings.
    *
    * Example:
-   * ```c++
+   * @code{.cpp}
    * // Creates a non-nullable STRING column with 7 string elements:
    * // {"", "this", "is", "a", "column", "of", "strings"}
    * std::vector<std::string> strings{"", "this", "is", "a", "column", "of", "strings"};
    * strings_column_wrapper s(strings.begin(), strings.end());
-   * ```
+   * @endcode
    *
    * @tparam StringsIterator A `std::string` must be constructible from
    * dereferencing a `StringsIterator`.
@@ -391,13 +475,13 @@ class strings_column_wrapper : public detail::column_wrapper {
    * `*(begin+i)` is null, it's value is ignored and treated as an empty string.
    *
    * Example:
-   * ```c++
+   * @code{.cpp}
    * // Creates a nullable STRING column with 7 string elements:
    * // {NULL, "this", NULL, "a", NULL, "of", NULL}
    * std::vector<std::string> strings{"", "this", "is", "a", "column", "of", "strings"};
    * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
    * strings_column_wrapper s(strings.begin(), strings.end(), validity);
-   * ```
+   * @endcode
    *
    * @tparam StringsIterator A `std::string` must be constructible from
    * dereferencing a `StringsIterator`.
@@ -423,11 +507,11 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @brief Construct a non-nullable column of strings from a list of strings.
    *
    * Example:
-   * ```c++
+   * @code{.cpp}
    * // Creates a non-nullable STRING column with 7 string elements:
    * // {"", "this", "is", "a", "column", "of", "strings"}
    * strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"});
-   * ```
+   * @endcode
    *
    * @param strings The list of strings
    **/
@@ -442,12 +526,12 @@ class strings_column_wrapper : public detail::column_wrapper {
    * validity of each string.
    *
    * Example:
-   * ```c++
+   * @code{.cpp}
    * // Creates a nullable STRING column with 7 string elements:
    * // {NULL, "this", NULL, "a", NULL, "of", NULL}
    * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
    * strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"}, validity);
-   * ```
+   * @endcode
    *
    * @tparam ValidityIterator Dereferencing a ValidityIterator must be
    * convertible to `bool`
@@ -465,12 +549,12 @@ class strings_column_wrapper : public detail::column_wrapper {
    * a list of booleans to indicate the validity of each string.
    *
    * Example:
-   * ```c++
+   * @code{.cpp}
    * // Creates a nullable STRING column with 7 string elements:
    * // {NULL, "this", NULL, "a", NULL, "of", NULL}
    * strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"},
    *                          {0,1,0,1,0,1,0});
-   * ```
+   * @endcode
    *
    * @param strings The list of strings
    * @param validity The list of validity indicator booleans
@@ -817,6 +901,5 @@ class lists_column_wrapper : public detail::column_wrapper {
 
   bool root = false;
 };
-
 }  // namespace test
 }  // namespace cudf
