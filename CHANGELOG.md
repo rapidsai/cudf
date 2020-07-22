@@ -49,6 +49,7 @@
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 - PR #5735 Add support for `add_months` API; force timestamp creation only with duration
+- PR #5572 Add `cudf::encode` API.
 
 ## Improvements
 
@@ -194,6 +195,7 @@
 - PR #5656 Fix issue with incorrect docker image being used in local build script
 - PR #5671 Fix chunksize issue with `DataFrame.to_csv`
 - PR #5672 Fix crash in parquet writer while writing large string data
+- PR #5675 Allow lists_column_wrappers to be constructed from incomplete hierarchies.
 - PR #5691 Raise error on incompatible mixed-type input for a column
 - PR #5692 Fix compilation issue with gcc 7.4.0 and CUDA 10.1
 - PR #5693 Add fix missing from PR 5656 to update local docker image to py3.7

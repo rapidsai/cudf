@@ -36,6 +36,9 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::TimestampTypes>;
 TYPED_TEST_CASE(GatherTestList, FixedWidthTypesNotBool);
 
+// to disambiguate between {} == 0 and {} == List{0}
+// Also, see note about compiler issues when declaring nested
+// empty lists in lists_column_wrapper documentation
 template <typename T>
 using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
 
