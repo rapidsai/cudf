@@ -157,6 +157,13 @@ public class TableTest extends CudfTestBase {
           case STRING:
             assertArrayEquals(expected.getUTF8(expectedRow), cv.getUTF8(tableRow),
                 "Column " + colName + " Row " + tableRow);
+          case LIST:
+            try {
+              assertArrayEquals(expected.getList(expectedRow).toString().getBytes(), cv.getList(tableRow).toString().getBytes(),
+                  "Column " + colName + " Row " + tableRow);
+            } catch (Exception e) {
+              e.printStackTrace();
+            }
             break;
           default:
             throw new IllegalArgumentException(type + " is not supported yet");

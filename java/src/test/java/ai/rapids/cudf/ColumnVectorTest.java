@@ -21,7 +21,9 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
@@ -612,8 +614,9 @@ public class ColumnVectorTest extends CudfTestBase {
         case DURATION_NANOSECONDS:
           s = Scalar.durationFromLong(type, 21313);
           break;
-        case EMPTY:
-          continue;
+          case EMPTY:
+          case LIST:
+            continue;
         default:
           throw new IllegalArgumentException("Unexpected type: " + type);
         }
@@ -779,8 +782,9 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         }
         case EMPTY:
-          continue;
-        default:
+          case LIST:
+            continue;
+          default:
           throw new IllegalArgumentException("Unexpected type: " + type);
         }
 
@@ -804,7 +808,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalarNull() {
     final int rowCount = 4;
     for (DType type : DType.values()) {
-      if (type == DType.EMPTY) {
+      if (type == DType.EMPTY || type == DType.LIST) {
         continue;
       }
       try (Scalar s = Scalar.fromNull(type);
@@ -2410,6 +2414,346 @@ public class ColumnVectorTest extends CudfTestBase {
           assertEquals(ns[i], hc.getLong(i));
         }
       }
+    }
+  }
+
+  @Test
+  void testListCv() throws Exception {
+    List<Integer> list = new ArrayList<>();
+    list.add(0);
+    list.add(1);
+    list.add(2);
+    list.add(3);
+    List<Integer> list2 = new ArrayList<>();
+    list2.add(6);
+    list2.add(2);
+    list2.add(4);
+    list2.add(5);
+    List<Integer> list3 = new ArrayList<>();
+    list3.add(0);
+    list3.add(7);
+    list3.add(3);
+    list3.add(4);
+    list3.add(2);
+
+    ColumnVector res = ColumnVector.fromLists(DType.INT32, list, list2, list3);
+    HostColumnVector hcv = res.copyToHost();
+    List<Integer> ret = hcv.getList(1);
+    System.out.println("Element =" + ret.get(0));
+    System.out.println("Element =" + ret.get(1));
+    System.out.println("Element =" + ret.get(2));
+    //add assert
+    res.close();
+    hcv.close();
+  }
+
+  @Test
+  void testListCvEmpty() throws Exception {
+    List<Integer> list = new ArrayList<>();
+    list.add(0);
+    list.add(1);
+    list.add(2);
+    list.add(3);
+    List<Integer> list2 = new ArrayList<>();
+    list2.add(6);
+    list2.add(2);
+    list2.add(4);
+    list2.add(5);
+    List<Integer> list3 = new ArrayList<>();
+
+    ColumnVector res = ColumnVector.fromLists(DType.INT32, list, list2, list3);
+
+    HostColumnVector hcv = res.copyToHost();
+    List<Integer> ret = hcv.getList(1);
+    System.out.println("Element =" + ret.get(0));
+    System.out.println("Element =" + ret.get(1));
+    System.out.println("Element =" + ret.get(2));
+    //add assert
+    res.close();
+    hcv.close();
+  }
+
+  @Test
+  void testListCvStrings() throws Exception {
+    List<String> list = new ArrayList<>();
+    list.add("0");
+    list.add("1");
+    list.add("2");
+    list.add("3");
+    List<String> list2 = new ArrayList<>();
+    list2.add("4");
+    list2.add(null);
+    list2.add("6");
+    list2.add(null);
+    List<String> list3 = null;
+
+    ColumnVector res = ColumnVector.fromLists(DType.STRING, list, list2, list3);
+
+    HostColumnVector hcv = res.copyToHost();
+    List<String> ret = hcv.getList(1);
+    List<String> ret2 = hcv.getList(2);
+    System.out.println("KUHU ret size=" + ret.size() + " ret2=" + ret2);
+//    //add asserts
+    System.out.println("Element =" + ret.get(0));
+    System.out.println("Element =" + ret.get(1));
+    System.out.println("Element =" + ret.get(2));
+    System.out.println("Element =" + ret.get(3));
+    res.close();
+    hcv.close();
+  }
+
+  @Test
+  void testListCvDoubles() throws Exception {
+    List<Double> list = new ArrayList<>();
+    list.add(0.1);
+    list.add(1.2);
+    list.add(2.3);
+    list.add(3.4);
+    List<Double> list2 = new ArrayList<>();
+    list2.add(6.7);
+    list2.add(7.8);
+    list2.add(8.9);
+    list2.add(5.6);
+    List<Double> list3 = new ArrayList<>();
+    list3.add(0.1);
+    list3.add(7.8);
+    list3.add(3.4);
+    list3.add(4.5);
+    list3.add(2.3);
+
+    ColumnVector res = ColumnVector.fromLists(DType.FLOAT64, list, list2, list3);
+    HostColumnVector hcv = res.copyToHost();
+    List<Double> ret = hcv.getList(1);
+    System.out.println("Element =" + ret.get(0));
+    System.out.println("Element =" + ret.get(1));
+    System.out.println("Element =" + ret.get(2));
+    //add asserts
+    res.close();
+    hcv.close();
+  }
+
+  @Test
+  void testListOfListsCv() {
+    List<Integer> list = new ArrayList<>();
+    list.add(1);
+    list.add(2);
+    list.add(3);
+    List<Integer> list2 = new ArrayList<>();
+    list2.add(4);
+    list2.add(5);
+    list2.add(6);
+    List<List<Integer>> mainList = new ArrayList<>();
+    mainList.add(list);
+    mainList.add(list2);
+    List<Integer> list3 = new ArrayList<>();
+    list3.add(10);
+    list3.add(20);
+    list3.add(30);
+    List<Integer> list4 = new ArrayList<>();
+    list4.add(40);
+    list4.add(50);
+    list4.add(60);
+    List<List<Integer>> mainList2 = new ArrayList<>();
+    mainList2.add(list3);
+    mainList2.add(list4);
+
+    ColumnVector res = ColumnVector.fromLists(DType.INT32, mainList, mainList2);
+    HostColumnVector hcv = res.copyToHost();
+    try {
+      List<Integer> ret = hcv.getList(1);
+      System.out.println("Element =" + ret.get(0));
+      System.out.println("Element =" + ret.get(1));
+      //add asserts
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      res.close();
+      hcv.close();
+    }
+  }
+
+  @Test
+  void testListOfListsCvStrings() {
+    List<String> list = new ArrayList<>();
+    list.add("1");
+    list.add("23");
+    list.add("10");
+    List<String> list2 = new ArrayList<>();
+    list2.add("13");
+    list2.add("14");
+    list2.add("17");
+    List<List<String>> mainList = new ArrayList<>();
+    mainList.add(list);
+    mainList.add(list2);
+    List<String> list3 = new ArrayList<>();
+    list3.add("24");
+    list3.add("25");
+    list3.add("27");
+    List<String> list4 = new ArrayList<>();
+    list4.add("29");
+    list4.add("88");
+    list4.add("19");
+    List<List<String>> mainList2 = new ArrayList<>();
+    mainList2.add(list3);
+    mainList2.add(list4);
+
+    ColumnVector res = ColumnVector.fromLists(DType.STRING, mainList, mainList2);
+    HostColumnVector hcv = res.copyToHost();
+    try {
+      List<List<String>> ret = hcv.getList(1);
+      System.out.println("Element =" + ret.get(0));
+      System.out.println("Element =" + ret.get(1));
+      //add asserts
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      res.close();
+      hcv.close();
+    }
+  }
+
+  @Test
+  void testListOfListsCvDoubles() {
+    List<Double> list = new ArrayList<>();
+    list.add(1.1);
+    list.add(2.2);
+    list.add(3.3);
+    List<Double> list2 = new ArrayList<>();
+    list2.add(4.4);
+    list2.add(5.5);
+    list2.add(6.6);
+    List<List<Double>> mainList = new ArrayList<>();
+    mainList.add(list);
+    mainList.add(list2);
+    List<Double> list3 = new ArrayList<>();
+    list3.add(10.1);
+    list3.add(20.2);
+    list3.add(30.3);
+    List<List<Double>> mainList2 = new ArrayList<>();
+    mainList2.add(list3);
+
+    ColumnVector res = ColumnVector.fromLists(DType.FLOAT64, mainList, mainList2);
+    HostColumnVector hcv = res.copyToHost();
+    try {
+      List<Double> ret = hcv.getList(1);
+      System.out.println("Element =" + ret.get(0));
+      //add asserts
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      res.close();
+      hcv.close();
+    }
+  }
+
+  @Test
+  void testConcatLists() {
+    List<Integer> list = new ArrayList<>();
+    list.add(0);
+    list.add(1);
+    list.add(2);
+    list.add(3);
+    List<Integer> list2 = new ArrayList<>();
+    list2.add(6);
+    list2.add(2);
+    list2.add(4);
+    list2.add(5);
+    List<Integer> list3 = new ArrayList<>();
+    list3.add(0);
+    list3.add(7);
+    list3.add(3);
+    list3.add(4);
+    list3.add(2);
+
+    List<Integer> list4 = new ArrayList<>();
+    list4.add(10);
+    list4.add(11);
+    list4.add(12);
+    list4.add(13);
+    List<Integer> list5 = new ArrayList<>();
+    list5.add(16);
+    list5.add(12);
+    list5.add(14);
+    list5.add(15);
+    List<Integer> list6 = new ArrayList<>();
+    list6.add(100);
+    list6.add(107);
+    list6.add(103);
+    list6.add(104);
+    list6.add(200);
+    try (ColumnVector res1 = ColumnVector.fromLists(DType.INT32, list, list2, list3);
+         ColumnVector res2 = ColumnVector.fromLists(DType.INT32, list4, list5, list6);
+         ColumnVector v = ColumnVector.concatenate(res1, res2);
+         ColumnVector expected = ColumnVector.fromLists(DType.INT32, list, list2, list3, list4, list5, list6);
+         HostColumnVector hostColumnVector = v.copyToHost()) {
+      List<Integer> ret = hostColumnVector.getList(5);
+      System.out.println("Guess we passed!"+ret.size() + " v size ="+v.getRowCount());
+      //add asserts
+      assertColumnsAreEqual(expected,v);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
+
+  @Test
+  void testConcatListsStrings() {
+    List<String> list = new ArrayList<>();
+    list.add("0");
+    list.add("1");
+    list.add("2");
+    list.add("3");
+    List<String> list2 = new ArrayList<>();
+    list2.add("4");
+    list2.add(null);
+    list2.add("6");
+    list2.add(null);
+    List<String> list3 = null;
+    try (ColumnVector res1 = ColumnVector.fromLists(DType.STRING, list, list3);
+         ColumnVector res2 = ColumnVector.fromLists(DType.STRING, list2);
+         ColumnVector v = ColumnVector.concatenate(res1, res2);
+         HostColumnVector hostColumnVector = v.copyToHost()) {
+      List<String> ret = hostColumnVector.getList(2);
+      System.out.println("Guess we passed!"+ (ret.get(1) == null) + " v size ="+v.getRowCount());
+      //add asserts
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
+  @Test
+  void testConcatListsOfLists() {
+    List<Integer> list = new ArrayList<>();
+    list.add(1);
+    list.add(2);
+    list.add(3);
+    List<Integer> list2 = new ArrayList<>();
+    list2.add(4);
+    list2.add(5);
+    list2.add(6);
+    List<List<Integer>> mainList = new ArrayList<>();
+    mainList.add(list);
+    mainList.add(list2);
+    List<Integer> list3 = new ArrayList<>();
+    list3.add(10);
+    list3.add(20);
+    list3.add(30);
+    List<Integer> list4 = new ArrayList<>();
+    list4.add(40);
+    list4.add(50);
+    list4.add(60);
+    List<List<Integer>> mainList2 = new ArrayList<>();
+    mainList2.add(list3);
+    mainList2.add(list4);
+    try (ColumnVector res1 = ColumnVector.fromLists(DType.INT32, mainList);
+         ColumnVector res2 = ColumnVector.fromLists(DType.INT32, mainList2);
+         ColumnVector v = ColumnVector.concatenate(res1, res2);
+         HostColumnVector hostColumnVector = v.copyToHost()) {
+      List<Integer> ret = hostColumnVector.getList(1);
+      System.out.println("Guess we passed!"+ ret + " v size = "+v.getRowCount());
+      //add asserts
+    } catch (Exception e) {
+      e.printStackTrace();
     }
   }
 }
