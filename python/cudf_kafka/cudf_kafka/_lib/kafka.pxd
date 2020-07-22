@@ -31,3 +31,5 @@ cdef class KafkaDatasource(Datasource):
     cdef int64_t end_offset
     cdef int32_t batch_timeout
     cdef string delimiter
+
+    cdef datasource* get_datasource(self) except +

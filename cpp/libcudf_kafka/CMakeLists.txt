@@ -149,4 +149,14 @@ message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
 target_link_libraries(cudf_kafka ${RDKAFKA++_LIBRARY})
 include_directories("${RDKAFKA_INCLUDE}")
 
+###################################################################################################
+# - cudf_kafka Install ----------------------------------------------------------------------------
 target_link_libraries(cudf_kafka cudf)
+
+install(TARGETS cudf_kafka
+        DESTINATION lib
+        COMPONENT cudf_kafka)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+        DESTINATION include
+        COMPONENT cudf_kafka)

@@ -25,3 +25,6 @@ cdef class KafkaDatasource(Datasource):
                                         end_offset,
                                         batch_timeout,
                                         delimiter)
+
+    cdef datasource* get_datasource(self):
+        return <datasource *> self.c_datasource.get()
