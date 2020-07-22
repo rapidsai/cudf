@@ -4492,57 +4492,6 @@ class DataFrame(Frame, Serializable):
 
         cudf.utils.ioutils.buffer_write_lines(buf, lines)
 
-    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
-        """Fill null values with ``value``.
-
-        Parameters
-        ----------
-        value : scalar, Series-like or dict
-            Value to use to fill nulls. If Series-like, null values
-            are filled with values in corresponding indices.
-            A dict can be used to provide different values to fill nulls
-            in different columns.
-
-        Returns
-        -------
-        result : DataFrame
-            Copy with nulls filled.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> gdf = cudf.DataFrame({'a': [1, 2, None], 'b': [3, None, 5]})
-        >>> gdf.fillna(4).to_pandas()
-        a  b
-        0  1  3
-        1  2  4
-        2  4  5
-        >>> gdf.fillna({'a': 3, 'b': 4}).to_pandas()
-        a  b
-        0  1  3
-        1  2  4
-        2  3  5
-        """
-        if inplace:
-            outdf = {}  # this dict will just hold Nones
-        else:
-            outdf = self.copy()
-
-        if not is_dict_like(value):
-            value = dict.fromkeys(self.columns, value)
-
-        for k in value:
-            outdf[k] = self[k].fillna(
-                value[k],
-                method=method,
-                axis=axis,
-                inplace=inplace,
-                limit=limit,
-            )
-
-        if not inplace:
-            return outdf
-
     def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a DataFrame's columns. For numeric
         data, the output includes the minimum, maximum, mean, median,

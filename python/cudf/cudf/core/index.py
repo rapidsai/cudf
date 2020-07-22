@@ -386,9 +386,7 @@ class Index(Frame, Serializable):
                 "`downcast` parameter is not yet supported"
             )
 
-        data = self._values.fillna(value)
-
-        return as_index(data, name=self.name)
+        return super().fillna(value=value)
 
     def take(self, indices):
         """Gather only the specific subset of indices

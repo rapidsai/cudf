@@ -994,7 +994,8 @@ class MultiIndex(Index):
         3  2  2
         4  3  0)
         """
-        return MultiIndex.from_frame(self._source_data.fillna(value))
+
+        return super().fillna(value=value)
 
     def unique(self):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())

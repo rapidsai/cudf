@@ -512,7 +512,9 @@ class Series(Frame, Serializable):
     def __copy__(self, deep=True):
         return self.copy(deep)
 
-    def __deepcopy__(self):
+    def __deepcopy__(self, memo={}):
+        if memo is None:
+            memo = {}
         return self.copy()
 
     def append(self, to_append, ignore_index=False, verify_integrity=False):
@@ -1814,36 +1816,6 @@ class Series(Frame, Serializable):
 
     def fill(self, fill_value, begin=0, end=-1, inplace=False):
         return self._fill([fill_value], begin, end, inplace)
-
-    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
-        """Fill null values with ``value`` without changing the series' type.
-
-        Parameters
-        ----------
-        value : scalar or Series-like
-            Value to use to fill nulls. If `value`'s dtype differs from the
-            series, the fill value will be cast to the column's dtype before
-            applying the fill. If Series-like, null values are filled with the
-            values in corresponding indices of the given Series.
-
-        Returns
-        -------
-        result : Series
-            Copy with nulls filled.
-        """
-        if method is not None:
-            raise NotImplementedError("The method keyword is not supported")
-        if limit is not None:
-            raise NotImplementedError("The limit keyword is not supported")
-        if axis:
-            raise NotImplementedError("The axis keyword is not supported")
-
-        data = self._column.fillna(value)
-
-        if inplace:
-            self._column._mimic_inplace(data, inplace=True)
-        else:
-            return self._copy_construct(data=data)
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
