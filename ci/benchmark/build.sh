@@ -125,7 +125,7 @@ do
     ./${BENCH} --benchmark_out=${BENCH}.json --benchmark_out_format=json
     EXITCODE=$?
     if [[ ${EXITCODE} != 0 ]]; then
-        rm ./${BENCH}
+        rm ./${BENCH}.json
     fi
 done < ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 set -e
