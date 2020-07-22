@@ -501,7 +501,7 @@ def test_index_where(data, condition, other, error):
                 expect.codes,
                 got.codes.astype(expect.codes.dtype).fillna(-1).to_array(),
             )
-            assert tuple(expect.categories) == tuple(got.categories)
+            assert_eq(expect.categories, got.categories)
         else:
             assert_eq(
                 ps.where(ps_condition, other=ps_other)
@@ -1282,45 +1282,63 @@ def test_index_empty(data, dtype):
     assert_eq(pdi.empty, gdi.empty)
 
 
+@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize(
-    "pdi",
-    [
-        pd.MultiIndex(
-            levels=[[], [], []],
-            codes=[[], [], []],
-            names=["one", "two", "three"],
-        ),
-        pd.MultiIndex.from_tuples(
-            list(
-                zip(
-                    *[
-                        [
-                            "bar",
-                            "bar",
-                            "baz",
-                            "baz",
-                            "foo",
-                            "foo",
-                            "qux",
-                            "qux",
-                        ],
-                        [
-                            "one",
-                            "two",
-                            "one",
-                            "two",
-                            "one",
-                            "two",
-                            "one",
-                            "two",
-                        ],
-                    ]
-                )
-            )
-        ),
-    ],
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
 )
-def test_multiIndex_empty(pdi):
-    gdi = cudf.from_pandas(pdi)
+def test_index_size(data, dtype):
+    pdi = pd.Index(data, dtype=dtype)
+    gdi = cudf.Index(data, dtype=dtype)
 
-    assert_eq(pdi.empty, gdi.empty)
+    assert_eq(pdi.size, gdi.size)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_drop_duplicates(data, dtype):
+    pdi = pd.Index(data, dtype=dtype)
+    gdi = cudf.Index(data, dtype=dtype)
+
+    assert_eq(pdi.drop_duplicates(), gdi.drop_duplicates())
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_tolist(data, dtype):
+    pdi = pd.Index(data, dtype=dtype)
+    gdi = cudf.Index(data, dtype=dtype)
+
+    assert_eq(pdi.tolist(), gdi.tolist())
+
+
+@pytest.mark.parametrize("data", [[], [1], [1, 2, 3]])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_iter_error(data, dtype):
+    gdi = cudf.Index(data, dtype=dtype)
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            f"{gdi.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        ),
+    ):
+        iter(gdi)
+
+
+@pytest.mark.parametrize("data", [[], [1], [1, 2, 3, 4, 5]])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+)
+def test_index_values_host(data, dtype):
+    gdi = cudf.Index(data, dtype=dtype)
+    pdi = pd.Index(data, dtype=dtype)
+
+    np.testing.assert_array_equal(gdi.values_host, pdi.values)

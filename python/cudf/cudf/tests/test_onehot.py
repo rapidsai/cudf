@@ -113,10 +113,10 @@ def test_get_dummies(data):
     encoded_expected = pd.get_dummies(pdf, prefix="test")
     encoded_actual = cudf.get_dummies(gdf, prefix="test")
 
-    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
+    utils.assert_eq(encoded_expected, encoded_actual)
     encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=np.uint8)
 
-    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
+    utils.assert_eq(encoded_expected, encoded_actual)
 
 
 @pytest.mark.parametrize("n_cols", [5, 10, 20])
@@ -132,7 +132,22 @@ def test_onehot_get_dummies_multicol(n_cols):
     encoded_expected = pd.get_dummies(pdf, prefix="test")
     encoded_actual = cudf.get_dummies(gdf, prefix="test")
 
-    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
+    utils.assert_eq(encoded_expected, encoded_actual)
+
+
+@pytest.mark.parametrize("nan_as_null", [True, False])
+@pytest.mark.parametrize("dummy_na", [True, False])
+def test_onehost_get_dummies_dummy_na(nan_as_null, dummy_na):
+    pdf = pd.DataFrame({"a": [0, 1, np.nan]})
+    df = DataFrame.from_pandas(pdf, nan_as_null=nan_as_null)
+
+    expected = pd.get_dummies(pdf, dummy_na=dummy_na, columns=["a"])
+    got = cudf.get_dummies(df, dummy_na=dummy_na, columns=["a"])
+
+    if dummy_na and nan_as_null:
+        got = got.rename(columns={"a_null": "a_nan"})[expected.columns]
+
+    utils.assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(
@@ -171,7 +186,7 @@ def test_get_dummies_prefix_sep(prefix, prefix_sep):
         gdf, prefix=prefix, prefix_sep=prefix_sep
     )
 
-    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
+    utils.assert_eq(encoded_expected, encoded_actual)
 
 
 if __name__ == "__main__":
