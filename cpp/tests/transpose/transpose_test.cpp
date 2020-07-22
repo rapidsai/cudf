@@ -179,7 +179,7 @@ TYPED_TEST(TransposeTest, EmptyColumns) { run_test<TypeParam>(10, 0, false); }
 
 TYPED_TEST(TransposeTest, MismatchedColumns)
 {
-  fixed_width_column_wrapper<TypeParam> col1{{1, 2, 3}};
+  fixed_width_column_wrapper<TypeParam, int32_t> col1({1, 2, 3});
   fixed_width_column_wrapper<int8_t> col2{{4, 5, 6}};
   fixed_width_column_wrapper<float> col3{{7, 8, 9}};
   cudf::table_view input{{col1, col2, col3}};

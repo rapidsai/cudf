@@ -39,13 +39,13 @@ def check_serialization(df):
         for b in buffers:
             assert isinstance(b, pickle.PickleBuffer)
         loaded = pickle.loads(serialbytes, buffers=buffers)
-        pd.util.testing.assert_frame_equal(loaded.to_pandas(), df.to_pandas())
+        assert_eq(loaded, df)
 
 
 def assert_frame_picklable(df):
     serialbytes = pickle.dumps(df)
     loaded = pickle.loads(serialbytes)
-    pd.util.testing.assert_frame_equal(loaded.to_pandas(), df.to_pandas())
+    assert_eq(loaded, df)
 
 
 def test_pickle_dataframe_numeric():
