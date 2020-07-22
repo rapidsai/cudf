@@ -178,7 +178,7 @@ def test_dataframe_join_cats():
     rhs = rhs.set_index("a")
 
     got = lhs.join(rhs)
-    expect = lhs.to_pandas().join(rhs.to_pandas())
+    expect = lhs.to_pandas(nullable_pd_dtype=False).join(rhs.to_pandas(nullable_pd_dtype=False))
 
     # Note: pandas make an object Index after joining
     assert_eq(
