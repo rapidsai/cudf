@@ -101,7 +101,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  * @endcode
  *
  * @param input        Column containing values to be encoded
- * @param mr           Device memory resource used to allocate the returned columns.
+ * @param mr           Device memory resource used to allocate the returned columns's device memory
  * @return A pair containing the distinct values of the input column in sorter order,
  * and a column of integer indices representing the encoded values.
  */
