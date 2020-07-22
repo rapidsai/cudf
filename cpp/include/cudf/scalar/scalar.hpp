@@ -423,6 +423,17 @@ struct timestamp_scalar : chrono_scalar<T> {
    * @brief Return the duration in number of ticks since the UNIX epoch.
    */
   typename T::rep ticks_since_epoch() { return this->value().time_since_epoch().count(); }
+
+  // TODO:
+  // This is for the python builds to pass and should be removed when cython's scalar.pxd
+  // allows construction of timestamp_scalar's with duration type
+  timestamp_scalar(typename T::rep value,
+                   bool is_valid,
+                   cudaStream_t stream                 = 0,
+                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    : timestamp_scalar(typename T::duration{value}, is_valid, stream, mr)
+  {
+  }
 };
 
 template <typename T>
