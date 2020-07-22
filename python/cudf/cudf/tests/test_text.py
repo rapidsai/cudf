@@ -113,7 +113,7 @@ def test_normalize_characters():
 
     actual = strings.str.normalize_characters()
     assert type(expected) == type(actual)
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    assert_eq(expected, actual)
 
     expected = cudf.Series(
         [
@@ -127,7 +127,7 @@ def test_normalize_characters():
     )
     actual = strings.str.normalize_characters(do_lower=False)
     assert type(expected) == type(actual)
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
