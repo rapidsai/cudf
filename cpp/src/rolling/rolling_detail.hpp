@@ -101,7 +101,7 @@ struct rolling_store_output_functor<_T, true> {
   template <typename T = _T, std::enable_if_t<cudf::is_timestamp<T>()> * = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
   {
-    out = val.time_since_epoch() / count;
+    out = static_cast<T>(val.time_since_epoch() / count);
   }
 };
 }  // namespace detail

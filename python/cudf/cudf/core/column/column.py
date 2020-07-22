@@ -1652,13 +1652,19 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
+                    native_dtype = dtype
+                    if dtype is None and pd.api.types.infer_dtype(
+                        arbitrary
+                    ) in ("mixed", "mixed-integer"):
+                        native_dtype = "object"
+                    data = np.asarray(
+                        arbitrary,
+                        dtype=native_dtype
+                        if native_dtype is None
+                        else np.dtype(native_dtype),
+                    )
                     data = as_column(
-                        np.asarray(
-                            arbitrary,
-                            dtype=dtype if dtype is None else np.dtype(dtype),
-                        ),
-                        dtype=dtype,
-                        nan_as_null=nan_as_null,
+                        data, dtype=dtype, nan_as_null=nan_as_null
                     )
     return data
 
