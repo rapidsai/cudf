@@ -49,6 +49,7 @@
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 - PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
+- PR #5572 Add `cudf::encode` API.
 
 ## Improvements
 
@@ -134,6 +135,7 @@
 - PR #5720 Replace owning raw pointers with std::unique_ptr
 - PR #5702 Add inherited methods to python docs and other docs fixes
 - PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
+- PR #5743 Reduce number of test cases in concatenate benchmark
 
 ## Bug Fixes
 
@@ -194,12 +196,15 @@
 - PR #5656 Fix issue with incorrect docker image being used in local build script
 - PR #5671 Fix chunksize issue with `DataFrame.to_csv`
 - PR #5672 Fix crash in parquet writer while writing large string data
+- PR #5675 Allow lists_column_wrappers to be constructed from incomplete hierarchies.
 - PR #5691 Raise error on incompatible mixed-type input for a column
 - PR #5692 Fix compilation issue with gcc 7.4.0 and CUDA 10.1
 - PR #5693 Add fix missing from PR 5656 to update local docker image to py3.7
 - PR #5703 Small fix for dataframe constructor with cuda array interface objects that don't have `descr` field
 - PR #5719 Fix Frame._concat() with categorical columns
 - PR #5736 Disable unsigned type in ORC writer benchmarks
+- PR #5745 Update JNI cast for inability to cast timestamp and integer types
+
 
 # cuDF 0.14.0 (03 Jun 2020)
 
