@@ -1156,7 +1156,7 @@ class DataFrame(Frame, Serializable):
 
     def _clean_nulls_from_dataframe(self, df):
         """
-        This function converts all na values to `null` for representation
+        This function converts all ``null`` values to ``<NA>`` for representation
         as a string in `__repr__`.
 
         `null` representation is handled as following for different types:
