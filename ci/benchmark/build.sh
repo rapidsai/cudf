@@ -69,6 +69,10 @@ if [ "$PYTHON_VER" == "3.6" ];then
     conda install contextvars
 fi
 
+# Enter dependencies to be shown in ASV tooltips.
+CUDF_DEPS=(librmm)
+LIBCUDF_DEPS=(librmm)
+
 conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "rapids-build-env=$MINOR_VERSION.*" \
               "rapids-notebook-env=$MINOR_VERSION.*" \
@@ -112,11 +116,60 @@ logger "Running benchmarks..."
 #Download GBench results Parser
 curl -L https://raw.githubusercontent.com/rapidsai/benchmark/main/parser/GBenchToASV.py --output GBenchToASV.py
 
+###
+# Generate Metadata for dependencies
+###
+
+# Concatenate dependency arrays, convert to JSON array,
+# and remove duplicates.
+X=("${CUDF_DEPS[@]}" "${LIBCUDF_DEPS[@]}")
+DEPS=$(printf '%s\n' "${X[@]}" | jq -R . | jq -s 'unique')
+
+# Build object with k/v pairs of "dependency:version"
+DEP_VER_DICT=$(jq -n '{}')
+for DEP in $(echo "${DEPS}" | jq -r '.[]'); do
+  VER=$(conda list | grep "^${DEP}" | awk '{print $2"-"$3}')
+  DEP_VER_DICT=$(echo "${DEP_VER_DICT}" | jq -c --arg DEP "${DEP}" --arg VER "${VER}" '. + { ($DEP): $VER }')
+done
+
+# Pass in an array of dependencies to get a dict of "dependency:version"
+function getReqs() {
+  local DEPS_ARR=("$@")
+  local REQS="{}"
+  for DEP in "${DEPS_ARR[@]}"; do
+    VER=$(echo "${DEP_VER_DICT}" | jq -r --arg DEP "${DEP}" '.[$DEP]')
+    REQS=$(echo "${REQS}" | jq -c --arg DEP "${DEP}" --arg VER "${VER}" '. + { ($DEP): $VER }')
+  done
+
+  echo "${REQS}"
+}
+
+###
+# Run LIBCUDF Benchmarks
+###
+
+REQS=$(getReqs "${LIBCUDF_DEPS[@]}")
+
+BENCHMARK_META=$(jq -n \
+  --arg NODE "${NODE_NAME}" \
+  --arg BRANCH "branch-${MINOR_VERSION}" \
+  --argjson REQS "${REQS}" '
+  {
+    "machineName": $NODE,
+    "commitBranch": $BRANCH,
+    "requirements": $REQS
+  }
+')
+
+echo "Benchmark meta:"
+echo "${BENCHMARK_META}" | jq "."
+
 mkdir -p ${WORKSPACE}/tmp/benchmark
 touch ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 ls ${GBENCH_BENCHMARKS_DIR} > ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 
 #Disable error aborting while tests run, failed tests will not generate data
+logger "Running libcudf GBenchmarks..."
 cd ${GBENCH_BENCHMARKS_DIR}
 set +e
 while read BENCH;
@@ -126,6 +179,7 @@ do
     EXITCODE=$?
     if [[ ${EXITCODE} != 0 ]]; then
         rm ./${BENCH}.json
+	JOBEXITCODE=1
     fi
 done < ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 set -e
@@ -133,5 +187,24 @@ set -e
 rm ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 cd ${WORKSPACE}
 mv ${GBENCH_BENCHMARKS_DIR}/*.json ${WORKSPACE}/tmp/benchmark/
-python GBenchToASV.py -d  ${WORKSPACE}/tmp/benchmark/ -t ${ASVRESULTS_DIR} -n libcudf -b branch-${MINOR_VERSION} 
+python GBenchToASV.py -d  ${WORKSPACE}/tmp/benchmark/ -t ${ASVRESULTS_DIR} -n libcudf -b branch-${MINOR_VERSION} -r ${BENCHMARK_META} 
 
+###
+# Run Python Benchmarks
+###
+
+#REQS=$(getReqs "${CUDF_DEPS[@]}")
+
+#BENCHMARK_META=$(jq -n \
+#  --arg NODE "${NODE_NAME}" \
+#  --arg BRANCH "branch-${MINOR_VERSION}" \
+#  --argjson REQS "${REQS}" '
+#  {
+#    "machineName": $NODE,
+#    "commitBranch": $BRANCH,
+#    "requirements": $REQS
+#  }
+#')
+
+#echo "Benchmark meta:"
+#echo "${BENCHMARK_META}" | jq "."
