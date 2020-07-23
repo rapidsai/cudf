@@ -28,6 +28,7 @@ requirements:
     - librdkafka=1.4.0
   run:
     - librdkafka=1.4.0 #TODO: librdkafka should be automatically included here by run_exports but is not
+
 test:
   commands:
     - test -f $PREFIX/lib/libcudf_kafka.so
