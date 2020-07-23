@@ -23,6 +23,7 @@ def test_null_series(nrows, dtype):
     psrepr = ps.__repr__()
     psrepr = psrepr.replace("NaN", "<NA>")
     psrepr = psrepr.replace("NaT", "<NA>")
+    psrepr = psrepr.replace("None", "<NA>")
     if (
         dtype.startswith("int")
         or dtype.startswith("uint")
@@ -61,6 +62,7 @@ def test_null_dataframe(ncols):
     pdfrepr = pdf.__repr__()
     pdfrepr = pdfrepr.replace("NaN", "<NA>")
     pdfrepr = pdfrepr.replace("NaT", "<NA>")
+    pdfrepr = pdfrepr.replace("None", "<NA>")
     print(pdf)
     print(gdf)
     assert pdfrepr.split() == gdf.__repr__().split()
@@ -391,7 +393,10 @@ def test_dataframe_null_index_repr(df, pandas_special_case):
     gdf = cudf.from_pandas(pdf)
 
     expected_repr = (
-        pdf.__repr__().replace("NaN", "<NA>").replace("NaT", "<NA>")
+        pdf.__repr__()
+        .replace("NaN", "<NA>")
+        .replace("NaT", "<NA>")
+        .replace("None", "<NA>")
     )
     actual_repr = gdf.__repr__()
 
@@ -467,7 +472,10 @@ def test_series_null_index_repr(sr, pandas_special_case):
     gsr = cudf.from_pandas(psr)
 
     expected_repr = (
-        psr.__repr__().replace("NaN", "<NA>").replace("NaT", "<NA>")
+        psr.__repr__()
+        .replace("NaN", "<NA>")
+        .replace("NaT", "<NA>")
+        .replace("None", "<NA>")
     )
     actual_repr = gsr.__repr__()
 

@@ -2228,7 +2228,7 @@ class StringIndex(GenericIndex):
         """
         if self._values.has_nulls:
             return cudf.Index(
-                self._values.astype("str").fillna("None"), name=self.name
+                self._values.astype("str").fillna("<NA>"), name=self.name
             )
         else:
             return self

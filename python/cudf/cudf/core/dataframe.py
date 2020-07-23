@@ -1156,39 +1156,25 @@ class DataFrame(Frame, Serializable):
 
     def _clean_nulls_from_dataframe(self, df):
         """
-        This function converts all ``null`` values to ``<NA>`` for representation
-        as a string in `__repr__`.
-
-        `null` representation is handled as following for different types:
-            - For ``object`` dtype all `na`/`null` values are represented
-                as `None`.
-            - For ``datetime64`` dtypes all `NaN`/`NaT` values are represented
-                as `null`. Because, null in a datetime to_pandas() becomes NaT,
-                which is then replaced with null in this processing step.
-                It is not possible to have a mix of nulls and NaTs in datetime
-                columns because we do not support NaT - pyarrow as_column
-                preprocessing converts NaT input values from numpy or pandas
-                into null.
-            - For all other dtypes null values are represented as `null`.
+        This function converts all ``null`` values to ``<NA>`` for
+        representation as a string in `__repr__`.
 
         Since we utilize Pandas `__repr__` at all places in our code
         for formatting purposes, we convert columns to `str` dtype for
-        filling with `null` values, except for datetime dtype column - where
+        filling with `<NA>` values, except for datetime dtype column - where
         we fill `null` and then convert to `str` dtype for representation
         purposeses.
         """
         for col in df._data:
-            if (
-                self._data[col].has_nulls
-                and not df._data[col].dtype == "O"
-                and not is_datetime_dtype(df._data[col].dtype)
+            if self._data[col].has_nulls and not is_datetime_dtype(
+                df._data[col].dtype
             ):
                 df[col] = df._data[col].astype("str").fillna("<NA>")
             elif self._data[col].has_nulls and is_datetime_dtype(
                 df._data[col].dtype
             ):
                 df[col] = column.as_column(
-                    df[col].to_pandas().fillna("<NA>").astype("str")
+                    df[col].to_pandas().astype("str").replace("NaT", "<NA>")
                 )
             else:
                 df[col] = df._data[col]

@@ -982,7 +982,6 @@ class Series(Frame, Serializable):
 
         if (
             preprocess.nullable
-            and not preprocess.dtype == "O"
             and not isinstance(
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
