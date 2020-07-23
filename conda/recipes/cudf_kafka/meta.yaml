@@ -26,10 +26,6 @@ requirements:
     - cython >=0.29,<0.30
     - setuptools
     - cudf {{ version }}
-  host:
-    - libcudf_kafka {{ version }}
-    - cudf {{ version }}
-    - python-confluent-kafka
   run:
     - libcudf_kafka {{ version }}
     - python-confluent-kafka
