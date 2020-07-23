@@ -126,6 +126,7 @@
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
+- PR #5419 Support rolling, groupby_rolling for durations 
 - PR #5687 Change strings::split_record to return a lists column
 - PR #5708 Add support for `dummy_na` in `get_dummies`
 - PR #5709 Update java build to help cu-spacial with java bindings
@@ -203,6 +204,9 @@
 - PR #5727 Fix `Index.__repr__` to allow representation of null values
 - PR #5719 Fix Frame._concat() with categorical columns
 - PR #5736 Disable unsigned type in ORC writer benchmarks
+- PR #5745 Update JNI cast for inability to cast timestamp and integer types
+- PR #5750 Add RMM_ROOT/include to the spdlog search path in JNI build
+
 
 # cuDF 0.14.0 (03 Jun 2020)
 
