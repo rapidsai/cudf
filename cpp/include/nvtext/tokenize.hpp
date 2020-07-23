@@ -195,13 +195,15 @@ std::unique_ptr<cudf::column> character_tokenize(
  * @endcode
  *
  * All null row entries are ignored and the output contains all valid rows.
+ * The values in `row_indices` are expected to have positive, sequential
+ * values without any missing row indices otherwise the output is undefined.
  *
  * @throw cudf::logic_error is `separator` is invalid
  * @throw cudf::logic_error if `row_indices.size() != strings.size()`
  * @throw cudf::logic_error if `row_indices` contains nulls
  *
  * @param strings Strings column to detokenize.
- * @param row_indices The output row index assigned for each token in the input column.
+ * @param row_indices The relative output row index assigned for each token in the input column.
  * @param separator String to append after concatenating each token to the proper output row.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings columns of tokens.
