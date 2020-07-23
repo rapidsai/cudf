@@ -3655,7 +3655,7 @@ class StringMethods(ColumnMethodsMixin):
     def detokenize(self, indices, separator=" ", **kwargs):
         """
         Combines tokens into strings by concatenating them in the order
-        in which they appear in the `indices` column. The `separator` is
+        in which they appear in the ``indices`` column. The ``separator`` is
         concatenated between each token.
 
         Parameters
