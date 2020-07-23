@@ -7,7 +7,7 @@ import pytest
 from dask import dataframe as dd
 
 import cudf
-from cudf.tests.utils import assert_eq
+
 from dask_cudf.tests.utils import upcast_pandas_to_nullable as upcast
 
 

@@ -4,10 +4,10 @@ import pytest
 
 from dask.dataframe.utils import assert_eq
 
-import dask_cudf as dgd
-
 import cudf as gd
-from dask_cudf.tests.utils import  upcast_pandas_to_nullable as upcast
+
+import dask_cudf as dgd
+from dask_cudf.tests.utils import upcast_pandas_to_nullable as upcast
 
 
 def _make_random_frame(nelem, npartitions=2):

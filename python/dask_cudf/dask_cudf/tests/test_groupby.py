@@ -5,10 +5,10 @@ import pytest
 import dask
 from dask import dataframe as dd
 
-import dask_cudf
-from dask_cudf.tests.utils import  upcast_pandas_to_nullable as upcast
-
 import cudf
+
+import dask_cudf
+from dask_cudf.tests.utils import upcast_pandas_to_nullable as upcast
 
 
 @pytest.mark.parametrize("aggregation", ["sum", "mean", "count", "min", "max"])
@@ -28,14 +28,14 @@ def test_groupby_basic_aggs(aggregation):
     b = getattr(ddf.groupby("x"), aggregation)().compute()
 
     if aggregation == "count":
-        b['y'] = b['y'].astype(a['y'].dtype)
+        b["y"] = b["y"].astype(a["y"].dtype)
     dd.assert_eq(a, b)
 
     a = gdf.groupby("x").agg({"x": aggregation})
     b = ddf.groupby("x").agg({"x": aggregation}).compute()
 
     if aggregation == "count":
-        b['x'] = b['x'].astype(a['x'].dtype)
+        b["x"] = b["x"].astype(a["x"].dtype)
     dd.assert_eq(a, b)
 
 
@@ -148,7 +148,9 @@ def test_reset_index_multiindex():
     gddf_lookup = dask_cudf.from_cudf(df_lookup, npartitions=2)
 
     ddf = dd.from_pandas(df.to_pandas(nullable_pd_dtype=False), npartitions=2)
-    ddf_lookup = dd.from_pandas(df_lookup.to_pandas(nullable_pd_dtype=False), npartitions=2)
+    ddf_lookup = dd.from_pandas(
+        df_lookup.to_pandas(nullable_pd_dtype=False), npartitions=2
+    )
 
     # Note: 'id_2' has wrong type (object) until after compute
     dd.assert_eq(
@@ -157,10 +159,12 @@ def test_reset_index_multiindex():
         .reset_index()
         .merge(gddf_lookup, on="id_1")
         .compute(),
-        upcast(ddf.groupby(by=["id_1", "id_2"])
-        .val.sum()
-        .reset_index()
-        .merge(ddf_lookup, on="id_1")),
+        upcast(
+            ddf.groupby(by=["id_1", "id_2"])
+            .val.sum()
+            .reset_index()
+            .merge(ddf_lookup, on="id_1")
+        ),
     )
 
 
