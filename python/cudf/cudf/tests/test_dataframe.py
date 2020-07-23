@@ -6086,9 +6086,9 @@ def test_dataframe_to_dict_error():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            r"Implicit conversion to a host memory via to_dict() is not "
-            r"allowed, To explicitly construct a dictionary object, "
-            r"consider using .to_pandas().to_dict()"
+            r"cuDF does not support conversion to host memory "
+            r"via `to_dict()` method. Consider using "
+            r"`.to_pandas().to_dict()` to construct a Python dictionary."
         ),
     ):
         df.to_dict()
@@ -6096,9 +6096,9 @@ def test_dataframe_to_dict_error():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            r"Implicit conversion to a host memory via to_dict() is not "
-            r"allowed, To explicitly construct a dictionary object, "
-            r"consider using .to_pandas().to_dict()"
+            r"cuDF does not support conversion to host memory "
+            r"via `to_dict()` method. Consider using "
+            r"`.to_pandas().to_dict()` to construct a Python dictionary."
         ),
     ):
         df["a"].to_dict()

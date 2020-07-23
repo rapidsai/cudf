@@ -341,9 +341,9 @@ def test_series_tolist(data):
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Implicit conversion to a host memory via tolist() is not "
-            "allowed, To explicitly construct a python list object, "
-            "consider using .to_pandas().tolist()"
+            r"cuDF does not support conversion to host memory "
+            r"via `tolist()` method. Consider using "
+            r"`.to_pandas().to_list()` to construct a Python list."
         ),
     ):
         gsr.tolist()
