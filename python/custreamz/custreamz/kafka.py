@@ -1,24 +1,40 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import confluent_kafka as ck
+from cudf_kafka._lib.kafka import KafkaDatasource
 
 import cudf
 
 # import custreamz._libxx.kafka as libkafka
 from custreamz.utils import docutils
 
-# import cudf_kafka
-
 
 # Base class for anything class that needs to interact with Apache Kafka
 class CudfKafkaClient(object):
-    def __init__(self, kafka_configs):
+    def __init__(self, kafka_configs, topic, partition, delimiter):
         self.kafka_configs = kafka_configs
+        self.topic = topic
+        self.partition = partition
+        self.delimiter = delimiter
+        print("Base __init__ in CudfKafkaClient invoked")
 
 
+# Kafka Consumer implementation
 class Consumer(CudfKafkaClient):
-    def __init__(self, kafka_configs):
-        # self.kafka_datasource = libkafka.librdkafka(kafka_configs)
-        pass
+    def __init__(self, kafka_configs, topic, partition, delimiter):
+        super().__init__(kafka_configs, topic, partition, delimiter)
+        print("__init__ in Consumer invoked")
+        kafka_confs = {}
+        for key, value in kafka_configs.items():
+            kafka_confs[str.encode(key)] = str.encode(value)
+        self.kafka_source = KafkaDatasource(
+            kafka_confs,
+            self.topic.encode(),
+            self.partition,
+            0,
+            10,
+            10000,
+            self.delimiter.encode(),
+        )
 
     def metadata(self):
         self.kafka_datasource.print_consumer_metadata()
@@ -39,11 +55,6 @@ class Consumer(CudfKafkaClient):
         dayfirst=True,
         byte_range=None,
         topic=None,
-        partition=0,
-        start=0,
-        end=0,
-        timeout=10000,
-        delimiter="\n",
         *args,
         **kwargs,
     ):
@@ -56,18 +67,13 @@ class Consumer(CudfKafkaClient):
                 + "that you want to consume from!"
             )
         else:
-            result = self.kafka_datasource.read_gdf(
+            result = cudf.io.read_csv(
+                self.kafka_source,
                 lines=lines,
                 dtype=dtype,
                 compression=compression,
                 dayfirst=dayfirst,
                 byte_range=byte_range,
-                topic=topic,
-                partition=partition,
-                start=start,
-                end=end,
-                timeout=timeout,
-                delimiter=delimiter,
             )
 
             if result is not None:
