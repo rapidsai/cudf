@@ -135,6 +135,7 @@
 - PR #5720 Replace owning raw pointers with std::unique_ptr
 - PR #5702 Add inherited methods to python docs and other docs fixes
 - PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
+- PR #5743 Reduce number of test cases in concatenate benchmark
 
 ## Bug Fixes
 
@@ -202,6 +203,8 @@
 - PR #5703 Small fix for dataframe constructor with cuda array interface objects that don't have `descr` field
 - PR #5719 Fix Frame._concat() with categorical columns
 - PR #5736 Disable unsigned type in ORC writer benchmarks
+- PR #5745 Update JNI cast for inability to cast timestamp and integer types
+
 
 # cuDF 0.14.0 (03 Jun 2020)
 
