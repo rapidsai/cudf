@@ -48,7 +48,7 @@
 - PR #5658 Add `filter_tokens` nvtext API
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
-- PR #5704 `fixed_point` Column Support (Part 1)
+- PR #5704 Initial `fixed_point` Column Support
 - PR #5572 Add `cudf::encode` API.
 
 ## Improvements
