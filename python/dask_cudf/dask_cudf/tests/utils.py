@@ -1,10 +1,14 @@
-import pandas as pd
-
-import dask.dataframe as dd
-from dask.dataframe.utils import assert_divisions, assert_sane_keynames, _check_dask, _maybe_sort
-from cudf.utils.dtypes import cudf_dtypes_to_pandas_dtypes
-import pandas.util.testing as tm
 import numpy as np
+import pandas as pd
+import pandas.util.testing as tm
+
+from dask.dataframe.utils import (
+    _check_dask,
+    _maybe_sort,
+    assert_divisions,
+    assert_sane_keynames,
+)
+
 
 def assert_eq(
     a,

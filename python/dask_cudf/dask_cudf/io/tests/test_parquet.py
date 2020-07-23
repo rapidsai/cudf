@@ -8,12 +8,12 @@ import pytest
 
 import dask
 from dask import dataframe as dd
-from dask_cudf.tests.utils import assert_eq as dask_cudf_assert_eq
 from dask.utils import natural_sort_key, parse_bytes
 
-import dask_cudf
-
 import cudf
+
+import dask_cudf
+from dask_cudf.tests.utils import assert_eq as dask_cudf_assert_eq
 
 nrows = 40
 npartitions = 15
@@ -107,7 +107,9 @@ def test_strings(tmpdir):
     ddf2 = dd.from_pandas(dfp, npartitions=2)
     ddf2.to_parquet(fn, engine="pyarrow")
     read_df = dask_cudf.read_parquet(fn, index=["a"])
-    dask_cudf_assert_eq(ddf2, read_df.compute().to_pandas(nullable_pd_dtype=False))
+    dask_cudf_assert_eq(
+        ddf2, read_df.compute().to_pandas(nullable_pd_dtype=False)
+    )
 
     read_df_cats = dask_cudf.read_parquet(
         fn, index=["a"], strings_to_categorical=True

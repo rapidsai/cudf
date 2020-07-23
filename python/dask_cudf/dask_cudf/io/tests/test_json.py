@@ -4,10 +4,10 @@ import pandas as pd
 import pytest
 
 import dask
-from dask import dataframe as dd
 from dask.utils import tmpfile
-from dask_cudf.tests.utils import assert_eq as dask_cudf_assert_eq
+
 import dask_cudf
+from dask_cudf.tests.utils import assert_eq as dask_cudf_assert_eq
 
 
 def test_read_json(tmp_path):

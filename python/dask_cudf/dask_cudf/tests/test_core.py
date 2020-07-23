@@ -9,11 +9,11 @@ from pandas.util import testing as tm
 import dask
 from dask import dataframe as dd
 from dask.dataframe.core import make_meta, meta_nonempty
-from dask_cudf.tests.utils import assert_eq as dask_cudf_assert_eq
 
 import cudf
 
 import dask_cudf as dgd
+from dask_cudf.tests.utils import assert_eq as dask_cudf_assert_eq
 
 
 def test_from_cudf():
@@ -152,7 +152,9 @@ def test_set_index(nelem, divisions):
         expect = ddf.set_index("x")
         got = dgdf.set_index("x", divisions=divisions)
 
-        dask_cudf_assert_eq(expect, got, check_index=False, check_divisions=False)
+        dask_cudf_assert_eq(
+            expect, got, check_index=False, check_divisions=False
+        )
 
 
 @pytest.mark.parametrize("by", ["a", "b"])
