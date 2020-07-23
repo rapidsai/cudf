@@ -26,6 +26,7 @@ requirements:
   host:
     - libcudf {{ version }}
     - librdkafka=1.4.0
+  run:
 
 test:
   commands:
