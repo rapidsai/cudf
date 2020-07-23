@@ -166,7 +166,7 @@ TEST_F(TextTokenizeTest, Detokenize)
     cudf::test::expect_columns_equal(*results, expected);
   }
   {
-    cudf::test::fixed_width_column_wrapper<int32_t> rows{0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+    cudf::test::fixed_width_column_wrapper<int16_t> rows{0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
                                                          1, 2, 2, 2, 2, 2, 3, 3, 3, 0};
     auto results =
       nvtext::detokenize(cudf::strings_column_view(strings), rows, cudf::string_scalar("_"));
