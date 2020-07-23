@@ -121,6 +121,10 @@ find_path(LIBCUDACXX_INCLUDE "simt"
     HINTS "$ENV{CUDF_ROOT}/_deps/libcudacxx-src/include"
           "${PROJECT_SOURCE_DIR}/../../../../cpp/build/_deps/libcudacxx-src/include")
 
+find_path(SPDLOG_INCLUDE "spdlog"
+    HINTS "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
+          "$ENV{CONDA_PREFIX}/include")
+
 ###################################################################################################
 # - CUDF ------------------------------------------------------------------------------------------
 
@@ -128,7 +132,8 @@ set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
                  "${PROJECT_SOURCE_DIR}/../../../../cpp/src/")
 
 find_library(CUDF_LIBRARY "cudf"
-    HINTS "$ENV{CUDF_ROOT}/lib"
+    HINTS "$ENV{CUDF_ROOT}"
+          "$ENV{CUDF_ROOT}/lib"
           "$ENV{CONDA_PREFIX}/lib"
           "../../../../cpp/build")
 
@@ -146,6 +151,7 @@ endif (CUDF_INCLUDE AND CUDF_LIBRARY)
 
 find_path(RMM_INCLUDE "rmm"
           HINTS "$ENV{RMM_ROOT}/include"
+                "$ENV{RMM_HOME}/include"
                 "$ENV{CONDA_PREFIX}/include/rmm"
                 "$ENV{CONDA_PREFIX}/include")
 
@@ -169,6 +175,7 @@ include_directories("${THRUST_INCLUDE}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
+                    "${SPDLOG_INCLUDE}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${JNI_INCLUDE_DIRS}"
                     "${CUDF_INCLUDE}"
@@ -220,5 +227,3 @@ endif(PER_THREAD_DEFAULT_STREAM)
 # - link libraries --------------------------------------------------------------------------------
 
 target_link_libraries(cudfjni cudf ${CUDART_LIBRARY} cuda nvrtc)
-
-

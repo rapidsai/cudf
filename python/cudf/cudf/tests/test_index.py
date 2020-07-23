@@ -1282,48 +1282,15 @@ def test_index_empty(data, dtype):
     assert_eq(pdi.empty, gdi.empty)
 
 
+@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize(
-    "pdi",
-    [
-        pd.MultiIndex(
-            levels=[[], [], []],
-            codes=[[], [], []],
-            names=["one", "two", "three"],
-        ),
-        pd.MultiIndex.from_tuples(
-            list(
-                zip(
-                    *[
-                        [
-                            "bar",
-                            "bar",
-                            "baz",
-                            "baz",
-                            "foo",
-                            "foo",
-                            "qux",
-                            "qux",
-                        ],
-                        [
-                            "one",
-                            "two",
-                            "one",
-                            "two",
-                            "one",
-                            "two",
-                            "one",
-                            "two",
-                        ],
-                    ]
-                )
-            )
-        ),
-    ],
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
 )
-def test_multiIndex_empty(pdi):
-    gdi = cudf.from_pandas(pdi)
+def test_index_size(data, dtype):
+    pdi = pd.Index(data, dtype=dtype)
+    gdi = cudf.Index(data, dtype=dtype)
 
-    assert_eq(pdi.empty, gdi.empty)
+    assert_eq(pdi.size, gdi.size)
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])

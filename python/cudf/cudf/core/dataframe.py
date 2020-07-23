@@ -840,6 +840,7 @@ class DataFrame(Frame, Serializable):
         sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
         if index:
             ind.append("Index")
+            ind = cudf.Index(ind, dtype="str")
             sizes.append(self.index.memory_usage(deep=deep))
         return Series(sizes, index=ind)
 
@@ -5140,7 +5141,7 @@ class DataFrame(Frame, Serializable):
         if columns is not None:
             data = dict(zip(columns, cols))
         else:
-            data = dict(zip(range(len(cols)), cols))
+            data = dict(enumerate(cols))
 
         return cls(data=data, index=index,)
 
