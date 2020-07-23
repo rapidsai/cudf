@@ -64,12 +64,11 @@ void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::aggregation> co
   }                                                               \
   BENCHMARK_REGISTER_F(Reduction, name)                           \
     ->UseManualTime()                                             \
-    ->Arg(10000)     /* 10k */                                    \
-    ->Arg(100000)    /* 100k */                                   \
-    ->Arg(1000000)   /* 1M */                                     \
-    ->Arg(10000000)  /* 10M */                                    \
-    ->Arg(100000000) /* 100M */                                   \
-    ->Iterations(1000);
+    ->Arg(10000)      /* 10k */                                   \
+    ->Arg(100000)     /* 100k */                                  \
+    ->Arg(1000000)    /* 1M */                                    \
+    ->Arg(10000000)   /* 10M */                                   \
+    ->Arg(100000000); /* 100M */
 
 #define REDUCE_BENCHMARK_DEFINE(type, aggregation) \
   RBM_BENCHMARK_DEFINE(concat(type, _, aggregation), type, aggregation)
