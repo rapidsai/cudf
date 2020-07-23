@@ -216,7 +216,7 @@ if hasArg libcudf_kafka; then
     fi
 
     if [[ ${BUILD_TESTS} == "ON" ]]; then
-        make -j${PARALLEL_LEVEL} build_tests_libcudf_kafka VERBOSE=${VERBOSE}
+        make -j${PARALLEL_LEVEL} test VERBOSE=${VERBOSE}
     fi
 fi
 

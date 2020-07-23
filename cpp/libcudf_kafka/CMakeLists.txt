@@ -154,16 +154,7 @@ include_directories("${RDKAFKA_INCLUDE}")
 target_link_libraries(cudf_kafka cudf)
 
 install(TARGETS cudf_kafka
-        DESTINATION lib
-        COMPONENT cudf_kafka)
+        DESTINATION lib)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
-        DESTINATION include
-        COMPONENT cudf_kafka)
-
-add_custom_target(build_tests_libcudf_kafka
-                    DEPENDS ${CUDF_KAFKA_TEST_LIST})
-
-add_custom_target(test_libcudf_kafka
-                    COMMAND ctest
-                    DEPENDS build_tests_libcudf_kafka)
+        DESTINATION include)
