@@ -15,7 +15,7 @@ else
 fi
 
 # upload cudf_kafka for all versions of Python
-if [[ "$CUDA" == "10.1" ]]
+if [[ "$CUDA" == "10.1" ]]; then
     export UPLOAD_CUDF_KAFKA=1
 else
     export UPLOAD_CUDF_KAFKA=0
