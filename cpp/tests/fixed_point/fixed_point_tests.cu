@@ -28,7 +28,6 @@
 #include <cudf/sorting.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include "cudf/search.hpp"
 #include "cudf/types.hpp"
 
 #include <algorithm>
@@ -655,50 +654,6 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
   auto const result = cudf::find_and_replace_all(input_w, to_replace_w, replacement_w);
 
   cudf::test::expect_columns_equal(*result, expected_w);
-}
-
-TYPED_TEST(FixedPointTestBothReps, FixedPointLowerBound)
-{
-  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
-
-  auto vec = std::vector<decimalXX>(1000);
-  std::iota(std::begin(vec), std::end(vec), decimalXX{});
-
-  auto const values = wrapper<decimalXX>{decimalXX{200, scale_type{0}},
-                                         decimalXX{400, scale_type{0}},
-                                         decimalXX{600, scale_type{0}},
-                                         decimalXX{800, scale_type{0}}};
-  auto const expect = wrapper<cudf::size_type>{200, 400, 600, 800};
-  auto const column = wrapper<decimalXX>(vec.begin(), vec.end());
-
-  auto result = cudf::lower_bound({cudf::table_view{{column}}},
-                                  {cudf::table_view{{values}}},
-                                  {cudf::order::ASCENDING},
-                                  {cudf::null_order::BEFORE});
-
-  expect_columns_equal(*result, expect);
-}
-
-TYPED_TEST(FixedPointTestBothReps, FixedPointUpperBound)
-{
-  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
-
-  auto vec = std::vector<decimalXX>(1000);
-  std::iota(std::begin(vec), std::end(vec), decimalXX{});
-
-  auto const values = wrapper<decimalXX>{decimalXX{200, scale_type{0}},
-                                         decimalXX{400, scale_type{0}},
-                                         decimalXX{600, scale_type{0}},
-                                         decimalXX{800, scale_type{0}}};
-  auto const expect = wrapper<cudf::size_type>{201, 401, 601, 801};
-  auto const column = wrapper<decimalXX>(vec.begin(), vec.end());
-
-  auto result = cudf::upper_bound({cudf::table_view{{column}}},
-                                  {cudf::table_view{{values}}},
-                                  {cudf::order::ASCENDING},
-                                  {cudf::null_order::BEFORE});
-
-  expect_columns_equal(*result, expect);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
