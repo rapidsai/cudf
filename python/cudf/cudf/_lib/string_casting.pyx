@@ -83,8 +83,8 @@ def dtos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type double to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type double
 
     Returns
@@ -99,8 +99,8 @@ def stod(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to double
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -115,8 +115,8 @@ def ftos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type float to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type double
 
     Returns
@@ -131,8 +131,8 @@ def stof(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to float
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -176,8 +176,8 @@ def i8tos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type int8 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type int8
 
     Returns
@@ -192,8 +192,8 @@ def stoi8(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to int8
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -208,8 +208,8 @@ def i16tos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type int16 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type int16
 
     Returns
@@ -224,8 +224,8 @@ def stoi16(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to int16
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -240,8 +240,8 @@ def itos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type int32 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type int32
 
     Returns
@@ -256,8 +256,8 @@ def stoi(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to int32
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -272,8 +272,8 @@ def ltos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type int64 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type int64
 
     Returns
@@ -288,8 +288,8 @@ def stol(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to int64
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -304,8 +304,8 @@ def ui8tos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type uint8 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type uint8
 
     Returns
@@ -320,8 +320,8 @@ def stoui8(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to uint8
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -336,8 +336,8 @@ def ui16tos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type uint16 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type uint16
 
     Returns
@@ -352,8 +352,8 @@ def stoui16(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to uint16
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -368,8 +368,8 @@ def uitos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type uint32 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type uint32
 
     Returns
@@ -384,8 +384,8 @@ def stoui(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to uint32
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -400,8 +400,8 @@ def ultos(Column input_col, **kwargs):
     """
     Converting/Casting input column of type uint64 to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type uint64
 
     Returns
@@ -416,8 +416,8 @@ def stoul(Column input_col, **kwargs):
     """
     Converting/Casting input column of type string to uint64
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -432,8 +432,8 @@ def _to_booleans(Column input_col, object string_true="True"):
     """
     Converting/Casting input column of type string to boolean column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
     string_true : string that represents True
 
@@ -468,8 +468,8 @@ def _from_booleans(
     """
     Converting/Casting input column of type boolean to string column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type boolean
     string_true : string that represents True
     string_false : string that represents False
@@ -509,8 +509,8 @@ def int2timestamp(
     Converting/Casting input date-time column to string
     column with specified format
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type timestamp in integer format
 
     Returns
@@ -539,8 +539,8 @@ def timestamp2int(
     Converting/Casting input string column to date-time column with specified
     timestamp_format
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -573,8 +573,8 @@ def int2ip(Column input_col, **kwargs):
     """
     Converting/Casting integer column to string column in ipv4 format
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input integer column
 
     Returns
@@ -596,8 +596,8 @@ def ip2int(Column input_col, **kwargs):
     """
     Converting string ipv4 column to integer column
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input string column
 
     Returns
@@ -637,8 +637,8 @@ def htoi(Column input_col, **kwargs):
     Converting input column of type string having hex values
     to integer of out_type
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
     out_type : The type of integer column expected
 
