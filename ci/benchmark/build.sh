@@ -62,12 +62,7 @@ logger "Check GPU usage..."
 nvidia-smi
 
 logger "Activate conda env..."
-source activate gdf
-
-# Install contextvars on Python 3.6
-if [ "$PYTHON_VER" == "3.6" ];then
-    conda install contextvars
-fi
+source activate rapids
 
 # Enter dependencies to be shown in ASV tooltips.
 CUDF_DEPS=(librmm)
