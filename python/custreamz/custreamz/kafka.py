@@ -16,17 +16,10 @@ class CudfKafkaClient(object):
         self.partition = partition
         self.delimiter = delimiter
         print("Base __init__ in CudfKafkaClient invoked")
-
-
-# Kafka Consumer implementation
-class Consumer(CudfKafkaClient):
-    def __init__(self, kafka_configs, topic, partition, delimiter):
-        super().__init__(kafka_configs, topic, partition, delimiter)
-        print("__init__ in Consumer invoked")
         kafka_confs = {}
         for key, value in kafka_configs.items():
             kafka_confs[str.encode(key)] = str.encode(value)
-        self.kafka_source = KafkaDatasource(
+        self.kafka_datasource = KafkaDatasource(
             kafka_confs,
             self.topic.encode(),
             self.partition,
@@ -45,6 +38,19 @@ class Consumer(CudfKafkaClient):
         """{docstring}"""
 
         self.kafka_datasource.current_configs()
+
+    def unsubscribe(self):
+        return self.kafka_datasource.unsubscribe()
+
+    def close(self, timeout=10000):
+        return self.kafka_datasource.close(timeout=timeout)
+
+
+# Kafka Consumer implementation
+class Consumer(CudfKafkaClient):
+    def __init__(self, kafka_configs, topic, partition, delimiter):
+        super().__init__(kafka_configs, topic, partition, delimiter)
+        print("__init__ in Consumer invoked")
 
     @docutils.doc_read_gdf()
     def read_gdf(
@@ -132,10 +138,14 @@ class Consumer(CudfKafkaClient):
                 offs.topic, offs.partition, offs.offset, asynchronous
             )
 
-    def produce(self, topic=None, message_val=None, message_key=None):
-        if topic is None:
-            raise ValueError("You must specify a Topic to produce to")
 
+# Kafka Producer implementation
+class Producer(CudfKafkaClient):
+    def __init__(self, kafka_configs, topic, partition, delimiter):
+        super().__init__(kafka_configs, topic, partition, delimiter)
+        print("__init__ in Producer invoked")
+
+    def produce(self, message_val=None, message_key=None):
         if message_val is None:
             raise ValueError("The message value is empty.")
 
@@ -143,14 +153,8 @@ class Consumer(CudfKafkaClient):
             message_key = ""
 
         return self.kafka_datasource.produce_message(
-            topic, message_val, message_key
+            self.topic, message_val, message_key
         )
 
     def flush(self, timeout=10000):
         return self.kafka_datasource.flush(timeout=timeout)
-
-    def unsubscribe(self):
-        return self.kafka_datasource.unsubscribe()
-
-    def close(self, timeout=10000):
-        return self.kafka_datasource.close(timeout=timeout)
