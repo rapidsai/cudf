@@ -10,10 +10,11 @@ import dask
 from dask import dataframe as dd
 from dask.dataframe.core import make_meta, meta_nonempty
 
+from dask_cudf.tests.utils import upcast_pandas_to_nullable as upcast
+
 import cudf
 
 import dask_cudf as dgd
-
 
 def test_from_cudf():
     np.random.seed(0)
@@ -29,11 +30,11 @@ def test_from_cudf():
 
     # Test simple around to/from dask
     ingested = dd.from_pandas(gdf, npartitions=2)
-    dd.assert_eq(ingested, df)
+    dd.assert_eq(ingested, upcast(df))
 
     # Test conversion to dask.dataframe
     ddf = ingested.to_dask_dataframe()
-    dd.assert_eq(ddf, df)
+    dd.assert_eq(ddf, upcast(df))
 
 
 def test_from_cudf_multiindex_raises():
@@ -78,6 +79,7 @@ def test_query():
     df = pd.DataFrame(
         {"x": np.random.randint(0, 5, size=10), "y": np.random.normal(size=10)}
     )
+    df = upcast(df)
     gdf = cudf.DataFrame.from_pandas(df)
     expr = "x > 2"
 
@@ -118,7 +120,7 @@ def test_head():
     gdf = cudf.DataFrame.from_pandas(df)
     dgf = dd.from_pandas(gdf, npartitions=2)
 
-    dd.assert_eq(dgf.head(), df.head())
+    dd.assert_eq(dgf.head(), upcast(df).head())
 
 
 def test_from_dask_dataframe():
@@ -126,7 +128,7 @@ def test_from_dask_dataframe():
     df = pd.DataFrame(
         {"x": np.random.randint(0, 5, size=20), "y": np.random.normal(size=20)}
     )
-    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_pandas(upcast(df), npartitions=2)
     dgdf = ddf.map_partitions(cudf.from_pandas)
     got = dgdf.compute().to_pandas()
     expect = df
@@ -151,7 +153,7 @@ def test_set_index(nelem, divisions):
         expect = ddf.set_index("x")
         got = dgdf.set_index("x", divisions=divisions)
 
-        dd.assert_eq(expect, got, check_index=False, check_divisions=False)
+        dd.assert_eq(upcast(expect), got, check_index=False, check_divisions=False)
 
 
 @pytest.mark.parametrize("by", ["a", "b"])
@@ -234,7 +236,7 @@ def test_set_index_sorted():
         expect = ddf1.set_index("id", sorted=True)
         got = gddf1.set_index("id", sorted=True)
 
-        dd.assert_eq(expect, got)
+        dd.assert_eq(upcast(expect), got)
 
         with pytest.raises(ValueError):
             # Cannot set `sorted=True` for non-sorted column
@@ -267,7 +269,7 @@ def test_rearrange_by_divisions(nelem, index):
         result = dd.shuffle.rearrange_by_divisions(
             gdf1, "x", divisions=divisions, shuffle="tasks"
         )
-        dd.assert_eq(expect, result)
+        dd.assert_eq(upcast(expect), result)
 
 
 def test_assign():
@@ -281,7 +283,7 @@ def test_assign():
     newcol = dd.from_pandas(cudf.Series(pdcol), npartitions=dgf.npartitions)
     got = dgf.assign(z=newcol)
 
-    dd.assert_eq(got.loc[:, ["x", "y"]], df)
+    dd.assert_eq(got.loc[:, ["x", "y"]], upcast(df))
     np.testing.assert_array_equal(got["z"].compute().to_array(), pdcol)
 
 
@@ -390,7 +392,7 @@ def test_repartition_simple_divisions(start, stop):
     b = gdf.repartition(npartitions=stop)
     assert a.divisions == b.divisions
 
-    dd.utils.assert_eq(a, b)
+    dd.utils.assert_eq(upcast(a), b)
 
 
 @pytest.mark.parametrize("npartitions", [2, 17, 20])
@@ -666,7 +668,7 @@ def test_dataframe_series_replace(data):
 
     ddf = dgd.from_cudf(gdf, npartitions=5)
 
-    dd.assert_eq(ddf.replace(1, 2), pdf.replace(1, 2))
+    dd.assert_eq(ddf.replace(1, 2), upcast(pdf.replace(1, 2)))
 
 
 def test_dataframe_assign_col():
@@ -685,7 +687,7 @@ def test_dataframe_assign_col():
         lambda p_df: np.random.randint(0, 4, len(p_df))
     )
 
-    dd.assert_eq(ddf[0], pddf[0])
+    dd.assert_eq(ddf[0], upcast(pddf[0]))
     dd.assert_eq(len(ddf["fold"]), len(pddf["fold"]))
 
 
@@ -693,7 +695,7 @@ def test_dataframe_set_index():
     random.seed(0)
     df = cudf.datasets.randomdata(26, dtypes={"a": float, "b": int})
     df["str"] = list("abcdefghijklmnopqrstuvwxyz")
-    pdf = df.to_pandas()
+    pdf = df.to_pandas(nullable_pd_dtype=False)
 
     ddf = dgd.from_cudf(df, npartitions=4)
     ddf = ddf.set_index("str")
@@ -708,9 +710,9 @@ def test_dataframe_set_index():
 def test_dataframe_describe():
     random.seed(0)
     df = cudf.datasets.randomdata(20)
-    pdf = df.to_pandas()
+    pdf = df.to_pandas(nullable_pd_dtype=False)
 
     ddf = dgd.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+    dd.assert_eq(ddf.describe(), upcast(pddf.describe()), check_less_precise=3)

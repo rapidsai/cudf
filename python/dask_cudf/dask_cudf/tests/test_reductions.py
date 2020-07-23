@@ -7,6 +7,7 @@ from dask.dataframe.utils import assert_eq
 import dask_cudf as dgd
 
 import cudf as gd
+from dask_cudf.tests.utils import  upcast_pandas_to_nullable as upcast
 
 
 def _make_random_frame(nelem, npartitions=2):
@@ -66,7 +67,7 @@ def test_series_reduce(reducer):
 def test_rowwise_reductions(data, op):
 
     gddf = dgd.from_cudf(data, npartitions=10)
-    pddf = gddf.to_dask_dataframe()
+    pddf = gddf.to_dask_dataframe(nullable_pd_dtype=False)
 
     if op in ("var", "std"):
         expected = getattr(pddf, op)(axis=1, ddof=0)
@@ -75,4 +76,4 @@ def test_rowwise_reductions(data, op):
         expected = getattr(pddf, op)(axis=1)
         got = getattr(pddf, op)(axis=1)
 
-    assert_eq(expected.compute(), got.compute(), check_less_precise=7)
+    assert_eq(upcast(expected.compute()), got.compute(), check_less_precise=7)

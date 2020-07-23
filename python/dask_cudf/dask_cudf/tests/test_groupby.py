@@ -6,6 +6,7 @@ import dask
 from dask import dataframe as dd
 
 import dask_cudf
+from dask_cudf.tests.utils import  upcast_pandas_to_nullable as upcast
 
 import cudf
 
@@ -27,17 +28,15 @@ def test_groupby_basic_aggs(aggregation):
     b = getattr(ddf.groupby("x"), aggregation)().compute()
 
     if aggregation == "count":
-        dd.assert_eq(a, b, check_dtype=False)
-    else:
-        dd.assert_eq(a, b)
+        b['y'] = b['y'].astype(a['y'].dtype)
+    dd.assert_eq(a, b)
 
     a = gdf.groupby("x").agg({"x": aggregation})
     b = ddf.groupby("x").agg({"x": aggregation}).compute()
 
     if aggregation == "count":
-        dd.assert_eq(a, b, check_dtype=False)
-    else:
-        dd.assert_eq(a, b)
+        b['x'] = b['x'].astype(a['x'].dtype)
+    dd.assert_eq(a, b)
 
 
 @pytest.mark.parametrize(
@@ -148,8 +147,8 @@ def test_reset_index_multiindex():
     gddf = dask_cudf.from_cudf(df, npartitions=2)
     gddf_lookup = dask_cudf.from_cudf(df_lookup, npartitions=2)
 
-    ddf = dd.from_pandas(df.to_pandas(), npartitions=2)
-    ddf_lookup = dd.from_pandas(df_lookup.to_pandas(), npartitions=2)
+    ddf = dd.from_pandas(df.to_pandas(nullable_pd_dtype=False), npartitions=2)
+    ddf_lookup = dd.from_pandas(df_lookup.to_pandas(nullable_pd_dtype=False), npartitions=2)
 
     # Note: 'id_2' has wrong type (object) until after compute
     dd.assert_eq(
@@ -158,10 +157,10 @@ def test_reset_index_multiindex():
         .reset_index()
         .merge(gddf_lookup, on="id_1")
         .compute(),
-        ddf.groupby(by=["id_1", "id_2"])
+        upcast(ddf.groupby(by=["id_1", "id_2"])
         .val.sum()
         .reset_index()
-        .merge(ddf_lookup, on="id_1"),
+        .merge(ddf_lookup, on="id_1")),
     )
 
 
@@ -269,7 +268,7 @@ def test_groupby_split_out_multiindex(agg_func):
     pddf = dd.from_pandas(df.to_pandas(), 5)
     gr = agg_func(ddf.groupby(["a", "b"]))
     pr = agg_func(pddf.groupby(["a", "b"]))
-    dd.assert_eq(gr.compute(), pr.compute())
+    dd.assert_eq(gr.compute(), upcast(pr.compute()))
 
 
 @pytest.mark.parametrize("npartitions", [1, 2])
@@ -283,7 +282,7 @@ def test_groupby_multiindex_reset_index(npartitions):
     pr = pddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     dd.assert_eq(
         gr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
-        pr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
+        upcast(pr.compute().sort_values(by=["a", "c"]).reset_index(drop=True)),
     )
 
 
@@ -315,7 +314,7 @@ def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
     pr = agg_func(pddf.groupby(groupby_keys)).reset_index()
     gf = gr.compute().sort_values(groupby_keys).reset_index(drop=True)
     pf = pr.compute().sort_values(groupby_keys).reset_index(drop=True)
-    dd.assert_eq(gf, pf)
+    dd.assert_eq(gf, upcast(pf))
 
 
 def test_groupby_reset_index_drop_True():
@@ -328,7 +327,7 @@ def test_groupby_reset_index_drop_True():
     pr = pddf.groupby(["a"]).agg({"b": ["count"]}).reset_index(drop=True)
     gf = gr.compute().sort_values(by=["b"]).reset_index(drop=True)
     pf = pr.compute().sort_values(by=[("b", "count")]).reset_index(drop=True)
-    dd.assert_eq(gf, pf)
+    dd.assert_eq(gf, upcast(pf))
 
 
 def test_groupby_mean_sort_false():
@@ -343,7 +342,7 @@ def test_groupby_mean_sort_false():
 
     gf = gr.compute().sort_values(by=["b"]).reset_index(drop=True)
     pf = pr.compute().sort_values(by=["b"]).reset_index(drop=True)
-    dd.assert_eq(gf, pf)
+    dd.assert_eq(gf, upcast(pf))
 
 
 def test_groupby_reset_index_dtype():
@@ -379,7 +378,7 @@ def test_groupby_reset_index_names():
     got = g_res.reset_index().compute().sort_values(["a", "b", "c"])
     expect = p_res.reset_index().compute().sort_values(["a", "b", "c"])
 
-    dd.assert_eq(got, expect)
+    dd.assert_eq(got, upcast(expect))
 
 
 def test_groupby_reset_index_string_name():
@@ -401,7 +400,7 @@ def test_groupby_reset_index_string_name():
         p_res.compute().sort_values(["key", "value"]).reset_index(drop=True)
     )
 
-    dd.assert_eq(got, expect)
+    dd.assert_eq(got, upcast(expect))
     assert len(g_res) == len(p_res)
 
 
@@ -422,4 +421,4 @@ def test_groupby_categorical_key():
         .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
         .compute()
     )
-    dd.assert_eq(expect, got)
+    dd.assert_eq(upcast(expect), got)
