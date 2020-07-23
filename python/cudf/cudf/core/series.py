@@ -1990,7 +1990,7 @@ class Series(Frame, Serializable):
         """
         return self._column.to_gpu_array(fillna=fillna)
 
-    def to_pandas(self, index=True, nullable_pd_dtype=True):
+    def to_pandas(self, index=True, **kwargs):
         """
         Convert to a Pandas Series.
 
@@ -2015,6 +2015,7 @@ class Series(Frame, Serializable):
         >>> type(pds)
         <class 'pandas.core.series.Series'>
         """
+        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", True)
         if index is True:
             index = self.index.to_pandas()
         s = self._column.to_pandas(

@@ -4657,7 +4657,7 @@ class DataFrame(Frame, Serializable):
 
         return output_frame
 
-    def to_pandas(self, nullable_pd_dtype=True):
+    def to_pandas(self, **kwargs):
         """
         Convert to a Pandas DataFrame.
 
@@ -4674,6 +4674,8 @@ class DataFrame(Frame, Serializable):
         >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
         """
+        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", True)
+
         out_data = {}
         out_index = self.index.to_pandas()
 
