@@ -21,11 +21,55 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/type_lists.hpp>
 
 #include <vector>
 
 struct ListsExtractTest : public cudf::test::BaseFixture {
 };
+
+using NumericTypesNotBool =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+
+template <typename T>
+class NumericsTest : public ListsExtractTest {
+};
+
+TYPED_TEST_CASE(NumericsTest, NumericTypesNotBool);
+
+TYPED_TEST(NumericsTest, ExtractElement)
+{
+  auto validity = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<cudf::size_type>(0), [](auto i) { return i != 1; });
+  using LCW = cudf::test::lists_column_wrapper<TypeParam>;
+  LCW input({LCW{3, 2, 1}, LCW{}, LCW{30, 20, 10, 50}, LCW{100, 120}, LCW{0}}, validity);
+
+  {
+    auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 0);
+    cudf::test::fixed_width_column_wrapper<TypeParam> expected({3, 0, 30, 100, 0}, {1, 0, 1, 1, 1});
+    cudf::test::expect_columns_equal(expected, *result);
+  }
+  {
+    auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 1);
+    cudf::test::fixed_width_column_wrapper<TypeParam> expected({2, 0, 20, 120, 0}, {1, 0, 1, 1, 0});
+    cudf::test::expect_columns_equal(expected, *result);
+  }
+  {
+    auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 2);
+    cudf::test::fixed_width_column_wrapper<TypeParam> expected({1, 0, 10, 0, 0}, {1, 0, 1, 0, 0});
+    cudf::test::expect_columns_equal(expected, *result);
+  }
+  {
+    auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 3);
+    cudf::test::fixed_width_column_wrapper<TypeParam> expected({0, 0, 50, 0, 0}, {0, 0, 1, 0, 0});
+    cudf::test::expect_columns_equal(expected, *result);
+  }
+  {
+    auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 4);
+    cudf::test::fixed_width_column_wrapper<TypeParam> expected({0, 0, 0, 0, 0}, {0, 0, 0, 0, 0});
+    cudf::test::expect_columns_equal(expected, *result);
+  }
+}
 
 TEST_F(ListsExtractTest, ExtractElementStrings)
 {
