@@ -54,12 +54,14 @@ namespace {
 __device__ std::pair<char const *, char const *> limit_range_to_brackets(char const *begin,
                                                                          char const *end)
 {
-  while (begin < end && *begin != '[' && *begin != '{') { begin++; }
-  begin++;
-
-  while (begin < end && *(end - 1) != ']' && *(end - 1) != '}') { end--; }
-  end--;
-  return {begin, end};
+  begin = thrust::find_if(
+    thrust::seq, begin, end, [] __device__(auto c) { return c == '[' || c == '{'; });
+  end = thrust::find_if(thrust::seq,
+                        thrust::make_reverse_iterator(end),
+                        thrust::make_reverse_iterator(++begin),
+                        [](auto c) { return c == ']' || c == '}'; })
+          .base();
+  return {begin, --end};
 }
 
 /**
@@ -82,14 +84,12 @@ __device__ std::pair<char const *, char const *> get_next_key(char const *begin,
   if (key_begin > end) return {end, end};
 
   // Key ends after the next unescaped quote
-  auto prev_ch       = ' ';
-  auto const key_end = thrust::find_if(thrust::seq, key_begin, end, [&] __device__(auto ch) {
-    auto const is_unescaped_quote = (ch == quotechar && prev_ch != '\\');
-    prev_ch                       = ch;
-    return is_unescaped_quote;
-  });
+  auto const key_end_pair = thrust::mismatch(
+    thrust::seq, key_begin, end - 1, key_begin + 1, [quotechar] __device__(auto prev_ch, auto ch) {
+      return !(ch == quotechar && prev_ch != '\\');
+    });
 
-  return {key_begin, key_end};
+  return {key_begin, key_end_pair.second};
 }
 
 /**
@@ -284,23 +284,24 @@ struct ConvertFunctor {
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(char const *begin,
                                                       char const *end,
-                                                      void *output_columns,
+                                                      void *output_column,
                                                       cudf::size_type row,
                                                       const ParseOptions &opts)
   {
-    T &value{static_cast<T *>(output_columns)[row]};
+    T &value{static_cast<T *>(output_column)[row]};
 
     // Check for user-specified true/false values first, where the output is
     // replaced with 1/0 respectively
-    const size_t field_len = end - begin;
-    if (serializedTrieContains(opts.trueValuesTrie, begin, field_len)) {
-      value = 1;
-    } else if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
-      value = 0;
-    } else {
-      // TODO: refactor decode_value to use pointers too
-      value = decode_value<T>(begin, 0, field_len - 1, opts);
-    }
+    value = [&, field_len = end - begin]() -> T {
+      if (serializedTrieContains(opts.trueValuesTrie, begin, field_len)) {
+        return 1;
+      } else if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
+        return 0;
+      } else {
+        // TODO: refactor decode_value to use pointers too
+        return decode_value<T>(begin, 0, field_len - 1, opts);
+      }
+    }();
 
     return true;
   }
@@ -327,11 +328,11 @@ struct ConvertFunctor {
                                       !std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(char const *begin,
                                                       char const *end,
-                                                      void *output_columns,
+                                                      void *output_column,
                                                       cudf::size_type row,
                                                       const ParseOptions &opts)
   {
-    T &value{static_cast<T *>(output_columns)[row]};
+    T &value{static_cast<T *>(output_column)[row]};
     value = decode_value<T>(begin, 0, end - begin - 1, opts);
 
     return true;
@@ -359,13 +360,16 @@ __inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == '
 __inline__ __device__ std::pair<char const *, char const *> trim_whitespaces_quotes(
   char const *begin, char const *end, char quotechar = '\0')
 {
-  auto first = begin;
-  auto last  = end - 1;
-  while ((first < last) && is_whitespace(*first)) { first++; }
-  if ((first < last) && *first == quotechar) { first++; }
-  while ((first <= last) && is_whitespace(*last)) { last--; }
-  if ((first <= last) && *last == quotechar) { last--; }
-  return {first, last + 1};
+  auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
+
+  begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
+  end   = thrust::find_if(thrust::seq,
+                        thrust::make_reverse_iterator(end),
+                        thrust::make_reverse_iterator(begin),
+                        not_whitespace)
+          .base();
+
+  return {(*begin == quotechar) ? ++begin : begin, (*(end - 1) == quotechar) ? end - 1 : end};
 }
 
 /**

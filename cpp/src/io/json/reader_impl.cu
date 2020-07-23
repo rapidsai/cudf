@@ -137,7 +137,7 @@ std::unique_ptr<table> create_json_keys_info_table(
   const ParseOptions &opts,
   cudaStream_t stream)
 {
-  // count keys
+  // Count keys
   rmm::device_scalar<unsigned long long int> key_counter(0, stream);
   auto const data_ptr = static_cast<const char *>(data.data());
   cudf::io::json::gpu::collect_keys_info(data_ptr,
@@ -149,12 +149,13 @@ std::unique_ptr<table> create_json_keys_info_table(
                                          nullptr,
                                          stream);
 
-  // Allocate columns to store hash values, lengths, offsets
+  // Allocate columns to store hash value, length, and offset of each JSON object key in the input
   auto const num_keys = key_counter.value();
   std::vector<std::unique_ptr<column>> info_columns;
   info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT64), num_keys));
   info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT16), num_keys));
   info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT32), num_keys));
+  // Create a table out of these columns to pass them around more easily
   auto info_table = std::make_unique<table>(std::move(info_columns));
   rmm::device_scalar<mutable_table_device_view> info_table_mdv(
     *mutable_table_device_view::create(info_table->mutable_view(), stream), stream);
@@ -196,10 +197,11 @@ std::vector<std::string> create_key_strings(char const *h_data,
                   stream);
 
   std::vector<std::string> names(num_cols);
-  std::transform(
-    h_offsets.begin(), h_offsets.end(), h_lens.begin(), names.begin(), [&](auto offset, auto len) {
-      return std::string(h_data + offset, len);
-    });
+  std::transform(h_offsets.cbegin(),
+                 h_offsets.cend(),
+                 h_lens.cbegin(),
+                 names.begin(),
+                 [&](auto offset, auto len) { return std::string(h_data + offset, len); });
   return names;
 }
 
