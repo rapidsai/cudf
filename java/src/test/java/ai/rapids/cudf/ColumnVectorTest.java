@@ -1605,13 +1605,13 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector expectedDays = ColumnVector.daysFromInts(values);
          ColumnVector days = cv.asTimestampDays();
          ColumnVector expectedUs = ColumnVector.timestampMicroSecondsFromLongs(longValues);
-         ColumnVector us = cv.asTimestampMicroseconds();
+         ColumnVector us = longs.asTimestampMicroseconds();
          ColumnVector expectedNs = ColumnVector.timestampNanoSecondsFromLongs(longValues);
-         ColumnVector ns = cv.asTimestampNanoseconds();
+         ColumnVector ns = longs.asTimestampNanoseconds();
          ColumnVector expectedMs = ColumnVector.timestampMilliSecondsFromLongs(longValues);
-         ColumnVector ms = cv.asTimestampMilliseconds();
+         ColumnVector ms = longs.asTimestampMilliseconds();
          ColumnVector expectedS = ColumnVector.timestampSecondsFromLongs(longValues);
-         ColumnVector s = cv.asTimestampSeconds();) {
+         ColumnVector s = longs.asTimestampSeconds();) {
       assertColumnsAreEqual(expectedUnsignedInts, unsignedInts);
       assertColumnsAreEqual(expectedBytes, bytes);
       assertColumnsAreEqual(expectedUnsignedBytes, unsignedBytes);
