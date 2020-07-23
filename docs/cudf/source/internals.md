@@ -4,8 +4,9 @@ cuDF internals
 ColumnAccessor
 --------------
 
-The underlying data structure of cuDF `Series`, `DataFrame` and `Index` objects
-is a `ColumnAccessor`, which can be accessed via their `._data` attribute:
+cuDF  `Series`, `DataFrame` and `Index` are all subclasses of an internal `Frame` class.
+The underlying data structure of `Frame` is a `ColumnAccessor`,
+which can be accessed via the `._data` attribute:
 
 ```python
 >>> a = cudf.DataFrame({'x': [1, 2, 3], 'y': ['a', 'b', 'c']})
@@ -13,7 +14,7 @@ is a `ColumnAccessor`, which can be accessed via their `._data` attribute:
 ColumnAccessor(OrderedColumnDict([('x', <cudf.core.column.numerical.NumericalColumn object at 0x7f5a7d12e050>), ('y', <cudf.core.column.string.StringColumn object at 0x7f5a7d12e320>)]), multiindex=False, level_names=(None,))
 ```
 
-`ColumnAccessor` is a dict-like object that maps column labels to columns.
+`ColumnAccessor` is an ordered, dict-like object that maps column labels to columns.
 In addition, it supports things like selecting multiple columns (both by index and label),
 as well as hierarchical indexing.
 
