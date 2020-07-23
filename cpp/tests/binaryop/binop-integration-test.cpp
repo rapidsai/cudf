@@ -18,8 +18,10 @@
  */
 
 #include <tests/binaryop/assert-binops.h>
-#include <cudf/binaryop.hpp>
 #include <tests/binaryop/binop-fixture.hpp>
+
+#include <cudf/binaryop.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 
 namespace cudf {
 namespace test {
@@ -2034,6 +2036,73 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Vector_FP64_SI32_SI64)
 
   // atan2 has a max ULP error of 2 per CUDA programming guide
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+using wrapper         = cudf::test::fixed_width_column_wrapper<T>;
+using FixedPointTypes = ::testing::Types<int32_t, int64_t>;
+TYPED_TEST_CASE(FixedPointTestBothReps, FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd)
+{
+  using namespace numeric;
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  auto const sz = std::size_t{1000};
+
+  auto vec1       = std::vector<decimalXX>(sz);
+  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{1, scale_type{-1}});
+  auto expected   = std::vector<decimalXX>(sz);
+
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{});
+
+  std::transform(std::cbegin(vec1),
+                 std::cend(vec1),
+                 std::cbegin(vec2),
+                 std::begin(expected),
+                 std::plus<decimalXX>());
+
+  auto const lhs          = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const rhs          = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected_col = wrapper<decimalXX>(expected.begin(), expected.end());
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::ADD, static_cast<cudf::column_view>(lhs).type());
+
+  cudf::test::expect_columns_equal(expected_col, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply)
+{
+  using namespace numeric;
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  auto const sz = std::size_t{1000};
+
+  auto vec1       = std::vector<decimalXX>(sz);
+  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{1, scale_type{-1}});
+  auto expected   = std::vector<decimalXX>(sz);
+
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{});
+
+  std::transform(std::cbegin(vec1),
+                 std::cend(vec1),
+                 std::cbegin(vec2),
+                 std::begin(expected),
+                 std::multiplies<decimalXX>());
+
+  auto const lhs          = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const rhs          = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected_col = wrapper<decimalXX>(expected.begin(), expected.end());
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::MUL, static_cast<cudf::column_view>(lhs).type());
+
+  cudf::test::expect_columns_equal(expected_col, result->view());
 }
 
 }  // namespace binop
