@@ -150,20 +150,6 @@ function getReqs() {
 
 REQS=$(getReqs "${LIBCUDF_DEPS[@]}")
 
-BENCHMARK_META=$(jq -n \
-  --arg NODE "${NODE_NAME}" \
-  --arg BRANCH "branch-${MINOR_VERSION}" \
-  --argjson REQS "${REQS}" '
-  {
-    "machineName": $NODE,
-    "commitBranch": $BRANCH,
-    "requirements": $REQS
-  }
-')
-
-echo "Benchmark meta:"
-echo "${BENCHMARK_META}" | jq "."
-
 mkdir -p ${WORKSPACE}/tmp/benchmark
 touch ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 ls ${GBENCH_BENCHMARKS_DIR} > ${WORKSPACE}/tmp/benchmark/benchmarks.txt
@@ -187,7 +173,7 @@ set -e
 rm ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 cd ${WORKSPACE}
 mv ${GBENCH_BENCHMARKS_DIR}/*.json ${WORKSPACE}/tmp/benchmark/
-python GBenchToASV.py -d  ${WORKSPACE}/tmp/benchmark/ -t ${ASVRESULTS_DIR} -n libcudf -b branch-${MINOR_VERSION} -r ${BENCHMARK_META} 
+python GBenchToASV.py -d  ${WORKSPACE}/tmp/benchmark/ -t ${ASVRESULTS_DIR} -n libcudf -b branch-${MINOR_VERSION} -r "${REQS}" 
 
 ###
 # Run Python Benchmarks
