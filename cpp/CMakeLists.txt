@@ -559,6 +559,7 @@ add_library(cudf
             src/strings/substring.cu
             src/strings/translate.cu
             src/strings/utilities.cu
+            src/lists/extract.cu
             src/lists/lists_column_factories.cu
             src/lists/lists_column_view.cu
             src/lists/copying/concatenate.cu
