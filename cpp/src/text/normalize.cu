@@ -193,6 +193,9 @@ std::unique_ptr<cudf::column> normalize_spaces(
                                    mr);
 }
 
+/**
+ * @copydoc nvtext::normalize_characters
+ */
 std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& strings,
                                                    bool do_lower_case,
                                                    cudaStream_t stream,
@@ -264,6 +267,9 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
   return detail::normalize_spaces(strings, mr);
 }
 
+/**
+ * @copydoc nvtext::normalize_characters
+ */
 std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& strings,
                                                    bool do_lower_case,
                                                    rmm::mr::device_memory_resource* mr)
