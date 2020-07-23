@@ -439,13 +439,6 @@ class Index(Frame, Serializable):
         return self._values.to_arrow()
 
     def tolist(self):
-        """
-        Return a list type from index data.
-
-        Returns
-        -------
-        list
-        """
 
         raise TypeError(
             "Implicit conversion to a host memory via tolist() is not "
