@@ -23,9 +23,6 @@ build:
 requirements:
   build:
     - cmake >=3.14.0
-    - cython >=0.29,<0.30
-    - setuptools
-    - cudf {{ version }}
   host:
     - cython >=0.29,<0.30
     - setuptools
