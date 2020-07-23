@@ -30,6 +30,8 @@
 #include <nvtext/tokenize.hpp>
 #include <strings/utilities.cuh>
 
+#include <thrust/copy.h>
+#include <thrust/count.h>
 #include <rmm/device_uvector.hpp>
 
 namespace nvtext {
@@ -98,13 +100,14 @@ struct token_row_offsets_fn {
   template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> operator()(cudaStream_t stream) const
   {
-    // the number of output strings is in the last entry of the sorted row indices
-    int32_t const last_entry =
-      cudf::detail::get_value<int32_t>(sorted_indices, tokens_counts - 1, stream);
-    auto const output_count = cudf::detail::get_value<T>(row_indices, last_entry, stream) + 1;
+    index_changed_fn<T> pfn{row_indices.data<T>(), sorted_indices.template data<int32_t>()};
+    auto const output_count =
+      thrust::count_if(rmm::exec_policy(stream)->on(stream),
+                       thrust::make_counting_iterator<cudf::size_type>(0),
+                       thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
+                       pfn);
     auto tokens_offsets =
       std::make_unique<rmm::device_uvector<cudf::size_type>>(output_count + 1, stream);
-    index_changed_fn<T> pfn{row_indices.data<T>(), sorted_indices.template data<int32_t>()};
     thrust::copy_if(rmm::exec_policy(stream)->on(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
@@ -125,6 +128,9 @@ struct token_row_offsets_fn {
 
 }  // namespace
 
+/**
+ * @copydoc nvtext::detokenize
+ */
 std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& strings,
                                          cudf::column_view const& row_indices,
                                          cudf::string_scalar const& separator,
