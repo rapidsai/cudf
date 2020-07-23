@@ -25,7 +25,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/replace.hpp>
-#include <cudf/reshape.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -700,27 +699,6 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointUpperBound)
                                   {cudf::null_order::BEFORE});
 
   expect_columns_equal(*result, expect);
-}
-
-TYPED_TEST(FixedPointTestBothReps, FixedPointInterleave)
-{
-  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
-
-  for (int i = 0; i > -4; --i) {
-    auto const ONE   = decimalXX{1, scale_type{i}};
-    auto const TWO   = decimalXX{2, scale_type{i}};
-    auto const THREE = decimalXX{3, scale_type{i}};
-    auto const FOUR  = decimalXX{4, scale_type{i}};
-
-    auto const a = wrapper<decimalXX>({ONE, THREE});
-    auto const b = wrapper<decimalXX>({TWO, FOUR});
-
-    auto const input    = cudf::table_view{std::vector<cudf::column_view>{a, b}};
-    auto const expected = wrapper<decimalXX>({ONE, TWO, THREE, FOUR});
-    auto const actual   = cudf::interleave_columns(input);
-
-    expect_columns_equal(expected, actual->view());
-  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
