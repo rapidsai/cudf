@@ -332,9 +332,15 @@ def test_series_merge_sorted(nparts, key, na_position, ascending):
     [
         ([], [], []),
         ([0], [0], [0]),
-        ([0, 0], [0, 1], [1, 2]),
-        ([0, 1], [0, 0], [1, 2]),
-        ([0, 1], [0, 1], [1, 2]),
+        ([0, 0], [0, 1], [1, 2.0]),
+        ([0, 1], [0, 0], [1, 2.0]),
+        ([0, 1], [0, 1], [1, 2.0]),
+        (["a", "a", "b", "b"], ["c", "d", "c", "d"], [1, 2, 3, 4.0]),
+        (
+            ["a", "a", "b", "b", "a"],
+            ["c", "d", "c", "d", "e"],
+            [1, 2, 3, 4, 5.0],
+        ),
     ],
 )
 def test_pivot_simple(index, column, data):
@@ -348,7 +354,25 @@ def test_pivot_simple(index, column, data):
     assert_eq(
         expect,
         got,
-        check_dtype=False,
         check_index_type=check_index_and_columns,
         check_column_type=check_index_and_columns,
+    )
+
+
+def test_pivot_multi_values():
+    # from Pandas docs:
+    # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.pivot.html
+    pdf = pd.DataFrame(
+        {
+            "foo": ["one", "one", "one", "two", "two", "two"],
+            "bar": ["A", "B", "C", "A", "B", "C"],
+            "baz": [1, 2, 3, 4, 5, 6],
+            "zoo": ["x", "y", "z", "q", "w", "t"],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        pdf.pivot(index="foo", columns="bar", values=["baz", "zoo"]),
+        gdf.pivot(index="foo", columns="bar", values=["baz", "zoo"]),
+        check_dtype=False,
     )
