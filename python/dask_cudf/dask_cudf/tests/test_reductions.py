@@ -2,12 +2,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dask.dataframe.utils import assert_eq
-
-import cudf as gd
+from dask_cudf.tests.utils import assert_eq as dask_cudf_assert_eq
 
 import dask_cudf as dgd
-from dask_cudf.tests.utils import upcast_pandas_to_nullable as upcast
+
+import cudf as gd
 
 
 def _make_random_frame(nelem, npartitions=2):
@@ -42,7 +41,7 @@ def test_series_reduce(reducer):
 
     got = reducer(gdf.x)
     exp = reducer(df.x)
-    assert_eq(got, exp)
+    dask_cudf_assert_eq(got, exp)
 
 
 @pytest.mark.parametrize(
@@ -76,4 +75,4 @@ def test_rowwise_reductions(data, op):
         expected = getattr(pddf, op)(axis=1)
         got = getattr(pddf, op)(axis=1)
 
-    assert_eq(upcast(expected.compute()), got.compute(), check_less_precise=7)
+    dask_cudf_assert_eq(expected.compute(), got.compute(), check_less_precise=7)

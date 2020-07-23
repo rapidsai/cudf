@@ -8,13 +8,12 @@ import pytest
 
 import dask
 from dask import dataframe as dd
-from dask.dataframe.utils import assert_eq
+from dask_cudf.tests.utils import assert_eq as dask_cudf_assert_eq
 from dask.utils import natural_sort_key, parse_bytes
 
-import cudf
-
 import dask_cudf
-from dask_cudf.tests.utils import upcast_pandas_to_nullable as upcast
+
+import cudf
 
 nrows = 40
 npartitions = 15
@@ -25,7 +24,7 @@ df = pd.DataFrame(
     },
     index=pd.Index(range(nrows), name="index"),
 )  # Sorted
-ddf = upcast(dd.from_pandas(df, npartitions=npartitions))
+ddf = dd.from_pandas(df, npartitions=npartitions)
 
 
 @pytest.mark.parametrize("stats", [True, False])
@@ -44,31 +43,31 @@ def test_roundtrip_from_dask(tmpdir, stats):
 
     # Read list of parquet files
     ddf2 = dask_cudf.read_parquet(files, gather_statistics=stats)
-    assert_eq(ddf, ddf2, check_divisions=stats)
+    dask_cudf_assert_eq(ddf, ddf2, check_divisions=stats)
 
     # Specify columns=['x']
     ddf2 = dask_cudf.read_parquet(
         files, columns=["x"], gather_statistics=stats
     )
-    assert_eq(ddf[["x"]], ddf2, check_divisions=stats)
+    dask_cudf_assert_eq(ddf[["x"]], ddf2, check_divisions=stats)
 
     # Specify columns='y'
     ddf2 = dask_cudf.read_parquet(files, columns="y", gather_statistics=stats)
-    assert_eq(ddf[["y"]], ddf2, check_divisions=stats)
+    dask_cudf_assert_eq(ddf[["y"]], ddf2, check_divisions=stats)
 
     # Now include metadata
     ddf2 = dask_cudf.read_parquet(tmpdir, gather_statistics=stats)
-    assert_eq(ddf, ddf2, check_divisions=stats)
+    dask_cudf_assert_eq(ddf, ddf2, check_divisions=stats)
 
     # Specify columns=['x'] (with metadata)
     ddf2 = dask_cudf.read_parquet(
         tmpdir, columns=["x"], gather_statistics=stats
     )
-    assert_eq(ddf[["x"]], ddf2, check_divisions=stats)
+    dask_cudf_assert_eq(ddf[["x"]], ddf2, check_divisions=stats)
 
     # Specify columns='y' (with metadata)
     ddf2 = dask_cudf.read_parquet(tmpdir, columns="y", gather_statistics=stats)
-    assert_eq(ddf[["y"]], ddf2, check_divisions=stats)
+    dask_cudf_assert_eq(ddf[["y"]], ddf2, check_divisions=stats)
 
 
 @pytest.mark.parametrize("write_meta", [True, False])
@@ -78,24 +77,24 @@ def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     gddf.to_parquet(tmpdir, write_metadata_file=write_meta)
 
     gddf2 = dask_cudf.read_parquet(tmpdir, index="index")
-    assert_eq(gddf, gddf2, check_divisions=write_meta)
+    dask_cudf_assert_eq(gddf, gddf2, check_divisions=write_meta)
 
 
 def test_roundtrip_from_pandas(tmpdir):
     fn = str(tmpdir.join("test.parquet"))
 
     # First without specifying an index
-    dfp = upcast(df.copy())
+    dfp = df.copy()
     dfp.to_parquet(fn, engine="pyarrow", index=False)
     dfp = dfp.reset_index(drop=True)
     ddf2 = dask_cudf.read_parquet(fn)
-    assert_eq(dfp, ddf2, check_index=True)
+    dask_cudf_assert_eq(dfp, ddf2, check_index=True)
 
     # Now, specifying an index
-    dfp = upcast(df.copy())
+    dfp = df.copy()
     dfp.to_parquet(fn, engine="pyarrow", index=True)
     ddf2 = dask_cudf.read_parquet(fn, index=["index"])
-    assert_eq(dfp, ddf2, check_index=True)
+    dask_cudf_assert_eq(dfp, ddf2, check_index=True)
 
 
 def test_strings(tmpdir):
@@ -108,13 +107,13 @@ def test_strings(tmpdir):
     ddf2 = dd.from_pandas(dfp, npartitions=2)
     ddf2.to_parquet(fn, engine="pyarrow")
     read_df = dask_cudf.read_parquet(fn, index=["a"])
-    assert_eq(ddf2, read_df.compute().to_pandas(nullable_pd_dtype=False))
+    dask_cudf_assert_eq(ddf2, read_df.compute().to_pandas(nullable_pd_dtype=False))
 
     read_df_cats = dask_cudf.read_parquet(
         fn, index=["a"], strings_to_categorical=True
     )
-    assert_eq(read_df_cats.dtypes, read_df_cats.compute().dtypes)
-    assert_eq(read_df_cats.dtypes[0], "int32")
+    dask_cudf_assert_eq(read_df_cats.dtypes, read_df_cats.compute().dtypes)
+    dask_cudf_assert_eq(read_df_cats.dtypes[0], "int32")
 
 
 def test_dask_timeseries_from_pandas(tmpdir):
@@ -124,7 +123,7 @@ def test_dask_timeseries_from_pandas(tmpdir):
     pdf = ddf2.compute()
     pdf.to_parquet(fn, engine="pyarrow")
     read_df = dask_cudf.read_parquet(fn)
-    assert_eq(ddf2, read_df.compute().to_pandas(nullable_pd_dtype=False))
+    dask_cudf_assert_eq(ddf2, read_df.compute())
 
 
 @pytest.mark.parametrize("index", [False, None])
@@ -135,11 +134,8 @@ def test_dask_timeseries_from_dask(tmpdir, index, stats):
     ddf2 = dask.datasets.timeseries(freq="D")
     ddf2.to_parquet(fn, engine="pyarrow", write_index=index)
     read_df = dask_cudf.read_parquet(fn, index=index, gather_statistics=stats)
-    assert_eq(
-        upcast(ddf2),
-        read_df,
-        check_divisions=(stats and index),
-        check_index=index,
+    dask_cudf_assert_eq(
+        ddf2, read_df, check_divisions=(stats and index), check_index=index
     )
 
 
@@ -154,7 +150,7 @@ def test_dask_timeseries_from_daskcudf(tmpdir, index, stats):
     ddf2.name = ddf2.name.astype("object")
     ddf2.to_parquet(fn, write_index=index)
     read_df = dask_cudf.read_parquet(fn, index=index, gather_statistics=stats)
-    assert_eq(
+    dask_cudf_assert_eq(
         ddf2, read_df, check_divisions=(stats and index), check_index=index
     )
 
@@ -170,7 +166,7 @@ def test_empty(tmpdir, index):
 
     ddf2.to_parquet(fn, write_index=index, engine="pyarrow")
     read_df = dask_cudf.read_parquet(fn)
-    assert_eq(ddf2, read_df.compute().to_pandas(nullable_pd_dtype=False))
+    dask_cudf_assert_eq(ddf2, read_df.compute())
 
 
 def test_filters(tmpdir):
@@ -228,8 +224,8 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
     df_read = dd.read_parquet(tmpdir, engine="pyarrow", index="index")
     gdf_read = dask_cudf.read_parquet(tmpdir, index="index")
 
-    assert_eq(
-        upcast(df_read.compute(scheduler=dask.get)),
+    dask_cudf_assert_eq(
+        df_read.compute(scheduler=dask.get),
         gdf_read.compute(scheduler=dask.get),
     )
 
@@ -275,7 +271,7 @@ def test_chunksize(tmpdir, chunksize, metadata):
         index="index",
     )
 
-    assert_eq(upcast(ddf1), ddf2, check_divisions=False)
+    dask_cudf_assert_eq(ddf1, ddf2, check_divisions=False)
 
     num_row_groups = df_size // row_group_size
     if not chunksize:
@@ -324,6 +320,6 @@ def test_row_groups_per_part(tmpdir, row_groups, index):
         index="index" if index else False,
     )
 
-    assert_eq(upcast(ddf1), ddf2, check_divisions=False, check_index=index)
+    dask_cudf_assert_eq(ddf1, ddf2, check_divisions=False, check_index=index)
 
     assert ddf2.npartitions == npartitions_expected

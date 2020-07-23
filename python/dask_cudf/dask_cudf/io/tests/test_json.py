@@ -6,9 +6,8 @@ import pytest
 import dask
 from dask import dataframe as dd
 from dask.utils import tmpfile
-
+from dask_cudf.tests.utils import assert_eq as dask_cudf_assert_eq
 import dask_cudf
-from dask_cudf.tests.utils import upcast_pandas_to_nullable as upcast
 
 
 def test_read_json(tmp_path):
@@ -18,19 +17,19 @@ def test_read_json(tmp_path):
     json_path = str(tmp_path / "data-*.json")
     df1.to_json(json_path)
     df2 = dask_cudf.read_json(json_path)
-    dd.assert_eq(upcast(df1), df2)
+    dask_cudf_assert_eq(df1, df2)
 
     # file path test
     stmp_path = str(tmp_path / "data-*.json")
     df3 = dask_cudf.read_json(f"file://{stmp_path}")
-    dd.assert_eq(upcast(df1), df3)
+    dask_cudf_assert_eq(df1, df3)
 
     # file list test
     list_paths = [
         os.path.join(tmp_path, fname) for fname in sorted(os.listdir(tmp_path))
     ]
     df4 = dask_cudf.read_json(list_paths)
-    dd.assert_eq(upcast(df1), df4)
+    dask_cudf_assert_eq(df1, df4)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -41,7 +40,7 @@ def test_read_json_basic(orient):
         df.to_json(f, orient=orient, lines=False)
         actual = dask_cudf.read_json(f, orient=orient, lines=False)
         actual_pd = pd.read_json(f, orient=orient, lines=False)
-        dd.assert_eq(actual, upcast(actual_pd))
+        dask_cudf_assert_eq(actual, actual_pd)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -52,4 +51,4 @@ def test_read_json_lines(lines):
         df.to_json(f, orient="records", lines=lines)
         actual = dask_cudf.read_json(f, orient="records", lines=lines)
         actual_pd = pd.read_json(f, orient="records", lines=lines)
-        dd.assert_eq(actual, upcast(actual_pd))
+        dask_cudf_assert_eq(actual, actual_pd)

@@ -8,11 +8,10 @@ import pytest
 
 import dask
 from dask import dataframe as dd
+from dask_cudf.tests.utils import assert_eq as dask_cudf_assert_eq
+import dask_cudf
 
 import cudf
-
-import dask_cudf
-from dask_cudf.tests.utils import upcast_pandas_to_nullable as upcast
 
 
 def test_csv_roundtrip(tmp_path):
@@ -22,7 +21,7 @@ def test_csv_roundtrip(tmp_path):
     ddf.to_csv(csv_path, index=False)
 
     ddf2 = dask_cudf.read_csv(csv_path)
-    dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
+    dask_cudf_assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
 
 
 def test_csv_roundtrip_filepath(tmp_path):
@@ -33,7 +32,7 @@ def test_csv_roundtrip_filepath(tmp_path):
     ddf.to_csv(f"file://{stmp_path}", index=False)
 
     ddf2 = dask_cudf.read_csv(f"file://{stmp_path}")
-    dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
+    dask_cudf_assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
 
 
 def test_read_csv(tmp_path):
@@ -45,20 +44,19 @@ def test_read_csv(tmp_path):
     df.to_csv(csv_path, index=False)
 
     df2 = dask_cudf.read_csv(csv_path)
-
-    dd.assert_eq(upcast(df), df2)
+    dask_cudf_assert_eq(df, df2)
 
     # file path test
     stmp_path = str(csv_path)
     df3 = dask_cudf.read_csv(f"file://{stmp_path}")
-    dd.assert_eq(df2, df3)
+    dask_cudf_assert_eq(df2, df3)
 
     # file list test
     list_paths = [
         os.path.join(tmp_path, fname) for fname in sorted(os.listdir(tmp_path))
     ]
     df4 = dask_cudf.read_csv(list_paths)
-    dd.assert_eq(df, df4)
+    dask_cudf_assert_eq(df, df4)
 
 
 def test_raises_FileNotFoundError():
@@ -75,7 +73,7 @@ def test_read_csv_w_bytes(tmp_path):
 
     df2 = dask_cudf.read_csv(tmp_path / "*.csv", chunksize="50 B")
     assert df2.npartitions == 3
-    dd.assert_eq(df2, upcast(df), check_index=False)
+    dask_cudf_assert_eq(df2, df, check_index=False)
 
 
 def test_read_csv_compression(tmp_path):
@@ -92,7 +90,7 @@ def test_read_csv_compression(tmp_path):
     assert "gzip" in msg
 
     assert df2.npartitions == 1
-    dd.assert_eq(df2, upcast(df), check_index=False)
+    dask_cudf_assert_eq(df2, df, check_index=False)
 
     with warnings.catch_warnings(record=True) as record:
         df2 = dask_cudf.read_csv(
@@ -117,4 +115,4 @@ def test_read_csv_compression_file_list(tmp_path):
     ddf_cpu = dd.read_csv(files, compression="gzip").compute()
     ddf_gpu = dask_cudf.read_csv(files, compression="gzip").compute()
 
-    dd.assert_eq(upcast(ddf_cpu), ddf_gpu)
+    dask_cudf_assert_eq(ddf_cpu, ddf_gpu)
