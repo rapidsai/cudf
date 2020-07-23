@@ -856,7 +856,7 @@ class Index(Frame, Serializable):
         # in case of MultiIndex
         if isinstance(lhs, cudf.MultiIndex):
             if level is not None and isinstance(level, int):
-                on = lhs._data.get_by_index(level).names[0]
+                on = lhs._data.select_by_index(level).names[0]
             right_names = (on,) or right_names
             on = right_names[0]
             if how == "outer":
