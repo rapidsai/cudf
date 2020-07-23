@@ -1275,6 +1275,18 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_getChildrenPointer
   //CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getChildCvPointer(JNIEnv *env,
+                                                                           jobject j_object,
+                                                                           jlong handle) {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+    //TODO: assert a list
+    std::unique_ptr<cudf::lists_column_view> view = std::make_unique<cudf::lists_column_view>(*column);
+    std::cout << "getChildCvPointer View is created";
+    std::unique_ptr<cudf::column_view> next_view = std::make_unique<cudf::column_view>(view->child());
+    return reinterpret_cast<jlong>(next_view.release());
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_getChildrenColumnPointers(JNIEnv *env,
                                                                                    jobject j_object,
                                                                                    jlong handle) {

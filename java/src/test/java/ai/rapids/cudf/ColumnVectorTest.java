@@ -21,7 +21,9 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
@@ -2410,6 +2412,125 @@ public class ColumnVectorTest extends CudfTestBase {
           assertEquals(ns[i], hc.getLong(i));
         }
       }
+    }
+  }
+
+  @Test
+  void testListCv() throws Exception {
+    List<Integer> list = new ArrayList<>();
+    list.add(0);
+    list.add(1);
+    list.add(2);
+    list.add(3);
+    List<Integer> list2 = new ArrayList<>();
+    list2.add(6);
+    list2.add(2);
+    list2.add(4);
+    list2.add(5);
+    List<Integer> list3 = new ArrayList<>();
+    list3.add(0);
+    list3.add(7);
+    list3.add(3);
+    list3.add(4);
+    list3.add(2);
+
+    ColumnVector res = ColumnVector.fromLists(DType.INT32, list, list2, list3);
+    //testing only need gather in jni
+//    res = new ColumnVector(res.getNativeView(), true);
+    HostColumnVector hcv = res.copyToHost();
+    System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
+    List<Integer> ret = hcv.getListParent(1, 0);
+    System.out.println("KUHU ele =" + ret.get(0));
+    System.out.println("KUHU ele =" + ret.get(1));
+    System.out.println("KUHU ele =" + ret.get(2));
+    res.close();
+    hcv.close();
+  }
+
+  @Test
+  void testListOfListsCv() {
+    List<Integer> list = new ArrayList<>();
+    list.add(1);
+    list.add(2);
+    list.add(3);
+    List<Integer> list2 = new ArrayList<>();
+    list2.add(4);
+    list2.add(5);
+    list2.add(6);
+    List<List<Integer>> mainList = new ArrayList<>();
+    mainList.add(list);
+    mainList.add(list2);
+    List<Integer> list3 = new ArrayList<>();
+    list3.add(10);
+    list3.add(20);
+    list3.add(30);
+    List<Integer> list4 = new ArrayList<>();
+    list4.add(40);
+    list4.add(50);
+    list4.add(60);
+    List<List<Integer>> mainList2 = new ArrayList<>();
+    mainList2.add(list3);
+    mainList2.add(list4);
+
+    ColumnVector res = ColumnVector.fromLists(DType.INT32, mainList, mainList2);
+//    res = new ColumnVector(res.getNativeView(), true);
+    HostColumnVector hcv = res.copyToHost();
+    System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
+    try {
+      List<Integer> ret = hcv.getListParent(0, 0);
+      System.out.println("KUHU ele =" + ret.get(0));
+      System.out.println("KUHU ele =" + ret.get(1));
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      res.close();
+      hcv.close();
+    }
+  }
+
+  @Test
+  void testConcatLists() {
+    List<Integer> list = new ArrayList<>();
+    list.add(0);
+    list.add(1);
+    list.add(2);
+    list.add(3);
+    List<Integer> list2 = new ArrayList<>();
+    list2.add(6);
+    list2.add(2);
+    list2.add(4);
+    list2.add(5);
+    List<Integer> list3 = new ArrayList<>();
+    list3.add(0);
+    list3.add(7);
+    list3.add(3);
+    list3.add(4);
+    list3.add(2);
+
+    List<Integer> list4 = new ArrayList<>();
+    list4.add(10);
+    list4.add(11);
+    list4.add(12);
+    list4.add(13);
+    List<Integer> list5 = new ArrayList<>();
+    list5.add(16);
+    list5.add(12);
+    list5.add(14);
+    list5.add(15);
+    List<Integer> list6 = new ArrayList<>();
+    list6.add(100);
+    list6.add(107);
+    list6.add(103);
+    list6.add(104);
+    list6.add(200);
+    try (ColumnVector res1 = ColumnVector.fromLists(DType.INT32, list, list2, list3);
+         ColumnVector res2 = ColumnVector.fromLists(DType.INT32, list4, list5, list6);
+         ColumnVector v = ColumnVector.concatenate(res1, res2);
+         HostColumnVector hostColumnVector = v.copyToHost()) {
+      List<Integer> ret = hostColumnVector.getListParent(5, 0);
+      System.out.println("Guess we passed!"+ret.size() + " v size ="+v.getRowCount());
+    } catch (Exception e) {
+      e.printStackTrace();
     }
   }
 }
