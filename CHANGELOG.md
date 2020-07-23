@@ -203,6 +203,7 @@
 - PR #5719 Fix Frame._concat() with categorical columns
 - PR #5736 Disable unsigned type in ORC writer benchmarks
 - PR #5745 Update JNI cast for inability to cast timestamp and integer types
+- PR #5750 Add RMM_ROOT/include to the spdlog search path in JNI build
 
 
 # cuDF 0.14.0 (03 Jun 2020)
