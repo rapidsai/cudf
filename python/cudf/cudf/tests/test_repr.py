@@ -295,10 +295,30 @@ def test_generic_index(length, dtype):
             "dtype='category')",
         ),
         (
+            cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[ns]")),
+            "DatetimeIndex([1970-01-01 00:00:00.000000010, "
+            "1970-01-01 00:00:00.000000020,"
+            "\n       1970-01-01 00:00:00.000000030, <NA>],\n      "
+            "dtype='datetime64[ns]')",
+        ),
+        (
+            cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[s]")),
+            "DatetimeIndex([1970-01-01 00:00:10, "
+            "1970-01-01 00:00:20, 1970-01-01 00:00:30,\n"
+            "       <NA>],\n      dtype='datetime64[s]')",
+        ),
+        (
+            cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[us]")),
+            "DatetimeIndex([1970-01-01 00:00:00.000010, "
+            "1970-01-01 00:00:00.000020,\n       "
+            "1970-01-01 00:00:00.000030, <NA>],\n      "
+            "dtype='datetime64[us]')",
+        ),
+        (
             cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[ms]")),
-            "DatetimeIndex([1970-01-01 00:00:00.010000, "
-            "1970-01-01 00:00:00.020000,"
-            "\n       1970-01-01 00:00:00.030000, <NA>],\n      "
+            "DatetimeIndex([1970-01-01 00:00:00.010, "
+            "1970-01-01 00:00:00.020,\n       "
+            "1970-01-01 00:00:00.030, <NA>],\n      "
             "dtype='datetime64[ms]')",
         ),
         (
@@ -342,7 +362,7 @@ def test_generic_index_null(index, expected_repr):
         (
             pd.DataFrame(
                 {"aa": [None, 2, 3]},
-                index=np.array([1, None, None], dtype="datetime64[s]"),
+                index=np.array([100, None, None], dtype="datetime64[ns]"),
             ),
             False,
         ),

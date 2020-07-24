@@ -2010,12 +2010,7 @@ class DatetimeIndex(GenericIndex):
         the type-cast operation.
         """
         if self._values.has_nulls:
-            return cudf.Index(
-                column.as_column(
-                    self.to_pandas().fillna("<NA>").astype("str")
-                ),
-                name=self.name,
-            )
+            return self.astype("str").fillna("<NA>")
         else:
             return self
 

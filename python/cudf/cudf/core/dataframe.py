@@ -41,7 +41,6 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     is_categorical_dtype,
-    is_datetime_dtype,
     is_list_like,
     is_scalar,
     is_string_dtype,
@@ -1166,16 +1165,8 @@ class DataFrame(Frame, Serializable):
         purposeses.
         """
         for col in df._data:
-            if self._data[col].has_nulls and not is_datetime_dtype(
-                df._data[col].dtype
-            ):
+            if self._data[col].has_nulls:
                 df[col] = df._data[col].astype("str").fillna("<NA>")
-            elif self._data[col].has_nulls and is_datetime_dtype(
-                df._data[col].dtype
-            ):
-                df[col] = column.as_column(
-                    df[col].to_pandas().astype("str").replace("NaT", "<NA>")
-                )
             else:
                 df[col] = df._data[col]
 

@@ -37,7 +37,6 @@ from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
-    is_datetime_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
@@ -985,7 +984,6 @@ class Series(Frame, Serializable):
             and not isinstance(
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
-            and not is_datetime_dtype(preprocess.dtype)
             and not is_list_dtype(preprocess.dtype)
         ):
             output = (
@@ -1008,8 +1006,6 @@ class Series(Frame, Serializable):
                 length=show_dimensions,
                 na_rep="<NA>",
             )
-        elif is_datetime_dtype(preprocess.dtype):
-            output = preprocess.to_pandas().fillna("<NA>").__repr__()
         else:
             output = preprocess.to_pandas().__repr__()
 
