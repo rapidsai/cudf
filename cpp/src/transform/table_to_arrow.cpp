@@ -15,9 +15,11 @@
  */
 
 #include <cudf/types.hpp>
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/null_mask.hpp>
@@ -74,10 +76,19 @@ struct dispatch_to_arrow {
 
     template <typename T>
     std::enable_if_t<is_compound<T>(), std::shared_ptr<arrow::Array>>
-    operator()(column_view input_view,
+    operator()(column_view input,
                cudf::type_id id,
                arrow::MemoryPool* ar_mr) {
         
+        std::unique_ptr<column> tmp_column = nullptr;
+        std::cout<<"RGSL : Before creating the table"<<std::endl;
+        if ((input.offset() != 0) or (std::is_same<T, cudf::dictionary32>::value and input.child(0).size() != input.size()) or (!std::is_same<T, cudf::dictionary32>::value and (input.child(0).size()-1 != input.size()))){
+            tmp_column = std::make_unique<cudf::column>(input);
+            std::cout<<"RGSL : Creating column from dict view"<<std::endl;
+        }
+        
+        column_view input_view = (tmp_column != nullptr)? tmp_column->view(): input;
+
         auto mask_buffer = fetch_mask_buffer(input_view, ar_mr);
         std::vector<std::shared_ptr<arrow::Array>> child_arrays;
 
@@ -86,18 +97,28 @@ struct dispatch_to_arrow {
             child_arrays.emplace_back(type_dispatcher(c.type(), dispatch_to_arrow{}, c, c.type().id(), ar_mr));
         }
 
+        std::cout<<"RGSL : Created array from chiildren "<<child_arrays.size()<<std::endl;
         if (std::is_same<T, cudf::string_view>::value) {
+             if (child_arrays.size() == 0) {
+                 return std::make_shared<arrow::StringArray>(0, nullptr, nullptr);
+             }
              auto offset_buffer = child_arrays[0]->data()->buffers[1];
              auto data_buffer = child_arrays[1]->data()->buffers[1];
+        std::cout<<"RGSL : String array creation chiildren"<<std::endl;
              //return to_arrow_array(id, static_cast<int64_t>(input_view.size()), offset_buffer, data_buffer, mask_buffer, static_cast<int64_t>(input_view.null_count()));
              return std::make_shared<arrow::StringArray>(static_cast<int64_t>(input_view.size()), offset_buffer, data_buffer, mask_buffer, static_cast<int64_t>(input_view.null_count()));
         } else if (std::is_same<T, cudf::dictionary32>::value){
             // Update indices with bit mask buffer
+            std::cout<<"RGSL : index value is"<<cudf::detail::get_value<int32_t>(input.child(0), 2, 0)<<std::endl;
+            std::cout<<"RGSL : index value is"<<cudf::detail::get_value<int32_t>(input_view.child(0), 1, 0)<<std::endl;
+            std::cout<<"RGSL : Index dict type is "<<child_arrays[0]->type()->id()<<std::endl;
             auto indices = to_arrow_array(type_id::INT32, static_cast<int64_t>(input_view.size()), child_arrays[0]->data()->buffers[1], mask_buffer, static_cast<int64_t>(input_view.null_count()));
+            arrow::PrettyPrint(*indices, arrow::PrettyPrintOptions{}, &std::cout);
             auto dictionary = child_arrays[1];
             return std::make_shared<arrow::DictionaryArray>(arrow::dictionary(indices->type(), dictionary->type()), indices, dictionary);
         } else {
             auto offset_buffer = child_arrays[0]->data()->buffers[1];
+            std::cout<<"RGSL : offset_buffer type "<<child_arrays[0]->type()->id()<<std::endl;
             auto data = child_arrays[1];
             return std::make_shared<arrow::ListArray>(arrow::list(data->type()), static_cast<int64_t>(input_view.size()), offset_buffer, data, mask_buffer, static_cast<int64_t>(input_view.null_count()));
         }
