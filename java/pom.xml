@@ -105,7 +105,7 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>1.7.9</version>
+            <version>1.7.30</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
@@ -123,7 +123,7 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
-            <version>1.7.9</version>
+            <version>1.7.30</version>
             <scope>test</scope>
         </dependency>
         <dependency>
