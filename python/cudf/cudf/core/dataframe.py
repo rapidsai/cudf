@@ -374,7 +374,7 @@ class DataFrame(Frame, Serializable):
                     self._data[col_name] = column.column_empty(
                         row_count=len(self), dtype=None, masked=True
                     )
-            self._data = self._data.get_by_label(columns)
+            self._data = self._data.select_by_label(columns)
 
     def _init_from_list_like(self, data, index=None, columns=None):
         if index is None:
@@ -840,6 +840,7 @@ class DataFrame(Frame, Serializable):
         sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
         if index:
             ind.append("Index")
+            ind = cudf.Index(ind, dtype="str")
             sizes.append(self.index.memory_usage(deep=deep))
         return Series(sizes, index=ind)
 
@@ -5140,7 +5141,7 @@ class DataFrame(Frame, Serializable):
         if columns is not None:
             data = dict(zip(columns, cols))
         else:
-            data = dict(zip(range(len(cols)), cols))
+            data = dict(enumerate(cols))
 
         return cls(data=data, index=index,)
 

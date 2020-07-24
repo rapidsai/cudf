@@ -856,7 +856,7 @@ class Index(Frame, Serializable):
         # in case of MultiIndex
         if isinstance(lhs, cudf.MultiIndex):
             if level is not None and isinstance(level, int):
-                on = lhs._data.get_by_index(level).names[0]
+                on = lhs._data.select_by_index(level).names[0]
             right_names = (on,) or right_names
             on = right_names[0]
             if how == "outer":
@@ -1431,9 +1431,6 @@ class RangeIndex(Index):
 
     @property
     def size(self):
-        """
-        Return the number of elements in the underlying data.
-        """
         return max(0, self._stop - self._start)
 
     def find_label_range(self, first, last):
@@ -1616,13 +1613,6 @@ class GenericIndex(Index):
 
     def __len__(self):
         return len(self._values)
-
-    @property
-    def size(self):
-        """
-        Return the number of elements in the underlying data.
-        """
-        return len(self)
 
     def __repr__(self):
         from pandas._config import get_option

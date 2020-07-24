@@ -1,8 +1,8 @@
 import pandas as pd
 import pytest
-from pandas.util.testing import assert_series_equal
 
 import cudf
+from cudf.tests.utils import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -55,7 +55,7 @@ def test_fill(data, fill_value, begin, end, inplace):
 
     ps[begin:end] = fill_value
 
-    assert_series_equal(ps, actual.to_pandas())
+    assert_eq(ps, actual)
 
 
 @pytest.mark.xfail(raises=ValueError)
