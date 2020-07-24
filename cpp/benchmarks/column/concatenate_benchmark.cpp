@@ -73,7 +73,7 @@ static void BM_concatenate(benchmark::State& state)
   BENCHMARK_TEMPLATE_DEFINE_F(Concatenate, name, type, nullable)          \
   (::benchmark::State & state) { BM_concatenate<type, nullable>(state); } \
   BENCHMARK_REGISTER_F(Concatenate, name)                                 \
-    ->RangeMultiplier(4)                                                  \
+    ->RangeMultiplier(8)                                                  \
     ->Ranges({{1 << 6, 1 << 18}, {2, 1024}})                              \
     ->Unit(benchmark::kMillisecond)                                       \
     ->UseManualTime();
@@ -135,7 +135,7 @@ static void BM_concatenate_tables(benchmark::State& state)
   BENCHMARK_TEMPLATE_DEFINE_F(Concatenate, name, type, nullable)                 \
   (::benchmark::State & state) { BM_concatenate_tables<type, nullable>(state); } \
   BENCHMARK_REGISTER_F(Concatenate, name)                                        \
-    ->RangeMultiplier(4)                                                         \
+    ->RangeMultiplier(8)                                                         \
     ->Ranges({{1 << 8, 1 << 12}, {2, 32}, {2, 128}})                             \
     ->Unit(benchmark::kMillisecond)                                              \
     ->UseManualTime();
@@ -196,7 +196,7 @@ static void BM_concatenate_strings(benchmark::State& state)
   BENCHMARK_TEMPLATE_DEFINE_F(ConcatenateStrings, name, nullable)           \
   (::benchmark::State & state) { BM_concatenate_strings<nullable>(state); } \
   BENCHMARK_REGISTER_F(ConcatenateStrings, name)                            \
-    ->RangeMultiplier(4)                                                    \
+    ->RangeMultiplier(8)                                                    \
     ->Ranges({{1 << 8, 1 << 14}, {8, 128}, {2, 256}})                       \
     ->Unit(benchmark::kMillisecond)                                         \
     ->UseManualTime();

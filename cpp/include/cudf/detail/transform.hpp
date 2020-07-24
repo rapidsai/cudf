@@ -56,7 +56,6 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
-
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<std::string> const& column_names = {},
                                        arrow::MemoryPool* ar_mr = arrow::default_memory_pool(),
@@ -148,6 +147,16 @@ data_type arrow_to_cudf_type(arrow::Type::type arrow_type){
     }
 }
 #endif
+
+/**
+ * @copydoc cudf::encode
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ **/
+std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
+  cudf::column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 }  // namespace detail
 }  // namespace cudf

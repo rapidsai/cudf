@@ -125,15 +125,6 @@ TEST_F(CUDFToArrowTest, NestedList){
     ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, false), true);
 }
 
-TEST_F(CUDFToArrowTest, DictSliceIssue){
-    auto col = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
-    auto dict_column = cudf::dictionary::encode(col);
-    auto out = cudf::detail::slice(dict_column->view(), 1, 4);
-
-    cudf::test::print(cudf::column(out).view());
-
-}
-
 struct CUDFToArrowTestSlice : public CUDFToArrowTest,
                               public ::testing::WithParamInterface<
                                   std::tuple<cudf::size_type, cudf::size_type>> {
@@ -158,4 +149,4 @@ TEST_P(CUDFToArrowTestSlice, SliceTest){
 INSTANTIATE_TEST_CASE_P(
   CUDFToArrowTest,
   CUDFToArrowTestSlice,
-  ::testing::Values(std::make_tuple(1, 4), std::make_tuple(0, 0), std::make_tuple(0, 2), std::make_tuple(4, 4)));
+  ::testing::Values(std::make_tuple(0, 0), std::make_tuple(0, 2), std::make_tuple(4, 4)));

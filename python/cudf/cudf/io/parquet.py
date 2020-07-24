@@ -52,12 +52,14 @@ def write_to_dataset(
     For each combination of partition group and value,
     subdirectories are created as follows:
 
-    root_dir/
-      group=value1
-        <uuid>.parquet
-      ...
-      group=valueN
-        <uuid>.parquet
+    .. code-block:: bash
+
+        root_dir/
+            group=value1
+                <uuid>.parquet
+            ...
+            group=valueN
+                <uuid>.parquet
 
     Parameters
     ----------

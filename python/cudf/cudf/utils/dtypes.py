@@ -11,6 +11,7 @@ from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
 
+_NA_REP = "<NA>"
 _np_pa_dtypes = {
     np.float64: pa.float64(),
     np.float32: pa.float32(),

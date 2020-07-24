@@ -15,6 +15,7 @@
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5397 Add internal implementation of nested loop equijoins.
 - PR #5303 Add slice_strings functionality using delimiter string
+- PR #5394 Enable cast and binops with duration types (builds on PR 5359)
 - PR #5301 Add Java bindings for `zfill`
 - PR #5411 Enable metadata collection for chunked parquet writer
 - PR #5359 Add duration types
@@ -39,6 +40,7 @@
 - PR #5654 Adding support for `cudf.DataFrame.sample` and `cudf.Series.sample`
 - PR #5607 Add Java bindings for duration types
 - PR #5612 Add `is_hex` strings API
+- PR #5659 Added support for rapids-compose for Java bindings and other enhancements
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
 - PR #5674 Support JIT backend on PowerPC64
@@ -46,6 +48,7 @@
 - PR #5658 Add `filter_tokens` nvtext API
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
+- PR #5572 Add `cudf::encode` API.
 
 ## Improvements
 
@@ -123,9 +126,19 @@
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
+- PR #5419 Support rolling, groupby_rolling for durations 
+- PR #5687 Change strings::split_record to return a lists column
 - PR #5708 Add support for `dummy_na` in `get_dummies`
 - PR #5709 Update java build to help cu-spacial with java bindings
 - PR #5713 Remove old NVTX utilities
+- PR #5726 Replace use of `assert_frame_equal` in tests with `assert_eq`
+- PR #5720 Replace owning raw pointers with std::unique_ptr
+- PR #5702 Add inherited methods to python docs and other docs fixes
+- PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
+- PR #5743 Reduce number of test cases in concatenate benchmark
+- PR #5756 Switch JNI code to use the RMM owning wrapper
+- PR #5725 Integrate Gbenchmarks into CI
+- PR #5752 Add cuDF internals documentation (ColumnAccessor)
 
 ## Bug Fixes
 
@@ -166,6 +179,7 @@
 - PR #5489 Fix drop_nulls/boolean_mask corruption for large columns
 - PR #5504 Remove some java assertions that are not needed
 - PR #5516 Update gpuCI image in local build script
+- PR #5529 Fix issue with negative timestamp in orc writer
 - PR #5523 Handle `dtype` of `Buffer` objects when not passed explicitly
 - PR #5534 Fix the java build around type_id
 - PR #5564 Fix CudfEngine.read_metadata API in dask_cudf
@@ -185,9 +199,18 @@
 - PR #5656 Fix issue with incorrect docker image being used in local build script
 - PR #5671 Fix chunksize issue with `DataFrame.to_csv`
 - PR #5672 Fix crash in parquet writer while writing large string data
+- PR #5675 Allow lists_column_wrappers to be constructed from incomplete hierarchies.
+- PR #5691 Raise error on incompatible mixed-type input for a column
 - PR #5692 Fix compilation issue with gcc 7.4.0 and CUDA 10.1
 - PR #5693 Add fix missing from PR 5656 to update local docker image to py3.7
 - PR #5703 Small fix for dataframe constructor with cuda array interface objects that don't have `descr` field
+- PR #5727 Fix `Index.__repr__` to allow representation of null values
+- PR #5719 Fix Frame._concat() with categorical columns
+- PR #5736 Disable unsigned type in ORC writer benchmarks
+- PR #5745 Update JNI cast for inability to cast timestamp and integer types
+- PR #5750 Add RMM_ROOT/include to the spdlog search path in JNI build
+- PR #5763 Update Java slf4j version to match Spark 3.0
+
 
 # cuDF 0.14.0 (03 Jun 2020)
 
