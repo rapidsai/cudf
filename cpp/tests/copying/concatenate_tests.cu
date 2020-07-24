@@ -324,9 +324,10 @@ TEST_F(ListsColumnTest, ConcatenateLists)
 
 TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 {
-  // to disambiguiate between {} == 0 and {} == List{0}
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<int>;
-
   {
     cudf::test::lists_column_wrapper<int> a{};
     cudf::test::lists_column_wrapper<int> b{4, 5, 6, 7};
@@ -437,7 +438,9 @@ TEST_F(ListsColumnTest, ConcatenateNestedLists)
 TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
 {
   using T = int;
-  // to disambiguiate between {} == 0 and {} == List{0}
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<T>;
 
   {
@@ -506,6 +509,39 @@ TEST_F(ListsColumnTest, ConcatenateNestedListsWithNulls)
                                                    {{{{8, 9, 10}, valids}, {11, 12}}, valids}};
 
     auto result = cudf::concatenate({a, b});
+
+    cudf::test::expect_columns_equal(*result, expected);
+  }
+}
+
+TEST_F(ListsColumnTest, ConcatenateIncompleteHierarchies)
+{
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  {
+    std::vector<bool> valids{false};
+    cudf::test::lists_column_wrapper<int> a{{{{LCW{}}}}};
+    cudf::test::lists_column_wrapper<int> b{{{LCW{}}}};
+    cudf::test::lists_column_wrapper<int> c{{LCW{}}};
+    auto result = cudf::concatenate({a, b, c});
+
+    cudf::test::lists_column_wrapper<int> expected{{{{LCW{}}}}, {{LCW{}}}, {LCW{}}};
+
+    cudf::test::expect_columns_equal(*result, expected);
+  }
+
+  {
+    std::vector<bool> valids{false};
+    cudf::test::lists_column_wrapper<int> a{{{{{LCW{}}}}, valids.begin()}};
+    cudf::test::lists_column_wrapper<int> b{{{LCW{}}}};
+    cudf::test::lists_column_wrapper<int> c{{LCW{}}};
+    auto result = cudf::concatenate({a, b, c});
+
+    cudf::test::lists_column_wrapper<int> expected{
+      {{{{LCW{}}}}, valids.begin()}, {{LCW{}}}, {LCW{}}};
 
     cudf::test::expect_columns_equal(*result, expected);
   }

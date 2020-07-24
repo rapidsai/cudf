@@ -288,7 +288,7 @@ def test_groupby_apply_grouped():
     expect = expect_grpby.apply(emulate)
     expect = expect.sort_values(["key1", "key2"])
 
-    pd.util.testing.assert_frame_equal(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("nelem", [100, 500])
