@@ -614,8 +614,9 @@ public class ColumnVectorTest extends CudfTestBase {
         case DURATION_NANOSECONDS:
           s = Scalar.durationFromLong(type, 21313);
           break;
-        case EMPTY:
-          continue;
+          case EMPTY:
+          case LIST:
+            continue;
         default:
           throw new IllegalArgumentException("Unexpected type: " + type);
         }
@@ -781,8 +782,9 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         }
         case EMPTY:
-          continue;
-        default:
+          case LIST:
+            continue;
+          default:
           throw new IllegalArgumentException("Unexpected type: " + type);
         }
 
@@ -806,7 +808,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalarNull() {
     final int rowCount = 4;
     for (DType type : DType.values()) {
-      if (type == DType.EMPTY) {
+      if (type == DType.EMPTY || type == DType.LIST) {
         continue;
       }
       try (Scalar s = Scalar.fromNull(type);
@@ -2439,7 +2441,39 @@ public class ColumnVectorTest extends CudfTestBase {
 //    res = new ColumnVector(res.getNativeView(), true);
     HostColumnVector hcv = res.copyToHost();
     System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
-    List<Integer> ret = hcv.getListParent(1, 0);
+    List<Integer> ret = hcv.getList(1);
+    System.out.println("KUHU ele =" + ret.get(0));
+    System.out.println("KUHU ele =" + ret.get(1));
+    System.out.println("KUHU ele =" + ret.get(2));
+    res.close();
+    hcv.close();
+  }
+
+  @Test
+  void testListCvDoubles() throws Exception {
+    List<Double> list = new ArrayList<>();
+    list.add(0.1);
+    list.add(1.2);
+    list.add(2.3);
+    list.add(3.4);
+    List<Double> list2 = new ArrayList<>();
+    list2.add(6.7);
+    list2.add(7.8);
+    list2.add(8.9);
+    list2.add(5.6);
+    List<Double> list3 = new ArrayList<>();
+    list3.add(0.1);
+    list3.add(7.8);
+    list3.add(3.4);
+    list3.add(4.5);
+    list3.add(2.3);
+
+    ColumnVector res = ColumnVector.fromLists(DType.FLOAT64, list, list2, list3);
+    //testing only need gather in jni
+//    res = new ColumnVector(res.getNativeView(), true);
+    HostColumnVector hcv = res.copyToHost();
+    System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
+    List<Double> ret = hcv.getList(1);
     System.out.println("KUHU ele =" + ret.get(0));
     System.out.println("KUHU ele =" + ret.get(1));
     System.out.println("KUHU ele =" + ret.get(2));
@@ -2473,13 +2507,47 @@ public class ColumnVectorTest extends CudfTestBase {
     mainList2.add(list4);
 
     ColumnVector res = ColumnVector.fromLists(DType.INT32, mainList, mainList2);
+    HostColumnVector hcv = res.copyToHost();
+    System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
+    try {
+      List<Integer> ret = hcv.getList(1);
+      System.out.println("KUHU ele =" + ret.get(0));
+      System.out.println("KUHU ele =" + ret.get(1));
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      res.close();
+      hcv.close();
+    }
+  }
+
+  @Test
+  void testListOfListsCvDoubles() {
+    List<Double> list = new ArrayList<>();
+    list.add(1.1);
+    list.add(2.2);
+    list.add(3.3);
+    List<Double> list2 = new ArrayList<>();
+    list2.add(4.4);
+    list2.add(5.5);
+    list2.add(6.6);
+    List<List<Double>> mainList = new ArrayList<>();
+    mainList.add(list);
+    mainList.add(list2);
+    List<Double> list3 = new ArrayList<>();
+    list3.add(10.1);
+    list3.add(20.2);
+    list3.add(30.3);
+    List<List<Double>> mainList2 = new ArrayList<>();
+    mainList2.add(list3);
+
+    ColumnVector res = ColumnVector.fromLists(DType.FLOAT64, mainList, mainList2);
 //    res = new ColumnVector(res.getNativeView(), true);
     HostColumnVector hcv = res.copyToHost();
     System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
     try {
-      List<Integer> ret = hcv.getListParent(0, 0);
+      List<Double> ret = hcv.getList(1);
       System.out.println("KUHU ele =" + ret.get(0));
-      System.out.println("KUHU ele =" + ret.get(1));
     } catch (Exception e) {
       e.printStackTrace();
     } finally {
@@ -2527,10 +2595,46 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector res2 = ColumnVector.fromLists(DType.INT32, list4, list5, list6);
          ColumnVector v = ColumnVector.concatenate(res1, res2);
          HostColumnVector hostColumnVector = v.copyToHost()) {
-      List<Integer> ret = hostColumnVector.getListParent(5, 0);
+      List<Integer> ret = hostColumnVector.getList(5);
       System.out.println("Guess we passed!"+ret.size() + " v size ="+v.getRowCount());
     } catch (Exception e) {
       e.printStackTrace();
     }
   }
+
+  //Fails- will be fixed in next commit
+//  @Test
+//  void testConcatListsOfLists() {
+//    List<Integer> list = new ArrayList<>();
+//    list.add(1);
+//    list.add(2);
+//    list.add(3);
+//    List<Integer> list2 = new ArrayList<>();
+//    list2.add(4);
+//    list2.add(5);
+//    list2.add(6);
+//    List<List<Integer>> mainList = new ArrayList<>();
+//    mainList.add(list);
+//    mainList.add(list2);
+//    List<Integer> list3 = new ArrayList<>();
+//    list3.add(10);
+//    list3.add(20);
+//    list3.add(30);
+//    List<Integer> list4 = new ArrayList<>();
+//    list4.add(40);
+//    list4.add(50);
+//    list4.add(60);
+//    List<List<Integer>> mainList2 = new ArrayList<>();
+//    mainList2.add(list3);
+//    mainList2.add(list4);
+//    try (ColumnVector res1 = ColumnVector.fromLists(DType.INT32, list, list2, list3);
+//         ColumnVector res2 = ColumnVector.fromLists(DType.INT32, list4);
+//         ColumnVector v = ColumnVector.concatenate(res1, res2);
+//         HostColumnVector hostColumnVector = v.copyToHost()) {
+//      List<Integer> ret = hostColumnVector.getList(0);
+//      System.out.println("Guess we passed!"+ret + " v size ="+v.getRowCount());
+//    } catch (Exception e) {
+//      e.printStackTrace();
+//    }
+//  }
 }

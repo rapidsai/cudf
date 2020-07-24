@@ -356,6 +356,9 @@ public final class HostColumnVector implements AutoCloseable {
   // DATA ACCESS
   /////////////////////////////////////////////////////////////////////////////
 
+  public List getList(long rowIndex) throws Exception {
+    return getListParent(rowIndex, 0);
+  }
   public List getListParent(long rowIndex, int level) throws IOException {
     // check if list is further nested
     if (level < offHeap.offsets.size() - 2) {
@@ -388,14 +391,37 @@ public final class HostColumnVector implements AutoCloseable {
       DataInputStream dataInputStream = new DataInputStream(bais);
       List<Integer> list = new ArrayList<>();
       System.out.println("KUHU ELEMENTS");
-      while (dataInputStream.available() > 0) {
-        list.add(dataInputStream.readInt());
-//        System.out.println(list.get(list.size()-1));
-      }
+      readToList(dataInputStream, list, baseType);
       System.out.println("retlist="+ list);
       return list;
     }
   }
+
+  private void readToList(DataInputStream dataInputStream, List list, DType baseType) throws IOException {
+    while (dataInputStream.available() > 0) {
+      switch (baseType) {
+        case INT32:
+          list.add(dataInputStream.readInt());
+          break;
+        case INT64: list.add(dataInputStream.readLong());
+          break;
+        case FLOAT32: list.add(dataInputStream.readFloat());
+          break;
+        case FLOAT64: list.add(dataInputStream.readDouble());
+          break;
+        case INT8: list.add(dataInputStream.readByte());
+          break;
+        case INT16: list.add(dataInputStream.readShort());
+          break;
+        case BOOL8: list.add(dataInputStream.readBoolean());
+          break;
+        case STRING: list.add(dataInputStream.readUTF()); //cross check for utf8 etc.
+          break;
+        default: throw new UnsupportedOperationException("Do not support " + baseType);
+      }
+    }
+  }
+
   /**
    * Check if the value at index is null or not.
    */
@@ -1320,10 +1346,7 @@ public final class HostColumnVector implements AutoCloseable {
         DataOutputStream dos = new DataOutputStream(bos);
         byte[] listBytes = null;
         try {
-          for (int i = 0; i < list.size(); i++) {
-            //TODO: make generic function for basetype
-            dos.writeInt((int) list.get(i));
-          }
+          writeLists(dos, list, baseType);
           dos.flush();
           listBytes = bos.toByteArray();
           ByteArrayInputStream bais = new ByteArrayInputStream(listBytes);
@@ -1382,6 +1405,33 @@ public final class HostColumnVector implements AutoCloseable {
         System.out.println("KUHU final data length=" + data.getLength());
       }
       return this;
+    }
+
+    private void writeLists(DataOutputStream dos, List list, DType baseType) throws IOException {
+      for (int i = 0; i < list.size(); i++) {
+        //TODO: make generic function for basetype
+        switch (baseType) {
+          case INT32:
+            dos.writeInt((int) list.get(i));
+            break;
+          case INT64: dos.writeLong((long) list.get(i));
+            break;
+          case FLOAT32: dos.writeFloat((float) list.get(i));
+            break;
+          case FLOAT64: dos.writeDouble((double) list.get(i));
+            break;
+          case INT8: dos.writeByte((byte) list.get(i));
+            break;
+          case INT16: dos.writeShort((short) list.get(i));
+            break;
+          case BOOL8: dos.writeBoolean((boolean) list.get(i));
+            break;
+          case STRING: dos.writeChars((String) list.get(i)); //cross check for utf8 etc.
+            break;
+          default: throw new UnsupportedOperationException("Do not support " + baseType);
+        }
+      }
+      dos.flush();
     }
 
     public final Builder append(boolean value) {

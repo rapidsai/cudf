@@ -353,16 +353,16 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
         if (type != DType.LIST) {
           if (!valid.isEmpty() && valid.get(0) != null) {
             hostValidityBuffer = HostMemoryBuffer.allocate(valid.get(0).getLength());
-            hostValidityBuffer.copyFromDeviceBuffer((DeviceMemoryBuffer) valid.get(0));
+            hostValidityBuffer.copyFromDeviceBuffer((DeviceMemoryBufferView) valid.get(0));
           }
           if (!offsets.isEmpty() && offsets.get(0) != null) {
             hostOffsetsBuffer = HostMemoryBuffer.allocate(offsets.get(0).length);
-            hostOffsetsBuffer.copyFromDeviceBuffer((DeviceMemoryBuffer) offsets.get(0));
+            hostOffsetsBuffer.copyFromDeviceBuffer((DeviceMemoryBufferView) offsets.get(0));
           }
           // If a strings column is all null values there is no data buffer allocated
           if (data != null) {
             hostDataBuffer = HostMemoryBuffer.allocate(data.length);
-            hostDataBuffer.copyFromDeviceBuffer((DeviceMemoryBuffer) data);
+            hostDataBuffer.copyFromDeviceBuffer((DeviceMemoryBufferView) data);
           }
           HostColumnVector ret = new HostColumnVector(type, rows, nullCount,
               hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer);
