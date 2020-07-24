@@ -322,6 +322,7 @@ endif(PER_THREAD_DEFAULT_STREAM)
 
 if(BUILD_TESTS)
     include(CTest)
+    find_package(GTest)
     
     if(GTEST_ROOT)
         message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
@@ -354,7 +355,8 @@ message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 # - add google benchmark --------------------------------------------------------------------------
 
 if(BUILD_BENCHMARKS)
-
+    find_package(benchmark)
+    
     if(GBENCH_ROOT)
         message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${GBENCH_ROOT}")
         add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)

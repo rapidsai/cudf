@@ -27,9 +27,6 @@ requirements:
     - pyarrow 0.17.1.*
     - libcudf {{ version }}
     - rmm {{ minor_version }}.*
-    - gtest
-  host:
-    - gtest
   run:
     - python
     - pandas >=1.0,<1.1.0a0
