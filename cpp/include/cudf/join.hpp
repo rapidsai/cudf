@@ -397,7 +397,10 @@ class hash_join {
   /**
    * @brief Controls the location in the output of the columns from the `probe` table. 
    */
-  enum class probe_output_side { LEFT, RIGHT };
+  enum class probe_output_side { 
+     LEFT, ///< Columns from the probe table appear as the leftmost in the output table
+     RIGHT ///< Columns from the probe table appear as the rightmost in the output table 
+  };
 
   /**
    * @brief Performs an inner join by probing in the internal hash table.
