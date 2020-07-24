@@ -23,6 +23,9 @@ from cudf._lib.nvtext.replace import (
     filter_tokens as cpp_filter_tokens,
     replace_tokens as cpp_replace_tokens,
 )
+from cudf._lib.nvtext.stemmer import (
+    porter_stemmer_measure as cpp_porter_stemmer_measure,
+)
 from cudf._lib.nvtext.subword_tokenize import (
     subword_tokenize as cpp_subword_tokenize,
 )
@@ -4084,6 +4087,27 @@ class StringMethods(ColumnMethodsMixin):
             cupy.asarray(tokens),
             cupy.asarray(masks),
             cupy.asarray(metadata),
+        )
+
+    def porter_stemmer_measure(self, **kwargs):
+        """
+        Compute the Porter Stemmer measure for each string.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["hello", "super"])
+        >>> ser.str.porter_stemmer_measure()
+        0    1
+        1    2
+        dtype: int32
+        """
+        return self._return_or_inplace(
+            cpp_porter_stemmer_measure(self._column), **kwargs
         )
 
 
