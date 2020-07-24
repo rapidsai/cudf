@@ -212,7 +212,6 @@
 - PR #5766 Fix issue related to `iloc` and slicing a `DataFrame`
 
 
-
 # cuDF 0.14.0 (03 Jun 2020)
 
 ## New Features
