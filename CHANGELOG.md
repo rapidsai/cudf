@@ -137,6 +137,7 @@
 - PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
 - PR #5743 Reduce number of test cases in concatenate benchmark
 - PR #5748 Disable `tolist` API in `Series` & `Index` and add `tolist` dispatch in `dask-cudf`
+- PR #5756 Switch JNI code to use the RMM owning wrapper
 - PR #5725 Integrate Gbenchmarks into CI
 - PR #5752 Add cuDF internals documentation (ColumnAccessor)
 
@@ -208,6 +209,7 @@
 - PR #5736 Disable unsigned type in ORC writer benchmarks
 - PR #5745 Update JNI cast for inability to cast timestamp and integer types
 - PR #5750 Add RMM_ROOT/include to the spdlog search path in JNI build
+- PR #5763 Update Java slf4j version to match Spark 3.0
 
 
 # cuDF 0.14.0 (03 Jun 2020)
