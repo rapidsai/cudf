@@ -545,11 +545,11 @@ class Frame(libcudf.table.Table):
         # it from materializing unnecessarily
         keep_index = True
         if self.index is not None and isinstance(self.index, RangeIndex):
-            keep_index = False
-            if len(self._data) == 0:
+            if self._num_columns == 0:
                 result = self._empty_like(keep_index)
                 result._index = self.index[start:stop]
                 return result
+            keep_index = False
 
         if start < 0:
             start = start + num_rows
