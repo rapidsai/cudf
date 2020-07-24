@@ -2602,39 +2602,40 @@ public class ColumnVectorTest extends CudfTestBase {
     }
   }
 
-  //Fails- will be fixed in next commit
-//  @Test
-//  void testConcatListsOfLists() {
-//    List<Integer> list = new ArrayList<>();
-//    list.add(1);
-//    list.add(2);
-//    list.add(3);
-//    List<Integer> list2 = new ArrayList<>();
-//    list2.add(4);
-//    list2.add(5);
-//    list2.add(6);
-//    List<List<Integer>> mainList = new ArrayList<>();
-//    mainList.add(list);
-//    mainList.add(list2);
-//    List<Integer> list3 = new ArrayList<>();
-//    list3.add(10);
-//    list3.add(20);
-//    list3.add(30);
-//    List<Integer> list4 = new ArrayList<>();
-//    list4.add(40);
-//    list4.add(50);
-//    list4.add(60);
-//    List<List<Integer>> mainList2 = new ArrayList<>();
-//    mainList2.add(list3);
-//    mainList2.add(list4);
-//    try (ColumnVector res1 = ColumnVector.fromLists(DType.INT32, list, list2, list3);
-//         ColumnVector res2 = ColumnVector.fromLists(DType.INT32, list4);
-//         ColumnVector v = ColumnVector.concatenate(res1, res2);
-//         HostColumnVector hostColumnVector = v.copyToHost()) {
-//      List<Integer> ret = hostColumnVector.getList(0);
-//      System.out.println("Guess we passed!"+ret + " v size ="+v.getRowCount());
-//    } catch (Exception e) {
-//      e.printStackTrace();
-//    }
-//  }
+
+  @Test
+  void testConcatListsOfLists() {
+    List<Integer> list = new ArrayList<>();
+    list.add(1);
+    list.add(2);
+    list.add(3);
+    List<Integer> list2 = new ArrayList<>();
+    list2.add(4);
+    list2.add(5);
+    list2.add(6);
+    List<List<Integer>> mainList = new ArrayList<>();
+    mainList.add(list);
+    mainList.add(list2);
+    List<Integer> list3 = new ArrayList<>();
+    list3.add(10);
+    list3.add(20);
+    list3.add(30);
+    List<Integer> list4 = new ArrayList<>();
+    list4.add(40);
+    list4.add(50);
+    list4.add(60);
+    List<List<Integer>> mainList2 = new ArrayList<>();
+    mainList2.add(list3);
+    mainList2.add(list4);
+    try (ColumnVector res1 = ColumnVector.fromLists(DType.INT32, mainList);
+         ColumnVector res2 = ColumnVector.fromLists(DType.INT32, mainList2);
+         ColumnVector v = ColumnVector.concatenate(res1, res2);
+         HostColumnVector hostColumnVector = v.copyToHost()) {
+      System.out.println("KUHU hcv type =" + hostColumnVector.getType() + "rows" + hostColumnVector.getRowCount());
+      List<Integer> ret = hostColumnVector.getList(1);
+      System.out.println("Guess we passed!"+ ret + " v size = "+v.getRowCount());
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
 }
