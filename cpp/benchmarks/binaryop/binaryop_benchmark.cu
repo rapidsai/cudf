@@ -93,8 +93,9 @@ static void BM_binaryop_transform(benchmark::State& state)
     }
   }
 
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0) * n_cols *
-                          sizeof(key_type));
+  // Use the number of bytes read from global memory
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0) *
+                          (tree_levels + 1) * sizeof(key_type));
 }
 
 #define BINARYOP_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns) \
