@@ -728,21 +728,26 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher_typed
 }
 
 // Operator dispatcher used for returning data_type-valued operations
-template <typename Functor, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher_data_type(
-  ast_operator op, Functor&& f, Ts&&... args)
+template <typename F, typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher_data_type(ast_operator op,
+                                                                           F&& f,
+                                                                           Ts&&... args)
 {
   // We capture the first argument's type in T0 so we can construct a "default" value of the correct
   // (matching) type.
   switch (op) {
     case ast_operator::ADD:
-      return f.template operator()<ast_operator::ADD>(std::forward<Ts>(args)...);
+      f.template operator()<ast_operator::ADD>(std::forward<Ts>(args)...);
+      break;
     case ast_operator::SUB:
-      return f.template operator()<ast_operator::SUB>(std::forward<Ts>(args)...);
+      f.template operator()<ast_operator::SUB>(std::forward<Ts>(args)...);
+      break;
     case ast_operator::MUL:
-      return f.template operator()<ast_operator::MUL>(std::forward<Ts>(args)...);
+      f.template operator()<ast_operator::MUL>(std::forward<Ts>(args)...);
+      break;
     case ast_operator::DIV:
-      return f.template operator()<ast_operator::DIV>(std::forward<Ts>(args)...);
+      f.template operator()<ast_operator::DIV>(std::forward<Ts>(args)...);
+      break;
     /*
     case ast_operator::TRUE_DIV:
       return f.template operator()<ast_operator::TRUE_DIV>(std::forward<T0>(arg0),
@@ -889,7 +894,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher_data_
       return f.template operator()<ast_operator::NOT>(std::forward<T0>(arg0),
                                                       std::forward<Ts>(args)...);
     */
-    default: return 0;  // TODO: Error handling?
+    default:
+      break;
+      // default: return 0;  // TODO: Error handling?
   }
 }
 
@@ -1282,42 +1289,25 @@ struct operator_functor<ast_operator::ADD> {
 };
 
 namespace detail {
-/*
-template <typename T1, typename T2>
-struct dispatch_operator {
-#pragma nv_exec_check_disable
-  template <ast_operator op, typename F, typename... Ts>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const
-  {
-    return f.template operator()<op, T1, T2>(std::forward<Ts>(args)...);
-  }
-};
-
-struct dispatch_operator_types {
-#pragma nv_exec_check_disable
-  template <typename T1, typename T2, typename F, typename... Ts>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(ast_operator op, F&& f, Ts&&... args) const
-  {
-    return ast_operator_dispatcher_typed(
-      op, detail::dispatch_operator<T1, T2>{}, std::forward<F>(f), std::forward<Ts>(args)...);
-  }
-};
-*/
 
 template <typename OperatorFunctor>
 struct dispatch_operator_functor_types {
   template <typename LHS,
             typename RHS,
+            typename F,
+            typename... Ts,
             std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(LHS lhs, RHS rhs)
+  CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
   {
-    return OperatorFunctor{}(lhs, rhs);
+    f.template operator()<OperatorFunctor, LHS, RHS>(std::forward<Ts>(args)...);
   }
 
   template <typename LHS,
             typename RHS,
+            typename F,
+            typename... Ts,
             std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(LHS lhs, RHS rhs)
+  CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation.");
@@ -1330,33 +1320,23 @@ struct dispatch_operator_functor_types {
     // Need to find out what the return type is in order to have a default
     // return value and solve the compiler warning for lack of a default
     // return
-    return 0;
+    // return 0;
 #endif
   }
 };
 
 struct dispatch_op {
-  template <ast_operator op,
-            typename... Ts,
-            std::enable_if_t<is_valid_binary_op<operator_functor<op>, Ts...>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(cudf::data_type lhs_t,
-                                                      cudf::data_type rhs_t,
-                                                      Ts&&... args)
+  template <ast_operator op, typename F, typename... Ts>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type lhs_t,
+                                            cudf::data_type rhs_t,
+                                            F&& f,
+                                            Ts&&... args)
   {
-    return type_double_dispatcher(lhs_t,
-                                  rhs_t,
-                                  detail::dispatch_operator_functor_types<operator_functor<op>>{},
-                                  std::forward<Ts>(args)...);
-  }
-  template <ast_operator op,
-            typename... Ts,
-            std::enable_if_t<!is_valid_binary_op<operator_functor<op>, Ts...>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(cudf::data_type lhs_t,
-                                                      cudf::data_type rhs_t,
-                                                      Ts&&... args)
-  {
-    // TODO: Error
-    return 0;
+    type_double_dispatcher(lhs_t,
+                           rhs_t,
+                           detail::dispatch_operator_functor_types<operator_functor<op>>{},
+                           std::forward<F>(f),
+                           std::forward<Ts>(args)...);
   }
 };
 
@@ -1375,22 +1355,12 @@ struct dispatch_op {
  * @param args Parameter pack forwarded to the `operator()` invocation `F`.
  */
 #pragma nv_exec_check_disable
-template <typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) ast_operator_dispatcher(ast_operator op,
-                                                                           cudf::data_type lhs_t,
-                                                                           cudf::data_type rhs_t,
-                                                                           Ts&&... args)
+template <typename F, typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(
+  ast_operator op, cudf::data_type lhs_t, cudf::data_type rhs_t, F&& f, Ts&&... args)
 {
-  return ast_operator_dispatcher_data_type(
-    op, detail::dispatch_op{}, lhs_t, rhs_t, std::forward<Ts>(args)...);
-  /*
-  return type_double_dispatcher(lhs_t,
-                                rhs_t,
-                                detail::dispatch_operator_types{},
-                                op,
-                                std::forward<F>(f),
-                                std::forward<Ts>(args)...);
-                                */
+  ast_operator_dispatcher_data_type(
+    op, detail::dispatch_op{}, lhs_t, rhs_t, std::forward<F>(f), std::forward<Ts>(args)...);
 }
 
 }  // namespace ast

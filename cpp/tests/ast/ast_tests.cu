@@ -22,20 +22,41 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 
+#include <simt/type_traits>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <type_traits>
-#include "cudf/types.hpp"
-#include "cudf/wrappers/timestamps.hpp"
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
 struct ASTTest : public cudf::test::BaseFixture {
+};
+
+struct test_functor {
+  template <typename OperatorFunctor,
+            typename LHS,
+            typename RHS,
+            typename Out = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>,
+            std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(int* result)
+  {
+    *result = 42;
+  }
+
+  template <typename OperatorFunctor,
+            typename LHS,
+            typename RHS,
+            typename Out                                                                 = void,
+            std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(int* result)
+  {
+  }
 };
 
 TEST_F(ASTTest, BasicASTEvaluation)
@@ -101,21 +122,17 @@ TEST_F(ASTTest, BasicASTEvaluation)
   cudf::test::expect_columns_equal(expect_tree_2, result_tree_2->view(), true);
 
   static_assert(
-    cudf::ast::
-      is_valid_binary_op<cudf::ast::operator_functor<cudf::ast::ast_operator::ADD>, float, int>,
-    "Same int");
-  static_assert(
-    cudf::ast::
-      is_valid_binary_op<cudf::ast::operator_functor<cudf::ast::ast_operator::ADD>, int, int>,
-    "This should be true");
-  cudf::timestamp_D a = 32;
-  float b             = 12;
-  auto thing          = cudf::ast::ast_operator_dispatcher(cudf::ast::ast_operator::ADD,
-                                                  cudf::data_type(cudf::type_id::TIMESTAMP_DAYS),
-                                                  cudf::data_type(cudf::type_id::FLOAT32),
-                                                  a,
-                                                  b);
-  EXPECT_EQ(thing, 44);
+    cudf::ast::is_valid_binary_op<cudf::ast::operator_functor<cudf::ast::ast_operator::ADD>,
+                                  cudf::duration_ns,
+                                  cudf::duration_ns>,
+    "Valid");
+  int result = 0;
+  cudf::ast::ast_operator_dispatcher(cudf::ast::ast_operator::ADD,
+                                     cudf::data_type(cudf::type_id::INT32),
+                                     cudf::data_type(cudf::type_id::INT32),
+                                     test_functor{},
+                                     &result);
+  EXPECT_EQ(result, 42);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
