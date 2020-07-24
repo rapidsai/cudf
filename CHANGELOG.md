@@ -137,6 +137,8 @@
 - PR #5702 Add inherited methods to python docs and other docs fixes
 - PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
 - PR #5743 Reduce number of test cases in concatenate benchmark
+- PR #5725 Integrate Gbenchmarks into CI
+- PR #5752 Add cuDF internals documentation (ColumnAccessor)
 
 ## Bug Fixes
 
