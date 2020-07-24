@@ -395,7 +395,7 @@ class hash_join {
   hash_join(cudf::table_view const& build, std::vector<size_type> const& build_on);
 
   /**
-   * @brief Side of the probe table in the joined table. Only applicable for inner join.
+   * @brief Controls the location in the output of the columns from the `probe` table. 
    */
   enum class probe_output_side { LEFT, RIGHT };
 
