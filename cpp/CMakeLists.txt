@@ -365,7 +365,8 @@ if(BUILD_BENCHMARKS)
         set(GBENCH_ROOT "${CMAKE_BINARY_DIR}/googlebenchmark")
     endif(GBENCH_ROOT)
 
-    link_directories(${GBENCH_ROOT}/lib/)
+    set(GBENCH_INCLUDE_DIR "${GBENCH_ROOT}/install/include")
+    set(GBENCH_LIBRARY_DIR "${GBENCH_ROOT}/install/lib" "${GBENCH_ROOT}/install/lib64")
     include_directories(${GBENCH_INCLUDE_DIR})
 
     message(STATUS "GBENCH_ROOT: " ${GBENCH_ROOT})
