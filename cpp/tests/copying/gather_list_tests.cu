@@ -73,7 +73,10 @@ TYPED_TEST(GatherTestList, GatherNulls)
 
 TYPED_TEST(GatherTestList, GatherNested)
 {
-  using T   = TypeParam;
+  using T = TypeParam;
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<T>;
 
   // List<List<T>>
@@ -118,7 +121,10 @@ TYPED_TEST(GatherTestList, GatherNested)
 
 TYPED_TEST(GatherTestList, GatherNestedForceRecycle)
 {
-  using T   = TypeParam;
+  using T = TypeParam;
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<T>;
 
   // these cases force the temporary memory-recycling behavior internal
@@ -175,7 +181,10 @@ TYPED_TEST(GatherTestList, GatherNestedForceRecycle)
 
 TYPED_TEST(GatherTestList, GatherOutOfOrder)
 {
-  using T   = TypeParam;
+  using T = TypeParam;
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<T>;
 
   // List<List<T>>
@@ -198,7 +207,10 @@ TYPED_TEST(GatherTestList, GatherOutOfOrder)
 
 TYPED_TEST(GatherTestList, GatherNestedNulls)
 {
-  using T   = TypeParam;
+  using T = TypeParam;
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<T>;
 
   auto valids = cudf::test::make_counting_transform_iterator(
@@ -252,7 +264,10 @@ TYPED_TEST(GatherTestList, GatherNestedNulls)
 
 TYPED_TEST(GatherTestList, GatherNestedWithEmpties)
 {
-  using T   = TypeParam;
+  using T = TypeParam;
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<T>;
 
   cudf::test::lists_column_wrapper<T> list{
@@ -269,7 +284,10 @@ TYPED_TEST(GatherTestList, GatherNestedWithEmpties)
 
 TYPED_TEST(GatherTestList, GatherDetailInvalidIndex)
 {
-  using T   = TypeParam;
+  using T = TypeParam;
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<T>;
 
   // List<List<T>>

@@ -28,6 +28,16 @@ class Serializable(abc.ABC):
         pass
 
     def device_serialize(self):
+        """Converts the object into a header and list of Buffer/memoryview
+        objects for file storage or network transmission.
+
+        Returns
+        -------
+            header : dictionary containing any serializable metadata
+            frames : list of Buffer or memoryviews, commonly of length one
+
+        :meta private:
+        """
         header, frames = self.serialize()
         assert all(
             (type(f) in [cudf.core.buffer.Buffer, memoryview]) for f in frames
@@ -41,6 +51,23 @@ class Serializable(abc.ABC):
 
     @classmethod
     def device_deserialize(cls, header, frames):
+        """Convert serialized header and frames back
+        into respective Object Type
+
+        Parameters
+        ----------
+        cls : class of object
+        header : dict
+            dictionary containing any serializable metadata
+        frames : list of Buffer or memoryview objects
+
+        Returns
+        -------
+        Deserialized Object of type cls extracted
+        from frames and header
+
+        :meta private:
+        """
         typ = pickle.loads(header["type-serialized"])
         frames = [
             cudf.core.buffer.Buffer(f) if c else memoryview(f)
@@ -57,6 +84,16 @@ class Serializable(abc.ABC):
         return obj
 
     def host_serialize(self):
+        """Converts the object into a header and list of memoryview
+        objects for file storage or network transmission.
+
+        Returns
+        -------
+            header : dictionary containing any serializable metadata
+            frames : list of memoryviews, commonly of length one
+
+        :meta private:
+        """
         header, frames = self.device_serialize()
         frames = [
             f.to_host_array().data if c else memoryview(f)
@@ -66,6 +103,23 @@ class Serializable(abc.ABC):
 
     @classmethod
     def host_deserialize(cls, header, frames):
+        """Convert serialized header and frames back
+        into respective Object Type
+
+        Parameters
+        ----------
+        cls : class of object
+        header : dict
+            dictionary containing any serializable metadata
+        frames : list of memoryview objects
+
+        Returns
+        -------
+        Deserialized Object of type cls extracted
+        from frames and header
+
+        :meta private:
+        """
         frames = [
             rmm.DeviceBuffer.to_device(f) if c else f
             for c, f in zip(header["is-cuda"], map(memoryview, frames))

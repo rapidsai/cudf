@@ -13,24 +13,24 @@ def test_series_replace():
     a2 = np.array([5, 1, 2, 3, 4])
     sr1 = Series(a1)
     sr2 = sr1.replace(0, 5)
-    np.testing.assert_equal(sr2.to_array(), a2)
+    assert_eq(a2, sr2.to_array())
 
     # Categorical
     psr3 = pd.Series(["one", "two", "three"], dtype="category")
     psr4 = psr3.replace("one", "two")
     sr3 = Series.from_pandas(psr3)
     sr4 = sr3.replace("one", "two")
-    pd.testing.assert_series_equal(sr4.to_pandas(), psr4)
+    assert_eq(psr4, sr4)
 
     psr5 = psr3.replace("one", "five")
     sr5 = sr3.replace("one", "five")
 
-    pd.testing.assert_series_equal(sr5.to_pandas(), psr5)
+    assert_eq(psr5, sr5)
 
     # List input
     a6 = np.array([5, 6, 2, 3, 4])
     sr6 = sr1.replace([0, 1], [5, 6])
-    np.testing.assert_equal(sr6.to_array(), a6)
+    assert_eq(a6, sr6.to_array())
 
     with pytest.raises(TypeError):
         sr1.replace([0, 1], [5.5, 6.5])
@@ -38,7 +38,7 @@ def test_series_replace():
     # Series input
     a8 = np.array([5, 5, 5, 3, 4])
     sr8 = sr1.replace(sr1[:3], 5)
-    np.testing.assert_equal(sr8.to_array(), a8)
+    assert_eq(a8, sr8.to_array())
 
     # large input containing null
     sr9 = Series(list(range(400)) + [None])
@@ -68,12 +68,12 @@ def test_series_replace_with_nulls():
     a2 = np.array([-10, 1, 2, 3, 4])
     sr1 = Series(a1)
     sr2 = sr1.replace(0, None).fillna(-10)
-    np.testing.assert_equal(sr2.to_array(), a2)
+    assert_eq(a2, sr2.to_array())
 
     # List input
     a6 = np.array([-10, 6, 2, 3, 4])
     sr6 = sr1.replace([0, 1], [None, 6]).fillna(-10)
-    np.testing.assert_equal(sr6.to_array(), a6)
+    assert_eq(a6, sr6.to_array())
 
     sr1 = Series([0, 1, 2, 3, 4, None])
     with pytest.raises(TypeError):
@@ -82,11 +82,11 @@ def test_series_replace_with_nulls():
     # Series input
     a8 = np.array([-10, -10, -10, 3, 4, -10])
     sr8 = sr1.replace(sr1[:3], None).fillna(-10)
-    np.testing.assert_equal(sr8.to_array(), a8)
+    assert_eq(a8, sr8.to_array())
 
     a9 = np.array([-10, 6, 2, 3, 4, -10])
     sr9 = sr1.replace([0, 1], [None, 6]).fillna(-10)
-    np.testing.assert_equal(sr9.to_array(), a9)
+    assert_eq(a9, sr9.to_array())
 
 
 def test_dataframe_replace():
@@ -95,7 +95,7 @@ def test_dataframe_replace():
     gdf1 = DataFrame.from_pandas(pdf1)
     pdf2 = pdf1.replace(0, 4)
     gdf2 = gdf1.replace(0, 4)
-    pd.testing.assert_frame_equal(gdf2.to_pandas(), pdf2)
+    assert_eq(gdf2, pdf2)
 
     # categorical
     pdf4 = pd.DataFrame(
@@ -105,25 +105,25 @@ def test_dataframe_replace():
     gdf4 = DataFrame.from_pandas(pdf4)
     pdf5 = pdf4.replace("two", "three")
     gdf5 = gdf4.replace("two", "three")
-    pd.testing.assert_frame_equal(gdf5.to_pandas(), pdf5)
+    assert_eq(gdf5, pdf5)
 
     # list input
     pdf6 = pdf1.replace([0, 1], [4, 5])
     gdf6 = gdf1.replace([0, 1], [4, 5])
-    pd.testing.assert_frame_equal(gdf6.to_pandas(), pdf6)
+    assert_eq(gdf6, pdf6)
 
     pdf7 = pdf1.replace([0, 1], 4)
     gdf7 = gdf1.replace([0, 1], 4)
-    pd.testing.assert_frame_equal(gdf7.to_pandas(), pdf7)
+    assert_eq(gdf7, pdf7)
 
     # dict input:
     pdf8 = pdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
     gdf8 = gdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
-    pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
+    assert_eq(gdf8, pdf8)
 
     pdf9 = pdf1.replace({"a": 0}, {"a": 4})
     gdf9 = gdf1.replace({"a": 0}, {"a": 4})
-    pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf9)
+    assert_eq(gdf9, pdf9)
 
 
 def test_dataframe_replace_with_nulls():
@@ -132,25 +132,25 @@ def test_dataframe_replace_with_nulls():
     gdf1 = DataFrame.from_pandas(pdf1)
     pdf2 = pdf1.replace(0, 4)
     gdf2 = gdf1.replace(0, None).fillna(4)
-    pd.testing.assert_frame_equal(gdf2.to_pandas(), pdf2)
+    assert_eq(gdf2, pdf2)
 
     # list input
     pdf6 = pdf1.replace([0, 1], [4, 5])
     gdf6 = gdf1.replace([0, 1], [4, None]).fillna(5)
-    pd.testing.assert_frame_equal(gdf6.to_pandas(), pdf6)
+    assert_eq(gdf6, pdf6)
 
     pdf7 = pdf1.replace([0, 1], 4)
     gdf7 = gdf1.replace([0, 1], None).fillna(4)
-    pd.testing.assert_frame_equal(gdf7.to_pandas(), pdf7)
+    assert_eq(gdf7, pdf7)
 
     # dict input:
     pdf8 = pdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
     gdf8 = gdf1.replace({"a": 0, "b": 0}, {"a": None, "b": 5}).fillna(4)
-    pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
+    assert_eq(gdf8, pdf8)
 
     gdf1 = DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, None]})
     gdf9 = gdf1.replace([0, 1], [4, 5]).fillna(3)
-    pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf6)
+    assert_eq(gdf9, pdf6)
 
 
 def test_replace_strings():

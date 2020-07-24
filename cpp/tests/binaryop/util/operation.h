@@ -30,11 +30,20 @@ namespace operation {
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Add {
-  // Disallow sum of timestamps with any other type (including itself)
+  // Allow sum between chronos only when both input and output types
+  // are chronos. Unsupported combinations will fail to compile
   template <typename OutT                        = TypeOut,
-            typename std::enable_if<!cudf::is_timestamp_t<OutT>::value &&
-                                      !cudf::is_timestamp_t<TypeLhs>::value &&
-                                      !cudf::is_timestamp_t<TypeRhs>::value,
+            typename std::enable_if<cudf::is_chrono<OutT>() && cudf::is_chrono<TypeLhs>() &&
+                                      cudf::is_chrono<TypeRhs>(),
+                                    void>::type* = nullptr>
+  OutT operator()(TypeLhs lhs, TypeRhs rhs) const
+  {
+    return lhs + rhs;
+  }
+
+  template <typename OutT                        = TypeOut,
+            typename std::enable_if<!cudf::is_chrono<OutT>() || !cudf::is_chrono<TypeLhs>() ||
+                                      !cudf::is_chrono<TypeRhs>(),
                                     void>::type* = nullptr>
   OutT operator()(TypeLhs lhs, TypeRhs rhs) const
   {
@@ -45,11 +54,20 @@ struct Add {
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Sub {
-  // Disallow difference of timestamps with any other type (including itself)
+  // Allow difference between chronos only when both input and output types
+  // are chronos. Unsupported combinations will fail to compile
   template <typename OutT                        = TypeOut,
-            typename std::enable_if<!cudf::is_timestamp_t<OutT>::value &&
-                                      !cudf::is_timestamp_t<TypeLhs>::value &&
-                                      !cudf::is_timestamp_t<TypeRhs>::value,
+            typename std::enable_if<cudf::is_chrono<OutT>() && cudf::is_chrono<TypeLhs>() &&
+                                      cudf::is_chrono<TypeRhs>(),
+                                    void>::type* = nullptr>
+  OutT operator()(TypeLhs lhs, TypeRhs rhs) const
+  {
+    return lhs - rhs;
+  }
+
+  template <typename OutT                        = TypeOut,
+            typename std::enable_if<!cudf::is_chrono<OutT>() || !cudf::is_chrono<TypeLhs>() ||
+                                      !cudf::is_chrono<TypeRhs>(),
                                     void>::type* = nullptr>
   OutT operator()(TypeLhs lhs, TypeRhs rhs) const
   {
@@ -60,19 +78,60 @@ struct Sub {
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Mul {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  template <typename OutT                                                           = TypeOut,
+            typename std::enable_if<!cudf::is_duration_t<OutT>::value, void>::type* = nullptr>
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) const
   {
     using TypeCommon = typename std::common_type<TypeOut, TypeLhs, TypeRhs>::type;
     return static_cast<TypeOut>(static_cast<TypeCommon>(lhs) * static_cast<TypeCommon>(rhs));
+  }
+
+  template <typename OutT                                                          = TypeOut,
+            typename std::enable_if<cudf::is_duration_t<OutT>::value, void>::type* = nullptr>
+  TypeOut operator()(TypeLhs x, TypeRhs y) const
+  {
+    return DurationProduct<TypeOut>(x, y);
+  }
+
+  template <
+    typename OutT,
+    typename LhsT,
+    typename RhsT,
+    typename std::enable_if<(cudf::is_duration_t<LhsT>::value && std::is_integral<RhsT>::value) ||
+                              (cudf::is_duration_t<RhsT>::value && std::is_integral<LhsT>::value),
+                            void>::type* = nullptr>
+  OutT DurationProduct(LhsT x, RhsT y) const
+  {
+    return x * y;
   }
 };
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Div {
+  template <typename LhsT                                                           = TypeLhs,
+            typename std::enable_if<!cudf::is_duration_t<LhsT>::value, void>::type* = nullptr>
   TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
   {
     using TypeCommon = typename std::common_type<TypeOut, TypeLhs, TypeRhs>::type;
     return static_cast<TypeOut>(static_cast<TypeCommon>(lhs) / static_cast<TypeCommon>(rhs));
+  }
+
+  template <typename LhsT                                                          = TypeLhs,
+            typename std::enable_if<cudf::is_duration_t<LhsT>::value, void>::type* = nullptr>
+  TypeOut operator()(TypeLhs x, TypeRhs y) const
+  {
+    return DurationDivide<TypeOut>(x, y);
+  }
+
+  template <
+    typename OutT,
+    typename LhsT,
+    typename RhsT,
+    typename std::enable_if<(std::is_integral<RhsT>::value || cudf::is_duration_t<RhsT>::value),
+                            void>::type* = nullptr>
+  OutT DurationDivide(LhsT x, RhsT y) const
+  {
+    return x / y;
   }
 };
 
@@ -92,30 +151,48 @@ struct FloorDiv {
   }
 };
 
-template <typename TypeOut,
-          typename TypeLhs,
-          typename TypeRhs,
-          typename TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type>
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Mod {
-  TypeOut operator()(TypeLhs x, TypeRhs y)
+  template <
+    typename OutT = TypeOut,
+    typename LhsT = TypeLhs,
+    typename RhsT = TypeRhs,
+    std::enable_if_t<
+      (std::is_integral<typename std::common_type<OutT, LhsT, RhsT>::type>::value)>* = nullptr>
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
   {
-    return static_cast<TypeOut>(static_cast<TypeCommon>(x) % static_cast<TypeCommon>(y));
+    using TypeCommon = typename std::common_type<TypeOut, TypeLhs, TypeRhs>::type;
+    return static_cast<TypeOut>(static_cast<TypeCommon>(lhs) % static_cast<TypeCommon>(rhs));
   }
-};
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct Mod<TypeOut, TypeLhs, TypeRhs, float> {
-  TypeOut operator()(TypeLhs x, TypeRhs y)
+  template <typename OutT                                   = TypeOut,
+            typename LhsT                                   = TypeLhs,
+            typename RhsT                                   = TypeRhs,
+            std::enable_if_t<(std::is_same<typename std::common_type<OutT, LhsT, RhsT>::type,
+                                           float>::value)>* = nullptr>
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
   {
-    return static_cast<TypeOut>(fmod(static_cast<float>(x), static_cast<float>(y)));
+    return static_cast<TypeOut>(fmod(static_cast<float>(lhs), static_cast<float>(rhs)));
   }
-};
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct Mod<TypeOut, TypeLhs, TypeRhs, double> {
-  TypeOut operator()(TypeLhs x, TypeRhs y)
+  template <typename OutT                                    = TypeOut,
+            typename LhsT                                    = TypeLhs,
+            typename RhsT                                    = TypeRhs,
+            std::enable_if_t<(std::is_same<typename std::common_type<OutT, LhsT, RhsT>::type,
+                                           double>::value)>* = nullptr>
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
   {
-    return static_cast<TypeOut>(fmod(static_cast<double>(x), static_cast<double>(y)));
+    return static_cast<TypeOut>(fmod(static_cast<double>(lhs), static_cast<double>(rhs)));
+  }
+
+  // Mod with duration types - duration % (integral or a duration) = duration
+  template <typename LhsT                                                = TypeLhs,
+            typename OutT                                                = TypeOut,
+            typename std::enable_if_t<cudf::is_duration_t<LhsT>::value &&
+                                      cudf::is_duration_t<OutT>::value>* = nullptr>
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
+    return lhs % rhs;
   }
 };
 

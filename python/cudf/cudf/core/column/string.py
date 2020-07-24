@@ -679,8 +679,8 @@ class StringMethods(ColumnMethodsMixin):
 
         if can_convert_to_column(pat) and can_convert_to_column(repl):
             warnings.warn(
-                "`n` parameter is not supported when \
-                `pat` and `repl` are list-like inputs"
+                "`n` parameter is not supported when "
+                "`pat` and `repl` are list-like inputs"
             )
 
             return self._return_or_inplace(
@@ -960,7 +960,7 @@ class StringMethods(ColumnMethodsMixin):
         4     True
         5    False
         dtype: bool
-        >>> s = cudf.Series(["this is plain text", "\t\n", "9.9", "9.9.9"])
+        >>> s = cudf.Series(["this is plain text", "\\t\\n", "9.9", "9.9.9"])
         >>> s.str.isfloat()
         0    False
         1    False
@@ -1941,7 +1941,8 @@ class StringMethods(ColumnMethodsMixin):
         Examples
         --------
         >>> import cudf
-        >>> data = ["this is a regular sentence", "https://docs.python.org/index.html", None]       # noqa E501
+        >>> data = ["this is a regular sentence",
+        ...     "https://docs.python.org/index.html", None]
         >>> s = cudf.Series(data)
         >>> s
         0            this is a regular sentence
@@ -2029,6 +2030,7 @@ class StringMethods(ColumnMethodsMixin):
         `NotImplementedError` if anything other than the default value is
         set. The handling of the n keyword depends on the number of
         found splits:
+
             - If found splits > n, make first n splits only
             - If found splits <= n, make all splits
             - If for a certain row the number of found splits < n,
@@ -2037,7 +2039,9 @@ class StringMethods(ColumnMethodsMixin):
         Examples
         --------
         >>> import cudf
-        >>> data = ["this is a regular sentence","https://docs.python.org/3/tutorial/index.html",None]      # noqa E501
+        >>> data = ["this is a regular sentence",
+        ... "https://docs.python.org/3/tutorial/index.html",
+        ... None]
         >>> s = cudf.Series(data)
         >>> s.str.rsplit(n=2)
                                                        0        1         2
@@ -2816,8 +2820,8 @@ class StringMethods(ColumnMethodsMixin):
             )
         elif break_long_words is None:
             warnings.warn(
-                "wrap current implementation defaults to \
-                    `break_long_words`=False"
+                "wrap current implementation defaults to "
+                "`break_long_words`=False"
             )
 
         break_on_hyphens = kwargs.get("break_on_hyphens", None)
@@ -2827,8 +2831,8 @@ class StringMethods(ColumnMethodsMixin):
             )
         elif break_on_hyphens is None:
             warnings.warn(
-                "wrap current implementation defaults to \
-                    `break_on_hyphens`=False"
+                "wrap current implementation defaults to "
+                "`break_on_hyphens`=False"
             )
 
         return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
@@ -3087,8 +3091,8 @@ class StringMethods(ColumnMethodsMixin):
         """
         if "na" in kwargs:
             warnings.warn(
-                "`na` parameter is not yet supported, \
-                as cudf uses native strings instead of Python objects"
+                "`na` parameter is not yet supported, "
+                "as cudf uses native strings instead of Python objects"
             )
 
         if pat is None:
@@ -3152,8 +3156,8 @@ class StringMethods(ColumnMethodsMixin):
         """
         if "na" in kwargs:
             warnings.warn(
-                "`na` parameter is not yet supported, \
-                as cudf uses native strings instead of Python objects"
+                "`na` parameter is not yet supported, "
+                "as cudf uses native strings instead of Python objects"
             )
 
         if pat is None:
@@ -3436,8 +3440,8 @@ class StringMethods(ColumnMethodsMixin):
 
         if "na" in kwargs:
             warnings.warn(
-                "`na` parameter is not yet supported, \
-                as cudf uses native strings instead of Python objects"
+                "`na` parameter is not yet supported, "
+                "as cudf uses native strings instead of Python objects"
             )
 
         return self._return_or_inplace(
@@ -3463,7 +3467,8 @@ class StringMethods(ColumnMethodsMixin):
         1      e f.g
         2      4-5,6
         dtype: object
-        >>> data = ["https%3A%2F%2Frapids.ai%2Fstart.html", "https%3A%2F%2Fmedium.com%2Frapids-ai"]     # noqa E501
+        >>> data = ["https%3A%2F%2Frapids.ai%2Fstart.html",
+        ...     "https%3A%2F%2Fmedium.com%2Frapids-ai"]
         >>> s = cudf.Series(data)
         >>> s.str.url_decode()
         0    https://rapids.ai/start.html
@@ -3494,7 +3499,8 @@ class StringMethods(ColumnMethodsMixin):
         1        e%20f.g
         2        4-5%2C6
         dtype: object
-        >>> data = ["https://rapids.ai/start.html", "https://medium.com/rapids-ai"]         # noqa E501
+        >>> data = ["https://rapids.ai/start.html",
+        ...     "https://medium.com/rapids-ai"]
         >>> s = cudf.Series(data)
         >>> s.str.url_encode()
         0    https%3A%2F%2Frapids.ai%2Fstart.html
@@ -4307,14 +4313,14 @@ class StringColumn(column.ColumnBase):
         elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
-                    "Could not convert strings to integer \
-                        type due to presence of non-integer values."
+                    "Could not convert strings to integer "
+                    "type due to presence of non-integer values."
                 )
         elif out_dtype.kind == "f":
             if not cpp_is_float(self).all():
                 raise ValueError(
-                    "Could not convert strings to float \
-                        type due to presence of non-floating values."
+                    "Could not convert strings to float "
+                    "type due to presence of non-floating values."
                 )
 
         result_col = _str_to_numeric_typecast_functions[out_dtype](
