@@ -137,6 +137,8 @@
 - PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
 - PR #5743 Reduce number of test cases in concatenate benchmark
 - PR #5756 Switch JNI code to use the RMM owning wrapper
+- PR #5725 Integrate Gbenchmarks into CI
+- PR #5752 Add cuDF internals documentation (ColumnAccessor)
 
 ## Bug Fixes
 
