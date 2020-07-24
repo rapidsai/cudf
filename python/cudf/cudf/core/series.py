@@ -987,7 +987,10 @@ class Series(Frame, Serializable):
             and not is_list_dtype(preprocess.dtype)
         ):
             output = (
-                preprocess.astype("O").fillna("<NA>").to_pandas().__repr__()
+                preprocess.astype("O")
+                .fillna(cudf._NA_REP)
+                .to_pandas()
+                .__repr__()
             )
         elif isinstance(
             preprocess._column, cudf.core.column.CategoricalColumn
@@ -1004,7 +1007,7 @@ class Series(Frame, Serializable):
                 min_rows=min_rows,
                 max_rows=max_rows,
                 length=show_dimensions,
-                na_rep="<NA>",
+                na_rep=cudf._NA_REP,
             )
         else:
             output = preprocess.to_pandas().__repr__()

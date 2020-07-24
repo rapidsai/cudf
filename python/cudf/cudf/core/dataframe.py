@@ -1166,7 +1166,7 @@ class DataFrame(Frame, Serializable):
         """
         for col in df._data:
             if self._data[col].has_nulls:
-                df[col] = df._data[col].astype("str").fillna("<NA>")
+                df[col] = df._data[col].astype("str").fillna(cudf._NA_REP)
             else:
                 df[col] = df._data[col]
 

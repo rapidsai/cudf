@@ -359,7 +359,7 @@ class Index(Frame, Serializable):
         """
         if self._values.has_nulls:
             return cudf.Index(
-                self._values.astype("str").fillna("<NA>"), name=self.name
+                self._values.astype("str").fillna(cudf._NA_REP), name=self.name
             )
         else:
             return self
@@ -1686,7 +1686,7 @@ class GenericIndex(Index):
         # related issue : https://github.com/pandas-dev/pandas/issues/35389
         if isinstance(preprocess, CategoricalIndex):
             output = preprocess.to_pandas().__repr__()
-            output = output.replace("nan", "<NA>")
+            output = output.replace("nan", cudf._NA_REP)
         elif preprocess._values.nullable:
             output = self._clean_nulls_from_index().to_pandas().__repr__()
 
@@ -2010,7 +2010,7 @@ class DatetimeIndex(GenericIndex):
         the type-cast operation.
         """
         if self._values.has_nulls:
-            return self.astype("str").fillna("<NA>")
+            return self.astype("str").fillna(cudf._NA_REP)
         else:
             return self
 
@@ -2226,7 +2226,7 @@ class StringIndex(GenericIndex):
         """
         if self._values.has_nulls:
             return cudf.Index(
-                self._values.astype("str").fillna("<NA>"), name=self.name
+                self._values.astype("str").fillna(cudf._NA_REP), name=self.name
             )
         else:
             return self
