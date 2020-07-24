@@ -136,6 +136,7 @@
 - PR #5702 Add inherited methods to python docs and other docs fixes
 - PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
 - PR #5743 Reduce number of test cases in concatenate benchmark
+- PR #5756 Switch JNI code to use the RMM owning wrapper
 - PR #5725 Integrate Gbenchmarks into CI
 - PR #5752 Add cuDF internals documentation (ColumnAccessor)
 
@@ -207,6 +208,7 @@
 - PR #5736 Disable unsigned type in ORC writer benchmarks
 - PR #5745 Update JNI cast for inability to cast timestamp and integer types
 - PR #5750 Add RMM_ROOT/include to the spdlog search path in JNI build
+- PR #5763 Update Java slf4j version to match Spark 3.0
 - PR #5766 Fix issue related to `iloc` and slicing a `DataFrame`
 
 
