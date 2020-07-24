@@ -1681,6 +1681,9 @@ class GenericIndex(Index):
         else:
             preprocess = self
 
+        # TODO: Change below usages accordingly to
+        # utilize `Index.to_string` once it is implemented
+        # related issue : https://github.com/pandas-dev/pandas/issues/35389
         if isinstance(preprocess, CategoricalIndex):
             output = preprocess.to_pandas().__repr__()
             output = output.replace("nan", "<NA>")
