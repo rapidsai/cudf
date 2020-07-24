@@ -941,8 +941,74 @@ class MultiIndex(Index):
     def argsort(self, ascending=True, **kwargs):
         return self._source_data.argsort(ascending=ascending, **kwargs)
 
+    def fillna(self, value):
+        """
+        Fill null values with the specified value.
+
+        Parameters
+        ----------
+        value : scalar
+            Scalar value to use to fill nulls. This value cannot be a
+            list-likes.
+
+        Returns
+        -------
+        filled : MultiIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.MultiIndex(
+        ...         levels=[["a", "b", "c", None], ["1", None, "5"]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...       )
+        >>> index
+        MultiIndex(levels=[0       a
+        1       b
+        2       c
+        3    None
+        dtype: object, 0       1
+        1    None
+        2       5
+        dtype: object],
+        codes=   x  y
+        0  0  0
+        1  0  2
+        2  1  1
+        3  2  1
+        4  3  0)
+        >>> index.fillna('hello')
+        MultiIndex(levels=[0        a
+        1        b
+        2        c
+        3    hello
+        dtype: object, 0        1
+        1        5
+        2    hello
+        dtype: object],
+        codes=   x  y
+        0  0  0
+        1  0  1
+        2  1  2
+        3  2  2
+        4  3  0)
+        """
+
+        return super().fillna(value=value)
+
     def unique(self):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())
+
+    def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in MultiIndex object
+        to `<NA>` as a preprocessing step to `__repr__` methods.
+        """
+        index_df = self._source_data
+        return MultiIndex.from_frame(
+            index_df._clean_nulls_from_dataframe(index_df), names=self.names
+        )
 
     def memory_usage(self, deep=False):
         n = 0
