@@ -34,7 +34,7 @@ enum class letter_type {
 };
 
 /**
- * @brief Returns boolean column indicating if `character index` of the input strings
+ * @brief Returns boolean column indicating if `character_index` of the input strings
  * is a consonant or vowel.
  *
  * Determining consonants and vowels is described in the following
