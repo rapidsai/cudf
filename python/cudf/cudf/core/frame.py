@@ -546,15 +546,17 @@ class Frame(libcudf.table.Table):
         keep_index = True
         if self.index is not None and isinstance(self.index, RangeIndex):
             keep_index = False
+            if len(self._data) == 0:
+                result = self._empty_like(keep_index)
+                result._index = self.index[start:stop]
+                return result
 
         if start < 0:
             start = start + num_rows
         if stop < 0:
             stop = stop + num_rows
 
-        if (start > stop and (stride is None or stride == 1)) or (
-            len(self._data) == 0 and keep_index is False
-        ):
+        if start > stop and (stride is None or stride == 1):
             return self._empty_like(keep_index)
         else:
             start = len(self) if start > num_rows else start

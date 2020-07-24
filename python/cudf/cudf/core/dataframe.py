@@ -1154,6 +1154,12 @@ class DataFrame(Frame, Serializable):
 
         if len(self) <= nrows and len(self._data.names) <= ncols:
             output = self.copy(deep=False)
+        elif self.empty and len(self.index) > 0:
+            # Incase of Empty DataFrame with index, Pandas prints
+            # first 100 index values followed by ...
+            # To obtain ... at the end of index list, adding 2 more
+            # values, hence fetching only first 102 values.
+            output = self.head(102)
         else:
             left_cols = len(self._data.names)
             right_cols = 0

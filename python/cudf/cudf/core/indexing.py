@@ -432,14 +432,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return self._downcast_to_series(df, arg)
 
         if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):
-            from cudf.core.index import RangeIndex
-
-            slice_len = len(self._df)
-            if arg[0] == slice(None, None, None):
-                df._index = self._df.index.copy()
-            else:
-                start, stop, step = arg[0].indices(slice_len)
-                df._index = RangeIndex(start, stop)
+            df._index = as_index(self._df.index[arg[0]])
         return df
 
     @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")

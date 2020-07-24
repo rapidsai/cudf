@@ -236,3 +236,53 @@ def test_generic_index(length, dtype):
     gsr = cudf.Series.from_pandas(psr)
 
     assert psr.index.__repr__() == gsr.index.__repr__()
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        cudf.DataFrame({"a": range(1000000)}),
+        cudf.DataFrame({"a": range(1000000), "b": range(1000000)}),
+        cudf.DataFrame({"a": range(20), "b": range(20)}),
+        cudf.DataFrame(
+            {
+                "a": range(20),
+                "b": range(20),
+                "c": ["abc", "def", "xyz", "def", "pqr"] * 4,
+            }
+        ),
+        cudf.DataFrame(index=[1, 2, 3]),
+        cudf.DataFrame(index=range(1000000)),
+        cudf.DataFrame(columns=["a", "b", "c", "d"]),
+        cudf.DataFrame(columns=["a"], index=range(1000000)),
+        cudf.DataFrame(
+            columns=["a", "col2", "...col n"], index=range(1000000)
+        ),
+        cudf.DataFrame(index=cudf.Series(range(1000000)).astype("str")),
+        cudf.DataFrame(
+            columns=["a", "b", "c", "d"],
+            index=cudf.Series(range(1000000)).astype("str"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "slice",
+    [
+        slice(250000, 500000),
+        slice(250000, 250001),
+        slice(500000),
+        slice(1, 10),
+        slice(10, 20),
+        slice(15, 24000),
+    ],
+)
+def test_dataframe_sliced(gdf, slice):
+    pdf = gdf.to_pandas()
+
+    sliced_gdf = gdf[slice]
+    sliced_pdf = pdf[slice]
+
+    expected_repr = sliced_pdf.__repr__()
+    actual_repr = sliced_gdf.__repr__()
+
+    assert expected_repr == actual_repr
