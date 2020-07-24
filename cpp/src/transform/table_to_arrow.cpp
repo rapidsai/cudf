@@ -35,7 +35,6 @@ namespace detail {
         CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, data_size_in_bytes, &data_buffer).ok(), "Failed to allocate Arrow buffer for data");
         cudaMemcpy(data_buffer->mutable_data(), input_view.data<T>(), data_size_in_bytes, cudaMemcpyDeviceToHost);
 
-
         return data_buffer; 
     }
 
