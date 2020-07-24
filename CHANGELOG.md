@@ -49,6 +49,7 @@
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 - PR #5572 Add `cudf::encode` API.
+- PR #5767 Add `nvtext::porter_stemmer_measure` and `nvtext::is_letter` APIs
 
 ## Improvements
 
