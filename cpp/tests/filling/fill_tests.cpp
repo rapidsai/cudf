@@ -63,7 +63,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
     } else if (cudf::is_duration<T>()) {
       p_val = cudf::make_duration_scalar(type);
     } else {
-      EXPECT_TRUE(false);  // should not be reached
+      ASSERT_TRUE(false);  // should not be reached
     }
     using ScalarType = cudf::scalar_type_t<T>;
     static_cast<ScalarType*>(p_val.get())->set_value(value);

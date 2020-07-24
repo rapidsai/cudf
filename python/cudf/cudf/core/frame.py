@@ -450,7 +450,7 @@ class Frame(libcudf.table.Table):
 
         If downcast is True, try and downcast from a DataFrame to a Series
         """
-        new_data = self._data.get_by_label(labels)
+        new_data = self._data.select_by_label(labels)
         if downcast:
             if is_scalar(labels):
                 nlevels = 1
@@ -469,7 +469,7 @@ class Frame(libcudf.table.Table):
         Returns columns of the Frame specified by `labels`
 
         """
-        data = self._data.get_by_index(indices)
+        data = self._data.select_by_index(indices)
         return self._constructor(
             data, columns=data.to_pandas_index(), index=self.index
         )
