@@ -1316,7 +1316,7 @@ def test_index_tolist(data, dtype):
         match=re.escape(
             r"cuDF does not support conversion to host memory "
             r"via `tolist()` method. Consider using "
-            r"`.to_pandas().to_list()` to construct a Python list."
+            r"`.to_arrow().to_pylist()` to construct a Python list."
         ),
     ):
         gdi.tolist()
