@@ -13,12 +13,42 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/extract.hpp>
+
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace lists {
 namespace detail {
+
+namespace {
+
+/**
+ * @brief Convert index value for each sublist into a gather index for
+ * the lists column's child column.
+ */
+template <bool PositiveIndex = true>
+struct map_index_fn {
+  column_device_view const d_offsets;  // offsets to each sublist (including validity mask)
+  size_type const index;               // index of element within each sublist
+  size_type const out_of_bounds;       // value to use to indicate out-of-bounds
+
+  __device__ int32_t operator()(size_type idx)
+  {
+    if (d_offsets.is_null(idx)) return out_of_bounds;
+    auto const offset = d_offsets.element<int32_t>(idx);
+    auto const length = d_offsets.element<int32_t>(idx + 1) - offset;
+    if (PositiveIndex)
+      return index < length ? index + offset : out_of_bounds;
+    else
+      return index < -length ? out_of_bounds : length + index + offset;
+  }
+};
+
+}  // namespace
 
 /**
  * @copydoc cudf::lists::extract_list_element
@@ -31,7 +61,7 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              rmm::mr::device_memory_resource* mr)
 {
   if (lists_column.size() == 0) return empty_like(lists_column.parent());
-  auto offsets_column = lists_column.offsets();
+  auto const offsets_column = lists_column.offsets();
 
   // create a column_view with attributes of the parent and data from the offsets
   column_view annotated_offsets(data_type{type_id::INT32},
@@ -44,25 +74,25 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
   // create a gather map for extracting elements from the child column
   auto gather_map = make_fixed_width_column(
     data_type{type_id::INT32}, annotated_offsets.size() - 1, mask_state::UNALLOCATED, stream);
-  auto d_gather_map = gather_map->mutable_view().data<int32_t>();
-  auto child_column = lists_column.child();
+  auto d_gather_map       = gather_map->mutable_view().data<int32_t>();
+  auto const child_column = lists_column.child();
   CUDF_EXPECTS(child_column.type().id() != type_id::LIST,
                "Nested lists not yet supported in extract_list_element");
 
   // build the gather map using the offsets and the provided index
-  auto child_size = child_column.size();  // used for out-of-bounds condition
-  auto d_column   = column_device_view::create(annotated_offsets, stream);
-  auto d_offsets  = *d_column;
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(gather_map->size()),
-                    d_gather_map,
-                    [d_offsets, index, child_size] __device__(auto idx) {
-                      if (d_offsets.is_null(idx)) return child_size;
-                      auto offset = d_offsets.element<int32_t>(idx);
-                      auto length = d_offsets.element<int32_t>(idx + 1) - offset;
-                      return index < length ? index + offset : child_size;
-                    });
+  auto const d_column = column_device_view::create(annotated_offsets, stream);
+  if (index < 0)
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(gather_map->size()),
+                      d_gather_map,
+                      map_index_fn<false>{*d_column, index, child_column.size()});
+  else
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(gather_map->size()),
+                      d_gather_map,
+                      map_index_fn<true>{*d_column, index, child_column.size()});
 
   // call gather on the child column
   auto result = cudf::detail::gather(table_view({child_column}),
