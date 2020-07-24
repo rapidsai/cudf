@@ -181,7 +181,8 @@ get_trivial_left_join_indices(table_view const& left, bool flip_join_indices, cu
                right_indices.begin(),
                right_indices.end(),
                JoinNoneValue);
-  if (flip_join_indices) std::swap(left_indices, right_indices);
+  using std::swap;
+  if (flip_join_indices) swap(left_indices, right_indices);
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 
