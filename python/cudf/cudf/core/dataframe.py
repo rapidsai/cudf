@@ -1160,9 +1160,7 @@ class DataFrame(Frame, Serializable):
 
         Since we utilize Pandas `__repr__` at all places in our code
         for formatting purposes, we convert columns to `str` dtype for
-        filling with `<NA>` values, except for datetime dtype column - where
-        we fill `null` and then convert to `str` dtype for representation
-        purposeses.
+        filling with `<NA>` values.
         """
         for col in df._data:
             if self._data[col].has_nulls:
