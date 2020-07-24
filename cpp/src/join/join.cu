@@ -34,8 +34,9 @@ std::unique_ptr<table> inner_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  // For `inner_join`, we can freely choose either the `left` or `right` table to use for building/probing the hash map
-  // Because building is typically more expensive than probing, we build the hash map from the smaller table 
+  // For `inner_join`, we can freely choose either the `left` or `right` table to use for
+  // building/probing the hash map. Because building is typically more expensive than probing, we
+  // build the hash map from the smaller table.
   if (right.num_rows() > left.num_rows()) {
     cudf::hash_join hj_obj(left, left_on);
     auto actual_columns_in_common = columns_in_common;

@@ -395,11 +395,11 @@ class hash_join {
   hash_join(cudf::table_view const& build, std::vector<size_type> const& build_on);
 
   /**
-   * @brief Controls the location in the output of the columns from the `probe` table. 
+   * @brief Controls the location in the output of the columns from the `probe` table.
    */
-  enum class probe_output_side { 
-     LEFT, ///< Columns from the probe table appear as the leftmost in the output table
-     RIGHT ///< Columns from the probe table appear as the rightmost in the output table 
+  enum class probe_output_side {
+    LEFT,  ///< Columns from the probe table appear as the leftmost in the output table
+    RIGHT  ///< Columns from the probe table appear as the rightmost in the output table
   };
 
   /**
