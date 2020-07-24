@@ -71,7 +71,7 @@ TEST_F(TableViewTest, TestLexicographicalComparatorTwoTableCase)
   cudf::table_view input_table_2{{col2}};
 
   auto got = cudf::make_numeric_column(
-    cudf::data_type(cudf::INT8), input_table_1.num_rows(), cudf::mask_state::UNALLOCATED);
+    cudf::data_type(cudf::type_id::INT8), input_table_1.num_rows(), cudf::mask_state::UNALLOCATED);
   cudf::test::fixed_width_column_wrapper<int8_t> expected{{1, 1, 0, 1}};
   row_comparison(input_table_1, input_table_2, got->mutable_view(), column_order);
 
@@ -86,7 +86,7 @@ TEST_F(TableViewTest, TestLexicographicalComparatorSameTable)
   cudf::table_view input_table_1{{col1}};
 
   auto got = cudf::make_numeric_column(
-    cudf::data_type(cudf::INT8), input_table_1.num_rows(), cudf::mask_state::UNALLOCATED);
+    cudf::data_type(cudf::type_id::INT8), input_table_1.num_rows(), cudf::mask_state::UNALLOCATED);
   cudf::test::fixed_width_column_wrapper<int8_t> expected{{0, 0, 0, 0}};
   row_comparison(input_table_1, input_table_1, got->mutable_view(), column_order);
 

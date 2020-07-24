@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import collections
 import functools
 import pickle
@@ -7,7 +6,7 @@ import pickle
 import pandas as pd
 
 import cudf
-import cudf._lib.groupby as libgroupby
+from cudf._lib import groupby as libgroupby
 from cudf._lib.nvtx import annotate
 from cudf.core.abc import Serializable
 from cudf.utils.utils import cached_property
@@ -55,16 +54,18 @@ class GroupBy(Serializable):
         else:
             self.grouping = _Grouping(obj, by, level)
 
-    def __getattr__(self, key):
-        if key != "_agg_func_name_with_args":
+    def __getattribute__(self, key):
+        try:
+            return super().__getattribute__(key)
+        except AttributeError:
             if key in libgroupby._GROUPBY_AGGS:
                 return functools.partial(self._agg_func_name_with_args, key)
-        raise AttributeError(
-            f"'{self.__class__.__name__}' has no attribute '{key}'"
-        )
+            raise
 
     def __iter__(self):
         group_names, offsets, grouped_values = self._grouped()
+        if isinstance(group_names, cudf.Index):
+            group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
 
@@ -149,18 +150,22 @@ class GroupBy(Serializable):
             result = result.sort_index()
 
         if not _is_multi_agg(func):
-            try:
-                # drop the last level
-                if result.columns.nlevels > 1:
+            if result.columns.nlevels == 1:
+                # make sure it's a flat index:
+                result.columns = result.columns.get_level_values(0)
+
+            if result.columns.nlevels > 1:
+                try:
+                    # drop the last level
                     result.columns = result.columns.droplevel(-1)
-            except IndexError:
-                # Pandas raises an IndexError if we are left
-                # with an all-nan MultiIndex when dropping
-                # the last level
-                if result.shape[1] == 1:
-                    result.columns = [None]
-                else:
-                    raise
+                except IndexError:
+                    # Pandas raises an IndexError if we are left
+                    # with an all-nan MultiIndex when dropping
+                    # the last level
+                    if result.shape[1] == 1:
+                        result.columns = [None]
+                    else:
+                        raise
 
         # set index names to be group key names
         result.index.names = self.grouping.names
@@ -222,7 +227,6 @@ class GroupBy(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-
         kwargs = header["kwargs"]
 
         obj_type = pickle.loads(header["obj_type"])
@@ -551,7 +555,7 @@ class DataFrameGroupBy(GroupBy):
         Parrot       25.0
 
         >>> arrays = [['Falcon', 'Falcon', 'Parrot', 'Parrot'],
-        ['Captive', 'Wild', 'Captive', 'Wild']]
+        ... ['Captive', 'Wild', 'Captive', 'Wild']]
         >>> index = pd.MultiIndex.from_arrays(arrays, names=('Animal', 'Type'))
         >>> df = cudf.DataFrame({'Max Speed': [390., 350., 30., 20.]},
                 index=index)
@@ -583,10 +587,15 @@ class DataFrameGroupBy(GroupBy):
             dropna=dropna,
         )
 
-    def __getattr__(self, key):
-        if key in self.obj:
-            return self.obj[key].groupby(self.grouping, dropna=self._dropna)
-        return super().__getattr__(key)
+    def __getattribute__(self, key):
+        try:
+            return super().__getattribute__(key)
+        except AttributeError:
+            if key in self.obj:
+                return self.obj[key].groupby(
+                    self.grouping, dropna=self._dropna
+                )
+            raise
 
     def __getitem__(self, key):
         return self.obj[key].groupby(self.grouping, dropna=self._dropna)

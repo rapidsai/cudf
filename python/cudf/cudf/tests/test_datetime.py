@@ -1,17 +1,12 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import datetime as dt
+import re
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from pandas.util.testing import (
-    assert_frame_equal,
-    assert_index_equal,
-    assert_series_equal,
-)
 
 import cudf
 from cudf.core import DataFrame, Series
@@ -164,7 +159,7 @@ def test_dt_series(data, field):
     gdf_data = Series(pd_data)
     base = getattr(pd_data.dt, field)
     test = getattr(gdf_data.dt, field).to_pandas().astype("int64")
-    assert_series_equal(base, test)
+    assert_eq(base, test)
 
 
 @pytest.mark.parametrize("data", [data1()])
@@ -172,9 +167,7 @@ def test_dt_series(data, field):
 def test_dt_index(data, field):
     pd_data = data.copy()
     gdf_data = DatetimeIndex(pd_data)
-    assert_index_equal(
-        getattr(gdf_data, field).to_pandas(), getattr(pd_data, field)
-    )
+    assert_eq(getattr(gdf_data, field), getattr(pd_data, field))
 
 
 def test_setitem_datetime():
@@ -214,34 +207,34 @@ def test_issue_165():
 
     base = df_pandas.query("dates==@start_date")
     test = df_cudf.query("dates==@start_date")
-    assert_frame_equal(base, test.to_pandas())
+    assert_eq(base, test)
     assert len(test) > 0
 
     mask = df_cudf.dates == start_date
     base_mask = df_pandas.dates == start_date
-    assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
+    assert_eq(mask, base_mask, check_names=False)
     assert mask.to_pandas().sum() > 0
 
     start_date_ts = pd.Timestamp(start_date)
     test = df_cudf.query("dates==@start_date_ts")
     base = df_pandas.query("dates==@start_date_ts")
-    assert_frame_equal(base, test.to_pandas())
+    assert_eq(base, test)
     assert len(test) > 0
 
     mask = df_cudf.dates == start_date_ts
     base_mask = df_pandas.dates == start_date_ts
-    assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
+    assert_eq(mask, base_mask, check_names=False)
     assert mask.to_pandas().sum() > 0
 
     start_date_np = np.datetime64(start_date_ts, "ns")
     test = df_cudf.query("dates==@start_date_np")
     base = df_pandas.query("dates==@start_date_np")
-    assert_frame_equal(base, test.to_pandas())
+    assert_eq(base, test)
     assert len(test) > 0
 
     mask = df_cudf.dates == start_date_np
     base_mask = df_pandas.dates == start_date_np
-    assert_series_equal(mask.to_pandas(), base_mask, check_names=False)
+    assert_eq(mask, base_mask, check_names=False)
     assert mask.to_pandas().sum() > 0
 
 
@@ -359,7 +352,7 @@ def test_typecast_from_datetime_to_datetime(data, from_dtype, to_dtype):
 @pytest.mark.parametrize("data", [numerical_data()])
 @pytest.mark.parametrize("nulls", ["some", "all"])
 def test_to_from_pandas_nulls(data, nulls):
-    pd_data = pd.Series(data.copy())
+    pd_data = pd.Series(data.copy().astype("datetime64[ns]"))
     if nulls == "some":
         # Fill half the values with NaT
         pd_data[list(range(0, len(pd_data), 2))] = np.datetime64("nat", "ns")
@@ -416,10 +409,7 @@ def test_datetime_unique(data, nulls):
     expected = psr.unique()
     got = gsr.unique()
 
-    # convert to int64 for equivalence testing
-    np.testing.assert_array_almost_equal(
-        got.to_pandas().astype(int), expected.astype(int)
-    )
+    assert_eq(pd.Series(expected), got.to_pandas())
 
 
 @pytest.mark.parametrize(
@@ -644,18 +634,13 @@ def test_to_datetime_errors(data):
     else:
         gd_data = pd_data
 
-    exception_type = None
     try:
         pd.to_datetime(pd_data)
     except Exception as e:
-
-        exception_type = type(e)
-
-    if exception_type is None:
-        raise TypeError("Was expecting `pd.to_datetime` to fail")
-
-    with pytest.raises(exception_type):
-        cudf.to_datetime(gd_data)
+        with pytest.raises(type(e), match=re.escape(str(e))):
+            cudf.to_datetime(gd_data)
+    else:
+        raise AssertionError("Was expecting `pd.to_datetime` to fail")
 
 
 def test_to_datetime_not_implemented():
@@ -817,14 +802,10 @@ def test_str_null_to_datetime():
     psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
     gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
 
-    error_type = None
     try:
         psr.astype("datetime64[s]")
-    except Exception as e:
-        error_type = type(e)
-
-    if error_type is None:
-        raise Exception("Expected psr.astype('datetime64[s]') to fail")
-
-    with pytest.raises(ValueError):
-        gsr.astype("datetime64[s]")
+    except Exception:
+        with pytest.raises(ValueError):
+            gsr.astype("datetime64[s]")
+    else:
+        raise AssertionError("Expected psr.astype('datetime64[s]') to fail")

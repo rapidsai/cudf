@@ -1,9 +1,7 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
-
 from numbers import Number
 
 import numpy as np
-
 
 """ Global __array_ufunc__ methods
 """

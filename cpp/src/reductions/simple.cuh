@@ -50,10 +50,9 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   Op simple_op{};
 
   if (col.has_nulls()) {
-    auto it =
-      thrust::make_transform_iterator(cudf::detail::make_null_replacement_iterator(
-                                        *dcol, simple_op.template get_identity<ElementType>()),
-                                      simple_op.template get_element_transformer<ResultType>());
+    auto it = thrust::make_transform_iterator(
+      dcol->pair_begin<ElementType, true>(),
+      simple_op.template get_null_replacing_element_transformer<ResultType>());
     result = detail::reduce(it, col.size(), Op{}, mr, stream);
   } else {
     auto it = thrust::make_transform_iterator(
@@ -77,7 +76,7 @@ struct result_type_dispatcher {
     //  - same dtypes (including cudf::wrappers)
     //  - any arithmetic dtype to any arithmetic dtype
     //  - bool to/from any arithmetic dtype
-    return std::is_convertible<ElementType, ResultType>::value &&
+    return cudf::is_convertible<ElementType, ResultType>::value &&
            (std::is_arithmetic<ResultType>::value ||
             std::is_same<Op, cudf::reduction::op::min>::value ||
             std::is_same<Op, cudf::reduction::op::max>::value) &&

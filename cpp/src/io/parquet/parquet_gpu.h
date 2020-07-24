@@ -179,6 +179,20 @@ constexpr unsigned int kDictHashBits = 16;
 constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 
 /**
+ * @brief Return the byte length of parquet dtypes that are physically represented by INT32
+ */
+inline uint32_t __device__ GetDtypeLogicalLen(uint8_t parquet_dtype)
+{
+  switch (parquet_dtype) {
+    case INT_8:
+    case UINT_8: return 1;
+    case INT_16:
+    case UINT_16: return 2;
+    default: return 4;
+  }
+}
+
+/**
  * @brief Return worst-case compressed size of compressed data given the uncompressed size
  **/
 inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size,

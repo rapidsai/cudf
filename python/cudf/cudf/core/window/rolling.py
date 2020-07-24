@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION
-
 import itertools
 
 import cupy as cp
@@ -7,7 +6,7 @@ import numba
 import pandas as pd
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf.core.column.column import as_column
 from cudf.utils import cudautils
 

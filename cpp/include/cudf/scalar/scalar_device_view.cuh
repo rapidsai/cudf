@@ -50,9 +50,9 @@ class scalar_device_view_base {
   __device__ void set_valid(bool is_valid) noexcept { *_is_valid = is_valid; }
 
  protected:
-  data_type _type{EMPTY};  ///< Value data type
-  bool* _is_valid{};       ///< Pointer to device memory containing
-                           ///< boolean representing validity of the value.
+  data_type _type{type_id::EMPTY};  ///< Value data type
+  bool* _is_valid{};                ///< Pointer to device memory containing
+                                    ///< boolean representing validity of the value.
 
   scalar_device_view_base(data_type type, bool* is_valid) : _type(type), _is_valid(is_valid) {}
 

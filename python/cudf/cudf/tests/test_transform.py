@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from __future__ import division
 
@@ -26,4 +26,4 @@ def test_applymap(dtype):
 
     result = lhs_arr ** 3
 
-    np.testing.assert_almost_equal(result, out_col)
+    np.testing.assert_almost_equal(result, out_col.to_array())

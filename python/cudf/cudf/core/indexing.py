@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import cupy
 import numpy as np
 import pandas as pd
@@ -8,6 +7,8 @@ import cudf
 from cudf._lib.nvtx import annotate
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_column_like,
+    is_list_like,
     is_scalar,
     to_cudf_compatible_scalar,
 )
@@ -121,6 +122,9 @@ class _SeriesLocIndexer(object):
 
     def __setitem__(self, key, value):
         key = self._loc_to_iloc(key)
+        if isinstance(value, (pd.Series, cudf.Series)):
+            value = cudf.Series(value)
+            value = value._align_to_index(self._sr.index, how="right")
         self._sr.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
@@ -196,8 +200,10 @@ class _DataFrameIndexer(object):
             if type(arg[0]) is slice:
                 if not is_scalar(arg[1]):
                     return False
-            elif pd.api.types.is_list_like(arg[0]) and (
-                pd.api.types.is_list_like(arg[1]) or type(arg[1]) is slice
+            elif (is_list_like(arg[0]) or is_column_like(arg[0])) and (
+                is_list_like(arg[1])
+                or is_column_like(arg[0])
+                or type(arg[1]) is slice
             ):
                 return False
             else:
@@ -218,7 +224,7 @@ class _DataFrameIndexer(object):
                 # Multiindex indexing with a slice
                 if any(isinstance(v, slice) for v in arg):
                     return False
-            if not pd.api.types.is_list_like(arg[1]):
+            if not (is_list_like(arg[1]) or is_column_like(arg[1])):
                 return True
         return False
 
@@ -266,11 +272,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     @annotate("LOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
-        from cudf.core.dataframe import DataFrame
-        from cudf.core.column import column
-        from cudf.core.index import as_index
-        from cudf import MultiIndex
         from uuid import uuid4
+
+        from cudf import MultiIndex
+        from cudf.core.column import column
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.index import as_index
 
         # Step 1: Gather columns
         if isinstance(arg, tuple):

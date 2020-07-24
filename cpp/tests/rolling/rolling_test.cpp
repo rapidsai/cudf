@@ -605,7 +605,7 @@ TYPED_TEST(RollingTest, ZeroWindow)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, 1);
+  std::vector<TypeParam> col_data(num_rows, TypeParam(1));
   std::vector<bool> col_mask(num_rows, 1);
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -620,7 +620,7 @@ TYPED_TEST(RollingTest, ZeroPeriods)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, 1);
+  std::vector<TypeParam> col_data(num_rows, TypeParam(1));
   std::vector<bool> col_mask(num_rows, 1);
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -638,7 +638,7 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, 1);
+  std::vector<TypeParam> col_data(num_rows, TypeParam(1));
   std::vector<bool> col_mask(num_rows, 1);
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -887,16 +887,16 @@ TEST_F(RollingTestUdf, StaticWindow)
   fixed_width_column_wrapper<int64_t> expected{start, start + size, valid};
 
   // Test CUDA UDF
-  auto cuda_udf_agg =
-    cudf::make_udf_aggregation(cudf::udf_type::CUDA, this->cuda_func, cudf::data_type{cudf::INT64});
+  auto cuda_udf_agg = cudf::make_udf_aggregation(
+    cudf::udf_type::CUDA, this->cuda_func, cudf::data_type{cudf::type_id::INT64});
 
   EXPECT_NO_THROW(output = cudf::rolling_window(input, 2, 2, 4, cuda_udf_agg));
 
   cudf::test::expect_columns_equal(*output, expected);
 
   // Test NUMBA UDF
-  auto ptx_udf_agg =
-    cudf::make_udf_aggregation(cudf::udf_type::PTX, this->ptx_func, cudf::data_type{cudf::INT64});
+  auto ptx_udf_agg = cudf::make_udf_aggregation(
+    cudf::udf_type::PTX, this->ptx_func, cudf::data_type{cudf::type_id::INT64});
 
   EXPECT_NO_THROW(output = cudf::rolling_window(input, 2, 2, 4, ptx_udf_agg));
 
@@ -933,16 +933,16 @@ TEST_F(RollingTestUdf, DynamicWindow)
   fixed_width_column_wrapper<int64_t> expected{start, start + size, valid};
 
   // Test CUDA UDF
-  auto cuda_udf_agg =
-    cudf::make_udf_aggregation(cudf::udf_type::CUDA, this->cuda_func, cudf::data_type{cudf::INT64});
+  auto cuda_udf_agg = cudf::make_udf_aggregation(
+    cudf::udf_type::CUDA, this->cuda_func, cudf::data_type{cudf::type_id::INT64});
 
   EXPECT_NO_THROW(output = cudf::rolling_window(input, preceding, following, 2, cuda_udf_agg));
 
   cudf::test::expect_columns_equal(*output, expected);
 
   // Test PTX UDF
-  auto ptx_udf_agg =
-    cudf::make_udf_aggregation(cudf::udf_type::PTX, this->ptx_func, cudf::data_type{cudf::INT64});
+  auto ptx_udf_agg = cudf::make_udf_aggregation(
+    cudf::udf_type::PTX, this->ptx_func, cudf::data_type{cudf::type_id::INT64});
 
   EXPECT_NO_THROW(output = cudf::rolling_window(input, preceding, following, 2, ptx_udf_agg));
 

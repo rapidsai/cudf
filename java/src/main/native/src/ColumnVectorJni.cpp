@@ -50,6 +50,35 @@
 
 #include "jni_utils.hpp"
 
+namespace {
+
+// convert a timestamp type to the corresponding duration type
+cudf::data_type timestamp_to_duration(cudf::data_type dt) {
+  cudf::type_id duration_type_id;
+  switch (dt.id()) {
+    case cudf::type_id::TIMESTAMP_DAYS:
+      duration_type_id = cudf::type_id::DURATION_DAYS;
+      break;
+    case cudf::type_id::TIMESTAMP_SECONDS:
+      duration_type_id = cudf::type_id::DURATION_SECONDS;
+      break;
+    case cudf::type_id::TIMESTAMP_MILLISECONDS:
+      duration_type_id = cudf::type_id::DURATION_MILLISECONDS;
+      break;
+    case cudf::type_id::TIMESTAMP_MICROSECONDS:
+      duration_type_id = cudf::type_id::DURATION_MICROSECONDS;
+      break;
+    case cudf::type_id::TIMESTAMP_NANOSECONDS:
+      duration_type_id = cudf::type_id::DURATION_NANOSECONDS;
+      break;
+    default:
+      throw std::logic_error("Unexpected type in timestamp_to_duration");
+  }
+  return cudf::data_type(duration_type_id);
+}
+
+} // anonymous namespace
+
 extern "C" {
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_upperStrings(JNIEnv *env, jobject j_object,
@@ -139,9 +168,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
       cudf::fill_in_place(mut_view, 0, row_count, *scalar_val);
     } else if (dtype.id() == cudf::type_id::STRING) {
       // create a string column of all empty strings to fill (cheapest string column to create)
-      auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, row_count + 1,
+      auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, row_count + 1,
                                                cudf::mask_state::UNALLOCATED);
-      auto data = cudf::make_empty_column(cudf::data_type{cudf::INT8});
+      auto data = cudf::make_empty_column(cudf::data_type{cudf::type_id::INT8});
       auto mask_buffer = cudf::create_null_mask(row_count, cudf::mask_state::UNALLOCATED);
       auto str_col = cudf::make_strings_column(row_count, std::move(offsets), std::move(data), 0,
                                                std::move(mask_buffer));
@@ -563,6 +592,42 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_second(JNIEnv *env, jcl
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_weekDay(JNIEnv *env, jclass,
+                                                                 jlong input_ptr) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+    std::unique_ptr<cudf::column> output = cudf::datetime::extract_weekday(*input);
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_lastDayOfMonth(JNIEnv *env, jclass,
+                                                                        jlong input_ptr) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+    std::unique_ptr<cudf::column> output = cudf::datetime::last_day_of_month(*input);
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_dayOfYear(JNIEnv *env, jclass,
+                                                                   jlong input_ptr) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+    std::unique_ptr<cudf::column> output = cudf::datetime::day_of_year(*input);
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, jobject j_object,
                                                                 jlong handle, jint type) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
@@ -613,6 +678,37 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, job
           break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
+    } else if (cudf::is_timestamp(n_data_type) && cudf::is_numeric(column->type())) {
+      // This is a temporary workaround to allow Java to cast from integral types into a timestamp
+      // without forcing an intermediate duration column to be manifested.  Ultimately this style of
+      // "reinterpret" casting will be supported via https://github.com/rapidsai/cudf/pull/5358
+      if (n_data_type.id() == cudf::type_id::TIMESTAMP_DAYS) {
+        if (column->type().id() != cudf::type_id::INT32) {
+          JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Numeric cast to TIMESTAMP_DAYS requires INT32", 0);
+        }
+      } else {
+        if (column->type().id() != cudf::type_id::INT64) {
+          JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Numeric cast to non-day timestamp requires INT64", 0);
+        }
+      }
+      cudf::data_type duration_type = timestamp_to_duration(n_data_type);
+      cudf::column_view duration_view = cudf::column_view(duration_type,
+                                                          column->size(),
+                                                          column->head(),
+                                                          column->null_mask(),
+                                                          column->null_count());
+      result = cudf::cast(duration_view, n_data_type);
+    } else if (cudf::is_timestamp(column->type()) && cudf::is_numeric(n_data_type)) {
+      // This is a temporary workaround to allow Java to cast from timestamp types to integral types
+      // without forcing an intermediate duration column to be manifested.  Ultimately this style of
+      // "reinterpret" casting will be supported via https://github.com/rapidsai/cudf/pull/5358
+      cudf::data_type duration_type = timestamp_to_duration(column->type());
+      cudf::column_view duration_view = cudf::column_view(duration_type,
+                                                          column->size(),
+                                                          column->head(),
+                                                          column->null_mask(),
+                                                          column->null_count());
+      result = cudf::cast(duration_view, n_data_type);
     } else {
       result = cudf::cast(*column, n_data_type);
     }
@@ -697,7 +793,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_transform(JNIEnv *env, 
     cudf::jni::native_jstring n_j_udf(env, j_udf);
     std::string n_udf(n_j_udf.get());
     std::unique_ptr<cudf::column> result =
-        cudf::transform(*column, n_udf, cudf::data_type(cudf::INT32), j_is_ptx);
+        cudf::transform(*column, n_udf, cudf::data_type(cudf::type_id::INT32), j_is_ptx);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -1050,16 +1146,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
       j_null_count = 0;
     }
 
-    if (n_type == cudf::STRING) {
+    if (n_type == cudf::type_id::STRING) {
       JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
       // This must be kept in sync with how string columns are created
       // offsets are always the first child
       // data is the second child
 
       cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
-      cudf::column_view offsets_column(cudf::data_type{cudf::INT32}, size + 1, offsets);
-      cudf::column_view data_column(cudf::data_type{cudf::INT8}, j_data_size, data);
-      ret.reset(new cudf::column_view(cudf::data_type{cudf::STRING}, size, nullptr, valid,
+      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
+      cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8}, j_data_size, data);
+      ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, size, nullptr, valid,
                                       j_null_count, 0, {offsets_column, data_column}));
     } else {
       ret.reset(new cudf::column_view(n_data_type, size, data, valid, j_null_count));
@@ -1077,7 +1173,7 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeTypeId(JNIEnv *
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-    return column->type().id();
+    return static_cast<jint>(column->type().id());
   }
   CATCH_STD(env, 0);
 }
@@ -1124,7 +1220,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeDataPoint
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jlongArray ret(env, 2);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-    if (column->type().id() == cudf::STRING) {
+    if (column->type().id() == cudf::type_id::STRING) {
       if (column->size() > 0) {
         cudf::strings_column_view view = cudf::strings_column_view(*column);
         cudf::column_view data_view = view.chars();
@@ -1149,7 +1245,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeOffsetsPo
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jlongArray ret(env, 2);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-    if (column->type().id() == cudf::STRING) {
+    if (column->type().id() == cudf::type_id::STRING) {
       if (column->size() > 0) {
         cudf::strings_column_view view = cudf::strings_column_view(*column);
         cudf::column_view offsets_view = view.offsets();
@@ -1309,14 +1405,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeStringCudfColumnHos
     }
 
     std::unique_ptr<cudf::column> offsets = cudf::make_numeric_column(
-        cudf::data_type{cudf::INT32}, size + 1, cudf::mask_state::UNALLOCATED);
+        cudf::data_type{cudf::type_id::INT32}, size + 1, cudf::mask_state::UNALLOCATED);
     auto offsets_view = offsets->mutable_view();
     JNI_CUDA_TRY(env, 0,
                  cudaMemcpyAsync(offsets_view.data<int32_t>(), host_offsets,
                                  (size + 1) * sizeof(int32_t), cudaMemcpyHostToDevice));
 
     std::unique_ptr<cudf::column> data = cudf::make_numeric_column(
-        cudf::data_type{cudf::INT8}, n_data_size, cudf::mask_state::UNALLOCATED);
+        cudf::data_type{cudf::type_id::INT8}, n_data_size, cudf::mask_state::UNALLOCATED);
     auto data_view = data->mutable_view();
     JNI_CUDA_TRY(env, 0,
                  cudaMemcpyAsync(data_view.data<int8_t>(), n_char_data, n_data_size,

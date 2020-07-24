@@ -159,10 +159,8 @@ void reader::impl::decompress_input()
     uncomp_data_ = reinterpret_cast<const char *>(buffer_->data());
     uncomp_size_ = buffer_->size();
   } else {
-    getUncompressedHostData(reinterpret_cast<const char *>(buffer_->data()),
-                            buffer_->size(),
-                            compression_type,
-                            uncomp_data_owner_);
+    uncomp_data_owner_ = getUncompressedHostData(
+      reinterpret_cast<const char *>(buffer_->data()), buffer_->size(), compression_type);
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();
   }
@@ -404,17 +402,17 @@ void reader::impl::set_data_types(cudaStream_t stream)
     for (const auto &cinfo : h_column_infos) {
       if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
         // Entire column is NULL; allocate the smallest amount of memory
-        dtypes_.push_back(data_type(INT8));
+        dtypes_.push_back(data_type(type_id::INT8));
       } else if (cinfo.string_count > 0) {
-        dtypes_.push_back(data_type(STRING));
+        dtypes_.push_back(data_type(type_id::STRING));
       } else if (cinfo.datetime_count > 0) {
-        dtypes_.push_back(data_type(TIMESTAMP_MILLISECONDS));
+        dtypes_.push_back(data_type(type_id::TIMESTAMP_MILLISECONDS));
       } else if (cinfo.float_count > 0 || (cinfo.int_count > 0 && cinfo.null_count > 0)) {
-        dtypes_.push_back(data_type(FLOAT64));
+        dtypes_.push_back(data_type(type_id::FLOAT64));
       } else if (cinfo.int_count > 0) {
-        dtypes_.push_back(data_type(INT64));
+        dtypes_.push_back(data_type(type_id::INT64));
       } else if (cinfo.bool_count > 0) {
-        dtypes_.push_back(data_type(BOOL8));
+        dtypes_.push_back(data_type(type_id::BOOL8));
       } else {
         CUDF_FAIL("Data type detection failed.\n");
       }
@@ -536,21 +534,23 @@ table_with_metadata reader::impl::read(size_t range_offset, size_t range_size, c
 }
 
 // Forward to implementation
-reader::reader(std::string filepath,
+reader::reader(std::vector<std::string> const &filepaths,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(nullptr, filepath, options, mr))
 {
+  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
+  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, mr);
 }
 
 // Forward to implementation
-reader::reader(std::unique_ptr<cudf::io::datasource> source,
+reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(source), "", options, mr))
 {
+  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, mr);
 }
 
 // Destructor within this translation unit

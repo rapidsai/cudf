@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import types
 from contextlib import ExitStack as does_not_raise
@@ -13,7 +13,7 @@ import cudf
 from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("module", ["cupy", "numba"])
 def test_cuda_array_interface_interop_in(dtype, module):
     np_data = np.arange(10).astype(dtype)
@@ -41,7 +41,7 @@ def test_cuda_array_interface_interop_in(dtype, module):
         assert_eq(pd_data, gdf["test"])
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES | {"str"})
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["str"])
 @pytest.mark.parametrize("module", ["cupy", "numba"])
 def test_cuda_array_interface_interop_out(dtype, module):
     expectation = does_not_raise()
@@ -72,7 +72,7 @@ def test_cuda_array_interface_interop_out(dtype, module):
         assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("module", ["cupy", "numba"])
 def test_cuda_array_interface_interop_out_masked(dtype, module):
     expectation = does_not_raise()
@@ -103,7 +103,7 @@ def test_cuda_array_interface_interop_out_masked(dtype, module):
         module_data = module_constructor(cudf_data)  # noqa: F841
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES | DATETIME_TYPES)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("nulls", ["all", "some", "bools", "none"])
 @pytest.mark.parametrize("mask_type", ["bits", "bools"])
 def test_cuda_array_interface_as_column(dtype, nulls, mask_type):
@@ -169,11 +169,6 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
 
 
-@pytest.mark.skipif(
-    cupy.cuda.runtime.runtimeGetVersion() >= 10020,
-    reason="Pytorch doesn't support 10.2 cuda yet \
-        without building from source.",
-)
 def test_cuda_array_interface_pytorch():
     torch = pytest.importorskip("torch")
     series = cudf.Series([1, -1, 10, -56])

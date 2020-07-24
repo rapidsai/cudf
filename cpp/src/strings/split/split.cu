@@ -24,6 +24,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <strings/split/split_utils.cuh>
 
 #include <thrust/binary_search.h>  // upper_bound()
 #include <thrust/copy.h>           // copy_if()
@@ -34,8 +35,8 @@
 namespace cudf {
 namespace strings {
 namespace detail {
+
 using string_index_pair = thrust::pair<const char*, size_type>;
-using position_pair     = thrust::pair<size_type, size_type>;
 
 namespace {
 
@@ -493,7 +494,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   // boundary case: if no columns, return one null column (custrings issue #119)
   if (columns_count == 0) {
     results.push_back(
-      std::make_unique<column>(data_type{STRING},
+      std::make_unique<column>(data_type{type_id::STRING},
                                strings_count,
                                rmm::device_buffer{0, stream, mr},  // no data
                                create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr),
@@ -583,99 +584,6 @@ struct base_whitespace_split_tokenizer {
 };
 
 /**
- * @brief Instantiated for each string to manage navigating tokens from
- * the beginning or the end of that string.
- */
-struct whitespace_string_tokenizer {
-  /**
-   * @brief Identifies the position range of the next token in the given
-   * string at the specified iterator position.
-   *
-   * Tokens are delimited by one or more whitespace characters.
-   *
-   * @return true if a token has been found
-   */
-  __device__ bool next_token()
-  {
-    if (itr != d_str.begin()) {  // skip these 2 lines the first time through
-      start_position = end_position + 1;
-      ++itr;
-    }
-    if (start_position >= d_str.length()) return false;
-    // continue search for the next token
-    end_position = d_str.length();
-    for (; itr < d_str.end(); ++itr) {
-      if (spaces == (*itr <= ' ')) {
-        if (spaces)
-          start_position = itr.position() + 1;
-        else
-          end_position = itr.position() + 1;
-        continue;
-      }
-      spaces = !spaces;
-      if (spaces) {
-        end_position = itr.position();
-        break;
-      }
-    }
-    return start_position < end_position;
-  }
-
-  /**
-   * @brief Identifies the position range of the previous token in the given
-   * string at the specified iterator position.
-   *
-   * Tokens are delimited by one or more whitespace characters.
-   *
-   * @return true if a token has been found
-   */
-  __device__ bool prev_token()
-  {
-    end_position = start_position - 1;
-    --itr;
-    if (end_position <= 0) return false;
-    // continue search for the next token
-    start_position = 0;
-    for (; itr >= d_str.begin(); --itr) {
-      if (spaces == (*itr <= ' ')) {
-        if (spaces)
-          end_position = itr.position();
-        else
-          start_position = itr.position();
-        continue;
-      }
-      spaces = !spaces;
-      if (spaces) {
-        start_position = itr.position() + 1;
-        break;
-      }
-    }
-    return start_position < end_position;
-  }
-
-  __device__ position_pair token_byte_positions()
-  {
-    return position_pair{d_str.byte_offset(start_position), d_str.byte_offset(end_position)};
-  }
-
-  __device__ whitespace_string_tokenizer(string_view const& d_str, bool reverse = false)
-    : d_str{d_str},
-      spaces(true),
-      start_position{reverse ? d_str.length() + 1 : 0},
-      end_position{d_str.length()},
-      itr{reverse ? d_str.end() : d_str.begin()}
-  {
-  }
-
- private:
-  string_view const d_str;
-  bool spaces;  // true if current position is whitespace
-  cudf::string_view::const_iterator itr;
-  size_type start_position;
-  size_type end_position;
-};
-
-/**
  * @brief The tokenizer functions for split() with whitespace.
  *
  * The whitespace tokenizer has no delimiter and handles one or more
@@ -709,7 +617,7 @@ struct whitespace_split_tokenizer_fn : base_whitespace_split_tokenizer {
     size_type token_idx   = 0;
     position_pair token{0, 0};
     while (tokenizer.next_token() && (token_idx < token_count)) {
-      token = tokenizer.token_byte_positions();
+      token = tokenizer.get_token();
       d_tokens[d_strings.size() * (token_idx++)] =
         string_index_pair{d_str.data() + token.first, (token.second - token.first)};
     }
@@ -760,7 +668,7 @@ struct whitespace_rsplit_tokenizer_fn : base_whitespace_split_tokenizer {
     size_type token_idx   = 0;
     position_pair token{0, 0};
     while (tokenizer.prev_token() && (token_idx < token_count)) {
-      token = tokenizer.token_byte_positions();
+      token = tokenizer.get_token();
       d_tokens[d_strings.size() * (token_count - 1 - token_idx)] =
         string_index_pair{d_str.data() + token.first, (token.second - token.first)};
       ++token_idx;
@@ -857,7 +765,7 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
   // boundary case: if no columns, return one null column (issue #119)
   if (columns_count == 0) {
     results.push_back(
-      std::make_unique<column>(data_type{STRING},
+      std::make_unique<column>(data_type{type_id::STRING},
                                strings_count,
                                rmm::device_buffer{0, stream, mr},  // no data
                                create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr),

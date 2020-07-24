@@ -499,8 +499,8 @@ std::vector<contiguous_split_result> contiguous_split(
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs
  * @param[in] lhs left-hand column_view
  * @param[in] rhs right-hand column_view
- * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
- * each element. Null element represents false.
+ * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * boolean for each element. Null element represents false.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
@@ -562,8 +562,8 @@ std::unique_ptr<column> shift(column_view const& input,
  * @throws cudf::logic_error if boolean mask is not of the same length as rhs
  * @param[in] lhs left-hand scalar
  * @param[in] rhs right-hand column_view
- * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
- * each element. Null element represents false.
+ * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * boolean for each element. Null element represents false.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
@@ -586,8 +586,8 @@ std::unique_ptr<column> copy_if_else(
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs
  * @param[in] lhs left-hand column_view
  * @param[in] rhs right-hand scalar
- * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
- * each element. Null element represents false.
+ * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * boolean for each element. Null element represents false.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
@@ -608,8 +608,8 @@ std::unique_ptr<column> copy_if_else(
  * @throws cudf::logic_error if boolean mask is not of type bool
  * @param[in] lhs left-hand scalar
  * @param[in] rhs right-hand scalar
- * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
- * each element. null element represents false.
+ * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * boolean for each element. null element represents false.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
@@ -715,6 +715,48 @@ std::unique_ptr<table> boolean_mask_scatter(
 std::unique_ptr<scalar> get_element(
   column_view const& input,
   size_type index,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Indicates whether a row can be sampled more than once.
+ **/
+enum class sample_with_replacement : bool {
+  FALSE,  // A row can be sampled only once
+  TRUE    // A row can be sampled more than once
+};
+
+/**
+ * @brief Gather `n` samples from given `input` randomly
+ *
+ * @code{.pseudo}
+ * Example:
+ * input: {col1: {1, 2, 3, 4, 5}, col2: {6, 7, 8, 9, 10}}
+ * n: 3
+ * replacement: false
+ *
+ * output:       {col1: {3, 1, 4}, col2: {8, 6, 9}}
+ *
+ * replacement: true
+ *
+ * output:       {col1: {3, 1, 1}, col2: {8, 6, 6}}
+ * @endcode
+ *
+ * @throws cudf::logic_error if `n` > `input.num_rows()` and `replacement` == FALSE.
+ * @throws cudf::logic_error if `n` < 0.
+ *
+ * @param input View of a table to sample.
+ * @param n non-negative number of samples expected from `input`.
+ * @param replacement Allow or disallow sampling of the same row more than once.
+ * @param seed Seed value to initiate random number generator.
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ *
+ * @return std::unique_ptr<table> Table containing samples from `input`
+ */
+std::unique_ptr<table> sample(
+  table_view const& input,
+  size_type const n,
+  sample_with_replacement replacement = sample_with_replacement::FALSE,
+  int64_t const seed                  = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */

@@ -1,3 +1,4 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import numpy as np
 import pandas as pd
 import pytest
@@ -17,7 +18,8 @@ from cudf.tests.utils import assert_eq
     ],
 )
 @pytest.mark.parametrize("nulls", ["one", "some", "all", "none"])
-def test_dropna_series(data, nulls):
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dropna_series(data, nulls, inplace):
 
     psr = pd.Series(data)
 
@@ -38,7 +40,16 @@ def test_dropna_series(data, nulls):
     if gsr.null_count == len(gsr):
         check_dtype = False
 
-    assert_eq(psr.dropna(), gsr.dropna(), check_dtype=check_dtype)
+    if inplace:
+        psr.dropna()
+        gsr.dropna()
+        expected = psr
+        actual = gsr
+    else:
+        expected = psr.dropna()
+        actual = gsr.dropna()
+
+    assert_eq(expected, actual, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize(
@@ -55,11 +66,21 @@ def test_dropna_series(data, nulls):
 )
 @pytest.mark.parametrize("how", ["all", "any"])
 @pytest.mark.parametrize("axis", [0, 1])
-def test_dropna_dataframe(data, how, axis):
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dropna_dataframe(data, how, axis, inplace):
     pdf = pd.DataFrame(data)
     gdf = cudf.from_pandas(pdf)
 
-    assert_eq(pdf.dropna(axis=axis, how=how), gdf.dropna(axis=axis, how=how))
+    if inplace:
+        pdf.dropna(axis=axis, how=how, inplace=inplace)
+        gdf.dropna(axis=axis, how=how, inplace=inplace)
+        expected = pdf
+        actual = gdf
+    else:
+        expected = pdf.dropna(axis=axis, how=how, inplace=inplace)
+        actual = gdf.dropna(axis=axis, how=how, inplace=inplace)
+
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("how", ["all", "any"])
@@ -164,21 +185,35 @@ def test_dropna_thresh(thresh, subset):
 
 @pytest.mark.parametrize("thresh", [0, 1, 2])
 @pytest.mark.parametrize("subset", [None, [0], [1], [0, 1]])
-def test_dropna_thresh_cols(thresh, subset):
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dropna_thresh_cols(thresh, subset, inplace):
     pdf = pd.DataFrame(
         {"a": [1, 2], "b": [3, 4], "c": [5, None], "d": [np.nan, np.nan]}
     )
     gdf = cudf.from_pandas(pdf)
 
+    if inplace:
+        pdf.dropna(axis=1, thresh=thresh, subset=subset, inplace=inplace)
+        gdf.dropna(axis=1, thresh=thresh, subset=subset, inplace=inplace)
+        expected = pdf
+        actual = gdf
+    else:
+        expected = pdf.dropna(
+            axis=1, thresh=thresh, subset=subset, inplace=inplace
+        )
+        actual = gdf.dropna(
+            axis=1, thresh=thresh, subset=subset, inplace=inplace
+        )
+
     assert_eq(
-        pdf.dropna(axis=1, thresh=thresh, subset=subset),
-        gdf.dropna(axis=1, thresh=thresh, subset=subset),
+        expected, actual,
     )
 
 
 def test_dropna_dataframe_np_nan():
-    import cudf
     import numpy as np
+
+    import cudf
 
     data = {"key": [1, 2], "val": [np.nan, 3]}
     gdf = cudf.DataFrame(data)
