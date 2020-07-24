@@ -175,7 +175,6 @@ conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml
 # activate the environment
 conda activate cudf_dev
 ```
-- If using CUDA 10.0, create the environment with `conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml` instead.
 - For other CUDA versions, check the corresponding cudf_dev_cuda*.yml file in conda/environments
 
 - Build and install `libcudf` after its dependencies. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
