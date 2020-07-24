@@ -126,6 +126,7 @@
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
+- PR #5419 Support rolling, groupby_rolling for durations 
 - PR #5687 Change strings::split_record to return a lists column
 - PR #5708 Add support for `dummy_na` in `get_dummies`
 - PR #5709 Update java build to help cu-spacial with java bindings
@@ -136,6 +137,7 @@
 - PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
 - PR #5743 Reduce number of test cases in concatenate benchmark
 - PR #5725 Integrate Gbenchmarks into CI
+- PR #5752 Add cuDF internals documentation (ColumnAccessor)
 
 ## Bug Fixes
 

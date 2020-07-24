@@ -374,7 +374,7 @@ class DataFrame(Frame, Serializable):
                     self._data[col_name] = column.column_empty(
                         row_count=len(self), dtype=None, masked=True
                     )
-            self._data = self._data.get_by_label(columns)
+            self._data = self._data.select_by_label(columns)
 
     def _init_from_list_like(self, data, index=None, columns=None):
         if index is None:
