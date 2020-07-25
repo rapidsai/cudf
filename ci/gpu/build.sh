@@ -117,6 +117,12 @@ else
         ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
     done
 
+    for gt in ${WORKSPACE}/cpp/libcudf_kafka/build/gtests/* ; do
+        test_name=$(basename ${gt})
+        echo "Running GoogleTest $test_name"
+        ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
+    done
+
 
     # set environment variable for numpy 1.16
     # will be enabled for later versions by default
