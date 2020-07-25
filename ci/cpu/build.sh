@@ -41,13 +41,6 @@ gcc --version
 g++ --version
 conda list
 
-# Install the master version of dask, distributed, and streamz
-logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps"
-pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
-logger "pip install git+https://github.com/dask/dask.git --upgrade --no-deps"
-pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
-logger "pip install git+https://github.com/python-streamz/streamz.git --upgrade --no-deps"
-pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
 
 # FIX Added to deal with Anancoda SSL verification issues during conda builds
 conda config --set ssl_verify False
