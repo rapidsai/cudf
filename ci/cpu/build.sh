@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018, NVIDIA CORPORATION.
 ######################################
 # cuDF CPU conda build script for CI #
 ######################################
@@ -40,7 +40,6 @@ python --version
 gcc --version
 g++ --version
 conda list
-
 
 # FIX Added to deal with Anancoda SSL verification issues during conda builds
 conda config --set ssl_verify False
