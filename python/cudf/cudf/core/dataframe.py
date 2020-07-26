@@ -17,7 +17,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
+from pandas._config import get_option
 from pandas.api.types import is_dict_like
+from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 
 import cudf
@@ -39,7 +41,6 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     is_categorical_dtype,
-    is_datetime_dtype,
     is_list_like,
     is_scalar,
     is_string_dtype,
@@ -1119,14 +1120,30 @@ class DataFrame(Frame, Serializable):
 
     def _clean_renderable_dataframe(self, output):
         """
-        the below is permissible: null in a datetime to_pandas() becomes
-        NaT, which is then replaced with null in this processing step.
-        It is not possible to have a mix of nulls and NaTs in datetime
-        columns because we do not support NaT - pyarrow as_column
-        preprocessing converts NaT input values from numpy or pandas into
-        null.
+        This method takes in partial/preprocessed dataframe
+        and returns correct representation of it with correct
+        dimensions (rows x columns)
         """
-        output = output.to_pandas().__repr__().replace(" NaT", "null")
+
+        max_rows = get_option("display.max_rows")
+        min_rows = get_option("display.min_rows")
+        max_cols = get_option("display.max_columns")
+        max_colwidth = get_option("display.max_colwidth")
+        show_dimensions = get_option("display.show_dimensions")
+        if get_option("display.expand_frame_repr"):
+            width, _ = console.get_console_size()
+        else:
+            width = None
+
+        output = output.to_pandas().to_string(
+            max_rows=max_rows,
+            min_rows=min_rows,
+            max_cols=max_cols,
+            line_width=width,
+            max_colwidth=max_colwidth,
+            show_dimensions=show_dimensions,
+        )
+
         lines = output.split("\n")
 
         if lines[-1].startswith("["):
@@ -1135,6 +1152,23 @@ class DataFrame(Frame, Serializable):
                 "[%d rows x %d columns]" % (len(self), len(self._data.names))
             )
         return "\n".join(lines)
+
+    def _clean_nulls_from_dataframe(self, df):
+        """
+        This function converts all ``null`` values to ``<NA>`` for
+        representation as a string in `__repr__`.
+
+        Since we utilize Pandas `__repr__` at all places in our code
+        for formatting purposes, we convert columns to `str` dtype for
+        filling with `<NA>` values.
+        """
+        for col in df._data:
+            if self._data[col].has_nulls:
+                df[col] = df._data[col].astype("str").fillna(cudf._NA_REP)
+            else:
+                df[col] = df._data[col]
+
+        return df
 
     def _get_renderable_dataframe(self):
         """
@@ -1193,15 +1227,8 @@ class DataFrame(Frame, Serializable):
             lower = cudf.concat([lower_left, lower_right], axis=1)
             output = cudf.concat([upper, lower])
 
-        for col in output._data:
-            if (
-                self._data[col].has_nulls
-                and not self._data[col].dtype == "O"
-                and not is_datetime_dtype(self._data[col].dtype)
-            ):
-                output[col] = output._data[col].astype("str").fillna("null")
-            else:
-                output[col] = output._data[col]
+        output = self._clean_nulls_from_dataframe(output)
+        output._index = output._index._clean_nulls_from_index()
 
         return output
 
@@ -2758,7 +2785,7 @@ class DataFrame(Frame, Serializable):
     def __copy__(self):
         return self.copy(deep=True)
 
-    def __deepcopy__(self, memo={}):
+    def __deepcopy__(self, memo=None):
         """
         Parameters
         ----------
@@ -4480,57 +4507,6 @@ class DataFrame(Frame, Serializable):
             )
 
         cudf.utils.ioutils.buffer_write_lines(buf, lines)
-
-    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
-        """Fill null values with ``value``.
-
-        Parameters
-        ----------
-        value : scalar, Series-like or dict
-            Value to use to fill nulls. If Series-like, null values
-            are filled with values in corresponding indices.
-            A dict can be used to provide different values to fill nulls
-            in different columns.
-
-        Returns
-        -------
-        result : DataFrame
-            Copy with nulls filled.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> gdf = cudf.DataFrame({'a': [1, 2, None], 'b': [3, None, 5]})
-        >>> gdf.fillna(4).to_pandas()
-        a  b
-        0  1  3
-        1  2  4
-        2  4  5
-        >>> gdf.fillna({'a': 3, 'b': 4}).to_pandas()
-        a  b
-        0  1  3
-        1  2  4
-        2  3  5
-        """
-        if inplace:
-            outdf = {}  # this dict will just hold Nones
-        else:
-            outdf = self.copy()
-
-        if not is_dict_like(value):
-            value = dict.fromkeys(self.columns, value)
-
-        for k in value:
-            outdf[k] = self[k].fillna(
-                value[k],
-                method=method,
-                axis=axis,
-                inplace=inplace,
-                limit=limit,
-            )
-
-        if not inplace:
-            return outdf
 
     def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a DataFrame's columns. For numeric
