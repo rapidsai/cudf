@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import cudf
 from cudf.core import DataFrame, Series
 from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq
 
@@ -240,24 +241,43 @@ def test_fillna_datetime(fill_type, inplace):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("fill_type", ["scalar", "series", "dict"])
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame({"a": [1, 2, None], "b": [None, None, 5]}),
+        pd.DataFrame(
+            {"a": [1, 2, None], "b": [None, None, 5]}, index=["a", "p", "z"]
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "value",
+    [
+        10,
+        pd.Series([10, 20, 30]),
+        pd.Series([3, 4, 5]),
+        pd.Series([10, 20, 30], index=["z", "a", "p"]),
+        {"a": 5, "b": pd.Series([3, 4, 5])},
+        {"a": 5, "b": pd.Series([3, 4, 5], index=["a", "p", "z"])},
+    ],
+)
 @pytest.mark.parametrize("inplace", [True, False])
-def test_fillna_dataframe(fill_type, inplace):
-    pdf = pd.DataFrame({"a": [1, 2, None], "b": [None, None, 5]})
+def test_fillna_dataframe(df, value, inplace):
+    pdf = df
     gdf = DataFrame.from_pandas(pdf)
 
-    if fill_type == "scalar":
-        fill_value_pd = 5
-        fill_value_cudf = fill_value_pd
-    elif fill_type == "series":
-        fill_value_pd = pd.Series([3, 4, 5])
-        fill_value_cudf = Series.from_pandas(fill_value_pd)
+    fill_value_pd = value
+    if isinstance(fill_value_pd, (pd.Series, pd.DataFrame)):
+        fill_value_cudf = cudf.from_pandas(fill_value_pd)
+    elif isinstance(fill_value_pd, dict):
+        fill_value_cudf = {}
+        for key in fill_value_pd:
+            temp_val = fill_value_pd[key]
+            if isinstance(temp_val, cudf.Series):
+                temp_val = cudf.from_pandas(temp_val)
+            fill_value_cudf[key] = temp_val
     else:
-        fill_value_pd = {"a": 5, "b": pd.Series([3, 4, 5])}
-        fill_value_cudf = {
-            "a": fill_value_pd["a"],
-            "b": Series.from_pandas(fill_value_pd["b"]),
-        }
+        fill_value_cudf = value
 
     expect = pdf.fillna(fill_value_pd, inplace=inplace)
     got = gdf.fillna(fill_value_cudf, inplace=inplace)
