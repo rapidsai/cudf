@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import collections
 import functools
 import pickle
@@ -7,7 +6,7 @@ import pickle
 import pandas as pd
 
 import cudf
-import cudf._lib.groupby as libgroupby
+from cudf._lib import groupby as libgroupby
 from cudf._lib.nvtx import annotate
 from cudf.core.abc import Serializable
 from cudf.utils.utils import cached_property
@@ -55,16 +54,18 @@ class GroupBy(Serializable):
         else:
             self.grouping = _Grouping(obj, by, level)
 
-    def __getattr__(self, key):
-        if key != "_agg_func_name_with_args":
+    def __getattribute__(self, key):
+        try:
+            return super().__getattribute__(key)
+        except AttributeError:
             if key in libgroupby._GROUPBY_AGGS:
                 return functools.partial(self._agg_func_name_with_args, key)
-        raise AttributeError(
-            f"'{self.__class__.__name__}' has no attribute '{key}'"
-        )
+            raise
 
     def __iter__(self):
         group_names, offsets, grouped_values = self._grouped()
+        if isinstance(group_names, cudf.Index):
+            group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
 
@@ -226,7 +227,6 @@ class GroupBy(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-
         kwargs = header["kwargs"]
 
         obj_type = pickle.loads(header["obj_type"])
@@ -555,7 +555,7 @@ class DataFrameGroupBy(GroupBy):
         Parrot       25.0
 
         >>> arrays = [['Falcon', 'Falcon', 'Parrot', 'Parrot'],
-        ['Captive', 'Wild', 'Captive', 'Wild']]
+        ... ['Captive', 'Wild', 'Captive', 'Wild']]
         >>> index = pd.MultiIndex.from_arrays(arrays, names=('Animal', 'Type'))
         >>> df = cudf.DataFrame({'Max Speed': [390., 350., 30., 20.]},
                 index=index)
@@ -587,10 +587,15 @@ class DataFrameGroupBy(GroupBy):
             dropna=dropna,
         )
 
-    def __getattr__(self, key):
-        if key in self.obj:
-            return self.obj[key].groupby(self.grouping, dropna=self._dropna)
-        return super().__getattr__(key)
+    def __getattribute__(self, key):
+        try:
+            return super().__getattribute__(key)
+        except AttributeError:
+            if key in self.obj:
+                return self.obj[key].groupby(
+                    self.grouping, dropna=self._dropna
+                )
+            raise
 
     def __getitem__(self, key):
         return self.obj[key].groupby(self.grouping, dropna=self._dropna)

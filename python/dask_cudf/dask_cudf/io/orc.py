@@ -1,6 +1,10 @@
-import pyarrow.orc as orc
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
-import dask.dataframe as dd
+from io import BufferedWriter, IOBase
+
+from pyarrow import orc as orc
+
+from dask import dataframe as dd
 from dask.base import tokenize
 from dask.bytes.core import get_fs_token_paths, stringify_path
 from dask.dataframe.io.utils import _get_pyarrow_dtypes
@@ -85,7 +89,10 @@ def read_orc(path, columns=None, storage_options=None, **kwargs):
 
 def write_orc_partition(df, path, fs, filename, compression=None):
     full_path = fs.sep.join([path, filename])
-    cudf.io.to_orc(df, full_path, compression=compression)
+    with fs.open(full_path, mode="wb") as out_file:
+        if not isinstance(out_file, IOBase):
+            out_file = BufferedWriter(out_file)
+        cudf.io.to_orc(df, out_file, compression=compression)
     return full_path
 
 
@@ -116,8 +123,7 @@ def to_orc(
         then a ``dask.delayed`` object is returned for future computation.
     """
 
-    from dask import delayed
-    from dask import compute as dask_compute
+    from dask import compute as dask_compute, delayed
 
     # TODO: Use upstream dask implementation once available
     #       (see: Dask Issue#5596)

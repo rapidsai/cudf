@@ -24,12 +24,43 @@
 #include <tests/utilities/cudf_gtest.hpp>
 
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <limits>
 
 namespace cudf {
 namespace test {
 namespace binop {
+
+// This is used to convert the expected binop result computed by the test utilities and the
+// result returned by the binop operation into string, which is then used for display purposes
+// when the values do not match.
+struct stringify_out_values {
+  template <typename TypeOut, std::enable_if_t<!is_chrono<TypeOut>()>* = nullptr>
+  std::string operator()(TypeOut lhs, TypeOut rhs) const
+  {
+    std::stringstream out_str;
+    out_str << "lhs: " << lhs << "\nrhs: " << rhs;
+    return out_str.str();
+  }
+
+  template <typename TypeOut, std::enable_if_t<is_timestamp<TypeOut>()>* = nullptr>
+  std::string operator()(TypeOut lhs, TypeOut rhs) const
+  {
+    std::stringstream out_str;
+    out_str << "lhs: " << lhs.time_since_epoch().count()
+            << "\nrhs: " << rhs.time_since_epoch().count();
+    return out_str.str();
+  }
+
+  template <typename TypeOut, std::enable_if_t<is_duration<TypeOut>()>* = nullptr>
+  std::string operator()(TypeOut lhs, TypeOut rhs) const
+  {
+    std::stringstream out_str;
+    out_str << "lhs: " << lhs.count() << "\nrhs: " << rhs.count();
+    return out_str.str();
+  }
+};
 
 // This comparator can be used to compare two values that are within a max ULP error.
 // This is typically used to compare floating point values computed on CPU and GPU which is
@@ -70,7 +101,7 @@ void ASSERT_BINOP(column_view const& out,
   for (size_t i = 0; i < out_data.size(); ++i) {
     auto lhs = out_data[i];
     auto rhs = (TypeOut)(op(lhs_h, rhs_data[i]));
-    ASSERT_TRUE(value_comparator(lhs, rhs)) << "lhs: " << lhs << "\nrhs: " << rhs;
+    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(lhs, rhs);
   }
 
   if (rhs.nullable()) {
@@ -117,7 +148,7 @@ void ASSERT_BINOP(column_view const& out,
   for (size_t i = 0; i < out_data.size(); ++i) {
     auto lhs = out_data[i];
     auto rhs = (TypeOut)(op(lhs_data[i], rhs_h));
-    ASSERT_TRUE(value_comparator(lhs, rhs)) << "lhs: " << lhs << "\nrhs: " << rhs;
+    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(lhs, rhs);
   }
 
   if (lhs.nullable()) {
@@ -165,7 +196,7 @@ void ASSERT_BINOP(column_view const& out,
   for (size_t i = 0; i < out_data.size(); ++i) {
     auto lhs = out_data[i];
     auto rhs = (TypeOut)(op(lhs_data[i], rhs_data[i]));
-    ASSERT_TRUE(value_comparator(lhs, rhs)) << "lhs: " << lhs << "\nrhs: " << rhs;
+    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(lhs, rhs);
   }
 
   if (lhs.nullable() and rhs.nullable()) {

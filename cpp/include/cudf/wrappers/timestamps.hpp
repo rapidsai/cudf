@@ -32,23 +32,26 @@ namespace cudf {
 namespace detail {
 // TODO: Use chrono::utc_clock when available in libcu++?
 template <class Duration>
-using time_point = simt::std::chrono::time_point<simt::std::chrono::system_clock, Duration>;
+using time_point = simt::std::chrono::sys_time<Duration>;
 
 template <class Duration>
 struct timestamp : time_point<Duration> {
+  // Bring over base class constructors and make them visible here
+  using time_point<Duration>::time_point;
+
+  // This is needed as __shared__ objects of this type can't be assigned in device code
+  // when the initializer list constructs subobjects with values, which is what std::time_point
+  // does.
   constexpr timestamp() : time_point<Duration>(Duration()){};
-  constexpr timestamp(Duration d) : time_point<Duration>(d){};
+
+  // Implicitly convert a tick count into a timestamp
+  // TODO: is this still needed and is this operation even meaningful? The duration units
+  // cannot be inferred from this
   constexpr timestamp(typename Duration::rep r) : time_point<Duration>(Duration(r)){};
-  /**
-   * @brief Constructs a new timestamp by copying the contents of another
-   * `time_point` and converting its duration value if necessary.
-   *
-   * @param other The `timestamp` to copy
-   */
-  // TODO: This explict truncation is intended?
-  template <class FromDuration>
-  inline constexpr explicit timestamp(time_point<FromDuration> const& other)
-    : time_point<Duration>(simt::std::chrono::duration_cast<Duration>(other.time_since_epoch())){};
+
+  // The inherited copy constructor will hide the auto generated copy constructor;
+  // hence, explicitly define and delegate
+  constexpr timestamp(const time_point<Duration>& other) : time_point<Duration>(other) {}
 };
 }  // namespace detail
 

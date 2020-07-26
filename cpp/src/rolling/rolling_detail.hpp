@@ -32,7 +32,7 @@ static constexpr bool is_rolling_supported()
 {
   if (!cudf::detail::is_valid_aggregation<ColumnType, op>()) {
     return false;
-  } else if (cudf::is_numeric<ColumnType>()) {
+  } else if (cudf::is_numeric<ColumnType>() or cudf::is_duration<ColumnType>()) {
     constexpr bool is_comparable_countable_op = std::is_same<AggOp, DeviceMin>::value or
                                                 std::is_same<AggOp, DeviceMax>::value or
                                                 std::is_same<AggOp, DeviceCount>::value;
@@ -43,7 +43,9 @@ static constexpr bool is_rolling_supported()
       (op == aggregation::MEAN) or (op == aggregation::ROW_NUMBER);
 
     constexpr bool is_valid_numeric_agg =
-      (cudf::is_numeric<ColumnType>() or is_comparable_countable_op) and is_operation_supported;
+      (cudf::is_numeric<ColumnType>() or cudf::is_duration<ColumnType>() or
+       is_comparable_countable_op) and
+      is_operation_supported;
 
     return is_valid_numeric_agg;
 
@@ -101,7 +103,7 @@ struct rolling_store_output_functor<_T, true> {
   template <typename T = _T, std::enable_if_t<cudf::is_timestamp<T>()> * = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
   {
-    out = val.time_since_epoch() / count;
+    out = static_cast<T>(val.time_since_epoch() / count);
   }
 };
 }  // namespace detail
