@@ -139,6 +139,7 @@
 - PR #5756 Switch JNI code to use the RMM owning wrapper
 - PR #5725 Integrate Gbenchmarks into CI
 - PR #5752 Add cuDF internals documentation (ColumnAccessor)
+- PR #5759 Fix documentation describing JIT cache default location
 
 ## Bug Fixes
 
