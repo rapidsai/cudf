@@ -2,7 +2,7 @@
 import copy
 import functools
 import warnings
-from collections import OrderedDict
+from collections import OrderedDict, abc as abc
 
 import cupy
 import numpy as np
@@ -1312,13 +1312,22 @@ class Frame(libcudf.table.Table):
         if axis:
             raise NotImplementedError("The axis keyword is not supported")
 
-        if not isinstance(value, dict):
+        if isinstance(value, cudf.Series):
+            value = value.reindex(self._data.names)
+        elif isinstance(value, cudf.DataFrame):
+            if not self.index.equals(value.index):
+                value = value.reindex(self.index)
+            else:
+                value = value
+        elif not isinstance(value, abc.Mapping):
             value = {name: copy.deepcopy(value) for name in self._data.names}
 
         copy_data = self._data.copy(deep=True)
 
         for name, col in copy_data.items():
-            copy_data[name] = copy_data[name].fillna(value[name],)
+            if name in value and value[name] is not None:
+                copy_data[name] = copy_data[name].fillna(value[name],)
+
         result = self._from_table(Frame(copy_data, self._index))
 
         return self._mimic_inplace(result, inplace=inplace)
@@ -2864,8 +2873,11 @@ class Frame(libcudf.table.Table):
 def _get_replacement_values(to_replace, replacement, col_name, column):
 
     all_nan = False
-
-    if is_dict_like(to_replace) and replacement is None:
+    if (
+        is_dict_like(to_replace)
+        and not isinstance(to_replace, cudf.Series)
+        and replacement is None
+    ):
         replacement = list(to_replace.values())
         to_replace = list(to_replace.keys())
     elif not is_scalar(to_replace):
