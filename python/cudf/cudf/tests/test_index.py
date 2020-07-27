@@ -1310,9 +1310,10 @@ def test_index_drop_duplicates(data, dtype):
 )
 def test_index_tolist(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)
+    pdi = pd.Index(data, dtype=dtype)
     # TODO: This needs to check for a raised error instead.
     # xref: https://github.com/rapidsai/cudf/issues/5689
-    gdi.tolist()
+    assert_eq(gdi.tolist(), pdi.tolist())
 
 
 @pytest.mark.parametrize("data", [[], [1], [1, 2, 3]])
