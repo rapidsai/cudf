@@ -52,7 +52,7 @@ std::shared_ptr<arrow::Table> get_arrow_table(){
     auto int64array = get_arrow_array<int64_t>({1, 2, 3, 4, 5});
     auto int32array = get_arrow_array<int32_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
     auto string_array = get_arrow_array<cudf::string_view>({"fff", "aaa", "", "fff", "ccc"}, {1, 1, 1, 0, 1});
-    auto dict_array = get_arrow_dict_array<int64_t, int32_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+    auto dict_array = get_arrow_dict_array({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
     //auto list_array = get_arrow_list_array({1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 2, 4, 5, 6, 9}, {1, 1, 0, 1, 1});
 
     //std::vector <std::shared_ptr<arrow::Field>> schema_vector = {arrow::field("a", int32array->type()), arrow::field("b", int64array->type()), arrow::field("c", string_array->type()), arrow::field("d", dict_array->type()), arrow::field("e", list_array->type())};
