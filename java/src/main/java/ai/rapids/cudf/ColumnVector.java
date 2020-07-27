@@ -336,7 +336,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       List<MemoryBuffer> offsets = new ArrayList<>();
       List<DType> allTypes = new ArrayList<>();
       List<Long> allRows = new ArrayList<>();
-      MemoryBuffer data = offHeap.getData();
       ColumnViewPointerAccess child;
       for (child = this; child != null; child = child.getChildColumnView()) {
         offsets.add(child.getOffsetBuffer());
@@ -345,6 +344,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
         allTypes.add(child.getDataType());
       }
 
+      MemoryBuffer data = offHeap.getData();
       boolean needsCleanup = true;
       try {
         // We don't have a good way to tell if it is cached on the device or recalculate it on

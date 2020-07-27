@@ -1204,28 +1204,44 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeDataPoint
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     if (column->type().id() == cudf::type_id::STRING) {
       if (column->size() > 0) {
+       std::cout << "KUHU IS STRING 1\t" << "\n";
         cudf::strings_column_view view = cudf::strings_column_view(*column);
+        std::cout << "KUHU IS STRING 2\t" << "\n";
         cudf::column_view data_view = view.chars();
+        std::cout << "KUHU IS STRING 3\t" << "\n";
         ret[0] = reinterpret_cast<jlong>(data_view.data<char>());
+        std::cout << "KUHU IS STRING 4\t" << "\n";
         ret[1] = data_view.size();
+        std::cout << "KUHU IS STRING 5 \t" << data_view.size() << "\n";
       } else {
+      std::cout << "NO!!!" << "\n";
         ret[0] = 0;
         ret[1] = 0;
       }
     } else if(column->type().id() == cudf::type_id::LIST) {
+    std::cout << "NO!!!"<< "\n";
     //handle list by calling this recursively on child
       if (column->size() > 0) {
               cudf::lists_column_view view = cudf::lists_column_view(*column);
 //              cudf::column_view data_view = Java_ai_rapids_cudf_ColumnVector_getNativeDataPointer(env, jobject, view.child)
               cudf::column_view data_view = view.child();
               while (data_view.type().id() == cudf::type_id::LIST) {
-//              std::cout << "child data size=" << data_view.size();
+              std::cout << "child data size=" << data_view.size();
                 data_view = cudf::lists_column_view(data_view).child();
               }
+//              std::cout << "KUHU data_view.type()\t" << "\n" << " cudf::size_of(data_view.type())" << cudf::size_of(data_view.type()) << "\n";
+              if (data_view.type().id() == cudf::type_id::STRING) {
+              cudf::strings_column_view str_view = cudf::strings_column_view(data_view);
+              ret[0] = reinterpret_cast<jlong>(str_view.chars().data<char>());
+                            std::cout << "KUHU data_view.size()\t" << data_view.size() << "\n";
+                            std::cout << "KUHU ret[0] \t" << ret[0] << "\n";
+              ret[1] = str_view.chars().size();
+              } else {
               ret[0] = reinterpret_cast<jlong>(data_view.data<char>());
-//              std::cout << "KUHU data_view.size()\t" << data_view.size() << "\n";
-//              std::cout << "KUHU data_view.type()\t" << data_view.type().id() << "\n" << " cudf::size_of(data_view.type())" << cudf::size_of(data_view.type()) << "\n";
+                            std::cout << "KUHU data_view.size()\t" << data_view.size() << "\n";
+                            std::cout << "KUHU ret[0] \t" << ret[0] << "\n";
               ret[1] = cudf::size_of(data_view.type()) * data_view.size();
+              }
       } else {
         ret[0] = 0;
         ret[1] = 0;
