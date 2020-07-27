@@ -28,9 +28,7 @@ requirements:
     - cudf {{ version }}
     - dask >=2.15.0
     - distributed >=2.15.0
-test:
-  imports:
-    - dask_cudf
+
 
 about:
   home: http://rapids.ai/

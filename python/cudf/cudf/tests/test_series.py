@@ -317,3 +317,44 @@ def test_series_column_iter_error():
         ),
     ):
         iter(gs._column)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1.0, 2.0, None, 4.0, 5.0],
+        ["a", "b", "c", "d", "e"],
+        ["a", "b", None, "d", "e"],
+        [None, None, None, None, None],
+        np.array(["1991-11-20", "2004-12-04"], dtype=np.datetime64),
+        np.array(["1991-11-20", None], dtype=np.datetime64),
+        np.array(
+            ["1991-11-20 05:15:00", "2004-12-04 10:00:00"], dtype=np.datetime64
+        ),
+        np.array(["1991-11-20 05:15:00", None], dtype=np.datetime64),
+    ],
+)
+def test_series_tolist(data):
+    psr = pd.Series(data)
+    gsr = cudf.from_pandas(psr)
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            r"cuDF does not support conversion to host memory "
+            r"via `tolist()` method. Consider using "
+            r"`.to_arrow().to_pylist()` to construct a Python list."
+        ),
+    ):
+        gsr.tolist()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [[], [None, None], ["a"], ["a", "b", "c"] * 500, [1.0, 2.0, 0.3] * 57],
+)
+def test_series_size(data):
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+
+    assert_eq(psr.size, gsr.size)

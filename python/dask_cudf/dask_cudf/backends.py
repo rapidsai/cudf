@@ -1,3 +1,4 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -5,7 +6,7 @@ import pyarrow as pa
 
 from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
-from dask.dataframe.methods import concat_dispatch
+from dask.dataframe.methods import concat_dispatch, tolist_dispatch
 from dask.dataframe.utils import (
     UNKNOWN_CATEGORIES,
     _nonempty_scalar,
@@ -216,6 +217,11 @@ def concat_cudf(
 @categorical_dtype_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
 def categorical_dtype_cudf(categories=None, ordered=None):
     return cudf.CategoricalDtype(categories=categories, ordered=ordered)
+
+
+@tolist_dispatch.register((cudf.Series, cudf.Index))
+def tolist_cudf(obj):
+    return obj.to_arrow().to_pylist()
 
 
 try:

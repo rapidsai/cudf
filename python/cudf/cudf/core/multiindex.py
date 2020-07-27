@@ -373,8 +373,8 @@ class MultiIndex(Index):
                 )
             ):
                 raise TypeError(
-                    "values need to be a Multi-Index or set/list-like tuple \
-                        squences  when `level=None`."
+                    "values need to be a Multi-Index or set/list-like tuple "
+                    "squences  when `level=None`."
                 )
             else:
                 values_idx = cudf.MultiIndex.from_tuples(
@@ -617,7 +617,7 @@ class MultiIndex(Index):
 
     @property
     def size(self):
-        return len(self._source_data)
+        return len(self)
 
     def take(self, indices):
         from collections.abc import Sequence
@@ -643,9 +643,6 @@ class MultiIndex(Index):
         return result
 
     def serialize(self):
-        """Serialize into pickle format suitable for file storage or network
-        transmission.
-        """
         header = {}
         header["type-serialized"] = pickle.dumps(type(self))
         header["names"] = pickle.dumps(self.names)
@@ -656,8 +653,6 @@ class MultiIndex(Index):
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert from pickle format into Index
-        """
         names = pickle.loads(header["names"])
 
         source_data_typ = pickle.loads(
@@ -921,6 +916,10 @@ class MultiIndex(Index):
 
     @property
     def is_monotonic_increasing(self):
+        """
+        Return if the index is monotonic increasing
+        (only equal or increasing) values.
+        """
         if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = self._is_sorted(
                 ascending=None, null_position=None
@@ -929,6 +928,10 @@ class MultiIndex(Index):
 
     @property
     def is_monotonic_decreasing(self):
+        """
+        Return if the index is monotonic decreasing
+        (only equal or decreasing) values.
+        """
         if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = self._is_sorted(
                 ascending=[False] * len(self.levels), null_position=None
@@ -938,8 +941,74 @@ class MultiIndex(Index):
     def argsort(self, ascending=True, **kwargs):
         return self._source_data.argsort(ascending=ascending, **kwargs)
 
+    def fillna(self, value):
+        """
+        Fill null values with the specified value.
+
+        Parameters
+        ----------
+        value : scalar
+            Scalar value to use to fill nulls. This value cannot be a
+            list-likes.
+
+        Returns
+        -------
+        filled : MultiIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.MultiIndex(
+        ...         levels=[["a", "b", "c", None], ["1", None, "5"]],
+        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...         names=["x", "y"],
+        ...       )
+        >>> index
+        MultiIndex(levels=[0       a
+        1       b
+        2       c
+        3    None
+        dtype: object, 0       1
+        1    None
+        2       5
+        dtype: object],
+        codes=   x  y
+        0  0  0
+        1  0  2
+        2  1  1
+        3  2  1
+        4  3  0)
+        >>> index.fillna('hello')
+        MultiIndex(levels=[0        a
+        1        b
+        2        c
+        3    hello
+        dtype: object, 0        1
+        1        5
+        2    hello
+        dtype: object],
+        codes=   x  y
+        0  0  0
+        1  0  1
+        2  1  2
+        3  2  2
+        4  3  0)
+        """
+
+        return super().fillna(value=value)
+
     def unique(self):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())
+
+    def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in MultiIndex object
+        to `<NA>` as a preprocessing step to `__repr__` methods.
+        """
+        index_df = self._source_data
+        return MultiIndex.from_frame(
+            index_df._clean_nulls_from_dataframe(index_df), names=self.names
+        )
 
     def memory_usage(self, deep=False):
         n = 0

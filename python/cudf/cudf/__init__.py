@@ -8,7 +8,7 @@ from numba import cuda
 
 import rmm
 
-from cudf import core, datasets
+from cudf import core, datasets, testing
 from cudf._version import get_versions
 from cudf.core import (
     CategoricalIndex,
@@ -62,6 +62,7 @@ from cudf.io import (
     read_orc,
     read_parquet,
 )
+from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
 
 cuda.set_memory_manager(rmm.RMMNumbaManager)
