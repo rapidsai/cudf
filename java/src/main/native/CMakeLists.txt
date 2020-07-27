@@ -123,6 +123,7 @@ find_path(LIBCUDACXX_INCLUDE "simt"
 
 find_path(SPDLOG_INCLUDE "spdlog"
     HINTS "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
+          "$ENV{RMM_ROOT}/include"
           "$ENV{CONDA_PREFIX}/include")
 
 ###################################################################################################

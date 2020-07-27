@@ -524,10 +524,10 @@ def test_dataframe_to_string():
     expect = """
 a b  c
 0 1 11 0
-1 2 12 null
+1 2 12 <NA>
 2 3 13 2
 3 4 14 3
-4 5 15 null
+4 5 15 <NA>
 5 6 16 5
 """
     # values should match despite whitespace difference

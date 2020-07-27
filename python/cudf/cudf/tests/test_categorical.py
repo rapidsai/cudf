@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -62,8 +62,8 @@ def test_categorical_integer():
     string = str(sr)
     expect_str = """
 0 a
-1 null
-2 null
+1 <NA>
+2 <NA>
 3 c
 4 a
 dtype: category

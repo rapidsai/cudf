@@ -153,8 +153,8 @@ def test_string_repr(ps_gs, item):
     expect = str(expect_out)
     got = str(got_out)
 
-    # if isinstance(expect_out, pd.Series):
-    #     expect = expect.replace("object", "str")
+    if got_out is not None and len(got_out) > 1:
+        expect = expect.replace("None", "<NA>")
 
     assert expect == got
 
