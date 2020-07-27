@@ -37,8 +37,8 @@ std::shared_ptr<arrow::Buffer> fetch_data_buffer(column_view input_view, arrow::
 
   CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, data_size_in_bytes, &data_buffer).ok(),
                "Failed to allocate Arrow buffer for data");
-  cudaMemcpy(
-    data_buffer->mutable_data(), input_view.data<T>(), data_size_in_bytes, cudaMemcpyDeviceToHost);
+  CUDA_TRY(cudaMemcpy(
+    data_buffer->mutable_data(), input_view.data<T>(), data_size_in_bytes, cudaMemcpyDeviceToHost));
 
   return data_buffer;
 }
@@ -51,17 +51,10 @@ std::shared_ptr<arrow::Buffer> fetch_mask_buffer(column_view input_view, arrow::
   if (input_view.has_nulls()) {
     CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, mask_size_in_bytes, &mask_buffer).ok(),
                  "Failed to allocate Arrow buffer for mask");
-    if (input_view.offset() > 0) {
-      cudaMemcpy(mask_buffer->mutable_data(),
-                 cudf::copy_bitmask(input_view).data(),
-                 mask_size_in_bytes,
-                 cudaMemcpyDeviceToHost);
-    } else {
-      cudaMemcpy(mask_buffer->mutable_data(),
-                 input_view.null_mask(),
-                 mask_size_in_bytes,
-                 cudaMemcpyDeviceToHost);
-    }
+    CUDA_TRY(cudaMemcpy(mask_buffer->mutable_data(), 
+               (input_view.offset() > 0)? cudf::copy_bitmask(input_view).data() : input_view.null_mask(),
+               mask_size_in_bytes,
+               cudaMemcpyDeviceToHost));
 
     return mask_buffer;
   }
@@ -154,15 +147,15 @@ std::shared_ptr<arrow::Table> cudf_to_arrow(table_view input,
                                             std::vector<std::string> const& column_names,
                                             arrow::MemoryPool* ar_mr)
 {
-  auto num_columns = input.num_columns();
+  CUDF_FUNC_RANGE();
 
-  CUDF_EXPECTS((column_names.size() == num_columns),
+  CUDF_EXPECTS((column_names.size() == input.num_columns()),
                "column names should be empty or should be equal to number of columns in table");
 
   std::vector<std::shared_ptr<arrow::Array>> arrays;
   std::vector<std::shared_ptr<arrow::Field>> fields;
   std::shared_ptr<arrow::Schema> schema;
-  bool has_names = column_names.size() > 0;
+  bool const has_names = not column_names.empty();
 
   size_type itr = 0;
   for (auto const& c : input) {

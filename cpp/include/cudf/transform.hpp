@@ -101,8 +101,8 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  **/
 std::shared_ptr<arrow::Table> cudf_to_arrow(
   table_view input,
-  std::vector<std::string> const& column_names = {},
-  arrow::MemoryPool* ar_mr                     = arrow::default_memory_pool());
+  std::vector<std::string> const& column_names,
+  arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
 
 /**
  * @brief Create `cudf::table` from given arrow Table input

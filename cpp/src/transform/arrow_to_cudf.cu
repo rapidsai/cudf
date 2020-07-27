@@ -56,7 +56,7 @@ data_type arrow_to_cudf_type(arrow::Type::type arrow_type)
   }
 }
 
-struct dispatch_to_cudf_col {
+struct dispatch_to_cudf_column {
   template <typename T>
   std::enable_if_t<is_fixed_width<T>(), std::pair<std::unique_ptr<column>, column_view>> operator()(
     const std::shared_ptr<arrow::Array> arrow_col,
@@ -71,15 +71,15 @@ struct dispatch_to_cudf_col {
     auto col         = make_fixed_width_column(
       type, num_rows, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
     auto mutable_column_view = col->mutable_view();
-    cudaMemcpy(mutable_column_view.data<void*>(),
+    CUDA_TRY(cudaMemcpy(mutable_column_view.data<void*>(),
                data_buffer->data(),
                data_buffer->size(),
-               cudaMemcpyHostToDevice);
+               cudaMemcpyHostToDevice));
     if (has_nulls) {
-      cudaMemcpy(mutable_column_view.null_mask(),
+      CUDA_TRY(cudaMemcpy(mutable_column_view.null_mask(),
                  arrow_col->null_bitmap_data(),
                  arrow_col->null_bitmap()->size(),
-                 cudaMemcpyHostToDevice);
+                 cudaMemcpyHostToDevice));
     }
 
     return std::make_pair<std::unique_ptr<column>, column_view>(
@@ -102,12 +102,11 @@ struct dispatch_to_cudf_col {
 
     if (arrow_col->null_bitmap_data() != nullptr) {
       mask = std::make_unique<rmm::device_buffer>(arrow_col->null_bitmap()->size(), stream, mr);
-      cudaMemcpy(mask->data(),
+      CUDA_TRY(cudaMemcpy(mask->data(),
                  arrow_col->null_bitmap_data(),
                  arrow_col->null_bitmap()->size(),
-                 cudaMemcpyHostToDevice);
+                 cudaMemcpyHostToDevice));
     }
-    std::vector<std::unique_ptr<column>> child_column;
 
     if (std::is_same<T, cudf::string_view>::value) {
       auto str_array    = static_cast<arrow::StringArray*>(arrow_col.get());
@@ -117,7 +116,7 @@ struct dispatch_to_cudf_col {
         str_array->value_data()->size(), str_array->value_data(), nullptr);
 
       auto offsets_column = std::move(type_dispatcher(data_type(type_id::INT32),
-                                                      dispatch_to_cudf_col{},
+                                                      dispatch_to_cudf_column{},
                                                       offset_array,
                                                       data_type(type_id::INT32),
                                                       true,
@@ -125,7 +124,7 @@ struct dispatch_to_cudf_col {
                                                       stream)
                                         .first);
       auto chars_column   = std::move(type_dispatcher(data_type(type_id::INT8),
-                                                    dispatch_to_cudf_col{},
+                                                    dispatch_to_cudf_column{},
                                                     char_array,
                                                     data_type(type_id::INT32),
                                                     true,
@@ -146,7 +145,7 @@ struct dispatch_to_cudf_col {
       auto dict_array = static_cast<arrow::DictionaryArray*>(arrow_col.get());
       auto ind_type   = arrow_to_cudf_type(dict_array->indices()->type()->id());
       auto indices    = type_dispatcher(
-        ind_type, dispatch_to_cudf_col{}, dict_array->indices(), ind_type, true, mr, stream);
+        ind_type, dispatch_to_cudf_column{}, dict_array->indices(), ind_type, true, mr, stream);
       std::unique_ptr<column> indices_column = nullptr;
       // If index type is not of type int32_t, then cast it to int32_t
       if (indices.first->type().id() != type_id::INT32) {
@@ -165,7 +164,7 @@ struct dispatch_to_cudf_col {
 
       auto dict_type = arrow_to_cudf_type(dict_array->dictionary()->type()->id());
       auto keys      = type_dispatcher(
-        dict_type, dispatch_to_cudf_col{}, dict_array->dictionary(), dict_type, true, mr, stream);
+        dict_type, dispatch_to_cudf_column{}, dict_array->dictionary(), dict_type, true, mr, stream);
       auto keys_column = (keys.first->size() == dict_array->dictionary()->length())
                            ? std::move(keys.first)
                            : std::make_unique<column>(keys.second, stream, mr);
@@ -179,7 +178,7 @@ struct dispatch_to_cudf_col {
                                             list_array->value_offsets(),
                                             nullptr);
       auto offsets        = type_dispatcher(data_type(type_id::INT32),
-                                     dispatch_to_cudf_col{},
+                                     dispatch_to_cudf_column{},
                                      offset_array,
                                      data_type(type_id::INT32),
                                      true,
@@ -191,7 +190,7 @@ struct dispatch_to_cudf_col {
 
       auto child_type = arrow_to_cudf_type(list_array->values()->type()->id());
       auto child      = type_dispatcher(
-        child_type, dispatch_to_cudf_col{}, list_array->values(), child_type, false, mr, stream);
+        child_type, dispatch_to_cudf_column{}, list_array->values(), child_type, false, mr, stream);
       auto child_column = (child.first->size() == list_array->values()->length())
                             ? std::move(child.first)
                             : std::make_unique<column>(child.second, stream, mr);
@@ -235,7 +234,7 @@ std::unique_ptr<table> arrow_to_cudf(std::shared_ptr<arrow::Table> input_table,
     auto cudf_type = arrow_to_cudf_type(chunks_col->type()->id());
     for (auto const& c : chunks_col->chunks()) {
       auto col_and_view =
-        type_dispatcher(cudf_type, dispatch_to_cudf_col{}, c, cudf_type, false, mr, stream);
+        type_dispatcher(cudf_type, dispatch_to_cudf_column{}, c, cudf_type, false, mr, stream);
       concat_columns.emplace_back(std::move(col_and_view.first));
       concat_column_views.emplace_back(col_and_view.second);
     }
@@ -257,6 +256,8 @@ std::unique_ptr<table> arrow_to_cudf(std::shared_ptr<arrow::Table> input_table,
 std::unique_ptr<table> arrow_to_cudf(std::shared_ptr<arrow::Table> input_table,
                                      rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
+
   return detail::arrow_to_cudf(input_table, mr);
 }
 
