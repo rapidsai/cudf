@@ -142,6 +142,7 @@
 - PR #5725 Integrate Gbenchmarks into CI
 - PR #5752 Add cuDF internals documentation (ColumnAccessor)
 - PR #5759 Fix documentation describing JIT cache default location
+- PR #5780 Add Java bindings for pad
 
 ## Bug Fixes
 
