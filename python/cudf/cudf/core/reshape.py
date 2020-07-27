@@ -667,3 +667,61 @@ def merge_sorted(
     )
     result._copy_categories(objs[0])
     return result
+
+
+def pivot(df, index=None, columns=None, values=None):
+    """
+    Return reshaped DataFrame organized by the given index and column values.
+
+    Reshape data (produce a "pivot" table) based on column values. Uses
+    unique values from specified `index` / `columns` to form axes of the
+    resulting DataFrame.
+
+    Parameters
+    ----------
+    index : column name, optional
+        Column used to construct the index of the result.
+    columns : column name, optional
+        Column used to construct the columns of the result.
+    values : column name or list of column names, optional
+        Column(s) whose values are rearranged to produce the result.
+        If not specified, all remaining columns of the DataFrame
+        are used.
+
+    Returns
+    -------
+    DataFrame
+
+    Examples
+    --------
+    TODO
+    """
+    if values is None:
+        values = [v for v in df._data.keys() if v not in (index, columns)]
+
+    if index is None:
+        index_column = df.index._values
+    else:
+        index_column = df._data[index]
+
+    columns_column = df._data[columns]
+
+    index_labels, index_idx = index_column.encode()
+    columns_labels, columns_idx = columns_column.encode()
+    column_names = columns_labels.to_pandas()
+
+    # the result of pivot always has a multicolumn
+    result = cudf.core.column_accessor.ColumnAccessor(
+        multiindex=True, level_names=(None, columns)
+    )
+
+    for v in values:
+        names = [(v, name) for name in column_names]
+        col = df._data[v]
+        result.update(
+            cudf.DataFrame._from_table(
+                col.scatter_to_table(index_idx, columns_idx, names)
+            )._data
+        )
+
+    return cudf.DataFrame(result, index=cudf.Index(index_labels, name=index))
