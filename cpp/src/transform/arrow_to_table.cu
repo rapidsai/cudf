@@ -27,6 +27,7 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/unary.hpp>
 
 namespace cudf {
 
@@ -128,7 +129,17 @@ struct dispatch_to_cudf_col {
             auto dict_array = static_cast<arrow::DictionaryArray *>(arrow_col.get());
             auto ind_type = arrow_to_cudf_type(dict_array->indices()->type()->id());
             auto indices = type_dispatcher(ind_type, dispatch_to_cudf_col{}, dict_array->indices(), ind_type, true, mr, stream);
-            auto indices_column = (indices.first->size() == dict_array->indices()->length())? std::move(indices.first) : std::make_unique<column>(indices.second, stream, mr);
+            std::unique_ptr<column> indices_column = nullptr;
+            if (indices.first->type().id() != type_id::INT32) {
+                if (indices.first->size() == dict_array->indices()->length()){
+                    indices_column = cudf::detail::cast(indices.first->view(), data_type(type_id::INT32), mr, stream);
+                } else {
+                    indices_column = cudf::detail::cast(indices.second, data_type(type_id::INT32), mr, stream);
+                }
+            } else {
+                indices_column = (indices.first->size() == dict_array->indices()->length())? std::move(indices.first) : std::make_unique<column>(indices.second, stream, mr);
+            }
+            
             auto dict_type = arrow_to_cudf_type(dict_array->dictionary()->type()->id());
             auto keys = type_dispatcher(dict_type, dispatch_to_cudf_col{}, dict_array->dictionary(), dict_type, true, mr, stream);
             auto keys_column = (keys.first->size() == dict_array->dictionary()->length())? std::move(keys.first) : std::make_unique<column>(keys.second, stream, mr);

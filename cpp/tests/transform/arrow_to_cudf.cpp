@@ -93,6 +93,27 @@ TEST_F(ArrowToCUDFTest, NestedList){
     cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
 }
 
+TEST_F(ArrowToCUDFTest, DictionaryIndicesType){
+    auto array1 = get_arrow_dict_array<int64_t, int8_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+    auto array2 = get_arrow_dict_array<int64_t, int16_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+
+    std::vector <std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", array1->type()), arrow::field("b", array2->type())});
+    auto schema = std::make_shared<arrow::Schema>(schema_vector);
+
+    auto arrow_table = arrow::Table::Make(schema, {array1, array2});
+
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    auto col = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
+    columns.emplace_back(std::move(cudf::dictionary::encode(col)));
+    columns.emplace_back(std::move(cudf::dictionary::encode(col)));
+
+    cudf::table expected_table(std::move(columns));
+
+    auto got_cudf_table = cudf::arrow_to_table(arrow_table);
+
+    cudf::test::expect_tables_equal(expected_table.view(), got_cudf_table->view());
+}
+
 
 struct ArrowToCUDFTestSlice : public ArrowToCUDFTest,
                               public ::testing::WithParamInterface<
