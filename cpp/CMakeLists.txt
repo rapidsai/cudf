@@ -355,7 +355,8 @@ message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 # - add google benchmark --------------------------------------------------------------------------
 
 if(BUILD_BENCHMARKS)
-    
+    find_package(benchmark)
+
     if(benchmark_ROOT)
         message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${benchmark_ROOT}")
         add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
@@ -365,8 +366,6 @@ if(BUILD_BENCHMARKS)
         add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
         set(benchmark_ROOT "${CMAKE_BINARY_DIR}/googlebenchmark")
     endif(benchmark_ROOT)
-
-    find_package(benchmark)
 
     set(benchmark_INCLUDE_DIR "${benchmark_ROOT}/install/include")
     set(benchmark_LIBRARY_DIR "${benchmark_ROOT}/install/lib" "${benchmark_ROOT}/install/lib64")
