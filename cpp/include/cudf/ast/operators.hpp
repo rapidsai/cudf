@@ -1332,7 +1332,7 @@ struct dispatch_op {
                                             F&& f,
                                             Ts&&... args)
   {
-    type_double_dispatcher(lhs_t,
+    double_type_dispatcher(lhs_t,
                            rhs_t,
                            detail::dispatch_operator_functor_types<operator_functor<op>>{},
                            std::forward<F>(f),
