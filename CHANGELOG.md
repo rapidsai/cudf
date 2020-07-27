@@ -51,7 +51,6 @@
 - PR #5732 Added deps for `gtest` and `gmock` to `conda` environments and `CMakeLists.txt`
 - PR #5572 Add `cudf::encode` API.
 
-
 ## Improvements
 
 - PR #5605 Automatically flush RMM allocate/free logs in JNI
