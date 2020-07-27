@@ -811,9 +811,9 @@ class Series(Frame, Serializable):
 
     def to_dict(self, into=dict):
         raise TypeError(
-            "Implicit conversion to a host memory via to_dict() is not "
-            "allowed, To explicitly construct a dictionary object, "
-            "consider using .to_pandas().to_dict()"
+            "cuDF does not support conversion to host memory "
+            "via `to_dict()` method. Consider using "
+            "`.to_pandas().to_dict()` to construct a Python dictionary."
         )
 
     def __setitem__(self, key, value):
@@ -849,16 +849,12 @@ class Series(Frame, Serializable):
         return out
 
     def tolist(self):
-        """
-        Return a list type from series data.
 
-        Returns
-        -------
-        list
-        """
-        # TODO: Raise error as part
-        # of https://github.com/rapidsai/cudf/issues/5689
-        return self.to_arrow().to_pylist()
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
 
     to_list = tolist
 

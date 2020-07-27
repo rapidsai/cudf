@@ -1304,15 +1304,22 @@ def test_index_drop_duplicates(data, dtype):
     assert_eq(pdi.drop_duplicates(), gdi.drop_duplicates())
 
 
-@pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])
+@pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], []])
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
 )
 def test_index_tolist(data, dtype):
-    pdi = pd.Index(data, dtype=dtype)
     gdi = cudf.Index(data, dtype=dtype)
 
-    assert_eq(pdi.tolist(), gdi.tolist())
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            r"cuDF does not support conversion to host memory "
+            r"via `tolist()` method. Consider using "
+            r"`.to_arrow().to_pylist()` to construct a Python list."
+        ),
+    ):
+        gdi.tolist()
 
 
 @pytest.mark.parametrize("data", [[], [1], [1, 2, 3]])
