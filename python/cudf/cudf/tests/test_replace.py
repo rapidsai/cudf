@@ -1,3 +1,4 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import numpy as np
 import pandas as pd
 import pytest
@@ -233,26 +234,71 @@ def test_fillna_categorical(psr, fill_value, inplace):
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("fill_type", ["scalar", "series"])
+@pytest.mark.parametrize(
+    "psr",
+    [
+        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y")),
+        pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
+        pd.Series(
+            [
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "2011-10-10",
+                "2010-01-01",
+                "2010-01-02",
+                "2010-01-04",
+                "2010-11-01",
+            ],
+            dtype="datetime64[ns]",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        pd.Timestamp("2010-01-02"),
+        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y"))
+        + pd.Timedelta("1d"),
+        pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
+        pd.Series(
+            [
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "2011-10-10",
+                "2010-01-01",
+                "2010-01-02",
+                "2010-01-04",
+                "2010-11-01",
+            ],
+            dtype="datetime64[ns]",
+        ),
+    ],
+)
 @pytest.mark.parametrize("inplace", [True, False])
-def test_fillna_datetime(fill_type, inplace):
-    psr = pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y"))
+def test_fillna_datetime(psr, fill_value, inplace):
+    gsr = cudf.from_pandas(psr)
 
-    if fill_type == "scalar":
-        fill_value = pd.Timestamp("2010-01-02")
-    elif fill_type == "series":
-        fill_value = psr + pd.Timedelta("1d")
+    if isinstance(fill_value, pd.Series):
+        fill_value_cudf = cudf.from_pandas(fill_value)
+    else:
+        fill_value_cudf = fill_value
 
-    psr[[5, 9]] = None
-    sr = Series.from_pandas(psr)
-
-    expect = psr.fillna(fill_value)
-    got = sr.fillna(fill_value, inplace=inplace)
+    expected = psr.fillna(fill_value, inplace=inplace)
+    got = gsr.fillna(fill_value_cudf, inplace=inplace)
 
     if inplace:
-        got = sr
+        got = gsr
+        expected = psr
 
-    assert_eq(expect, got)
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(
