@@ -5,7 +5,7 @@ import pytest
 import cudf as gd
 
 import dask_cudf as dgd
-from dask_cudf.tests.utils import assert_eq as dask_cudf_assert_eq
+from dask_cudf.tests.utils import assert_dd_eq
 
 
 def _make_random_frame(nelem, npartitions=2):
@@ -40,7 +40,7 @@ def test_series_reduce(reducer):
 
     got = reducer(gdf.x)
     exp = reducer(df.x)
-    dask_cudf_assert_eq(got, exp)
+    assert_dd_eq(got, exp)
 
 
 @pytest.mark.parametrize(
@@ -74,6 +74,6 @@ def test_rowwise_reductions(data, op):
         expected = getattr(pddf, op)(axis=1)
         got = getattr(pddf, op)(axis=1)
 
-    dask_cudf_assert_eq(
+    assert_dd_eq(
         expected.compute(), got.compute(), check_less_precise=7
     )

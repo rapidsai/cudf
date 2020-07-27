@@ -10,7 +10,7 @@ from dask.dataframe.utils import (
 )
 
 
-def assert_eq(
+def assert_dd_eq(
     a,
     b,
     check_names=True,
