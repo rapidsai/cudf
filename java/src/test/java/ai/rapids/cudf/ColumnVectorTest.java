@@ -2441,8 +2441,9 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector hcv = res.copyToHost();
     List<Integer> ret = hcv.getList(1);
     System.out.println("Element =" + ret.get(0));
-    System.out.println("KUHU ele =" + ret.get(1));
-    System.out.println("KUHU ele =" + ret.get(2));
+    System.out.println("Element =" + ret.get(1));
+    System.out.println("Element =" + ret.get(2));
+    //add assert
     res.close();
     hcv.close();
   }
@@ -2470,7 +2471,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
     HostColumnVector hcv = res.copyToHost();
     List<String> ret = hcv.getList(1);
-
+    //add asserts
     res.close();
     hcv.close();
   }
@@ -2497,9 +2498,10 @@ public class ColumnVectorTest extends CudfTestBase {
     ColumnVector res = ColumnVector.fromLists(DType.FLOAT64, list, list2, list3);
     HostColumnVector hcv = res.copyToHost();
     List<Double> ret = hcv.getList(1);
-    System.out.println("KUHU ele =" + ret.get(0));
-    System.out.println("KUHU ele =" + ret.get(1));
-    System.out.println("KUHU ele =" + ret.get(2));
+    System.out.println("Element =" + ret.get(0));
+    System.out.println("Element =" + ret.get(1));
+    System.out.println("Element =" + ret.get(2));
+    //add asserts
     res.close();
     hcv.close();
   }
@@ -2533,8 +2535,9 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector hcv = res.copyToHost();
     try {
       List<Integer> ret = hcv.getList(1);
-      System.out.println("KUHU ele =" + ret.get(0));
-      System.out.println("KUHU ele =" + ret.get(1));
+      System.out.println("Element =" + ret.get(0));
+      System.out.println("Element =" + ret.get(1));
+      //add asserts
     } catch (Exception e) {
       e.printStackTrace();
     } finally {
@@ -2572,8 +2575,9 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector hcv = res.copyToHost();
     try {
       List<List<String>> ret = hcv.getList(1);
-      System.out.println("KUHU ele =" + ret.get(0));
-      System.out.println("KUHU ele =" + ret.get(1));
+      System.out.println("Element =" + ret.get(0));
+      System.out.println("Element =" + ret.get(1));
+      //add asserts
     } catch (Exception e) {
       e.printStackTrace();
     } finally {
@@ -2606,7 +2610,8 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector hcv = res.copyToHost();
     try {
       List<Double> ret = hcv.getList(1);
-      System.out.println("KUHU ele =" + ret.get(0));
+      System.out.println("Element =" + ret.get(0));
+      //add asserts
     } catch (Exception e) {
       e.printStackTrace();
     } finally {
@@ -2656,6 +2661,7 @@ public class ColumnVectorTest extends CudfTestBase {
          HostColumnVector hostColumnVector = v.copyToHost()) {
       List<Integer> ret = hostColumnVector.getList(5);
       System.out.println("Guess we passed!"+ret.size() + " v size ="+v.getRowCount());
+      //add asserts
     } catch (Exception e) {
       e.printStackTrace();
     }
@@ -2692,6 +2698,7 @@ public class ColumnVectorTest extends CudfTestBase {
          HostColumnVector hostColumnVector = v.copyToHost()) {
       List<Integer> ret = hostColumnVector.getList(1);
       System.out.println("Guess we passed!"+ ret + " v size = "+v.getRowCount());
+      //add asserts
     } catch (Exception e) {
       e.printStackTrace();
     }
