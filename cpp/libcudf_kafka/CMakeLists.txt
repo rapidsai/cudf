@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.15.0 LANGUAGES C CXX CUDA)
+project(CUDA_KAFKA VERSION 0.15.0 LANGUAGES C CXX CUDA)
 
 # TODO: Since we have no actual CUDA code in cudf_kafka this should be removed in the future
 # in favor of using FindCUDAToolkit to get the needed CUDA include headers
