@@ -24,6 +24,9 @@ from cudf._lib.nvtext.replace import (
     replace_tokens as cpp_replace_tokens,
 )
 from cudf._lib.nvtext.stemmer import (
+    LetterType,
+    is_letter as cpp_is_letter,
+    is_letter_multi as cpp_is_letter_multi,
     porter_stemmer_measure as cpp_porter_stemmer_measure,
 )
 from cudf._lib.nvtext.subword_tokenize import (
@@ -4108,6 +4111,90 @@ class StringMethods(ColumnMethodsMixin):
         """
         return self._return_or_inplace(
             cpp_porter_stemmer_measure(self._column), **kwargs
+        )
+
+    def is_consonant(self, index, **kwargs):
+        """
+        Return true for strings where the character at ``index`` is a
+        consonant.
+
+        Parameters
+        ----------
+        index
+           The character position to check within each string.
+
+        Returns
+        -------
+        Series or Index of bool dtype.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["toy", "trouble"])
+        >>> ser.str.is_consonant(1)
+        0    False
+        1     True
+        dtype: bool
+        >>> r = cudf.Series([2,3])
+        >>> ser.str.is_consonant(r)
+        0     True
+        1    False
+        dtype: bool
+         """
+        ltype = LetterType.CONSONANT
+
+        if can_convert_to_column(index):
+            return self._return_or_inplace(
+                cpp_is_letter_multi(
+                    self._column, ltype, column.as_column(index)
+                ),
+                **kwargs,
+            )
+
+        return self._return_or_inplace(
+            cpp_is_letter(self._column, ltype, index), **kwargs
+        )
+
+    def is_vowel(self, index, **kwargs):
+        """
+        Return true for strings where the character at ``index`` is a
+        vowel -- not a consonant.
+
+        Parameters
+        ----------
+        index
+           The character position to check within each string.
+
+        Returns
+        -------
+        Series or Index of bool dtype.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["toy", "trouble"])
+        >>> ser.str.is_consonant(1)
+        0     True
+        1    False
+        dtype: bool
+        >>> r = cudf.Series([2,3])
+        >>> ser.str.is_vowel(r)
+        0    False
+        1     True
+        dtype: bool
+        """
+        ltype = LetterType.VOWEL
+
+        if can_convert_to_column(index):
+            return self._return_or_inplace(
+                cpp_is_letter_multi(
+                    self._column, ltype, column.as_column(index)
+                ),
+                **kwargs,
+            )
+
+        return self._return_or_inplace(
+            cpp_is_letter(self._column, ltype, index), **kwargs
         )
 
 
