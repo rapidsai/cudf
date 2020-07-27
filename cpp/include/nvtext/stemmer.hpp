@@ -48,9 +48,20 @@ enum class letter_type {
  *
  * @code{.pseudo}
  * Example:
- * s = ["trouble", "toy", "sygyzy"]
- * t = is_letter(s,VOWEL,1)
- * t is now [false,true,true]
+ * st = ["trouble", "toy", "sygyzy"]
+ * b1 = is_letter(st, VOWEL, 1)
+ * b1 is now [false, true, true]
+ * @endcode
+ *
+ * A negative index value will check the character starting from the end
+ * of each string. That is, for `character_index < 0` the letter checked for string
+ * `strings[i]` is at position `strings[i].length + index`.
+ *
+ * @code{.pseudo}
+ * Example:
+ * st = ["trouble", "toy", "sygyzy"]
+ * b2 = is_letter(st, CONSONANT, -1) // last letter checked in each string
+ * b2 is now [false, true, false]
  * @endcode
  *
  * A null input element at row `i` produces a corresponding null entry
@@ -83,10 +94,22 @@ std::unique_ptr<cudf::column> is_letter(
  *
  * @code{.pseudo}
  * Example:
- * s = ["trouble", "toy", "sygyzy"]
- * i = [3, 1, 4]
- * t = is_letter(s,VOWEL,i)
- * t is now [true,true,false]
+ * st = ["trouble", "toy", "sygyzy"]
+ * ix = [3, 1, 4]
+ * b1 = is_letter(st, VOWEL, ix)
+ * b1 is now [true, true, false]
+ * @endcode
+ *
+ * A negative index value will check the character starting from the end
+ * of each string. That is, for `character_index < 0` the letter checked for string
+ * `strings[i]` is at position `strings[i].length + indices[i]`.
+ *
+ * @code{.pseudo}
+ * Example:
+ * st = ["trouble", "toy", "sygyzy"]
+ * ix = [3, -2, 4] // 2nd to last character in st[1] is checked
+ * b2 = is_letter(st, CONSONANT, ix)
+ * b2 is now [false, false, true]
  * @endcode
  *
  * A null input element at row `i` produces a corresponding null entry
@@ -123,9 +146,9 @@ std::unique_ptr<cudf::column> is_letter(
  *
  * @code{.pseudo}
  * Example:
- * s = ["tr", "troubles", "trouble"]
- * t = porter_stemmer_measure(s)
- * t is now [0,2,1]
+ * st = ["tr", "troubles", "trouble"]
+ * m = porter_stemmer_measure(st)
+ * m is now [0,2,1]
  * @endcode
  *
  * A null input element at row `i` produces a corresponding null entry

@@ -4095,6 +4095,8 @@ class StringMethods(ColumnMethodsMixin):
     def porter_stemmer_measure(self, **kwargs):
         """
         Compute the Porter Stemmer measure for each string.
+        The Porter Stemmer algorithm is described `here
+        <https://tartarus.org/martin/PorterStemmer/def.txt>`_.
 
         Returns
         -------
@@ -4116,11 +4118,14 @@ class StringMethods(ColumnMethodsMixin):
     def is_consonant(self, index, **kwargs):
         """
         Return true for strings where the character at ``index`` is a
-        consonant.
+        consonant. The ``index`` parameter may also be
+        a list of integers to check different characters per string.
+        If the index is larger than the string length, False is returned
+        for that string.
 
         Parameters
         ----------
-        index
+        index: int or list-like
            The character position to check within each string.
 
         Returns
@@ -4135,8 +4140,8 @@ class StringMethods(ColumnMethodsMixin):
         0    False
         1     True
         dtype: bool
-        >>> r = cudf.Series([2,3])
-        >>> ser.str.is_consonant(r)
+        >>> indices = cudf.Series([2,3])
+        >>> ser.str.is_consonant(indices)
         0     True
         1    False
         dtype: bool
@@ -4158,11 +4163,14 @@ class StringMethods(ColumnMethodsMixin):
     def is_vowel(self, index, **kwargs):
         """
         Return true for strings where the character at ``index`` is a
-        vowel -- not a consonant.
+        vowel -- not a consonant. The ``index`` parameter may also be
+        a list of integers to check different characters per string.
+        If the index is larger than the string length, False is returned
+        for that string.
 
         Parameters
         ----------
-        index
+        index: int or list-like
            The character position to check within each string.
 
         Returns
@@ -4173,12 +4181,12 @@ class StringMethods(ColumnMethodsMixin):
         --------
         >>> import cudf
         >>> ser = cudf.Series(["toy", "trouble"])
-        >>> ser.str.is_consonant(1)
+        >>> ser.str.is_vowel(1)
         0     True
         1    False
         dtype: bool
-        >>> r = cudf.Series([2,3])
-        >>> ser.str.is_vowel(r)
+        >>> indices = cudf.Series([2,3])
+        >>> ser.str.is_vowel(indices)
         0    False
         1     True
         dtype: bool
