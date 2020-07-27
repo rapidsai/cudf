@@ -550,8 +550,8 @@ struct parse_duration {
       int8_t item_length{0};
       switch (item.value) {
         case 'D': timeparts->day = str2int(ptr, 11, item_length); break;
-        case '-': break;  // skip
-        case 'H':         // 24-hour
+        case '-': item_length = (*ptr == '-'); break;  // skip
+        case 'H':                                      // 24-hour
           timeparts->hour = parse_hour(ptr, item_length);
           hour_shift      = 0;
           break;
@@ -594,7 +594,7 @@ struct parse_duration {
           item_length++;  // :
           timeparts->second = parse_second(ptr + item_length, item_length);
           item_length++;  // space
-          if (*ptr == 'P' && *(ptr + 1) == 'M')
+          if (*(ptr + item_length) == 'P' && *(ptr + item_length + 1) == 'M')
             hour_shift = 12;
           else
             hour_shift = 0;
@@ -623,15 +623,15 @@ struct parse_duration {
 
   inline __device__ int64_t duration_from_parts(duration_component const* timeparts)
   {
-    int32_t days = timeparts->day;
-    if (simt::std::is_same<T, duration_D>::value) return days;
-
+    int32_t days  = timeparts->day;
     auto hour     = timeparts->hour;
     auto minute   = timeparts->minute;
     auto second   = timeparts->second;
     auto duration = duration_D(days) + simt::std::chrono::hours(hour) +
                     simt::std::chrono::minutes(minute) + duration_s(second);
-    if (simt::std::is_same<T, duration_s>::value)
+    if (simt::std::is_same<T, duration_D>::value)
+      return simt::std::chrono::duration_cast<duration_D>(duration).count();
+    else if (simt::std::is_same<T, duration_s>::value)
       return simt::std::chrono::duration_cast<duration_s>(duration).count();
 
     duration_ns subsecond(timeparts->subsecond);  // ns
