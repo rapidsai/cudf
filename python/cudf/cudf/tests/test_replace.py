@@ -193,30 +193,44 @@ def test_series_fillna_numerical(
     np.testing.assert_equal(expect, got)
 
 
-@pytest.mark.parametrize("fill_type", ["scalar", "series"])
-@pytest.mark.parametrize("null_value", [None, np.nan])
+@pytest.mark.parametrize(
+    "psr",
+    [
+        pd.Series(["a", "b", "a", None, "c", None], dtype="category"),
+        pd.Series(["a", "b", "a", np.nan, "c", np.nan], dtype="category"),
+        pd.Series(
+            [None, None, None, None, None, None, "a", "b", "c"],
+            dtype="category",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        "c",
+        pd.Series(["c", "c", "c", "c", "c", "a"], dtype="category"),
+        pd.Series(["a", "b", "a", None, "c", None], dtype="category"),
+        pd.Series(["a", "b", "a", np.nan, "c", np.nan], dtype="category"),
+    ],
+)
 @pytest.mark.parametrize("inplace", [True, False])
-def test_fillna_categorical(fill_type, null_value, inplace):
-    data = pd.Series(
-        ["a", "b", "a", null_value, "c", null_value], dtype="category"
-    )
-    sr = Series.from_pandas(data)
+def test_fillna_categorical(psr, fill_value, inplace):
 
-    if fill_type == "scalar":
-        fill_value = "c"
-        expect = pd.Series(["a", "b", "a", "c", "c", "c"], dtype="category")
-    elif fill_type == "series":
-        fill_value = pd.Series(
-            ["c", "c", "c", "c", "c", "a"], dtype="category"
-        )
-        expect = pd.Series(["a", "b", "a", "c", "c", "a"], dtype="category")
+    gsr = Series.from_pandas(psr)
 
-    got = sr.fillna(fill_value, inplace=inplace)
+    if isinstance(fill_value, pd.Series):
+        fill_value_cudf = cudf.from_pandas(fill_value)
+    else:
+        fill_value_cudf = fill_value
+
+    expected = psr.fillna(fill_value, inplace=inplace)
+    got = gsr.fillna(fill_value_cudf, inplace=inplace)
 
     if inplace:
-        got = sr
+        expected = psr
+        got = gsr
 
-    assert_eq(expect, got)
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("fill_type", ["scalar", "series"])
