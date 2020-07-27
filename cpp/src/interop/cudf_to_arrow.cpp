@@ -17,11 +17,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/interop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/transform.hpp>
+#include <cudf/interop.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -51,10 +51,11 @@ std::shared_ptr<arrow::Buffer> fetch_mask_buffer(column_view input_view, arrow::
   if (input_view.has_nulls()) {
     CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, mask_size_in_bytes, &mask_buffer).ok(),
                  "Failed to allocate Arrow buffer for mask");
-    CUDA_TRY(cudaMemcpy(mask_buffer->mutable_data(), 
-               (input_view.offset() > 0)? cudf::copy_bitmask(input_view).data() : input_view.null_mask(),
-               mask_size_in_bytes,
-               cudaMemcpyDeviceToHost));
+    CUDA_TRY(cudaMemcpy(
+      mask_buffer->mutable_data(),
+      (input_view.offset() > 0) ? cudf::copy_bitmask(input_view).data() : input_view.null_mask(),
+      mask_size_in_bytes,
+      cudaMemcpyDeviceToHost));
 
     return mask_buffer;
   }

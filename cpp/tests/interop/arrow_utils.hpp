@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-//#include <arrow/util/bit_util.h>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/transform.hpp>
+#include <cudf/detail/interop.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/table/table.hpp>
@@ -27,6 +26,7 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
 
 #pragma once

@@ -87,36 +87,6 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Create `arrow::Table` from cudf table `input`
- *
- * Converts the `cudf::table_view` to `arrow::Table` with the provided
- * metadata `column_names`.
- *
- * @throws cudf::logic_error if `column_names` size doesn't match with number of columns.
- *
- * @param input table_view that needs to be converted to arrow Table
- * @param column_names Vector of column names for metadata of arrow Table
- * @param ar_mr arrow memory pool to allocate memory for arrow Table
- * @return arrow Table generated from given input cudf table
- **/
-std::shared_ptr<arrow::Table> cudf_to_arrow(
-  table_view input,
-  std::vector<std::string> const& column_names,
-  arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
-
-/**
- * @brief Create `cudf::table` from given arrow Table input
- *
- * @param input  arrow:Table that needs to be converted to `cudf::table`
- * @param mr           Device memory resource used to allocate `cudf::table`
- * @return cudf table generated from given arrow Table.
- **/
-
-std::unique_ptr<table> arrow_to_cudf(
-  std::shared_ptr<arrow::Table> input_table,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-/**
  * @brief Encode the values of the given column as integers
  *
  * The encoded values are integers in the range [0, n), where `n`

@@ -14,18 +14,17 @@
  * limitations under the License.
  */
 
-//#include <arrow/util/bit_util.h>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
+#include <cudf/interop.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
-#include <tests/transform/arrow_utils.hpp>
+#include <tests/interop/arrow_utils.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -159,3 +158,5 @@ INSTANTIATE_TEST_CASE_P(CUDFToArrowTest,
                         ::testing::Values(std::make_tuple(0, 0),
                                           std::make_tuple(0, 2),
                                           std::make_tuple(4, 4)));
+
+CUDF_TEST_PROGRAM_MAIN()

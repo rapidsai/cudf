@@ -18,13 +18,13 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/interop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/transform.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/interop.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -72,14 +72,14 @@ struct dispatch_to_cudf_column {
       type, num_rows, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
     auto mutable_column_view = col->mutable_view();
     CUDA_TRY(cudaMemcpy(mutable_column_view.data<void*>(),
-               data_buffer->data(),
-               data_buffer->size(),
-               cudaMemcpyHostToDevice));
+                        data_buffer->data(),
+                        data_buffer->size(),
+                        cudaMemcpyHostToDevice));
     if (has_nulls) {
       CUDA_TRY(cudaMemcpy(mutable_column_view.null_mask(),
-                 arrow_col->null_bitmap_data(),
-                 arrow_col->null_bitmap()->size(),
-                 cudaMemcpyHostToDevice));
+                          arrow_col->null_bitmap_data(),
+                          arrow_col->null_bitmap()->size(),
+                          cudaMemcpyHostToDevice));
     }
 
     return std::make_pair<std::unique_ptr<column>, column_view>(
@@ -103,9 +103,9 @@ struct dispatch_to_cudf_column {
     if (arrow_col->null_bitmap_data() != nullptr) {
       mask = std::make_unique<rmm::device_buffer>(arrow_col->null_bitmap()->size(), stream, mr);
       CUDA_TRY(cudaMemcpy(mask->data(),
-                 arrow_col->null_bitmap_data(),
-                 arrow_col->null_bitmap()->size(),
-                 cudaMemcpyHostToDevice));
+                          arrow_col->null_bitmap_data(),
+                          arrow_col->null_bitmap()->size(),
+                          cudaMemcpyHostToDevice));
     }
 
     if (std::is_same<T, cudf::string_view>::value) {
@@ -162,9 +162,14 @@ struct dispatch_to_cudf_column {
                            : std::make_unique<column>(indices.second, stream, mr);
       }
 
-      auto dict_type = arrow_to_cudf_type(dict_array->dictionary()->type()->id());
-      auto keys      = type_dispatcher(
-        dict_type, dispatch_to_cudf_column{}, dict_array->dictionary(), dict_type, true, mr, stream);
+      auto dict_type   = arrow_to_cudf_type(dict_array->dictionary()->type()->id());
+      auto keys        = type_dispatcher(dict_type,
+                                  dispatch_to_cudf_column{},
+                                  dict_array->dictionary(),
+                                  dict_type,
+                                  true,
+                                  mr,
+                                  stream);
       auto keys_column = (keys.first->size() == dict_array->dictionary()->length())
                            ? std::move(keys.first)
                            : std::make_unique<column>(keys.second, stream, mr);

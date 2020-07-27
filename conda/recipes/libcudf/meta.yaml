@@ -63,6 +63,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/groupby.hpp
     - test -f $PREFIX/include/cudf/detail/groupby/sort_helper.hpp
     - test -f $PREFIX/include/cudf/detail/hashing.hpp
+    - test -f $PREFIX/include/cudf/detail/interop.hpp
     - test -f $PREFIX/include/cudf/detail/null_mask.hpp
     - test -f $PREFIX/include/cudf/detail/nvtx/nvtx3.hpp
     - test -f $PREFIX/include/cudf/detail/nvtx/ranges.hpp
@@ -93,6 +94,7 @@ test:
     - test -f $PREFIX/include/cudf/fixed_point/fixed_point.hpp
     - test -f $PREFIX/include/cudf/groupby.hpp
     - test -f $PREFIX/include/cudf/hashing.hpp
+    - test -f $PREFIX/include/cudf/interop.hpp
     - test -f $PREFIX/include/cudf/io/data_sink.hpp
     - test -f $PREFIX/include/cudf/io/datasource.hpp
     - test -f $PREFIX/include/cudf/io/functions.hpp
