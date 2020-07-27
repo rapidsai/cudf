@@ -339,7 +339,7 @@ def test_series_tolist(data):
     gsr = cudf.from_pandas(psr)
     # TODO: This needs to check for a raised error instead.
     # xref: https://github.com/rapidsai/cudf/issues/5689
-    gsr.tolist()
+    assert_eq(gsr.tolist(), psr.tolist())
 
 
 @pytest.mark.parametrize(
