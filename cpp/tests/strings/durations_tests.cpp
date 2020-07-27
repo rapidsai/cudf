@@ -638,6 +638,11 @@ TEST_F(StringsDurationsTest, ParseCompoundSpecifier)
                                              "%r");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_s1);
 
+  results = cudf::strings::to_durations(cudf::strings_column_view(string_src),
+                                        cudf::data_type(cudf::type_to_id<cudf::duration_s>()),
+                                        "%OI:%OM:%OS %p");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_s1);
+
   auto it2 =
     thrust::make_transform_iterator(expected_v, [](auto i) { return cudf::duration_ms{i * 1000}; });
   cudf::test::fixed_width_column_wrapper<cudf::duration_ms> expected_s2(it2, it2 + size);
@@ -697,8 +702,32 @@ TEST_F(StringsDurationsTest, ParseCompoundSpecifier)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_s4);
 }
 
+// Escape characters %% %n %t
 // Mixed (for checking only one negative sign)
-// XXX: Expect wrong value on insufficient info. (eg. only H:M, I:M:S)
+TEST_F(StringsDurationsTest, ParseEscapeCharacters)
+{
+  cudf::test::strings_column_wrapper string_src{
+    "00:00%00", "01:01%01", "11:59%59", "11:-59%59", "09:00%00"};
+  cudf::test::fixed_width_column_wrapper<cudf::duration_s, int64_t> expected_s1(
+    {0, 3661, (11 * 3600 + 59 * 60 + 59), -(11 * 3600 + 59 * 60 + 59), 9 * 3600});
+  auto results = cudf::strings::to_durations(cudf::strings_column_view(string_src),
+                                             cudf::data_type(cudf::type_to_id<cudf::duration_s>()),
+                                             "%OH:%M%%%S");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_s1);
+
+  results = cudf::strings::from_durations(expected_s1, "%OH:%M%%%S");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, string_src);
+
+  cudf::test::strings_column_wrapper string_src2{
+    "00\t00\n00", "01\t01\n01", "11\t59\n59", "11\t-59\n59", "09\t00\n00"};
+  results = cudf::strings::to_durations(cudf::strings_column_view(string_src2),
+                                        cudf::data_type(cudf::type_to_id<cudf::duration_s>()),
+                                        "%OH%t%M%n%S");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_s1);
+
+  results = cudf::strings::from_durations(expected_s1, "%OH%t%M%n%S");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, string_src2);
+}
 
 TEST_F(StringsDurationsTest, ZeroSizeStringsColumn)
 {

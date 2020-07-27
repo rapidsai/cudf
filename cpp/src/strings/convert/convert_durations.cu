@@ -110,9 +110,15 @@ struct format_compiler {
       {
         items.push_back(format_item::new_delimiter(ch));
         continue;
+      } else if (ch == 'n') {
+        items.push_back(format_item::new_delimiter('\n'));
+        continue;
+      } else if (ch == 't') {
+        items.push_back(format_item::new_delimiter('\t'));
+        continue;
       }
       if (ch == 'O') {
-        CUDF_EXPECTS(*str == 'H' || *str == 'M' || *str == 'S',
+        CUDF_EXPECTS(*str == 'H' || *str == 'I' || *str == 'M' || *str == 'S',
                      "locale's alternative representation not supported for specifier: " +
                        std::string(1, *str));
         ch = *str++;
@@ -134,8 +140,6 @@ struct format_compiler {
       int8_t spec_length = specifier_lengths[ch];
       items.push_back(format_item::new_specifier(ch, spec_length));
     }
-    // for (auto item : items)
-    //  std::cout << int(item.item_type) << ":" << item.value << ":" << int(item.length) << "\n";
 
     // create program in device memory
     d_items.resize(items.size(), stream);
@@ -417,8 +421,6 @@ struct dispatch_from_durations_fn {
     auto d_new_offsets = offsets_view.template data<int32_t>();
     rmm::device_vector<int32_t> ofst(offsets_transformer_itr,
                                      offsets_transformer_itr + strings_count);
-    // thrust::copy(ofst.begin(), ofst.end(), std::ostream_iterator<int32_t>(std::cout, " "));
-    // std::cout << "\n";
 
     // build chars column
     auto const chars_bytes =
