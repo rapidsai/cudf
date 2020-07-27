@@ -1288,6 +1288,7 @@ public final class HostColumnVector implements AutoCloseable {
       }
     }
 
+    //TODO: Needs clean up
     public Builder appendList(DType type, DType baseType, int level, int prevSize, List list) {
       if (list.isEmpty()) {
         throw new IllegalStateException("Cannot handle empty lists just yet");
