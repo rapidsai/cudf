@@ -317,3 +317,14 @@ def test_series_column_iter_error():
         ),
     ):
         iter(gs._column)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [[], [None, None], ["a"], ["a", "b", "c"] * 500, [1.0, 2.0, 0.3] * 57],
+)
+def test_series_size(data):
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+
+    assert_eq(psr.size, gsr.size)
