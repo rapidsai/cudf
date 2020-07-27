@@ -17,7 +17,7 @@ Series
 .. autoclass:: Series
     :members:
     :inherited-members:
-    :exclude-members: serialize, deserialize, logical_not, logical_or, logical_and, remainder, sum_of_squares, fill, merge, iteritems, items, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict
+    :exclude-members: serialize, deserialize, logical_not, logical_or, logical_and, remainder, sum_of_squares, fill, merge, iteritems, items, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict, tolist, to_list
 
 Strings
 -------
@@ -39,7 +39,7 @@ Index
 .. autoclass:: Index
     :members:
     :inherited-members:
-    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 RangeIndex
 ----------
@@ -47,7 +47,7 @@ RangeIndex
 .. autoclass:: RangeIndex
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 GenericIndex
 ------------
@@ -55,7 +55,7 @@ GenericIndex
 .. autoclass:: GenericIndex
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 MultiIndex
 ----------
@@ -63,7 +63,7 @@ MultiIndex
 .. autoclass:: MultiIndex
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 Int8Index
 ---------
@@ -71,7 +71,7 @@ Int8Index
 .. autoclass:: Int8Index
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 Int16Index
 ----------
@@ -79,7 +79,7 @@ Int16Index
 .. autoclass:: Int16Index
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 Int32Index
 ----------
@@ -87,7 +87,7 @@ Int32Index
 .. autoclass:: Int32Index
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 Int64Index
 ----------
@@ -95,7 +95,7 @@ Int64Index
 .. autoclass:: Int64Index
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 UInt8Index
 ----------
@@ -103,7 +103,7 @@ UInt8Index
 .. autoclass:: UInt8Index
     :inherited-members:
     :members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 UInt16Index
 -----------
@@ -111,7 +111,7 @@ UInt16Index
 .. autoclass:: UInt16Index
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 UInt32Index
 -----------
@@ -119,7 +119,7 @@ UInt32Index
 .. autoclass:: UInt32Index
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 UInt64Index
 -----------
@@ -127,7 +127,7 @@ UInt64Index
 .. autoclass:: UInt64Index
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 Float32Index
 ------------
@@ -135,7 +135,7 @@ Float32Index
 .. autoclass:: Float32Index
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 Float64Index
 ------------
@@ -143,7 +143,7 @@ Float64Index
 .. autoclass:: Float64Index
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 CategoricalIndex
 ----------------
@@ -151,7 +151,7 @@ CategoricalIndex
 .. autoclass:: CategoricalIndex
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 StringIndex
 -----------
@@ -159,7 +159,7 @@ StringIndex
 .. autoclass:: StringIndex
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 DatetimeIndex
 -------------
@@ -167,7 +167,7 @@ DatetimeIndex
 .. autoclass:: DatetimeIndex
     :members:
     :inherited-members:
-    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
 Categories
 ----------

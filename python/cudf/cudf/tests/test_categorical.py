@@ -424,7 +424,7 @@ def test_categorical_add_categories(pd_str_cat, inplace):
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
     assert "d" in pd_sr_1.cat.categories.to_list()
-    assert "d" in cd_sr_1.cat.categories.to_list()
+    assert "d" in cd_sr_1.cat.categories.to_pandas().to_list()
 
     assert_eq(pd_sr_1, cd_sr_1)
 
@@ -445,7 +445,7 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
     assert "a" not in pd_sr_1.cat.categories.to_list()
-    assert "a" not in cd_sr_1.cat.categories.to_list()
+    assert "a" not in cd_sr_1.cat.categories.to_pandas().to_list()
 
     assert_eq(pd_sr_1, cd_sr_1)
 

@@ -48,8 +48,10 @@
 - PR #5658 Add `filter_tokens` nvtext API
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
+- PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
 - PR #5572 Add `cudf::encode` API.
 - PR #5767 Add `nvtext::porter_stemmer_measure` and `nvtext::is_letter` APIs
+- PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
 
 ## Improvements
 
@@ -137,6 +139,7 @@
 - PR #5702 Add inherited methods to python docs and other docs fixes
 - PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
 - PR #5743 Reduce number of test cases in concatenate benchmark
+- PR #5748 Disable `tolist` API in `Series` & `Index` and add `tolist` dispatch in `dask-cudf`
 - PR #5756 Switch JNI code to use the RMM owning wrapper
 - PR #5725 Integrate Gbenchmarks into CI
 - PR #5752 Add cuDF internals documentation (ColumnAccessor)
@@ -212,6 +215,7 @@
 - PR #5745 Update JNI cast for inability to cast timestamp and integer types
 - PR #5750 Add RMM_ROOT/include to the spdlog search path in JNI build
 - PR #5763 Update Java slf4j version to match Spark 3.0
+- PR #5766 Fix issue related to `iloc` and slicing a `DataFrame`
 
 
 # cuDF 0.14.0 (03 Jun 2020)
