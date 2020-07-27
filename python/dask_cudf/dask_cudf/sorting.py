@@ -6,6 +6,7 @@ import numpy as np
 import tlz as toolz
 
 from dask.base import tokenize
+from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series
 from dask.dataframe.shuffle import rearrange_by_column
 from dask.highlevelgraph import HighLevelGraph
@@ -241,5 +242,5 @@ def sort_values(
     df4 = df3.map_partitions(M.sort_values, by)
     if not isinstance(divisions, gd.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
-        df4.divisions = divisions.tolist()
+        df4.divisions = methods.tolist(divisions)
     return df4
