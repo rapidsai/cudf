@@ -326,15 +326,13 @@ if(BUILD_TESTS)
     
     if(GTEST_ROOT)
         message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
     else()
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found, it will be built from source.")
         include(ConfigureGoogleBenchmark)
-        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
         set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
     endif(GTEST_ROOT)
 
-    message(STATUS "GTEST_ROOT: " ${GTEST_ROOT})
+    add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
     
     set(GTEST_INCLUDE_DIR "${GTEST_ROOT}/install/include")
     set(GTEST_LIBRARY_DIR "${GTEST_ROOT}/install/lib")
@@ -359,13 +357,12 @@ if(BUILD_BENCHMARKS)
 
     if(benchmark_FOUND)
         message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${benchmark_ROOT}")
-        add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
     else()
         message(AUTHOR_WARNING "Google C++ Benchmarking Framework (Google Benchmark) not found, it will be built from source.")
         include(ConfigureGoogleBenchmark)
-        add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
         set(benchmark_ROOT "${CMAKE_BINARY_DIR}/googlebenchmark")
     endif(benchmark_FOUND)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
 
 endif(BUILD_BENCHMARKS)
 
