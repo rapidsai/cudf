@@ -110,17 +110,8 @@ BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_double_imbalanced_unique,
 
 static void CustomRanges(benchmark::internal::Benchmark* b)
 {
-  auto row_counts       = std::vector<cudf::size_type>{100'000,
-                                                 200'000,
-                                                 500'000,
-                                                 1'000'000,
-                                                 2'000'000,
-                                                 5'000'000,
-                                                 10'000'000,
-                                                 20'000'000,
-                                                 50'000'000,
-                                                 100'000'000};
-  auto operation_counts = std::vector<cudf::size_type>{1, 2, 5, 10, 20};
+  auto row_counts       = std::vector<cudf::size_type>{100'000, 1'000'000, 10'000'000, 100'000'000};
+  auto operation_counts = std::vector<cudf::size_type>{1, 2, 5, 10};
   for (auto const& row_count : row_counts) {
     for (auto const& operation_count : operation_counts) { b->Args({row_count, operation_count}); }
   }
