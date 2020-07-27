@@ -3112,7 +3112,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   public static<T> ColumnVector fromLists(DType baseType, List<T>... lists) {
-    System.out.println("KUHU fromLists size="+lists.length);
     try (HostColumnVector host = HostColumnVector.fromLists(baseType, lists)) {
       return host.copyToDevice();
     }

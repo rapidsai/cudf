@@ -60,14 +60,6 @@ public final class HostColumnVector implements AutoCloseable {
   private Optional<Long> nullCount = Optional.empty();
   private int refCount;
 
-//  public void printDataBuffer() {
-//    byte[] dataBytes = new byte[100];
-//    offHeap.data.getBytes(dataBytes, 0, 0, offHeap.data.length);
-//    System.out.println("Setting KUHU DATA========" + dataBytes.length);
-//    for (int i = 0; i < dataBytes.length; i++) {
-//      System.out.print(dataBytes[i] + " ");
-//    }
-//  }
   /**
    * Create a new column vector with data populated on the host.
    */
@@ -384,7 +376,6 @@ public final class HostColumnVector implements AutoCloseable {
       DType baseType = allTypes.get(allTypes.size() - 1);
       int start = mainOffset.getInt(rowIndex*DType.INT32.getSizeInBytes());
       int end = mainOffset.getInt((rowIndex+1)*DType.INT32.getSizeInBytes());
-      System.out.println("KUHU start=" +start + " end ="+end);
       for(int j = start;j < end;j++) {
         retList.add(getListParent(j, level + 1));
       }
@@ -393,7 +384,6 @@ public final class HostColumnVector implements AutoCloseable {
       HostMemoryBuffer mainOffset = offHeap.offsets.get(level);
       int start = mainOffset.getInt(rowIndex*DType.INT32.getSizeInBytes());
       int end = mainOffset.getInt((rowIndex+1)*DType.INT32.getSizeInBytes());
-      System.out.println("KUHU start=" +start + " end ="+end);
       HostMemoryBuffer strOffsets = offHeap.offsets.get(level + 1);
       List retList = new ArrayList();
       for (int index = start; index < end; index++) {
@@ -406,7 +396,6 @@ public final class HostColumnVector implements AutoCloseable {
         }
         retList.add(new String(rawData));
       }
-      System.out.println("KUHU print string lists = " + retList);
       return retList;
     } else { //Level 1 list
       HostMemoryBuffer mainOffset = offHeap.offsets.get(level);
@@ -419,16 +408,13 @@ public final class HostColumnVector implements AutoCloseable {
         offHeap.data.getBytes(rawData, 0, start*baseType.getSizeInBytes(), size);
       }
 
-      System.out.println("KUHU rawdata========"+rawData.length);
       for (int i =0; i < rawData.length;i++) {
         System.out.print((rawData[i]) + " ");
       }
       ByteArrayInputStream bais = new ByteArrayInputStream(rawData);
       DataInputStream dataInputStream = new DataInputStream(bais);
       List<Integer> list = new ArrayList<>();
-      System.out.println("KUHU ELEMENTS");
       readToList(dataInputStream, list, baseType);
-      System.out.println("retlist="+ list);
       return list;
     }
   }
@@ -823,16 +809,7 @@ public final class HostColumnVector implements AutoCloseable {
     //TODO: ADD support for nulls
     return build(DType.LIST, baseType, rows, bufferSize, (b) -> {
       for (List s: values) {
-        System.out.println("KUHU from lists" + s + " baseType =" + baseType);
         b.appendList(DType.LIST, baseType, 0, values.length + 1 , s);
-      }
-      for(HostMemoryBuffer myOffsets: b.allOffsets) {
-        byte[] tmp = new byte[(int)myOffsets.length];
-        System.out.println("KUHU TMP OFFSETS==========");
-        myOffsets.getBytes(tmp,0,0,tmp.length);
-        for (int i = 0; i < tmp.length; i++) {
-          System.out.print((tmp[i]) + " ");
-        }
       }
     });
   }
@@ -1321,26 +1298,19 @@ public final class HostColumnVector implements AutoCloseable {
           allTypes.set(level + 1, DType.LIST);
         }
         int newSize = 0;
-        System.out.println("KUHU LSIST OF LISTS");
-        System.out.println("KUHU offsets.size()=" + allOffsets.size());
         List<List> tmpList = list;
         for(List insideList: tmpList) {
           newSize++;
         }
         if (allOffsets.size() <= level) {
-          System.out.println("1 KUHU offsets.size()=" + allOffsets.size());
-          System.out.println("1 KUHU level" + level);
           this.allOffsets.add(level, HostMemoryBuffer.allocate(prevSize * OFFSET_SIZE));
           this.allOffsets.get(level).setInt(0,0);
           this.currentOffsets.add(level, OFFSET_SIZE);
         }
         for(List insideList: tmpList) {
-          System.out.println("KUHU LSIST OF LISTS insideList=" + insideList + "level=" + level);
           appendList(type, baseType, level + 1, prevSize + newSize, insideList);
         }
-//        System.out.println("KUHU offsets.size()=" + allOffsets.size());
-//        System.out.println("KUHU currOffsets.size()=" + currentOffsets.size());
-//        System.out.println("KUHU level" + level);
+
         this.allOffsets.get(level).setInt(
             this.currentOffsets.get(level),
             this.allOffsets.get(level).getInt(
@@ -1359,7 +1329,6 @@ public final class HostColumnVector implements AutoCloseable {
           allTypes.set(level + 1, baseType);
         }
         int baseTypeSizeInBytes = baseType.getSizeInBytes();
-//        System.out.println("KUHU MAIN list" + list + " level =" + level + currentListCount* baseTypeSizeInBytes);
         assert list != null : "appendNull must be used to append null strings";
         int length = list.size();
         // just for lists we want to throw a real exception if we would overrun the buffer
@@ -1380,9 +1349,6 @@ public final class HostColumnVector implements AutoCloseable {
             newLen *= 2;
           }
         } else {
-          System.out.println("KUHU new len for strings currentStringByteIndex=" +currentStringByteIndex);
-          System.out.println("KUHU new len for strings currentListCount=" + currentListCount);
-          System.out.println("KUHU new len for strings list.size=" +list.size() + "new len" + newLen);
           while (newLen - currentStringByteIndex < listBytes.length) {
             newLen = newLen + listBytes.length;
           }
@@ -1390,7 +1356,6 @@ public final class HostColumnVector implements AutoCloseable {
         if (newLen > Integer.MAX_VALUE) {
           throw new IllegalStateException("A string buffer is not supported over 2GB in size");
         }
-        System.out.println("KUHU append list" + list + " new len=" + newLen + " oldLen=" + oldLen);
         if (newLen != oldLen) {
           // need to grow the size of the buffer.
           HostMemoryBuffer newData = HostMemoryBuffer.allocate(newLen);
@@ -1410,14 +1375,9 @@ public final class HostColumnVector implements AutoCloseable {
           }
         }
         if (length > 0) {
-          System.out.println("KUHU listBytes========" + listBytes.length);
           for (int i = 0; i < listBytes.length; i++) {
             System.out.print((listBytes[i]) + " ");
           }
-          System.out.println("KUHU INDEX=" + currentListCount * baseTypeSizeInBytes);
-          System.out.println("KUHU data length=" + data.length);
-          System.out.println("KUHU currentListCount=" + currentListCount);
-          System.out.println("KUHU currentStringByteIndex=" + currentStringByteIndex);
           if (baseType != DType.STRING) {
             data.setBytes(currentListCount * baseTypeSizeInBytes, listBytes, 0, listBytes.length);
           } else {
@@ -1425,7 +1385,6 @@ public final class HostColumnVector implements AutoCloseable {
           }
           byte[] tmpArr = new byte[(int) data.length];
           data.getBytes(tmpArr, 0, 0, tmpArr.length);
-          System.out.println("\nKUHU tmpArr========" + tmpArr.length);
           for (int i = 0; i < tmpArr.length; i++) {
             System.out.print((tmpArr[i]) + " ");
           }
@@ -1438,13 +1397,6 @@ public final class HostColumnVector implements AutoCloseable {
           allOffsets.get(level).setInt(0, 0);
           this.currentOffsets.add(level, OFFSET_SIZE);
         }
-
-        System.out.println("KUHU currentIndex=" + currentListIndex);
-        System.out.println("KUHU rows=" + rows);
-        System.out.println("KUHU offset size=" + OFFSET_SIZE);
-        System.out.println("KUHU currentListCount=" + currentListCount);
-        System.out.println("KUHU this.currentOffsets.get(level)=" + this.currentOffsets.get(level));
-        System.out.println("KUHU this.offsets.get(level) size=" + this.allOffsets.get(level).length);
 //        offsets.get(level).setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
         this.allOffsets.get(level).setInt(this.currentOffsets.get(level), currentListCount);
         this.currentOffsets.set(level,this.currentOffsets.get(level)+OFFSET_SIZE);
@@ -1452,9 +1404,6 @@ public final class HostColumnVector implements AutoCloseable {
           this.allRows.add(0l);
         }
         this.allRows.set(level + 1, (long) currentListCount);
-        //debug
-//        printOffsetBuffer(level, prevSize);
-        System.out.println("KUHU final data length=" + data.getLength());
       }
       if (baseType == DType.STRING) {
         if (!needToAdd) {
@@ -1467,20 +1416,15 @@ public final class HostColumnVector implements AutoCloseable {
         for (Object item : list) {
           String strItem = (String)item;
           int strLen = strItem.getBytes(UTF_8).length;
-          System.out.println("strItem=======");
           for (int k =0;k < strItem.getBytes(UTF_8).length;k++) {
             System.out.print(strItem.getBytes(UTF_8)[k]);
           }
           currentStringByteIndex += strLen;
           currentIndex++;
-//          System.out.println("KUHU currentStringByteIndex=" + currentStringByteIndex);
-          System.out.println("KUHU currentIndex=" + currentIndex);
           allOffsets.get(allOffsets.size() - 1).setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
         }
         //TODO: Fix this hard code
         printOffsetBuffer(allOffsets.size() - 1, 10);
-//        offsets.setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
-        //////////////
 
       }
       return this;
@@ -1489,7 +1433,6 @@ public final class HostColumnVector implements AutoCloseable {
     private void printOffsetBuffer(int level, int prevSize) {
       byte[] offsetBytes = new byte[prevSize * OFFSET_SIZE];
       allOffsets.get(level).getBytes(offsetBytes, 0, 0, offsetBytes.length);
-      System.out.println("Setting KUHU offsetBytes========" + offsetBytes.length);
       for (int i = 0; i < offsetBytes.length; i++) {
         System.out.print(offsetBytes[i]);
       }

@@ -2437,12 +2437,10 @@ public class ColumnVectorTest extends CudfTestBase {
     list3.add(2);
 
     ColumnVector res = ColumnVector.fromLists(DType.INT32, list, list2, list3);
-    //testing only need gather in jni
-//    res = new ColumnVector(res.getNativeView(), true);
+
     HostColumnVector hcv = res.copyToHost();
-    System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
     List<Integer> ret = hcv.getList(1);
-    System.out.println("KUHU ele =" + ret.get(0));
+    System.out.println("Element =" + ret.get(0));
     System.out.println("KUHU ele =" + ret.get(1));
     System.out.println("KUHU ele =" + ret.get(2));
     res.close();
@@ -2469,14 +2467,10 @@ public class ColumnVectorTest extends CudfTestBase {
     list3.add("12");
 
     ColumnVector res = ColumnVector.fromLists(DType.STRING, list, list2, list3);
-    //testing only need gather in jni
-//    res = new ColumnVector(res.getNativeView(), true);
+
     HostColumnVector hcv = res.copyToHost();
-    System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
     List<String> ret = hcv.getList(1);
-    System.out.println("KUHU ele =" + ret.get(0));
-    System.out.println("KUHU ele =" + ret.get(1));
-    System.out.println("KUHU ele =" + ret.get(2));
+
     res.close();
     hcv.close();
   }
@@ -2501,10 +2495,7 @@ public class ColumnVectorTest extends CudfTestBase {
     list3.add(2.3);
 
     ColumnVector res = ColumnVector.fromLists(DType.FLOAT64, list, list2, list3);
-    //testing only need gather in jni
-//    res = new ColumnVector(res.getNativeView(), true);
     HostColumnVector hcv = res.copyToHost();
-    System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
     List<Double> ret = hcv.getList(1);
     System.out.println("KUHU ele =" + ret.get(0));
     System.out.println("KUHU ele =" + ret.get(1));
@@ -2540,7 +2531,6 @@ public class ColumnVectorTest extends CudfTestBase {
 
     ColumnVector res = ColumnVector.fromLists(DType.INT32, mainList, mainList2);
     HostColumnVector hcv = res.copyToHost();
-    System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
     try {
       List<Integer> ret = hcv.getList(1);
       System.out.println("KUHU ele =" + ret.get(0));
@@ -2580,7 +2570,6 @@ public class ColumnVectorTest extends CudfTestBase {
 
     ColumnVector res = ColumnVector.fromLists(DType.STRING, mainList, mainList2);
     HostColumnVector hcv = res.copyToHost();
-    System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
     try {
       List<List<String>> ret = hcv.getList(1);
       System.out.println("KUHU ele =" + ret.get(0));
@@ -2614,9 +2603,7 @@ public class ColumnVectorTest extends CudfTestBase {
     mainList2.add(list3);
 
     ColumnVector res = ColumnVector.fromLists(DType.FLOAT64, mainList, mainList2);
-//    res = new ColumnVector(res.getNativeView(), true);
     HostColumnVector hcv = res.copyToHost();
-    System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
     try {
       List<Double> ret = hcv.getList(1);
       System.out.println("KUHU ele =" + ret.get(0));
@@ -2703,7 +2690,6 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector res2 = ColumnVector.fromLists(DType.INT32, mainList2);
          ColumnVector v = ColumnVector.concatenate(res1, res2);
          HostColumnVector hostColumnVector = v.copyToHost()) {
-      System.out.println("KUHU hcv type =" + hostColumnVector.getType() + "rows" + hostColumnVector.getRowCount());
       List<Integer> ret = hostColumnVector.getList(1);
       System.out.println("Guess we passed!"+ ret + " v size = "+v.getRowCount());
     } catch (Exception e) {
