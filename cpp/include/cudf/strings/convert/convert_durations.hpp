@@ -29,14 +29,27 @@ namespace strings {
  * @brief Returns a new duration column converting a strings column into
  * durations using the provided format pattern.
  *
- * The format pattern can include the following specifiers: "%D,%H,%M,%S"
+ * The format pattern can include the following specifiers:
+ * "%%,%n,%t,%D,%H,%I,%M,%S,%p,%R,%T,%r,%OH,%OI,%OM,%OS"
  *
  * | Specifier | Description | Range |
  * | :-------: | ----------- | ---------------- |
+ * | %%%% | A literal % character | '%' |
+ * | %%n | A newline character | '\n' |
+ * | %%t | A horizontal tab character | '\t' |
  * | %%D | Days | -2,147,483,648 to 2,147,483,647 |
  * | %%H | 24-hour of the day | 00 to 23 |
+ * | %%I | 12-hour of the day | 00 to 11 |
  * | %%M | Minute of the hour | 00 to 59 |
  * | %%S | Second of the minute | 00 to 59.999999999 |
+ * | %%p | AM/PM designations associated with a 12-hour clock | 'AM' or 'PM' |
+ * | %%R | Equivalent to "%H:%M" |  |
+ * | %%T | Equivalent to "%H:%M:%S" |  |
+ * | %%r | The locale's 12-hour clock time (without sign) |  |
+ * | %%OH | locale's alternative representation of 24-hour of the day (without sign) | 00 to 23 |
+ * | %%OI | locale's alternative representation of 12-hour of the day (without sign) | 00 to 11 |
+ * | %%OM | locale's alternative representation of Minute of the hour (without sign) | 00 to 59 |
+ * | %%OS | locale's alternative representation of Second of the minute (without sign) | 00 to 59 |
  *
  * Other specifiers are not currently supported.
  *
@@ -46,10 +59,6 @@ namespace strings {
  * Any null string entry will result in a corresponding null row in the output column.
  *
  * The resulting time units are specified by the `duration_type` parameter.
- * The time units are independent of the number of digits parsed by the "%f" specifier.
- * The "%f" supports a precision value to read the numeric digits. Specify the
- * precision with a single integer value (1-9) as follows:
- * use "%3f" for milliseconds, "%6f" for microseconds and "%9f" for nanoseconds.
  *
  * @throw cudf::logic_error if duration_type is not a duration type.
  *
@@ -69,40 +78,43 @@ std::unique_ptr<column> to_durations(
  * @brief Returns a new strings column converting a duration column into
  * strings using the provided format pattern.
  *
- * The format pattern can include the following specifiers: "%d,%+,%H,%M,%S,%u,%f"
+ * The format pattern can include the following specifiers:
+ * "%%,%n,%t,%D,%H,%I,%M,%S,%p,%R,%T,%r,%OH,%OI,%OM,%OS"
  *
  * | Specifier | Description | Range |
  * | :-------: | ----------- | ---------------- |
+ * | %%%% | A literal % character | '%' |
+ * | %%n | A newline character | '\n' |
+ * | %%t | A horizontal tab character | '\t' |
  * | %%D | Days | -2,147,483,648 to 2,147,483,647 |
  * | %%H | 24-hour of the day | 00 to 23 |
+ * | %%I | 12-hour of the day | 00 to 11 |
  * | %%M | Minute of the hour | 00 to 59 |
  * | %%S | Second of the minute | 00 to 59.999999999 |
+ * | %%p | AM/PM designations associated with a 12-hour clock | 'AM' or 'PM' |
+ * | %%R | Equivalent to "%H:%M" |  |
+ * | %%T | Equivalent to "%H:%M:%S" |  |
+ * | %%r | The locale's 12-hour clock time (without sign) |  |
+ * | %%OH | locale's alternative representation of 24-hour of the day (without sign) | 00 to 23 |
+ * | %%OI | locale's alternative representation of 12-hour of the day (without sign) | 00 to 11 |
+ * | %%OM | locale's alternative representation of Minute of the hour (without sign) | 00 to 59 |
+ * | %%OS | locale's alternative representation of Second of the minute (without sign) | 00 to 59 |
  *
- * Any format string starting with letter 'P' is considered iso format.
- * For Example: "P%dD%HH%MM%SS"
- * https://en.wikipedia.org/wiki/ISO_8601#Durations
- * For ISO format, the leading zeros are not present for all specifiers and
- * trailing zeros are not present for "%f" specifier.
- *
- * No checking is done for invalid formats or invalid duration values.
+ * No checking is done for invalid formats or invalid duration values. Formatting sticks to
+ * specifications of `std::formatter<std::chrono::duration>` as much as possible.
  *
  * Any null input entry will result in a corresponding null entry in the output column.
  *
- * The time units of the input column do not influence the number of digits written by
- * the "%f" specifier.
- * The "%f" supports a precision value to write out numeric digits for the subsecond value.
- * Specify the precision with a single integer value (1-9) between the "%" and the "f" as follows:
- * use "%3f" for milliseconds, "%6f" for microseconds and "%9f" for nanoseconds.
- * If the precision is higher than the units, then zeroes are padded to the right of
- * the subsecond value.
- * If the precision is lower than the units, the subsecond value may be truncated.
- * If the precision is not specified, trailing zeros will be truncated.
+ * The time units of the input column influence the number of digits in decimal of seconds.
+ * It uses 3 digits for milliseconds, 6 digits for microseconds and 9 digits for nanoseconds.
+ * If duration value is negative, only one negative sign is written to output string. The specifiers
+ * with signs are "%H,%I,%M,%S,%R,%T".
  *
  * @throw cudf::logic_error if `durations` column parameter is not a duration type.
  *
  * @param durations Duration values to convert.
  * @param format The string specifying output format.
- *        Default format is ""%d days %+%H:%M:%S".
+ *        Default format is ""%d days %H:%M:%S".
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with formatted durations.
  */

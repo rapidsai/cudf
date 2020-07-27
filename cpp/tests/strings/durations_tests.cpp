@@ -759,6 +759,9 @@ TEST_F(StringsDurationsTest, Errors)
   EXPECT_THROW(
     cudf::strings::to_durations(view, cudf::data_type{cudf::type_id::DURATION_SECONDS}, "%g"),
     cudf::logic_error);
+  EXPECT_THROW(
+    cudf::strings::to_durations(view, cudf::data_type{cudf::type_id::DURATION_SECONDS}, "%Op"),
+    cudf::logic_error);
 
   cudf::test::fixed_width_column_wrapper<int64_t> invalid_durations{1530705600};
   EXPECT_THROW(cudf::strings::from_durations(invalid_durations), cudf::logic_error);
