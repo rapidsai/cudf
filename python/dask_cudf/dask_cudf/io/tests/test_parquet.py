@@ -107,9 +107,7 @@ def test_strings(tmpdir):
     ddf2 = dd.from_pandas(dfp, npartitions=2)
     ddf2.to_parquet(fn, engine="pyarrow")
     read_df = dask_cudf.read_parquet(fn, index=["a"])
-    assert_dd_eq(
-        ddf2, read_df.compute().to_pandas(nullable_pd_dtype=False)
-    )
+    assert_dd_eq(ddf2, read_df.compute().to_pandas(nullable_pd_dtype=False))
 
     read_df_cats = dask_cudf.read_parquet(
         fn, index=["a"], strings_to_categorical=True

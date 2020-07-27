@@ -152,9 +152,7 @@ def test_set_index(nelem, divisions):
         expect = ddf.set_index("x")
         got = dgdf.set_index("x", divisions=divisions)
 
-        assert_dd_eq(
-            expect, got, check_index=False, check_divisions=False
-        )
+        assert_dd_eq(expect, got, check_index=False, check_divisions=False)
 
 
 @pytest.mark.parametrize("by", ["a", "b"])

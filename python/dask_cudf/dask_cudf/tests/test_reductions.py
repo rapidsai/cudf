@@ -74,6 +74,4 @@ def test_rowwise_reductions(data, op):
         expected = getattr(pddf, op)(axis=1)
         got = getattr(pddf, op)(axis=1)
 
-    assert_dd_eq(
-        expected.compute(), got.compute(), check_less_precise=7
-    )
+    assert_dd_eq(expected.compute(), got.compute(), check_less_precise=7)
