@@ -417,8 +417,8 @@ add_library(cudf
             src/transform/transform.cpp
             src/transform/nans_to_nulls.cu
             src/transform/bools_to_mask.cu
-            src/transform/table_to_arrow.cpp
-            src/transform/arrow_to_table.cu
+            src/transform/cudf_to_arrow.cpp
+            src/transform/arrow_to_cudf.cu
             src/transform/encode.cpp
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu

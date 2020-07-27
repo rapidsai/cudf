@@ -29,7 +29,6 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <arrow/util/bit_util.h>
-#include <arrow/testing/gtest_util.h>
 #include <tests/transform/arrow_utils.hpp>
 #include <gtest/gtest.h>
 
@@ -67,10 +66,8 @@ TEST_F(CUDFToArrowTest, NormalTable){
     auto cudf_table = get_cudf_table();
     auto expected_arrow_table = get_arrow_table();
 
-    auto got_arrow_table = cudf::to_arrow(cudf_table->view(), {"a", "b", "c", "d"});
+    auto got_arrow_table = cudf::cudf_to_arrow(cudf_table->view(), {"a", "b", "c", "d"});
 
-    //arrow::PrettyPrint(*got_arrow_table, arrow::PrettyPrintOptions{}, &std::cout);
-    //arrow::PrettyPrint(*expected_arrow_table, arrow::PrettyPrintOptions{}, &std::cout);
     ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }
 
@@ -96,19 +93,15 @@ TEST_F(CUDFToArrowTest, DateTimeTable){
 
     auto expected_arrow_table = arrow::Table::Make(schema, {arr1, arr2});
 
-    auto got_arrow_table = cudf::to_arrow(input_view, {"a", "b"});
+    auto got_arrow_table = cudf::cudf_to_arrow(input_view, {"a", "b"});
 
    ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }
 
 TEST_F(CUDFToArrowTest, NestedList){
-    auto valids = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return i == 2 ? false : true; });
-    //auto col = cudf::test::lists_column_wrapper<int64_t>({{{{1, 2}, {3, 4}, {}}, valids}, {{{6}, {7, 8, 9}}, valids}});
     auto col = cudf::test::lists_column_wrapper<int64_t>({{{1, 2}, {3, 4}, {5}}, {{6}, {7, 8, 9}}});
     cudf::table_view input_view({col});
 
-    //auto list_arr = get_arrow_list_array({1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 2, 4, 5, 6, 9}, {1, 1, 0, 1, 1});
     auto list_arr = get_arrow_list_array<int64_t>({1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 2, 4, 5, 6, 9});
     std::vector<int32_t> offset {0, 3, 5};
     auto nested_list_arr = std::make_shared<arrow::ListArray>(arrow::list(list(arrow::int64())), offset.size()-1, arrow::Buffer::Wrap(offset), list_arr);
@@ -117,15 +110,8 @@ TEST_F(CUDFToArrowTest, NestedList){
     auto schema = std::make_shared<arrow::Schema>(schema_vector);
 
     auto expected_arrow_table = arrow::Table::Make(schema, {nested_list_arr});
+    auto got_arrow_table = cudf::cudf_to_arrow(input_view, {"a"});
 
-    auto got_arrow_table = cudf::to_arrow(input_view, {"a"});
-    //arrow::PrettyPrint(*got_arrow_table, arrow::PrettyPrintOptions{2, 10, 2, "null", false, false}, &std::cout);
-    //arrow::PrettyPrint(*expected_arrow_table, arrow::PrettyPrintOptions{2, 10, 2, "null", false, false}, &std::cout);
-    auto col1 = got_arrow_table->GetColumnByName("a")->chunk(0);
-    auto col2 = expected_arrow_table->GetColumnByName("a")->chunk(0);
-    cudf::test::print(col);
-    std::cout<<"RGSL : The diff is "<<col1->Diff(*col2)<<std::endl;
-    std::cout<<"RGSL : The values is "<<reinterpret_cast<arrow::ListArray*>(col1.get())->values()->Diff(*(reinterpret_cast<arrow::ListArray*>(col2.get())->values()))<<std::endl;
     ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
 }
 
@@ -142,10 +128,8 @@ TEST_P(CUDFToArrowTestSlice, SliceTest){
 
     auto sliced_cudf_table = cudf::slice(cudf_table->view(), {start, end})[0];
     auto expected_arrow_table = arrow_table->Slice(start, end-start);
-    auto got_arrow_table = cudf::to_arrow(sliced_cudf_table, {"a", "b", "c", "d"});
+    auto got_arrow_table = cudf::cudf_to_arrow(sliced_cudf_table, {"a", "b", "c", "d"});
 
-    //arrow::PrettyPrint(*got_arrow_table, arrow::PrettyPrintOptions{}, &std::cout);
-    //arrow::PrettyPrint(*expected_arrow_table, arrow::PrettyPrintOptions{}, &std::cout);
     ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }
 

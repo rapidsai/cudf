@@ -83,20 +83,15 @@ struct dispatch_to_cudf_col {
 
         auto data_buffer = arrow_col->data()->buffers[1];
         auto num_rows = data_buffer->size()/sizeof(T);
-        std::cout<<"RGSL : Number of row "<< num_rows<<std::endl;
-        auto has_nulls = skip_mask? false:arrow_col->null_count()>0;
-        auto col = make_fixed_width_column(type, num_rows, has_nulls?mask_state::UNINITIALIZED:mask_state::UNALLOCATED, stream, mr);
+        auto has_nulls = skip_mask? false:arrow_col->null_bitmap_data() != nullptr;
+        auto col = make_fixed_width_column(type, num_rows, has_nulls?mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
         auto mutable_column_view = col->mutable_view();
         cudaMemcpy(mutable_column_view.data<void*>(), data_buffer->data(), data_buffer->size(), cudaMemcpyHostToDevice);
         if (has_nulls){
             cudaMemcpy(mutable_column_view.null_mask(), arrow_col->null_bitmap_data(), arrow_col->null_bitmap()->size(), cudaMemcpyHostToDevice);
         }
 
-        //arrow::PrettyPrint(*arrow_col, arrow::PrettyPrintOptions{}, &std::cout);
-
-        slice(col->view(), static_cast<size_type>(arrow_col->offset()), static_cast<size_type>(arrow_col->length()));
-        std::cout<<"RGSL : length"<<arrow_col->length()<<std::endl;
-        return std::make_pair<std::unique_ptr<column>, column_view> (std::move(col), slice(col->view(), static_cast<size_type>(arrow_col->offset()), static_cast<size_type>(arrow_col->length())));
+        return std::make_pair<std::unique_ptr<column>, column_view> (std::move(col), cudf::detail::slice(col->view(), static_cast<size_type>(arrow_col->offset()), static_cast<size_type>(arrow_col->length())));
     }
 
     template <typename T>
@@ -106,10 +101,11 @@ struct dispatch_to_cudf_col {
                bool skip_mask,
                rmm::mr::device_memory_resource* mr,
                cudaStream_t stream) {
+
         std::unique_ptr<rmm::device_buffer> mask = std::make_unique<rmm::device_buffer>(0);
         std::unique_ptr<column> out_col;
 
-        if (arrow_col->null_count() > 0){
+        if (arrow_col->null_bitmap_data() != nullptr){
             mask = std::make_unique<rmm::device_buffer>(arrow_col->null_bitmap()->size(), stream, mr);
             cudaMemcpy(mask->data(), arrow_col->null_bitmap_data(), arrow_col->null_bitmap()->size(), cudaMemcpyHostToDevice);
         }
@@ -119,6 +115,7 @@ struct dispatch_to_cudf_col {
             auto str_array = static_cast<arrow::StringArray *>(arrow_col.get());
             auto offset_array = std::make_shared<arrow::Int32Array>(str_array->value_offsets()->size()/sizeof(int32_t), str_array->value_offsets(), nullptr);
             auto char_array = std::make_shared<arrow::Int8Array>(str_array->value_data()->size(), str_array->value_data(), nullptr);
+
             auto offsets_column = std::move(type_dispatcher(data_type(type_id::INT32), dispatch_to_cudf_col{}, offset_array, data_type(type_id::INT32), true, mr, stream).first);
             auto chars_column = std::move(type_dispatcher(data_type(type_id::INT8), dispatch_to_cudf_col{}, char_array, data_type(type_id::INT32), true, mr, stream).first);
 
@@ -174,7 +171,7 @@ struct dispatch_to_cudf_col {
 
 };
 
-std::unique_ptr<table> arrow_to_table(std::shared_ptr<arrow::Table> input_table,
+std::unique_ptr<table> arrow_to_cudf(std::shared_ptr<arrow::Table> input_table,
                                       rmm::mr::device_memory_resource* mr,
                                       cudaStream_t stream) {
     std::vector<std::unique_ptr<column>> columns;
@@ -188,22 +185,20 @@ std::unique_ptr<table> arrow_to_table(std::shared_ptr<arrow::Table> input_table,
             concat_column_views.emplace_back(col_and_view.second);
         }
         if ((concat_columns.size() == 1) and (concat_column_views[0].offset()==0) and (concat_column_views[0].size() == concat_columns[0]->size()) ) {
-            std::cout<<"Handling columns directly"<<std::endl;
             columns.emplace_back(std::move(concat_columns[0]));
         } else {
             columns.emplace_back(cudf::detail::concatenate(concat_column_views, mr, stream));
         }
     }
 
-    std::cout<<"Making Table"<<std::endl;
     return std::make_unique<table>(std::move(columns));
 }
 
 } //namespace detail
 
-std::unique_ptr<table> arrow_to_table(std::shared_ptr<arrow::Table> input_table,
+std::unique_ptr<table> arrow_to_cudf(std::shared_ptr<arrow::Table> input_table,
                                       rmm::mr::device_memory_resource* mr) {
-    return detail::arrow_to_table(input_table, mr);
+    return detail::arrow_to_cudf(input_table, mr);
 }
 
 }// namespace cudf

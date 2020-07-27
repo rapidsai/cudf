@@ -29,7 +29,6 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <arrow/util/bit_util.h>
-#include <arrow/testing/gtest_util.h>
 #include <tests/transform/arrow_utils.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <gtest/gtest.h>
@@ -41,7 +40,7 @@ TEST_F(ArrowToCUDFTest, NormalTable){
     auto expected_cudf_table = get_cudf_table();
     auto arrow_table = get_arrow_table();
 
-    auto got_cudf_table = cudf::arrow_to_table(arrow_table);
+    auto got_cudf_table = cudf::arrow_to_cudf(arrow_table);
 
     cudf::test::expect_tables_equal(expected_cudf_table->view(), got_cudf_table->view());
 }
@@ -68,7 +67,7 @@ TEST_F(ArrowToCUDFTest, DateTimeTable){
 
     auto arrow_table = arrow::Table::Make(schema, {arr1, arr2});
 
-    auto got_cudf_table = cudf::arrow_to_table(arrow_table);
+    auto got_cudf_table = cudf::arrow_to_cudf(arrow_table);
     
     cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
 
@@ -89,7 +88,7 @@ TEST_F(ArrowToCUDFTest, NestedList){
 
     auto arrow_table = arrow::Table::Make(schema, {nested_list_arr});
 
-    auto got_cudf_table = cudf::arrow_to_table(arrow_table);
+    auto got_cudf_table = cudf::arrow_to_cudf(arrow_table);
     cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
 }
 
@@ -111,7 +110,7 @@ TEST_F(ArrowToCUDFTest, DictionaryIndicesType){
 
     cudf::table expected_table(std::move(columns));
 
-    auto got_cudf_table = cudf::arrow_to_table(arrow_table);
+    auto got_cudf_table = cudf::arrow_to_cudf(arrow_table);
 
     cudf::test::expect_tables_equal(expected_table.view(), got_cudf_table->view());
 }
@@ -122,15 +121,12 @@ TEST_F(ArrowToCUDFTest, ChunkedArray){
     auto int32array_2 = get_arrow_array<int32_t>({5, 2, 7}, {1, 1, 1});
     auto string_array_1 = get_arrow_array<cudf::string_view>({"fff", "aaa", "",});
     auto string_array_2 = get_arrow_array<cudf::string_view>({"fff", "ccc",}, {0, 1});
-    auto dict_array = get_arrow_dict_array<>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
-    //auto list_array_1 = get_arrow_list_array({1, 2}, {0, 2});
-    //auto list_array_2 = get_arrow_list_array({3, 4, 5, 6, 7, 8, 9}, {0, 2, 3, 4, 7}, {1, 0, 1, 1});
+    auto dict_array = get_arrow_dict_array({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
     
     auto int64_chunked_array = std::make_shared<arrow::ChunkedArray>(int64array);
     auto int32_chunked_array = std::make_shared<arrow::ChunkedArray>(std::vector<std::shared_ptr<arrow::Array>> {int32array_1, int32array_2});
     auto string_chunked_array = std::make_shared<arrow::ChunkedArray>(std::vector<std::shared_ptr<arrow::Array>> {string_array_1, string_array_2});
     auto dict_chunked_array = std::make_shared<arrow::ChunkedArray>(dict_array);
-    //auto list_chunked_array = arrow::ChunkedArray(std::vector<arrow::ArrayVector> {list_array_1, list_array_2});
 
     std::vector <std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", int32_chunked_array->type()), arrow::field("b", int64array->type()), arrow::field("c", string_array_1->type()), arrow::field("d", dict_chunked_array->type())});
     auto schema = std::make_shared<arrow::Schema>(schema_vector);
@@ -139,17 +135,7 @@ TEST_F(ArrowToCUDFTest, ChunkedArray){
 
     auto expected_cudf_table = get_cudf_table();
 
-    auto got_cudf_table = cudf::arrow_to_table(arrow_table);
-    cudf::test::print(got_cudf_table->get_column(0).view());
-    cudf::test::print(got_cudf_table->get_column(1).view());
-    cudf::test::print(got_cudf_table->get_column(2).view());
-    cudf::test::print(got_cudf_table->get_column(3).view());
-    cudf::test::print(expected_cudf_table->get_column(3).view());
-    std::cout<<"RGSL : Dict index type is"<<(int)got_cudf_table->get_column(0).type().id()<<std::endl;
-    std::cout<<"RGSL : Dict index type is"<<(int)got_cudf_table->get_column(1).type().id()<<std::endl;
-    std::cout<<"RGSL : Dict index type is"<<(int)got_cudf_table->get_column(2).type().id()<<std::endl;
-    std::cout<<"RGSL : Dict index type is"<<(int)got_cudf_table->get_column(3).child(0).type().id()<<std::endl;
-    std::cout<<"RGSL : Dict index type is"<<(int)expected_cudf_table->get_column(3).child(0).type().id()<<std::endl;
+    auto got_cudf_table = cudf::arrow_to_cudf(arrow_table);
 
     cudf::test::expect_tables_equal(expected_cudf_table->view(), got_cudf_table->view());
 }
@@ -169,7 +155,7 @@ TEST_P(ArrowToCUDFTestSlice, SliceTest){
     auto sliced_cudf_table = cudf::slice(cudf_table->view(), {start, end})[0];
     cudf::table expected_cudf_table{sliced_cudf_table};
     auto sliced_arrow_table = arrow_table->Slice(start, end-start);
-    auto got_cudf_table = cudf::arrow_to_table(sliced_arrow_table);
+    auto got_cudf_table = cudf::arrow_to_cudf(sliced_arrow_table);
 
     cudf::test::expect_tables_equal(expected_cudf_table.view(), got_cudf_table->view());
 }

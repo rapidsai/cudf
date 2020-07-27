@@ -28,6 +28,7 @@
 
 namespace cudf {
 namespace detail {
+
     template<typename T>
     std::shared_ptr<arrow::Buffer>
     fetch_data_buffer(column_view input_view, arrow::MemoryPool* ar_mr) {
@@ -81,10 +82,8 @@ struct dispatch_to_arrow {
                arrow::MemoryPool* ar_mr) {
         
         std::unique_ptr<column> tmp_column = nullptr;
-//        std::cout<<"RGSL : Before creating the table"<<std::endl;
         if ((input.offset() != 0) or (std::is_same<T, cudf::dictionary32>::value and input.child(0).size() != input.size()) or (!std::is_same<T, cudf::dictionary32>::value and (input.child(0).size()-1 != input.size()))){
             tmp_column = std::make_unique<cudf::column>(input);
-//            std::cout<<"RGSL : Creating column from dict view"<<std::endl;
         }
         
         column_view input_view = (tmp_column != nullptr)? tmp_column->view(): input;
@@ -97,28 +96,20 @@ struct dispatch_to_arrow {
             child_arrays.emplace_back(type_dispatcher(c.type(), dispatch_to_arrow{}, c, c.type().id(), ar_mr));
         }
 
-//        std::cout<<"RGSL : Created array from chiildren "<<child_arrays.size()<<std::endl;
         if (std::is_same<T, cudf::string_view>::value) {
              if (child_arrays.size() == 0) {
                  return std::make_shared<arrow::StringArray>(0, nullptr, nullptr);
              }
              auto offset_buffer = child_arrays[0]->data()->buffers[1];
              auto data_buffer = child_arrays[1]->data()->buffers[1];
-        //std::cout<<"RGSL : String array creation chiildren"<<std::endl;
-             //return to_arrow_array(id, static_cast<int64_t>(input_view.size()), offset_buffer, data_buffer, mask_buffer, static_cast<int64_t>(input_view.null_count()));
              return std::make_shared<arrow::StringArray>(static_cast<int64_t>(input_view.size()), offset_buffer, data_buffer, mask_buffer, static_cast<int64_t>(input_view.null_count()));
         } else if (std::is_same<T, cudf::dictionary32>::value){
             // Update indices with bit mask buffer
-//            std::cout<<"RGSL : index value is"<<cudf::detail::get_value<int32_t>(input.child(0), 2, 0)<<std::endl;
-//            std::cout<<"RGSL : index value is"<<cudf::detail::get_value<int32_t>(input_view.child(0), 1, 0)<<std::endl;
-//            std::cout<<"RGSL : Index dict type is "<<child_arrays[0]->type()->id()<<std::endl;
             auto indices = to_arrow_array(type_id::INT32, static_cast<int64_t>(input_view.size()), child_arrays[0]->data()->buffers[1], mask_buffer, static_cast<int64_t>(input_view.null_count()));
-            arrow::PrettyPrint(*indices, arrow::PrettyPrintOptions{}, &std::cout);
             auto dictionary = child_arrays[1];
             return std::make_shared<arrow::DictionaryArray>(arrow::dictionary(indices->type(), dictionary->type()), indices, dictionary);
         } else {
             auto offset_buffer = child_arrays[0]->data()->buffers[1];
-//            std::cout<<"RGSL : offset_buffer type "<<child_arrays[0]->type()->id()<<std::endl;
             auto data = child_arrays[1];
             return std::make_shared<arrow::ListArray>(arrow::list(data->type()), static_cast<int64_t>(input_view.size()), offset_buffer, data, mask_buffer, static_cast<int64_t>(input_view.null_count()));
         }
@@ -134,7 +125,7 @@ struct dispatch_to_arrow {
 };
 
 
-std::shared_ptr<arrow::Table> to_arrow(table_view input,
+std::shared_ptr<arrow::Table> cudf_to_arrow(table_view input,
                                        std::vector<std::string> const& column_names,
                                        arrow::MemoryPool* ar_mr,
                                        cudaStream_t stream){
@@ -149,14 +140,12 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
     bool has_names = column_names.size() > 0;
 
     size_type itr = 0;
-    std::cout<<"Before For"<<std::endl;
     for (auto const& c : input) {
         arrays.emplace_back(type_dispatcher(c.type(), dispatch_to_arrow{}, c, c.type().id(), ar_mr));
         fields.emplace_back(arrow::field(has_names ? column_names[itr] : nullptr, arrays[itr]->type()));
         itr++;
     }
 
-    std::cout<<"After For"<<std::endl;
     schema = arrow::schema(fields);
 
     return arrow::Table::Make(schema, arrays);
@@ -164,10 +153,10 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
 
 } //namespace detail
 
-std::shared_ptr<arrow::Table> to_arrow(table_view input,
+std::shared_ptr<arrow::Table> cudf_to_arrow(table_view input,
                                        std::vector<std::string> const& column_names,
                                        arrow::MemoryPool* ar_mr){
-    return detail::to_arrow(input, column_names, ar_mr);
+    return detail::cudf_to_arrow(input, column_names, ar_mr);
 }
 
 } // namespace cudf

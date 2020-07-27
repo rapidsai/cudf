@@ -85,12 +85,12 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-std::shared_ptr<arrow::Table> to_arrow(table_view input,
+std::shared_ptr<arrow::Table> cudf_to_arrow(table_view input,
                                        std::vector<std::string> const& column_names = {},
                                        arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
 
 
-std::unique_ptr<table> arrow_to_table(std::shared_ptr<arrow::Table> input_table,
+std::unique_ptr<table> arrow_to_cudf(std::shared_ptr<arrow::Table> input_table,
                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
