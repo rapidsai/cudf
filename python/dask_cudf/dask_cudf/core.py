@@ -99,8 +99,9 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         s = "<dask_cudf.%s | %d tasks | %d npartitions>"
         return s % (type(self).__name__, len(self.dask), self.npartitions)
 
-    def to_dask_dataframe(self, nullable_pd_dtype=True):
+    def to_dask_dataframe(self, **kwargs):
         """Create a dask.dataframe object from a dask_cudf object"""
+        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", False)
         return self.map_partitions(
             M.to_pandas, nullable_pd_dtype=nullable_pd_dtype
         )

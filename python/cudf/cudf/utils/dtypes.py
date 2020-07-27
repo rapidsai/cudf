@@ -30,18 +30,6 @@ _np_pa_dtypes = {
     np.str_: pa.string(),
 }
 
-pa_pd_types_mapper = {
-    pa.uint8: pd.UInt8Dtype(),
-    pa.uint16: pd.UInt8Dtype(),
-    pa.uint32: pd.UInt8Dtype(),
-    pa.uint64: pd.UInt8Dtype(),
-    pa.int8: pd.UInt8Dtype(),
-    pa.int16: pd.UInt8Dtype(),
-    pa.int32: pd.UInt8Dtype(),
-    pa.int64: pd.UInt8Dtype(),
-    pa.bool_: pd.UInt8Dtype(),
-}
-
 cudf_dtypes_to_pandas_dtypes = {
     np.dtype("uint8"): pd.UInt8Dtype(),
     np.dtype("uint16"): pd.UInt16Dtype(),
