@@ -1,1 +1,1 @@
-from .kafka import Consumer, Producer
+from .kafka import KafkaConsumer, KafkaProducer

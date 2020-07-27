@@ -4,18 +4,29 @@ from cudf_kafka._lib.kafka import KafkaDatasource
 
 import cudf
 
-# import custreamz._libxx.kafka as libkafka
 from custreamz.utils import docutils
 
 
 # Base class for anything class that needs to interact with Apache Kafka
 class CudfKafkaClient(object):
-    def __init__(self, kafka_configs, topic, partition, delimiter):
+    def __init__(
+        self,
+        kafka_configs,
+        topic=None,
+        partition=0,
+        start_offset=0,
+        end_offset=0,
+        delimiter="/n",
+        batch_size=10000,
+    ):
         self.kafka_configs = kafka_configs
         self.topic = topic
         self.partition = partition
+        self.start_offset = start_offset
+        self.end_offset = end_offset
         self.delimiter = delimiter
-        print("Base __init__ in CudfKafkaClient invoked")
+        self.batch_size = batch_size
+
         kafka_confs = {}
         for key, value in kafka_configs.items():
             kafka_confs[str.encode(key)] = str.encode(value)
@@ -23,9 +34,9 @@ class CudfKafkaClient(object):
             kafka_confs,
             self.topic.encode(),
             self.partition,
-            0,
-            10,
-            10000,
+            self.start_offset,
+            self.end_offset,
+            self.batch_size,
             self.delimiter.encode(),
         )
 
@@ -46,46 +57,62 @@ class CudfKafkaClient(object):
         return self.kafka_datasource.close(timeout=timeout)
 
 
-# Kafka Consumer implementation
-class Consumer(CudfKafkaClient):
-    def __init__(self, kafka_configs, topic, partition, delimiter):
-        super().__init__(kafka_configs, topic, partition, delimiter)
-        print("__init__ in Consumer invoked")
+# Apache Kafka Consumer implementation
+class KafkaConsumer(CudfKafkaClient):
+    def __init__(
+        self,
+        kafka_configs,
+        topic=None,
+        partition=0,
+        start_offset=0,
+        end_offset=0,
+        delimiter="/n",
+        batch_size=10000,
+    ):
+        super().__init__(
+            kafka_configs,
+            topic=topic,
+            partition=partition,
+            start_offset=start_offset,
+            end_offset=end_offset,
+            delimiter=delimiter,
+            batch_size=batch_size,
+        )
 
     @docutils.doc_read_gdf()
     def read_gdf(
-        self,
-        lines=True,
-        dtype=True,
-        compression="infer",
-        dayfirst=True,
-        byte_range=None,
-        topic=None,
-        *args,
-        **kwargs,
+        self, message_format="json",
     ):
 
         """{docstring}"""
 
-        if topic is None:
+        if self.topic is None:
             raise ValueError(
-                "ERROR: You MUST specifiy the topic "
-                + "that you want to consume from!"
-            )
-        else:
-            result = cudf.io.read_csv(
-                self.kafka_source,
-                lines=lines,
-                dtype=dtype,
-                compression=compression,
-                dayfirst=dayfirst,
-                byte_range=byte_range,
+                "ERROR: You must specifiy the topic "
+                + "that you want to consume from"
             )
 
-            if result is not None:
-                return cudf.DataFrame._from_table(result)
-            else:
-                return cudf.DataFrame()
+        if message_format.lower() == "json":
+            result = cudf.io.read_json(self.kafka_source)
+        elif message_format.lower() == "csv":
+            result = cudf.io.read_csv(self.kafka_source)
+        elif message_format.lower() == "orc":
+            result = cudf.io.read_orc(self.kafka_source)
+        elif message_format.lower() == "avro":
+            result = cudf.io.read_avro(self.kafka_source)
+        elif message_format.lower() == "parquet":
+            result = cudf.io.read_parquet(self.kafka_source)
+        else:
+            raise ValueError(
+                "Unsupported Kafka Message payload type of: "
+                + str(message_format)
+            )
+
+        if result is not None:
+            return cudf.DataFrame._from_table(result)
+        else:
+            # empty Dataframe
+            return cudf.DataFrame()
 
     def committed(self, partitions, timeout=10000):
         toppars = []
@@ -139,8 +166,8 @@ class Consumer(CudfKafkaClient):
             )
 
 
-# Kafka Producer implementation
-class Producer(CudfKafkaClient):
+# Apache Kafka Producer implementation
+class KafkaProducer(CudfKafkaClient):
     def __init__(self, kafka_configs, topic, partition, delimiter):
         super().__init__(kafka_configs, topic, partition, delimiter)
         print("__init__ in Producer invoked")
