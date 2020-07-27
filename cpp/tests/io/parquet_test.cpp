@@ -1087,7 +1087,7 @@ TEST_F(ParquetReaderTest, UserBounds)
     // attempt to read more rows than there actually are
     cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
     read_args.num_rows = 16;
-    auto result = cudf_io::read_parquet(read_args);  
+    auto result        = cudf_io::read_parquet(read_args);
 
     // we should only get back 4 rows
     EXPECT_EQ(result.tbl->view().column(0).size(), 4);
@@ -1106,14 +1106,14 @@ TEST_F(ParquetReaderTest, UserBounds)
     // attempt to read more rows than there actually are
     cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
     read_args.skip_rows = 4;
-    auto result = cudf_io::read_parquet(read_args);  
+    auto result         = cudf_io::read_parquet(read_args);
 
     // we should get empty columns back
     EXPECT_EQ(result.tbl->view().num_columns(), 4);
     EXPECT_EQ(result.tbl->view().column(0).size(), 0);
-  }  
+  }
 
-  // trying to read 0 rows should result in reading the whole file  
+  // trying to read 0 rows should result in reading the whole file
   // TODO : this is somewhat incongruous with skipping past all the rows
   // in the file, which returns columns of length 0. should this behavior be altered?
   {
@@ -1127,7 +1127,7 @@ TEST_F(ParquetReaderTest, UserBounds)
     // attempt to read more rows than there actually are
     cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
     read_args.num_rows = 0;
-    auto result = cudf_io::read_parquet(read_args);  
+    auto result        = cudf_io::read_parquet(read_args);
 
     // we should only get back 4 rows
     EXPECT_EQ(result.tbl->view().column(0).size(), 4);
@@ -1146,8 +1146,8 @@ TEST_F(ParquetReaderTest, UserBounds)
     // attempt to read more rows than there actually are
     cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
     read_args.skip_rows = 4;
-    read_args.num_rows = 0;
-    auto result = cudf_io::read_parquet(read_args);  
+    read_args.num_rows  = 0;
+    auto result         = cudf_io::read_parquet(read_args);
 
     // we should get empty columns back
     EXPECT_EQ(result.tbl->view().num_columns(), 4);

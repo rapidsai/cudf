@@ -908,22 +908,23 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
   pages.device_to_host(stream);
   page_nesting.device_to_host(stream);
 
-  // for nested schemas, add the final offset to every offset buffer.  
+  // for nested schemas, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each
   // on each buffer.  Or potentially do it in PreprocessColumnData
   // Note : the reason we are doing this here instead of in the decode kernel is
-  // that it is difficult/impossible for a given page to know that it is writing the very 
+  // that it is difficult/impossible for a given page to know that it is writing the very
   // last value that should then be followed by a terminator (because rows can span
   // page boundaries).
-  for(size_t idx=0; idx<out_buffers.size(); idx++){
-    column_buffer *out        = &out_buffers[idx];
-    int depth = 0;
-    while(out->children.size() != 0){
+  for (size_t idx = 0; idx < out_buffers.size(); idx++) {
+    column_buffer *out = &out_buffers[idx];
+    int depth          = 0;
+    while (out->children.size() != 0) {
       int offset = out->children[0].size;
-      if(out->children[0].children.size() > 0){
-        offset--;
-      }
-      cudaMemcpy(((int32_t*)out->data()) + (out->size-1), &offset, sizeof(offset), cudaMemcpyHostToDevice);
+      if (out->children[0].children.size() > 0) { offset--; }
+      cudaMemcpy(((int32_t *)out->data()) + (out->size - 1),
+                 &offset,
+                 sizeof(offset),
+                 cudaMemcpyHostToDevice);
       depth++;
       out = &out->children[0];
     }
@@ -1162,7 +1163,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                                   _mr});
             col = &col->children[0];
           }
-          
+
           // leaf buffer - plain data type. int, string, etc
           col->children.push_back(column_buffer{
             data_type{to_type_id(leaf_schema, _strings_to_categorical, _timestamp_type.id())},

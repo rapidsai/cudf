@@ -180,7 +180,7 @@ struct ColumnChunkDesc {
   int8_t decimal_scale;                       // decimal scale pow(10, -decimal_scale)
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
-  int32_t col_index;   // my output column index
+  int32_t col_index;  // my output column index
 };
 
 /**
