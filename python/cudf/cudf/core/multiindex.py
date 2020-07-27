@@ -848,7 +848,7 @@ class MultiIndex(Index):
         result = cls.from_pandas(pdi)
         return result
 
-    def to_pandas(self, nullable_pd_dtype=False):
+    def to_pandas(self, **kwargs):
         if hasattr(self, "_source_data"):
             result = self._source_data.to_pandas(nullable_pd_dtype=False)
             result.columns = self.names
