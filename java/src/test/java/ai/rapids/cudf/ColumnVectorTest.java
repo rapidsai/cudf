@@ -2554,6 +2554,46 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testListOfListsCvStrings() {
+    List<String> list = new ArrayList<>();
+    list.add("1");
+    list.add("23");
+    list.add("10");
+    List<String> list2 = new ArrayList<>();
+    list2.add("13");
+    list2.add("14");
+    list2.add("17");
+    List<List<String>> mainList = new ArrayList<>();
+    mainList.add(list);
+    mainList.add(list2);
+    List<String> list3 = new ArrayList<>();
+    list3.add("24");
+    list3.add("25");
+    list3.add("27");
+    List<String> list4 = new ArrayList<>();
+    list4.add("29");
+    list4.add("88");
+    list4.add("19");
+    List<List<String>> mainList2 = new ArrayList<>();
+    mainList2.add(list3);
+    mainList2.add(list4);
+
+    ColumnVector res = ColumnVector.fromLists(DType.STRING, mainList, mainList2);
+    HostColumnVector hcv = res.copyToHost();
+    System.out.println("KUHU hcv type =" + hcv.getType() + "rows" + hcv.getRowCount());
+    try {
+      List<List<String>> ret = hcv.getList(1);
+      System.out.println("KUHU ele =" + ret.get(0));
+      System.out.println("KUHU ele =" + ret.get(1));
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      res.close();
+      hcv.close();
+    }
+  }
+
+  @Test
   void testListOfListsCvDoubles() {
     List<Double> list = new ArrayList<>();
     list.add(1.1);

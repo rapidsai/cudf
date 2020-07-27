@@ -60,14 +60,14 @@ public final class HostColumnVector implements AutoCloseable {
   private Optional<Long> nullCount = Optional.empty();
   private int refCount;
 
-  public void printDataBuffer() {
-    byte[] dataBytes = new byte[100];
-    offHeap.data.getBytes(dataBytes, 0, 0, offHeap.data.length);
-    System.out.println("Setting KUHU DATA========" + dataBytes.length);
-    for (int i = 0; i < dataBytes.length; i++) {
-      System.out.print(dataBytes[i] + " ");
-    }
-  }
+//  public void printDataBuffer() {
+//    byte[] dataBytes = new byte[100];
+//    offHeap.data.getBytes(dataBytes, 0, 0, offHeap.data.length);
+//    System.out.println("Setting KUHU DATA========" + dataBytes.length);
+//    for (int i = 0; i < dataBytes.length; i++) {
+//      System.out.print(dataBytes[i] + " ");
+//    }
+//  }
   /**
    * Create a new column vector with data populated on the host.
    */
@@ -126,7 +126,6 @@ public final class HostColumnVector implements AutoCloseable {
     }
     offHeap = new OffHeapState(hostDataBuffer, hostValidityBuffer, offsetBuffer);
     System.out.println("PRINT IN HCV" + hostDataBuffer);
-    printDataBuffer();
     MemoryCleaner.register(this, offHeap);
     this.rows = rows.get(0);
     this.allRows = rows;
@@ -298,9 +297,9 @@ public final class HostColumnVector implements AutoCloseable {
         }
 
         ColumnVector ret = new ColumnVector(type, rows, nullCount, data, valid, offsets);
-//        data = null;
-//        valid = null;
-//        offsets = null;
+        data = null;
+        valid = null;
+        offsets = null;
         return ret;
       } else {
         int depth = allTypes.size() -1 ; // 0,1,2 for List<List<int>>
@@ -313,14 +312,13 @@ public final class HostColumnVector implements AutoCloseable {
           DType colType = allTypes.get(i);
           long colRows = allRows.get(i);
           //TODO: fix this so that only one level has data
-          HostMemoryBuffer colData = offHeap.data;
+          HostMemoryBuffer colData = (i == depth) ? offHeap.data : null;
           HostMemoryBuffer colValid = i < offHeap.valid.size() ? offHeap.valid.get(i) : null;
           HostMemoryBuffer colOffsets = i < offHeap.offsets.size() ? offHeap.offsets.get(i) : null;
           newCol = createColumnVector(colType, colRows, nullCount, colData, colValid,
               colOffsets, prev);
           prev = newCol.getNativeView();
         }
-        newCol.getDataBuffer();
       return newCol;
       }
     } finally {
@@ -828,7 +826,6 @@ public final class HostColumnVector implements AutoCloseable {
         System.out.println("KUHU from lists" + s + " baseType =" + baseType);
         b.appendList(DType.LIST, baseType, 0, values.length + 1 , s);
       }
-      b.printDataBuffer();
       for(HostMemoryBuffer myOffsets: b.allOffsets) {
         byte[] tmp = new byte[(int)myOffsets.length];
         System.out.println("KUHU TMP OFFSETS==========");
@@ -1426,7 +1423,6 @@ public final class HostColumnVector implements AutoCloseable {
           } else {
             data.setBytes(currentStringByteIndex, listBytes, 0, listBytes.length);
           }
-          printDataBuffer();
           byte[] tmpArr = new byte[(int) data.length];
           data.getBytes(tmpArr, 0, 0, tmpArr.length);
           System.out.println("\nKUHU tmpArr========" + tmpArr.length);
@@ -1499,14 +1495,6 @@ public final class HostColumnVector implements AutoCloseable {
       }
     }
 
-    public void printDataBuffer() {
-      byte[] dataBytes = new byte[100];
-      data.getBytes(dataBytes, 0, 0, data.length);
-      System.out.println("Setting KUHU DATA========" + dataBytes.length);
-      for (int i = 0; i < dataBytes.length; i++) {
-        System.out.print(dataBytes[i] + " ");
-      }
-    }
 
     private void writeLists(DataOutputStream dos, List list, DType baseType) throws IOException {
       for (int i = 0; i < list.size(); i++) {
