@@ -1627,9 +1627,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         data = as_column(data, dtype=cudf_dtype)
 
         mask = arbitrary._mask
-        mask = bools_to_mask(
-            as_column(mask).binary_operator("eq", np.bool_(False))
-        )
+        mask = bools_to_mask(as_column(mask).unary_operator("not"))
 
         data = data.set_mask(mask)
 
