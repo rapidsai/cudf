@@ -140,6 +140,7 @@
 - PR #5756 Switch JNI code to use the RMM owning wrapper
 - PR #5725 Integrate Gbenchmarks into CI
 - PR #5752 Add cuDF internals documentation (ColumnAccessor)
+- PR #5759 Fix documentation describing JIT cache default location
 
 ## Bug Fixes
 
@@ -205,6 +206,7 @@
 - PR #5692 Fix compilation issue with gcc 7.4.0 and CUDA 10.1
 - PR #5693 Add fix missing from PR 5656 to update local docker image to py3.7
 - PR #5703 Small fix for dataframe constructor with cuda array interface objects that don't have `descr` field
+- PR #5727 Fix `Index.__repr__` to allow representation of null values
 - PR #5719 Fix Frame._concat() with categorical columns
 - PR #5736 Disable unsigned type in ORC writer benchmarks
 - PR #5745 Update JNI cast for inability to cast timestamp and integer types
