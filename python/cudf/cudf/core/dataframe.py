@@ -6685,7 +6685,7 @@ class DataFrame(Frame, Serializable):
 
         return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
 
-    def pivot(self, index, columns, values):
+    def pivot(self, index, columns, values=None):
         return cudf.core.reshape.pivot(
             self, index=index, columns=columns, values=values
         )
