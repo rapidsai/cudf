@@ -6527,6 +6527,37 @@ class DataFrame(Frame, Serializable):
             "`.to_pandas().to_dict()` to construct a Python dictionary."
         )
 
+    def keys(self):
+        """
+        Get the columns.
+        This is index for Series, columns for DataFrame.
+
+        Returns
+        -------
+        Index
+            Columns of DataFrame.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'one' : [1, 2, 3], 'five' : ['a', 'b', 'c']})
+        >>> df
+           one five
+        0    1    a
+        1    2    b
+        2    3    c
+        >>> df.keys()
+        Index(['one', 'five'], dtype='object')
+        >>> df = cudf.DataFrame(columns=[0, 1, 2, 3])
+        >>> df
+        Empty DataFrame
+        Columns: [0, 1, 2, 3]
+        Index: []
+        >>> df.keys()
+        Int64Index([0, 1, 2, 3], dtype='int64')
+        """
+        return self.columns
+
     def append(
         self, other, ignore_index=False, verify_integrity=False, sort=False
     ):
