@@ -161,43 +161,54 @@ def test_replace_strings():
     assert_eq(pdf.replace("a", "e"), gdf.replace("a", "e"))
 
 
+@pytest.mark.parametrize(
+    "psr",
+    [pd.Series([0, 1, None, 2, None]), pd.Series([0, 1, np.nan, 2, np.nan])],
+)
 @pytest.mark.parametrize("data_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("fill_dtype", NUMERIC_TYPES)
-@pytest.mark.parametrize("fill_type", ["scalar", "series"])
-@pytest.mark.parametrize("null_value", [None, np.nan])
+@pytest.mark.parametrize("fill_value", [10, pd.Series([10, 20, 30, 40, 50])])
 @pytest.mark.parametrize("inplace", [True, False])
 def test_series_fillna_numerical(
-    data_dtype, fill_dtype, fill_type, null_value, inplace
+    psr, data_dtype, fill_dtype, fill_value, inplace
 ):
     # TODO: These tests should use Pandas' nullable int type
     # when we support a recent enough version of Pandas
     # https://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
+    if np.dtype(data_dtype).kind not in ("i"):
+        psr = psr.astype(data_dtype)
 
-    if fill_type == "scalar":
-        fill_value = np.random.randint(0, 5)
-        expect = np.array([0, 1, fill_value, 2, fill_value], dtype=data_dtype)
-    elif fill_type == "series":
-        data = np.random.randint(0, 5, (5,))
-        fill_value = pd.Series(data, dtype=data_dtype)
-        expect = np.array(
-            [0, 1, fill_value[2], 2, fill_value[4]], dtype=data_dtype
-        )
+    gsr = cudf.from_pandas(psr)
 
-    sr = Series([0, 1, null_value, 2, null_value], dtype=data_dtype)
-    result = sr.fillna(fill_value, inplace=inplace)
+    if isinstance(fill_value, pd.Series):
+        fill_value_cudf = cudf.from_pandas(fill_value)
+    else:
+        fill_value_cudf = fill_value
+
+    expected = psr.fillna(fill_value, inplace=inplace)
+    actual = gsr.fillna(fill_value_cudf, inplace=inplace)
 
     if inplace:
-        result = sr
+        expected = psr
+        actual = gsr
 
-    got = result.to_array()
-
-    np.testing.assert_equal(expect, got)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
     "psr",
     [
         pd.Series(["a", "b", "a", None, "c", None], dtype="category"),
+        pd.Series(
+            ["a", "b", "a", None, "c", None],
+            dtype="category",
+            index=["q", "r", "z", "a", "b", "c"],
+        ),
+        pd.Series(
+            ["a", "b", "a", None, "c", None],
+            dtype="category",
+            index=["x", "t", "p", "q", "r", "z"],
+        ),
         pd.Series(["a", "b", "a", np.nan, "c", np.nan], dtype="category"),
         pd.Series(
             [None, None, None, None, None, None, "a", "b", "c"],
@@ -210,6 +221,16 @@ def test_series_fillna_numerical(
     [
         "c",
         pd.Series(["c", "c", "c", "c", "c", "a"], dtype="category"),
+        pd.Series(
+            ["a", "b", "a", None, "c", None],
+            dtype="category",
+            index=["x", "t", "p", "q", "r", "z"],
+        ),
+        pd.Series(
+            ["a", "b", "a", None, "c", None],
+            dtype="category",
+            index=["q", "r", "z", "a", "b", "c"],
+        ),
         pd.Series(["a", "b", "a", None, "c", None], dtype="category"),
         pd.Series(["a", "b", "a", np.nan, "c", np.nan], dtype="category"),
     ],
@@ -255,6 +276,23 @@ def test_fillna_categorical(psr, fill_value, inplace):
             ],
             dtype="datetime64[ns]",
         ),
+        pd.Series(
+            [
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "2011-10-10",
+                "2010-01-01",
+                "2010-01-02",
+                "2010-01-04",
+                "2010-11-01",
+            ],
+            dtype="datetime64[ns]",
+            index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"],
+        ),
     ],
 )
 @pytest.mark.parametrize(
@@ -279,6 +317,23 @@ def test_fillna_categorical(psr, fill_value, inplace):
                 "2010-11-01",
             ],
             dtype="datetime64[ns]",
+        ),
+        pd.Series(
+            [
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "2011-10-10",
+                "2010-01-01",
+                "2010-01-02",
+                "2010-01-04",
+                "2010-11-01",
+            ],
+            dtype="datetime64[ns]",
+            index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"],
         ),
     ],
 )
@@ -318,7 +373,10 @@ def test_fillna_datetime(psr, fill_value, inplace):
         pd.Series([3, 4, 5]),
         pd.Series([10, 20, 30], index=["z", "a", "p"]),
         {"a": 5, "b": pd.Series([3, 4, 5])},
+        {"a": 5001},
+        {"b": pd.Series([11, 22, 33], index=["a", "p", "z"])},
         {"a": 5, "b": pd.Series([3, 4, 5], index=["a", "p", "z"])},
+        {"c": 100},
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])

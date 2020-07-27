@@ -1323,7 +1323,7 @@ class Frame(libcudf.table.Table):
         copy_data = self._data.copy(deep=True)
 
         for name, col in copy_data.items():
-            if value[name] is not None:
+            if name in value and value[name] is not None:
                 copy_data[name] = copy_data[name].fillna(value[name],)
 
         result = self._from_table(Frame(copy_data, self._index))
