@@ -2714,10 +2714,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long makeCudfColumnView(int type, long data, long dataSize, long offsets,
                                                 long valid, int nullCount, int size, long childHandle);
 
-  private static native long[] getChildrenPointers(long viewHandle) throws CudfException;
   private static native long getChildCvPointer(long viewHandle) throws CudfException;
-
-  private static native long[] getChildrenColumnPointers(long colHandle) throws CudfException;
 
   ////////
   // Native methods specific to cudf::column. These either take or create a cudf::column
@@ -2934,22 +2931,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
         return null;
       }
       return new DeviceMemoryBufferView(values[0], values[1]);
-    }
-
-    private List<MemoryBuffer> getAllNativeOffsetPointers() {
-      long[] values = ColumnVector.getNativeOffsetPointers(getViewHandle());
-      List<MemoryBuffer> list = new ArrayList<>(values.length/2);
-      for (int i =0; i< values.length; i = i + 2) {
-        if (values[i] == 0) {
-          list.add(i, null);
-        } else {
-          MemoryBuffer autoCloseable = new DeviceMemoryBufferView(values[i], values[i+1]);
-          toClose.add(autoCloseable);
-          list.add(i, autoCloseable);
-
-        }
-      }
-      return list;
     }
 
     public DType getNativeType() {
