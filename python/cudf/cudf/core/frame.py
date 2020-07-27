@@ -2,7 +2,7 @@
 import copy
 import functools
 import warnings
-from collections import OrderedDict
+from collections import OrderedDict, abc as abc
 
 import cupy
 import numpy as np
@@ -1319,7 +1319,7 @@ class Frame(libcudf.table.Table):
                 value = value.reindex(self.index)
             else:
                 value = value
-        elif not isinstance(value, dict):
+        elif not isinstance(value, abc.Mapping):
             value = {name: copy.deepcopy(value) for name in self._data.names}
 
         copy_data = self._data.copy(deep=True)

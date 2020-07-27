@@ -1823,7 +1823,7 @@ class Series(Frame, Serializable):
                 f'"{type(value).__name__}"'
             )
 
-        if isinstance(value, (dict, Series)):
+        if isinstance(value, (abc.Mapping, Series)):
             value = Series(value)
             if not self.index.equals(value.index):
                 value = value.reindex(self.index)
