@@ -30,6 +30,8 @@
 #include <arrow/util/bit_util.h>
 #include <arrow/testing/gtest_util.h>
 
+#pragma once
+
 template <typename T>
 std::enable_if_t<cudf::is_fixed_width<T>(), std::shared_ptr<arrow::Array>>
 get_arrow_array(std::initializer_list<T> elements, std::initializer_list<uint8_t>validity={}){
@@ -87,3 +89,8 @@ std::shared_ptr<arrow::Array> get_arrow_list_array(std::initializer_list<T> data
 
     return std::make_shared<arrow::ListArray>(arrow::list(data_array->type()), offsets.size()-1, offset_buffer, data_array, mask.size() == 0? nullptr :arrow::BitUtil::BytesToBits(mask).ValueOrDie());
 }
+
+std::unique_ptr<cudf::table> get_cudf_table();
+
+std::shared_ptr<arrow::Table> get_arrow_table();
+

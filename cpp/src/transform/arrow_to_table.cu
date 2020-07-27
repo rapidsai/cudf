@@ -122,7 +122,7 @@ struct dispatch_to_cudf_col {
             auto chars_column = std::move(type_dispatcher(data_type(type_id::INT8), dispatch_to_cudf_col{}, char_array, data_type(type_id::INT32), true, mr, stream).first);
 
             auto num_rows = offsets_column->size()-1;
-            out_col = make_strings_column(num_rows, std::move(offsets_column), std::move(chars_column), static_cast<size_type>(arrow_col->null_count()), std::move(rmm::device_buffer{0}), stream, mr);
+            out_col = make_strings_column(num_rows, std::move(offsets_column), std::move(chars_column), static_cast<size_type>(arrow_col->null_count()), std::move(*mask), stream, mr);
 
         } else if (std::is_same<T, cudf::dictionary32>::value){
             auto dict_array = static_cast<arrow::DictionaryArray *>(arrow_col.get());

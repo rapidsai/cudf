@@ -286,6 +286,7 @@ set(TRANSFORM_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/cudf_to_arrow.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/arrow_to_cudf.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/bools_to_mask.cpp")
 
 ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
