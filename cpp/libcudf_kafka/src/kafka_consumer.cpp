@@ -112,6 +112,106 @@ void kafka_consumer::consume_to_buffer()
   }
 }
 
+std::map<std::string, std::string> kafka_consumer::current_configs()
+{
+  std::map<std::string, std::string> configs;
+  std::list<std::string> *dump = kafka_conf->dump();
+  std::string key;
+  std::string val;
+  for (std::list<std::string>::iterator it = dump->begin(); it != dump->end();) {
+    key = (*it);
+    it++;
+    val = (*it);
+    it++;
+    configs.insert(std::pair<std::string, std::string>{key, val});
+  }
+  return configs;
+}
+
+int64_t kafka_consumer::get_committed_offset(std::string topic, int partition)
+{
+  std::vector<RdKafka::TopicPartition *> toppar_list;
+  // toppar_list.push_back(find_toppar(topic, partition));
+  toppar_list.push_back(RdKafka::TopicPartition::create(topic, partition));
+
+  // Query Kafka to populate the TopicPartitions with the desired offsets
+  RdKafka::ErrorCode err = consumer->committed(toppar_list, default_timeout);
+
+  return toppar_list[0]->offset();
+}
+
+std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string topic,
+                                                                    int partition,
+                                                                    int timeout,
+                                                                    bool cached)
+{
+  int64_t low;
+  int64_t high;
+  std::map<std::string, int64_t> results;
+  RdKafka::ErrorCode err;
+
+  if (cached == true) {
+    err = consumer->get_watermark_offsets(topic, partition, &low, &high);
+  } else {
+    err = consumer->query_watermark_offsets(topic, partition, &low, &high, timeout);
+  }
+
+  if (err != RdKafka::ErrorCode::ERR_NO_ERROR) {
+    printf("Error: '%s'\n", err2str(err).c_str());
+    if (err == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
+      results.insert(std::pair<std::string, int64_t>("low", low));
+      results.insert(std::pair<std::string, int64_t>("high", high));
+    } else {
+      throw std::runtime_error(std::string(err2str(err).c_str()));
+    }
+  } else {
+    results.insert(std::pair<std::string, int64_t>("low", low));
+    results.insert(std::pair<std::string, int64_t>("high", high));
+  }
+
+  return results;
+}
+
+bool kafka_consumer::commit_offset(std::string topic, int partition, int64_t offset)
+{
+  std::vector<RdKafka::TopicPartition *> partitions_;
+  RdKafka::TopicPartition *toppar = RdKafka::TopicPartition::create(topic, partition, offset);
+  if (toppar != NULL) {
+    toppar->set_offset(offset);
+    partitions_.push_back(toppar);
+    RdKafka::ErrorCode err = consumer->commitSync(partitions_);
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool kafka_consumer::unsubscribe()
+{
+  RdKafka::ErrorCode err = consumer.get()->unassign();
+  if (err != RdKafka::ERR_NO_ERROR) {
+    printf(
+      "Timeout occurred while unsubscribing from Kafka Consumer "
+      "assignments.\n");
+    return false;
+  } else {
+    return true;
+  }
+}
+
+bool kafka_consumer::close(int timeout)
+{
+  RdKafka::ErrorCode err = consumer.get()->close();
+  if (err != RdKafka::ERR_NO_ERROR) {
+    printf("Timeout occurred while closing Kafka Consumer\n");
+    return false;
+  } else {
+    return true;
+  }
+  delete consumer.get();
+  delete kafka_conf.get();
+}
+
 }  // namespace kafka
 }  // namespace external
 }  // namespace io

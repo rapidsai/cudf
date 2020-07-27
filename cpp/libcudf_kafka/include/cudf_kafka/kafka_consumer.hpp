@@ -86,6 +86,64 @@ class kafka_consumer : public cudf::io::datasource {
    */
   size_t host_read(size_t offset, size_t size, uint8_t *dst) override;
 
+  /**
+   * @brief Commits an offset to a specified Kafka Topic/Partition instance
+   *
+   * @param[in] topic Name of the Kafka topic that the offset should be set for
+   * @param[in] partition Partition on the specified topic that should be used
+   * @param[in] offset Offset that should be set for the topic/partition pair
+   *
+   * @return True if the offset is successfully committed and false otherwise
+   */
+  bool commit_offset(std::string topic, int partition, int64_t offset);
+
+  /**
+   * @brief Retrieve the watermark offset values for a topic/partition
+   *
+   * @param[in] topic Name of the Kafka topci that the watermark should be retrieved for
+   * @param[in] partition Partition on the specified topic which should be used
+   * @param[in] timeout Max milliseconds to wait on a response from the Kafka broker
+   * @param[in] cached If True uses the last retrieved value from the Kafka broker, if False
+   *            the latest value will be retrieved from the Kafka broker by making a network
+   *            request.
+   */
+  std::map<std::string, int64_t> get_watermark_offset(std::string topic,
+                                                      int partition,
+                                                      int timeout,
+                                                      bool cached);
+
+  /**
+   * @brief Retrieve the current Kafka client configurations
+   *
+   * @return Map<string, string> of key/value pairs of the current client configurations
+   */
+  std::map<std::string, std::string> current_configs();
+
+  /**
+   * @brief Get the latest offset that was successfully committed to the Kafka broker
+   *
+   * @param[in] topic Topic name for the topic/partition pair
+   * @param[in] partition Partition number of the topic/partition pair
+   *
+   * @return Latest offset for the specified topic/partition pair
+   */
+  int64_t get_committed_offset(std::string topic, int partition);
+
+  /**
+   * @brief Close the underlying socket connection to Kafka and clean up system resources
+   *
+   * @return True on success and False otherwise
+   */
+  bool close(int timeout);
+
+  /**
+   * @brief Stop all active consumption and remove consumer subscriptions to topic/partition
+   * instances
+   *
+   * @return True if success and False otherwise
+   */
+  bool unsubscribe();
+
   virtual ~kafka_consumer(){};
 
  private:
@@ -97,6 +155,7 @@ class kafka_consumer : public cudf::io::datasource {
   int64_t start_offset;
   int64_t end_offset;
   int batch_timeout;
+  int default_timeout = 10000;
   std::string delimiter;
 
   std::string buffer;

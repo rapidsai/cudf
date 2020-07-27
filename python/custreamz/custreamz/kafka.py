@@ -161,27 +161,6 @@ class KafkaConsumer(CudfKafkaClient):
 
     def commit(self, offsets=None, asynchronous=True):
         for offs in offsets:
-            self.kafka_datasource.commit_topic_offset(
+            self.kafka_datasource.commit_offset(
                 offs.topic, offs.partition, offs.offset, asynchronous
             )
-
-
-# Apache Kafka Producer implementation
-class KafkaProducer(CudfKafkaClient):
-    def __init__(self, kafka_configs, topic, partition, delimiter):
-        super().__init__(kafka_configs, topic, partition, delimiter)
-        print("__init__ in Producer invoked")
-
-    def produce(self, message_val=None, message_key=None):
-        if message_val is None:
-            raise ValueError("The message value is empty.")
-
-        if message_key is None:
-            message_key = ""
-
-        return self.kafka_datasource.produce_message(
-            self.topic, message_val, message_key
-        )
-
-    def flush(self, timeout=10000):
-        return self.kafka_datasource.flush(timeout=timeout)
