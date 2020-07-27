@@ -85,10 +85,10 @@ TEST_P(IdDispatcherTest, IdToType)
 }
 
 template <typename T>
-struct DoubleTypedDispatcherTest : public DispatcherTest {
+struct TypedDoubleDispatcherTest : public DispatcherTest {
 };
 
-TYPED_TEST_CASE(DoubleTypedDispatcherTest, cudf::test::AllTypes);
+TYPED_TEST_CASE(TypedDoubleDispatcherTest, cudf::test::AllTypes);
 
 namespace {
 template <typename Expected1, typename Expected2>
@@ -102,7 +102,7 @@ struct two_type_tester {
 };
 }  // namespace
 
-TYPED_TEST(DoubleTypedDispatcherTest, TypeToId)
+TYPED_TEST(TypedDoubleDispatcherTest, TypeToId)
 {
   EXPECT_TRUE(cudf::double_type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                            cudf::data_type{cudf::type_to_id<TypeParam>()},
@@ -126,7 +126,7 @@ __global__ void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id2
 }
 }  // namespace
 
-TYPED_TEST(DoubleTypedDispatcherTest, DeviceDoubleDispatch)
+TYPED_TEST(TypedDoubleDispatcherTest, DeviceDoubleDispatch)
 {
   thrust::device_vector<bool> result(1, false);
   double_dispatch_test_kernel<<<1, 1>>>(
