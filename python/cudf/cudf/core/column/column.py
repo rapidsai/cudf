@@ -1031,6 +1031,33 @@ class ColumnBase(Column, Serializable):
     def max(self, dtype=None):
         return libcudf.reduce.reduce("max", self, dtype=dtype)
 
+    def encode(self):
+        return libcudf.transform.encode(self)
+
+    def scatter_to_table(self, index, columns, names):
+        nrows = ncols = 0
+
+        if len(index) > 0:
+            nrows = int(index.max() + 1)
+        if len(columns) > 0:
+            ncols = int(columns.max() + 1)
+
+        if nrows * ncols == 0:
+            return cudf.core.frame.Frame({})
+
+        scatter_map = cudf.Series(columns) * nrows + cudf.Series(index)
+        target = cudf.core.frame.Frame(
+            {None: column_empty_like(self, masked=True, newsize=nrows * ncols)}
+        )
+        target._data[None][scatter_map] = self
+        result_frames = target._split(range(nrows, nrows * ncols, nrows))
+        return cudf.core.frame.Frame(
+            {
+                name: next(iter(f._columns))
+                for name, f in zip(names, result_frames)
+            }
+        )
+
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
     """Allocate a new column like the given *column*

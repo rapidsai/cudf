@@ -2770,6 +2770,13 @@ class Frame(libcudf.table.Table):
             self, ascending=ascending, null_position=null_position
         )
 
+    def _split(self, splits, keep_index=True):
+        result = libcudf.copying.table_split(
+            self, splits, keep_index=keep_index
+        )
+        result = [self.__class__._from_table(tbl) for tbl in result]
+        return result
+
 
 def _get_replacement_values(to_replace, replacement, col_name, column):
     from pandas.api.types import is_dict_like
