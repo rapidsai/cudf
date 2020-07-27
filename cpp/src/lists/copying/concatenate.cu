@@ -94,17 +94,18 @@ std::unique_ptr<column> concatenate(
   std::vector<column_view> children;
   children.reserve(columns.size());
   size_type total_list_count = 0;
-  std::transform(lists_columns.begin(),
-                 lists_columns.end(),
-                 std::back_inserter(children),
-                 [&total_list_count, &children](lists_column_view const& l) {
-                   // count total # of lists
-                   total_list_count += l.size();
-                   // child column. could be a leaf type (string, float, int, etc) or more nested
-                   // lists
-                   return l.child();
-                 });
-  auto data = cudf::detail::concatenate(children, mr, stream);
+  std::for_each(lists_columns.begin(),
+                lists_columns.end(),
+                [&total_list_count, &children](lists_column_view const& l) {
+                  // count total # of lists
+                  total_list_count += l.size();
+
+                  // child column. could be a leaf type (string, float, int, etc) or more nested
+                  // lists.
+                  if (l.child().size() > 0) { children.push_back(l.child()); }
+                });
+  auto data = children.empty() ? make_empty_column(data_type{lists_columns[0].child().type()})
+                               : cudf::detail::concatenate(children, mr, stream);
 
   // merge offsets
   auto offsets = merge_offsets(lists_columns, total_list_count, stream, mr);
