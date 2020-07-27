@@ -1767,32 +1767,32 @@ public class ColumnVectorTest extends CudfTestBase {
     }
   }
 
-//  @Test
-//  @Disabled("Negative timestamp values are not currently supported. " +
-//      "See github issue https://github.com/rapidsai/cudf/issues/3116 for details")
-//  void testCastNegativeTimestampAsString() {
-//    final String[] NEG_TIME_S_STRING = {"1965-10-26 14:01:12",
-//        "1960-02-06 19:22:11"};
-//
-//    final long[] NEG_TIME_S = {-131968728L,   //'1965-10-26 14:01:12'
-//        -312439069L};   //'1960-02-06 19:22:11'
-//
-//    final long[] NEG_TIME_NS = {-131968727761702469L};   //'1965-10-26 14:01:12.238297531'
-//
-//    final String[] NEG_TIME_NS_STRING = {"1965-10-26 14:01:12.238297531"};
-//
-//    // Seconds
-//    try (ColumnVector unsupported_s_string_times = ColumnVector.fromStrings(NEG_TIME_S_STRING);
-//         ColumnVector unsupported_s_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_S)) {
-//      assertColumnsAreEqual(unsupported_s_string_times, unsupported_s_timestamps);
-//    }
-//
-//    // Nanoseconds
-//    try (ColumnVector unsupported_ns_string_times = ColumnVector.fromStrings(NEG_TIME_NS_STRING);
-//         ColumnVector unsupported_ns_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_NS)) {
-//      assertColumnsAreEqual(unsupported_ns_string_times, unsupported_ns_timestamps);
-//    }
-//  }
+  @Test
+  @Disabled("Negative timestamp values are not currently supported. " +
+      "See github issue https://github.com/rapidsai/cudf/issues/3116 for details")
+  void testCastNegativeTimestampAsString() {
+    final String[] NEG_TIME_S_STRING = {"1965-10-26 14:01:12",
+        "1960-02-06 19:22:11"};
+
+    final long[] NEG_TIME_S = {-131968728L,   //'1965-10-26 14:01:12'
+        -312439069L};   //'1960-02-06 19:22:11'
+
+    final long[] NEG_TIME_NS = {-131968727761702469L};   //'1965-10-26 14:01:12.238297531'
+
+    final String[] NEG_TIME_NS_STRING = {"1965-10-26 14:01:12.238297531"};
+
+    // Seconds
+    try (ColumnVector unsupported_s_string_times = ColumnVector.fromStrings(NEG_TIME_S_STRING);
+         ColumnVector unsupported_s_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_S)) {
+      assertColumnsAreEqual(unsupported_s_string_times, unsupported_s_timestamps);
+    }
+
+    // Nanoseconds
+    try (ColumnVector unsupported_ns_string_times = ColumnVector.fromStrings(NEG_TIME_NS_STRING);
+         ColumnVector unsupported_ns_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_NS)) {
+      assertColumnsAreEqual(unsupported_ns_string_times, unsupported_ns_timestamps);
+    }
+  }
 
   @Test
   void testContainsScalar() {
@@ -2116,9 +2116,9 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector v = ColumnVector.fromStrings("Héllo thesé", null, "are\tsome", "tést\nString", " ");
          Table expected = new Table.TestBuilder().column("Héllo", null, "are", "tést", null)
          .column("thesé", null, "some", "String", null)
-         .build()) {
-      v.copyToHost();
-//      assertTablesAreEqual(expected, result);
+         .build();
+         Table result = v.stringSplit()) {
+      assertTablesAreEqual(expected, result);
     }
   }
 
