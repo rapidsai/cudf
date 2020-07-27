@@ -20,19 +20,17 @@ package ai.rapids.cudf;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.nio.cs.UTF_32;
 
-import java.awt.datatransfer.StringSelection;
 import java.io.*;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+
 
 /**
  * Similar to a ColumnVector, but the data is stored in host memory and accessible directly from
@@ -44,7 +42,6 @@ public final class HostColumnVector implements AutoCloseable {
   /**
    * The size in bytes of an offset entry
    */
-
   static final int OFFSET_SIZE = DType.INT32.sizeInBytes;
   private static final Logger log = LoggerFactory.getLogger(HostColumnVector.class);
 
@@ -571,7 +568,7 @@ public final class HostColumnVector implements AutoCloseable {
    */
   long getEndStringOffset(long index) {
     assert type == DType.STRING || type == DType.LIST;
-//    assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
+    assert (index >= 0 && index < allRows.get(allRows.size() - 1)) : "index is out of range 0 <= " + index + " < " + rows;
     // The offsets has one more entry than there are rows.
     HostMemoryBuffer offset;
     if (type == DType.STRING) {
@@ -986,7 +983,7 @@ public final class HostColumnVector implements AutoCloseable {
       if (s == null) {
         nullCount++;
       } else {
-        bufferSize += s.getBytes(StandardCharsets.UTF_8).length;
+        bufferSize += s.getBytes(UTF_8).length;
       }
     }
     if (nullCount > 0) {
@@ -1274,7 +1271,6 @@ public final class HostColumnVector implements AutoCloseable {
     Builder(DType type, DType baseType, long rows, long stringBufferSize) {
       this.type = type;
       this.allTypes.add(type);
-//      this.allTypes.add(baseType);
       this.rows = rows;
       this.allRows.add(rows);
       if (type == DType.LIST) {
@@ -1390,7 +1386,6 @@ public final class HostColumnVector implements AutoCloseable {
             System.out.print((tmpArr[i]) + " ");
           }
         }
-        //print again
         currentListCount += length;
         currentListIndex++;
         if (allOffsets.size() <= level) {
@@ -1398,7 +1393,6 @@ public final class HostColumnVector implements AutoCloseable {
           allOffsets.get(level).setInt(0, 0);
           this.currentOffsets.add(level, OFFSET_SIZE);
         }
-//        offsets.get(level).setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
         this.allOffsets.get(level).setInt(this.currentOffsets.get(level), currentListCount);
         this.currentOffsets.set(level,this.currentOffsets.get(level)+OFFSET_SIZE);
         while (this.allRows.size() <= level + 1) {
@@ -1442,7 +1436,6 @@ public final class HostColumnVector implements AutoCloseable {
 
     private void writeLists(DataOutputStream dos, List list, DType baseType) throws IOException {
       for (int i = 0; i < list.size(); i++) {
-        //TODO: make generic function for basetype
         switch (baseType) {
           case INT32:
             dos.writeInt((int) list.get(i));
