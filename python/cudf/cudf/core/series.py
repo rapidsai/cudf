@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import pickle
 import warnings
+from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
 
@@ -1819,11 +1820,11 @@ class Series(Frame, Serializable):
         if isinstance(value, pd.Series):
             value = Series.from_pandas(value)
 
-        if not (is_scalar(value) or isinstance(value, (dict, Series))):
+        if not (is_scalar(value) or isinstance(value, (abc.Mapping, Series))):
             raise TypeError(
                 f'"value" parameter must be a scalar, dict '
                 f"or Series, but you passed a "
-                f'"{type(value)}"'
+                f'"{type(value).__name__}"'
             )
 
         if isinstance(value, (dict, Series)):

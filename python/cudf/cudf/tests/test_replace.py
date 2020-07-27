@@ -837,3 +837,16 @@ def test_series_fillna(data, index, value):
     expect = psr.fillna(pd.Series(value))
     got = gsr.fillna(Series(value))
     assert_eq(expect, got)
+
+
+def test_series_fillna_error():
+    psr = pd.Series([1, 2, None, 3, None])
+    gsr = cudf.from_pandas(psr)
+
+    try:
+        psr.fillna(pd.DataFrame({"a": [1, 2, 3]}))
+    except Exception as e:
+        with pytest.raises(type(e), match=str(e)):
+            gsr.fillna(cudf.DataFrame({"a": [1, 2, 3]}))
+    else:
+        raise AssertionError("Expected psr.fillna to fail")
