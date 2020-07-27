@@ -85,6 +85,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       return offHeap.getNativeRowCount(viewHandle);
     }
 
+    @Override
+    public void close() {
+      if (getDataType() == DType.LIST) {
+        ColumnViewPointerAccess child = getChildColumnView();
+        if (child != null) {
+          child.close();
+        }
+      }
+      deleteColumnView(viewHandle);
+    }
+  }
+
+  List<MemoryBuffer> getToClose() {
+    return offHeap.toClose;
   }
   static {
     NativeDepsLoader.loadNativeDeps();
@@ -216,6 +230,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     refCount--;
     offHeap.delRef();
     if (refCount == 0) {
+      ColumnViewPointerAccess childCv = getChildColumnView();
+      if (childCv != null) {
+        childCv.close();
+      }
       offHeap.clean(false);
     } else if (refCount < 0) {
       offHeap.logRefCountDebug("double free " + this);
@@ -2349,35 +2367,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Close all non-null buffers. Exceptions that occur during the process will
    * be aggregated into a single exception thrown at the end.
    */
-  static void closeBuffers(AutoCloseable data, AutoCloseable valid, AutoCloseable offsets) {
+  static void closeBuffers(AutoCloseable buffer) {
     Throwable toThrow = null;
-    if (data != null) {
+    if (buffer != null) {
       try {
-        data.close();
+        buffer.close();
       } catch (Throwable t) {
         toThrow = t;
-      }
-    }
-    if (valid != null) {
-      try {
-        valid.close();
-      } catch (Throwable t) {
-        if (toThrow != null) {
-          toThrow.addSuppressed(t);
-        } else {
-          toThrow = t;
-        }
-      }
-    }
-    if (offsets != null) {
-      try {
-        offsets.close();
-      } catch (Throwable t) {
-        if (toThrow != null) {
-          toThrow.addSuppressed(t);
-        } else {
-          toThrow = t;
-        }
       }
     }
     if (toThrow != null) {
@@ -3014,9 +3010,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
         neededCleanup = true;
       }
       //TODO: use toClose data structure
-      if (!toClose.isEmpty() && (toClose.get(0) != null || toClose.get(1) != null || toClose.get(2) != null)) {
+      if (!toClose.isEmpty()) {
         try {
-          closeBuffers(toClose.get(0), toClose.size() > 1 ? toClose.get(1) : null,  toClose.size() > 2 ? toClose.get(2) : null);
+          for (MemoryBuffer toCloseBuff : toClose) {
+            closeBuffers(toCloseBuff);
+          }
         } catch (Throwable t) {
           if (toThrow != null) {
             toThrow.addSuppressed(t);

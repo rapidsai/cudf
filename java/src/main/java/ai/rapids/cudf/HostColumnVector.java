@@ -113,7 +113,6 @@ public final class HostColumnVector implements AutoCloseable {
       assert offsetBuffer == null : "offsets are only supported for STRING";
     }
     offHeap = new OffHeapState(hostDataBuffer, hostValidityBuffer, offsetBuffer);
-    System.out.println("PRINT IN HCV" + hostDataBuffer);
     MemoryCleaner.register(this, offHeap);
     this.rows = rows.get(0);
     this.allRows = rows;
@@ -297,6 +296,13 @@ public final class HostColumnVector implements AutoCloseable {
         long prev = 0l;
         ColumnVector newCol = null;
         for (int i = depth; i >= 0; i--) {
+          if (newCol != null) {
+            List<MemoryBuffer> list = newCol.getToClose();
+            for (MemoryBuffer buffer : list) {
+              buffer.close();
+            }
+            newCol.getToClose().clear();
+          }
           DType colType = allTypes.get(i);
           long colRows = allRows.get(i);
           //TODO: fix this so that only one level has data
@@ -402,10 +408,6 @@ public final class HostColumnVector implements AutoCloseable {
       byte[] rawData = new byte[size];
       if (size > 0) {
         offHeap.data.getBytes(rawData, 0, start*baseType.getSizeInBytes(), size);
-      }
-
-      for (int i =0; i < rawData.length;i++) {
-        System.out.print((rawData[i]) + " ");
       }
       ByteArrayInputStream bais = new ByteArrayInputStream(rawData);
       DataInputStream dataInputStream = new DataInputStream(bais);
@@ -663,8 +665,13 @@ public final class HostColumnVector implements AutoCloseable {
       boolean neededCleanup = false;
       if (data != null || valid != null || offsets != null) {
         try {
-          ColumnVector.closeBuffers(data, valid.isEmpty() ? null : valid.get(0),
-              offsets.isEmpty() ? null : offsets.get(0));
+          ColumnVector.closeBuffers(data);
+          for (HostMemoryBuffer offset : offsets) {
+            ColumnVector.closeBuffers(offset);
+          }
+          for (HostMemoryBuffer validity : valid) {
+            ColumnVector.closeBuffers(validity);
+          }
         } finally {
           // Always mark the resource as freed even if an exception is thrown.
           // We cannot know how far it progressed before the exception, and
@@ -1371,9 +1378,6 @@ public final class HostColumnVector implements AutoCloseable {
           }
         }
         if (length > 0) {
-          for (int i = 0; i < listBytes.length; i++) {
-            System.out.print((listBytes[i]) + " ");
-          }
           if (baseType != DType.STRING) {
             data.setBytes(currentListCount * baseTypeSizeInBytes, listBytes, 0, listBytes.length);
           } else {
@@ -1418,7 +1422,7 @@ public final class HostColumnVector implements AutoCloseable {
           allOffsets.get(allOffsets.size() - 1).setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
         }
         //TODO: Fix this hard code
-        printOffsetBuffer(allOffsets.size() - 1, 10);
+//        printOffsetBuffer(allOffsets.size() - 1, 10);
 
       }
       return this;

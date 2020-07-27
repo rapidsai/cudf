@@ -34,4 +34,6 @@ public interface ColumnViewPointerAccess {
 
   long getRows();
 
+  void close();
+
 }
