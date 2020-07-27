@@ -1177,7 +1177,8 @@ class DataFrame(Frame, Serializable):
         multiindex as well producing an efficient representative string
         for printing with the dataframe.
         """
-        nrows = np.max([pd.options.display.max_rows, 1])
+        max_rows = pd.options.display.max_rows
+        nrows = np.max([len(self) if max_rows is None else max_rows, 1])
         if pd.options.display.max_rows == 0:
             nrows = len(self)
         ncols = (
@@ -1188,6 +1189,24 @@ class DataFrame(Frame, Serializable):
 
         if len(self) <= nrows and len(self._data.names) <= ncols:
             output = self.copy(deep=False)
+        elif self.empty and len(self.index) > 0:
+            max_seq_items = pd.options.display.max_seq_items
+            # Incase of Empty DataFrame with index, Pandas prints
+            # first `pd.options.display.max_seq_items` index values
+            # followed by ... To obtain ... at the end of index list,
+            # adding 1 extra value.
+            # If `pd.options.display.max_seq_items` is None,
+            # entire sequence/Index is to be printed.
+            # Note : Pandas truncates the dimensions at the end of
+            # the resulting dataframe when `display.show_dimensions`
+            # is set to truncate. Hence to display the dimentions we
+            # need to extract maximum of `max_seq_items` and `nrows`
+            # and have 1 extra value for ... to show up in the output
+            # string.
+            if max_seq_items is not None:
+                output = self.head(max(max_seq_items, nrows) + 1)
+            else:
+                output = self.copy(deep=False)
         else:
             left_cols = len(self._data.names)
             right_cols = 0
@@ -4401,7 +4420,7 @@ class DataFrame(Frame, Serializable):
                 column_head, space
             )
             if show_counts:
-                counts = self.count().tolist()
+                counts = self.count().to_pandas().tolist()
                 if len(cols) != len(counts):
                     raise AssertionError(
                         f"Columns must equal "
@@ -6503,9 +6522,9 @@ class DataFrame(Frame, Serializable):
 
     def to_dict(self, orient="dict", into=dict):
         raise TypeError(
-            "Implicit conversion to a host memory via to_dict() is not "
-            "allowed, To explicitly construct a dictionary object, "
-            "consider using .to_pandas().to_dict()"
+            "cuDF does not support conversion to host memory "
+            "via `to_dict()` method. Consider using "
+            "`.to_pandas().to_dict()` to construct a Python dictionary."
         )
 
     def append(
