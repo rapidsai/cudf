@@ -34,8 +34,6 @@ namespace gpu {
  */
 enum {
   PAGEINFO_FLAGS_DICTIONARY = (1 << 0),  // Indicates a dictionary page
-  PAGEINFO_FLAGS_TERMINATOR =
-    (1 << 1),  // Indicates this is the terminating page for the entire column
 };
 
 /**
@@ -107,8 +105,11 @@ struct PageInfo {
   uint8_t definition_level_encoding;  // Encoding used for definition levels (data page)
   uint8_t repetition_level_encoding;  // Encoding used for repetition levels (data page)
 
+  int skipped_values;
+  int skipped_leaf_values;
+
   // nesting infomation (input/output) for each page
-  int max_nesting_depth;
+  int num_nesting_levels;
   PageNestingInfo *nesting;
 };
 
@@ -132,8 +133,7 @@ struct ColumnChunkDesc {
                                      int8_t converted_type_,
                                      int8_t decimal_scale_,
                                      int32_t ts_clock_rate_,
-                                     int32_t col_index_,
-                                     bool terminator_)
+                                     int32_t col_index_)
     : compressed_data(compressed_data_),
       compressed_size(compressed_size_),
       num_values(num_values_),
@@ -153,8 +153,7 @@ struct ColumnChunkDesc {
       converted_type(converted_type_),
       decimal_scale(decimal_scale_),
       ts_clock_rate(ts_clock_rate_),
-      col_index(col_index_),
-      terminator(terminator_)
+      col_index(col_index_)
   {
   }
 
@@ -182,7 +181,6 @@ struct ColumnChunkDesc {
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t col_index;   // my output column index
-  int32_t terminator;  // if I am the terminating chunk for the entire column
 };
 
 /**

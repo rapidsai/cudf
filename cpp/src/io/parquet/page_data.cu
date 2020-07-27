@@ -71,11 +71,14 @@ struct page_state_s {
   uint32_t str_len[NZ_BFRSZ];   // String length for plain encoding of strings
 
   // repetition/definition level decoding
-  int input_value_count;                      // how many values of the we've processed
+  int input_value_count;                      // how many values of the input we've processed
+  int input_row_count;                        // how many rows of the input we've processed
+  int input_leaf_count;                       // how many leaf values of the input we've processed
   uint32_t rep[NZ_BFRSZ];                     // circular buffer of repetition level values
   uint32_t def[NZ_BFRSZ];                     // circular buffer of definition level values
   const uint8_t *lvl_start[NUM_LEVEL_TYPES];  // [def,rep]
-  int32_t lvl_count[NUM_LEVEL_TYPES];         // how many of each of the streams we've decoded
+  int32_t lvl_count[NUM_LEVEL_TYPES];         // how many of each of the streams we've decoded  
+  int row_index_lower_bound;                  // lower bound of row indices we should process
 };
 
 /**
@@ -896,8 +899,8 @@ static __device__ void gpuOutputGeneric(volatile page_state_s *s,
  * @param[in, out] s The local page state to be filled in
  * @param[in] p The global page to be copied from
  * @param[in] chunks The global list of chunks
- * @param[in] min_row crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
+ * @param[in] min_row crop all rows below min_row
  * @param[in] num_chunk Number of column chunks
  */
 static __device__ bool setupLocalPageInfo(page_state_s *const s,
@@ -927,14 +930,24 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
   }
 
   // zero nested value and valid counts
-  if (t < s->page.max_nesting_depth) {
-    s->page.nesting[t].value_count = 0;
-    s->page.nesting[t].valid_count = 0;
+  int d = 0;
+  while(d < s->page.num_nesting_levels){
+    if(d + t < s->page.num_nesting_levels){
+      s->page.nesting[d + t].valid_count = 0;
+      s->page.nesting[d + t].value_count = 0;
+    }
+    d += blockDim.x;
   }
   __syncthreads();
 
   if (!t) {
     s->error = 0;
+
+    // our starting row (absolute index) is
+    // col.start_row == absolute row index
+    // page.chunk-row == relative row index within the chunk
+    size_t page_start_row = s->col.start_row + s->page.chunk_row;
+
     if (s->page.num_input_values > 0 && s->page.num_rows > 0) {
       uint8_t *cur = s->page.page_data;
       uint8_t *end = cur + s->page.uncompressed_page_size;
@@ -980,12 +993,19 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
         s->dtype_len = 4;  // HASH32 output
       } else if ((s->col.data_type & 7) == INT96) {
         s->dtype_len = 8;  // Convert to 64-bit timestamp
-      }
+      } 
 
-      // our starting row (absolute index) is
-      // col.start_row == absolute row index
-      // page.chunk-row == relative row index within the chunk
-      size_t page_start_row = s->col.start_row + s->page.chunk_row;
+      // first row within the page to start reading
+      if (page_start_row >= min_row) {
+        s->first_row = 0;
+      } else {
+        s->first_row = (int32_t)min(min_row - page_start_row, (size_t)s->page.num_rows);
+      }
+      // # of rows within the page to read      
+      s->num_rows = s->page.num_rows;      
+      if ((page_start_row + s->first_row) + s->num_rows > min_row + num_rows) {
+        s->num_rows = (int32_t)max((int64_t)(min_row + num_rows - (page_start_row + s->first_row)), INT64_C(0));
+      } 
 
       // during the decoding step we need to offset the global output buffers
       // for each level of nesting so that we write to the section this page
@@ -997,7 +1017,14 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
         for (int idx = 0; idx <= max_depth; idx++) {
           PageNestingInfo *pni = &s->page.nesting[idx];
 
-          int output_offset = max_depth == 0 ? page_start_row : pni->page_start_value;
+          size_t output_offset;
+          if(max_depth == 0){
+            output_offset = page_start_row >= min_row ? page_start_row - min_row : 0;
+          } 
+          // for nested schemas, we've already got the exactly value precomputed
+          else {
+            output_offset = pni->page_start_value;
+          }
           pni->data_out     = reinterpret_cast<uint8_t *>(s->col.column_data_base[idx]) +
                           (output_offset * s->dtype_len);
           pni->valid_map = s->col.valid_map_base[idx];
@@ -1008,18 +1035,6 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
         }
       }
       s->first_output_value = 0;
-
-      // first row within the page to start reading
-      if (page_start_row >= min_row) {
-        s->first_row = 0;
-      } else {
-        s->first_row = (int32_t)min(min_row - page_start_row, (size_t)s->page.num_rows);
-      }
-      // # of rows within the page to read
-      s->num_rows = s->page.num_rows;
-      if (page_start_row + s->num_rows > min_row + num_rows) {
-        s->num_rows = (int32_t)max((int64_t)(min_row + num_rows - page_start_row), INT64_C(0));
-      }
 
       // Find the compressed size of repetition levels
       cur += InitLevelSection(s, cur, end, level_type::REPETITION);
@@ -1064,13 +1079,49 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
       s->error = 1;
     }
 
-    s->input_value_count                 = 0;
     s->lvl_count[level_type::REPETITION] = 0;
     s->lvl_count[level_type::DEFINITION] = 0;
     s->nz_count                          = 0;
     s->num_input_values                  = s->page.num_input_values;
     s->dict_pos                          = 0;
     s->out_pos                           = 0;
+
+    // handle row bounds (skip_rows, min_rows)
+    s->input_row_count                   = s->first_row;
+
+    // return the lower bound to compare (page-relative) thread row index against. Explanation:
+    // In the case of nested schemas, rows can span page boundaries.  That is to say,
+    // we can encounter the first value for row X on page M, but the last value for page M
+    // might not be the last value for row X. page M+1 (or further) may contain the last value.
+    // 
+    // This means that the first values we encounter for a given page (M+1) may not belong to the row
+    // indicated by chunk_row, but to the row before it that spanned page boundaries. If that previous
+    // row is within the overall row bounds, include the values by allowing relative row index -1
+    int max_row = (min_row + num_rows) - 1;
+    if(min_row < page_start_row && max_row >= page_start_row-1){
+      s->row_index_lower_bound = -1;
+    } else {
+      s->row_index_lower_bound = s->first_row;
+    }
+
+    // if we're in the decoding step, jump directly to the first
+    // value we care about
+    if(s->col.column_data_base != nullptr){
+      // for flat hierarchies, we haven't computed skipped_values yet, but we can do so trivially
+      // now
+      if(s->col.max_level[level_type::REPETITION] == 0){
+        s->page.skipped_values = s->first_row;
+        s->page.skipped_leaf_values = s->first_row;
+      }
+
+      s->input_value_count = s->page.skipped_values;
+    } else {
+      s->input_value_count = 0;
+      s->input_leaf_count = 0;
+      s->page.skipped_values = -1;
+      s->page.skipped_leaf_values = -1;
+    }
+
     __threadfence_block();
   }
   __syncthreads();
@@ -1144,6 +1195,8 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
   int max_depth = s->col.max_level[level_type::REPETITION];
   // how many (input) values we've processed in the page so far
   int input_value_count = s->input_value_count;
+  // how many rows we've processed in the page so far
+  int input_row_count = s->input_row_count;
 
   // process until we've reached the target
   while (input_value_count < target_input_value_count) {
@@ -1170,8 +1223,17 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
     uint32_t thread_value_count, warp_value_count;
     uint32_t thread_valid_count, warp_valid_count;
 
+    // track (page-relative) row index for the thread so we can compare against input bounds
+    // keep track of overall # of rows we've read.
+    int is_new_row = start_depth == 0 ? 1 : 0;
+    uint32_t warp_row_count_mask = BALLOT(is_new_row);    
+    int32_t thread_row_index = input_row_count + ((__popc(warp_row_count_mask & ((1 << t) - 1)) + is_new_row) - 1);
+    input_row_count += __popc(warp_row_count_mask);
+    // is this thread within row bounds?
+    int in_row_bounds = thread_row_index >= s->row_index_lower_bound && thread_row_index < (s->first_row + s->num_rows) ? 1 : 0;
+    
     // compute warp and thread value counts
-    uint32_t warp_count_mask = BALLOT((0 >= start_depth && 0 <= end_depth) ? 1 : 0);
+    uint32_t warp_count_mask = BALLOT((0 >= start_depth && 0 <= end_depth) && in_row_bounds ? 1 : 0);
     warp_value_count         = __popc(warp_count_mask);
     // Note : ((1 << t) - 1) implies "for all threads before me"
     thread_value_count = __popc(warp_count_mask & ((1 << t) - 1));
@@ -1183,11 +1245,11 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
     for (int s_idx = 0; s_idx <= max_depth; s_idx++) {
       PageNestingInfo *pni = &s->page.nesting[s_idx];
 
-      int in_range = (s_idx >= start_depth && s_idx <= end_depth) ? 1 : 0;
-
+      int in_bounds = ((s_idx >= start_depth && s_idx <= end_depth) && in_row_bounds) ? 1 : 0;
+      
       // everything up to the max_def_level is a real value
       uint32_t is_valid = 0;
-      if (d >= pni->max_def_level && in_range) { is_valid = 1; }
+      if (d >= pni->max_def_level && in_bounds) { is_valid = 1; }
 
       // compute warp and thread valid counts
       uint32_t warp_valid_mask;
@@ -1219,24 +1281,23 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
       // level. more concretely : the offset for the current nesting level == current length of the
       // next nesting level
       if (s_idx < max_depth) {
-        uint32_t next_warp_count_mask =
-          (s_idx < max_depth) ? BALLOT((s_idx + 1 >= start_depth && s_idx + 1 <= end_depth) ? 1 : 0)
-                              : 0;
+        uint32_t next_warp_count_mask = BALLOT((s_idx + 1 >= start_depth && s_idx + 1 <= end_depth && in_row_bounds) ? 1 : 0);
         next_warp_value_count   = __popc(next_warp_count_mask);
         next_thread_value_count = __popc(next_warp_count_mask & ((1 << t) - 1));
 
-        // if we're -not- at a leaf column, emit an offset
-        if (in_range && s_idx < max_depth) {
+        // if we're -not- at a leaf column, and we're within row bounds, emit an offset        
+        if(in_bounds){
           int idx = pni->value_count + thread_value_count;
-          (reinterpret_cast<int *>(pni->data_out))[idx] =
-            s->page.nesting[s_idx + 1].value_count + next_thread_value_count +
-            s->page.nesting[s_idx + 1].page_start_value;
+          int ofs = s->page.nesting[s_idx + 1].value_count + next_thread_value_count + s->page.nesting[s_idx + 1].page_start_value;
+          (reinterpret_cast<int *>(pni->data_out))[idx] = ofs;
         }
       }
 
       // increment count of valid values, count of total values, and validity mask
       if (!t) {
-        if (pni->valid_map != nullptr) { store_validity(pni, warp_valid_mask, warp_value_count); }
+        if (pni->valid_map != nullptr) {
+          store_validity(pni, warp_valid_mask, warp_value_count);
+        }
         pni->valid_count += warp_valid_count;
         pni->value_count += warp_value_count;
       }
@@ -1255,16 +1316,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
     // update valid value count for decoding and total # of values we've processed
     s->nz_count          = s->page.nesting[max_depth].valid_count;
     s->input_value_count = input_value_count;
-
-    // if we're the terminating page for the column, add the final offset to each level of nesting.
-    // this will only ever hit once for the entire read operation.
-    if (s->input_value_count >= s->input_value_count && s->page.flags & PAGEINFO_FLAGS_TERMINATOR) {
-      for (int s_idx = 0; s_idx < max_depth; s_idx++) {
-        (reinterpret_cast<int *>(
-          s->page.nesting[s_idx].data_out))[s->page.nesting[s_idx].value_count] =
-          s->page.nesting[s_idx + 1].value_count + s->page.nesting[s_idx + 1].page_start_value;
-      }
-    }
+    s->input_row_count = input_row_count;
   }
 }
 
@@ -1303,7 +1355,7 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_leaf_count, int 
                                                 s->lvl_count[level_type::DEFINITION])
                                           : s->lvl_count[level_type::DEFINITION];
 
-    // process what we got back.
+    // process what we got back
     gpuUpdateValidityOffsetsAndRowIndices(actual_leaf_count, s, t);
     cur_leaf_count = actual_leaf_count + batch_size;
     SYNCWARP();
@@ -1321,36 +1373,75 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_leaf_count, int 
  * @param[in] target_input_value_count The # of repetition/definition levels to process up to
  * @param[in] t Thread index
  */
-static __device__ void gpuUpdatePageSizes(page_state_s *s, int32_t target_input_value_count, int t)
+static __device__ void gpuUpdatePageSizes(page_state_s *s, int32_t target_input_value_count, int t, bool bounds_set, int page_idx)
 {
   // max nesting depth of the column
   int max_depth = s->col.max_level[level_type::REPETITION];
-  // how many (input) values we've processed in the page so far
+  // how many input level values we've processed in the page so far
   int input_value_count = s->input_value_count;
+  // how many leaf values we've processed in the page so far
+  int input_leaf_count = s->input_leaf_count;
+  // how many rows we've processed in the page so far
+  int input_row_count = s->input_row_count;
 
   while (input_value_count < target_input_value_count) {
     // determine the nesting bounds for this thread
     int start_depth = -1;
     int end_depth   = -1;
+    int d = -1;
     if (input_value_count + t < target_input_value_count) {
       int index   = rolling_index(input_value_count + t);
       int r       = s->rep[index];
       start_depth = r;
-      int d       = s->def[index];
+      d           = s->def[index];
       end_depth   = s->page.nesting[d].d_remap;
+    }
+
+    // count rows and leaf values
+    int is_new_row = start_depth == 0 ? 1 : 0;
+    uint32_t warp_row_count_mask = BALLOT(is_new_row);     
+    int is_new_leaf = (d >= s->page.nesting[max_depth].max_def_level) ? 1 : 0;
+    uint32_t warp_leaf_count_mask = BALLOT(is_new_leaf);
+
+    // is this thread within row bounds? on the first pass we don't know the bounds, so we will be computing
+    // the full size of the column.  on the second pass, we will know our actual row bounds, so the computation
+    // will cap sizes properly.
+    int in_row_bounds = 1;
+    if(bounds_set){
+      // absolute row index
+      int32_t thread_row_index = input_row_count + ((__popc(warp_row_count_mask & ((1 << t) - 1)) + is_new_row) - 1);
+      in_row_bounds = thread_row_index >= s->row_index_lower_bound && thread_row_index < (s->first_row + s->num_rows) ? 1 : 0;
+      uint32_t row_bounds_mask = BALLOT(in_row_bounds);
+      int first_thread_in_range = __ffs(row_bounds_mask)-1;
+
+      // if we've found the beginning of the first row, mark down the position
+      // in the def/repetition buffer (skipped_values) and the data buffer (skipped_leaf_values)
+      if(!t && first_thread_in_range >= 0 && s->page.skipped_values < 0){        
+        // how many values we've skipped in the rep/def levels
+        s->page.skipped_values = input_value_count + first_thread_in_range;
+        // how many values we've skipped in the actual data stream
+        s->page.skipped_leaf_values = input_leaf_count + __popc(warp_leaf_count_mask & ((1 << first_thread_in_range) - 1));
+      }
     }
 
     // increment counts across all nesting depths
     for (int s_idx = 0; s_idx <= max_depth; s_idx++) {
-      int in_range        = (s_idx >= start_depth && s_idx <= end_depth) ? 1 : 0;
-      uint32_t count_mask = BALLOT(in_range);
+      int in_bounds        = (s_idx >= start_depth && s_idx <= end_depth && in_row_bounds) ? 1 : 0;
+      uint32_t count_mask = BALLOT(in_bounds);
       if (!t) { s->page.nesting[s_idx].size += __popc(count_mask); }
     }
+
     input_value_count += min(32, (target_input_value_count - input_value_count));
+    input_row_count += __popc(warp_row_count_mask);
+    input_leaf_count += __popc(warp_leaf_count_mask);
   }
 
   // update final page value count
-  if (!t) { s->input_value_count = target_input_value_count; }
+  if (!t) { 
+    s->input_value_count = target_input_value_count;
+    s->input_leaf_count = input_leaf_count;
+    s->input_row_count = input_row_count;    
+  }
 }
 
 /**
@@ -1368,15 +1459,39 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
                       ColumnChunkDesc const *chunks,
                       size_t min_row,
                       size_t num_rows,
-                      int32_t num_chunks)
+                      int32_t num_chunks,
+                      bool trim_pass)
 {
   __shared__ __align__(16) page_state_s state_g;
 
   page_state_s *const s = &state_g;
   int page_idx          = blockIdx.x;
   int t                 = threadIdx.x;
+  PageInfo *pp          = &pages[page_idx];
 
-  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, num_chunks)) { return; }
+  if (!setupLocalPageInfo(s, pp, chunks, trim_pass ? min_row : 0, trim_pass ? num_rows : INT_MAX, num_chunks)) { return; }
+
+  // zero sizes
+  int d = 0;
+  while(d < s->page.num_nesting_levels){
+    if(d + t < s->page.num_nesting_levels){
+      s->page.nesting[d + t].size = 0;
+    }
+    d += blockDim.x;
+  }
+  if(!t){
+    s->page.skipped_values = -1;
+    s->page.skipped_leaf_values = -1;
+    s->input_row_count = 0;
+    s->input_value_count = 0;
+    // if this isn't the trim pass, make sure we visit absolutely everything
+    if(!trim_pass){
+      s->first_row = 0;
+      s->num_rows = INT_MAX;      
+      s->row_index_lower_bound = -1;
+    }
+   }
+  __syncthreads();
 
   // optimization : it might be useful to have a version of gpuDecodeStream that could go
   // wider than 1 warp.  Currently it only only uses 1 warp so that it can overlap work
@@ -1387,7 +1502,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
     int target_input_count   = batch_size;
     while (!s->error && s->input_value_count < s->num_input_values) {
       // decode repetition and definition levels. these will attempt to decode at
-      // least as up to the target, but may decode a few more.
+      // least up to the target, but may decode a few more.
       gpuDecodeStream(s->rep, s, target_input_count, t, level_type::REPETITION);
       gpuDecodeStream(s->def, s, target_input_count, t, level_type::DEFINITION);
       SYNCWARP();
@@ -1397,13 +1512,17 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         min(s->lvl_count[level_type::REPETITION], s->lvl_count[level_type::DEFINITION]);
 
       // process what we got back
-      gpuUpdatePageSizes(s, actual_input_count, t);
+      gpuUpdatePageSizes(s, actual_input_count, t, trim_pass, page_idx);
       target_input_count = actual_input_count + batch_size;
       SYNCWARP();
     }
   }
   // update # rows in the actual page
-  if (!t) { s->page.num_rows = s->page.nesting[0].size; }
+  if (!t) { 
+    pp->num_rows = s->page.nesting[0].size;    
+    pp->skipped_values = s->page.skipped_values;
+    pp->skipped_leaf_values = s->page.skipped_leaf_values;
+  }
 }
 
 /**
@@ -1444,6 +1563,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
       ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
   }
 
+  uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
   while (!s->error && (s->input_value_count < s->num_input_values || s->out_pos < s->nz_count)) {
     int target_pos;
     int out_pos = s->out_pos;
@@ -1463,23 +1583,26 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
       gpuDecodeLevels(s, target_pos, t);
     } else if (t < out_thread0) {
+      uint32_t src_target_pos = target_pos + skipped_leaf_values;
+
       // WARP1: Decode dictionary indices, booleans or string positions
       if (s->dict_base) {
-        target_pos = gpuDecodeDictionaryIndices(s, target_pos, t & 0x1f);
+        src_target_pos = gpuDecodeDictionaryIndices(s, src_target_pos, t & 0x1f);
       } else if ((s->col.data_type & 7) == BOOLEAN) {
-        target_pos = gpuDecodeRleBooleans(s, target_pos, t & 0x1f);
+        src_target_pos = gpuDecodeRleBooleans(s, src_target_pos, t & 0x1f);
       } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
-        gpuInitStringDescriptors(s, target_pos, t & 0x1f);
+        gpuInitStringDescriptors(s, src_target_pos, t & 0x1f);
       }
-      if (t == 32) { *(volatile int32_t *)&s->dict_pos = target_pos; }
+      if (t == 32) { *(volatile int32_t *)&s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
       int dtype = s->col.data_type & 7;
       out_pos += t - out_thread0;
-      int output_value_idx = s->nz_idx[rolling_index(out_pos)];
+      uint32_t src_pos = out_pos + skipped_leaf_values;
+      
+      int output_value_idx = s->nz_idx[rolling_index(out_pos)];            
 
-      if (out_pos < target_pos && output_value_idx >= 0 &&
-          s->first_output_value + output_value_idx < s->num_input_values) {
+      if (out_pos < target_pos && output_value_idx >= 0 && output_value_idx < s->num_input_values) {
         // nesting level that is storing actual leaf values
         int leaf_level_index = s->col.max_level[level_type::REPETITION];
 
@@ -1487,25 +1610,27 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         uint8_t *dst =
           s->page.nesting[leaf_level_index].data_out + (size_t)output_value_idx * dtype_len;
         if (dtype == BYTE_ARRAY)
-          gpuOutputString(s, out_pos, dst, output_value_idx);
+          gpuOutputString(s, src_pos, dst, output_value_idx);
         else if (dtype == BOOLEAN)
-          gpuOutputBoolean(s, out_pos, dst);
+          gpuOutputBoolean(s, src_pos, dst);
         else if (s->col.converted_type == DECIMAL)
-          gpuOutputDecimal(s, out_pos, reinterpret_cast<double *>(dst), dtype);
+          gpuOutputDecimal(s, src_pos, reinterpret_cast<double *>(dst), dtype);
         else if (dtype == INT96)
-          gpuOutputInt96Timestamp(s, out_pos, reinterpret_cast<int64_t *>(dst));
+          gpuOutputInt96Timestamp(s, src_pos, reinterpret_cast<int64_t *>(dst));
         else if (dtype_len == 8) {
           if (s->ts_scale)
-            gpuOutputInt64Timestamp(s, out_pos, reinterpret_cast<int64_t *>(dst));
+            gpuOutputInt64Timestamp(s, src_pos, reinterpret_cast<int64_t *>(dst));
           else
-            gpuOutputFast(s, out_pos, reinterpret_cast<uint2 *>(dst));
+            gpuOutputFast(s, src_pos, reinterpret_cast<uint2 *>(dst));
         } else if (dtype_len == 4)
-          gpuOutputFast(s, out_pos, reinterpret_cast<uint32_t *>(dst));
+          gpuOutputFast(s, src_pos, reinterpret_cast<uint32_t *>(dst));
         else
-          gpuOutputGeneric(s, out_pos, dst, dtype_len);
+          gpuOutputGeneric(s, src_pos, dst, dtype_len);
       }
 
-      if (t == out_thread0) { *(volatile int32_t *)&s->out_pos = target_pos; }
+      if (t == out_thread0) {
+        *(volatile int32_t *)&s->out_pos = target_pos;
+      }
     }
     __syncthreads();
   }
@@ -1579,10 +1704,33 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   // computes:
-  // PageNestingInfo::size for each level of nesting, for each page
-  gpuComputePageSizes<<<dim_grid, dim_block, 0, stream>>>(
-    pages.device_ptr(), chunks.device_ptr(), min_row, num_rows, chunks.size());
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  // PageNestingInfo::size for each level of nesting, for each page.
+  // The output from this does not take row bounds (num_rows, min_row) into account
+  gpuComputePageSizes<<<dim_grid, dim_block, 0, stream>>>(pages.device_ptr(), chunks.device_ptr(), min_row, num_rows, 
+    chunks.size(), false);
+  CUDA_TRY(cudaStreamSynchronize(stream));  
+
+  // computes:
+  // PageInfo::chunk_row for all pages  
+  auto key_input = thrust::make_transform_iterator(
+    pages.device_ptr(), [] __device__(PageInfo const &page) { return page.chunk_idx; });
+  auto page_input = thrust::make_transform_iterator(
+    pages.device_ptr(), [] __device__(PageInfo const &page) { return page.num_rows; });
+  thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream),
+                                key_input,
+                                key_input + pages.size(),
+                                page_input,
+                                chunk_row_output_iter{pages.device_ptr()});   
+
+  // computes:
+  // PageNestingInfo::size for each level of nesting, for each page, taking row bounds into account.
+  // PageInfo::skipped_values, which tells us where to start decoding in the input   
+  gpuComputePageSizes<<<dim_grid, dim_block, 0, stream>>>(pages.device_ptr(), chunks.device_ptr(), min_row, num_rows, 
+    chunks.size(), true);
+
+  // retrieve pages back (PageInfo::num_rows has been set. if we don't bring it
+  // back, this value will get overwritten later on).
+  pages.device_to_host(stream);
 
   // computes:
   // output column sizes for each level of nesting (summing PageNestingInfo::size)
@@ -1614,18 +1762,6 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
           pages.device_ptr(), static_cast<int>(chunks[idx].col_index), static_cast<int>(l_idx)});
     }
   }
-
-  // computes:
-  // PageInfo::chunk_row for all pages
-  auto key_input = thrust::make_transform_iterator(
-    pages.device_ptr(), [] __device__(PageInfo const &page) { return page.chunk_idx; });
-  auto page_input = thrust::make_transform_iterator(
-    pages.device_ptr(), [] __device__(PageInfo const &page) { return page.num_rows; });
-  thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream),
-                                key_input,
-                                key_input + pages.size(),
-                                page_input,
-                                chunk_row_output_iter{pages.device_ptr()});
 
   return cudaSuccess;
 }

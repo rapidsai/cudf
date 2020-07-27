@@ -435,6 +435,7 @@ class aggregate_metadata {
       row_count = static_cast<size_type>(
         std::min<int64_t>(get_num_rows(), std::numeric_limits<size_type>::max()));
     }
+    row_count = min(row_count, get_num_rows() - row_start);
     CUDF_EXPECTS(row_count >= 0, "Invalid row count");
     CUDF_EXPECTS(row_start <= get_num_rows(), "Invalid row start");
 
@@ -450,6 +451,7 @@ class aggregate_metadata {
         if (count >= row_start + row_count) { break; }
       }
     }
+
     return selection;
   }
 
@@ -728,7 +730,7 @@ void reader::impl::allocate_nesting_info(
     target_page_index += chunks[idx].num_dict_pages;
     for (int p_idx = 0; p_idx < chunks[idx].num_data_pages; p_idx++) {
       pages[target_page_index + p_idx].nesting = page_nesting_info.device_ptr() + src_info_index;
-      pages[target_page_index + p_idx].max_nesting_depth = per_page_nesting_info_size;
+      pages[target_page_index + p_idx].num_nesting_levels = per_page_nesting_info_size;
 
       src_info_index += per_page_nesting_info_size;
     }
@@ -906,6 +908,27 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
   pages.device_to_host(stream);
   page_nesting.device_to_host(stream);
 
+  // for nested schemas, add the final offset to every offset buffer.  
+  // TODO : make this happen in more efficiently. Maybe use thrust::for_each
+  // on each buffer.  Or potentially do it in PreprocessColumnData
+  // Note : the reason we are doing this here instead of in the decode kernel is
+  // that it is difficult/impossible for a given page to know that it is writing the very 
+  // last value that should then be followed by a terminator (because rows can span
+  // page boundaries).
+  for(size_t idx=0; idx<out_buffers.size(); idx++){
+    column_buffer *out        = &out_buffers[idx];
+    int depth = 0;
+    while(out->children.size() != 0){
+      int offset = out->children[0].size;
+      if(out->children[0].children.size() > 0){
+        offset--;
+      }
+      cudaMemcpy(((int32_t*)out->data()) + (out->size-1), &offset, sizeof(offset), cudaMemcpyHostToDevice);
+      depth++;
+      out = &out->children[0];
+    }
+  }
+
   // update null counts in the final column buffers
   for (size_t i = 0; i < pages.size(); i++) {
     gpu::PageInfo *pi = &pages[i];
@@ -993,7 +1016,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       auto const row_group_source = rg.source_index;
       auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
       auto const io_chunk_idx     = chunks.size();
-      bool terminating_rg         = (remaining_rows - row_group.num_rows) == 0 ? true : false;
 
       for (size_t i = 0; i < num_columns; ++i) {
         auto col       = _selected_columns[i];
@@ -1050,8 +1072,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                            converted_type,
                                            leaf_schema.decimal_scale,
                                            clock_rate,
-                                           i,
-                                           terminating_rg));
+                                           i));
 
         // Map each column chunk to its column index and its source index
         chunk_source_map[chunks.size() - 1] = row_group_source;
@@ -1141,6 +1162,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                                   _mr});
             col = &col->children[0];
           }
+          
           // leaf buffer - plain data type. int, string, etc
           col->children.push_back(column_buffer{
             data_type{to_type_id(leaf_schema, _strings_to_categorical, _timestamp_type.id())},
@@ -1160,8 +1182,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // decoding of column data itself
       decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows, out_buffers, stream);
-
-      for (size_t i = 0; i < column_types.size(); ++i) {}
 
       // create the final output cudf columns
       for (size_t i = 0; i < column_types.size(); ++i) {

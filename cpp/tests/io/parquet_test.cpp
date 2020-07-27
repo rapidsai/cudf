@@ -98,6 +98,10 @@ std::unique_ptr<cudf::table> create_compressible_fixed_table(cudf::size_type num
 struct ParquetWriterTest : public cudf::test::BaseFixture {
 };
 
+// Base test fixture for tests
+struct ParquetReaderTest : public cudf::test::BaseFixture {
+};
+
 // Base test fixture for "stress" tests
 struct ParquetWriterStressTest : public cudf::test::BaseFixture {
 };
@@ -1066,6 +1070,89 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids)
   cudf_io::read_parquet_args custom_args{cudf_io::source_info{mm_buf.data(), mm_buf.size()}};
   auto custom_tbl = cudf_io::read_parquet(custom_args);
   expect_tables_equal(custom_tbl.tbl->view(), expected->view());
+}
+
+TEST_F(ParquetReaderTest, UserBounds)
+{
+  // trying to read more rows than there are should result in
+  // receiving the properly capped # of rows
+  {
+    srand(31337);
+    auto expected = create_random_fixed_table<int>(4, 4, false);
+
+    auto filepath = temp_env->get_temp_filepath("TooManyRows.parquet");
+    cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, *expected};
+    cudf_io::write_parquet(args);
+
+    // attempt to read more rows than there actually are
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.num_rows = 16;
+    auto result = cudf_io::read_parquet(read_args);  
+
+    // we should only get back 4 rows
+    EXPECT_EQ(result.tbl->view().column(0).size(), 4);
+  }
+
+  // trying to read past the end of the # of actual rows should result
+  // in empty columns.
+  {
+    srand(31337);
+    auto expected = create_random_fixed_table<int>(4, 4, false);
+
+    auto filepath = temp_env->get_temp_filepath("PastBounds.parquet");
+    cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, *expected};
+    cudf_io::write_parquet(args);
+
+    // attempt to read more rows than there actually are
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.skip_rows = 4;
+    auto result = cudf_io::read_parquet(read_args);  
+
+    // we should get empty columns back
+    EXPECT_EQ(result.tbl->view().num_columns(), 4);
+    EXPECT_EQ(result.tbl->view().column(0).size(), 0);
+  }  
+
+  // trying to read 0 rows should result in reading the whole file  
+  // TODO : this is somewhat incongruous with skipping past all the rows
+  // in the file, which returns columns of length 0. should this behavior be altered?
+  {
+    srand(31337);
+    auto expected = create_random_fixed_table<int>(4, 4, false);
+
+    auto filepath = temp_env->get_temp_filepath("ZeroRows.parquet");
+    cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, *expected};
+    cudf_io::write_parquet(args);
+
+    // attempt to read more rows than there actually are
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.num_rows = 0;
+    auto result = cudf_io::read_parquet(read_args);  
+
+    // we should only get back 4 rows
+    EXPECT_EQ(result.tbl->view().column(0).size(), 4);
+  }
+
+  // trying to read 0 rows past the end of the # of actual rows should result
+  // in empty columns.
+  {
+    srand(31337);
+    auto expected = create_random_fixed_table<int>(4, 4, false);
+
+    auto filepath = temp_env->get_temp_filepath("ZeroRowsPastBounds.parquet");
+    cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, *expected};
+    cudf_io::write_parquet(args);
+
+    // attempt to read more rows than there actually are
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.skip_rows = 4;
+    read_args.num_rows = 0;
+    auto result = cudf_io::read_parquet(read_args);  
+
+    // we should get empty columns back
+    EXPECT_EQ(result.tbl->view().num_columns(), 4);
+    EXPECT_EQ(result.tbl->view().column(0).size(), 0);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

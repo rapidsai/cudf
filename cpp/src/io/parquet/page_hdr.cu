@@ -282,12 +282,6 @@ extern "C" __global__ void __launch_bounds__(128)
     if (t == 0) {
       chunks[chunk].num_data_pages = data_page_count;
       chunks[chunk].num_dict_pages = dictionary_page_count;
-
-      // if we are the last chunk, mark our last page as the terminator
-      if (chunks[chunk].terminator && chunks[chunk].page_info != nullptr) {
-        int total_pages = data_page_count + dictionary_page_count;
-        chunks[chunk].page_info[total_pages - 1].flags |= PAGEINFO_FLAGS_TERMINATOR;
-      }
     }
   }
 }
