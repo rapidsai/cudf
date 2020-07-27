@@ -164,20 +164,20 @@ public class ColumnVectorTest extends CudfTestBase {
     }
   }
 
-//  @Test
-//  void testRefCountLeak() throws InterruptedException {
-//    assumeTrue(Boolean.getBoolean("ai.rapids.cudf.flaky-tests-enabled"));
-//    long expectedLeakCount = MemoryCleaner.leakCount.get() + 1;
-//    ColumnVector.fromInts(1, 2, 3);
-//    long maxTime = System.currentTimeMillis() + 10_000;
-//    long leakNow;
-//    do {
-//      System.gc();
-//      Thread.sleep(50);
-//      leakNow = MemoryCleaner.leakCount.get();
-//    } while (leakNow != expectedLeakCount && System.currentTimeMillis() < maxTime);
-//    assertEquals(expectedLeakCount, MemoryCleaner.leakCount.get());
-//  }
+  @Test
+  void testRefCountLeak() throws InterruptedException {
+    assumeTrue(Boolean.getBoolean("ai.rapids.cudf.flaky-tests-enabled"));
+    long expectedLeakCount = MemoryCleaner.leakCount.get() + 1;
+    ColumnVector.fromInts(1, 2, 3);
+    long maxTime = System.currentTimeMillis() + 10_000;
+    long leakNow;
+    do {
+      System.gc();
+      Thread.sleep(50);
+      leakNow = MemoryCleaner.leakCount.get();
+    } while (leakNow != expectedLeakCount && System.currentTimeMillis() < maxTime);
+    assertEquals(expectedLeakCount, MemoryCleaner.leakCount.get());
+  }
 
   @Test
   void testConcatTypeError() {
