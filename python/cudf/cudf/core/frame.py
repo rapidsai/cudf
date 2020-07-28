@@ -1,17 +1,19 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+import copy
 import functools
 import warnings
-from collections import OrderedDict
+from collections import OrderedDict, abc as abc
 
 import cupy
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dtype_equal
+from pandas.api.types import is_dict_like, is_dtype_equal
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf.core.column import as_column, build_categorical_column
+from cudf.utils import utils
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
@@ -545,6 +547,10 @@ class Frame(libcudf.table.Table):
         # it from materializing unnecessarily
         keep_index = True
         if self.index is not None and isinstance(self.index, RangeIndex):
+            if self._num_columns == 0:
+                result = self._empty_like(keep_index)
+                result._index = self.index[start:stop]
+                return result
             keep_index = False
 
         if start < 0:
@@ -552,9 +558,7 @@ class Frame(libcudf.table.Table):
         if stop < 0:
             stop = stop + num_rows
 
-        if (start > stop and (stride is None or stride == 1)) or (
-            len(self._data) == 0 and keep_index is False
-        ):
+        if start > stop and (stride is None or stride == 1):
             return self._empty_like(keep_index)
         else:
             start = len(self) if start > num_rows else start
@@ -1230,6 +1234,101 @@ class Frame(libcudf.table.Table):
             result = self._drop_na_columns(
                 how=how, subset=subset, thresh=thresh
             )
+
+        return self._mimic_inplace(result, inplace=inplace)
+
+    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
+        """Fill null values with ``value``.
+
+        Parameters
+        ----------
+        value : scalar, Series-like or dict
+            Value to use to fill nulls. If Series-like, null values
+            are filled with values in corresponding indices.
+            A dict can be used to provide different values to fill nulls
+            in different columns.
+
+        Returns
+        -------
+        result : DataFrame
+            Copy with nulls filled.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, None], 'b': [3, None, 5]})
+        >>> df
+              a     b
+        0     1     3
+        1     2  null
+        2  null     5
+        >>> df.fillna(4)
+           a  b
+        0  1  3
+        1  2  4
+        2  4  5
+        >>> df.fillna({'a': 3, 'b': 4})
+           a  b
+        0  1  3
+        1  2  4
+        2  3  5
+
+        ``fillna`` on a Series object:
+
+        >>> ser = cudf.Series(['a', 'b', None, 'c'])
+        >>> ser
+        0       a
+        1       b
+        2    None
+        3       c
+        dtype: object
+        >>> ser.fillna('z')
+        0    a
+        1    b
+        2    z
+        3    c
+        dtype: object
+
+        ``fillna`` can also supports inplace operation:
+
+        >>> ser.fillna('z', inplace=True)
+        >>> ser
+        0    a
+        1    b
+        2    z
+        3    c
+        dtype: object
+        >>> df.fillna({'a': 3, 'b': 4}, inplace=True)
+        >>> df
+        a  b
+        0  1  3
+        1  2  4
+        2  3  5
+        """
+        if method is not None:
+            raise NotImplementedError("The method keyword is not supported")
+        if limit is not None:
+            raise NotImplementedError("The limit keyword is not supported")
+        if axis:
+            raise NotImplementedError("The axis keyword is not supported")
+
+        if isinstance(value, cudf.Series):
+            value = value.reindex(self._data.names)
+        elif isinstance(value, cudf.DataFrame):
+            if not self.index.equals(value.index):
+                value = value.reindex(self.index)
+            else:
+                value = value
+        elif not isinstance(value, abc.Mapping):
+            value = {name: copy.deepcopy(value) for name in self._data.names}
+
+        copy_data = self._data.copy(deep=True)
+
+        for name, col in copy_data.items():
+            if name in value and value[name] is not None:
+                copy_data[name] = copy_data[name].fillna(value[name],)
+
+        result = self._from_table(Frame(copy_data, self._index))
 
         return self._mimic_inplace(result, inplace=inplace)
 
@@ -2772,13 +2871,13 @@ class Frame(libcudf.table.Table):
 
 
 def _get_replacement_values(to_replace, replacement, col_name, column):
-    from pandas.api.types import is_dict_like
-
-    from cudf.utils import utils
 
     all_nan = False
-
-    if is_dict_like(to_replace) and replacement is None:
+    if (
+        is_dict_like(to_replace)
+        and not isinstance(to_replace, cudf.Series)
+        and replacement is None
+    ):
         replacement = list(to_replace.values())
         to_replace = list(to_replace.keys())
     elif not is_scalar(to_replace):
