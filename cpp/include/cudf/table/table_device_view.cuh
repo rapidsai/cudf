@@ -95,7 +95,10 @@ class mutable_table_device_view
  public:
   static auto create(mutable_table_view source_view, cudaStream_t stream = 0)
   {
-    auto deleter = [](mutable_table_device_view* t) { t->destroy(); };
+    auto deleter = [](mutable_table_device_view* t) {
+      t->destroy();
+      delete t->_descendant_storage;
+    };
     return std::unique_ptr<mutable_table_device_view, decltype(deleter)>{
       new mutable_table_device_view(source_view, stream), deleter};
   }
