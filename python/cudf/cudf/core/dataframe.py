@@ -4652,7 +4652,7 @@ class DataFrame(Frame, Serializable):
 
         return output_frame
 
-    def to_pandas(self):
+    def to_pandas(self, **kwargs):
         """
         Convert to a Pandas DataFrame.
 
@@ -4669,19 +4669,23 @@ class DataFrame(Frame, Serializable):
         >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
         """
+        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", True)
+
         out_data = {}
         out_index = self.index.to_pandas()
 
         if not isinstance(self.columns, pd.Index):
-            out_columns = self.columns.to_pandas()
+            out_columns = self.columns.to_pandas(nullable_pd_dtype=False)
         else:
             out_columns = self.columns
 
         for i, col_key in enumerate(self._data):
-            out_data[i] = self._data[col_key].to_pandas(index=out_index)
+            out_data[i] = self._data[col_key].to_pandas(
+                index=out_index, nullable_pd_dtype=nullable_pd_dtype
+            )
 
         if isinstance(self.columns, Index):
-            out_columns = self.columns.to_pandas()
+            out_columns = self.columns.to_pandas(nullable_pd_dtype=False)
             if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
                 if self.columns.names is not None:
                     out_columns.names = self.columns.names
@@ -6526,6 +6530,37 @@ class DataFrame(Frame, Serializable):
             "via `to_dict()` method. Consider using "
             "`.to_pandas().to_dict()` to construct a Python dictionary."
         )
+
+    def keys(self):
+        """
+        Get the columns.
+        This is index for Series, columns for DataFrame.
+
+        Returns
+        -------
+        Index
+            Columns of DataFrame.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'one' : [1, 2, 3], 'five' : ['a', 'b', 'c']})
+        >>> df
+           one five
+        0    1    a
+        1    2    b
+        2    3    c
+        >>> df.keys()
+        Index(['one', 'five'], dtype='object')
+        >>> df = cudf.DataFrame(columns=[0, 1, 2, 3])
+        >>> df
+        Empty DataFrame
+        Columns: [0, 1, 2, 3]
+        Index: []
+        >>> df.keys()
+        Int64Index([0, 1, 2, 3], dtype='int64')
+        """
+        return self.columns
 
     def append(
         self, other, ignore_index=False, verify_integrity=False, sort=False

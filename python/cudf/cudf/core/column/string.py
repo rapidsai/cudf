@@ -18,7 +18,10 @@ from cudf._lib.nvtext.generate_ngrams import (
 from cudf._lib.nvtext.ngrams_tokenize import (
     ngrams_tokenize as cpp_ngrams_tokenize,
 )
-from cudf._lib.nvtext.normalize import normalize_spaces as cpp_normalize_spaces
+from cudf._lib.nvtext.normalize import (
+    normalize_characters as cpp_normalize_characters,
+    normalize_spaces as cpp_normalize_spaces,
+)
 from cudf._lib.nvtext.replace import (
     filter_tokens as cpp_filter_tokens,
     replace_tokens as cpp_replace_tokens,
@@ -3616,6 +3619,55 @@ class StringMethods(ColumnMethodsMixin):
             cpp_normalize_spaces(self._column), **kwargs
         )
 
+    def normalize_characters(self, do_lower=True, **kwargs):
+        """
+        Normalizes strings characters for tokenizing.
+
+        This uses the normalizer that is built into the
+        subword_tokenize function which includes:
+
+            - adding padding around punctuation (unicode category starts with
+              "P") as well as certain ASCII symbols like "^" and "$"
+            - adding padding around the CJK Unicode block characters
+            - changing whitespace (e.g. ``\\t``, ``\\n``, ``\\r``) to space
+            - removing control characters (unicode categories "Cc" and "Cf")
+
+        If `do_lower_case = true`, lower-casing also removes the accents.
+        The accents cannot be removed from upper-case characters without
+        lower-casing and lower-casing cannot be performed without also
+        removing accents. However, if the accented character is already
+        lower-case, then only the accent is removed.
+
+        Parameters
+        ----------
+        do_lower : bool, Default is True
+            If set to True, characters will be lower-cased and accents
+            will be removed. If False, accented and upper-case characters
+            are not transformed.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["héllo, \\tworld","ĂĆCĖÑTED","$99"])
+        >>> ser.str.normalize_characters()
+        0    hello ,  world
+        1          accented
+        2              $ 99
+        dtype: object
+        >>> ser.str.normalize_characters(do_lower=False)
+        0    héllo ,  world
+        1          ĂĆCĖÑTED
+        2              $ 99
+        dtype: object
+        """
+        return self._return_or_inplace(
+            cpp_normalize_characters(self._column, do_lower), **kwargs
+        )
+
     def tokenize(self, delimiter=" ", **kwargs):
         """
         Each string is split into tokens using the provided delimiter(s).
@@ -4361,10 +4413,12 @@ class StringColumn(column.ColumnBase):
                 len(self), obuf, sbuf, nbuf, self.null_count
             )
 
-    def to_pandas(self, index=None):
+    def to_pandas(self, index=None, nullable_pd_dtype=False):
         pd_series = self.to_arrow().to_pandas()
         if index is not None:
             pd_series.index = index
+        if nullable_pd_dtype:
+            return pd_series.astype(pd.StringDtype(), copy=False)
         return pd_series
 
     @property

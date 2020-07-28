@@ -73,9 +73,9 @@ class _SeriesIlocIndexer(object):
         if isinstance(arg, tuple):
             arg = list(arg)
         data = self._sr._column[arg]
-        index = self._sr.index.take(arg)
         if is_scalar(data) or data is None:
             return data
+        index = self._sr.index.take(arg)
         return self._sr._copy_construct(data=data, index=index)
 
     def __setitem__(self, key, value):
