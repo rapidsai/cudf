@@ -145,7 +145,7 @@ def test_series_set_equal_length_object_by_mask(replace_data):
     gd_bool_col = Series.from_pandas(pd_bool_col)
 
     psr[pd_bool_col] = (
-        replace_data.to_pandas()
+        replace_data.to_pandas(nullable_pd_dtype=False)
         if hasattr(replace_data, "to_pandas")
         else replace_data
     )
