@@ -4167,17 +4167,17 @@ class StringMethods(ColumnMethodsMixin):
             cpp_porter_stemmer_measure(self._column), **kwargs
         )
 
-    def is_consonant(self, index, **kwargs):
+    def is_consonant(self, i, **kwargs):
         """
-        Return true for strings where the character at ``index`` is a
-        consonant. The ``index`` parameter may also be
-        a list of integers to check different characters per string.
-        If the index is larger than the string length, False is returned
+        Return true for strings where the character at ``i`` is a
+        consonant. The ``i`` parameter may also be a list of integers
+        to check different characters per string.
+        If the ``i`` is larger than the string length, False is returned
         for that string.
 
         Parameters
         ----------
-        index: int or list-like
+        i: int or list-like
            The character position to check within each string.
 
         Returns
@@ -4192,37 +4192,35 @@ class StringMethods(ColumnMethodsMixin):
         0    False
         1     True
         dtype: bool
-        >>> indices = cudf.Series([2,3])
-        >>> ser.str.is_consonant(indices)
+        >>> positions = cudf.Series([2, 3])
+        >>> ser.str.is_consonant(positions)
         0     True
         1    False
         dtype: bool
          """
         ltype = LetterType.CONSONANT
 
-        if can_convert_to_column(index):
+        if can_convert_to_column(i):
             return self._return_or_inplace(
-                cpp_is_letter_multi(
-                    self._column, ltype, column.as_column(index)
-                ),
+                cpp_is_letter_multi(self._column, ltype, column.as_column(i)),
                 **kwargs,
             )
 
         return self._return_or_inplace(
-            cpp_is_letter(self._column, ltype, index), **kwargs
+            cpp_is_letter(self._column, ltype, i), **kwargs
         )
 
-    def is_vowel(self, index, **kwargs):
+    def is_vowel(self, i, **kwargs):
         """
-        Return true for strings where the character at ``index`` is a
-        vowel -- not a consonant. The ``index`` parameter may also be
+        Return true for strings where the character at ``i`` is a
+        vowel -- not a consonant. The ``i`` parameter may also be
         a list of integers to check different characters per string.
-        If the index is larger than the string length, False is returned
+        If the ``i`` is larger than the string length, False is returned
         for that string.
 
         Parameters
         ----------
-        index: int or list-like
+        i: int or list-like
            The character position to check within each string.
 
         Returns
@@ -4237,24 +4235,22 @@ class StringMethods(ColumnMethodsMixin):
         0     True
         1    False
         dtype: bool
-        >>> indices = cudf.Series([2,3])
-        >>> ser.str.is_vowel(indices)
+        >>> positions = cudf.Series([2, 3])
+        >>> ser.str.is_vowel(positions)
         0    False
         1     True
         dtype: bool
         """
         ltype = LetterType.VOWEL
 
-        if can_convert_to_column(index):
+        if can_convert_to_column(i):
             return self._return_or_inplace(
-                cpp_is_letter_multi(
-                    self._column, ltype, column.as_column(index)
-                ),
+                cpp_is_letter_multi(self._column, ltype, column.as_column(i)),
                 **kwargs,
             )
 
         return self._return_or_inplace(
-            cpp_is_letter(self._column, ltype, index), **kwargs
+            cpp_is_letter(self._column, ltype, i), **kwargs
         )
 
 
