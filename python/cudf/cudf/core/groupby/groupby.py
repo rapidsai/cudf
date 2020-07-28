@@ -2,6 +2,7 @@
 import collections
 import functools
 import pickle
+import warnings
 
 import pandas as pd
 
@@ -13,6 +14,9 @@ from cudf.utils.utils import cached_property
 
 
 class GroupBy(Serializable):
+
+    _MAX_GROUPS_BEFORE_WARN = 100
+
     def __init__(
         self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
     ):
@@ -76,6 +80,13 @@ class GroupBy(Serializable):
         """
         group_names, offsets, _, grouped_values = self._grouped()
         grouped_index = grouped_values.index
+
+        if len(group_names) > self._MAX_GROUPS_BEFORE_WARN:
+            warnings.warn(
+                f"GroupBy.groups() expected to be slow"
+                f" for large number of groups ({len(group_names)})"
+            )
+
         return dict(
             zip(group_names.to_pandas(), grouped_index._split(offsets[1:-1]))
         )
@@ -346,6 +357,14 @@ class GroupBy(Serializable):
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
         _, offsets, _, grouped_values = self._grouped()
+
+        ngroups = len(offsets) - 1
+        if ngroups > self._MAX_GROUPS_BEFORE_WARN:
+            warnings.warn(
+                f"GroupBy.apply() expected to be slow"
+                f" for large number of groups ({ngroups})"
+            )
+
         chunks = [
             grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
         ]
