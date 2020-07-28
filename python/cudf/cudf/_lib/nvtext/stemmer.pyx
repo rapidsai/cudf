@@ -33,7 +33,7 @@ def porter_stemmer_measure(Column strings):
 
 
 def is_letter(Column strings,
-              ltype,
+              object ltype,
               size_type index):
     cdef column_view c_strings = strings.view()
     cdef letter_type c_ltype = <letter_type>(
@@ -48,7 +48,7 @@ def is_letter(Column strings,
 
 
 def is_letter_multi(Column strings,
-                    ltype,
+                    object ltype,
                     Column indices):
     cdef column_view c_strings = strings.view()
     cdef column_view c_indices = indices.view()
