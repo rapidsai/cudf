@@ -76,8 +76,6 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
     data_type{type_id::INT32}, annotated_offsets.size() - 1, mask_state::UNALLOCATED, stream);
   auto d_gather_map       = gather_map->mutable_view().data<int32_t>();
   auto const child_column = lists_column.child();
-  CUDF_EXPECTS(child_column.type().id() != type_id::LIST,
-               "Nested lists not yet supported in extract_list_element");
 
   // build the gather map using the offsets and the provided index
   auto const d_column = column_device_view::create(annotated_offsets, stream);
@@ -102,6 +100,8 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                      mr,
                                      stream)
                   ->release();
+  if (result.front()->null_count() == 0)
+    result.front()->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
   return std::unique_ptr<column>(std::move(result.front()));
 }
 
