@@ -150,6 +150,7 @@
 - PR #5780 Add Java bindings for pad
 - PR #5775 Update dask_cudf.read_parquet to align with upstream improvements
 - PR #5786 JNI Header Cleanup for cuspacial
+- PR #5795 Clarify documentation on Boost dependency
 
 ## Bug Fixes
 
