@@ -1639,23 +1639,15 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 memoryview(arbitrary), dtype=dtype, nan_as_null=nan_as_null
             )
         except TypeError:
-            pa_type = None
-            np_type = None
             try:
                 if dtype is not None:
                     dtype = pd.api.types.pandas_dtype(dtype)
-                    if is_categorical_dtype(dtype):
+                    if dtype.is_categorical_dtype:
                         raise TypeError
-                    else:
-                        np_type = np.dtype(dtype).type
-                        if np_type == np.bool_:
-                            pa_type = pa.bool_()
-                        else:
-                            pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(
                     pa.array(
                         arbitrary,
-                        type=pa_type,
+                        type=dtype.pa_type,
                         from_pandas=True
                         if nan_as_null is None
                         else nan_as_null,
@@ -1664,14 +1656,14 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     nan_as_null=nan_as_null,
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
-                if is_categorical_dtype(dtype):
+                if dtype.is_categorical_dtype:
                     sr = pd.Series(arbitrary, dtype="category")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
-                elif np_type == np.str_:
+                elif dtype.to_numpy == np.str_:
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
-                    native_dtype = dtype
+                    native_dtype = dtype.to_numpy
                     if dtype is None and pd.api.types.infer_dtype(
                         arbitrary
                     ) in ("mixed", "mixed-integer"):

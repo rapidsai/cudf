@@ -145,8 +145,7 @@ class Series(Frame, Serializable):
             ``null`` values.
             If ``False``, leaves ``np.nan`` values as is.
         """
-        if dtype:
-            dtype = Dtype(dtype)
+        dtype = Dtype(dtype)
         if isinstance(data, pd.Series):
             if name is None:
                 name = data.name

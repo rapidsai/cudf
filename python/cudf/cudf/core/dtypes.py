@@ -45,9 +45,13 @@ pa_to_np_dtypes = {
     pa.timestamp('us'): np.dtype('datetime64[us]'),
     pa.timestamp('ms'): np.dtype('datetime64[ms]'),
     pa.timestamp('s'): np.dtype('datetime64[s]'),
+    None: None
 }
 
 class Dtype(ExtensionDtype):
+
+    is_categorical_dtype = False
+    pa_type = None
     def __init__(self, arg):
         cudf_dtype = make_dtype_from_obj(arg)
         cudf_dtype.__init__(self)
@@ -183,6 +187,9 @@ def make_dtype_from_obj(obj):
         return make_dtype_from_string(obj)
 
 class CategoricalDtype(ExtensionDtype):
+
+    is_categorical_dtype = True
+
     def __init__(self, categories=None, ordered=None):
         """
         dtype similar to pd.CategoricalDtype with the categories
