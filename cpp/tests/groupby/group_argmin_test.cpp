@@ -40,7 +40,7 @@ TYPED_TEST(groupby_argmin_test, basic)
     if (std::is_same<V, bool>::value) return;
 
     fixed_width_column_wrapper<K> keys { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals { 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
+    fixed_width_column_wrapper<V, int32_t> vals({9, 8, 7, 6, 5, 4, 3, 2, 1, 0});
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
     fixed_width_column_wrapper<R> expect_vals { 6, 9, 8 };
@@ -61,7 +61,7 @@ TYPED_TEST(groupby_argmin_test, zero_valid_keys)
     if (std::is_same<V, bool>::value) return;
 
     fixed_width_column_wrapper<K> keys ( { 1, 2, 3}, all_null() );
-    fixed_width_column_wrapper<V> vals   { 3, 4, 5};
+    fixed_width_column_wrapper<V, int32_t> vals({3, 4, 5});
 
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
@@ -82,7 +82,7 @@ TYPED_TEST(groupby_argmin_test, zero_valid_values)
     if (std::is_same<V, bool>::value) return;
 
     fixed_width_column_wrapper<K> keys   { 1, 1, 1};
-    fixed_width_column_wrapper<V> vals ( { 3, 4, 5}, all_null() );
+    fixed_width_column_wrapper<V, int32_t> vals({3, 4, 5}, all_null());
 
     fixed_width_column_wrapper<K> expect_keys { 1 };
     fixed_width_column_wrapper<R> expect_vals({ 0 }, all_null());
@@ -104,8 +104,8 @@ TYPED_TEST(groupby_argmin_test, null_keys_and_values)
 
     fixed_width_column_wrapper<K> keys({ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
                                        { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals({ 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 4},
-                                       { 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0});
+    fixed_width_column_wrapper<V, int32_t> vals({ 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 4},
+                                                { 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0});
 
                                           //  { 1, 1,     2, 2, 2,   3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
