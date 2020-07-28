@@ -307,6 +307,16 @@ public class Cuda {
   public static native void setDevice(int device) throws CudaException, CudfException;
 
   /**
+   * Set the device for this thread to the appropriate one. Java loves threads, but cuda requires
+   * each thread to have the device set explicitly or it falls back to CUDA_VISIBLE_DEVICES. Most
+   * JNI calls through the cudf API will do this for you, but if you are writing your own JNI
+   * calls that extend cudf you might want to call this before calling into your JNI APIs to
+   * ensure that the device is set correctly.
+   * @throws CudaException on any error
+   */
+  public static native void autoSetDevice() throws CudaException;
+
+  /**
    * Calls cudaFree(0). This can be used to initialize the GPU after a setDevice()
    * @throws CudaException on any error
    */
