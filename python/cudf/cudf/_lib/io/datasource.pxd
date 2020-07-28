@@ -5,4 +5,4 @@ from cudf._lib.cpp.io.types cimport datasource
 
 cdef class Datasource:
 
-    cdef datasource* get_datasource(self) except +
+    cdef datasource* get_datasource(self) nogil except *

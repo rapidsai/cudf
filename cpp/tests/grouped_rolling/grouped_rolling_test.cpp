@@ -192,13 +192,23 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                  following_window,
                  min_periods,
                  cudf::make_max_aggregation());
-    run_test_col(keys,
-                 input,
-                 expected_grouping,
-                 preceding_window,
-                 following_window,
-                 min_periods,
-                 cudf::make_mean_aggregation());
+
+    if (!cudf::is_timestamp(input.type())) {
+      run_test_col(keys,
+                   input,
+                   expected_grouping,
+                   preceding_window,
+                   following_window,
+                   min_periods,
+                   cudf::make_sum_aggregation());
+      run_test_col(keys,
+                   input,
+                   expected_grouping,
+                   preceding_window,
+                   following_window,
+                   min_periods,
+                   cudf::make_mean_aggregation());
+    }
     run_test_col(keys,
                  input,
                  expected_grouping,
@@ -228,16 +238,6 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                    following_window,
                    min_periods,
                    ptx_udf_agg);
-    }
-
-    if (!cudf::is_timestamp(input.type())) {
-      run_test_col(keys,
-                   input,
-                   expected_grouping,
-                   preceding_window,
-                   following_window,
-                   min_periods,
-                   cudf::make_sum_aggregation());
     }
   }
 
@@ -763,25 +763,6 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                  following_window_in_days,
                  min_periods,
                  cudf::make_max_aggregation());
-    run_test_col(keys,
-                 timestamp_column,
-                 timestamp_order,
-                 input,
-                 expected_grouping,
-                 preceding_window_in_days,
-                 following_window_in_days,
-                 min_periods,
-                 cudf::make_mean_aggregation());
-    run_test_col(keys,
-                 timestamp_column,
-                 timestamp_order,
-                 input,
-                 expected_grouping,
-                 preceding_window_in_days,
-                 following_window_in_days,
-                 min_periods,
-                 cudf::make_row_number_aggregation());
-
     if (!cudf::is_timestamp(input.type())) {
       run_test_col(keys,
                    timestamp_column,
@@ -792,7 +773,25 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                    following_window_in_days,
                    min_periods,
                    cudf::make_sum_aggregation());
+      run_test_col(keys,
+                   timestamp_column,
+                   timestamp_order,
+                   input,
+                   expected_grouping,
+                   preceding_window_in_days,
+                   following_window_in_days,
+                   min_periods,
+                   cudf::make_mean_aggregation());
     }
+    run_test_col(keys,
+                 timestamp_column,
+                 timestamp_order,
+                 input,
+                 expected_grouping,
+                 preceding_window_in_days,
+                 following_window_in_days,
+                 min_periods,
+                 cudf::make_row_number_aggregation());
   }
 
  private:
