@@ -1433,7 +1433,7 @@ class RangeIndex(Index):
         elif isinstance(other, cudf.core.index.RangeIndex):
             return self._start == other._start and self._stop == other._stop
         else:
-            return (self == other)._values.all()
+            return super().equals(other)
 
     def serialize(self):
         header = {}
