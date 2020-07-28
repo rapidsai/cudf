@@ -12,6 +12,8 @@ from cudf._lib.types cimport (
 )
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
+from cudf.core.dtypes import ListDtype
+
 cimport cudf._lib.cpp.types as libcudf_types
 
 
@@ -124,8 +126,6 @@ class NullHandling(IntEnum):
 
 
 cdef dtype_from_lists_column_view(lists_column_view lv):
-    from cudf.core.dtypes import ListDtype
-
     if lv.child().type().id() == libcudf_types.type_id.LIST:
         return ListDtype(
             dtype_from_lists_column_view(lists_column_view(lv.child()))
