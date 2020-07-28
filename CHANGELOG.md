@@ -218,6 +218,7 @@
 - PR #5750 Add RMM_ROOT/include to the spdlog search path in JNI build
 - PR #5763 Update Java slf4j version to match Spark 3.0
 - PR #5766 Fix issue related to `iloc` and slicing a `DataFrame`
+- PR #5774 Add fallback for when `tolist` is absent
 - PR #5319 Disallow SUM and specialize MEAN of timestamp types
 
 
