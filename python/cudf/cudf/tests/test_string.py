@@ -153,8 +153,8 @@ def test_string_repr(ps_gs, item):
     expect = str(expect_out)
     got = str(got_out)
 
-    # if isinstance(expect_out, pd.Series):
-    #     expect = expect.replace("object", "str")
+    if got_out is not None and len(got_out) > 1:
+        expect = expect.replace("None", "<NA>")
 
     assert expect == got
 
@@ -1258,9 +1258,9 @@ def test_strings_rsplit(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
 
-    pd.testing.assert_frame_equal(
+    assert_eq(
         ps.str.rsplit(n=n, expand=expand).reset_index(),
-        gs.str.rsplit(n=n, expand=expand).to_pandas().reset_index(),
+        gs.str.rsplit(n=n, expand=expand).reset_index(),
         check_index_type=False,
     )
     assert_eq(
@@ -1294,9 +1294,9 @@ def test_strings_split(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
 
-    pd.testing.assert_frame_equal(
+    assert_eq(
         ps.str.split(n=n, expand=expand).reset_index(),
-        gs.str.split(n=n, expand=expand).to_pandas().reset_index(),
+        gs.str.split(n=n, expand=expand).reset_index(),
         check_index_type=False,
     )
 
