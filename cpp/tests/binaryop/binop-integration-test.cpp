@@ -24,6 +24,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include "cudf/types.hpp"
 #include "cudf/utilities/type_dispatcher.hpp"
+#include "tests/utilities/column_utilities.hpp"
 
 namespace cudf {
 namespace test {
@@ -2134,6 +2135,46 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimple)
     col1, col2, cudf::binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
 
   cudf::test::expect_columns_equal(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
+{
+  using namespace numeric;
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  auto const sz = std::size_t{1000};
+
+  // TESTING binary op ADD
+
+  auto vec1 = std::vector<decimalXX>(sz, decimalXX{0, scale_type{-3}});
+  auto vec2 = std::vector<decimalXX>(sz, decimalXX{0, scale_type{-1}});
+
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{1, scale_type{-3}});
+
+  auto const iota_1  = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const zeros_3 = wrapper<decimalXX>(vec2.begin(), vec2.end());
+
+  auto const iota_3 = cudf::binary_operation(
+    zeros_3, iota_1, cudf::binary_operator::ADD, static_cast<cudf::column_view>(zeros_3).type());
+
+  cudf::test::expect_columns_equal(iota_1, iota_3->view());
+
+  // TESTING binary op EQUAL, LESS, GREATER
+
+  auto const trues    = std::vector<bool>(sz, true);
+  auto const true_col = wrapper<bool>(trues.begin(), trues.end());
+
+  auto const equal_result = cudf::binary_operation(
+    iota_1, iota_3->view(), cudf::binary_operator::EQUAL, data_type{type_id::BOOL8});
+  cudf::test::expect_columns_equal(true_col, equal_result->view());
+
+  auto const less_result = cudf::binary_operation(
+    zeros_3, iota_3->view(), cudf::binary_operator::LESS, data_type{type_id::BOOL8});
+  cudf::test::expect_columns_equal(true_col, less_result->view());
+
+  auto const greater_result = cudf::binary_operation(
+    iota_3->view(), zeros_3, cudf::binary_operator::GREATER, data_type{type_id::BOOL8});
+  cudf::test::expect_columns_equal(true_col, greater_result->view());
 }
 
 }  // namespace binop
