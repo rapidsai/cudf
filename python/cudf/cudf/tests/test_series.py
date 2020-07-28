@@ -339,7 +339,10 @@ def test_series_tolist(data):
     gsr = cudf.from_pandas(psr)
     # TODO: This needs to check for a raised error instead.
     # xref: https://github.com/rapidsai/cudf/issues/5689
-    assert_eq(gsr.tolist(), psr.tolist())
+    got = gsr.tolist()
+    expected = [x if not pd.isnull(x) else None for x in psr.tolist()]
+
+    np.testing.assert_array_equal(got, expected)
 
 
 @pytest.mark.parametrize(
