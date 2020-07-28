@@ -24,6 +24,7 @@
 
 #include <array>
 #include <tuple>
+#include "cudf/fixed_point/fixed_point.hpp"
 
 /**
  * @filename type_lists.hpp
@@ -181,6 +182,18 @@ using StringTypes = cudf::test::Types<string_view>;
  * ```
  */
 using ListTypes = cudf::test::Types<list_view>;
+
+/**
+ * @brief Provides a list of all fixed-point element types for use in GTest
+ * typed tests.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all fixed-width types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedPointTypes);
+ * ```
+ **/
+using FixedPointTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
 
 /**
  * @brief Provides a list of all fixed-width element types for use in GTest

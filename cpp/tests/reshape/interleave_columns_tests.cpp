@@ -349,13 +349,12 @@ template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
 
-using FixedPointTypes = ::testing::Types<int32_t, int64_t>;
-TYPED_TEST_CASE(FixedPointTestBothReps, FixedPointTypes);
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointInterleave)
 {
   using namespace numeric;
-  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+  using decimalXX = TypeParam;
 
   for (int i = 0; i > -4; --i) {
     auto const ONE  = decimalXX{1, scale_type{i}};

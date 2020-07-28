@@ -554,14 +554,13 @@ struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-using wrapper         = cudf::test::fixed_width_column_wrapper<T>;
-using FixedPointTypes = ::testing::Types<int32_t, int64_t>;
-TYPED_TEST_CASE(FixedPointTestBothReps, FixedPointTypes);
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
 {
   using namespace numeric;
-  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+  using decimalXX = TypeParam;
 
   auto vec = std::vector<decimalXX>(1000);
   std::iota(std::begin(vec), std::end(vec), decimalXX{});

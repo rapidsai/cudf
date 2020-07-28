@@ -17,6 +17,7 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/type_lists.hpp>
 
 #include <cudf/fixed_point/fixed_point.hpp>
 #include "cudf/search.hpp"
@@ -1820,13 +1821,12 @@ template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
 
-using FixedPointTypes = ::testing::Types<int32_t, int64_t>;
-TYPED_TEST_CASE(FixedPointTestBothReps, FixedPointTypes);
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointLowerBound)
 {
   using namespace numeric;
-  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+  using decimalXX = TypeParam;
 
   auto vec = std::vector<decimalXX>(1000);
   std::iota(std::begin(vec), std::end(vec), decimalXX{});
@@ -1850,7 +1850,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointLowerBound)
 TYPED_TEST(FixedPointTestBothReps, FixedPointUpperBound)
 {
   using namespace numeric;
-  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+  using decimalXX = TypeParam;
 
   auto vec = std::vector<decimalXX>(1000);
   std::iota(std::begin(vec), std::end(vec), decimalXX{});
