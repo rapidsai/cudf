@@ -1941,7 +1941,7 @@ class DatetimeIndex(GenericIndex):
         elif isinstance(data, pd.DatetimeIndex):
             data = column.as_column(data.values)
         elif isinstance(data, (list, tuple)):
-            data = column.as_column(np.array(data, dtype="<M8[ms]"))
+            data = column.as_column(np.array(data, dtype="datetime64[ms]"))
         out._initialize(data, **kwargs)
         return out
 

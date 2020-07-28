@@ -68,6 +68,11 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         STRING "cudf::type_id::STRING"
         LIST "cudf::type_id::LIST"
         NUM_TYPE_IDS "cudf::type_id::NUM_TYPE_IDS"
+        DURATION_DAYS "cudf::type_id::DURATION_DAYS"
+        DURATION_SECONDS "cudf::type_id::DURATION_SECONDS"
+        DURATION_MILLISECONDS "cudf::type_id::DURATION_MILLISECONDS"
+        DURATION_MICROSECONDS "cudf::type_id::DURATION_MICROSECONDS"
+        DURATION_NANOSECONDS "cudf::type_id::DURATION_NANOSECONDS"
 
     cdef cppclass data_type:
         data_type() except +

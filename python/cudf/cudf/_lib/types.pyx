@@ -42,6 +42,21 @@ class TypeId(IntEnum):
     )
     STRING = <underlying_type_t_type_id> libcudf_types.type_id.STRING
     BOOL8 = <underlying_type_t_type_id> libcudf_types.type_id.BOOL8
+    DURATION_DAYS = (
+        <underlying_type_t_type_id> libcudf_types.type_id.DURATION_DAYS
+    )
+    DURATION_SECONDS = (
+        <underlying_type_t_type_id> libcudf_types.type_id.DURATION_SECONDS
+    )
+    DURATION_MILLISECONDS = (
+        <underlying_type_t_type_id> libcudf_types.type_id.DURATION_MILLISECONDS
+    )
+    DURATION_MICROSECONDS = (
+        <underlying_type_t_type_id> libcudf_types.type_id.DURATION_MICROSECONDS
+    )
+    DURATION_NANOSECONDS = (
+        <underlying_type_t_type_id> libcudf_types.type_id.DURATION_NANOSECONDS
+    )
 
 
 np_to_cudf_types = {
@@ -61,6 +76,11 @@ np_to_cudf_types = {
     np.dtype("datetime64[ns]"): TypeId.TIMESTAMP_NANOSECONDS,
     np.dtype("object"): TypeId.STRING,
     np.dtype("bool"): TypeId.BOOL8,
+    np.dtype("timedelta64[D]"): TypeId.DURATION_DAYS,
+    np.dtype("timedelta64[s]"): TypeId.DURATION_SECONDS,
+    np.dtype("timedelta64[ms]"): TypeId.DURATION_MILLISECONDS,
+    np.dtype("timedelta64[us]"): TypeId.DURATION_MICROSECONDS,
+    np.dtype("timedelta64[ns]"): TypeId.DURATION_NANOSECONDS,
 }
 
 cudf_to_np_types = {
@@ -80,6 +100,11 @@ cudf_to_np_types = {
     TypeId.TIMESTAMP_NANOSECONDS: np.dtype("datetime64[ns]"),
     TypeId.STRING: np.dtype("object"),
     TypeId.BOOL8: np.dtype("bool"),
+    TypeId.DURATION_DAYS: np.dtype("timedelta64[D]"),
+    TypeId.DURATION_SECONDS: np.dtype("timedelta64[s]"),
+    TypeId.DURATION_MILLISECONDS: np.dtype("timedelta64[ms]"),
+    TypeId.DURATION_MICROSECONDS: np.dtype("timedelta64[us]"),
+    TypeId.DURATION_NANOSECONDS: np.dtype("timedelta64[ns]"),
 }
 
 

@@ -1154,6 +1154,15 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
+    elif dtype.type is np.timedelta64:
+        return cudf.core.column.TimeDeltaColumn(
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+        )
     elif dtype.type in (np.object_, np.str_):
         return cudf.core.column.StringColumn(
             mask=mask,
@@ -1399,6 +1408,19 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 size=pa_size,
                 offset=pa_offset,
             )
+        elif isinstance(arbitrary, pa.DurationArray):
+            dtype = np.dtype("m8[{}]".format(arbitrary.type.unit))
+            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
+                arbitrary, dtype=dtype
+            )
+
+            data = cudf.core.column.timedelta.TimeDeltaColumn(
+                data=padata,
+                mask=pamask,
+                dtype=dtype,
+                size=pa_size,
+                offset=pa_offset,
+            )
         elif isinstance(arbitrary, pa.Date64Array):
             raise NotImplementedError
             pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
@@ -1568,6 +1590,26 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 mask = data.mask
 
             data = cudf.core.column.datetime.DatetimeColumn(
+                data=buffer, mask=mask, dtype=arbitrary.dtype
+            )
+        elif arb_dtype.kind == "m":
+
+            time_unit, _ = np.datetime_data(arbitrary.dtype)
+            cast_dtype = time_unit in ("W", "M", "Y")
+
+            if cast_dtype:
+                arbitrary = arbitrary.astype(np.dtype("timedelta64[s]"))
+
+            buffer = Buffer(arbitrary.view("|u1"))
+            mask = None
+            if nan_as_null is None or nan_as_null is True:
+                data = as_column(
+                    buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
+                )
+                data = utils.time_col_replace_nulls(data)
+                mask = data.mask
+
+            data = cudf.core.column.timedelta.TimeDeltaColumn(
                 data=buffer, mask=mask, dtype=arbitrary.dtype
             )
         elif arb_dtype.kind in ("O", "U"):

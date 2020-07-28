@@ -42,8 +42,15 @@ DATETIME_TYPES = {
     "datetime64[us]",
     "datetime64[ns]",
 }
+TIMEDELTA_TYPES = {
+    "timedelta64[D]",
+    "timedelta64[s]",
+    "timedelta64[ms]",
+    "timedelta64[us]",
+    "timedelta64[ns]",
+}
 OTHER_TYPES = {"bool", "category", "str"}
-ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | OTHER_TYPES
+ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
 
 def np_to_pa_dtype(dtype):
@@ -57,6 +64,13 @@ def np_to_pa_dtype(dtype):
             return pa.timestamp(time_unit)
         # default is int64_t UNIX ms
         return pa.date64()
+    elif dtype.kind == "m":
+        time_unit, _ = np.datetime_data(dtype)
+        if time_unit in ("s", "ms", "us", "ns"):
+            # return a pa.Duration of the appropriate unit
+            return pa.duration(time_unit)
+        # default fallback unit is ns
+        return pa.duration("ns")
     return _np_pa_dtypes[np.dtype(dtype).type]
 
 
@@ -216,6 +230,10 @@ def to_cudf_compatible_scalar(val, dtype=None):
         time_unit, _ = np.datetime_data(val.dtype)
         if time_unit in ("D", "W", "M", "Y"):
             val = val.astype("datetime64[s]")
+    elif val.dtype.type is np.timedelta64:
+        time_unit, _ = np.datetime_data(val.dtype)
+        if time_unit in ("W", "M", "Y"):
+            val = val.astype("timedelta64[s]")
 
     return val
 

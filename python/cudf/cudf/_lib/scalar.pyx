@@ -26,10 +26,18 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_us,
     timestamp_ns
 )
+from cudf._lib.cpp.wrappers.durations cimport(
+    duration_D,
+    duration_s,
+    duration_ms,
+    duration_us,
+    duration_ns
+)
 from cudf._lib.cpp.scalar.scalar cimport (
     scalar,
     numeric_scalar,
     timestamp_scalar,
+    duration_scalar,
     string_scalar
 )
 cimport cudf._lib.cpp.types as libcudf_types
@@ -74,6 +82,10 @@ cdef class Scalar:
             _set_datetime64_from_np_scalar(
                 self.c_value, value, dtype, valid
             )
+        elif pd.api.types.is_timedelta64_dtype(dtype):
+            _set_timedelta64_from_np_scalar(
+                self.c_value, value, dtype, valid
+            )
         else:
             raise ValueError(
                 "Cannot convert value of type {} to cudf scalar".format(
@@ -101,6 +113,8 @@ cdef class Scalar:
             return _get_np_scalar_from_numeric(self.c_value)
         elif pd.api.types.is_datetime64_dtype(self.dtype):
             return _get_np_scalar_from_timestamp64(self.c_value)
+        elif pd.api.types.is_timedelta64_dtype(self.dtype):
+            return _get_np_scalar_from_timedelta64(self.c_value)
         else:
             raise ValueError(
                 "Could not convert cudf::scalar to a Python value"
@@ -182,6 +196,33 @@ cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,
     else:
         raise ValueError("dtype not supported: {}".format(dtype))
 
+cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
+                                     value,
+                                     dtype,
+                                     bool valid=True):
+    value = value if valid else 0
+    if dtype == "timedelta64[D]":
+        s.reset(
+            new duration_scalar[duration_D](<int32_t>np.int32(value), valid)
+        )
+    elif dtype == "timedelta64[s]":
+        s.reset(
+            new duration_scalar[duration_s](<int64_t>np.int64(value), valid)
+        )
+    elif dtype == "timedelta64[ms]":
+        s.reset(
+            new duration_scalar[duration_ms](<int64_t>np.int64(value), valid)
+        )
+    elif dtype == "timedelta64[us]":
+        s.reset(
+            new duration_scalar[duration_us](<int64_t>np.int64(value), valid)
+        )
+    elif dtype == "timedelta64[ns]":
+        s.reset(
+            new duration_scalar[duration_ns](<int64_t>np.int64(value), valid)
+        )
+    else:
+        raise ValueError("dtype not supported: {}".format(dtype))
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():
@@ -257,6 +298,54 @@ cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
+            "ns"
+        )
+    else:
+        raise ValueError("Could not convert cudf::scalar to numpy scalar")
+
+
+cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
+
+    cdef scalar* s_ptr = s.get()
+
+    if not s_ptr[0].is_valid():
+        return None
+
+    cdef libcudf_types.data_type cdtype = s_ptr[0].type()
+
+    if cdtype.id() == libcudf_types.DURATION_DAYS:
+        return np.timedelta64(
+            (
+                <duration_scalar[duration_D]*> s_ptr
+            )[0].ticks(),
+            "D"
+        )
+    elif cdtype.id() == libcudf_types.DURATION_SECONDS:
+        return np.timedelta64(
+            (
+                <duration_scalar[duration_s]*> s_ptr
+            )[0].ticks(),
+            "s"
+        )
+    elif cdtype.id() == libcudf_types.DURATION_MILLISECONDS:
+        return np.timedelta64(
+            (
+                <duration_scalar[duration_ms]*> s_ptr
+            )[0].ticks(),
+            "ms"
+        )
+    elif cdtype.id() == libcudf_types.DURATION_MICROSECONDS:
+        return np.timedelta64(
+            (
+                <duration_scalar[duration_us]*> s_ptr
+            )[0].ticks(),
+            "us"
+        )
+    elif cdtype.id() == libcudf_types.DURATION_NANOSECONDS:
+        return np.timedelta64(
+            (
+                <duration_scalar[duration_ns]*> s_ptr
+            )[0].ticks(),
             "ns"
         )
     else:
