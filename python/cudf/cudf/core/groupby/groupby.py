@@ -74,9 +74,10 @@ class GroupBy(Serializable):
         """
         Returns a dictionary mapping group keys to row labels.
         """
-        group_names, offsets, _, _ = self._grouped()
+        group_names, offsets, _, grouped_values = self._grouped()
+        grouped_index = grouped_values.index
         return dict(
-            zip(group_names.to_pandas(), self.obj.index._split(offsets[1:-1]))
+            zip(group_names.to_pandas(), grouped_index._split(offsets[1:-1]))
         )
 
     def size(self):
