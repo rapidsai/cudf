@@ -10,6 +10,7 @@ from cudf._lib.types cimport (
     underlying_type_t_sorted,
     underlying_type_t_interpolation
 )
+from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 cimport cudf._lib.cpp.types as libcudf_types
 
 
@@ -119,3 +120,18 @@ class NullOrder(IntEnum):
 class NullHandling(IntEnum):
     INCLUDE = <underlying_type_t_null_policy> libcudf_types.null_policy.INCLUDE
     EXCLUDE = <underlying_type_t_null_policy> libcudf_types.null_policy.EXCLUDE
+
+
+cdef dtype_from_lists_column_view(lists_column_view lv):
+    from cudf.core.dtypes import ListDtype
+
+    if lv.child().type().id() == libcudf_types.type_id.LIST:
+        return ListDtype(
+            dtype_from_lists_column_view(lists_column_view(lv.child()))
+        )
+    else:
+        return ListDtype(
+            cudf_to_np_types[
+                <underlying_type_t_type_id> lv.child().type().id()
+            ]
+        )
