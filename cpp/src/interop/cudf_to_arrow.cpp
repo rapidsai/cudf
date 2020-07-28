@@ -88,13 +88,10 @@ struct dispatch_to_arrow {
   std::enable_if_t<is_fixed_width<T>(), std::shared_ptr<arrow::Array>> operator()(
     column_view input_view, cudf::type_id id, arrow::MemoryPool* ar_mr)
   {
-    auto data_buffer = fetch_data_buffer<T>(input_view, ar_mr);
-    auto mask_buffer = fetch_mask_buffer(input_view, ar_mr);
-
     return to_arrow_array(id,
                           static_cast<int64_t>(input_view.size()),
-                          data_buffer,
-                          mask_buffer,
+                          fetch_data_buffer<T>(input_view, ar_mr),
+                          fetch_mask_buffer(input_view, ar_mr),
                           static_cast<int64_t>(input_view.null_count()));
   }
 
