@@ -400,12 +400,9 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_unique_ptr(unique_ptr[column] c_col):
-
-        size = c_col.get()[0].size()
-
         cdef libcudf_types.type_id tid = c_col.get()[0].type().id()
-
         cdef column_view cv = c_col.get()[0].view()
+        size = c_col.get()[0].size()
 
         if tid == libcudf_types.type_id.LIST:
             dtype = dtype_from_lists_column_view(
