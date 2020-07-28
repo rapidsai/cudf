@@ -144,6 +144,7 @@
 - PR #5725 Integrate Gbenchmarks into CI
 - PR #5752 Add cuDF internals documentation (ColumnAccessor)
 - PR #5759 Fix documentation describing JIT cache default location
+- PR #5780 Add Java bindings for pad
 - PR #5775 Update dask_cudf.read_parquet to align with upstream improvements
 
 ## Bug Fixes
