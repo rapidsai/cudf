@@ -49,7 +49,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
 
   // Kafka 0.9 > requires group.id in the configuration
   std::string conf_val;
-  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group_id", conf_val),
+  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
                "Kafka group.id must be configured");
 
   std::string errstr;
@@ -104,6 +104,10 @@ void kafka_consumer::consume_to_buffer()
       buffer.append(static_cast<char *>(msg->payload()));
       buffer.append(delimiter);
       messages_read++;
+    } else if (msg->err() == RdKafka::ErrorCode::ERR__TIMED_OUT ||
+               msg->err() == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
+      // If there are no more messages or a timeout reading a message occurs then return
+      break;
     }
   }
 }

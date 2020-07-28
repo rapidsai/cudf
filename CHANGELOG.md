@@ -33,6 +33,7 @@
 - PR #5511 Port of clx subword tokenizer to cudf
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
+- PR #5618 Add Kafka as a cudf datasource
 - PR #5668 Adding support for `cudf.testing`
 - PR #5460 Add support to write to remote filesystems
 - PR #5454 Add support for `DataFrame.append`, `Index.append`, `Index.difference` and `Index.empty`
@@ -50,6 +51,7 @@
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 - PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
 - PR #5572 Add `cudf::encode` API.
+- PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
 
 ## Improvements
 
@@ -143,6 +145,7 @@
 - PR #5752 Add cuDF internals documentation (ColumnAccessor)
 - PR #5759 Fix documentation describing JIT cache default location
 - PR #5780 Add Java bindings for pad
+- PR #5775 Update dask_cudf.read_parquet to align with upstream improvements
 
 ## Bug Fixes
 
