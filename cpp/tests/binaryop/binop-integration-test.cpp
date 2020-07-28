@@ -22,6 +22,8 @@
 
 #include <cudf/binaryop.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include "cudf/types.hpp"
+#include "cudf/utilities/type_dispatcher.hpp"
 
 namespace cudf {
 namespace test {
@@ -2103,6 +2105,35 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply)
     lhs, rhs, cudf::binary_operator::MUL, static_cast<cudf::column_view>(lhs).type());
 
   cudf::test::expect_columns_equal(expected_col, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimple)
+{
+  using namespace numeric;
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+
+  auto const ONE_2   = decimalXX{1, scale_type{-2}};
+  auto const TWO_2   = decimalXX{2, scale_type{-2}};
+  auto const THREE_2 = decimalXX{3, scale_type{-2}};
+  auto const FOUR_2  = decimalXX{4, scale_type{-2}};
+
+  auto const vec1  = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+  auto const vec2  = std::vector<decimalXX>{ONE_2, TWO_2, THREE_2, FOUR_2};
+  auto const trues = std::vector<bool>(4, true);
+
+  auto const col1     = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const col2     = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected = wrapper<bool>(trues.begin(), trues.end());
+
+  auto const result = cudf::binary_operation(
+    col1, col2, cudf::binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
+
+  cudf::test::expect_columns_equal(expected, result->view());
 }
 
 }  // namespace binop
