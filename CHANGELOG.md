@@ -44,6 +44,7 @@
 - PR #5659 Added support for rapids-compose for Java bindings and other enhancements
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
+- PR #5669 Add support for reading JSON files with missing or out-of-order fields
 - PR #5674 Support JIT backend on PowerPC64
 - PR #5629 Add `ListColumn` and `ListDtype`
 - PR #5658 Add `filter_tokens` nvtext API
@@ -148,6 +149,7 @@
 - PR #5780 Add Java bindings for pad
 - PR #5775 Update dask_cudf.read_parquet to align with upstream improvements
 - PR #5785 Enable computing views of ListColumns
+- PR #5786 JNI Header Cleanup for cuspacial
 
 ## Bug Fixes
 
