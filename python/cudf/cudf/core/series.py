@@ -10,6 +10,8 @@ import pandas as pd
 from pandas._config import get_option
 from pandas.api.types import is_dict_like
 
+from cudf.core.dtypes import Dtype
+
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
@@ -143,6 +145,8 @@ class Series(Frame, Serializable):
             ``null`` values.
             If ``False``, leaves ``np.nan`` values as is.
         """
+        if dtype:
+            dtype = Dtype(dtype)
         if isinstance(data, pd.Series):
             if name is None:
                 name = data.name

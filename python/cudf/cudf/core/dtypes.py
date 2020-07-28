@@ -9,6 +9,178 @@ from pandas.api.extensions import ExtensionDtype
 
 import cudf
 
+pa_to_pd_dtypes = {
+    pa.uint8(): pd.UInt8Dtype(),
+    pa.uint16(): pd.UInt16Dtype(),
+    pa.uint32(): pd.UInt32Dtype(),
+    pa.uint64(): pd.UInt64Dtype(),
+    pa.int8(): pd.Int8Dtype(),
+    pa.int16(): pd.Int16Dtype(),
+    pa.int32(): pd.Int32Dtype(),
+    pa.int64(): pd.Int64Dtype(),
+    pa.bool_(): pd.BooleanDtype(),
+    pa.string(): pd.StringDtype(),
+    pa.float32(): np.float32(),
+    pa.float64(): np.float64(),
+    pa.timestamp('ns'): np.dtype('datetime64[ns]'),
+    pa.timestamp('us'): np.dtype('datetime64[us]'),
+    pa.timestamp('ms'): np.dtype('datetime64[ms]'),
+    pa.timestamp('s'): np.dtype('datetime64[s]'),
+}
+
+pa_to_np_dtypes = {
+    pa.uint8(): np.dtype('uint8'),
+    pa.uint16(): np.dtype('uint16'),
+    pa.uint32(): np.dtype('uint32'),
+    pa.uint64(): np.dtype('uint64'),
+    pa.int8(): np.dtype('int8'),
+    pa.int16(): np.dtype('int16'),
+    pa.int32(): np.dtype('int32'),
+    pa.int64(): np.dtype('int64'),
+    pa.bool_(): np.dtype('bool'),
+    pa.string(): np.dtype('object'),
+    pa.float32(): np.dtype('float32'),
+    pa.float64(): np.dtype('float64'),
+    pa.timestamp('ns'): np.dtype('datetime64[ns]'),
+    pa.timestamp('us'): np.dtype('datetime64[us]'),
+    pa.timestamp('ms'): np.dtype('datetime64[ms]'),
+    pa.timestamp('s'): np.dtype('datetime64[s]'),
+}
+
+class Dtype(ExtensionDtype):
+    def __init__(self, arg):
+        cudf_dtype = make_dtype_from_obj(arg)
+        cudf_dtype.__init__(self)
+
+    def __eq__(self, other):
+        if isinstance(other, self.to_pandas.__class__) or other is self.to_pandas.__class__:
+            return True
+        if self.to_numpy == other:
+            return True
+        raise NotImplementedError
+
+    @property
+    def to_numpy(self):
+        return pa_to_np_dtypes[self.pa_type]
+
+    @property
+    def to_pandas(self):
+        return pa_to_pd_dtypes[self.pa_type]
+
+    @property
+    def type(self):
+        return self.pandas_dtype().type
+
+class UInt8Dtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.uint8()
+        
+class UInt16Dtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.uint16()
+
+class UInt32Dtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.uint32()
+
+class UInt64Dtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.uint64()
+
+class Int8Dtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.int8()
+
+class Int16Dtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.int16()
+
+class Int32Dtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.int32()
+
+class Int64Dtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.int64()
+
+class Float32Dtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.float32()
+
+class Float64Dtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.float64()
+
+class BooleanDtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.bool()
+
+class Datetime64NSDtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.timestamp('ns')
+
+class Datetime64USDtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.timestamp('us')
+
+class Datetime64MSDtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.timestamp('ms')
+
+class Datetime64SDtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.timestamp('s')
+
+class StringDtype(Dtype):
+    def __init__(self):
+        self.pa_type = pa.string()
+
+def make_dtype_from_string(obj):
+    if obj in {'str', 'string', 'object'}:
+        return StringDtype
+    elif 'datetime' in obj:
+        if obj == 'datetime64[ns]':
+            return Datetime64NSDtype
+        elif obj == 'datetime64[us]':
+            return Datetime64USDtype
+        elif obj == 'datetime64[ms]':
+            return Datetime64MSDtype
+        elif obj == 'datetime64[s]':
+            return Datetime64SDtype
+    elif 'int' in obj or 'Int' in obj:
+        if obj in {'int', 'Int', 'int64', 'Int64'}:
+            return Int64Dtype
+        elif obj in {'int32', 'Int32'}:
+            return Int32Dtype
+        elif obj in {'int16', 'Int16'}:
+            return Int16Dtype
+        elif obj in {'int8', 'Int8'}:
+            return Int8Dtype
+        elif obj in {'uint64', 'UInt64'}:
+            return UInt64Dtype
+        elif obj in {'uint32', 'UInt32'}:
+            return UInt32Dtype
+        elif obj in {'uint16', 'UInt16'}:
+            return UInt16Dtype
+        elif obj in {'uint8', 'Uint8'}:
+            return UInt8Dtype
+    elif 'float' in obj:
+        if obj in {'float64', 'Float64'}:
+            return Float64Dtype
+        elif obj in {'float32', 'Float32'}:
+            return Float32Dtype
+    elif 'bool' in obj:
+        return BooleanDtype
+
+def make_dtype_from_numpy(obj):
+    np_to_pd_types = {v: k for k, v in pd_to_np_dtypes.items()}
+    result = np_to_pd_types.get(obj)
+
+def make_dtype_from_obj(obj):
+    if isinstance(obj, np.dtype):
+        return make_dtype_from_numpy(obj)
+    elif isinstance(obj, str):
+        return make_dtype_from_string(obj)
 
 class CategoricalDtype(ExtensionDtype):
     def __init__(self, categories=None, ordered=None):
