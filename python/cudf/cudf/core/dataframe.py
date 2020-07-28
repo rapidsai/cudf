@@ -4656,7 +4656,7 @@ class DataFrame(Frame, Serializable):
 
         return output_frame
 
-    def to_pandas(self):
+    def to_pandas(self, **kwargs):
         """
         Convert to a Pandas DataFrame.
 
@@ -4673,19 +4673,23 @@ class DataFrame(Frame, Serializable):
         >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
         """
+        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", True)
+
         out_data = {}
         out_index = self.index.to_pandas()
 
         if not isinstance(self.columns, pd.Index):
-            out_columns = self.columns.to_pandas()
+            out_columns = self.columns.to_pandas(nullable_pd_dtype=False)
         else:
             out_columns = self.columns
 
         for i, col_key in enumerate(self._data):
-            out_data[i] = self._data[col_key].to_pandas(index=out_index)
+            out_data[i] = self._data[col_key].to_pandas(
+                index=out_index, nullable_pd_dtype=nullable_pd_dtype
+            )
 
         if isinstance(self.columns, Index):
-            out_columns = self.columns.to_pandas()
+            out_columns = self.columns.to_pandas(nullable_pd_dtype=False)
             if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
                 if self.columns.names is not None:
                     out_columns.names = self.columns.names
