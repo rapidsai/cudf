@@ -28,7 +28,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 
-#include "jni_utils.hpp"
+#include "cudf_jni_apis.hpp"
 
 namespace cudf {
 namespace jni {
