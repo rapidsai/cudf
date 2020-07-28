@@ -237,6 +237,15 @@ public final class HostColumnVector implements AutoCloseable {
     return getNullCount() > 0;
   }
 
+  //  void printOffsetBuffer(int level, int prevSize) {
+//    byte[] offsetBytes = new byte[128];
+//    System.out.println("OFFSET BUFFER" + offsetBytes);
+//    offHeap.offsets.get(level).getBytes(offsetBytes, 0, 0, offHeap.offsets.get(level).length);
+//    for (int i = 0; i < offsetBytes.length; i++) {
+//      System.out.print(offsetBytes[i]);
+//    }
+//  }
+//
   /////////////////////////////////////////////////////////////////////////////
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
@@ -1202,6 +1211,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Build
    */
   public static final class Builder implements AutoCloseable {
+    public static final int INIT_OFFSET_SIZE = 10;
     private final long rows;
     private final List<Long> allRows = new ArrayList<>();
     private final DType type;
@@ -1401,10 +1411,11 @@ public final class HostColumnVector implements AutoCloseable {
       if (baseType == DType.STRING) {
         if (!needToAdd) {
           //TODO: Fix this hard code
-          allOffsets.add(HostMemoryBuffer.allocate(128));
+          allOffsets.add(HostMemoryBuffer.allocate(INIT_OFFSET_SIZE));
           allOffsets.get(allOffsets.size() - 1).setInt(0, 0);
           needToAdd = true;
         }
+        HostMemoryBuffer currentOffsetBuffer = allOffsets.get(allOffsets.size() - 1);
         //////////////
         for (Object item : list) {
           String strItem = (String)item;
@@ -1414,22 +1425,35 @@ public final class HostColumnVector implements AutoCloseable {
           }
           currentStringByteIndex += strLen;
           currentIndex++;
-          allOffsets.get(allOffsets.size() - 1).setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
+          if (currentOffsetBuffer.length <= currentIndex*OFFSET_SIZE + OFFSET_SIZE) {
+            HostMemoryBuffer newOffset = HostMemoryBuffer.allocate(currentOffsetBuffer.length * 2);
+            try {
+              newOffset.copyFromHostBuffer(0, currentOffsetBuffer, 0, currentOffsetBuffer.length);
+              currentOffsetBuffer.close();
+              allOffsets.set(allOffsets.size() - 1, newOffset);
+              newOffset = null;
+            } finally {
+              if (newOffset != null) {
+                newOffset.close();
+              }
+            }
+          }
+          currentOffsetBuffer = allOffsets.get(allOffsets.size() - 1);
+          currentOffsetBuffer.setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
         }
-        //TODO: Fix this hard code
-//        printOffsetBuffer(allOffsets.size() - 1, 10);
+//        printOffsetBuffer(allOffsets.size() - 1, 128);
 
       }
       return this;
     }
 
-    private void printOffsetBuffer(int level, int prevSize) {
-      byte[] offsetBytes = new byte[prevSize * OFFSET_SIZE];
-      allOffsets.get(level).getBytes(offsetBytes, 0, 0, offsetBytes.length);
-      for (int i = 0; i < offsetBytes.length; i++) {
-        System.out.print(offsetBytes[i]);
-      }
-    }
+//    private void printOffsetBuffer(int level, int prevSize) {
+//      byte[] offsetBytes = new byte[128];
+//      allOffsets.get(level).getBytes(offsetBytes, 0, 0, allOffsets.get(level).length);
+//      for (int i = 0; i < offsetBytes.length; i++) {
+//        System.out.print(offsetBytes[i]);
+//      }
+//    }
 
 
     private void writeLists(DataOutputStream dos, List list, DType baseType) throws IOException {
