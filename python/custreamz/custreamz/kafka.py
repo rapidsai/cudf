@@ -58,7 +58,7 @@ class CudfKafkaClient(object):
 
 
 # Apache Kafka Consumer implementation
-class KafkaConsumer(CudfKafkaClient):
+class Consumer(CudfKafkaClient):
     def __init__(
         self,
         kafka_configs,
