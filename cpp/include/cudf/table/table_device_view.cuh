@@ -77,7 +77,6 @@ class table_device_view : public detail::table_device_view_base<column_device_vi
   {
     auto deleter = [](table_device_view* t) {
       t->destroy();
-      delete t->_descendant_storage;
     };
     return std::unique_ptr<table_device_view, decltype(deleter)>{
       new table_device_view(source_view, stream), deleter};
@@ -97,7 +96,6 @@ class mutable_table_device_view
   {
     auto deleter = [](mutable_table_device_view* t) {
       t->destroy();
-      delete t->_descendant_storage;
     };
     return std::unique_ptr<mutable_table_device_view, decltype(deleter)>{
       new mutable_table_device_view(source_view, stream), deleter};
