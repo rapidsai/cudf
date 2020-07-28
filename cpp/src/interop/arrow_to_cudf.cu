@@ -71,15 +71,17 @@ struct dispatch_to_cudf_column {
     auto col         = make_fixed_width_column(
       type, num_rows, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
     auto mutable_column_view = col->mutable_view();
-    CUDA_TRY(cudaMemcpy(mutable_column_view.data<void*>(),
-                        data_buffer->data(),
-                        data_buffer->size(),
-                        cudaMemcpyHostToDevice));
+    CUDA_TRY(cudaMemcpyAsync(mutable_column_view.data<void*>(),
+                             data_buffer->data(),
+                             data_buffer->size(),
+                             cudaMemcpyHostToDevice,
+                             stream));
     if (has_nulls) {
-      CUDA_TRY(cudaMemcpy(mutable_column_view.null_mask(),
-                          arrow_col.null_bitmap_data(),
-                          arrow_col.null_bitmap()->size(),
-                          cudaMemcpyHostToDevice));
+      CUDA_TRY(cudaMemcpyAsync(mutable_column_view.null_mask(),
+                               arrow_col.null_bitmap_data(),
+                               arrow_col.null_bitmap()->size(),
+                               cudaMemcpyHostToDevice,
+                               stream));
     }
 
     return std::make_pair<std::unique_ptr<column>, column_view>(
@@ -96,10 +98,11 @@ struct dispatch_to_cudf_column {
     std::unique_ptr<rmm::device_buffer> mask = std::make_unique<rmm::device_buffer>(0);
     if (array.null_bitmap_data() != nullptr) {
       mask = std::make_unique<rmm::device_buffer>(array.null_bitmap()->size(), stream, mr);
-      CUDA_TRY(cudaMemcpy(mask->data(),
-                          array.null_bitmap_data(),
-                          array.null_bitmap()->size(),
-                          cudaMemcpyHostToDevice));
+      CUDA_TRY(cudaMemcpyAsync(mask->data(),
+                               array.null_bitmap_data(),
+                               array.null_bitmap()->size(),
+                               cudaMemcpyHostToDevice,
+                               stream));
     }
 
     return std::move(mask);
@@ -120,22 +123,16 @@ struct dispatch_to_cudf_column {
     auto char_array = std::make_unique<arrow::Int8Array>(
       str_array->value_data()->size(), str_array->value_data(), nullptr);
 
-    auto offsets_column = std::move(type_dispatcher(data_type(type_id::INT32),
-                                                    dispatch_to_cudf_column{},
-                                                    *offset_array,
-                                                    data_type(type_id::INT32),
-                                                    true,
-                                                    mr,
-                                                    stream)
-                                      .first);
-    auto chars_column   = std::move(type_dispatcher(data_type(type_id::INT8),
-                                                  dispatch_to_cudf_column{},
-                                                  *char_array,
-                                                  data_type(type_id::INT32),
-                                                  true,
-                                                  mr,
-                                                  stream)
-                                    .first);
+    auto offsets_column =
+      std::move(dispatch_to_cudf_column{}
+                  .
+                  operator()<int32_t>(*offset_array, data_type(type_id::INT32), true, mr, stream)
+                  .first);
+    auto chars_column =
+      std::move(dispatch_to_cudf_column{}
+                  .
+                  operator()<int8_t>(*char_array, data_type(type_id::INT8), true, mr, stream)
+                  .first);
 
     auto num_rows = offsets_column->size() - 1;
     auto out_col  = make_strings_column(num_rows,
@@ -218,13 +215,8 @@ struct dispatch_to_cudf_column {
     arrow::ListArray const* list_array = static_cast<arrow::ListArray const*>(&arrow_col);
     auto offset_array                  = std::make_unique<arrow::Int32Array>(
       list_array->value_offsets()->size() / sizeof(int32_t), list_array->value_offsets(), nullptr);
-    auto offsets        = type_dispatcher(data_type(type_id::INT32),
-                                   dispatch_to_cudf_column{},
-                                   *offset_array,
-                                   data_type(type_id::INT32),
-                                   true,
-                                   mr,
-                                   stream);
+    auto offsets = dispatch_to_cudf_column{}.operator()<int32_t>(
+      *offset_array, data_type(type_id::INT32), true, mr, stream);
     auto offsets_column = (offsets.first->size() == offset_array->length())
                             ? std::move(offsets.first)
                             : std::make_unique<column>(offsets.second, stream, mr);

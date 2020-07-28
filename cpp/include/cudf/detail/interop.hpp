@@ -23,6 +23,26 @@
 
 namespace cudf {
 namespace detail {
+
+/**
+ * @copydoc cudf::from_dlpack
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<table> from_dlpack(
+  DLManagedTensor const* managed_tensor,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @copydoc cudf::to_dlpack
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+DLManagedTensor* to_dlpack(table_view const& input,
+                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                           cudaStream_t stream                 = 0);
+
 // Creating arrow as per given type_id and buffer arguments
 template <typename... Ts>
 std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
@@ -51,6 +71,16 @@ std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
 data_type arrow_to_cudf_type(arrow::Type::type arrow_type);
 
 /**
+ * @copydoc cudf::cudf_to_arrow
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ **/
+std::shared_ptr<arrow::Table> cudf_to_arrow(table_view input,
+                                            std::vector<std::string> const& column_names = {},
+                                            arrow::MemoryPool* ar_mr = arrow::default_memory_pool(),
+                                            cudaStream_t stream      = 0);
+
+/**
  * @copydoc cudf::arrow_to_cudf
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -59,5 +89,6 @@ std::unique_ptr<table> arrow_to_cudf(
   arrow::Table const& input_table,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
+
 }  // namespace detail
 }  // namespace cudf

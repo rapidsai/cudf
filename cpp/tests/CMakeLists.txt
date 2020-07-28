@@ -294,7 +294,8 @@ ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
 set(INTEROP_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/interop/cudf_to_arrow_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/interop/arrow_to_cudf_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/interop/arrow_to_cudf_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interop/dlpack_test.cpp")
 
 ConfigureTest(INTEROP_TEST "${INTEROP_TEST_SRC}")
 
@@ -343,14 +344,6 @@ set(SORT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/rank_test.cpp")
 
 ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
-
-###################################################################################################
-# - DLPack tests ----------------------------------------------------------------------------------
-
-set(DLPACK_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/dlpack/dlpack_test.cpp")
-
-ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
 
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------

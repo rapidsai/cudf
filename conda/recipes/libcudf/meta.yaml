@@ -57,7 +57,6 @@ test:
     - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
     - test -f $PREFIX/include/cudf/detail/binaryop.hpp
     - test -f $PREFIX/include/cudf/detail/copy.hpp
-    - test -f $PREFIX/include/cudf/detail/dlpack.hpp
     - test -f $PREFIX/include/cudf/detail/fill.hpp
     - test -f $PREFIX/include/cudf/detail/gather.hpp
     - test -f $PREFIX/include/cudf/detail/groupby.hpp
@@ -89,7 +88,6 @@ test:
     - test -f $PREFIX/include/cudf/dictionary/encode.hpp
     - test -f $PREFIX/include/cudf/dictionary/search.hpp
     - test -f $PREFIX/include/cudf/dictionary/update_keys.hpp
-    - test -f $PREFIX/include/cudf/dlpack.hpp
     - test -f $PREFIX/include/cudf/filling.hpp
     - test -f $PREFIX/include/cudf/fixed_point/fixed_point.hpp
     - test -f $PREFIX/include/cudf/groupby.hpp
