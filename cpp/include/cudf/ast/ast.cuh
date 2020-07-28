@@ -142,17 +142,6 @@ struct typed_binop_dispatch {
     auto typed_output =
       resolve_output_data_reference<Element>(output, table, thread_intermediate_storage, row_index);
     *typed_output = ast_operator_dispatcher_typed(op, do_binop<Element>{}, typed_lhs, typed_rhs);
-    /*
-    if (row_index == 0) {
-      printf("lhs index %i = %f, rhs index %i = %f, output index %i = %f\n",
-             lhs.data_index,
-             float(typed_lhs),
-             rhs.data_index,
-             float(typed_rhs),
-             output.data_index,
-             float(*typed_output));
-    }
-    */
   }
 
   template <typename Element, std::enable_if_t<!cudf::is_numeric<Element>()>* = nullptr>
@@ -348,7 +337,6 @@ __global__ void compute_column_kernel(table_device_view table,
                             row_index,
                             thread_intermediate_storage,
                             output);
-    // output.element<bool>(row_index) = evaluate_expression<Element>(expr, table, row_index);
   }
 }
 
@@ -358,7 +346,7 @@ std::unique_ptr<column> compute_column(
   cudaStream_t stream                 = 0,  // TODO use detail API
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
-  CUDF_FUNC_RANGE()
+  CUDF_FUNC_RANGE();
   // Linearize the AST
   nvtxRangePush("Linearizing...");
   auto expr_linearizer = linearizer(table);
@@ -443,7 +431,11 @@ std::unique_ptr<column> compute_column(
   auto num_intermediates = expr_linearizer.get_intermediate_count();
   auto shmem_size_per_block =
     sizeof(std::int64_t) * num_intermediates * config.num_threads_per_block;
-  // std::cout << "Requesting " << shmem_size_per_block << " bytes of shared memory." << std::endl;
+  /*
+  std::cout << "Requesting " << config.num_blocks << " blocks, ";
+  std::cout << config.num_threads_per_block << " threads/block, ";
+  std::cout << shmem_size_per_block << " bytes of shared memory." << std::endl;
+  */
   nvtxRangePop();
 
   // Execute the kernel

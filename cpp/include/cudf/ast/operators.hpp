@@ -733,8 +733,6 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher_data_type(ast_o
                                                                            F&& f,
                                                                            Ts&&... args)
 {
-  // We capture the first argument's type in T0 so we can construct a "default" value of the correct
-  // (matching) type.
   switch (op) {
     case ast_operator::ADD:
       f.template operator()<ast_operator::ADD>(std::forward<Ts>(args)...);
