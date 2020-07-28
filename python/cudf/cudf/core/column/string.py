@@ -4167,17 +4167,17 @@ class StringMethods(ColumnMethodsMixin):
             cpp_porter_stemmer_measure(self._column), **kwargs
         )
 
-    def is_consonant(self, i, **kwargs):
+    def is_consonant(self, position, **kwargs):
         """
-        Return true for strings where the character at ``i`` is a
-        consonant. The ``i`` parameter may also be a list of integers
+        Return true for strings where the character at ``position`` is a
+        consonant. The ``position`` parameter may also be a list of integers
         to check different characters per string.
-        If the ``i`` is larger than the string length, False is returned
-        for that string.
+        If the ``position`` is larger than the string length, False is
+        returned for that string.
 
         Parameters
         ----------
-        i: int or list-like
+        position: int or list-like
            The character position to check within each string.
 
         Returns
@@ -4200,27 +4200,29 @@ class StringMethods(ColumnMethodsMixin):
          """
         ltype = LetterType.CONSONANT
 
-        if can_convert_to_column(i):
+        if can_convert_to_column(position):
             return self._return_or_inplace(
-                cpp_is_letter_multi(self._column, ltype, column.as_column(i)),
+                cpp_is_letter_multi(
+                    self._column, ltype, column.as_column(position)
+                ),
                 **kwargs,
             )
 
         return self._return_or_inplace(
-            cpp_is_letter(self._column, ltype, i), **kwargs
+            cpp_is_letter(self._column, ltype, position), **kwargs
         )
 
-    def is_vowel(self, i, **kwargs):
+    def is_vowel(self, position, **kwargs):
         """
-        Return true for strings where the character at ``i`` is a
-        vowel -- not a consonant. The ``i`` parameter may also be
+        Return true for strings where the character at ``position`` is a
+        vowel -- not a consonant. The ``position`` parameter may also be
         a list of integers to check different characters per string.
-        If the ``i`` is larger than the string length, False is returned
-        for that string.
+        If the ``position`` is larger than the string length, False is
+        returned for that string.
 
         Parameters
         ----------
-        i: int or list-like
+        position: int or list-like
            The character position to check within each string.
 
         Returns
@@ -4243,14 +4245,16 @@ class StringMethods(ColumnMethodsMixin):
         """
         ltype = LetterType.VOWEL
 
-        if can_convert_to_column(i):
+        if can_convert_to_column(position):
             return self._return_or_inplace(
-                cpp_is_letter_multi(self._column, ltype, column.as_column(i)),
+                cpp_is_letter_multi(
+                    self._column, ltype, column.as_column(position)
+                ),
                 **kwargs,
             )
 
         return self._return_or_inplace(
-            cpp_is_letter(self._column, ltype, i), **kwargs
+            cpp_is_letter(self._column, ltype, position), **kwargs
         )
 
 
