@@ -28,7 +28,7 @@
 
 namespace cudf {
 namespace detail {
-
+namespace {
 template <typename T>
 std::shared_ptr<arrow::Buffer> fetch_data_buffer(column_view input_view, arrow::MemoryPool* ar_mr)
 {
@@ -62,6 +62,7 @@ std::shared_ptr<arrow::Buffer> fetch_mask_buffer(column_view input_view, arrow::
 
   return nullptr;
 }
+}  // namespace
 
 struct dispatch_to_arrow {
   template <typename T>
@@ -158,13 +159,16 @@ std::shared_ptr<arrow::Table> cudf_to_arrow(table_view input,
   std::shared_ptr<arrow::Schema> schema;
   bool const has_names = not column_names.empty();
 
-  size_type itr = 0;
-  for (auto const& c : input) {
-    arrays.emplace_back(
-      type_dispatcher(c.type(), detail::dispatch_to_arrow{}, c, c.type().id(), ar_mr));
-    fields.emplace_back(arrow::field(has_names ? column_names[itr] : "", arrays[itr]->type()));
-    itr++;
-  }
+  std::transform(input.begin(), input.end(), std::back_inserter(arrays), [&](auto const& c) {
+    return type_dispatcher(c.type(), detail::dispatch_to_arrow{}, c, c.type().id(), ar_mr);
+  });
+
+  std::transform(
+    arrays.begin(),
+    arrays.end(),
+    column_names.begin(),
+    std::back_inserter(fields),
+    [](auto const& array, auto const& name) { return arrow::field(name, array->type()); });
 
   schema = arrow::schema(fields);
 
