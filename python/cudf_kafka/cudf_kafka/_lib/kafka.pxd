@@ -25,8 +25,6 @@ cdef extern from "kafka_consumer.hpp" \
 
         bool assign(vector[string] topics, vector[int] partitions) except +
 
-        map[string, string] current_configs() except +
-
         bool commit_offset(string topic, int partition, int offset) except +
 
         int64_t get_committed_offset(string topic,

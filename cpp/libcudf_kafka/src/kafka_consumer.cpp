@@ -24,6 +24,23 @@ namespace io {
 namespace external {
 namespace kafka {
 
+kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs)
+{
+  kafka_conf = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
+
+  for (auto const &key_value : configs) {
+    std::string error_string;
+    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+                   kafka_conf->set(key_value.first, key_value.second, error_string),
+                 "Invalid Kafka configuration");
+  }
+
+  // Kafka 0.9 > requires group.id in the configuration
+  std::string conf_val;
+  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
+               "Kafka group.id must be configured");
+}
+
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
                                std::string topic_name,
                                int partition,

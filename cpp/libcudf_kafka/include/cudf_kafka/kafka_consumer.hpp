@@ -36,6 +36,17 @@ namespace kafka {
 class kafka_consumer : public cudf::io::datasource {
  public:
   /**
+   * @brief Creates an instance of the Kafka consumer object that is in a semi ready state. This
+   * is useful when the need for delayed partition and topic assignment is not know ahead of time
+   * and needs to be delayed to as late as possible. Documentation for librdkafka configurations can
+   *be found at https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+   *
+   * @param configs key/value pairs of librdkafka configurations that will be
+   *                passed to the librdkafka client
+   **/
+  kafka_consumer(std::map<std::string, std::string> configs);
+
+  /**
    * @brief Instantiate a Kafka consumer object. Documentation for librdkafka configurations can be
    * found at https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
    *
