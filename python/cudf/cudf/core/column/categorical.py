@@ -1088,7 +1088,7 @@ class CategoricalColumn(column.ColumnBase):
             codes=column.as_column(result.base_data, dtype=result.dtype),
             offset=result.offset,
             size=result.size,
-            mask=None,
+            mask=result.base_mask,
             ordered=self.dtype.ordered,
         )
 

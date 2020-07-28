@@ -48,7 +48,9 @@
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 - PR #5735 Add support for `add_months` API; force timestamp creation only with duration
+- PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
 - PR #5572 Add `cudf::encode` API.
+- PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
 
 ## Improvements
 
@@ -141,6 +143,7 @@
 - PR #5725 Integrate Gbenchmarks into CI
 - PR #5752 Add cuDF internals documentation (ColumnAccessor)
 - PR #5759 Fix documentation describing JIT cache default location
+- PR #5775 Update dask_cudf.read_parquet to align with upstream improvements
 
 ## Bug Fixes
 

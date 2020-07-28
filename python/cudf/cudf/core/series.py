@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import pickle
 import warnings
+from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
 
@@ -1810,6 +1811,27 @@ class Series(Frame, Serializable):
 
     def fill(self, fill_value, begin=0, end=-1, inplace=False):
         return self._fill([fill_value], begin, end, inplace)
+
+    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
+        if isinstance(value, pd.Series):
+            value = Series.from_pandas(value)
+
+        if not (is_scalar(value) or isinstance(value, (abc.Mapping, Series))):
+            raise TypeError(
+                f'"value" parameter must be a scalar, dict '
+                f"or Series, but you passed a "
+                f'"{type(value).__name__}"'
+            )
+
+        if isinstance(value, (abc.Mapping, Series)):
+            value = Series(value)
+            if not self.index.equals(value.index):
+                value = value.reindex(self.index)
+            value = value._column
+
+        return super().fillna(
+            value=value, method=method, axis=axis, inplace=inplace, limit=limit
+        )
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
@@ -4179,6 +4201,49 @@ class Series(Frame, Serializable):
         )
 
         return result
+
+    def keys(self):
+        """
+        Return alias for index.
+
+        Returns
+        -------
+        Index
+            Index of the Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series([10, 11, 12, 13, 14, 15])
+        >>> sr
+        0    10
+        1    11
+        2    12
+        3    13
+        4    14
+        5    15
+        dtype: int64
+
+        >>> sr.keys()
+        RangeIndex(start=0, stop=6)
+        >>> sr = cudf.Series(['a', 'b', 'c'])
+        >>> sr
+        0    a
+        1    b
+        2    c
+        dtype: object
+        >>> sr.keys()
+        RangeIndex(start=0, stop=3)
+        >>> sr = cudf.Series([1, 2, 3], index=['a', 'b', 'c'])
+        >>> sr
+        a    1
+        b    2
+        c    3
+        dtype: int64
+        >>> sr.keys()
+        StringIndex(['a' 'b' 'c'], dtype='object')
+        """
+        return self.index
 
 
 truediv_int_dtype_corrections = {
