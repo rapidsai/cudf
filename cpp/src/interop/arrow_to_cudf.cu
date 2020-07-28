@@ -259,12 +259,12 @@ struct dispatch_to_cudf_column {
 
 }  // namespace
 
-std::unique_ptr<table> arrow_to_cudf(std::shared_ptr<arrow::Table> input_table,
+std::unique_ptr<table> arrow_to_cudf(arrow::Table const& input_table,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
 {
   std::vector<std::unique_ptr<column>> columns;
-  auto chunked_arrays = input_table->columns();
+  auto chunked_arrays = input_table.columns();
   std::transform(
     chunked_arrays.begin(),
     chunked_arrays.end(),
@@ -300,7 +300,7 @@ std::unique_ptr<table> arrow_to_cudf(std::shared_ptr<arrow::Table> input_table,
 
 }  // namespace detail
 
-std::unique_ptr<table> arrow_to_cudf(std::shared_ptr<arrow::Table> input_table,
+std::unique_ptr<table> arrow_to_cudf(arrow::Table const& input_table,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();

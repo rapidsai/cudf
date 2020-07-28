@@ -56,7 +56,7 @@ data_type arrow_to_cudf_type(arrow::Type::type arrow_type);
  * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
 std::unique_ptr<table> arrow_to_cudf(
-  std::shared_ptr<arrow::Table> input_table,
+  arrow::Table const& input_table,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 }  // namespace detail

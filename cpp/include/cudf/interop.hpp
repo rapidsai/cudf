@@ -43,13 +43,13 @@ std::shared_ptr<arrow::Table> cudf_to_arrow(
 /**
  * @brief Create `cudf::table` from given arrow Table input
  *
- * @param input  arrow:Table that needs to be converted to `cudf::table`
+ * @param input_table  arrow:Table that needs to be converted to `cudf::table`
  * @param mr           Device memory resource used to allocate `cudf::table`
  * @return cudf table generated from given arrow Table.
  **/
 
 std::unique_ptr<table> arrow_to_cudf(
-  std::shared_ptr<arrow::Table> input_table,
+  arrow::Table const& input_table,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace cudf
