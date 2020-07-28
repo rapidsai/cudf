@@ -16,9 +16,6 @@
 
 #pragma once
 
-#include <arrow/api.h>
-#include <cudf/column/column.hpp>
-#include <cudf/detail/transform.hpp>
 #include <cudf/types.hpp>
 
 #include <memory>

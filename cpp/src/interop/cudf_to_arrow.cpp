@@ -16,7 +16,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/interop.hpp>
@@ -161,9 +160,6 @@ struct dispatch_to_arrow {
 
     column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
     auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
-    if (child_arrays.size() == 0) {
-      return std::make_shared<arrow::StringArray>(0, nullptr, nullptr);
-    }
     auto offset_buffer = child_arrays[0]->data()->buffers[1];
     auto data          = child_arrays[1];
     return std::make_shared<arrow::ListArray>(arrow::list(data->type()),
@@ -194,7 +190,6 @@ std::shared_ptr<arrow::Table> cudf_to_arrow(table_view input,
 
   std::vector<std::shared_ptr<arrow::Array>> arrays;
   std::vector<std::shared_ptr<arrow::Field>> fields;
-  std::shared_ptr<arrow::Schema> schema;
   bool const has_names = not column_names.empty();
 
   std::transform(input.begin(), input.end(), std::back_inserter(arrays), [&](auto const& c) {
@@ -208,9 +203,7 @@ std::shared_ptr<arrow::Table> cudf_to_arrow(table_view input,
     std::back_inserter(fields),
     [](auto const& array, auto const& name) { return arrow::field(name, array->type()); });
 
-  schema = arrow::schema(fields);
-
-  return arrow::Table::Make(schema, arrays);
+  return arrow::Table::Make(arrow::schema(fields), arrays);
 }
 }  // namespace detail
 

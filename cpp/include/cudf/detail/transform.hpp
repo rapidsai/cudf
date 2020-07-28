@@ -16,10 +16,7 @@
 
 #pragma once
 
-#include <arrow/api.h>
 #include <cudf/transform.hpp>
-#include <cudf/utilities/error.hpp>
-//#include <string>
 
 namespace cudf {
 namespace detail {
