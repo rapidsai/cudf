@@ -500,16 +500,16 @@ TEST_F(RollingErrorTest, SumTimestampNotSupported)
 TEST_F(RollingErrorTest, MeanTimestampNotSupported)
 {
   constexpr size_type size{10};
-  fixed_width_column_wrapper<cudf::timestamp_D> input_D(thrust::make_counting_iterator(0),
-                                                        thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_s> input_s(thrust::make_counting_iterator(0),
-                                                        thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ms> input_ms(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_us> input_us(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ns> input_ns(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
 
   EXPECT_THROW(cudf::rolling_window(input_D, 2, 2, 0, cudf::make_mean_aggregation()),
                cudf::logic_error);

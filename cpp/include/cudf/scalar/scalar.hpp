@@ -404,18 +404,21 @@ struct timestamp_scalar : chrono_scalar<T> {
   timestamp_scalar() = default;
 
   /**
-   * @brief Construct a new timestamp scalar object from a duration
+   * @brief Construct a new timestamp scalar object from a duration that is
+   * convertible to T::duration
    *
-   * @param value Duration representing number of ticks since the UNIX epoch
+   * @param value Duration representing number of ticks since the UNIX epoch or
+   * another duration that is convertible to timestamps duration
    * @param is_valid Whether the value held by the scalar is valid
    * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for device memory allocation
    */
-  timestamp_scalar(typename T::duration const& value,
+  template <typename Duration2>
+  timestamp_scalar(Duration2 const& value,
                    bool is_valid,
                    cudaStream_t stream                 = 0,
                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : chrono_scalar<T>(T{value}, is_valid, stream, mr)
+    : chrono_scalar<T>(T{typename T::duration{value}}, is_valid, stream, mr)
   {
   }
 
@@ -423,17 +426,6 @@ struct timestamp_scalar : chrono_scalar<T> {
    * @brief Return the duration in number of ticks since the UNIX epoch.
    */
   typename T::rep ticks_since_epoch() { return this->value().time_since_epoch().count(); }
-
-  // TODO:
-  // This is for the python builds to pass and should be removed when cython's scalar.pxd
-  // allows construction of timestamp_scalar's with duration type
-  timestamp_scalar(typename T::rep value,
-                   bool is_valid,
-                   cudaStream_t stream                 = 0,
-                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : timestamp_scalar(typename T::duration{value}, is_valid, stream, mr)
-  {
-  }
 };
 
 template <typename T>
