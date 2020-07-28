@@ -219,6 +219,7 @@
 - PR #5763 Update Java slf4j version to match Spark 3.0
 - PR #5766 Fix issue related to `iloc` and slicing a `DataFrame`
 - PR #5319 Disallow SUM and specialize MEAN of timestamp types
+- PR #5787 Fix column create from dictionary column view
 
 
 # cuDF 0.14.0 (03 Jun 2020)
