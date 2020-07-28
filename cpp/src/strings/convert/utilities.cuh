@@ -49,6 +49,7 @@ __device__ inline int64_t string_to_integer(string_view const& d_str)
   }
   return value * static_cast<int64_t>(sign);
 }
+
 /**
  * @brief Converts an integer into string
  *

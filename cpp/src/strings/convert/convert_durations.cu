@@ -76,21 +76,20 @@ struct alignas(4) format_item {
 struct format_compiler {
   std::string format;
   rmm::device_uvector<format_item> d_items;
-
-  std::map<char, int8_t> specifier_lengths = {
-    {'-', -1},  // '-' if negative
-    {'D', -1},  // 1 to 11 (not in std::format)
-    {'H', 2},   // HH
-    {'I', 2},   // HH
-    {'M', 2},   // MM
-    {'S', -1},  // 2 to 13 SS[.mmm][uuu][nnn] (uuu,nnn are not in std::format)
-    {'p', 2},   // AM/PM
-    {'R', 5},   // 5 HH:MM
-    {'T', 8},   // 8 HH:MM:SS"
-    {'r', 11}   // HH:MM:SS AM/PM
-  };
   format_compiler(const char* format_, cudaStream_t stream) : format(format_), d_items(0, stream)
   {
+    static std::map<char, int8_t> const specifier_lengths = {
+      {'-', -1},  // '-' if negative
+      {'D', -1},  // 1 to 11 (not in std::format)
+      {'H', 2},   // HH
+      {'I', 2},   // HH
+      {'M', 2},   // MM
+      {'S', -1},  // 2 to 13 SS[.mmm][uuu][nnn] (uuu,nnn are not in std::format)
+      {'p', 2},   // AM/PM
+      {'R', 5},   // 5 HH:MM
+      {'T', 8},   // 8 HH:MM:SS"
+      {'r', 11}   // HH:MM:SS AM/PM
+    };
     std::vector<format_item> items;
     const char* str = format.c_str();
     auto length     = format.length();
@@ -132,12 +131,12 @@ struct format_compiler {
       // negative sign should be present only once.
       if (negative_sign) {
         if (std::string("DHIMSRT").find_first_of(ch) != std::string::npos) {
-          items.push_back(format_item::new_specifier('-', specifier_lengths['-']));
+          items.push_back(format_item::new_specifier('-', specifier_lengths.at('-')));
           negative_sign = false;
         }
       }
 
-      int8_t spec_length = specifier_lengths[ch];
+      int8_t spec_length = specifier_lengths.at(ch);
       items.push_back(format_item::new_specifier(ch, spec_length));
     }
 
@@ -269,10 +268,10 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
 
   __device__ char* int_to_2digitstr(char* str, int min_digits, int8_t value)
   {
-    assert(value = > -99 && value <= 99);
+    assert(value >= -99 && value <= 99);
     value  = std::abs(value);
     str[0] = '0' + value / 10;
-    str[1] = '0' + std::abs(value % 10);
+    str[1] = '0' + value % 10;
     return str + 2;
   }
 
@@ -389,7 +388,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
 };
 
 /**
- * @brief This dispatch method is for converting integers into strings.
+ * @brief This dispatch method is for converting durations into strings.
  *
  * The template function declaration ensures only duration types are used.
  */
@@ -460,14 +459,14 @@ struct dispatch_from_durations_fn {
 static const __device__ __constant__ int32_t powers_of_ten[10] = {
   1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
 
-// this parses duration characters into a duration integer
+// this parses duration string into a duration integer
 template <typename T>  // duration type
 struct parse_duration {
   column_device_view const d_strings;
   format_item const* d_format_items;
   size_type items_count;
 
-  //
+  // function to parse string (maximum 10 digits) to integer.
   __device__ int32_t str2int(const char* str, int8_t max_bytes, int8_t& actual_length)
   {
     const char* ptr = (*str == '-' || *str == '+') ? str + 1 : str;
@@ -492,7 +491,7 @@ struct parse_duration {
   {
     const char* ptr = (*str == '.') ? str + 1 : str;
     int32_t value   = 0;
-    // add end of string condition.
+    // parse till fixed_width or end of string.
     for (int8_t idx = 0; idx < fixed_width && idx < string_length; ++idx) {
       char chr = *ptr++;
       if (chr < '0' || chr > '9') {
@@ -502,12 +501,13 @@ struct parse_duration {
       value = (value * 10) + static_cast<int32_t>(chr - '0');
     }
     auto parsed_length = ptr - str;
-    // trailing zeros
+    // compensate for missing trailing zeros
     if (parsed_length < fixed_width) value *= powers_of_ten[fixed_width - parsed_length];
     actual_length += parsed_length;
     return value;
   }
 
+  // parse 2 digit string to integer
   __device__ int8_t parse_2digit_int(const char* str, int8_t& actual_length)
   {
     const char* ptr = (*str == '-' || *str == '+') ? str + 1 : str;
@@ -551,14 +551,22 @@ struct parse_duration {
       // special logic for each specifier
       int8_t item_length{0};
       switch (item.value) {
-        case 'D': timeparts->day = str2int(ptr, 11, item_length); break;
-        case '-': item_length = (*ptr == '-'); break;  // skip
-        case 'H':                                      // 24-hour
+        case 'D':  // day
+          timeparts->day = str2int(ptr, 11, item_length);
+          break;
+        case '-':  // skip
+          item_length = (*ptr == '-');
+          break;
+        case 'H':  // 24-hour
           timeparts->hour = parse_hour(ptr, item_length);
           hour_shift      = 0;
           break;
-        case 'I': timeparts->hour = parse_hour(ptr, item_length); break;  // 12-hour
-        case 'M': timeparts->minute = parse_minute(ptr, item_length); break;
+        case 'I':  // 12-hour
+          timeparts->hour = parse_hour(ptr, item_length);
+          break;
+        case 'M':  // minute
+          timeparts->minute = parse_minute(ptr, item_length);
+          break;
         case 'S':  // [-]SS[.mmm][uuu][nnn]
           timeparts->second = parse_second(ptr, item_length);
           if (*(ptr + item_length) == '.') {
@@ -607,16 +615,14 @@ struct parse_duration {
       ptr += item_length;
       length -= item_length;
     }
-    timeparts->is_negative =
-      (timeparts->is_negative || timeparts->day < 0 || timeparts->hour < 0 ||
-       timeparts->minute < 0 || timeparts->second < 0 || timeparts->subsecond < 0);
-    auto negate = [](auto i, bool b) { return (i < 0 ? i : (b ? -i : i)); };
+    // negate all if duration has negative sign
     if (timeparts->is_negative) {
-      timeparts->day       = negate(timeparts->day, timeparts->is_negative);
-      timeparts->hour      = negate(timeparts->hour, timeparts->is_negative);
-      timeparts->minute    = negate(timeparts->minute, timeparts->is_negative);
-      timeparts->second    = negate(timeparts->second, timeparts->is_negative);
-      timeparts->subsecond = negate(timeparts->subsecond, timeparts->is_negative);
+      auto negate          = [](auto i) { return (i < 0 ? i : -i); };
+      timeparts->day       = negate(timeparts->day);
+      timeparts->hour      = negate(timeparts->hour);
+      timeparts->minute    = negate(timeparts->minute);
+      timeparts->second    = negate(timeparts->second);
+      timeparts->subsecond = negate(timeparts->subsecond);
       hour_shift           = -hour_shift;
     }
     timeparts->hour += hour_shift;
@@ -659,6 +665,11 @@ struct parse_duration {
   }
 };
 
+/**
+ * @brief This dispatch method is for converting strings to durations.
+ *
+ * The template function declaration ensures only duration types are used.
+ */
 struct dispatch_to_durations_fn {
   template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
   void operator()(column_device_view const& d_strings,
@@ -682,7 +693,7 @@ struct dispatch_to_durations_fn {
                   mutable_column_view&,
                   cudaStream_t) const
   {
-    CUDF_FAIL("Only durations type are expected");
+    CUDF_FAIL("Only durations type are expected for to_durations function");
   }
 };
 

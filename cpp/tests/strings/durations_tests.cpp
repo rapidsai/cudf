@@ -133,7 +133,6 @@ TEST_F(StringsDurationsTest, ISOFormatSubseconds)
                                                       T{15258L},
                                                       T{15258000L},
                                                       T{-70672L}};
-  // fully isoformat compliant.
   auto results = cudf::strings::from_durations(durations, "P%DDT%HH%MM%SS");
   cudf::test::strings_column_wrapper expected{"P0DT00H00M00S",
                                               "P0DT00H00M07S",
@@ -146,9 +145,8 @@ TEST_F(StringsDurationsTest, ISOFormatSubseconds)
                                               "P0DT00H00M00.015258000S",
                                               "P-0DT00H00M00.000070672S"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  return;
 
-  //
+  // fully isoformat compliant.
   cudf::test::strings_column_wrapper string_iso{"P0DT0H0M0S",
                                                 "P0DT0H0M7S",
                                                 "P0DT0H0M0.000000011S",
