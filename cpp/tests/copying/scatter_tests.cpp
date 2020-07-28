@@ -255,8 +255,9 @@ class ScatterInvalidIndexTypeTests : public cudf::test::BaseFixture {
 };
 
 // NOTE string types hit static assert in fixed_width_column_wrapper
-using InvalidIndexTypes =
-  cudf::test::Concat<cudf::test::Types<float, double, bool>, cudf::test::ChronoTypes>;
+using InvalidIndexTypes = cudf::test::Concat<cudf::test::Types<float, double, bool>,
+                                             cudf::test::ChronoTypes,
+                                             cudf::test::FixedPointTypes>;
 TYPED_TEST_CASE(ScatterInvalidIndexTypeTests, InvalidIndexTypes);
 
 // Throw logic error if scatter map column has invalid data type
