@@ -4,31 +4,60 @@ from cudf_kafka._lib.kafka import KafkaDatasource
 
 import cudf
 
-from custreamz.utils import docutils
-
 
 # Base class for anything class that needs to interact with Apache Kafka
-class CudfKafkaClient(object):
+class CudfKafkaClient:
     def __init__(self, kafka_configs):
+
+        """
+        Base object for any client that wants to interact with a Kafka broker.
+        This object creates the underlying KafkaDatasource connection which
+        is used to read data from Kafka and create cudf Dataframes.
+        This class should not be directly instantiated.
+
+        Parameters
+        ----------
+        kafka_configs, dict, Key/Value pairs of librdkafka
+        configuration values. Full list of valid configuration
+        options can be found at
+        https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+
+        """
+
         self.kafka_configs = kafka_configs
 
-        self.kafka_confs = {}
-        for key, value in self.kafka_configs.items():
-            self.kafka_confs[str.encode(key)] = str.encode(value)
+        self.kafka_confs = {
+            str.encode(key): str.encode(value)
+            for key, value in self.kafka_configs.items()
+        }
 
         self.kafka_meta_client = KafkaDatasource(self.kafka_confs)
 
-    @docutils.doc_unsubscribe()
     def unsubscribe(self):
 
-        """{docstring}"""
+        """
+        Stop all active consumption and remove consumer subscriptions
+        to topic/partition instances
+
+        Parameters
+        ----------
+        None
+
+        """
 
         return self.kafka_meta_client.unsubscribe()
 
-    @docutils.doc_close()
     def close(self, timeout=10000):
 
-        """{docstring}"""
+        """
+        Close the underlying socket connection to Kafka and
+        clean up system resources
+
+        Parameters
+        ----------
+        None
+
+        """
 
         return self.kafka_meta_client.close(timeout=timeout)
 
@@ -36,9 +65,23 @@ class CudfKafkaClient(object):
 # Apache Kafka Consumer implementation
 class Consumer(CudfKafkaClient):
     def __init__(self, kafka_configs):
+
+        """
+        Creates a KafkaConsumer object which allows for all valid Kafka
+        consumer type operations such as reading messages, committing
+        offsets, and retrieving the current consumption offsets.
+
+        Parameters
+        ----------
+        kafka_configs, dict, Key/Value pairs of librdkafka
+        configuration values.
+        Full list of valid configuration options can be found at
+        https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+
+        """
+
         super().__init__(kafka_configs)
 
-    @docutils.doc_read_gdf()
     def read_gdf(
         self,
         topic=None,
@@ -51,12 +94,52 @@ class Consumer(CudfKafkaClient):
         message_format="json",
     ):
 
-        """{docstring}"""
+        """
+        Read messages from the underlying KafkaDatasource connection and create
+        a cudf Dataframe
+
+
+        topic=None,
+                partition=0,
+                lines=True,
+                start=0,
+                end=0,
+                batch_timeout=10000,
+                delimiter="\n",
+                message_format="json",
+
+        Parameters
+        ----------
+        topic : str, Name of the Kafka topic that the messages
+        should be read from
+        parition : int, Partition number on the specified topic that
+        should be read from
+        lines : {{ True, False }}, default True, Whether messages should be
+        treated as individual lines
+        start : int, default 0, The beginning offset that should be used when
+        reading a range of messages
+        end : int, default 0, The last offset that will be read when
+        reading a range of messages
+        batch_timeout : int, default 10000, Amount of time to wait on the
+        reading of the messages from Kafka in Milliseconds
+        delimiter : str, default "\n", If lines=True this is the delimiter that
+        will be placed between all messages that are read from Kafka
+        message_format : {{ 'avro', 'csv', 'json', 'orc', 'parquet' }},
+        default 'json',
+        Format of the messages that will be read from Kafka.
+        This dictates which underlying cudf reader will be invoked the
+        create the Dataframe.
+
+        Returns
+        -------
+        DataFrame
+
+        """
 
         if topic is None:
             raise ValueError(
                 "ERROR: You must specifiy the topic "
-                + "that you want to consume from"
+                "that you want to consume from"
             )
 
         kafka_datasource = KafkaDatasource(
@@ -69,23 +152,19 @@ class Consumer(CudfKafkaClient):
             delimiter.encode(),
         )
 
-        if message_format.lower() == "json":
-            result = cudf.io.read_json(self.kafka_datasource)
-        elif message_format.lower() == "csv":
-            result = cudf.io.read_csv(self.kafka_datasource)
-        elif message_format.lower() == "orc":
-            result = cudf.io.read_orc(self.kafka_datasource)
-        elif message_format.lower() == "avro":
-            result = cudf.io.read_avro(self.kafka_datasource)
-        elif message_format.lower() == "parquet":
-            result = cudf.io.read_parquet(self.kafka_datasource)
-        else:
-            raise ValueError(
-                "Unsupported Kafka Message payload type of: "
-                + str(message_format)
-            )
+        cudf_readers = {
+            "json": cudf.io.read_json,
+            "csv": cudf.io.read_csv,
+            "orc": cudf.io.read_orc,
+            "avro": cudf.io.read_avro,
+            "parquet": cudf.io.read_parquet,
+        }
+
+        result = cudf_readers[message_format](self.kafka_datasource)
 
         # Close up the cudf datasource instance
+        # TODO: Ideally the C++ destructor should handle the
+        # unsubscribe and closing the socket connection.
         kafka_datasource.unsubscribe()
         kafka_datasource.close()
 
@@ -95,27 +174,60 @@ class Consumer(CudfKafkaClient):
             # empty Dataframe
             return cudf.DataFrame()
 
-    @docutils.doc_committed()
     def committed(self, partitions, timeout=10000):
 
-        """{docstring}"""
+        """
+        Retrieves the last successfully committed Kafka offset of the
+        underlying KafkaDatasource connection.
 
-        toppars = []
-        for part in partitions:
-            offset = self.kafka_meta_client.get_committed_offset(
-                part.topic, part.partition
+        Parameters
+        ----------
+        partitions : list, Topic/Partition instances that specify the TOPPAR
+        instances the offsets should be retrieved for
+        timeout : int, default 10000, Max time to wait on the response from
+        the Kafka broker in milliseconds
+
+        Returns
+        -------
+        Tuple of ck.TopicPartition objects
+
+        """
+
+        toppars = [
+            ck.TopicPartition(
+                part.topic,
+                part.partition,
+                self.kafka_meta_client.get_committed_offset(
+                    part.topic, part.partition
+                ),
             )
-            if offset < 0:
-                offset = 0
-            toppars.append(
-                ck.TopicPartition(part.topic, part.partition, offset)
-            )
+            for part in partitions
+        ]
+
         return toppars
 
-    @docutils.doc_get_watermark_offsets()
     def get_watermark_offsets(self, partition, timeout=10000, cached=False):
+        """
+        Retrieve the low and high watermark offsets from the Kafka consumer
 
-        """{docstring}"""
+        Returns
+        -------
+        Tuple with a [low, high] value
+
+        Examples
+        --------
+        >>> from custream import kafka
+        >>> kafka_configs = {
+            "metadata.broker.list": "localhost:9092",
+            "enable.partition.eof": "true",
+            "group.id": "groupid",
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": "false"
+        }
+        >>> consumer = kafka.KafkaHandle(kafka_configs,
+        topics=["kafka-topic"], partitions=[0]))
+        >>> low, high = consumer.get_watermark_offsets("kafka-topic", 0)
+        """
 
         offsets = ()
 
@@ -131,10 +243,8 @@ class Consumer(CudfKafkaClient):
 
         if len(offsets) != 2:
             raise RuntimeError(
-                "Multiple watermark offsets encountered. "
-                + "Only 2 were expected and "
-                + str(len(offsets))
-                + " encountered"
+                f"Multiple watermark offsets encountered. "
+                f"Only 2 were expected and {len(offsets)} encountered"
             )
 
         if offsets[b"low"] < 0:
@@ -145,10 +255,20 @@ class Consumer(CudfKafkaClient):
 
         return offsets[b"low"], offsets[b"high"]
 
-    @docutils.doc_commit()
     def commit(self, offsets=None, asynchronous=True):
 
-        """{docstring}"""
+        """
+        Takes a list of ck.TopicPartition objects and commits their
+        offset values to the KafkaDatasource connection
+
+        Parameters
+        ----------
+        offsets : list, ck.TopicPartition objects containing the
+        Topic/Partition/Offset values to be committed to the Kafka broker
+        asynchronous : {{ True, False }}, default True, True to wait on
+        Kafka broker response to commit request and False otherwise
+
+        """
 
         for offs in offsets:
             self.kafka_meta_client.commit_offset(

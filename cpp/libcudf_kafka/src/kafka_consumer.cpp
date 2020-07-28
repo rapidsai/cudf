@@ -154,7 +154,12 @@ int64_t kafka_consumer::get_committed_offset(std::string topic, int partition)
   // Query Kafka to populate the TopicPartitions with the desired offsets
   RdKafka::ErrorCode err = consumer->committed(toppar_list, default_timeout);
 
-  return toppar_list[0]->offset();
+  int64_t offset = toppar_list[0]->offset();
+  if (offset > 0) {
+    return offset;
+  } else {
+    return 0;
+  }
 }
 
 std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string topic,

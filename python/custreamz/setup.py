@@ -1,18 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-import os
 
 from setuptools import find_packages, setup
 
 import versioneer
 
 install_requires = ["cudf_kafka", "cudf"]
-
-CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
-CUDF_KAFKA_ROOT = os.environ.get(
-    "CUDF_KAFKA_ROOT", "../../libcudf_kafka/build"
-)
-CUSTREAMZ_ROOT = os.environ.get("CUSTREAMZ_ROOT", "../../custreamz/build")
-
 
 setup(
     name="custreamz",

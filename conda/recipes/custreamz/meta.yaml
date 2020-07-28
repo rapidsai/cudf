@@ -20,6 +20,7 @@ build:
 requirements:
   host:
     - python
+    - python-confluent-kafka
   run:
     - python
     - streamz 
