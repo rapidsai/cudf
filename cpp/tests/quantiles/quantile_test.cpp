@@ -436,14 +436,14 @@ TYPED_TEST(QuantileUnsupportedTypesTest, TestZeroElements)
 
 TYPED_TEST(QuantileUnsupportedTypesTest, TestOneElements)
 {
-  fixed_width_column_wrapper<TypeParam> input({0});
+  fixed_width_column_wrapper<TypeParam, int32_t> input({0});
 
   EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }
 
 TYPED_TEST(QuantileUnsupportedTypesTest, TestMultipleElements)
 {
-  fixed_width_column_wrapper<TypeParam> input({0, 1, 2});
+  fixed_width_column_wrapper<TypeParam, int32_t> input({0, 1, 2});
 
   EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }

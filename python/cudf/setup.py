@@ -6,10 +6,11 @@ from distutils.sysconfig import get_python_lib
 
 import numpy as np
 import pyarrow as pa
-import versioneer
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
+
+import versioneer
 
 install_requires = ["numba", "cython"]
 
@@ -94,7 +95,8 @@ setup(
     ),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf._lib*", "cudf._cuda*"]), ["*.pxd"],
+        find_packages(include=["cudf._lib*", "cudf._lib.io*", "cudf._cuda*"]),
+        ["*.pxd"],
     ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,

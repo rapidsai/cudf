@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import collections
 import functools
 import pickle
@@ -7,7 +6,7 @@ import pickle
 import pandas as pd
 
 import cudf
-import cudf._lib.groupby as libgroupby
+from cudf._lib import groupby as libgroupby
 from cudf._lib.nvtx import annotate
 from cudf.core.abc import Serializable
 from cudf.utils.utils import cached_property
@@ -65,6 +64,8 @@ class GroupBy(Serializable):
 
     def __iter__(self):
         group_names, offsets, grouped_keys, grouped_values = self._grouped()
+        if isinstance(group_names, cudf.Index):
+            group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
 
@@ -236,7 +237,6 @@ class GroupBy(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-
         kwargs = header["kwargs"]
 
         obj_type = pickle.loads(header["obj_type"])
@@ -565,7 +565,7 @@ class DataFrameGroupBy(GroupBy):
         Parrot       25.0
 
         >>> arrays = [['Falcon', 'Falcon', 'Parrot', 'Parrot'],
-        ['Captive', 'Wild', 'Captive', 'Wild']]
+        ... ['Captive', 'Wild', 'Captive', 'Wild']]
         >>> index = pd.MultiIndex.from_arrays(arrays, names=('Animal', 'Type'))
         >>> df = cudf.DataFrame({'Max Speed': [390., 350., 30., 20.]},
                 index=index)

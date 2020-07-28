@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 import pickle
 import warnings
 from numbers import Number
@@ -12,7 +11,7 @@ import pyarrow as pa
 from numba import cuda, njit
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.column import Column
 from cudf._lib.null_mask import (
     MaskState,
@@ -26,10 +25,11 @@ from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
     is_categorical_dtype,
+    is_list_dtype,
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
@@ -121,18 +121,34 @@ class ColumnBase(Column, Serializable):
     def __len__(self):
         return self.size
 
-    def to_pandas(self):
-        arr = self.data_array_view
-        sr = pd.Series(arr.copy_to_host())
+    def to_pandas(self, index=None, **kwargs):
+        pd_series = self.to_arrow().to_pandas(**kwargs)
+        if index is not None:
+            pd_series.index = index
+        return pd_series
 
-        if self.nullable:
-            mask_bytes = (
-                cudautils.expand_mask_bits(len(self), self.mask_array_view)
-                .copy_to_host()
-                .astype(bool)
-            )
-            sr[~mask_bytes] = None
-        return sr
+    def __iter__(self):
+        cudf.utils.utils.raise_iteration_error(obj=self)
+
+    @property
+    def values_host(self):
+        """
+        Return a numpy representation of the Column.
+        """
+        return self.data_array_view.copy_to_host()
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the Column.
+        """
+        if len(self) == 0:
+            return cupy.asarray([], dtype=self.dtype)
+
+        if self.has_nulls:
+            raise ValueError("Column must have no nulls.")
+
+        return cupy.asarray(self.data_array_view)
 
     def clip(self, lo, hi):
         if is_categorical_dtype(self):
@@ -545,6 +561,8 @@ class ColumnBase(Column, Serializable):
                         "Boolean mask must be of same length as column"
                     )
                 key = column.as_column(cupy.arange(len(self)))[key]
+                if hasattr(value, "__len__") and len(value) == len(self):
+                    value = column.as_column(value)[key]
             nelem = len(key)
 
         if is_scalar(value):
@@ -789,7 +807,7 @@ class ColumnBase(Column, Serializable):
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        import cudf.io.dlpack as dlpack
+        from cudf.io import dlpack as dlpack
 
         return dlpack.to_dlpack(self)
 
@@ -880,12 +898,18 @@ class ColumnBase(Column, Serializable):
         # Re-label self w.r.t. the provided categories
         if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
             labels = sr.label_encoding(cats=dtype.categories)
+            if "ordered" in kwargs:
+                warnings.warn(
+                    "Ignoring the `ordered` parameter passed in `**kwargs`, "
+                    "will be using `ordered` parameter of CategoricalDtype"
+                )
+
             return build_categorical_column(
                 categories=dtype.categories,
                 codes=labels._column,
                 mask=self.mask,
-                ordered=ordered,
-            ).astype(dtype)
+                ordered=dtype.ordered,
+            )
 
         cats = sr.unique().astype(sr.dtype)
         label_dtype = min_unsigned_type(len(cats))
@@ -904,7 +928,7 @@ class ColumnBase(Column, Serializable):
             codes=labels._column,
             mask=self.mask,
             ordered=ordered,
-        ).astype(dtype)
+        )
 
     def as_numerical_column(self, dtype, **kwargs):
         raise NotImplementedError
@@ -1137,6 +1161,16 @@ def build_column(
             offset=offset,
             children=children,
             null_count=null_count,
+        )
+    elif is_list_dtype(dtype):
+        return cudf.core.column.ListColumn(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
         )
     else:
         return cudf.core.column.NumericalColumn(
@@ -1406,10 +1440,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 offset=pa_offset,
             )
         elif isinstance(arbitrary, pa.ListArray):
-            raise NotImplementedError(
-                "cudf doesn't support list like data types"
-            )
-
+            data = cudf.core.column.ListColumn.from_arrow(arbitrary)
         else:
             pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
                 arbitrary
@@ -1621,13 +1652,19 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
+                    native_dtype = dtype
+                    if dtype is None and pd.api.types.infer_dtype(
+                        arbitrary
+                    ) in ("mixed", "mixed-integer"):
+                        native_dtype = "object"
+                    data = np.asarray(
+                        arbitrary,
+                        dtype=native_dtype
+                        if native_dtype is None
+                        else np.dtype(native_dtype),
+                    )
                     data = as_column(
-                        np.asarray(
-                            arbitrary,
-                            dtype=dtype if dtype is None else np.dtype(dtype),
-                        ),
-                        dtype=dtype,
-                        nan_as_null=nan_as_null,
+                        data, dtype=dtype, nan_as_null=nan_as_null
                     )
     return data
 

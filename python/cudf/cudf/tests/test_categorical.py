@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -62,8 +62,8 @@ def test_categorical_integer():
     string = str(sr)
     expect_str = """
 0 a
-1 null
-2 null
+1 <NA>
+2 <NA>
 3 c
 4 a
 dtype: category
@@ -177,8 +177,8 @@ def test_categorical_element_indexing():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    assert list(pdsr) == list(sr)
-    assert list(pdsr.cat.codes) == list(sr.cat.codes)
+    assert_eq(pdsr, sr)
+    assert_eq(pdsr.cat.codes, sr.cat.codes, check_dtype=False)
 
 
 def test_categorical_masking():
@@ -311,7 +311,7 @@ def test_categorical_empty():
     np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_array())
 
     # Test attributes
-    assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)
+    assert_eq(pdsr.cat.categories, sr.cat.categories)
     assert pdsr.cat.ordered == sr.cat.ordered
 
     np.testing.assert_array_equal(
@@ -423,8 +423,8 @@ def test_categorical_add_categories(pd_str_cat, inplace):
     pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
-    assert "d" in list(pd_sr_1.cat.categories)
-    assert "d" in list(cd_sr_1.cat.categories)
+    assert "d" in pd_sr_1.cat.categories.to_list()
+    assert "d" in cd_sr_1.cat.categories.to_pandas().to_list()
 
     assert_eq(pd_sr_1, cd_sr_1)
 
@@ -444,8 +444,8 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
     pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
-    assert "a" not in list(pd_sr_1.cat.categories)
-    assert "a" not in list(cd_sr_1.cat.categories)
+    assert "a" not in pd_sr_1.cat.categories.to_list()
+    assert "a" not in cd_sr_1.cat.categories.to_pandas().to_list()
 
     assert_eq(pd_sr_1, cd_sr_1)
 
@@ -471,6 +471,10 @@ def test_categorical_dataframe_slice_copy():
     [
         pd.Series([1, 2, 3, 89]),
         pd.Series([1, 2, 3, 89, 3, 1, 89], dtype="category"),
+        pd.Series(["1", "2", "3", "4", "5"], dtype="category"),
+        pd.Series(["1.0", "2.5", "3.001", "9"], dtype="category"),
+        pd.Series(["1", "2", "3", None, "4", "5"], dtype="category"),
+        pd.Series(["1.0", "2.5", "3.001", None, "9"], dtype="category"),
         pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
         pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
         pd.Series([1, 2, 3, 89, None, np.nan, np.NaN], dtype="float64"),
@@ -488,6 +492,8 @@ def test_categorical_dataframe_slice_copy():
         pd.CategoricalDtype(categories=["aa", "bb", "c"]),
         pd.CategoricalDtype(categories=["a", "bb", "c"]),
         pd.CategoricalDtype(categories=["a", "b", "c"]),
+        pd.CategoricalDtype(categories=["1", "2", "3", "4"]),
+        pd.CategoricalDtype(categories=["1.0", "2.5", "3.001", "9"]),
         pd.CategoricalDtype(categories=[]),
     ],
 )
@@ -641,6 +647,7 @@ def test_astype_dtype(data, expected):
         (["a", "bd", "ef"], ["asdfsdf", "bddf", "eff"]),
         ([1, 2, 3], []),
         ([0.0, 6.7, 10.0], []),
+        (["a", "bd", "ef"], []),
     ],
 )
 def test_add_categories(data, add):

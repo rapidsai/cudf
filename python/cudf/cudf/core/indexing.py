@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import cupy
 import numpy as np
 import pandas as pd
@@ -74,9 +73,9 @@ class _SeriesIlocIndexer(object):
         if isinstance(arg, tuple):
             arg = list(arg)
         data = self._sr._column[arg]
-        index = self._sr.index.take(arg)
         if is_scalar(data) or data is None:
             return data
+        index = self._sr.index.take(arg)
         return self._sr._copy_construct(data=data, index=index)
 
     def __setitem__(self, key, value):
@@ -123,6 +122,9 @@ class _SeriesLocIndexer(object):
 
     def __setitem__(self, key, value):
         key = self._loc_to_iloc(key)
+        if isinstance(value, (pd.Series, cudf.Series)):
+            value = cudf.Series(value)
+            value = value._align_to_index(self._sr.index, how="right")
         self._sr.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
@@ -270,11 +272,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     @annotate("LOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
-        from cudf.core.dataframe import DataFrame
-        from cudf.core.column import column
-        from cudf.core.index import as_index
-        from cudf import MultiIndex
         from uuid import uuid4
+
+        from cudf import MultiIndex
+        from cudf.core.column import column
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.index import as_index
 
         # Step 1: Gather columns
         if isinstance(arg, tuple):
@@ -429,11 +432,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return self._downcast_to_series(df, arg)
 
         if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):
-            from cudf.core.index import RangeIndex
-
-            slice_len = len(self._df)
-            start, stop, step = arg[0].indices(slice_len)
-            df._index = RangeIndex(start, stop)
+            df._index = as_index(self._df.index[arg[0]])
         return df
 
     @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")

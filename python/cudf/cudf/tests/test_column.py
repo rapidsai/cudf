@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -7,9 +6,9 @@ import pyarrow as pa
 import pytest
 
 import cudf
-import cudf.utils.dtypes as dtypeutils
 from cudf.core.column.column import as_column
 from cudf.tests.utils import assert_eq
+from cudf.utils import dtypes as dtypeutils
 
 dtypes = sorted(
     list(
@@ -85,13 +84,23 @@ def test_column_series_multi_dim(data):
         cudf.core.column.as_column(data)
 
 
-@pytest.mark.parametrize("data", [["1.0", "2", -3], ["1", "0.11", 0.1]])
-def test_column_series_misc_input(data):
-    psr = pd.Series(data)
-    sr = cudf.Series(data)
-
-    assert_eq(psr.dtype, sr.dtype)
-    assert_eq(psr.astype("str"), sr)
+@pytest.mark.parametrize(
+    ("data", "error"),
+    [
+        ([1, "1.0", "2", -3], TypeError),
+        ([np.nan, 0, "null", cp.nan], TypeError),
+        (
+            [np.int32(4), np.float64(1.5), np.float32(1.290994), np.int8(0)],
+            None,
+        ),
+    ],
+)
+def test_column_mixed_dtype(data, error):
+    if error is None:
+        cudf.Series(data)
+    else:
+        with pytest.raises(TypeError):
+            cudf.Series(data)
 
 
 @pytest.mark.parametrize("nan_as_null", [True, False])

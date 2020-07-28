@@ -414,12 +414,8 @@ struct read_parquet_args {
   /// Names of column to read; empty is all
   std::vector<std::string> columns;
 
-  /// Row group to read; -1 is all
-  size_type row_group = -1;
-  /// Number of row groups to read starting from row_group; default is one if row_group >= 0
-  size_type row_group_count = -1;
   /// List of individual row groups to read (ignored if empty)
-  std::vector<size_type> row_group_list;
+  std::vector<std::vector<size_type>> row_groups;
   /// Rows to skip from the start; -1 is none
   size_type skip_rows = -1;
   /// Rows to read; -1 is all
@@ -769,8 +765,16 @@ void write_parquet_chunked(table_view const& table,
  *
  * @param[in] state Opaque state information about the writer process. Must be the same pointer
  * returned from write_parquet_chunked_begin()
+ * @param[in] return_filemetadata If true, return the raw file metadata
+ * @param[in] metadata_out_file_path Column chunks file path to be set in the raw output metadata
+ *
+ * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
+ *         requested in write_parquet_args (empty blob otherwise)
  */
-void write_parquet_chunked_end(std::shared_ptr<detail::parquet::pq_chunked_state>& state);
+std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
+  std::shared_ptr<detail::parquet::pq_chunked_state>& state,
+  bool return_filemetadata                  = false,
+  const std::string& metadata_out_file_path = "");
 
 }  // namespace io
 }  // namespace cudf

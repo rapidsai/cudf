@@ -1,7 +1,9 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import numpy as np
 import pandas as pd
 import pytest
 
+import cudf
 from cudf.core import DataFrame, Series
 from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq
 
@@ -13,24 +15,24 @@ def test_series_replace():
     a2 = np.array([5, 1, 2, 3, 4])
     sr1 = Series(a1)
     sr2 = sr1.replace(0, 5)
-    np.testing.assert_equal(sr2.to_array(), a2)
+    assert_eq(a2, sr2.to_array())
 
     # Categorical
     psr3 = pd.Series(["one", "two", "three"], dtype="category")
     psr4 = psr3.replace("one", "two")
     sr3 = Series.from_pandas(psr3)
     sr4 = sr3.replace("one", "two")
-    pd.testing.assert_series_equal(sr4.to_pandas(), psr4)
+    assert_eq(psr4, sr4)
 
     psr5 = psr3.replace("one", "five")
     sr5 = sr3.replace("one", "five")
 
-    pd.testing.assert_series_equal(sr5.to_pandas(), psr5)
+    assert_eq(psr5, sr5)
 
     # List input
     a6 = np.array([5, 6, 2, 3, 4])
     sr6 = sr1.replace([0, 1], [5, 6])
-    np.testing.assert_equal(sr6.to_array(), a6)
+    assert_eq(a6, sr6.to_array())
 
     with pytest.raises(TypeError):
         sr1.replace([0, 1], [5.5, 6.5])
@@ -38,7 +40,7 @@ def test_series_replace():
     # Series input
     a8 = np.array([5, 5, 5, 3, 4])
     sr8 = sr1.replace(sr1[:3], 5)
-    np.testing.assert_equal(sr8.to_array(), a8)
+    assert_eq(a8, sr8.to_array())
 
     # large input containing null
     sr9 = Series(list(range(400)) + [None])
@@ -68,12 +70,12 @@ def test_series_replace_with_nulls():
     a2 = np.array([-10, 1, 2, 3, 4])
     sr1 = Series(a1)
     sr2 = sr1.replace(0, None).fillna(-10)
-    np.testing.assert_equal(sr2.to_array(), a2)
+    assert_eq(a2, sr2.to_array())
 
     # List input
     a6 = np.array([-10, 6, 2, 3, 4])
     sr6 = sr1.replace([0, 1], [None, 6]).fillna(-10)
-    np.testing.assert_equal(sr6.to_array(), a6)
+    assert_eq(a6, sr6.to_array())
 
     sr1 = Series([0, 1, 2, 3, 4, None])
     with pytest.raises(TypeError):
@@ -82,11 +84,11 @@ def test_series_replace_with_nulls():
     # Series input
     a8 = np.array([-10, -10, -10, 3, 4, -10])
     sr8 = sr1.replace(sr1[:3], None).fillna(-10)
-    np.testing.assert_equal(sr8.to_array(), a8)
+    assert_eq(a8, sr8.to_array())
 
     a9 = np.array([-10, 6, 2, 3, 4, -10])
     sr9 = sr1.replace([0, 1], [None, 6]).fillna(-10)
-    np.testing.assert_equal(sr9.to_array(), a9)
+    assert_eq(a9, sr9.to_array())
 
 
 def test_dataframe_replace():
@@ -95,7 +97,7 @@ def test_dataframe_replace():
     gdf1 = DataFrame.from_pandas(pdf1)
     pdf2 = pdf1.replace(0, 4)
     gdf2 = gdf1.replace(0, 4)
-    pd.testing.assert_frame_equal(gdf2.to_pandas(), pdf2)
+    assert_eq(gdf2, pdf2)
 
     # categorical
     pdf4 = pd.DataFrame(
@@ -105,25 +107,25 @@ def test_dataframe_replace():
     gdf4 = DataFrame.from_pandas(pdf4)
     pdf5 = pdf4.replace("two", "three")
     gdf5 = gdf4.replace("two", "three")
-    pd.testing.assert_frame_equal(gdf5.to_pandas(), pdf5)
+    assert_eq(gdf5, pdf5)
 
     # list input
     pdf6 = pdf1.replace([0, 1], [4, 5])
     gdf6 = gdf1.replace([0, 1], [4, 5])
-    pd.testing.assert_frame_equal(gdf6.to_pandas(), pdf6)
+    assert_eq(gdf6, pdf6)
 
     pdf7 = pdf1.replace([0, 1], 4)
     gdf7 = gdf1.replace([0, 1], 4)
-    pd.testing.assert_frame_equal(gdf7.to_pandas(), pdf7)
+    assert_eq(gdf7, pdf7)
 
     # dict input:
     pdf8 = pdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
     gdf8 = gdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
-    pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
+    assert_eq(gdf8, pdf8)
 
     pdf9 = pdf1.replace({"a": 0}, {"a": 4})
     gdf9 = gdf1.replace({"a": 0}, {"a": 4})
-    pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf9)
+    assert_eq(gdf9, pdf9)
 
 
 def test_dataframe_replace_with_nulls():
@@ -132,25 +134,25 @@ def test_dataframe_replace_with_nulls():
     gdf1 = DataFrame.from_pandas(pdf1)
     pdf2 = pdf1.replace(0, 4)
     gdf2 = gdf1.replace(0, None).fillna(4)
-    pd.testing.assert_frame_equal(gdf2.to_pandas(), pdf2)
+    assert_eq(gdf2, pdf2)
 
     # list input
     pdf6 = pdf1.replace([0, 1], [4, 5])
     gdf6 = gdf1.replace([0, 1], [4, None]).fillna(5)
-    pd.testing.assert_frame_equal(gdf6.to_pandas(), pdf6)
+    assert_eq(gdf6, pdf6)
 
     pdf7 = pdf1.replace([0, 1], 4)
     gdf7 = gdf1.replace([0, 1], None).fillna(4)
-    pd.testing.assert_frame_equal(gdf7.to_pandas(), pdf7)
+    assert_eq(gdf7, pdf7)
 
     # dict input:
     pdf8 = pdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
     gdf8 = gdf1.replace({"a": 0, "b": 0}, {"a": None, "b": 5}).fillna(4)
-    pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
+    assert_eq(gdf8, pdf8)
 
     gdf1 = DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, None]})
     gdf9 = gdf1.replace([0, 1], [4, 5]).fillna(3)
-    pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf6)
+    assert_eq(gdf9, pdf6)
 
 
 def test_replace_strings():
@@ -159,145 +161,290 @@ def test_replace_strings():
     assert_eq(pdf.replace("a", "e"), gdf.replace("a", "e"))
 
 
+@pytest.mark.parametrize(
+    "psr",
+    [pd.Series([0, 1, None, 2, None]), pd.Series([0, 1, np.nan, 2, np.nan])],
+)
 @pytest.mark.parametrize("data_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("fill_dtype", NUMERIC_TYPES)
-@pytest.mark.parametrize("fill_type", ["scalar", "series"])
-@pytest.mark.parametrize("null_value", [None, np.nan])
+@pytest.mark.parametrize("fill_value", [10, pd.Series([10, 20, 30, 40, 50])])
 @pytest.mark.parametrize("inplace", [True, False])
 def test_series_fillna_numerical(
-    data_dtype, fill_dtype, fill_type, null_value, inplace
+    psr, data_dtype, fill_dtype, fill_value, inplace
 ):
     # TODO: These tests should use Pandas' nullable int type
     # when we support a recent enough version of Pandas
     # https://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
+    if np.dtype(data_dtype).kind not in ("i"):
+        psr = psr.astype(data_dtype)
 
-    if fill_type == "scalar":
-        fill_value = np.random.randint(0, 5)
-        expect = np.array([0, 1, fill_value, 2, fill_value], dtype=data_dtype)
-    elif fill_type == "series":
-        data = np.random.randint(0, 5, (5,))
-        fill_value = pd.Series(data, dtype=data_dtype)
-        expect = np.array(
-            [0, 1, fill_value[2], 2, fill_value[4]], dtype=data_dtype
-        )
+    gsr = cudf.from_pandas(psr)
 
-    sr = Series([0, 1, null_value, 2, null_value], dtype=data_dtype)
-    result = sr.fillna(fill_value, inplace=inplace)
+    if isinstance(fill_value, pd.Series):
+        fill_value_cudf = cudf.from_pandas(fill_value)
+    else:
+        fill_value_cudf = fill_value
 
-    if inplace:
-        result = sr
-
-    got = result.to_array()
-
-    np.testing.assert_equal(expect, got)
-
-
-@pytest.mark.parametrize("fill_type", ["scalar", "series"])
-@pytest.mark.parametrize("null_value", [None, np.nan])
-@pytest.mark.parametrize("inplace", [True, False])
-def test_fillna_categorical(fill_type, null_value, inplace):
-    data = pd.Series(
-        ["a", "b", "a", null_value, "c", null_value], dtype="category"
-    )
-    sr = Series.from_pandas(data)
-
-    if fill_type == "scalar":
-        fill_value = "c"
-        expect = pd.Series(["a", "b", "a", "c", "c", "c"], dtype="category")
-    elif fill_type == "series":
-        fill_value = pd.Series(
-            ["c", "c", "c", "c", "c", "a"], dtype="category"
-        )
-        expect = pd.Series(["a", "b", "a", "c", "c", "a"], dtype="category")
-
-    got = sr.fillna(fill_value, inplace=inplace)
+    expected = psr.fillna(fill_value, inplace=inplace)
+    actual = gsr.fillna(fill_value_cudf, inplace=inplace)
 
     if inplace:
-        got = sr
+        expected = psr
+        actual = gsr
 
-    assert_eq(expect, got)
+    assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("fill_type", ["scalar", "series"])
+@pytest.mark.parametrize(
+    "psr",
+    [
+        pd.Series(["a", "b", "a", None, "c", None], dtype="category"),
+        pd.Series(
+            ["a", "b", "a", None, "c", None],
+            dtype="category",
+            index=["q", "r", "z", "a", "b", "c"],
+        ),
+        pd.Series(
+            ["a", "b", "a", None, "c", None],
+            dtype="category",
+            index=["x", "t", "p", "q", "r", "z"],
+        ),
+        pd.Series(["a", "b", "a", np.nan, "c", np.nan], dtype="category"),
+        pd.Series(
+            [None, None, None, None, None, None, "a", "b", "c"],
+            dtype="category",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        "c",
+        pd.Series(["c", "c", "c", "c", "c", "a"], dtype="category"),
+        pd.Series(
+            ["a", "b", "a", None, "c", None],
+            dtype="category",
+            index=["x", "t", "p", "q", "r", "z"],
+        ),
+        pd.Series(
+            ["a", "b", "a", None, "c", None],
+            dtype="category",
+            index=["q", "r", "z", "a", "b", "c"],
+        ),
+        pd.Series(["a", "b", "a", None, "c", None], dtype="category"),
+        pd.Series(["a", "b", "a", np.nan, "c", np.nan], dtype="category"),
+    ],
+)
 @pytest.mark.parametrize("inplace", [True, False])
-def test_fillna_datetime(fill_type, inplace):
-    psr = pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y"))
+def test_fillna_categorical(psr, fill_value, inplace):
 
-    if fill_type == "scalar":
-        fill_value = pd.Timestamp("2010-01-02")
-    elif fill_type == "series":
-        fill_value = psr + pd.Timedelta("1d")
+    gsr = Series.from_pandas(psr)
 
-    psr[[5, 9]] = None
-    sr = Series.from_pandas(psr)
+    if isinstance(fill_value, pd.Series):
+        fill_value_cudf = cudf.from_pandas(fill_value)
+    else:
+        fill_value_cudf = fill_value
 
-    expect = psr.fillna(fill_value)
-    got = sr.fillna(fill_value, inplace=inplace)
+    expected = psr.fillna(fill_value, inplace=inplace)
+    got = gsr.fillna(fill_value_cudf, inplace=inplace)
 
     if inplace:
-        got = sr
+        expected = psr
+        got = gsr
 
-    assert_eq(expect, got)
+    assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("fill_type", ["scalar", "series", "dict"])
+@pytest.mark.parametrize(
+    "psr",
+    [
+        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y")),
+        pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
+        pd.Series(
+            [
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "2011-10-10",
+                "2010-01-01",
+                "2010-01-02",
+                "2010-01-04",
+                "2010-11-01",
+            ],
+            dtype="datetime64[ns]",
+        ),
+        pd.Series(
+            [
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "2011-10-10",
+                "2010-01-01",
+                "2010-01-02",
+                "2010-01-04",
+                "2010-11-01",
+            ],
+            dtype="datetime64[ns]",
+            index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        pd.Timestamp("2010-01-02"),
+        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y"))
+        + pd.Timedelta("1d"),
+        pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
+        pd.Series(
+            [
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "2011-10-10",
+                "2010-01-01",
+                "2010-01-02",
+                "2010-01-04",
+                "2010-11-01",
+            ],
+            dtype="datetime64[ns]",
+        ),
+        pd.Series(
+            [
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "2011-10-10",
+                "2010-01-01",
+                "2010-01-02",
+                "2010-01-04",
+                "2010-11-01",
+            ],
+            dtype="datetime64[ns]",
+            index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"],
+        ),
+    ],
+)
 @pytest.mark.parametrize("inplace", [True, False])
-def test_fillna_dataframe(fill_type, inplace):
-    pdf = pd.DataFrame({"a": [1, 2, None], "b": [None, None, 5]})
+def test_fillna_datetime(psr, fill_value, inplace):
+    gsr = cudf.from_pandas(psr)
+
+    if isinstance(fill_value, pd.Series):
+        fill_value_cudf = cudf.from_pandas(fill_value)
+    else:
+        fill_value_cudf = fill_value
+
+    expected = psr.fillna(fill_value, inplace=inplace)
+    got = gsr.fillna(fill_value_cudf, inplace=inplace)
+
+    if inplace:
+        got = gsr
+        expected = psr
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame({"a": [1, 2, None], "b": [None, None, 5]}),
+        pd.DataFrame(
+            {"a": [1, 2, None], "b": [None, None, 5]}, index=["a", "p", "z"]
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "value",
+    [
+        10,
+        pd.Series([10, 20, 30]),
+        pd.Series([3, 4, 5]),
+        pd.Series([10, 20, 30], index=["z", "a", "p"]),
+        {"a": 5, "b": pd.Series([3, 4, 5])},
+        {"a": 5001},
+        {"b": pd.Series([11, 22, 33], index=["a", "p", "z"])},
+        {"a": 5, "b": pd.Series([3, 4, 5], index=["a", "p", "z"])},
+        {"c": 100},
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_fillna_dataframe(df, value, inplace):
+    pdf = df
     gdf = DataFrame.from_pandas(pdf)
 
-    if fill_type == "scalar":
-        fill_value_pd = 5
-        fill_value_cudf = fill_value_pd
-    elif fill_type == "series":
-        fill_value_pd = pd.Series([3, 4, 5])
-        fill_value_cudf = Series.from_pandas(fill_value_pd)
+    fill_value_pd = value
+    if isinstance(fill_value_pd, (pd.Series, pd.DataFrame)):
+        fill_value_cudf = cudf.from_pandas(fill_value_pd)
+    elif isinstance(fill_value_pd, dict):
+        fill_value_cudf = {}
+        for key in fill_value_pd:
+            temp_val = fill_value_pd[key]
+            if isinstance(temp_val, cudf.Series):
+                temp_val = cudf.from_pandas(temp_val)
+            fill_value_cudf[key] = temp_val
     else:
-        fill_value_pd = {"a": 5, "b": pd.Series([3, 4, 5])}
-        fill_value_cudf = {
-            "a": fill_value_pd["a"],
-            "b": Series.from_pandas(fill_value_pd["b"]),
-        }
+        fill_value_cudf = value
 
-    # https://github.com/pandas-dev/pandas/issues/27197
-    # pandas df.fill_value with series is not working
-
-    if isinstance(fill_value_pd, pd.Series):
-        expect = pd.DataFrame()
-        for col in pdf.columns:
-            expect[col] = pdf[col].fillna(fill_value_pd)
-    else:
-        expect = pdf.fillna(fill_value_pd)
-
+    expect = pdf.fillna(fill_value_pd, inplace=inplace)
     got = gdf.fillna(fill_value_cudf, inplace=inplace)
 
     if inplace:
         got = gdf
+        expect = pdf
 
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("fill_type", ["scalar", "series"])
+@pytest.mark.parametrize(
+    "psr",
+    [
+        pd.Series(["a", "b", "c", "d"]),
+        pd.Series([None] * 4, dtype="object"),
+        pd.Series(["z", None, "z", None]),
+        pd.Series(["x", "y", None, None, None]),
+        pd.Series([None, None, None, "i", "P"]),
+    ],
+)
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        "a",
+        pd.Series(["a", "b", "c", "d"]),
+        pd.Series(["z", None, "z", None]),
+        pd.Series([None] * 4, dtype="object"),
+        pd.Series(["x", "y", None, None, None]),
+        pd.Series([None, None, None, "i", "P"]),
+    ],
+)
 @pytest.mark.parametrize("inplace", [True, False])
-def test_fillna_string(fill_type, inplace):
-    psr = pd.Series(["z", None, "z", None])
+def test_fillna_string(psr, fill_value, inplace):
+    gsr = cudf.from_pandas(psr)
 
-    if fill_type == "scalar":
-        fill_value_pd = "a"
-        fill_value_cudf = fill_value_pd
-    elif fill_type == "series":
-        fill_value_pd = pd.Series(["a", "b", "c", "d"])
-        fill_value_cudf = Series.from_pandas(fill_value_pd)
+    if isinstance(fill_value, pd.Series):
+        fill_value_cudf = cudf.from_pandas(fill_value)
+    else:
+        fill_value_cudf = fill_value
 
-    sr = Series.from_pandas(psr)
-
-    expect = psr.fillna(fill_value_pd)
-    got = sr.fillna(fill_value_cudf, inplace=inplace)
+    expected = psr.fillna(fill_value, inplace=inplace)
+    got = gsr.fillna(fill_value_cudf, inplace=inplace)
 
     if inplace:
-        got = sr
+        expected = psr
+        got = gsr
 
-    assert_eq(expect, got)
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("data_dtype", INTEGER_TYPES)
@@ -720,3 +867,44 @@ def test_multiindex_clip(lower, upper, inplace):
         assert_eq(df, index.to_frame(index=False))
     else:
         assert_eq(expected, got.to_frame(index=False))
+
+
+@pytest.mark.parametrize(
+    "data", [[1, 2.0, 3, 4, None, 1, None, 10, None], ["a", "b", "c"]]
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        None,
+        [1, 2, 3],
+        ["a", "b", "z"],
+        ["a", "b", "c", "d", "e", "f", "g", "l", "m"],
+    ],
+)
+@pytest.mark.parametrize("value", [[1, 2, 3, 4, None, 1, None, 10, None]])
+def test_series_fillna(data, index, value):
+    psr = pd.Series(
+        data,
+        index=index if index is not None and len(index) == len(data) else None,
+    )
+    gsr = Series(
+        data,
+        index=index if index is not None and len(index) == len(data) else None,
+    )
+
+    expect = psr.fillna(pd.Series(value))
+    got = gsr.fillna(Series(value))
+    assert_eq(expect, got)
+
+
+def test_series_fillna_error():
+    psr = pd.Series([1, 2, None, 3, None])
+    gsr = cudf.from_pandas(psr)
+
+    try:
+        psr.fillna(pd.DataFrame({"a": [1, 2, 3]}))
+    except Exception as e:
+        with pytest.raises(type(e), match=str(e)):
+            gsr.fillna(cudf.DataFrame({"a": [1, 2, 3]}))
+    else:
+        raise AssertionError("Expected psr.fillna to fail")

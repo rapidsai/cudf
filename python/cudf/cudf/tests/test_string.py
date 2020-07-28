@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
 
@@ -9,12 +8,12 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-import cudf.utils.dtypes as dtypeutils
 from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.utils import dtypes as dtypeutils
 
 data_list = [
     ["AbC", "de", "FGHI", "j", "kLm"],
@@ -154,8 +153,8 @@ def test_string_repr(ps_gs, item):
     expect = str(expect_out)
     got = str(got_out)
 
-    # if isinstance(expect_out, pd.Series):
-    #     expect = expect.replace("object", "str")
+    if got_out is not None and len(got_out) > 1:
+        expect = expect.replace("None", "<NA>")
 
     assert expect == got
 
@@ -1114,6 +1113,51 @@ def test_string_char_types(type_op, data):
     assert_eq(getattr(gs.str, type_op)(), getattr(ps.str, type_op)())
 
 
+def test_string_filter_alphanum():
+    data = ["1234567890", "!@#$%^&*()", ",./<>?;:[]}{|+=", "abc DEF"]
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if str.isalnum(c):
+                rs = rs + c
+        expected.append(rs)
+
+    gs = Series(data)
+    assert_eq(gs.str.filter_alphanum(), Series(expected))
+
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if not str.isalnum(c):
+                rs = rs + c
+        expected.append(rs)
+    assert_eq(gs.str.filter_alphanum(keep=False), Series(expected))
+
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if str.isalnum(c):
+                rs = rs + c
+            else:
+                rs = rs + "*"
+        expected.append(rs)
+    assert_eq(gs.str.filter_alphanum("*"), Series(expected))
+
+    expected = []
+    for st in data:
+        rs = ""
+        for c in st:
+            if not str.isalnum(c):
+                rs = rs + c
+            else:
+                rs = rs + "*"
+        expected.append(rs)
+    assert_eq(gs.str.filter_alphanum("*", keep=False), Series(expected))
+
+
 @pytest.mark.parametrize(
     "case_op", ["title", "capitalize", "lower", "upper", "swapcase"]
 )
@@ -1214,9 +1258,9 @@ def test_strings_rsplit(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
 
-    pd.testing.assert_frame_equal(
+    assert_eq(
         ps.str.rsplit(n=n, expand=expand).reset_index(),
-        gs.str.rsplit(n=n, expand=expand).to_pandas().reset_index(),
+        gs.str.rsplit(n=n, expand=expand).reset_index(),
         check_index_type=False,
     )
     assert_eq(
@@ -1250,9 +1294,9 @@ def test_strings_split(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
 
-    pd.testing.assert_frame_equal(
+    assert_eq(
         ps.str.split(n=n, expand=expand).reset_index(),
-        gs.str.split(n=n, expand=expand).to_pandas().reset_index(),
+        gs.str.split(n=n, expand=expand).reset_index(),
         check_index_type=False,
     )
 
@@ -2083,6 +2127,41 @@ def test_string_int_to_ipv4():
 
     got = Series(gsr._column.int2ip())
 
+    assert_eq(expected, got)
+
+
+def test_string_isipv4():
+    gsr = Series(
+        [
+            "",
+            None,
+            "1...1",
+            "141.168.0.1",
+            "127.0.0.1",
+            "1.255.0.1",
+            "256.27.28.26",
+            "25.257.28.26",
+            "25.27.258.26",
+            "25.27.28.256",
+            "-1.0.0.0",
+        ]
+    )
+    got = gsr.str.isipv4()
+    expected = Series(
+        [
+            False,
+            None,
+            False,
+            True,
+            True,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+        ]
+    )
     assert_eq(expected, got)
 
 

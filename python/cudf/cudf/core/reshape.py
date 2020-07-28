@@ -1,11 +1,14 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
-
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import numpy as np
 import pandas as pd
 
 import cudf
 from cudf.core import DataFrame, Index, Series
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.column import (
+    CategoricalColumn,
+    as_column,
+    build_categorical_column,
+)
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
@@ -76,14 +79,97 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     ignore_index : bool, default False
         Set True to ignore the index of the *objs* and provide a
         default range index instead.
+    sort : bool, default False
+        Sort non-concatenation axis if it is not already aligned.
 
     Returns
     -------
     A new object of like type with rows from each object in ``objs``.
-    """
 
-    if sort not in (None, False):
-        raise NotImplementedError("sort parameter is not yet supported")
+    Examples
+    --------
+    Combine two ``Series``.
+
+    >>> import cudf
+    >>> s1 = cudf.Series(['a', 'b'])
+    >>> s2 = cudf.Series(['c', 'd'])
+    >>> s1
+    0    a
+    1    b
+    dtype: object
+    >>> s2
+    0    c
+    1    d
+    dtype: object
+    >>> cudf.concat([s1, s2])
+    0    a
+    1    b
+    0    c
+    1    d
+    dtype: object
+
+    Clear the existing index and reset it in the
+    result by setting the ``ignore_index`` option to ``True``.
+
+    >>> cudf.concat([s1, s2], ignore_index=True)
+    0    a
+    1    b
+    2    c
+    3    d
+    dtype: object
+
+    Combine two DataFrame objects with identical columns.
+
+    >>> df1 = cudf.DataFrame([['a', 1], ['b', 2]],
+    ...                    columns=['letter', 'number'])
+    >>> df1
+      letter  number
+    0      a       1
+    1      b       2
+    >>> df2 = cudf.DataFrame([['c', 3], ['d', 4]],
+    ...                    columns=['letter', 'number'])
+    >>> df2
+      letter  number
+    0      c       3
+    1      d       4
+    >>> cudf.concat([df1, df2])
+      letter  number
+    0      a       1
+    1      b       2
+    0      c       3
+    1      d       4
+
+    Combine DataFrame objects with overlapping columns and return
+    everything. Columns outside the intersection will
+    be filled with ``null`` values.
+
+    >>> df3 = cudf.DataFrame([['c', 3, 'cat'], ['d', 4, 'dog']],
+    ...                    columns=['letter', 'number', 'animal'])
+    >>> df3
+    letter  number animal
+    0      c       3    cat
+    1      d       4    dog
+    >>> cudf.concat([df1, df3], sort=False)
+      letter  number animal
+    0      a       1   None
+    1      b       2   None
+    0      c       3    cat
+    1      d       4    dog
+
+    Combine ``DataFrame`` objects horizontally along the
+    x axis by passing in ``axis=1``.
+
+    >>> df4 = cudf.DataFrame([['bird', 'polly'], ['monkey', 'george']],
+    ...                    columns=['animal', 'name'])
+    >>> df4
+       animal    name
+    0    bird   polly
+    1  monkey  george
+    >>> cudf.concat([df1, df4], axis=1)
+      letter  number  animal    name
+    0      a       1    bird   polly
+    1      b       2  monkey  george
+    """
 
     if not objs:
         raise ValueError("No objects to concatenate")
@@ -92,7 +178,14 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
 
     # Return for single object
     if len(objs) == 1:
-        return objs[0]
+        if ignore_index:
+            result = cudf.DataFrame(
+                data=objs[0]._data.copy(deep=True),
+                index=cudf.RangeIndex(len(objs[0])),
+            )
+        else:
+            result = objs[0].copy()
+        return result
 
     if len(objs) == 0:
         raise ValueError("All objects passed were None")
@@ -161,9 +254,28 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             )
 
     if typ is DataFrame:
-        return DataFrame._concat(objs, axis=axis, ignore_index=ignore_index)
+        objs = [obj for obj in objs if obj.shape != (0, 0)]
+        if len(objs) == 0:
+            # If objs is empty, that indicates all of
+            # objs are empty dataframes.
+            return cudf.DataFrame()
+        elif len(objs) == 1:
+            if ignore_index:
+                result = cudf.DataFrame(
+                    data=objs[0]._data.copy(deep=True),
+                    index=cudf.RangeIndex(len(objs[0])),
+                )
+            else:
+                result = objs[0].copy()
+            return result
+        else:
+            return DataFrame._concat(
+                objs, axis=axis, ignore_index=ignore_index, sort=sort
+            )
     elif typ is Series:
-        return Series._concat(objs, axis=axis)
+        return Series._concat(
+            objs, axis=axis, index=None if ignore_index else True
+        )
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, Index):
@@ -210,19 +322,36 @@ def melt(
     Examples
     --------
     >>> import cudf
-    >>> import numpy as np
-    >>> df = cudf.DataFrame({'A': {0: 1, 1: 1, 2: 5},
-    ...                      'B': {0: 1, 1: 3, 2: 6},
-    ...                      'C': {0: 1.0, 1: np.nan, 2: 4.0},
-    ...                      'D': {0: 2.0, 1: 5.0, 2: 6.0}})
-    >>> cudf.melt(frame=df, id_vars=['A', 'B'], value_vars=['C', 'D'])
-         A    B variable value
-    0    1    1        C   1.0
-    1    1    3        C
-    2    5    6        C   4.0
-    3    1    1        D   2.0
-    4    1    3        D   5.0
-    5    5    6        D   6.0
+    >>> df = cudf.DataFrame({'A': ['a', 'b', 'c'],
+    ...                      'B': [1, 3, 5],
+    ...                      'C': [2, 4, 6]})
+    >>> df
+       A  B  C
+    0  a  1  2
+    1  b  3  4
+    2  c  5  6
+    >>> cudf.melt(df, id_vars=['A'], value_vars=['B'])
+       A variable  value
+    0  a        B      1
+    1  b        B      3
+    2  c        B      5
+    >>> cudf.melt(df, id_vars=['A'], value_vars=['B', 'C'])
+       A variable  value
+    0  a        B      1
+    1  b        B      3
+    2  c        B      5
+    3  a        C      2
+    4  b        C      4
+    5  c        C      6
+
+    The names of ‘variable’ and ‘value’ columns can be customized:
+
+    >>> cudf.melt(df, id_vars=['A'], value_vars=['B'],
+    ...         var_name='myVarname', value_name='myValname')
+       A myVarname  myValname
+    0  a         B          1
+    1  b         B          3
+    2  c         B          5
     """
     assert col_level in (None,)
 
@@ -338,7 +467,7 @@ def get_dummies(
     cats={},
     sparse=False,
     drop_first=False,
-    dtype="int8",
+    dtype="uint8",
 ):
     """ Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
@@ -355,7 +484,7 @@ def get_dummies(
     prefix_sep : str, dict, or sequence, optional, default '_'
         separator to use when appending prefixes
     dummy_na : boolean, optional
-        Right now this is NON-FUNCTIONAL argument in rapids.
+        Add a column to indicate Nones, if False Nones are ignored.
     cats : dict, optional
         dictionary mapping column names to sequences of integers representing
         that column's category. See `cudf.DataFrame.one_hot_encoding` for more
@@ -369,11 +498,41 @@ def get_dummies(
         columns. Note this is different from pandas default behavior, which
         encodes all columns with dtype object or categorical
     dtype : str, optional
-        output dtype, default 'int8'
-    """
-    if dummy_na:
-        raise NotImplementedError("dummy_na is not supported yet")
+        output dtype, default 'uint8'
 
+    Examples
+    --------
+    >>> import cudf
+    >>> df = cudf.DataFrame({"a": ["value1", "value2", None], "b": [0, 0, 0]})
+    >>> cudf.get_dummies(df)
+       b  a_value1  a_value2
+    0  0         1         0
+    1  0         0         1
+    2  0         0         0
+
+    >>> cudf.get_dummies(df, dummy_na=True)
+       b  a_None  a_value1  a_value2
+    0  0       0         1         0
+    1  0       0         0         1
+    2  0       1         0         0
+
+    >>> import numpy as np
+    >>> df = cudf.DataFrame({"a":cudf.Series([1, 2, np.nan, None],
+    ...                     nan_as_null=False)})
+    >>> df
+          a
+    0   1.0
+    1   2.0
+    2   NaN
+    3  null
+
+    >>> cudf.get_dummies(df, dummy_na=True, columns=["a"])
+       a_1.0  a_2.0  a_nan  a_null
+    0      1      0      0       0
+    1      0      1      0       0
+    2      0      0      1       0
+    3      0      0      0       1
+    """
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
@@ -424,10 +583,15 @@ def get_dummies(
     else:
         result_df = df.drop(labels=columns)
         for name in columns:
-            if hasattr(df[name]._column, "categories"):
+            if isinstance(df[name]._column, CategoricalColumn):
                 unique = df[name]._column.categories
             else:
                 unique = df[name].unique()
+
+            if not dummy_na:
+                if np.issubdtype(unique.dtype, np.floating):
+                    unique = unique.nans_to_nulls()
+                unique = unique.dropna()
 
             col_enc_df = df.one_hot_encoding(
                 name,

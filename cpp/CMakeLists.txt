@@ -138,7 +138,6 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
-option(BUILD_CUDF_KAFKA "Configure CMake to build cudf_kafka" OFF)
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
@@ -417,6 +416,7 @@ add_library(cudf
             src/transform/transform.cpp
             src/transform/nans_to_nulls.cu
             src/transform/bools_to_mask.cu
+            src/transform/encode.cpp
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
             src/stream_compaction/drop_nans.cu
@@ -486,8 +486,8 @@ add_library(cudf
             src/io/utilities/type_conversion.cu
             src/io/utilities/data_sink.cpp
             src/copying/gather.cu
-            src/utilities/nvtx/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/sample.cu
             src/copying/scatter.cu
             src/copying/shift.cu
             src/copying/copy.cu
@@ -561,11 +561,16 @@ add_library(cudf
             src/lists/lists_column_factories.cu
             src/lists/lists_column_view.cu
             src/lists/copying/concatenate.cu
+            src/lists/copying/gather.cu
             src/text/generate_ngrams.cu
             src/text/normalize.cu
             src/text/tokenize.cu
             src/text/ngrams_tokenize.cu
             src/text/replace.cu
+            src/text/subword/load_hash_file.cu
+            src/text/subword/data_normalizer.cu
+            src/text/subword/wordpiece_tokenizer.cu
+            src/text/subword/subword_tokenize.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
             src/dictionary/add_keys.cu
@@ -617,6 +622,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                           ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/durations.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cfloat.jit
@@ -637,6 +643,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/utilities/bit.hpp
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/timestamps.hpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/durations.hpp
                                    ${LIBCUDACXX_INCLUDE_DIR}/details/__config
                                    ${LIBCUDACXX_INCLUDE_DIR}/simt/limits
                                    ${LIBCUDACXX_INCLUDE_DIR}/simt/cfloat
@@ -660,6 +667,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/utilities/bit.hpp > ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ../src/rolling/rolling_jit_detail.hpp > ${CMAKE_BINARY_DIR}/include/rolling_jit_detail.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/durations.hpp > ${CMAKE_BINARY_DIR}/include/jit/durations.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/details/__config libcudacxx_details_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/limits libcudacxx_simt_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/cfloat libcudacxx_simt_cfloat > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cfloat.jit
@@ -683,6 +691,7 @@ add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/durations.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cfloat.jit
@@ -774,72 +783,3 @@ add_custom_command(OUTPUT CUDF_DOXYGEN
                    VERBATIM)
 
 add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
-
-
-####################################################################################################
-# - cudf_kafka - OFF by default due to increased number of dependencies
-if(BUILD_CUDF_KAFKA)
-
-    # cudf_kafka library
-    add_library(libcudf_kafka
-        libcudf_kafka/src/kafka_consumer.cpp
-    )
-
-    # Include paths
-    include_directories("${CMAKE_SOURCE_DIR}/libcudf_kafka/include"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/include/cudf")
-    
-    # Rename installation to proper name for later finding
-    set_target_properties(libcudf_kafka PROPERTIES OUTPUT_NAME "cudf_kafka")
-    set_target_properties(libcudf_kafka PROPERTIES BUILD_RPATH "\$ORIGIN")
-
-    ###################################################################################################
-    # cudf_kafka - librdkafka -------------------------------------------------------------------------
-
-    find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
-    find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
-
-    message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
-    message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
-
-    target_link_libraries(libcudf_kafka ${RDKAFKA++_LIBRARY})
-    include_directories("${RDKAFKA_INCLUDE}")
-
-    ###################################################################################################
-    # - cudf_kafka Install ----------------------------------------------------------------------------
-    target_link_libraries(libcudf_kafka cudf)
-
-    install(TARGETS libcudf_kafka
-            DESTINATION libcudf_kafka/lib
-            COMPONENT libcudf_kafka)
-
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/include
-            DESTINATION include
-            COMPONENT libcudf_kafka)
-
-    add_custom_target(install_libcudf_kafka
-            COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=libcudf_kafka -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
-            DEPENDS libcudf_kafka)
-
-    ####################################################################################################
-    # - cudf_kafka Tests
-    if(BUILD_TESTS)
-        if(GTEST_FOUND)
-            message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-            include_directories(${GTEST_INCLUDE_DIR})
-            add_subdirectory(${CMAKE_SOURCE_DIR}/libcudf_kafka/tests)
-        else()
-            message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
-        endif(GTEST_FOUND)
-    endif(BUILD_TESTS)
-        
-    message(STATUS "CUDF_KAFKA_TEST_LIST set to: ${CUDF_KAFKA_TEST_LIST}")
-
-    add_custom_target(build_tests_libcudf_kafka
-                      DEPENDS ${CUDF_KAFKA_TEST_LIST})
-
-    add_custom_target(test_libcudf_kafka
-                      COMMAND ctest
-                      DEPENDS build_tests_libcudf_kafka)
-
-endif(BUILD_CUDF_KAFKA)

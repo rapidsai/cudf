@@ -104,3 +104,48 @@ TEST_F(TextReplaceTest, ReplaceTokensErrorTest)
     nvtext::replace_tokens(notnulls_view, nulls_view, strings_view, cudf::string_scalar("", false)),
     cudf::logic_error);
 }
+
+TEST_F(TextReplaceTest, FilterTokens)
+{
+  cudf::test::strings_column_wrapper strings({" one two three ", "four  fivé  six", "sevén eight"});
+
+  auto results = nvtext::filter_tokens(cudf::strings_column_view(strings), 1);
+  cudf::test::expect_columns_equal(*results, strings);  // no change
+
+  {
+    auto results = nvtext::filter_tokens(cudf::strings_column_view(strings), 4);
+    cudf::test::strings_column_wrapper expected({"   three ", "four  fivé  ", "sevén eight"});
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+  {
+    auto results = nvtext::filter_tokens(cudf::strings_column_view(strings), 5);
+    cudf::test::strings_column_wrapper expected({"   three ", "    ", "sevén eight"});
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+  {
+    auto results =
+      nvtext::filter_tokens(cudf::strings_column_view(strings), 4, cudf::string_scalar("--"));
+    cudf::test::strings_column_wrapper expected({" -- -- three ", "four  fivé  --", "sevén eight"});
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+}
+
+TEST_F(TextReplaceTest, FilterTokensEmptyTest)
+{
+  auto strings       = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  auto const results = nvtext::filter_tokens(cudf::strings_column_view(strings->view()), 7);
+  EXPECT_EQ(results->size(), 0);
+}
+
+TEST_F(TextReplaceTest, FilterTokensErrorTest)
+{
+  auto strings = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  EXPECT_THROW(nvtext::filter_tokens(
+                 cudf::strings_column_view(strings->view()), 1, cudf::string_scalar("", false)),
+               cudf::logic_error);
+  EXPECT_THROW(nvtext::filter_tokens(cudf::strings_column_view(strings->view()),
+                                     1,
+                                     cudf::string_scalar("-"),
+                                     cudf::string_scalar("", false)),
+               cudf::logic_error);
+}

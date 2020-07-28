@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import functools
 from collections import OrderedDict
 from math import floor, isinf, isnan
@@ -427,3 +426,11 @@ def time_col_replace_nulls(input_col):
         null,
     )
     return out_col
+
+
+def raise_iteration_error(obj):
+    raise TypeError(
+        f"{obj.__class__.__name__} object is not iterable. "
+        f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+        f"if you wish to iterate over the values."
+    )
