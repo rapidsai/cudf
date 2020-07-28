@@ -53,6 +53,7 @@
 - PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
 - PR #5572 Add `cudf::encode` API.
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
+- PR #5789 Add groupby support for duration types
 
 ## Improvements
 
