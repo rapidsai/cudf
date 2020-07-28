@@ -295,24 +295,19 @@ public final class HostColumnVector implements AutoCloseable {
         int rowsLen = this.allRows.size();
         long prev = 0l;
         ColumnVector newCol = null;
+        List<MemoryBuffer> buffersToClose = new ArrayList<>();
         for (int i = depth; i >= 0; i--) {
-          if (newCol != null) {
-            List<MemoryBuffer> list = newCol.getToClose();
-            for (MemoryBuffer buffer : list) {
-              buffer.close();
-            }
-            newCol.getToClose().clear();
-          }
           DType colType = allTypes.get(i);
           long colRows = allRows.get(i);
-          //TODO: fix this so that only one level has data
           HostMemoryBuffer colData = (i == depth) ? offHeap.data : null;
           HostMemoryBuffer colValid = i < offHeap.valid.size() ? offHeap.valid.get(i) : null;
           HostMemoryBuffer colOffsets = i < offHeap.offsets.size() ? offHeap.offsets.get(i) : null;
-          newCol = createColumnVector(colType, colRows, nullCount, colData, colValid,
-              colOffsets, prev);
-          prev = newCol.getNativeView();
+          newCol = createColumnVector(colType, colRows, nullCount, colData, colValid, colOffsets, prev);
+          if (i > 0) {
+            prev = newCol.stealColumnView(buffersToClose);
+          }
         }
+        newCol.getToClose().addAll(buffersToClose);
       return newCol;
       }
     } finally {

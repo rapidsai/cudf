@@ -98,7 +98,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   List<MemoryBuffer> getToClose() {
-    return offHeap.toClose;
+    return offHeap.getToClose();
+  }
+
+  public void setViewHandle(long viewHandle) {
+    offHeap.viewHandle = viewHandle;
+  }
+
+  long stealColumnView(List<MemoryBuffer> buffersToClose) {
+    buffersToClose.addAll(this.getToClose());
+    getToClose().clear();
+    long ret = getNativeView();
+    setViewHandle(0l);
+    return ret;
   }
   static {
     NativeDepsLoader.loadNativeDeps();
@@ -2803,7 +2815,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     // This must be kept in sync with the native code
     public static final long UNKNOWN_NULL_COUNT = -1;
     private long columnHandle;
+
     private long viewHandle = 0;
+
+    public List<MemoryBuffer> getToClose() {
+      return toClose;
+    }
+
     private List<MemoryBuffer> toClose = new ArrayList<>();
 
 

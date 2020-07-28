@@ -2469,14 +2469,14 @@ public class ColumnVectorTest extends CudfTestBase {
 
     ColumnVector res = ColumnVector.fromLists(DType.STRING, list, list2, list3);
 
-//    HostColumnVector hcv = res.copyToHost();
-//    List<String> ret = hcv.getList(1);
+    HostColumnVector hcv = res.copyToHost();
+    List<String> ret = hcv.getList(1);
 //    //add asserts
-//    System.out.println("Element =" + ret.get(0));
-//    System.out.println("Element =" + ret.get(1));
-//    System.out.println("Element =" + ret.get(2));
+    System.out.println("Element =" + ret.get(0));
+    System.out.println("Element =" + ret.get(1));
+    System.out.println("Element =" + ret.get(2));
     res.close();
-//    hcv.close();
+    hcv.close();
   }
 
   @Test
