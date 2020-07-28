@@ -7,7 +7,7 @@ from cudf._lib.cpp.column.column_view cimport (
 
 cdef extern from "cudf/lists/lists_column_view.hpp" namespace "cudf" nogil:
     cdef cppclass lists_column_view(column_view):
-        lists_column_view(const column_view& column_view)
-        column_view parent()
-        column_view offsets()
-        column_view child()
+        lists_column_view(const column_view& column_view) except +
+        column_view parent() except +
+        column_view offsets() except +
+        column_view child() except +
