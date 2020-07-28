@@ -257,12 +257,13 @@ cdef class Column:
     def children(self):
         if (self.offset == 0) and (self.size == self.base_size):
             return self.base_children
-        if self.base_children == ():
-            return ()
         if self._children is None:
-            self._children = Column.from_unique_ptr(
-                make_unique[column](self.view())
-            ).base_children
+            if self.base_children == ():
+                self._children = ()
+            else:
+                self._children = Column.from_unique_ptr(
+                    make_unique[column](self.view())
+                ).base_children
         return self._children
 
     def set_base_children(self, value):
