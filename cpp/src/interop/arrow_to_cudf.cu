@@ -117,8 +117,8 @@ struct dispatch_to_cudf_column {
              rmm::mr::device_memory_resource* mr,
              cudaStream_t stream)
   {
-    auto str_array = static_cast<arrow::StringArray const*>(&array);
-    auto offset_array                   = std::make_unique<arrow::Int32Array>(
+    auto str_array    = static_cast<arrow::StringArray const*>(&array);
+    auto offset_array = std::make_unique<arrow::Int32Array>(
       str_array->value_offsets()->size() / sizeof(int32_t), str_array->value_offsets(), nullptr);
     auto char_array = std::make_unique<arrow::Int8Array>(
       str_array->value_data()->size(), str_array->value_data(), nullptr);
@@ -159,24 +159,17 @@ struct dispatch_to_cudf_column {
              rmm::mr::device_memory_resource* mr,
              cudaStream_t stream)
   {
-    auto dict_array =
-      static_cast<arrow::DictionaryArray const*>(&array);
-    auto ind_type = arrow_to_cudf_type(dict_array->indices()->type()->id());
-    auto indices  = type_dispatcher(
+    auto dict_array = static_cast<arrow::DictionaryArray const*>(&array);
+    auto ind_type   = arrow_to_cudf_type(dict_array->indices()->type()->id());
+    auto indices    = type_dispatcher(
       ind_type, dispatch_to_cudf_column{}, *(dict_array->indices()), ind_type, true, mr, stream);
     std::unique_ptr<column> indices_column = nullptr;
     // If index type is not of type int32_t, then cast it to int32_t
     if (indices.first->type().id() != type_id::INT32) {
-      if (indices.first->size() == dict_array->indices()->length()) {
-        indices_column =
-          cudf::detail::cast(indices.first->view(), data_type(type_id::INT32), mr, stream);
-      } else {
-        indices_column = cudf::detail::cast(indices.second, data_type(type_id::INT32), mr, stream);
-      }
+      indices_column =
+        cudf::detail::cast(indices.first->view(), data_type(type_id::INT32), mr, stream);
     } else {
-      indices_column = (indices.first->size() == dict_array->indices()->length())
-                         ? std::move(indices.first)
-                         : std::make_unique<column>(indices.second, stream, mr);
+      indices_column = std::move(indices.first);
     }
 
     auto dict_type   = arrow_to_cudf_type(dict_array->dictionary()->type()->id());
@@ -212,8 +205,8 @@ struct dispatch_to_cudf_column {
              rmm::mr::device_memory_resource* mr,
              cudaStream_t stream)
   {
-    auto list_array = static_cast<arrow::ListArray const*>(&array);
-    auto offset_array                  = std::make_unique<arrow::Int32Array>(
+    auto list_array   = static_cast<arrow::ListArray const*>(&array);
+    auto offset_array = std::make_unique<arrow::Int32Array>(
       list_array->value_offsets()->size() / sizeof(int32_t), list_array->value_offsets(), nullptr);
     auto offsets = dispatch_to_cudf_column{}.operator()<int32_t>(
       *offset_array, data_type(type_id::INT32), true, mr, stream);
@@ -289,13 +282,15 @@ std::unique_ptr<table> arrow_to_cudf(arrow::Table const& input_table,
           return std::move(col_and_view.first);
         });
 
-      if ((concat_columns.size() == 1) and (concat_column_views[0].offset() == 0) and
-          (concat_column_views[0].size() == concat_columns[0]->size())) {
-        return std::move(concat_columns[0]);
+      if (concat_columns.size() == 1) {
+        if ((concat_column_views[0].offset() == 0) and
+            (concat_column_views[0].size() == concat_columns[0]->size())) {
+          return std::move(concat_columns[0]);
+        } else {
+          return std::make_unique<column>(concat_column_views[0]);
+        }
       }
-      {
-        return cudf::detail::concatenate(concat_column_views, mr, stream);
-      }
+      return cudf::detail::concatenate(concat_column_views, mr, stream);
     });
 
   return std::make_unique<table>(std::move(columns));

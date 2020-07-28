@@ -160,8 +160,8 @@ struct dispatch_to_arrow {
 
     column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
     auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
-    auto offset_buffer = child_arrays[0]->data()->buffers[1];
-    auto data          = child_arrays[1];
+    auto offset_buffer     = child_arrays[0]->data()->buffers[1];
+    auto data              = child_arrays[1];
     return std::make_shared<arrow::ListArray>(arrow::list(data->type()),
                                               static_cast<int64_t>(input_view.size()),
                                               offset_buffer,

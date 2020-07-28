@@ -155,7 +155,8 @@ TEST_P(CUDFToArrowTestSlice, SliceTest)
 
 INSTANTIATE_TEST_CASE_P(CUDFToArrowTest,
                         CUDFToArrowTestSlice,
-                        ::testing::Values(std::make_tuple(0, 0),
+                        ::testing::Values(std::make_tuple(1, 3),
+                                          std::make_tuple(0, 0),
                                           std::make_tuple(0, 2),
                                           std::make_tuple(4, 4)));
 
