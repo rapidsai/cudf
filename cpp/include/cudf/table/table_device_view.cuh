@@ -75,9 +75,7 @@ class table_device_view : public detail::table_device_view_base<column_device_vi
  public:
   static auto create(table_view source_view, cudaStream_t stream = 0)
   {
-    auto deleter = [](table_device_view* t) {
-      t->destroy();
-    };
+    auto deleter = [](table_device_view* t) { t->destroy(); };
     return std::unique_ptr<table_device_view, decltype(deleter)>{
       new table_device_view(source_view, stream), deleter};
   }
@@ -94,9 +92,7 @@ class mutable_table_device_view
  public:
   static auto create(mutable_table_view source_view, cudaStream_t stream = 0)
   {
-    auto deleter = [](mutable_table_device_view* t) {
-      t->destroy();
-    };
+    auto deleter = [](mutable_table_device_view* t) { t->destroy(); };
     return std::unique_ptr<mutable_table_device_view, decltype(deleter)>{
       new mutable_table_device_view(source_view, stream), deleter};
   }
