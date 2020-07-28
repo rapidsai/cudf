@@ -1058,7 +1058,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_zfill(
     jint j_width) {
 
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, j_width, "width is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
@@ -1066,6 +1065,30 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_zfill(
     cudf::size_type width = reinterpret_cast<cudf::size_type>(j_width);
 
     std::unique_ptr<cudf::column> result = cudf::strings::zfill(scv, width);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_pad(
+    JNIEnv *env,
+    jclass,
+    jlong column_view,
+    jint j_width,
+    jint j_side,
+    jstring fill_char) {
+
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, fill_char, "fill_char is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::size_type width = reinterpret_cast<cudf::size_type>(j_width);
+    cudf::strings::pad_side side = static_cast<cudf::strings::pad_side>(j_side);
+    cudf::jni::native_jstring ss_fill(env, fill_char);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::pad(scv, width, side, ss_fill.get());
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
