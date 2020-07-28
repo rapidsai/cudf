@@ -144,6 +144,11 @@ class DatetimeColumn(column.ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
+    def as_timedelta_column(self, dtype, **kwargs):
+        raise TypeError(
+            f"cannot astype a datetimelike from [{self.dtype}] to [{dtype}]"
+        )
+
     def as_numerical_column(self, dtype, **kwargs):
         return self.as_numerical.astype(dtype)
 

@@ -882,6 +882,8 @@ class ColumnBase(Column, Serializable):
             return self.as_categorical_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
+        elif np.issubdtype(dtype, np.timedelta64):
+            return self.as_timedelta_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
             return self.as_string_column(dtype, **kwargs)
         else:
@@ -934,6 +936,9 @@ class ColumnBase(Column, Serializable):
         raise NotImplementedError
 
     def as_datetime_column(self, dtype, **kwargs):
+        raise NotImplementedError
+
+    def as_timedelta_column(self, dtype, **kwargs):
         raise NotImplementedError
 
     def as_string_column(self, dtype, **kwargs):

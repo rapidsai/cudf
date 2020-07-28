@@ -1163,6 +1163,11 @@ class CategoricalColumn(column.ColumnBase):
             dtype, **kwargs
         )
 
+    def as_timedelta_column(self, dtype, **kwargs):
+        return self._get_decategorized_column().as_timedelta_column(
+            dtype, **kwargs
+        )
+
     def _get_decategorized_column(self):
         if self.null_count == len(self):
             # self.categories is empty; just return codes

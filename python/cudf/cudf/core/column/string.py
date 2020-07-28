@@ -4362,6 +4362,11 @@ class StringColumn(column.ColumnBase):
                 raise ValueError("Could not convert `None` value to datetime")
 
             boolean_match = self.binary_operator("eq", "NaT")
+        elif out_dtype.type is np.timedelta64:
+            # TODO: Add once
+            # https://github.com/rapidsai/cudf/pull/5625/
+            # is merged.
+            pass
         elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
@@ -4378,11 +4383,17 @@ class StringColumn(column.ColumnBase):
         result_col = _str_to_numeric_typecast_functions[out_dtype](
             self, **kwargs
         )
-        if (out_dtype.type is np.datetime64) and boolean_match.any():
+        if (
+            (out_dtype.type is np.datetime64)
+            or (out_dtype.type is np.timedelta64)
+        ) and boolean_match.any():
             result_col[boolean_match] = None
         return result_col
 
     def as_datetime_column(self, dtype, **kwargs):
+        return self.as_numerical_column(dtype, **kwargs)
+
+    def as_timedelta_column(self, dtype, **kwargs):
         return self.as_numerical_column(dtype, **kwargs)
 
     def as_string_column(self, dtype, **kwargs):

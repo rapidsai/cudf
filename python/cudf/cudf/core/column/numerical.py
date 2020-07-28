@@ -154,6 +154,17 @@ class NumericalColumn(column.ColumnBase):
             size=self.size,
         )
 
+    def as_timedelta_column(self, dtype, **kwargs):
+        from cudf.core.column import build_column
+
+        return build_column(
+            data=self.astype("int64").base_data,
+            dtype=dtype,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
+        )
+
     def as_numerical_column(self, dtype, **kwargs):
         dtype = np.dtype(dtype)
         if dtype == self.dtype:

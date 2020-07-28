@@ -1,10 +1,14 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+import datetime as dt
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
 from cudf import _lib as libcudf
+from cudf.core.buffer import Buffer
 from cudf.core.column import column
+from cudf.utils import utils
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 
 
@@ -39,6 +43,14 @@ class TimeDeltaColumn(column.ColumnBase):
         assert self.dtype.type is np.timedelta64
         self._time_unit, _ = np.datetime_data(self.dtype)
 
+    def __contains__(self, item):
+        # Handles improper item types
+        try:
+            item = np.timedelta64(item, self._time_unit)
+        except Exception:
+            return False
+        return item.astype("int_") in self.as_numerical
+
     def to_pandas(self, index=None):
         return pd.Series(
             self.to_array(fillna="pandas").astype(self.dtype), index=index
@@ -55,6 +67,25 @@ class TimeDeltaColumn(column.ColumnBase):
             length=len(self),
             buffers=[mask, data],
             null_count=self.null_count,
+        )
+
+    def normalize_binop_value(self, other):
+        if isinstance(other, dt.timedelta):
+            other = np.timedelata64(other)
+
+        if isinstance(other, pd.Timestamp):
+            # TODO
+            pass
+        elif isinstance(other, np.timedelta64):
+            other = other.astype(self.dtype)
+            ary = utils.scalar_broadcast_to(
+                other, size=len(self), dtype=self.dtype
+            )
+        else:
+            raise TypeError("cannot broadcast {}".format(type(other)))
+
+        return column.build_column(
+            data=Buffer(ary.data_array_view.view("|u1")), dtype=self.dtype
         )
 
     @property
@@ -89,8 +120,7 @@ class TimeDeltaColumn(column.ColumnBase):
             fill_value = np.timedelta64(fill_value, self.time_unit)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
-        print(self.dtype, fill_value.dtype)
-        print(self, fill_value)
+
         result = libcudf.replace.replace_nulls(self, fill_value)
 
         return result
@@ -98,4 +128,13 @@ class TimeDeltaColumn(column.ColumnBase):
     def as_numerical_column(self, dtype, **kwargs):
         return self.as_numerical.astype(dtype)
 
-    # TODO type-cast methods
+    def as_datetime_column(self, dtype, **kwargs):
+        raise TypeError(
+            f"cannot astype a timedelta from [{self.dtype}] to [{dtype}]"
+        )
+
+    def as_string_column(self, dtype, **kwargs):
+        # TODO: To be implemented once
+        # https://github.com/rapidsai/cudf/pull/5625/
+        # is merged.
+        raise NotImplementedError
