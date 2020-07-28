@@ -16,7 +16,6 @@
 #pragma once
 
 #include <thrust/detail/raw_pointer_cast.h>
-#include <algorithm>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -28,12 +27,15 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <functional>
-#include <iterator>
 #include <rmm/device_uvector.hpp>
-#include <type_traits>
+
 #include "linearizer.hpp"
 #include "operators.hpp"
+
+#include <algorithm>
+#include <functional>
+#include <iterator>
+#include <type_traits>
 
 namespace cudf {
 
