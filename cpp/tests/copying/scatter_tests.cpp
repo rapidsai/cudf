@@ -948,3 +948,37 @@ TEST_F(BooleanMaskScatterScalarFails, NumberOfColumnAndScalarMismatch)
 
   EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask), cudf::logic_error);
 }
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+using wrapper         = cudf::test::fixed_width_column_wrapper<T>;
+using FixedPointTypes = ::testing::Types<int32_t, int64_t>;
+TYPED_TEST_CASE(FixedPointTestBothReps, FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointScatter)
+{
+  using namespace numeric;
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+  auto const FIVE  = decimalXX{5, scale_type{0}};
+
+  auto const source      = wrapper<decimalXX>({ONE, TWO, THREE, FOUR, FIVE});
+  auto const target      = wrapper<decimalXX>({ONE, TWO, THREE, FOUR, FIVE, FOUR, THREE, TWO, ONE});
+  auto const scatter_map = wrapper<int32_t>({1, 2, -1, -3, -4});
+  auto const expected    = wrapper<decimalXX>({ONE, ONE, TWO, FOUR, FIVE, FIVE, FOUR, TWO, THREE});
+
+  auto const source_table   = cudf::table_view({source, source});
+  auto const target_table   = cudf::table_view({target, target});
+  auto const expected_table = cudf::table_view({expected, expected});
+
+  auto const result = cudf::scatter(source_table, scatter_map, target_table, true);
+
+  cudf::test::expect_tables_equal(expected_table, result->view());
+}
