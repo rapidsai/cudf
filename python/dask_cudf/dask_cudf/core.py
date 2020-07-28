@@ -18,10 +18,10 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
-from dask_cudf import sorting
-
 import cudf
 from cudf import _lib as libcudf
+
+from dask_cudf import sorting
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -99,9 +99,12 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         s = "<dask_cudf.%s | %d tasks | %d npartitions>"
         return s % (type(self).__name__, len(self.dask), self.npartitions)
 
-    def to_dask_dataframe(self):
+    def to_dask_dataframe(self, **kwargs):
         """Create a dask.dataframe object from a dask_cudf object"""
-        return self.map_partitions(M.to_pandas)
+        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", False)
+        return self.map_partitions(
+            M.to_pandas, nullable_pd_dtype=nullable_pd_dtype
+        )
 
 
 concat = dd.concat

@@ -5,9 +5,10 @@ import pytest
 import dask
 from dask import dataframe as dd
 
-import dask_cudf
-
 import cudf
+
+import dask_cudf
+from dask_cudf.tests.utils import assert_dd_eq
 
 
 @pytest.mark.parametrize("aggregation", ["sum", "mean", "count", "min", "max"])
@@ -27,17 +28,17 @@ def test_groupby_basic_aggs(aggregation):
     b = getattr(ddf.groupby("x"), aggregation)().compute()
 
     if aggregation == "count":
-        dd.assert_eq(a, b, check_dtype=False)
+        assert_dd_eq(a, b, check_dtype=False)
     else:
-        dd.assert_eq(a, b)
+        assert_dd_eq(a, b)
 
     a = gdf.groupby("x").agg({"x": aggregation})
     b = ddf.groupby("x").agg({"x": aggregation}).compute()
 
     if aggregation == "count":
-        dd.assert_eq(a, b, check_dtype=False)
+        assert_dd_eq(a, b, check_dtype=False)
     else:
-        dd.assert_eq(a, b)
+        assert_dd_eq(a, b)
 
 
 @pytest.mark.parametrize(
@@ -70,7 +71,7 @@ def test_groupby_agg(func):
     b.index.name = None
     b.name = None
 
-    dd.assert_eq(a, b)
+    assert_dd_eq(a, b)
 
 
 @pytest.mark.xfail(reason="cudf issues")
@@ -97,7 +98,7 @@ def test_groupby_std(func):
     a.name = None
     b.index.name = None
 
-    dd.assert_eq(a, b)
+    assert_dd_eq(a, b)
 
 
 # reason gotattr in cudf
@@ -132,7 +133,7 @@ def test_groupby_multi_column(func):
     a = func(gdf).to_pandas()
     b = func(ddf).compute().to_pandas()
 
-    dd.assert_eq(a, b)
+    assert_dd_eq(a, b)
 
 
 def test_reset_index_multiindex():
@@ -148,11 +149,13 @@ def test_reset_index_multiindex():
     gddf = dask_cudf.from_cudf(df, npartitions=2)
     gddf_lookup = dask_cudf.from_cudf(df_lookup, npartitions=2)
 
-    ddf = dd.from_pandas(df.to_pandas(), npartitions=2)
-    ddf_lookup = dd.from_pandas(df_lookup.to_pandas(), npartitions=2)
+    ddf = dd.from_pandas(df.to_pandas(nullable_pd_dtype=False), npartitions=2)
+    ddf_lookup = dd.from_pandas(
+        df_lookup.to_pandas(nullable_pd_dtype=False), npartitions=2
+    )
 
     # Note: 'id_2' has wrong type (object) until after compute
-    dd.assert_eq(
+    assert_dd_eq(
         gddf.groupby(by=["id_1", "id_2"])
         .val.sum()
         .reset_index()
@@ -199,7 +202,7 @@ def test_groupby_split_out(split_out, column):
         .sort_values()
     )
 
-    dd.assert_eq(gddf_result, ddf_result, check_index=False)
+    assert_dd_eq(gddf_result, ddf_result, check_index=False)
 
 
 @pytest.mark.parametrize("dropna", [False, True, None])
@@ -233,7 +236,7 @@ def test_groupby_dropna(dropna, by):
         dask_result = dask_result.compute()
         dask_result.index.name = cudf_result.index.name
 
-    dd.assert_eq(dask_result, cudf_result)
+    assert_dd_eq(dask_result, cudf_result)
 
 
 @pytest.mark.parametrize("myindex", [[1, 2] * 4, ["s1", "s2"] * 4])
@@ -269,7 +272,7 @@ def test_groupby_split_out_multiindex(agg_func):
     pddf = dd.from_pandas(df.to_pandas(), 5)
     gr = agg_func(ddf.groupby(["a", "b"]))
     pr = agg_func(pddf.groupby(["a", "b"]))
-    dd.assert_eq(gr.compute(), pr.compute())
+    assert_dd_eq(gr.compute(), pr.compute())
 
 
 @pytest.mark.parametrize("npartitions", [1, 2])
@@ -281,7 +284,7 @@ def test_groupby_multiindex_reset_index(npartitions):
     pddf = dd.from_pandas(df.to_pandas(), npartitions=npartitions)
     gr = ddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     pr = pddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
-    dd.assert_eq(
+    assert_dd_eq(
         gr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
         pr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
     )
@@ -310,12 +313,12 @@ def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
         }
     )
     ddf = dask_cudf.from_cudf(df, 5)
-    pddf = dd.from_pandas(df.to_pandas(), 5)
+    pddf = dd.from_pandas(df.to_pandas(nullable_pd_dtype=False), 5)
     gr = agg_func(ddf.groupby(groupby_keys)).reset_index()
     pr = agg_func(pddf.groupby(groupby_keys)).reset_index()
     gf = gr.compute().sort_values(groupby_keys).reset_index(drop=True)
     pf = pr.compute().sort_values(groupby_keys).reset_index(drop=True)
-    dd.assert_eq(gf, pf)
+    assert_dd_eq(gf, pf)
 
 
 def test_groupby_reset_index_drop_True():
@@ -328,7 +331,7 @@ def test_groupby_reset_index_drop_True():
     pr = pddf.groupby(["a"]).agg({"b": ["count"]}).reset_index(drop=True)
     gf = gr.compute().sort_values(by=["b"]).reset_index(drop=True)
     pf = pr.compute().sort_values(by=[("b", "count")]).reset_index(drop=True)
-    dd.assert_eq(gf, pf)
+    assert_dd_eq(gf, pf)
 
 
 def test_groupby_mean_sort_false():
@@ -343,7 +346,7 @@ def test_groupby_mean_sort_false():
 
     gf = gr.compute().sort_values(by=["b"]).reset_index(drop=True)
     pf = pr.compute().sort_values(by=["b"]).reset_index(drop=True)
-    dd.assert_eq(gf, pf)
+    assert_dd_eq(gf, pf)
 
 
 def test_groupby_reset_index_dtype():
@@ -368,7 +371,7 @@ def test_groupby_reset_index_names():
     df = cudf.datasets.randomdata(
         nrows=10, dtypes={"a": str, "b": int, "c": int}
     )
-    pdf = df.to_pandas()
+    pdf = df.to_pandas(nullable_pd_dtype=False)
 
     gddf = dask_cudf.from_cudf(df, 2)
     pddf = dd.from_pandas(pdf, 2)
@@ -379,7 +382,7 @@ def test_groupby_reset_index_names():
     got = g_res.reset_index().compute().sort_values(["a", "b", "c"])
     expect = p_res.reset_index().compute().sort_values(["a", "b", "c"])
 
-    dd.assert_eq(got, expect)
+    assert_dd_eq(got, expect)
 
 
 def test_groupby_reset_index_string_name():
@@ -401,7 +404,7 @@ def test_groupby_reset_index_string_name():
         p_res.compute().sort_values(["key", "value"]).reset_index(drop=True)
     )
 
-    dd.assert_eq(got, expect)
+    assert_dd_eq(got, expect)
     assert len(g_res) == len(p_res)
 
 
@@ -422,4 +425,4 @@ def test_groupby_categorical_key():
         .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
         .compute()
     )
-    dd.assert_eq(expect, got)
+    assert_dd_eq(expect, got)

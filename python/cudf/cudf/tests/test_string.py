@@ -67,7 +67,7 @@ def test_string_export(ps_gs):
     ps, gs = ps_gs
 
     expect = ps
-    got = gs.to_pandas()
+    got = gs.to_pandas(nullable_pd_dtype=False)
     assert_eq(expect, got)
 
     expect = np.array(ps)

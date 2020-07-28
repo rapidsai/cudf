@@ -11,7 +11,7 @@ from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
 
 
-cpdef read_avro(filepath_or_buffer, columns=None, skip_rows=-1, num_rows=-1):
+cpdef read_avro(datasource, columns=None, skip_rows=-1, num_rows=-1):
     """
     Cython function to call libcudf++ read_avro, see `read_avro`.
 
@@ -30,7 +30,7 @@ cpdef read_avro(filepath_or_buffer, columns=None, skip_rows=-1, num_rows=-1):
 
     cdef table_with_metadata c_result
     cdef read_avro_args c_read_avro_args = make_read_avro_args(
-        filepath_or_buffer, columns or [], num_rows, skip_rows
+        datasource, columns or [], num_rows, skip_rows
     )
 
     with nogil:
@@ -41,11 +41,11 @@ cpdef read_avro(filepath_or_buffer, columns=None, skip_rows=-1, num_rows=-1):
     return Table.from_unique_ptr(move(c_result.tbl), column_names=names)
 
 
-cdef read_avro_args make_read_avro_args(filepath_or_buffer,
+cdef read_avro_args make_read_avro_args(datasource,
                                         column_names,
                                         num_rows, skip_rows) except*:
     cdef read_avro_args args = read_avro_args(
-        make_source_info([filepath_or_buffer])
+        make_source_info([datasource])
     )
     args.num_rows = <size_type> num_rows
     args.skip_rows = <size_type> skip_rows
