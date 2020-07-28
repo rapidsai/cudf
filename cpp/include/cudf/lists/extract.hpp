@@ -30,27 +30,27 @@ namespace lists {
  * @brief Create a column using values from row `index` from each
  * sublist within the intput `lists_column`.
  *
- * Output `column[i]` is retrieved from `lists_column[i][index]`.
+ * Output `column[i]` is set from element `lists_column[i][index]`.
  * If `index` is larger than the size of the sublist at `lists_column[i]`
- * then output `column[i]=null`.
+ * then output `column[i] = null`.
  *
  * @code{.pseudo}
- * l = { {1,2,3}, {4}, {5,6} }
- * c = extract_list_element(l,1)
- * c is now {2, null, 6}
+ * l = { {1, 2, 3}, {4}, {5, 6} }
+ * r = extract_list_element(l, 1)
+ * r is now {2, null, 6}
  * @endcode
  *
- * Index may also be negative in which case the row retrieved is offset
+ * The `index` may also be negative in which case the row retrieved is offset
  * from the end of each sublist.
  *
  * @code{.pseudo}
- * l = { {"a"}, {"b","c"}, {"d","e","f"} }
- * c = extract_list_element(l,-1)
- * c is now {"a", "c", "f"}
+ * l = { {"a"}, {"b", "c"}, {"d", "e", "f"} }
+ * r = extract_list_element(l, -1)
+ * r is now {"a", "c", "f"}
  * @endcode
  *
- * Also, any input `lists_column[i]==null` will also produce
- * output `column[i]=null`.
+ * Also, any input where `lists_column[i] == null` will also produce
+ * output `column[i] = null`.
  *
  * @param lists_column Column to extract elements from.
  * @param index The row within each sublist to retrieve.
