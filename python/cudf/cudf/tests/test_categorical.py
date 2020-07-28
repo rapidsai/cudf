@@ -213,7 +213,7 @@ def test_df_cat_set_index():
     df["b"] = np.arange(len(df))
     got = df.set_index("a")
 
-    pddf = df.to_pandas()
+    pddf = df.to_pandas(nullable_pd_dtype=False)
     expect = pddf.set_index("a")
 
     assert_eq(got, expect)
@@ -225,7 +225,7 @@ def test_df_cat_sort_index():
     df["b"] = np.arange(len(df))
 
     got = df.set_index("a").sort_index()
-    expect = df.to_pandas().set_index("a").sort_index()
+    expect = df.to_pandas(nullable_pd_dtype=False).set_index("a").sort_index()
 
     assert_eq(got, expect)
 

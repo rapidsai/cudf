@@ -393,29 +393,29 @@ def test_drop_duplicates_NA():
     df = cudf.DataFrame.from_pandas(df)
     # single column
     result = df.drop_duplicates("A")
-    expected = df.to_pandas().loc[[0, 2, 3]]
+    expected = df.to_pandas(nullable_pd_dtype=False).loc[[0, 2, 3]]
     assert_df(result, expected)
 
     result = df.drop_duplicates("A", keep="last")
-    expected = df.to_pandas().loc[[1, 6, 7]]
+    expected = df.to_pandas(nullable_pd_dtype=False).loc[[1, 6, 7]]
     assert_df(result, expected)
 
     result = df.drop_duplicates("A", keep=False)
-    expected = df.to_pandas().loc[[]]  # empty df
+    expected = df.to_pandas(nullable_pd_dtype=False).loc[[]]  # empty df
     assert_df(result, expected)
     assert len(result) == 0
 
     # multi column
     result = df.drop_duplicates(["A", "B"])
-    expected = df.to_pandas().loc[[0, 2, 3, 6]]
+    expected = df.to_pandas(nullable_pd_dtype=False).loc[[0, 2, 3, 6]]
     assert_df(result, expected)
 
     result = df.drop_duplicates(["A", "B"], keep="last")
-    expected = df.to_pandas().loc[[1, 5, 6, 7]]
+    expected = df.to_pandas(nullable_pd_dtype=False).loc[[1, 5, 6, 7]]
     assert_df(result, expected)
 
     result = df.drop_duplicates(["A", "B"], keep=False)
-    expected = df.to_pandas().loc[[6]]
+    expected = df.to_pandas(nullable_pd_dtype=False).loc[[6]]
     assert_df(result, expected)
 
     # nan
@@ -434,25 +434,25 @@ def test_drop_duplicates_NA():
     assert_df(result, expected)
 
     result = df.drop_duplicates("C", keep="last")
-    expected = df.to_pandas().loc[[3, 7]]
+    expected = df.to_pandas(nullable_pd_dtype=False).loc[[3, 7]]
     assert_df(result, expected)
 
     result = df.drop_duplicates("C", keep=False)
-    expected = df.to_pandas().loc[[]]  # empty df
+    expected = df.to_pandas(nullable_pd_dtype=False).loc[[]]  # empty df
     assert_df(result, expected)
     assert len(result) == 0
 
     # multi column
     result = df.drop_duplicates(["C", "B"])
-    expected = df.to_pandas().loc[[0, 1, 2, 4]]
+    expected = df.to_pandas(nullable_pd_dtype=False).loc[[0, 1, 2, 4]]
     assert_df(result, expected)
 
     result = df.drop_duplicates(["C", "B"], keep="last")
-    expected = df.to_pandas().loc[[1, 3, 6, 7]]
+    expected = df.to_pandas(nullable_pd_dtype=False).loc[[1, 3, 6, 7]]
     assert_df(result, expected)
 
     result = df.drop_duplicates(["C", "B"], keep=False)
-    expected = df.to_pandas().loc[[1]]
+    expected = df.to_pandas(nullable_pd_dtype=False).loc[[1]]
     assert_df(result, expected)
 
 
@@ -594,10 +594,11 @@ def test_drop_duplicates_multi_index():
 
     expected = pdf.drop_duplicates()
     result = gdf.drop_duplicates()
-    assert_df(result.to_pandas(), expected)
+    assert_df(result.to_pandas(nullable_pd_dtype=False), expected)
     # FIXME: to_pandas needed until sort_index support for MultiIndex
 
     for col in gdf.columns:
         assert_df(
-            gdf[col].drop_duplicates().to_pandas(), pdf[col].drop_duplicates()
+            gdf[col].drop_duplicates().to_pandas(nullable_pd_dtype=False),
+            pdf[col].drop_duplicates(),
         )
