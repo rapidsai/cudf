@@ -164,8 +164,48 @@ struct typed_binop_dispatch {
                              detail::device_data_reference rhs,
                              detail::device_data_reference output)
   {
-    // TODO: How else to make this compile? Need a template to match unsupported types, or prevent
-    // the compiler from attempting to compile unsupported types here.
+    // TODO: Need a template to match unsupported types, or prevent the compiler from attempting to
+    // compile unsupported types here.
+  }
+};
+
+struct typed_operator_dispatch_functor {
+  template <typename OperatorFunctor,
+            typename LHS,
+            typename RHS,
+            typename Out = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>,
+            std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(table_device_view const& table,
+                                                      std::int64_t* thread_intermediate_storage,
+                                                      cudf::size_type row_index,
+                                                      detail::device_data_reference lhs,
+                                                      detail::device_data_reference rhs,
+                                                      detail::device_data_reference output)
+  {
+    auto typed_lhs =
+      resolve_input_data_reference<LHS>(lhs, table, thread_intermediate_storage, row_index);
+    auto typed_rhs =
+      resolve_input_data_reference<RHS>(rhs, table, thread_intermediate_storage, row_index);
+    auto typed_output =
+      resolve_output_data_reference<Out>(output, table, thread_intermediate_storage, row_index);
+    *typed_output = OperatorFunctor{}(typed_lhs, typed_rhs);
+    // printf("LHS: %i, RHS: %i, Output: %i\n", typed_lhs, typed_rhs, *typed_output);
+  }
+
+  template <typename OperatorFunctor,
+            typename LHS,
+            typename RHS,
+            typename Out                                                                 = void,
+            std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(table_device_view const& table,
+                                                      std::int64_t* thread_intermediate_storage,
+                                                      cudf::size_type row_index,
+                                                      detail::device_data_reference lhs,
+                                                      detail::device_data_reference rhs,
+                                                      detail::device_data_reference output)
+  {
+    // TODO: Need a template to match unsupported types, or prevent the compiler from attempting to
+    // compile unsupported types here.
   }
 };
 
@@ -177,6 +217,7 @@ __device__ void operate(ast_operator op,
                         detail::device_data_reference rhs,
                         detail::device_data_reference output)
 {
+  /*
   type_dispatcher(lhs.data_type,
                   typed_binop_dispatch{},
                   op,
@@ -186,6 +227,17 @@ __device__ void operate(ast_operator op,
                   lhs,
                   rhs,
                   output);
+  */
+  ast_operator_dispatcher(op,
+                          lhs.data_type,
+                          rhs.data_type,
+                          typed_operator_dispatch_functor{},
+                          table,
+                          thread_intermediate_storage,
+                          row_index,
+                          lhs,
+                          rhs,
+                          output);
 }
 
 struct output_copy_functor {
