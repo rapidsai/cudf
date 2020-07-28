@@ -4433,6 +4433,8 @@ class StringColumn(column.ColumnBase):
     def serialize(self):
         header = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
+        header["size"] = pickle.dumps(self.size)
+
         frames = []
         sub_headers = []
 
@@ -4450,6 +4452,7 @@ class StringColumn(column.ColumnBase):
 
     @classmethod
     def deserialize(cls, header, frames):
+        size = pickle.loads(header["size"])
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
 
@@ -4464,7 +4467,11 @@ class StringColumn(column.ColumnBase):
             children.append(column_type.deserialize(h, [b]))
 
         col = column.build_column(
-            data=None, dtype="str", mask=nbuf, children=tuple(children)
+            data=None,
+            dtype="str",
+            mask=nbuf,
+            children=tuple(children),
+            size=size,
         )
         return col
 
