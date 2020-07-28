@@ -2,27 +2,31 @@
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
+from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from libcpp.string cimport string
 from cudf._lib.cpp.io.types cimport source_info, io_type, host_buffer
-from cudf._lib.cpp.io.types cimport sink_info, data_sink
+from cudf._lib.cpp.io.types cimport sink_info, data_sink, datasource
+from cudf._lib.io.datasource cimport Datasource
 
 import codecs
 import errno
 import io
 import os
+import cudf
 
 # Converts the Python source input to libcudf++ IO source_info
 # with the appropriate type and source values
 cdef source_info make_source_info(list src) except*:
-    if not len(src):
+    if not src:
         raise ValueError("Need to pass at least one source")
 
     cdef const unsigned char[::1] c_buffer
     cdef vector[host_buffer] c_host_buffers
     cdef vector[string] c_files
+    cdef Datasource csrc
     empty_buffer = False
     if isinstance(src[0], bytes):
         empty_buffer = True
@@ -40,6 +44,9 @@ cdef source_info make_source_info(list src) except*:
     # Otherwise src is expected to be a numeric fd, string path, or PathLike.
     # TODO (ptaylor): Might need to update this check if accepted input types
     #                 change when UCX and/or cuStreamz support is added.
+    elif isinstance(src[0], Datasource):
+        csrc = src[0]
+        return source_info(csrc.get_datasource())
     elif isinstance(src[0], (int, float, complex, basestring, os.PathLike)):
         # If source is a file, return source_info where type=FILEPATH
         if not all(os.path.isfile(file) for file in src):

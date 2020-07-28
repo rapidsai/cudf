@@ -2217,6 +2217,48 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testLPad() {
+      try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+           ColumnVector expected = ColumnVector.fromStrings("A1", "23", "45678", null);
+           ColumnVector actual = v.pad(2, PadSide.LEFT, "A")) {
+          assertColumnsAreEqual(expected, actual);
+      }
+      try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+           ColumnVector expected = ColumnVector.fromStrings("___1", "__23", "45678", null);
+           ColumnVector actual = v.pad(4, PadSide.LEFT, "_")) {
+          assertColumnsAreEqual(expected, actual);
+      }
+  }
+
+  @Test
+  void testRPad() {
+      try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+           ColumnVector expected = ColumnVector.fromStrings("1A", "23", "45678", null);
+           ColumnVector actual = v.pad(2, PadSide.RIGHT, "A")) {
+          assertColumnsAreEqual(expected, actual);
+      }
+      try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+           ColumnVector expected = ColumnVector.fromStrings("1___", "23__", "45678", null);
+           ColumnVector actual = v.pad(4, PadSide.RIGHT, "_")) {
+          assertColumnsAreEqual(expected, actual);
+      }
+  }
+
+  @Test
+  void testPad() {
+      try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+           ColumnVector expected = ColumnVector.fromStrings("1A", "23", "45678", null);
+           ColumnVector actual = v.pad(2, PadSide.BOTH, "A")) {
+          assertColumnsAreEqual(expected, actual);
+      }
+      try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+           ColumnVector expected = ColumnVector.fromStrings("_1__", "_23_", "45678", null);
+           ColumnVector actual = v.pad(4, PadSide.BOTH, "_")) {
+          assertColumnsAreEqual(expected, actual);
+      }
+  }
+
+  @Test
   void testZfill() {
     try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
          ColumnVector expected = ColumnVector.fromStrings("01", "23", "45678", null);

@@ -201,7 +201,7 @@ def test_scan_boolean_cumsum():
 
     # cumsum test
     got = (s > 0).cumsum()
-    expect = (s > 0).to_pandas().cumsum()
+    expect = (s > 0).to_pandas(nullable_pd_dtype=False).cumsum()
 
     assert_eq(expect, got)
 
@@ -211,6 +211,6 @@ def test_scan_boolean_cumprod():
 
     # cumprod test
     got = (s > 0).cumprod()
-    expect = (s > 0).to_pandas().cumprod()
+    expect = (s > 0).to_pandas(nullable_pd_dtype=False).cumprod()
 
     assert_eq(expect, got)

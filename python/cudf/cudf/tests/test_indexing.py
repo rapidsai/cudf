@@ -165,7 +165,9 @@ def test_dataframe_column_name_indexing():
 
     for i in range(1, len(pdf.columns) + 1):
         for idx in combinations(pdf.columns, i):
-            assert pdf[list(idx)].equals(df[list(idx)].to_pandas())
+            assert pdf[list(idx)].equals(
+                df[list(idx)].to_pandas(nullable_pd_dtype=False)
+            )
 
     # test for only numeric columns
     df = pd.DataFrame()
@@ -715,7 +717,7 @@ def test_dataframe_boolean_mask_with_None():
 @pytest.mark.parametrize("dtype", [int, float, str])
 def test_empty_boolean_mask(dtype):
     gdf = cudf.datasets.randomdata(nrows=0, dtypes={"a": dtype})
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     compare_val = dtype(1)
 
@@ -1098,7 +1100,7 @@ def test_sliced_indexing():
 def test_iloc_categorical_index(index):
     gdf = cudf.DataFrame({"data": range(len(index))}, index=index)
     gdf.index = gdf.index.astype("category")
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     expect = pdf.iloc[:, 0]
     got = gdf.iloc[:, 0]
     assert_eq(expect, got)
@@ -1176,7 +1178,7 @@ def test_loc_datetime_index(sli, is_dataframe):
     ],
 )
 def test_dataframe_sliced(gdf, slice):
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     actual = gdf[slice]
     expected = pdf[slice]
@@ -1222,7 +1224,7 @@ def test_dataframe_sliced(gdf, slice):
     "slice", [slice(6), slice(1), slice(7), slice(1, 3)],
 )
 def test_dataframe_iloc_index(gdf, slice):
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     actual = gdf.iloc[:, slice]
     expected = pdf.iloc[:, slice]
