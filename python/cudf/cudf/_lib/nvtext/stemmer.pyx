@@ -14,7 +14,7 @@ from cudf._lib.cpp.nvtext.stemmer cimport (
     is_letter as cpp_is_letter,
     letter_type as letter_type
 )
-from cudf._lib.nvtext.stemmer cimport underlying_type_t_letter_type
+from cudf._lib.cpp.nvtext.stemmer cimport underlying_type_t_letter_type
 
 
 class LetterType(IntEnum):
