@@ -360,6 +360,8 @@ public class RmmTest {
   public void testSetDeviceThrowsAfterRmmInit(int rmmAllocMode) {
     Rmm.initialize(rmmAllocMode, false, 1024 * 1024);
     assertThrows(CudfException.class, () -> Cuda.setDevice(Cuda.getDevice() + 1));
+    // Verify that auto set device does not
+    Cuda.autoSetDevice();
   }
 
   private static class AllocFailException extends RuntimeException {}

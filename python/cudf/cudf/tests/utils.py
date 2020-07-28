@@ -70,9 +70,16 @@ def assert_eq(left, right, **kwargs):
     __tracebackhide__ = True
 
     if hasattr(left, "to_pandas"):
-        left = left.to_pandas()
+        try:
+            left = left.to_pandas(nullable_pd_dtype=False)
+        except TypeError:
+            # nullable_pd_dtype not a kwarg
+            left = left.to_pandas()
     if hasattr(right, "to_pandas"):
-        right = right.to_pandas()
+        try:
+            right = right.to_pandas(nullable_pd_dtype=False)
+        except TypeError:
+            right = right.to_pandas()
     if isinstance(left, cupy.ndarray):
         left = cupy.asnumpy(left)
     if isinstance(right, cupy.ndarray):
