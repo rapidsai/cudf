@@ -639,6 +639,17 @@ inline __device__ void PackLiterals(
 }
 
 /**
+ * @brief Flushes the RLE encoded repeated values.
+ */
+void __device__ flushRleRepeat(page_enc_state_s *s, uint32_t nbits, uint32_t rle_run)
+{
+  uint8_t *dst = VlqEncode(s->rle_out, rle_run);
+  *dst++       = s->run_val;
+  if (nbits > 8) { *dst++ = s->run_val >> 8; }
+  s->rle_out = dst;
+}
+
+/**
  * @brief RLE encoder
  *
  * @param[in,out] s Page encode state
@@ -652,6 +663,12 @@ static __device__ void RleEncode(
 {
   uint32_t rle_pos = s->rle_pos;
   uint32_t rle_run = s->rle_run;
+
+  // Nothing left to encode; RleEncode called to flush the repeated values
+  if (flush && rle_pos == numvals) {
+    if (t == 0) { flushRleRepeat(s, nbits, rle_run); }
+    return;
+  }
 
   while (rle_pos < numvals) {
     uint32_t pos = rle_pos + t;
@@ -675,13 +692,7 @@ static __device__ void RleEncode(
       rle_run += rle_rpt_count << 1;
       rle_pos += rle_rpt_count;
       if (rle_rpt_count < max_rpt_count || (flush && rle_pos == numvals)) {
-        if (!t) {
-          uint32_t run_val = s->run_val;
-          uint8_t *dst     = VlqEncode(s->rle_out, rle_run);
-          *dst++           = run_val;
-          if (nbits > 8) { *dst++ = run_val >> 8; }
-          s->rle_out = dst;
-        }
+        if (t == 0) { flushRleRepeat(s, nbits, rle_run); }
         rle_run = 0;
       }
     } else {
@@ -949,7 +960,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           PlainBoolEncode(s, rle_numvals, (cur_row == s->page.num_rows), t);
         } else
 #endif
+        {
           RleEncode(s, rle_numvals, dict_bits, (cur_row == s->page.num_rows), t);
+        }
         __syncthreads();
       }
       if (t == 0) { s->cur = s->rle_out; }
