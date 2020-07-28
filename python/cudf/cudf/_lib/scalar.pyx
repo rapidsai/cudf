@@ -27,7 +27,6 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_ns
 )
 from cudf._lib.cpp.wrappers.durations cimport(
-    duration_D,
     duration_s,
     duration_ms,
     duration_us,
@@ -201,11 +200,7 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
                                      dtype,
                                      bool valid=True):
     value = value if valid else 0
-    if dtype == "timedelta64[D]":
-        s.reset(
-            new duration_scalar[duration_D](<int32_t>np.int32(value), valid)
-        )
-    elif dtype == "timedelta64[s]":
+    if dtype == "timedelta64[s]":
         s.reset(
             new duration_scalar[duration_s](<int64_t>np.int64(value), valid)
         )
@@ -313,14 +308,7 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
-    if cdtype.id() == libcudf_types.DURATION_DAYS:
-        return np.timedelta64(
-            (
-                <duration_scalar[duration_D]*> s_ptr
-            )[0].ticks(),
-            "D"
-        )
-    elif cdtype.id() == libcudf_types.DURATION_SECONDS:
+    if cdtype.id() == libcudf_types.DURATION_SECONDS:
         return np.timedelta64(
             (
                 <duration_scalar[duration_s]*> s_ptr

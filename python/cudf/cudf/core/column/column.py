@@ -1604,7 +1604,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         elif arb_dtype.kind == "m":
 
             time_unit, _ = np.datetime_data(arbitrary.dtype)
-            cast_dtype = time_unit in ("W", "M", "Y")
+            cast_dtype = time_unit in ("D", "W", "M", "Y")
 
             if cast_dtype:
                 arbitrary = arbitrary.astype(np.dtype("timedelta64[s]"))

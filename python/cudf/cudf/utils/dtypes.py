@@ -56,7 +56,6 @@ DATETIME_TYPES = {
     "datetime64[ns]",
 }
 TIMEDELTA_TYPES = {
-    "timedelta64[D]",
     "timedelta64[s]",
     "timedelta64[ms]",
     "timedelta64[us]",
@@ -245,8 +244,8 @@ def to_cudf_compatible_scalar(val, dtype=None):
             val = val.astype("datetime64[s]")
     elif val.dtype.type is np.timedelta64:
         time_unit, _ = np.datetime_data(val.dtype)
-        if time_unit in ("W", "M", "Y"):
-            val = val.astype("timedelta64[s]")
+        if time_unit in ("D", "W", "M", "Y"):
+            val = val.astype("timedelta64[ns]")
 
     return val
 

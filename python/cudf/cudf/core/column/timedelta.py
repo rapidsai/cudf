@@ -51,7 +51,7 @@ class TimeDeltaColumn(column.ColumnBase):
             return False
         return item.astype("int_") in self.as_numerical
 
-    def to_pandas(self, index=None):
+    def to_pandas(self, index=None, nullable_pd_dtype=False):
         return pd.Series(
             self.to_array(fillna="pandas").astype(self.dtype), index=index
         )

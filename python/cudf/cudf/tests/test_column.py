@@ -18,7 +18,7 @@ dtypes = sorted(
             "datetime64[s]",
             "datetime64[ms]",
             "datetime64[us]",
-            "timedelta64[D]" "timedelta64[s]",
+            "timedelta64[s]",
             "timedelta64[ms]",
             "timedelta64[us]",
         }
