@@ -1178,7 +1178,7 @@ def test_loc_datetime_index(sli, is_dataframe):
     ],
 )
 def test_dataframe_sliced(gdf, slice):
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     actual = gdf[slice]
     expected = pdf[slice]
@@ -1224,7 +1224,7 @@ def test_dataframe_sliced(gdf, slice):
     "slice", [slice(6), slice(1), slice(7), slice(1, 3)],
 )
 def test_dataframe_iloc_index(gdf, slice):
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     actual = gdf.iloc[:, slice]
     expected = pdf.iloc[:, slice]
