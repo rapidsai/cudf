@@ -162,7 +162,7 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
-    def to_pandas(self, index=None):
+    def to_pandas(self, index=None, nullable_pd_dtype=False):
         return pd.Series(
             self.to_array(fillna="pandas").astype(self.dtype), index=index
         )
@@ -210,13 +210,6 @@ class DatetimeColumn(column.ColumnBase):
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
         result = libcudf.replace.replace_nulls(self, fill_value)
-        result = column.build_column(
-            result.base_data,
-            result.dtype,
-            mask=None,
-            offset=result.offset,
-            size=result.size,
-        )
 
         return result
 
