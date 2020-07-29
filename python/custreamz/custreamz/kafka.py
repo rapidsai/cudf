@@ -17,10 +17,11 @@ class CudfKafkaClient:
 
         Parameters
         ----------
-        kafka_configs : dict, Dict of Key/Value pairs of librdkafka
-        configuration values. Full list of valid configuration
-        options can be found at
-        https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+        kafka_configs : dict,
+            Dict of Key/Value pairs of librdkafka
+            configuration values. Full list of valid configuration
+            options can be found at
+            https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
 
         """
 
@@ -49,10 +50,6 @@ class CudfKafkaClient:
         Close the underlying socket connection to Kafka and
         clean up system resources
 
-        Parameters
-        ----------
-        None
-
         """
 
         return self.kafka_meta_client.close(timeout=timeout)
@@ -69,10 +66,11 @@ class Consumer(CudfKafkaClient):
 
         Parameters
         ----------
-        kafka_configs, dict, Key/Value pairs of librdkafka
-        configuration values.
-        Full list of valid configuration options can be found at
-        https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+        kafka_configs : dict,
+            Dict of Key/Value pairs of librdkafka
+            configuration values. Full list of valid configuration
+            options can be found at
+            https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
 
         """
 
@@ -106,25 +104,31 @@ class Consumer(CudfKafkaClient):
 
         Parameters
         ----------
-        topic : str, Name of the Kafka topic that the messages
-        should be read from
-        parition : int, Partition number on the specified topic that
-        should be read from
-        lines : {{ True, False }}, default True, Whether messages should be
-        treated as individual lines
-        start : int, default 0, The beginning offset that should be used when
-        reading a range of messages
-        end : int, default 0, The last offset that will be read when
-        reading a range of messages
-        batch_timeout : int, default 10000, Amount of time to wait on the
-        reading of the messages from Kafka in Milliseconds
-        delimiter : str, default "\n", If lines=True this is the delimiter that
-        will be placed between all messages that are read from Kafka
+        topic : str,
+            Name of the Kafka topic that the messages
+            should be read from
+        parition : int,
+            Partition number on the specified topic that
+            should be read from
+        lines : {{ True, False }}, default True,
+            Whether messages should be treated as individual lines
+        start : int, default 0,
+            The beginning offset that should be used when
+            reading a range of messages
+        end : int, default 0,
+            The last offset that will be read when
+            reading a range of messages
+        batch_timeout : int, default 10000,
+            Amount of time to wait on the
+            reading of the messages from Kafka in Milliseconds
+        delimiter : str, default "\n",
+            If lines=True this is the delimiter that
+            will be placed between all messages that are read from Kafka
         message_format : {{ 'avro', 'csv', 'json', 'orc', 'parquet' }},
         default 'json',
-        Format of the messages that will be read from Kafka.
-        This dictates which underlying cudf reader will be invoked the
-        create the Dataframe.
+            Format of the messages that will be read from Kafka.
+            This dictates which underlying cudf reader will be invoked the
+            create the Dataframe.
 
         Returns
         -------
@@ -178,10 +182,12 @@ class Consumer(CudfKafkaClient):
 
         Parameters
         ----------
-        partitions : list, Topic/Partition instances that specify the TOPPAR
-        instances the offsets should be retrieved for
-        timeout : int, default 10000, Max time to wait on the response from
-        the Kafka broker in milliseconds
+        partitions : list,
+            Topic/Partition instances that specify the TOPPAR
+            instances the offsets should be retrieved for
+        timeout : int, default 10000,
+            Max time to wait on the response from
+            the Kafka broker in milliseconds
 
         Returns
         -------
@@ -259,10 +265,12 @@ class Consumer(CudfKafkaClient):
 
         Parameters
         ----------
-        offsets : list, ck.TopicPartition objects containing the
-        Topic/Partition/Offset values to be committed to the Kafka broker
-        asynchronous : {{ True, False }}, default True, True to wait on
-        Kafka broker response to commit request and False otherwise
+        offsets : list,
+            ck.TopicPartition objects containing the
+            Topic/Partition/Offset values to be committed to the Kafka broker
+        asynchronous : {{ True, False }}, default True,
+            True to wait on
+            Kafka broker response to commit request and False otherwise
 
         """
 
