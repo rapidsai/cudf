@@ -49,7 +49,9 @@ namespace lists {
  * r is now {"a", "c", "f"}
  * @endcode
  *
- * Also, any input where `lists_column[i] == null` will also produce
+ * Any input where `lists_column[i] == null` will produce
+ * output `column[i] = null`. Also, any element where
+ * `lists_column[i][index] == null` will produce
  * output `column[i] = null`.
  *
  * @param lists_column Column to extract elements from.
