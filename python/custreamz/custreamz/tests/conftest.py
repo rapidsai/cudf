@@ -17,7 +17,7 @@ def kafka_client():
         s.close()
     except Exception:
         pytest.skip(
-            "A running Kafka instance must be" " available to run these tests"
+            "A running Kafka instance must be available to run these tests"
         )
 
     kafka_configs = {

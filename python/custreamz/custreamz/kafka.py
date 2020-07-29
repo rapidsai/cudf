@@ -22,7 +22,6 @@ class CudfKafkaClient:
             configuration values. Full list of valid configuration
             options can be found at
             https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-
         """
 
         self.kafka_configs = kafka_configs
@@ -39,7 +38,6 @@ class CudfKafkaClient:
         """
         Stop all active consumption and remove consumer subscriptions
         to topic/partition instances
-
         """
 
         return self.kafka_meta_client.unsubscribe()
@@ -49,7 +47,6 @@ class CudfKafkaClient:
         """
         Close the underlying socket connection to Kafka and
         clean up system resources
-
         """
 
         return self.kafka_meta_client.close(timeout=timeout)
@@ -71,7 +68,6 @@ class Consumer(CudfKafkaClient):
             configuration values. Full list of valid configuration
             options can be found at
             https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-
         """
 
         super().__init__(kafka_configs)
@@ -91,16 +87,6 @@ class Consumer(CudfKafkaClient):
         """
         Read messages from the underlying KafkaDatasource connection and create
         a cudf Dataframe
-
-
-        topic=None,
-                partition=0,
-                lines=True,
-                start=0,
-                end=0,
-                batch_timeout=10000,
-                delimiter="\n",
-                message_format="json",
 
         Parameters
         ----------
@@ -133,7 +119,6 @@ class Consumer(CudfKafkaClient):
         Returns
         -------
         DataFrame
-
         """
 
         if topic is None:
@@ -191,8 +176,8 @@ class Consumer(CudfKafkaClient):
 
         Returns
         -------
-        Tuple of ck.TopicPartition objects
-
+        tuple
+            Tuple of ck.TopicPartition objects
         """
 
         toppars = [
@@ -271,7 +256,6 @@ class Consumer(CudfKafkaClient):
         asynchronous : {{ True, False }}, default True,
             True to wait on
             Kafka broker response to commit request and False otherwise
-
         """
 
         for offs in offsets:
