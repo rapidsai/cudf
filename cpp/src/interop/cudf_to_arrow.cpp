@@ -94,8 +94,10 @@ struct dispatch_to_arrow {
   }
 
   template <typename T>
-  std::enable_if_t<is_fixed_width<T>(), std::shared_ptr<arrow::Array>> operator()(
-    column_view input_view, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
+  std::shared_ptr<arrow::Array> operator()(column_view input_view,
+                                           cudf::type_id id,
+                                           arrow::MemoryPool* ar_mr,
+                                           cudaStream_t stream)
   {
     return to_arrow_array(id,
                           static_cast<int64_t>(input_view.size()),
@@ -103,87 +105,80 @@ struct dispatch_to_arrow {
                           fetch_mask_buffer(input_view, ar_mr, stream),
                           static_cast<int64_t>(input_view.null_count()));
   }
+};
 
-  template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::string_view>::value, std::shared_ptr<arrow::Array>>
-  operator()(column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
-  {
-    std::unique_ptr<column> tmp_column = nullptr;
-    if ((input.offset() != 0) or (input.child(0).size() - 1 != input.size())) {
-      tmp_column = std::make_unique<cudf::column>(input);
-    }
-
-    column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
-    auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
-    if (child_arrays.size() == 0) {
-      return std::make_shared<arrow::StringArray>(0, nullptr, nullptr);
-    }
-    auto offset_buffer = child_arrays[0]->data()->buffers[1];
-    auto data_buffer   = child_arrays[1]->data()->buffers[1];
-    return std::make_shared<arrow::StringArray>(static_cast<int64_t>(input_view.size()),
-                                                offset_buffer,
-                                                data_buffer,
-                                                fetch_mask_buffer(input_view, ar_mr, stream),
-                                                static_cast<int64_t>(input_view.null_count()));
+template <>
+std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
+  column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
+{
+  std::unique_ptr<column> tmp_column = nullptr;
+  if ((input.offset() != 0) or (input.child(0).size() - 1 != input.size())) {
+    tmp_column = std::make_unique<cudf::column>(input);
   }
 
-  template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::dictionary32>::value, std::shared_ptr<arrow::Array>>
-  operator()(column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
-  {
-    std::unique_ptr<column> tmp_column = nullptr;
-    if ((input.offset() != 0) or (input.child(0).size() != input.size())) {
-      tmp_column = std::make_unique<cudf::column>(input);
-    }
-
-    column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
-    auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
-
-    auto indices    = to_arrow_array(type_id::INT32,
-                                  static_cast<int64_t>(input_view.size()),
-                                  child_arrays[0]->data()->buffers[1],
-                                  fetch_mask_buffer(input_view, ar_mr, stream),
-                                  static_cast<int64_t>(input_view.null_count()));
-    auto dictionary = child_arrays[1];
-    return std::make_shared<arrow::DictionaryArray>(
-      arrow::dictionary(indices->type(), dictionary->type()), indices, dictionary);
+  column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
+  auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
+  if (child_arrays.size() == 0) {
+    return std::make_shared<arrow::StringArray>(0, nullptr, nullptr);
   }
-
-  template <typename T>
-  std::enable_if_t<std::is_same<T, cudf::list_view>::value, std::shared_ptr<arrow::Array>>
-  operator()(column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
-  {
-    std::unique_ptr<column> tmp_column = nullptr;
-    if ((input.offset() != 0) or (input.child(0).size() - 1 != input.size())) {
-      tmp_column = std::make_unique<cudf::column>(input);
-    }
-
-    column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
-    auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
-    auto offset_buffer     = child_arrays[0]->data()->buffers[1];
-    auto data              = child_arrays[1];
-    return std::make_shared<arrow::ListArray>(arrow::list(data->type()),
-                                              static_cast<int64_t>(input_view.size()),
+  auto offset_buffer = child_arrays[0]->data()->buffers[1];
+  auto data_buffer   = child_arrays[1]->data()->buffers[1];
+  return std::make_shared<arrow::StringArray>(static_cast<int64_t>(input_view.size()),
                                               offset_buffer,
-                                              data,
+                                              data_buffer,
                                               fetch_mask_buffer(input_view, ar_mr, stream),
                                               static_cast<int64_t>(input_view.null_count()));
+}
+
+template <>
+std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::dictionary32>(
+  column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
+{
+  std::unique_ptr<column> tmp_column = nullptr;
+  if ((input.offset() != 0) or (input.child(0).size() != input.size())) {
+    tmp_column = std::make_unique<cudf::column>(input);
   }
 
-  template <typename T>
-  std::enable_if_t<(!is_fixed_width<T>()) and (!is_compound<T>()), std::shared_ptr<arrow::Array>>
-  operator()(column_view input_view, cudf::type_id id, arrow::MemoryPool* ar_mr)
-  {
-    CUDF_FAIL("Only fixed width and compund types are supported");
+  column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
+  auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
+
+  auto indices    = to_arrow_array(type_id::INT32,
+                                static_cast<int64_t>(input_view.size()),
+                                child_arrays[0]->data()->buffers[1],
+                                fetch_mask_buffer(input_view, ar_mr, stream),
+                                static_cast<int64_t>(input_view.null_count()));
+  auto dictionary = child_arrays[1];
+  return std::make_shared<arrow::DictionaryArray>(
+    arrow::dictionary(indices->type(), dictionary->type()), indices, dictionary);
+}
+
+template <>
+std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
+  column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
+{
+  std::unique_ptr<column> tmp_column = nullptr;
+  if ((input.offset() != 0) or (input.child(0).size() - 1 != input.size())) {
+    tmp_column = std::make_unique<cudf::column>(input);
   }
-};
+
+  column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
+  auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
+  auto offset_buffer     = child_arrays[0]->data()->buffers[1];
+  auto data              = child_arrays[1];
+  return std::make_shared<arrow::ListArray>(arrow::list(data->type()),
+                                            static_cast<int64_t>(input_view.size()),
+                                            offset_buffer,
+                                            data,
+                                            fetch_mask_buffer(input_view, ar_mr, stream),
+                                            static_cast<int64_t>(input_view.null_count()));
+}
 
 }  // namespace
 
-std::shared_ptr<arrow::Table> cudf_to_arrow(table_view input,
-                                            std::vector<std::string> const& column_names,
-                                            arrow::MemoryPool* ar_mr,
-                                            cudaStream_t stream)
+std::shared_ptr<arrow::Table> to_arrow(table_view input,
+                                       std::vector<std::string> const& column_names,
+                                       arrow::MemoryPool* ar_mr,
+                                       cudaStream_t stream)
 {
   CUDF_EXPECTS((column_names.size() == input.num_columns()),
                "column names should be empty or should be equal to number of columns in table");
@@ -207,13 +202,13 @@ std::shared_ptr<arrow::Table> cudf_to_arrow(table_view input,
 }
 }  // namespace detail
 
-std::shared_ptr<arrow::Table> cudf_to_arrow(table_view input,
-                                            std::vector<std::string> const& column_names,
-                                            arrow::MemoryPool* ar_mr)
+std::shared_ptr<arrow::Table> to_arrow(table_view input,
+                                       std::vector<std::string> const& column_names,
+                                       arrow::MemoryPool* ar_mr)
 {
   CUDF_FUNC_RANGE();
 
-  return detail::cudf_to_arrow(input, column_names, ar_mr);
+  return detail::to_arrow(input, column_names, ar_mr);
 }
 
 }  // namespace cudf

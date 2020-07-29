@@ -80,7 +80,7 @@ TEST_F(CUDFToArrowTest, NormalTable)
   auto cudf_table           = get_cudf_table();
   auto expected_arrow_table = get_arrow_table();
 
-  auto got_arrow_table = cudf::cudf_to_arrow(cudf_table->view(), {"a", "b", "c", "d"});
+  auto got_arrow_table = cudf::to_arrow(cudf_table->view(), {"a", "b", "c", "d"});
 
   ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }
@@ -109,7 +109,7 @@ TEST_F(CUDFToArrowTest, DateTimeTable)
 
   auto expected_arrow_table = arrow::Table::Make(schema, {arr1, arr2});
 
-  auto got_arrow_table = cudf::cudf_to_arrow(input_view, {"a", "b"});
+  auto got_arrow_table = cudf::to_arrow(input_view, {"a", "b"});
 
   ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }
@@ -129,7 +129,7 @@ TEST_F(CUDFToArrowTest, NestedList)
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
 
   auto expected_arrow_table = arrow::Table::Make(schema, {nested_list_arr});
-  auto got_arrow_table      = cudf::cudf_to_arrow(input_view, {"a"});
+  auto got_arrow_table      = cudf::to_arrow(input_view, {"a"});
 
   ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
 }
@@ -148,7 +148,7 @@ TEST_P(CUDFToArrowTestSlice, SliceTest)
 
   auto sliced_cudf_table    = cudf::slice(cudf_table->view(), {start, end})[0];
   auto expected_arrow_table = arrow_table->Slice(start, end - start);
-  auto got_arrow_table      = cudf::cudf_to_arrow(sliced_cudf_table, {"a", "b", "c", "d"});
+  auto got_arrow_table      = cudf::to_arrow(sliced_cudf_table, {"a", "b", "c", "d"});
 
   ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }

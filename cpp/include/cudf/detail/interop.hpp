@@ -71,21 +71,21 @@ std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
 data_type arrow_to_cudf_type(arrow::Type::type arrow_type);
 
 /**
- * @copydoc cudf::cudf_to_arrow
+ * @copydoc cudf::to_arrow
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
-std::shared_ptr<arrow::Table> cudf_to_arrow(table_view input,
-                                            std::vector<std::string> const& column_names = {},
-                                            arrow::MemoryPool* ar_mr = arrow::default_memory_pool(),
-                                            cudaStream_t stream      = 0);
+std::shared_ptr<arrow::Table> to_arrow(table_view input,
+                                       std::vector<std::string> const& column_names = {},
+                                       arrow::MemoryPool* ar_mr = arrow::default_memory_pool(),
+                                       cudaStream_t stream      = 0);
 
 /**
  * @copydoc cudf::arrow_to_cudf
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
-std::unique_ptr<table> arrow_to_cudf(
+std::unique_ptr<table> from_arrow(
   arrow::Table const& input_table,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);

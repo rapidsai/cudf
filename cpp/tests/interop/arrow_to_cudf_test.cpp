@@ -39,7 +39,7 @@ TEST_F(ArrowToCUDFTest, NormalTable)
   auto expected_cudf_table = get_cudf_table();
   auto arrow_table         = get_arrow_table();
 
-  auto got_cudf_table = cudf::arrow_to_cudf(*arrow_table);
+  auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
   cudf::test::expect_tables_equal(expected_cudf_table->view(), got_cudf_table->view());
 }
@@ -68,7 +68,7 @@ TEST_F(ArrowToCUDFTest, DateTimeTable)
 
   auto arrow_table = arrow::Table::Make(schema, {arr1, arr2});
 
-  auto got_cudf_table = cudf::arrow_to_cudf(*arrow_table);
+  auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
   cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
 }
@@ -91,7 +91,7 @@ TEST_F(ArrowToCUDFTest, NestedList)
 
   auto arrow_table = arrow::Table::Make(schema, {nested_list_arr});
 
-  auto got_cudf_table = cudf::arrow_to_cudf(*arrow_table);
+  auto got_cudf_table = cudf::from_arrow(*arrow_table);
   cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
 }
 
@@ -119,7 +119,7 @@ TEST_F(ArrowToCUDFTest, DictionaryIndicesType)
 
   cudf::table expected_table(std::move(columns));
 
-  auto got_cudf_table = cudf::arrow_to_cudf(*arrow_table);
+  auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
   cudf::test::expect_tables_equal(expected_table.view(), got_cudf_table->view());
 }
@@ -161,7 +161,7 @@ TEST_F(ArrowToCUDFTest, ChunkedArray)
 
   auto expected_cudf_table = get_cudf_table();
 
-  auto got_cudf_table = cudf::arrow_to_cudf(*arrow_table);
+  auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
   cudf::test::expect_tables_equal(expected_cudf_table->view(), got_cudf_table->view());
 }
@@ -181,7 +181,7 @@ TEST_P(ArrowToCUDFTestSlice, SliceTest)
   auto sliced_cudf_table = cudf::slice(cudf_table->view(), {start, end})[0];
   cudf::table expected_cudf_table{sliced_cudf_table};
   auto sliced_arrow_table = arrow_table->Slice(start, end - start);
-  auto got_cudf_table     = cudf::arrow_to_cudf(*sliced_arrow_table);
+  auto got_cudf_table     = cudf::from_arrow(*sliced_arrow_table);
 
   cudf::test::expect_tables_equal(expected_cudf_table.view(), got_cudf_table->view());
 }
