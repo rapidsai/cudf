@@ -83,8 +83,8 @@ class GroupBy(Serializable):
 
         if len(group_names) > self._MAX_GROUPS_BEFORE_WARN:
             warnings.warn(
-                f"GroupBy.groups() expected to be slow"
-                f" for large number of groups ({len(group_names)})"
+                f"GroupBy.groups() performance scales poorly with "
+                f"number of groups. Got {len(group_names)} groups."
             )
 
         return dict(
@@ -361,8 +361,8 @@ class GroupBy(Serializable):
         ngroups = len(offsets) - 1
         if ngroups > self._MAX_GROUPS_BEFORE_WARN:
             warnings.warn(
-                f"GroupBy.apply() expected to be slow"
-                f" for large number of groups ({ngroups})"
+                f"GroupBy.apply() performance scales poorly with "
+                f"number of groups. Got {ngroups} groups."
             )
 
         chunks = [
