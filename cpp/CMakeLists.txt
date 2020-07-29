@@ -324,9 +324,7 @@ if(BUILD_TESTS)
     include(CTest)
     find_package(GTest)
     
-    if(GTEST_ROOT)
-        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-    else()
+    if(NOT GTEST_ROOT)
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found, it will be built from source.")
         include(ConfigureGoogleBenchmark)
         set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
@@ -339,12 +337,12 @@ if(BUILD_TESTS)
     link_directories(${GTEST_ROOT}/install/lib/)
     include_directories(${GTEST_INCLUDE_DIR})
 
-    if(GTEST_FOUND)
-        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-    else()
-        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+    if(NOT GTEST_FOUND)
         set(BUILD_TESTING OFF)
     endif()
+
+    message(STATUS "Google C++ Testing Framework (Google Test) was found? ${GTEST_FOUND} - ${GTEST_ROOT}")
+
 endif(BUILD_TESTS)
 
 message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
@@ -355,14 +353,14 @@ message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 if(BUILD_BENCHMARKS)
     find_package(benchmark)
 
-    if(benchmark_FOUND)
-        message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${benchmark_ROOT}")
-    else()
+    if(NOT benchmark_FOUND)
         message(AUTHOR_WARNING "Google C++ Benchmarking Framework (Google Benchmark) not found, it will be built from source.")
         include(ConfigureGoogleBenchmark)
         set(benchmark_ROOT "${CMAKE_BINARY_DIR}/googlebenchmark")
     endif(benchmark_FOUND)
     add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
+
+    message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) was found? ${benchmark_FOUND} - ${benchmark_ROOT}")
 
 endif(BUILD_BENCHMARKS)
 
