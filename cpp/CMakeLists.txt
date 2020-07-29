@@ -359,7 +359,7 @@ if(BUILD_BENCHMARKS)
 
     set(GBENCH_INCLUDE_DIR "${benchmark_ROOT}/install/include")
     set(GBENCH_LIBRARY_DIR "${benchmark_ROOT}/install/lib")
-    link_directories(${GBENCH_LIBRARY_DIR}
+    link_directories(${GBENCH_LIBRARY_DIR})
     include_directories(${GBENCH_INCLUDE_DIR})
     
     if(NOT benchmark_FOUND)
