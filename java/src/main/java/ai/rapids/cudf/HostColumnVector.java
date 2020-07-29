@@ -1386,7 +1386,7 @@ public final class HostColumnVector implements AutoCloseable {
         this.allRows.set(level + 1, (long) currentListCount);
         /// SET VALIDITY/////
         if (list == null) {
-          setNullAt(level,currentListIndex);
+          setNullAt(level,currentListIndex - 1);
         } else {
           for (int x = 0; x < list.size(); x++) {
             if (list.get(x) == null) {
@@ -1875,6 +1875,13 @@ public final class HostColumnVector implements AutoCloseable {
       valid.setMemory(0, bitmaskSize, (byte) 0xFF);
     }
 
+    private void allocateBitmaskAndSetDefaultValues(int level) {
+      long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) rows);
+      HostMemoryBuffer newValid = (HostMemoryBuffer.allocate(bitmaskSize));
+      allValids.add(newValid);
+      newValid.setMemory(0, bitmaskSize, (byte) 0xFF);
+    }
+
     /**
      * Append null value.
      */
@@ -1903,11 +1910,11 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public final Builder setNullAt(int level, long index) {
-      assert index < allRows.get((allRows.size() - 1));
+      assert index < allRows.get(level);
 
       // add null
-      if (this.valid == null) {
-        allocateBitmaskAndSetDefaultValues();
+      if (this.allValids.size() < level) {
+        allocateBitmaskAndSetDefaultValues(level);
       }
       nullCount += BitVectorHelper.setNullAt(allValids.get(allValids.size() - 1), index);
       return this;

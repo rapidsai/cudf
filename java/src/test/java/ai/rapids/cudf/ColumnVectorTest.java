@@ -2493,7 +2493,7 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector hcv = res.copyToHost();
     List<String> ret = hcv.getList(1);
     List<String> ret2 = hcv.getList(2);
-    System.out.println("KUHU ret size=" + ret.size() + " ret2=" + ret2.size());
+    System.out.println("KUHU ret size=" + ret.size() + " ret2=" + ret2);
 //    //add asserts
     System.out.println("Element =" + ret.get(0));
     System.out.println("Element =" + ret.get(1));
