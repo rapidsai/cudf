@@ -128,3 +128,30 @@ def test_timedelta_series_to_array(data, dtype, fillna):
     actual = gsr.to_array(fillna=fillna)
 
     np.testing.assert_array_equal(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+    ],
+)
+@pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
+def test_timedelta_series_to_pandas(data, dtype):
+    gsr = cudf.Series(data, dtype=dtype)
+
+    expected = np.array(
+        cp.asnumpy(data) if isinstance(data, cp.ndarray) else data, dtype=dtype
+    )
+
+    expected = pd.Series(expected)
+    actual = gsr.to_pandas()
+
+    assert_eq(expected, actual)
