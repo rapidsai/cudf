@@ -274,8 +274,8 @@ __inline__ __device__ cudf::list_view decode_value(const char *data,
 
 template <>
 __inline__ __device__ numeric::decimal32 decode_value(const char *data,
-                                                      long start,
-                                                      long end,
+                                                      uint64_t start,
+                                                      uint64_t end,
                                                       ParseOptions const &opts)
 {
   return numeric::decimal32{};
@@ -283,8 +283,8 @@ __inline__ __device__ numeric::decimal32 decode_value(const char *data,
 
 template <>
 __inline__ __device__ numeric::decimal64 decode_value(const char *data,
-                                                      long start,
-                                                      long end,
+                                                      uint64_t start,
+                                                      uint64_t end,
                                                       ParseOptions const &opts)
 {
   return numeric::decimal64{};
