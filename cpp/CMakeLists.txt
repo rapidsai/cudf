@@ -323,7 +323,7 @@ if(BUILD_TESTS)
     include(CTest)
     find_package(GTest)
     
-    if(NOT GTEST_ROOT)
+    if(NOT GTEST_FOUND)
         include(ConfigureGoogleTest)
         set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
     endif(NOT GTEST_FOUND)
