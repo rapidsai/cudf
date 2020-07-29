@@ -134,25 +134,26 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
+from cudf.core.dtypes import Dtype
 
 _str_to_numeric_typecast_functions = {
-    np.dtype("int8"): str_cast.stoi8,
-    np.dtype("int16"): str_cast.stoi16,
-    np.dtype("int32"): str_cast.stoi,
-    np.dtype("int64"): str_cast.stol,
-    np.dtype("uint8"): str_cast.stoui8,
-    np.dtype("uint16"): str_cast.stoui16,
-    np.dtype("uint32"): str_cast.stoui,
-    np.dtype("uint64"): str_cast.stoul,
-    np.dtype("float32"): str_cast.stof,
-    np.dtype("float64"): str_cast.stod,
-    np.dtype("bool"): str_cast.to_booleans,
+    Dtype("int8"): str_cast.stoi8,
+    Dtype("int16"): str_cast.stoi16,
+    Dtype("int32"): str_cast.stoi,
+    Dtype("int64"): str_cast.stol,
+    Dtype("uint8"): str_cast.stoui8,
+    Dtype("uint16"): str_cast.stoui16,
+    Dtype("uint32"): str_cast.stoui,
+    Dtype("uint64"): str_cast.stoul,
+    Dtype("float32"): str_cast.stof,
+    Dtype("float64"): str_cast.stod,
+    Dtype("bool"): str_cast.to_booleans,
     # TODO: support Date32 UNIX days
     # np.dtype("datetime64[D]"): str_cast.timestamp2int,
-    np.dtype("datetime64[s]"): str_cast.timestamp2int,
-    np.dtype("datetime64[ms]"): str_cast.timestamp2int,
-    np.dtype("datetime64[us]"): str_cast.timestamp2int,
-    np.dtype("datetime64[ns]"): str_cast.timestamp2int,
+    Dtype("datetime64[s]"): str_cast.timestamp2int,
+    Dtype("datetime64[ms]"): str_cast.timestamp2int,
+    Dtype("datetime64[us]"): str_cast.timestamp2int,
+    Dtype("datetime64[ns]"): str_cast.timestamp2int,
 }
 
 _numeric_to_str_typecast_functions = {
