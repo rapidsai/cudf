@@ -848,6 +848,34 @@ class MultiIndex(Index):
         result = cls.from_pandas(pdi)
         return result
 
+    def _poplevels(self, level):
+        ilevels = [self.names.index(lev) for lev in level]
+
+        popped_data = {}
+        for i in ilevels:
+            n = self._data.names[i]
+            popped_data[n] = self._data.pop(n)
+
+        result = cudf.core.index.Index._from_table(
+            cudf.core.frame.Frame(popped_data)
+        )
+        names = list(self.names)
+        popped_names = [names.pop(i) for i in ilevels]
+        result.names = popped_names
+
+        self.names = names
+        self._compute_levels_and_codes()
+
+        return result
+
+    def droplevels(self, level):
+        mi = self.copy()
+        mi._poplevels(level)
+        if mi.nlevels == 1:
+            return mi.get_level_values(mi.names[0])
+        else:
+            return mi
+
     def to_pandas(self, **kwargs):
         if hasattr(self, "_source_data"):
             result = self._source_data.to_pandas(nullable_pd_dtype=False)
