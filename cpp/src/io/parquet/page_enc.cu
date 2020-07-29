@@ -639,17 +639,6 @@ inline __device__ void PackLiterals(
 }
 
 /**
- * @brief Flushes the RLE encoded repeated values.
- */
-void __device__ flushRleRepeat(page_enc_state_s *s, uint32_t nbits, uint32_t rle_run)
-{
-  uint8_t *dst = VlqEncode(s->rle_out, rle_run);
-  *dst++       = s->run_val;
-  if (nbits > 8) { *dst++ = s->run_val >> 8; }
-  s->rle_out = dst;
-}
-
-/**
  * @brief RLE encoder
  *
  * @param[in,out] s Page encode state
@@ -664,13 +653,7 @@ static __device__ void RleEncode(
   uint32_t rle_pos = s->rle_pos;
   uint32_t rle_run = s->rle_run;
 
-  // Nothing left to encode; RleEncode called to flush the repeated values
-  if (flush && rle_pos == numvals) {
-    if (t == 0) { flushRleRepeat(s, nbits, rle_run); }
-    return;
-  }
-
-  while (rle_pos < numvals) {
+  while (rle_pos < numvals || (flush && rle_run)) {
     uint32_t pos = rle_pos + t;
     if (rle_run > 0 && !(rle_run & 1)) {
       // Currently in a long repeat run
@@ -692,7 +675,13 @@ static __device__ void RleEncode(
       rle_run += rle_rpt_count << 1;
       rle_pos += rle_rpt_count;
       if (rle_rpt_count < max_rpt_count || (flush && rle_pos == numvals)) {
-        if (t == 0) { flushRleRepeat(s, nbits, rle_run); }
+        if (t == 0) {
+          uint32_t const run_val = s->run_val;
+          uint8_t *dst           = VlqEncode(s->rle_out, rle_run);
+          *dst++                 = run_val;
+          if (nbits > 8) { *dst++ = run_val >> 8; }
+          s->rle_out = dst;
+        }
         rle_run = 0;
       }
     } else {
