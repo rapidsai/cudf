@@ -152,7 +152,7 @@
 - PR #5775 Update dask_cudf.read_parquet to align with upstream improvements
 - PR #5785 Enable computing views of ListColumns
 - PR #5791 Get nullable_pd_dtype from kwargs if provided in assert_eq
-- PR #5786 JNI Header Cleanup for cuspacial
+- PR #5786 JNI Header Cleanup for cuSpatial
 - PR #5795 Clarify documentation on Boost dependency
 - PR #5803 Add in Java support for the repeat command
 
