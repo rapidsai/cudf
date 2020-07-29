@@ -94,17 +94,20 @@ struct dispatch_to_cudf_column {
                                                       rmm::mr::device_memory_resource* mr,
                                                       cudaStream_t stream)
   {
-    std::unique_ptr<rmm::device_buffer> mask = std::make_unique<rmm::device_buffer>(0);
-    if (array.null_bitmap_data() != nullptr) {
-      mask = std::make_unique<rmm::device_buffer>(array.null_bitmap()->size(), stream, mr);
-      CUDA_TRY(cudaMemcpyAsync(mask->data(),
-                               array.null_bitmap_data(),
-                               array.null_bitmap()->size(),
-                               cudaMemcpyHostToDevice,
-                               stream));
-    }
-
-    return std::move(mask);
+    return [&]() {
+      if (array.null_bitmap_data() == nullptr) {
+        return std::make_unique<rmm::device_buffer>(0);
+      } else {
+        std::unique_ptr<rmm::device_buffer> mask = std::make_unique<rmm::device_buffer>(0);
+        mask = std::make_unique<rmm::device_buffer>(array.null_bitmap()->size(), stream, mr);
+        CUDA_TRY(cudaMemcpyAsync(mask->data(),
+                                 array.null_bitmap_data(),
+                                 array.null_bitmap()->size(),
+                                 cudaMemcpyHostToDevice,
+                                 stream));
+        return mask;
+      }
+    }();
   }
 };
 
