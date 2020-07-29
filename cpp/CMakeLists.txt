@@ -337,7 +337,7 @@ if(BUILD_TESTS)
 
     if(NOT GTEST_FOUND)
         set(BUILD_TESTING OFF)
-    endif()
+    endif(NOT GTEST_FOUND)
 
     message(STATUS "Google C++ Testing Framework (Google Test) was found? ${GTEST_FOUND} - ${GTEST_ROOT}")
 
