@@ -32,7 +32,7 @@ class ListColumn(ColumnBase):
 
     @property
     def base_size(self):
-        return self.size
+        return len(self.base_children[0]) - 1
 
     @property
     def elements(self):
@@ -78,7 +78,7 @@ class ListColumn(ColumnBase):
         else:
             buffers = offsets.buffers()
         return pa.ListArray.from_buffers(
-            self.dtype.to_arrow(), len(self), buffers, children=[elements],
+            self.dtype.to_arrow(), len(self), buffers, children=[elements]
         )
 
     def list(self, parent=None):
