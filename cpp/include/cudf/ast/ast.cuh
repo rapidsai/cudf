@@ -16,7 +16,6 @@
 #pragma once
 
 #include <thrust/detail/raw_pointer_cast.h>
-#include <algorithm>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -28,12 +27,15 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <functional>
-#include <iterator>
 #include <rmm/device_uvector.hpp>
-#include <type_traits>
+
 #include "linearizer.hpp"
 #include "operators.hpp"
+
+#include <algorithm>
+#include <functional>
+#include <iterator>
+#include <type_traits>
 
 namespace cudf {
 
@@ -140,17 +142,6 @@ struct typed_binop_dispatch {
     auto typed_output =
       resolve_output_data_reference<Element>(output, table, thread_intermediate_storage, row_index);
     *typed_output = ast_operator_dispatcher_typed(op, do_binop<Element>{}, typed_lhs, typed_rhs);
-    /*
-    if (row_index == 0) {
-      printf("lhs index %i = %f, rhs index %i = %f, output index %i = %f\n",
-             lhs.data_index,
-             float(typed_lhs),
-             rhs.data_index,
-             float(typed_rhs),
-             output.data_index,
-             float(*typed_output));
-    }
-    */
   }
 
   template <typename Element, std::enable_if_t<!cudf::is_numeric<Element>()>* = nullptr>
@@ -162,8 +153,48 @@ struct typed_binop_dispatch {
                              detail::device_data_reference rhs,
                              detail::device_data_reference output)
   {
-    // TODO: How else to make this compile? Need a template to match unsupported types, or prevent
-    // the compiler from attempting to compile unsupported types here.
+    // TODO: Need a template to match unsupported types, or prevent the compiler from attempting to
+    // compile unsupported types here.
+  }
+};
+
+struct typed_operator_dispatch_functor {
+  template <typename OperatorFunctor,
+            typename LHS,
+            typename RHS,
+            typename Out = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>,
+            std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(table_device_view const& table,
+                                                      std::int64_t* thread_intermediate_storage,
+                                                      cudf::size_type row_index,
+                                                      detail::device_data_reference lhs,
+                                                      detail::device_data_reference rhs,
+                                                      detail::device_data_reference output)
+  {
+    auto typed_lhs =
+      resolve_input_data_reference<LHS>(lhs, table, thread_intermediate_storage, row_index);
+    auto typed_rhs =
+      resolve_input_data_reference<RHS>(rhs, table, thread_intermediate_storage, row_index);
+    auto typed_output =
+      resolve_output_data_reference<Out>(output, table, thread_intermediate_storage, row_index);
+    *typed_output = OperatorFunctor{}(typed_lhs, typed_rhs);
+    // printf("LHS: %i, RHS: %i, Output: %i\n", typed_lhs, typed_rhs, *typed_output);
+  }
+
+  template <typename OperatorFunctor,
+            typename LHS,
+            typename RHS,
+            typename Out                                                                 = void,
+            std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(table_device_view const& table,
+                                                      std::int64_t* thread_intermediate_storage,
+                                                      cudf::size_type row_index,
+                                                      detail::device_data_reference lhs,
+                                                      detail::device_data_reference rhs,
+                                                      detail::device_data_reference output)
+  {
+    // TODO: Need a template to match unsupported types, or prevent the compiler from attempting to
+    // compile unsupported types here.
   }
 };
 
@@ -175,6 +206,7 @@ __device__ void operate(ast_operator op,
                         detail::device_data_reference rhs,
                         detail::device_data_reference output)
 {
+  /*
   type_dispatcher(lhs.data_type,
                   typed_binop_dispatch{},
                   op,
@@ -184,6 +216,17 @@ __device__ void operate(ast_operator op,
                   lhs,
                   rhs,
                   output);
+  */
+  ast_operator_dispatcher(op,
+                          lhs.data_type,
+                          rhs.data_type,
+                          typed_operator_dispatch_functor{},
+                          table,
+                          thread_intermediate_storage,
+                          row_index,
+                          lhs,
+                          rhs,
+                          output);
 }
 
 struct output_copy_functor {
@@ -269,14 +312,16 @@ __device__ void evaluate_row_expression(table_device_view const& table,
                   expression_output);
 }
 
-__global__ void compute_column_kernel(table_device_view table,
-                                      detail::device_data_reference* data_references,
-                                      // scalar* literals,
-                                      ast_operator* operators,
-                                      cudf::size_type* operator_source_indices,
-                                      cudf::size_type num_operators,
-                                      cudf::size_type num_intermediates,
-                                      mutable_column_device_view output)
+template <size_type block_size>
+__launch_bounds__(block_size) __global__
+  void compute_column_kernel(table_device_view table,
+                             detail::device_data_reference* data_references,
+                             // scalar* literals,
+                             ast_operator* operators,
+                             cudf::size_type* operator_source_indices,
+                             cudf::size_type num_operators,
+                             cudf::size_type num_intermediates,
+                             mutable_column_device_view output)
 {
   extern __shared__ std::int64_t intermediate_storage[];
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
@@ -294,7 +339,6 @@ __global__ void compute_column_kernel(table_device_view table,
                             row_index,
                             thread_intermediate_storage,
                             output);
-    // output.element<bool>(row_index) = evaluate_expression<Element>(expr, table, row_index);
   }
 }
 
@@ -304,7 +348,7 @@ std::unique_ptr<column> compute_column(
   cudaStream_t stream                 = 0,  // TODO use detail API
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
-  CUDF_FUNC_RANGE()
+  CUDF_FUNC_RANGE();
   // Linearize the AST
   nvtxRangePush("Linearizing...");
   auto expr_linearizer = linearizer(table);
@@ -383,28 +427,31 @@ std::unique_ptr<column> compute_column(
 
   // Configure kernel parameters
   nvtxRangePush("Configuring kernel parameters...");
-  auto block_size = 1024;  // TODO: Dynamically determine block size based on shared memory limits
-                           // and block size limits
+  auto constexpr block_size = 512;
   cudf::detail::grid_1d config(table_num_rows, block_size);
   auto num_intermediates = expr_linearizer.get_intermediate_count();
   auto shmem_size_per_block =
     sizeof(std::int64_t) * num_intermediates * config.num_threads_per_block;
-  // std::cout << "Requesting " << shmem_size_per_block << " bytes of shared memory." << std::endl;
+  /*
+  std::cout << "Requesting " << config.num_blocks << " blocks, ";
+  std::cout << config.num_threads_per_block << " threads/block, ";
+  std::cout << shmem_size_per_block << " bytes of shared memory." << std::endl;
+  */
   nvtxRangePop();
 
   // Execute the kernel
   nvtxRangePush("Executing AST kernel...");
-  compute_column_kernel<<<config.num_blocks,
-                          config.num_threads_per_block,
-                          shmem_size_per_block,
-                          stream>>>(*table_device,
-                                    thrust::raw_pointer_cast(device_data_references.data()),
-                                    // device_literals,
-                                    thrust::raw_pointer_cast(device_operators.data()),
-                                    thrust::raw_pointer_cast(device_operator_source_indices.data()),
-                                    num_operators,
-                                    num_intermediates,
-                                    *mutable_output_device);
+  compute_column_kernel<block_size>
+    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
+      *table_device,
+      thrust::raw_pointer_cast(device_data_references.data()),
+      // device_literals,
+      thrust::raw_pointer_cast(device_operators.data()),
+      thrust::raw_pointer_cast(device_operator_source_indices.data()),
+      num_operators,
+      num_intermediates,
+      *mutable_output_device);
+  CHECK_CUDA(stream);
   nvtxRangePop();
   return output_column;
 }
