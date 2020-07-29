@@ -332,7 +332,7 @@ if(BUILD_TESTS)
     
     set(GTEST_INCLUDE_DIR "${GTEST_ROOT}/install/include")
     set(GTEST_LIBRARY_DIR "${GTEST_ROOT}/install/lib")
-    link_directories(${GTEST_ROOT}/install/lib/)
+    link_directories(${GTEST_LIBRARY_DIR})
     include_directories(${GTEST_INCLUDE_DIR})
 
     if(NOT GTEST_FOUND)
