@@ -150,6 +150,7 @@
 - PR #5780 Add Java bindings for pad
 - PR #5775 Update dask_cudf.read_parquet to align with upstream improvements
 - PR #5786 JNI Header Cleanup for cuspacial
+- PR #5800 Expose arrow datasource instead of directly taking a RandomAccessFile
 
 ## Bug Fixes
 
