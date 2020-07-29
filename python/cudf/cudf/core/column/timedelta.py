@@ -167,6 +167,12 @@ class TimeDeltaColumn(column.ColumnBase):
         # is merged.
         raise NotImplementedError
 
+    def as_timedelta_column(self, dtype, **kwargs):
+        dtype = np.dtype(dtype)
+        if dtype == self.dtype:
+            return self
+        return libcudf.unary.cast(self, dtype=dtype)
+
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(lhs, rhs, op, out_dtype):
