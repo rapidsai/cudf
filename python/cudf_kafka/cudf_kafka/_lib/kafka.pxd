@@ -15,6 +15,8 @@ cdef extern from "kafka_consumer.hpp" \
 
     cpdef cppclass kafka_consumer:
 
+        kafka_consumer(map[string, string] configs) except +
+
         kafka_consumer(map[string, string] configs,
                        string topic_name,
                        int32_t partition,
@@ -23,16 +25,18 @@ cdef extern from "kafka_consumer.hpp" \
                        int32_t batch_timeout,
                        string delimiter) except +
 
-        bool assign(vector[string] topics, vector[int] partitions) except +
+        bool assign(vector[string] topics, vector[int32_t] partitions) except +
 
-        bool commit_offset(string topic, int partition, int offset) except +
+        bool commit_offset(string topic,
+                           int32_t partition,
+                           int64_t offset) except +
 
         int64_t get_committed_offset(string topic,
-                                     int partition) except +
+                                     int32_t partition) except +
 
         map[string, int64_t] get_watermark_offset(string topic,
-                                                  int partition,
-                                                  int timeout,
+                                                  int32_t partition,
+                                                  int32_t timeout,
                                                   bool cached) except +
 
         bool unsubscribe() except +
@@ -51,3 +55,10 @@ cdef class KafkaDatasource(Datasource):
     cdef string delimiter
 
     cdef datasource* get_datasource(self) nogil
+
+    cpdef bool commit_offset(self,
+                             string topic,
+                             int32_t partition,
+                             int64_t offset)
+
+    cpdef int64_t get_committed_offset(self, string topic, int32_t partition)

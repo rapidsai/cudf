@@ -39,6 +39,10 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs)
   std::string conf_val;
   CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
                "Kafka group.id must be configured");
+
+  std::string errstr;
+  consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
+    RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
 }
 
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,

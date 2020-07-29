@@ -17,7 +17,7 @@ class CudfKafkaClient:
 
         Parameters
         ----------
-        kafka_configs, dict, Key/Value pairs of librdkafka
+        kafka_configs : dict, Dict of Key/Value pairs of librdkafka
         configuration values. Full list of valid configuration
         options can be found at
         https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
@@ -38,10 +38,6 @@ class CudfKafkaClient:
         """
         Stop all active consumption and remove consumer subscriptions
         to topic/partition instances
-
-        Parameters
-        ----------
-        None
 
         """
 
@@ -198,7 +194,7 @@ class Consumer(CudfKafkaClient):
                 part.topic,
                 part.partition,
                 self.kafka_meta_client.get_committed_offset(
-                    part.topic, part.partition
+                    part.topic.encode(), part.partition
                 ),
             )
             for part in partitions
@@ -218,14 +214,14 @@ class Consumer(CudfKafkaClient):
         --------
         >>> from custream import kafka
         >>> kafka_configs = {
-            "metadata.broker.list": "localhost:9092",
-            "enable.partition.eof": "true",
-            "group.id": "groupid",
-            "auto.offset.reset": "earliest",
-            "enable.auto.commit": "false"
-        }
+        ... "metadata.broker.list": "localhost:9092",
+        ... "enable.partition.eof": "true",
+        ... "group.id": "groupid",
+        ... "auto.offset.reset": "earliest",
+        ... "enable.auto.commit": "false"
+        ... }
         >>> consumer = kafka.KafkaHandle(kafka_configs,
-        topics=["kafka-topic"], partitions=[0]))
+        ... topics=["kafka-topic"], partitions=[0]))
         >>> low, high = consumer.get_watermark_offsets("kafka-topic", 0)
         """
 
@@ -272,5 +268,5 @@ class Consumer(CudfKafkaClient):
 
         for offs in offsets:
             self.kafka_meta_client.commit_offset(
-                offs.topic, offs.partition, offs.offset, asynchronous
+                offs.topic.encode(), offs.partition, offs.offset
             )
