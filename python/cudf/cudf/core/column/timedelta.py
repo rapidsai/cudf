@@ -6,6 +6,7 @@ import pandas as pd
 import pyarrow as pa
 
 from cudf import _lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -68,6 +69,24 @@ class TimeDeltaColumn(column.ColumnBase):
             buffers=[mask, data],
             null_count=self.null_count,
         )
+
+    def binary_operator(self, op, rhs, reflect=False):
+        lhs, rhs = self, rhs
+
+        if op in ("eq", "ne", "lt", "gt", "le", "ge"):
+            out_dtype = np.bool
+        elif op in ("add", "sub", "floordiv", "mul"):
+            if binop in ["mod", "floordiv"]:
+                out_dtype = np.dtype("int_")
+            else:
+                out_dtype = self.dtype
+
+        else:
+            raise TypeError(
+                f"Series of dtype {self.dtype} cannot perform "
+                f" the operation {op}"
+            )
+        return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def normalize_binop_value(self, other):
         if isinstance(other, dt.timedelta):
@@ -138,3 +157,9 @@ class TimeDeltaColumn(column.ColumnBase):
         # https://github.com/rapidsai/cudf/pull/5625/
         # is merged.
         raise NotImplementedError
+
+
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
+def binop(lhs, rhs, op, out_dtype):
+    out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+    return out

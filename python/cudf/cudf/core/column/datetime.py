@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf.core.buffer import Buffer
@@ -201,6 +202,10 @@ class DatetimeColumn(column.ColumnBase):
 
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
             out_dtype = np.bool
+        elif op in ("add", "sub") and isinstance(
+            rhs, cudf.core.column.timedelta.TimeDeltaColumn
+        ):
+            out_dtype = self.dtype
         else:
             raise TypeError(
                 f"Series of dtype {self.dtype} cannot perform "
