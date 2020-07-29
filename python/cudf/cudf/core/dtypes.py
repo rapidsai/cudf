@@ -49,10 +49,17 @@ pa_to_np_dtypes = {
 }
 
 class Dtype(ExtensionDtype):
+    is_integer = False
+    is_string = False
+    is_boolean = False
+    is_categorical = False
+    is_datetime = False
+    is_list = False
+    is_float = False
 
-    is_categorical_dtype = False
     pa_type = None
     def __init__(self, arg):
+
         cudf_dtype = make_dtype_from_obj(arg)
         cudf_dtype.__init__(self)
 
@@ -72,70 +79,92 @@ class Dtype(ExtensionDtype):
         return pa_to_pd_dtypes[self.pa_type]
 
     @property
+    def itemsize(self):
+        return self.to_numpy.itemsize
+
+    @property
     def type(self):
         return self.pandas_dtype().type
 
-class UInt8Dtype(Dtype):
+    def __repr__(self):
+        return self.pa_type.__repr__()
+
+    def __hash__(self):
+        return hash(self.__repr__())
+
+class IntDtype(Dtype):
+    is_integer = True
+
+class UInt8Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.uint8()
         
-class UInt16Dtype(Dtype):
+class UInt16Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.uint16()
 
-class UInt32Dtype(Dtype):
+class UInt32Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.uint32()
 
-class UInt64Dtype(Dtype):
+class UInt64Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.uint64()
 
-class Int8Dtype(Dtype):
+class Int8Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.int8()
 
-class Int16Dtype(Dtype):
+class Int16Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.int16()
 
-class Int32Dtype(Dtype):
+class Int32Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.int32()
 
-class Int64Dtype(Dtype):
+class Int64Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.int64()
 
-class Float32Dtype(Dtype):
+
+class FloatDtype(Dtype):
+    is_float = True
+
+class Float32Dtype(FloatDtype):
     def __init__(self):
         self.pa_type = pa.float32()
 
-class Float64Dtype(Dtype):
+class Float64Dtype(FloatDtype):
     def __init__(self):
         self.pa_type = pa.float64()
 
 class BooleanDtype(Dtype):
+    is_boolean = True
     def __init__(self):
-        self.pa_type = pa.bool()
+        self.pa_type = pa.bool_()
 
-class Datetime64NSDtype(Dtype):
+class DatetimeDtype(Dtype):
+    is_datetime = True
+
+class Datetime64NSDtype(DatetimeDtype):
     def __init__(self):
         self.pa_type = pa.timestamp('ns')
 
-class Datetime64USDtype(Dtype):
+class Datetime64USDtype(DatetimeDtype):
     def __init__(self):
         self.pa_type = pa.timestamp('us')
 
-class Datetime64MSDtype(Dtype):
+class Datetime64MSDtype(DatetimeDtype):
     def __init__(self):
         self.pa_type = pa.timestamp('ms')
 
-class Datetime64SDtype(Dtype):
+class Datetime64SDtype(DatetimeDtype):
     def __init__(self):
         self.pa_type = pa.timestamp('s')
 
 class StringDtype(Dtype):
+    is_string = True
     def __init__(self):
         self.pa_type = pa.string()
 
@@ -176,13 +205,20 @@ def make_dtype_from_string(obj):
     elif 'bool' in obj:
         return BooleanDtype
 
+
+
 def make_dtype_from_numpy(obj):
     np_to_pd_types = {v: k for k, v in pd_to_np_dtypes.items()}
     result = np_to_pd_types.get(obj)
+    return result
 
 def make_dtype_from_obj(obj):
+    if isinstance(obj, Dtype):
+        return np_to_cudf_dtypes[obj.to_numpy]
     if isinstance(obj, np.dtype):
-        return make_dtype_from_numpy(obj)
+        return np_to_cudf_dtypes[obj]
+    elif isinstance(obj, pa.lib.DataType):
+        return pa_to_cudf_dtypes[obj]
     elif isinstance(obj, str):
         return make_dtype_from_string(obj)
 
@@ -346,3 +382,43 @@ class ListDtype(ExtensionDtype):
             return f"ListDtype({self.element_type.__repr__()})"
         else:
             return f"ListDtype({self.element_type})"
+
+
+pa_to_cudf_dtypes = {
+    pa.uint8(): UInt8Dtype,
+    pa.uint16(): UInt16Dtype,
+    pa.uint32(): UInt32Dtype,
+    pa.uint64(): UInt64Dtype,
+    pa.int8(): Int8Dtype,
+    pa.int16(): Int16Dtype,
+    pa.int32(): Int32Dtype,
+    pa.int64(): Int64Dtype,
+    pa.bool_(): BooleanDtype,
+    pa.string(): StringDtype,
+    pa.float32(): Float32Dtype,
+    pa.float64(): Float64Dtype,
+    pa.timestamp('ns'): Datetime64NSDtype,
+    pa.timestamp('us'): Datetime64USDtype,
+    pa.timestamp('ms'): Datetime64MSDtype,
+    pa.timestamp('s'): Datetime64SDtype,
+    None: Dtype
+}
+
+np_to_cudf_dtypes = {
+    np.dtype('int8'): Int8Dtype,
+    np.dtype('int16'): Int16Dtype,
+    np.dtype('int32'): Int32Dtype,
+    np.dtype('int64'): Int64Dtype,
+    np.dtype('uint8'): UInt8Dtype,
+    np.dtype('uint16'): UInt16Dtype,
+    np.dtype('uint32'): UInt32Dtype,
+    np.dtype('uint64'): UInt64Dtype,
+    np.dtype('bool'): BooleanDtype,
+    np.dtype('object'): StringDtype,
+    np.dtype('float32'): Float32Dtype,
+    np.dtype('float64'): Float64Dtype,
+    np.dtype('datetime64[ns]'): Datetime64NSDtype,
+    np.dtype('datetime64[us]'): Datetime64USDtype,
+    np.dtype('datetime64[ms]'): Datetime64MSDtype,
+    np.dtype('datetime64[s]'): Datetime64SDtype,
+}
