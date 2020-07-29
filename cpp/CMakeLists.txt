@@ -326,7 +326,7 @@ if(BUILD_TESTS)
     if(NOT GTEST_ROOT)
         include(ConfigureGoogleBenchmark)
         set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
-    endif(GTEST_ROOT)
+    endif(NOT GTEST_FOUND)
 
     add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
     
