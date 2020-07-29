@@ -878,11 +878,11 @@ class ColumnBase(Column, Serializable):
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
     def astype(self, dtype, **kwargs):
-        if is_categorical_dtype(dtype):
+        if dtype.is_categorical:
             return self.as_categorical_column(dtype, **kwargs)
-        elif np.issubdtype(dtype, np.datetime64):
+        elif dtype.is_datetime:
             return self.as_datetime_column(dtype, **kwargs)
-        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
+        elif dtype.is_string:
             return self.as_string_column(dtype, **kwargs)
         else:
             return self.as_numerical_column(dtype, **kwargs)
@@ -1447,7 +1447,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             )
             data = cudf.core.column.NumericalColumn(
                 data=padata,
-                dtype=np.dtype(arbitrary.type.to_pandas_dtype()),
+                dtype=dtype,
                 mask=pamask,
                 size=pa_size,
                 offset=pa_offset,
@@ -1642,19 +1642,12 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             try:
                 if dtype is not None:
                     dtype = pd.api.types.pandas_dtype(dtype)
-                    if dtype.is_categorical_dtype:
+                    if dtype.is_categorical:
                         raise TypeError
-                data = as_column(
-                    pa.array(
-                        arbitrary,
-                        type=dtype.pa_type,
-                        from_pandas=True
-                        if nan_as_null is None
-                        else nan_as_null,
-                    ),
-                    dtype=dtype,
-                    nan_as_null=nan_as_null,
-                )
+
+                pa_data = pa.array(arbitrary, type=dtype.pa_type, from_pandas=True if nan_as_null is None else nan_as_null)
+                data = as_column(pa_data, dtype=cudf.Dtype(pa_data.type), nan_as_null=nan_as_null)
+
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 if dtype.is_categorical_dtype:
                     sr = pd.Series(arbitrary, dtype="category")

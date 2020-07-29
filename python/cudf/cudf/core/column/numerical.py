@@ -32,7 +32,7 @@ class NumericalColumn(column.ColumnBase):
             The dtype associated with the data Buffer
         mask : Buffer, optional
         """
-        dtype = np.dtype(dtype)
+        dtype = cudf.Dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
@@ -139,7 +139,7 @@ class NumericalColumn(column.ColumnBase):
 
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
-                np.dtype(self.dtype)
+                dtype.to_numpy
             ](self, **kwargs)
         else:
             return as_column([], dtype="object")
