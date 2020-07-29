@@ -312,14 +312,16 @@ __device__ void evaluate_row_expression(table_device_view const& table,
                   expression_output);
 }
 
-__global__ void compute_column_kernel(table_device_view table,
-                                      detail::device_data_reference* data_references,
-                                      // scalar* literals,
-                                      ast_operator* operators,
-                                      cudf::size_type* operator_source_indices,
-                                      cudf::size_type num_operators,
-                                      cudf::size_type num_intermediates,
-                                      mutable_column_device_view output)
+template <size_type block_size>
+__launch_bounds__(block_size) __global__
+  void compute_column_kernel(table_device_view table,
+                             detail::device_data_reference* data_references,
+                             // scalar* literals,
+                             ast_operator* operators,
+                             cudf::size_type* operator_source_indices,
+                             cudf::size_type num_operators,
+                             cudf::size_type num_intermediates,
+                             mutable_column_device_view output)
 {
   extern __shared__ std::int64_t intermediate_storage[];
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
@@ -425,8 +427,7 @@ std::unique_ptr<column> compute_column(
 
   // Configure kernel parameters
   nvtxRangePush("Configuring kernel parameters...");
-  auto block_size = 1024;  // TODO: Dynamically determine block size based on shared memory limits
-                           // and block size limits
+  auto constexpr block_size = 512;
   cudf::detail::grid_1d config(table_num_rows, block_size);
   auto num_intermediates = expr_linearizer.get_intermediate_count();
   auto shmem_size_per_block =
@@ -440,17 +441,17 @@ std::unique_ptr<column> compute_column(
 
   // Execute the kernel
   nvtxRangePush("Executing AST kernel...");
-  compute_column_kernel<<<config.num_blocks,
-                          config.num_threads_per_block,
-                          shmem_size_per_block,
-                          stream>>>(*table_device,
-                                    thrust::raw_pointer_cast(device_data_references.data()),
-                                    // device_literals,
-                                    thrust::raw_pointer_cast(device_operators.data()),
-                                    thrust::raw_pointer_cast(device_operator_source_indices.data()),
-                                    num_operators,
-                                    num_intermediates,
-                                    *mutable_output_device);
+  compute_column_kernel<block_size>
+    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
+      *table_device,
+      thrust::raw_pointer_cast(device_data_references.data()),
+      // device_literals,
+      thrust::raw_pointer_cast(device_operators.data()),
+      thrust::raw_pointer_cast(device_operator_source_indices.data()),
+      num_operators,
+      num_intermediates,
+      *mutable_output_device);
+  CHECK_CUDA(stream);
   nvtxRangePop();
   return output_column;
 }
