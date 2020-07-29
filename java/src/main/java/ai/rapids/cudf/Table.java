@@ -866,7 +866,7 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Repeat the contents of this table count times.
+   * Repeat each row of this table count times.
    * @param count the number of times to repeat each row.
    * @return the new Table.
    */
@@ -875,8 +875,8 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Create a new table by repeating the rows of this table. The number if
-   * repetitions of each element is defined by the corresponding value in counts.
+   * Create a new table by repeating each row of this table. The number of
+   * repetitions of each row is defined by the corresponding value in counts.
    * @param counts the number of times to repeat each row. Cannot have nulls, must be an
    *               Integer type, and must have one entry for each row in the table.
    * @return the new Table.
@@ -887,11 +887,11 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Create a new table by repeating the rows of this table. The number if
-   * repetitions of each element is defined by the corresponding value in counts.
+   * Create a new table by repeating each row of this table. The number of
+   * repetitions of each row is defined by the corresponding value in counts.
    * @param counts the number of times to repeat each row. Cannot have nulls, must be an
    *               Integer type, and must have one entry for each row in the table.
-   * @param checkCount should counts be checked for errors before processing. be careful if you
+   * @param checkCount should counts be checked for errors before processing. Be careful if you
    *                   disable this because if you pass in bad data you might just get back an
    *                   empty table or bad data.
    * @return the new Table.
