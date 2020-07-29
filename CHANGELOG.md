@@ -49,6 +49,7 @@
 - PR #5629 Add `ListColumn` and `ListDtype`
 - PR #5658 Add `filter_tokens` nvtext API
 - PR #5666 Add `filter_characters_of_type` strings API
+- PR #5778 Add support for `cudf::table` to `arrow::Table` and `arrow::Table` to `cudf::table`
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 - PR #5739 Add `nvtext::detokenize` API
 - PR #5645 Enforce pd.NA and Pandas nullable dtype parity
