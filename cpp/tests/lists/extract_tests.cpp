@@ -227,4 +227,29 @@ TEST_F(ListsExtractTest, ExtractElementEmpty)
   cudf::test::expect_columns_equal(expected_null, *result);
 }
 
+TEST_F(ListsExtractTest, ExtractElementWithNulls)
+{
+  auto validity = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<cudf::size_type>(0), [](auto i) { return i != 1; });
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW input{
+    {{"Héllo", "", "thesé"}, validity}, {"are"}, {{"some", ""}, validity}, {"tést", "strings"}};
+
+  {
+    auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 0);
+    cudf::test::strings_column_wrapper expected({"Héllo", "are", "some", "tést"});
+    cudf::test::expect_columns_equal(expected, *result);
+  }
+  {
+    auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 1);
+    cudf::test::strings_column_wrapper expected({"", "", "", "strings"}, {0, 0, 0, 1});
+    cudf::test::expect_columns_equal(expected, *result);
+  }
+  {
+    auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), -1);
+    cudf::test::strings_column_wrapper expected({"thesé", "are", "", "strings"}, {1, 1, 0, 1});
+    cudf::test::expect_columns_equal(expected, *result);
+  }
+}
+
 CUDF_TEST_PROGRAM_MAIN()
