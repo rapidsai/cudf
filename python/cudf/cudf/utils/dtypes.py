@@ -11,6 +11,7 @@ from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
 
+_NA_REP = "<NA>"
 _np_pa_dtypes = {
     np.float64: pa.float64(),
     np.float32: pa.float32(),
@@ -27,6 +28,19 @@ _np_pa_dtypes = {
     np.datetime64: pa.date64(),
     np.object_: pa.string(),
     np.str_: pa.string(),
+}
+
+cudf_dtypes_to_pandas_dtypes = {
+    np.dtype("uint8"): pd.UInt8Dtype(),
+    np.dtype("uint16"): pd.UInt16Dtype(),
+    np.dtype("uint32"): pd.UInt32Dtype(),
+    np.dtype("uint64"): pd.UInt64Dtype(),
+    np.dtype("int8"): pd.Int8Dtype(),
+    np.dtype("int16"): pd.Int16Dtype(),
+    np.dtype("int32"): pd.Int32Dtype(),
+    np.dtype("int64"): pd.Int64Dtype(),
+    np.dtype("bool_"): pd.BooleanDtype(),
+    np.dtype("object"): pd.StringDtype(),
 }
 
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}

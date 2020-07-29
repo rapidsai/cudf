@@ -67,7 +67,7 @@ def test_string_export(ps_gs):
     ps, gs = ps_gs
 
     expect = ps
-    got = gs.to_pandas()
+    got = gs.to_pandas(nullable_pd_dtype=False)
     assert_eq(expect, got)
 
     expect = np.array(ps)
@@ -153,8 +153,8 @@ def test_string_repr(ps_gs, item):
     expect = str(expect_out)
     got = str(got_out)
 
-    # if isinstance(expect_out, pd.Series):
-    #     expect = expect.replace("object", "str")
+    if got_out is not None and len(got_out) > 1:
+        expect = expect.replace("None", "<NA>")
 
     assert expect == got
 

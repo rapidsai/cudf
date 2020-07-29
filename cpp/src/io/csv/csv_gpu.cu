@@ -208,7 +208,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   while (col < num_columns) {
     if (start > stop) { break; }
 
-    pos = cudf::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
+    pos = cudf::io::gpu::seek_field_end(raw_csv + pos, raw_csv + stop, opts) - raw_csv;
 
     // Checking if this is a column that the user wants --- user can filter
     // columns
@@ -556,7 +556,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   while (col < num_columns) {
     if (start > stop) break;
 
-    pos = cudf::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
+    pos = cudf::io::gpu::seek_field_end(raw_csv + pos, raw_csv + stop, opts) - raw_csv;
 
     if (flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
