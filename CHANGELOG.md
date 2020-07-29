@@ -229,6 +229,7 @@
 - PR #5766 Fix issue related to `iloc` and slicing a `DataFrame`
 - PR #5774 Add fallback for when `tolist` is absent
 - PR #5319 Disallow SUM and specialize MEAN of timestamp types
+- PR #5797 Fix a missing data issue in some Parquet files
 - PR #5787 Fix column create from dictionary column view
 
 
