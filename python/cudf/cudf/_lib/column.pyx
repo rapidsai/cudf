@@ -256,7 +256,7 @@ cdef class Column:
     @property
     def children(self):
         if (self.offset == 0) and (self.size == self.base_size):
-            return self.base_children
+            self._children = self.base_children
         if self._children is None:
             if self.base_children == ():
                 self._children = ()
