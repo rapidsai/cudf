@@ -12,11 +12,7 @@ def kafka_client():
     # Check for the existance of a kafka broker
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        result = s.connect_ex(("localhost", 9092))
-        if result == 0:
-            print("Kafka service is running")
-        else:
-            print("Kafka service is NOT running")
+        s.connect_ex(("localhost", 9092))
         s.shutdown(2)
         s.close()
     except Exception:
