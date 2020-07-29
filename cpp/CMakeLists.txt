@@ -357,6 +357,14 @@ if(BUILD_BENCHMARKS)
     endif(benchmark_FOUND)
     add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
 
+    set(GBENCH_INCLUDE_DIR "${benchmark_ROOT}/install/include")
+    set(GBENCH_LIBRARY_DIR "${benchmark_ROOT}/install/lib")
+    link_directories(${GBENCH_LIBRARY_DIR}
+    include_directories(${GBENCH_INCLUDE_DIR})
+    
+    if(NOT benchmark_FOUND)
+        set(BUILD_BENCHMARKS off)
+    endif(NOT benchmark_FOUND)
     message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) was found? ${benchmark_FOUND} - ${benchmark_ROOT}")
 
 endif(BUILD_BENCHMARKS)
