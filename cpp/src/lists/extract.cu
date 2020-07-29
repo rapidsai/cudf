@@ -44,7 +44,7 @@ struct map_index_fn {
     if (PositiveIndex)
       return index < length ? index + offset : out_of_bounds;
     else
-      return index < -length ? out_of_bounds : length + index + offset;
+      return index >= -length ? length + index + offset : out_of_bounds;
   }
 };
 
