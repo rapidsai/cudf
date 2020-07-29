@@ -32,6 +32,7 @@ from cudf._lib.nvtext.subword_tokenize import (
 from cudf._lib.nvtext.tokenize import (
     character_tokenize as cpp_character_tokenize,
     count_tokens as cpp_count_tokens,
+    detokenize as cpp_detokenize,
     tokenize as cpp_tokenize,
 )
 from cudf._lib.nvtx import annotate
@@ -3701,6 +3702,41 @@ class StringMethods(ColumnMethodsMixin):
         kwargs.setdefault("retain_index", False)
         return self._return_or_inplace(
             cpp_tokenize(self._column, delimiter), **kwargs
+        )
+
+    def detokenize(self, indices, separator=" ", **kwargs):
+        """
+        Combines tokens into strings by concatenating them in the order
+        in which they appear in the ``indices`` column. The ``separator`` is
+        concatenated between each token.
+
+        Parameters
+        ----------
+        indices : list of ints
+            Each value identifies the output row for the corresponding token.
+        separator : str
+            The string concatenated between each token in an output row.
+            Default is space.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> strs = cudf.Series(["hello", "world", "one", "two", "three"])
+        >>> indices = cudf.Series([0, 0, 1, 1, 2])
+        >>> strs.str.detokenize(indices)
+        0    hello world
+        1        one two
+        2          three
+        dtype: object
+        """
+        separator = _massage_string_arg(separator, "separator")
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_detokenize(self._column, indices._column, separator), **kwargs
         )
 
     def character_tokenize(self, **kwargs):
