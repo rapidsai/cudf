@@ -1,22 +1,29 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+import socket
+
 import pytest
-from confluent_kafka.admin import AdminClient
 
 from custreamz import kafka
-
-# Test for the prescence of a running kafka broker
-kafka_available = True
-admin_client = AdminClient(
-    {"bootstrap.servers": "localhost:9092", "socket.timeout.ms": 1000}
-)
-topics = admin_client.list_topics().topics
-
-if not topics:
-    kafka_available = False
 
 
 @pytest.fixture(scope="session")
 def kafka_client():
+
+    # Check for the existance of a kafka broker
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        result = s.connect_ex(("localhost", 9092))
+        if result == 0:
+            print("Kafka service is running")
+        else:
+            print("Kafka service is NOT running")
+        s.shutdown(2)
+        s.close()
+    except Exception:
+        pytest.skip(
+            "A running Kafka instance must be" " available to run these tests"
+        )
+
     kafka_configs = {
         "metadata.broker.list": "localhost:9092",
         "enable.partition.eof": "true",
@@ -24,10 +31,5 @@ def kafka_client():
         "auto.offset.reset": "earliest",
         "enable.auto.commit": "false",
     }
-
-    if kafka_available is not True:
-        pytest.skip(
-            "A running Kafka instance must be available to run these tests"
-        )
 
     return kafka.Consumer(kafka_configs)
