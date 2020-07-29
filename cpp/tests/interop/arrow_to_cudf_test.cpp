@@ -34,16 +34,6 @@
 struct ArrowToCUDFTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(ArrowToCUDFTest, NormalTable)
-{
-  auto expected_cudf_table = get_cudf_table();
-  auto arrow_table         = get_arrow_table();
-
-  auto got_cudf_table = cudf::from_arrow(*arrow_table);
-
-  cudf::test::expect_tables_equal(expected_cudf_table->view(), got_cudf_table->view());
-}
-
 TEST_F(ArrowToCUDFTest, DateTimeTable)
 {
   auto data = {1, 2, 3, 4, 5, 6};
@@ -188,7 +178,8 @@ TEST_P(ArrowToCUDFTestSlice, SliceTest)
 
 INSTANTIATE_TEST_CASE_P(ArrowToCUDFTest,
                         ArrowToCUDFTestSlice,
-                        ::testing::Values(std::make_tuple(1, 3),
+                        ::testing::Values(std::make_tuple(0, 5),
+                                          std::make_tuple(1, 3),
                                           std::make_tuple(0, 0),
                                           std::make_tuple(0, 2),
                                           std::make_tuple(4, 4)));
