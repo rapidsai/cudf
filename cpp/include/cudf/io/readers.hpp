@@ -511,6 +511,7 @@ namespace parquet {
  */
 struct reader_options {
   std::vector<std::string> columns;
+  bool predicate              = false;
   bool strings_to_categorical = false;
   bool use_pandas_metadata    = false;
   data_type timestamp_type{type_id::EMPTY};
@@ -531,6 +532,28 @@ struct reader_options {
                  bool use_pandas_metadata,
                  data_type timestamp_type)
     : columns(std::move(columns)),
+      strings_to_categorical(strings_to_categorical),
+      use_pandas_metadata(use_pandas_metadata),
+      timestamp_type(timestamp_type)
+  {
+  }
+
+  /**
+   * @brief Constructor to populate reader options where predicate is specified.
+   *
+   * @param columns Set of columns to read; empty for all columns
+   * @param predicate Predicate for selecting rows
+   * @param strings_to_categorical Whether to return strings as category
+   * @param use_pandas_metadata Whether to always load PANDAS index columns
+   * @param timestamp_type Cast timestamp columns to a specific type
+   */
+  reader_options(std::vector<std::string> columns,
+                 bool predicate,
+                 bool strings_to_categorical,
+                 bool use_pandas_metadata,
+                 data_type timestamp_type)
+    : columns(std::move(columns)),
+      predicate(predicate),
       strings_to_categorical(strings_to_categorical),
       use_pandas_metadata(use_pandas_metadata),
       timestamp_type(timestamp_type)

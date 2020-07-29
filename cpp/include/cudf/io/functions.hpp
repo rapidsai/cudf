@@ -413,6 +413,8 @@ struct read_parquet_args {
 
   /// Names of column to read; empty is all
   std::vector<std::string> columns;
+  /// Predicate for selecting rows
+  bool predicate = false;
 
   /// List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> row_groups;

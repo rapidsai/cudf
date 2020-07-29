@@ -76,6 +76,21 @@ class reader::impl {
                            std::vector<std::vector<size_type>> const &row_group_indices,
                            cudaStream_t stream);
 
+  /**
+   * @brief Read data, filters out rows using predicate, and returns a set of columns
+   *
+   * @param skip_rows Number of rows to skip from the start
+   * @param num_rows Number of rows to read
+   * @param row_group_indices TODO
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   *
+   * @return The set of columns along with metadata
+   */
+  table_with_metadata read_filtered(size_type skip_rows,
+                           size_type num_rows,
+                           std::vector<std::vector<size_type>> const &row_group_indices,
+                           cudaStream_t stream);
+
  private:
   /**
    * @brief Reads compressed page data to device memory
@@ -155,6 +170,7 @@ class reader::impl {
   std::unique_ptr<aggregate_metadata> _metadata;
 
   std::vector<std::pair<int, std::string>> _selected_columns;
+  bool _predicate;
   bool _strings_to_categorical = false;
   data_type _timestamp_type{type_id::EMPTY};
 };

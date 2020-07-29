@@ -712,6 +712,9 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
   // Select only columns required by the options
   _selected_columns = _metadata->select_columns(options.columns, options.use_pandas_metadata);
 
+  // Store predicate for filtering out rows
+  _predicate = options.predicate;
+
   // Override output timestamp resolution if requested
   if (options.timestamp_type.id() != type_id::EMPTY) { _timestamp_type = options.timestamp_type; }
 
@@ -724,6 +727,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                        std::vector<std::vector<size_type>> const &row_group_list,
                                        cudaStream_t stream)
 {
+  // Use read_filtered if predicate is specified
+  if (_predicate) {
+    return read_filtered(skip_rows, num_rows, row_group_list, stream);
+  }
+
   // Select only row groups required
   const auto selected_row_groups =
     _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
