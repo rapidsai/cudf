@@ -159,43 +159,6 @@ operator()<cudf::string_view>(arrow::Array const& array,
 
 template <>
 std::pair<std::unique_ptr<column>, column_view> dispatch_to_cudf_column::
-operator()<cudf::list_view>(arrow::Array const& array,
-                            data_type type,
-                            bool skip_mask,
-                            rmm::mr::device_memory_resource* mr,
-                            cudaStream_t stream)
-{
-  auto list_array   = static_cast<arrow::ListArray const*>(&array);
-  auto offset_array = std::make_unique<arrow::Int32Array>(
-    list_array->value_offsets()->size() / sizeof(int32_t), list_array->value_offsets(), nullptr);
-  auto offsets = dispatch_to_cudf_column{}.operator()<int32_t>(
-    *offset_array, data_type(type_id::INT32), true, mr, stream);
-  auto offsets_column = (offsets.first->size() == offset_array->length())
-                          ? std::move(offsets.first)
-                          : std::make_unique<column>(offsets.second, stream, mr);
-
-  auto child_type   = arrow_to_cudf_type(list_array->values()->type()->id());
-  auto child        = get_column(*(list_array->values()), child_type, false, mr, stream);
-  auto child_column = (child.first->size() == list_array->values()->length())
-                        ? std::move(child.first)
-                        : std::make_unique<column>(child.second, stream, mr);
-
-  auto num_rows = offsets_column->size() - 1;
-  auto out_col  = make_lists_column(num_rows,
-                                   std::move(offsets_column),
-                                   std::move(child_column),
-                                   UNKNOWN_NULL_COUNT,
-                                   std::move(*get_mask_buffer(array, mr, stream)));
-
-  return std::make_pair<std::unique_ptr<column>, column_view>(
-    std::move(out_col),
-    slice(out_col->view(),
-          static_cast<size_type>(array.offset()),
-          static_cast<size_type>(array.offset() + array.length())));
-}
-
-template <>
-std::pair<std::unique_ptr<column>, column_view> dispatch_to_cudf_column::
 operator()<cudf::dictionary32>(arrow::Array const& array,
                                data_type type,
                                bool skip_mask,
@@ -224,6 +187,43 @@ operator()<cudf::dictionary32>(arrow::Array const& array,
                                         std::move(indices_column),
                                         std::move(*get_mask_buffer(array, mr, stream)),
                                         UNKNOWN_NULL_COUNT);
+
+  return std::make_pair<std::unique_ptr<column>, column_view>(
+    std::move(out_col),
+    slice(out_col->view(),
+          static_cast<size_type>(array.offset()),
+          static_cast<size_type>(array.offset() + array.length())));
+}
+
+template <>
+std::pair<std::unique_ptr<column>, column_view> dispatch_to_cudf_column::
+operator()<cudf::list_view>(arrow::Array const& array,
+                            data_type type,
+                            bool skip_mask,
+                            rmm::mr::device_memory_resource* mr,
+                            cudaStream_t stream)
+{
+  auto list_array   = static_cast<arrow::ListArray const*>(&array);
+  auto offset_array = std::make_unique<arrow::Int32Array>(
+    list_array->value_offsets()->size() / sizeof(int32_t), list_array->value_offsets(), nullptr);
+  auto offsets = dispatch_to_cudf_column{}.operator()<int32_t>(
+    *offset_array, data_type(type_id::INT32), true, mr, stream);
+  auto offsets_column = (offsets.first->size() == offset_array->length())
+                          ? std::move(offsets.first)
+                          : std::make_unique<column>(offsets.second, stream, mr);
+
+  auto child_type   = arrow_to_cudf_type(list_array->values()->type()->id());
+  auto child        = get_column(*(list_array->values()), child_type, false, mr, stream);
+  auto child_column = (child.first->size() == list_array->values()->length())
+                        ? std::move(child.first)
+                        : std::make_unique<column>(child.second, stream, mr);
+
+  auto num_rows = offsets_column->size() - 1;
+  auto out_col  = make_lists_column(num_rows,
+                                   std::move(offsets_column),
+                                   std::move(child_column),
+                                   UNKNOWN_NULL_COUNT,
+                                   std::move(*get_mask_buffer(array, mr, stream)));
 
   return std::make_pair<std::unique_ptr<column>, column_view>(
     std::move(out_col),

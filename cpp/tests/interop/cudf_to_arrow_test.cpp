@@ -75,16 +75,6 @@ std::shared_ptr<arrow::Table> get_arrow_table()
   return arrow::Table::Make(schema, {int32array, int64array, string_array, dict_array});
 }
 
-TEST_F(CUDFToArrowTest, NormalTable)
-{
-  auto cudf_table           = get_cudf_table();
-  auto expected_arrow_table = get_arrow_table();
-
-  auto got_arrow_table = cudf::to_arrow(cudf_table->view(), {"a", "b", "c", "d"});
-
-  ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
-}
-
 TEST_F(CUDFToArrowTest, DateTimeTable)
 {
   auto data = {1, 2, 3, 4, 5, 6};
@@ -155,7 +145,8 @@ TEST_P(CUDFToArrowTestSlice, SliceTest)
 
 INSTANTIATE_TEST_CASE_P(CUDFToArrowTest,
                         CUDFToArrowTestSlice,
-                        ::testing::Values(std::make_tuple(1, 3),
+                        ::testing::Values(std::make_tuple(0, 5),
+                                          std::make_tuple(1, 3),
                                           std::make_tuple(0, 0),
                                           std::make_tuple(0, 2),
                                           std::make_tuple(4, 4)));
