@@ -132,29 +132,20 @@ cdef dtype_from_lists_column_view(column_view cv):
     # allocate it to get around Cython's limitation of requiring
     # default constructors for stack allocated objects
     cdef shared_ptr[lists_column_view] lv = make_shared[lists_column_view](cv)
-
     cdef column_view child = lv.get()[0].child()
 
     if child.type().id() == libcudf_types.type_id.LIST:
-        return ListDtype(
-            dtype_from_lists_column_view(child)
-        )
+        return ListDtype(dtype_from_lists_column_view(child))
     else:
         return ListDtype(
-            cudf_to_np_types[
-                <underlying_type_t_type_id> child.type().id()
-            ]
+            cudf_to_np_types[<underlying_type_t_type_id> child.type().id()]
         )
 
 
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
     if tid == libcudf_types.type_id.LIST:
-        dtype = dtype_from_lists_column_view(
-            cv
-        )
+        dtype = dtype_from_lists_column_view(cv)
     else:
-        dtype = cudf_to_np_types[<underlying_type_t_type_id>(
-            tid
-        )]
+        dtype = cudf_to_np_types[<underlying_type_t_type_id>(tid)]
     return dtype
