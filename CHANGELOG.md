@@ -149,7 +149,7 @@
 - PR #5759 Fix documentation describing JIT cache default location
 - PR #5780 Add Java bindings for pad
 - PR #5775 Update dask_cudf.read_parquet to align with upstream improvements
-- PR #5786 JNI Header Cleanup for cuspacial
+- PR #5786 JNI Header Cleanup for cuSpatial
 
 ## Bug Fixes
 
