@@ -80,3 +80,6 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef pair[unique_ptr[column], unique_ptr[column]] move(
         pair[unique_ptr[column], unique_ptr[column]]
     )
+    cdef pair[unique_ptr[table], unique_ptr[column]] move(
+        pair[unique_ptr[table], unique_ptr[column]]
+    )

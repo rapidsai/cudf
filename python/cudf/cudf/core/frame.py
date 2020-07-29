@@ -2880,6 +2880,11 @@ class Frame(libcudf.table.Table):
         result = [self.__class__._from_table(tbl) for tbl in result]
         return result
 
+    def _encode(self):
+        keys, indices = libcudf.transform.table_encode(self)
+        keys = self.__class__._from_table(keys)
+        return keys, indices
+
 
 def _get_replacement_values(to_replace, replacement, col_name, column):
 

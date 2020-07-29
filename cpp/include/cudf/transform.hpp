@@ -111,5 +111,9 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
   cudf::column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
+  cudf::table_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** @} */  // end of group
 }  // namespace cudf

@@ -5,9 +5,34 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/table/table_view.hpp>
+#include <iostream>
+#include <numeric>
 
 namespace cudf {
 namespace detail {
+
+std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
+  table_view const& input_table, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+{
+  // side effects of this function we are now dependent on:
+  // - resulting table elements are sorted ascending
+
+  std::vector<size_type> columns(input_table.num_columns());
+  std::iota(columns.begin(), columns.end(), 0);
+
+  auto keys_table = cudf::detail::drop_duplicates(
+    input_table, columns, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, mr, stream);
+
+  auto indices_column =
+    cudf::detail::lower_bound(keys_table->view(),
+                              input_table,
+                              std::vector<order>(input_table.num_columns(), order::ASCENDING),
+                              std::vector<null_order>(input_table.num_columns(), null_order::AFTER),
+                              mr,
+                              stream);
+
+  return std::make_pair(std::move(keys_table), std::move(indices_column));
+}
 
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> encode(
   column_view const& input_column, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
@@ -49,6 +74,12 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> encode(
 
 std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
   cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
+{
+  return detail::encode(input, mr, 0);
+}
+
+std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
+  cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
 {
   return detail::encode(input, mr, 0);
 }
