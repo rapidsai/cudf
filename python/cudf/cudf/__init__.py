@@ -31,7 +31,27 @@ from cudf.core import (
     from_pandas,
     merge,
 )
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import (
+    Dtype,
+    CategoricalDtype, 
+    Int8Dtype,
+    Int16Dtype, 
+    Int32Dtype, 
+    Int64Dtype, 
+    UInt8Dtype, 
+    UInt16Dtype,
+    UInt32Dtype, 
+    UInt64Dtype, 
+    StringDtype,
+    Float32Dtype,
+    Float64Dtype, 
+    BooleanDtype,
+    Datetime64NSDtype,
+    Datetime64USDtype, 
+    Datetime64MSDtype,
+    Datetime64SDtype
+)
+
 from cudf.core.groupby import Grouper
 from cudf.core.ops import (
     arccos,
