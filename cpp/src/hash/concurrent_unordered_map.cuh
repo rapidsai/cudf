@@ -154,7 +154,7 @@ class concurrent_unordered_map {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   static auto create(size_type capacity,
-                     const mapped_type unused_element = std::numeric_limits<key_type>::max(),
+                     const mapped_type unused_element = std::numeric_limits<mapped_type>::max(),
                      const key_type unused_key        = std::numeric_limits<key_type>::max(),
                      const Hasher& hash_function      = hasher(),
                      const Equality& equal            = key_equal(),

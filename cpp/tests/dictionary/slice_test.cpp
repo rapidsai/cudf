@@ -15,6 +15,7 @@
  */
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/dictionary/update_keys.hpp>
@@ -57,6 +58,11 @@ TEST_F(DictionarySliceTest, SliceColumn)
     auto added = cudf::dictionary::set_keys(cudf::dictionary_column_view(result.front()), new_keys);
     output     = cudf::dictionary::decode(cudf::dictionary_column_view(*added));
     cudf::test::expect_columns_equal(expected, *output);
+  }
+  {
+    // check new column is created correctly from sliced view (issue 5768)
+    cudf::column new_col(result.front());
+    cudf::test::expect_columns_equal(result.front(), new_col.view());
   }
 }
 
