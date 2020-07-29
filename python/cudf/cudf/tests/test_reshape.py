@@ -335,11 +335,11 @@ def test_series_merge_sorted(nparts, key, na_position, ascending):
         ([0, 0], [0, 1], [1, 2.0]),
         ([0, 1], [0, 0], [1, 2.0]),
         ([0, 1], [0, 1], [1, 2.0]),
-        (["a", "a", "b", "b"], ["c", "d", "c", "d"], [1, 2, 3, 4.0]),
+        (["a", "a", "b", "b"], ["c", "d", "c", "d"], [1, 2, 3, 4]),
         (
             ["a", "a", "b", "b", "a"],
             ["c", "d", "c", "d", "e"],
-            [1, 2, 3, 4, 5.0],
+            [1, 2, 3, 4, 5],
         ),
     ],
 )
@@ -354,6 +354,8 @@ def test_pivot_simple(index, column, data):
     assert_eq(
         expect,
         got,
+        check_dtype=False,
+        nullable_pd_dtype=True,
         check_index_type=check_index_and_columns,
         check_column_type=check_index_and_columns,
     )
@@ -374,5 +376,6 @@ def test_pivot_multi_values():
     assert_eq(
         pdf.pivot(index="foo", columns="bar", values=["baz", "zoo"]),
         gdf.pivot(index="foo", columns="bar", values=["baz", "zoo"]),
+        nullable_pd_dtype=True,
         check_dtype=False,
     )
