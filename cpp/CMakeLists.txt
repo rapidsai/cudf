@@ -324,7 +324,7 @@ if(BUILD_TESTS)
     find_package(GTest)
     
     if(NOT GTEST_ROOT)
-        include(ConfigureGoogleBenchmark)
+        include(ConfigureGoogleTest)
         set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
     endif(GTEST_ROOT)
 
