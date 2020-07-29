@@ -1048,6 +1048,7 @@ class Frame(libcudf.table.Table):
         output_table, output_offsets = libcudf.partitioning.partition(
             self, scatter_map, npartitions, keep_index
         )
+        partitioned = self.__class__._from_table(output_table)
 
         # due to the split limitation mentioned
         # here: https://github.com/rapidsai/cudf/issues/4607
@@ -1055,7 +1056,7 @@ class Frame(libcudf.table.Table):
         # TODO: Remove this after the above issue is fixed.
         output_offsets = output_offsets[1:-1]
 
-        result = output_table._split(output_offsets, keep_index=keep_index)
+        result = partitioned._split(output_offsets, keep_index=keep_index)
 
         for frame in result:
             frame._copy_categories(self, include_index=keep_index)
