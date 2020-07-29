@@ -33,6 +33,7 @@
 - PR #5511 Port of clx subword tokenizer to cudf
 - PR #5528 Add unsigned int reading and writing support to parquet
 - PR #5510 Add support for `cudf.Index` to create Indexes
+- PR #5618 Add Kafka as a cudf datasource
 - PR #5668 Adding support for `cudf.testing`
 - PR #5460 Add support to write to remote filesystems
 - PR #5454 Add support for `DataFrame.append`, `Index.append`, `Index.difference` and `Index.empty`
@@ -43,14 +44,19 @@
 - PR #5659 Added support for rapids-compose for Java bindings and other enhancements
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
+- PR #5669 Add support for reading JSON files with missing or out-of-order fields
 - PR #5674 Support JIT backend on PowerPC64
 - PR #5629 Add `ListColumn` and `ListDtype`
 - PR #5658 Add `filter_tokens` nvtext API
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 - PR #5732 Added deps for `gtest` and `gmock` to `conda` environments and `CMakeLists.txt`
+- PR #5739 Add `nvtext::detokenize` API
+- PR #5645 Enforce pd.NA and Pandas nullable dtype parity
 - PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
 - PR #5572 Add `cudf::encode` API.
+- PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
+- PR #5642 Add `GroupBy.groups()`
 
 ## Improvements
 
@@ -143,9 +149,15 @@
 - PR #5725 Integrate Gbenchmarks into CI
 - PR #5752 Add cuDF internals documentation (ColumnAccessor)
 - PR #5759 Fix documentation describing JIT cache default location
+- PR #5780 Add Java bindings for pad
+- PR #5775 Update dask_cudf.read_parquet to align with upstream improvements
+- PR #5791 Get nullable_pd_dtype from kwargs if provided in assert_eq
+- PR #5786 JNI Header Cleanup for cuspacial
+- PR #5795 Clarify documentation on Boost dependency
 
 ## Bug Fixes
 
+- PR #5793 Fix leak in mutable_table_device_view by deleting _descendant_storage in table_device_view_base::destroy
 - PR #5525 Make sure to allocate bitmasks of string columns only once
 - PR #5336 Initialize conversion tables on a per-context basis
 - PR #5283 Fix strings::ipv4_to_integers overflow to negative
@@ -215,6 +227,9 @@
 - PR #5750 Add RMM_ROOT/include to the spdlog search path in JNI build
 - PR #5763 Update Java slf4j version to match Spark 3.0
 - PR #5766 Fix issue related to `iloc` and slicing a `DataFrame`
+- PR #5774 Add fallback for when `tolist` is absent
+- PR #5319 Disallow SUM and specialize MEAN of timestamp types
+- PR #5787 Fix column create from dictionary column view
 
 
 # cuDF 0.14.0 (03 Jun 2020)
