@@ -302,7 +302,7 @@ template <typename T>
 class ScatterDataTypeTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ScatterDataTypeTests, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(ScatterDataTypeTests, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 // Empty scatter map returns copy of input
 TYPED_TEST(ScatterDataTypeTests, EmptyScatterMap)
@@ -796,7 +796,7 @@ struct BooleanMaskScalarScatter : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(BooleanMaskScalarScatter, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(BooleanMaskScalarScatter, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(BooleanMaskScalarScatter, WithNoNullElementsInTarget)
 {
