@@ -55,6 +55,7 @@
 - PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
 - PR #5572 Add `cudf::encode` API.
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
+- PR #5642 Add `GroupBy.groups()`
 
 ## Improvements
 
@@ -151,6 +152,7 @@
 - PR #5775 Update dask_cudf.read_parquet to align with upstream improvements
 - PR #5791 Get nullable_pd_dtype from kwargs if provided in assert_eq
 - PR #5786 JNI Header Cleanup for cuspacial
+- PR #5795 Clarify documentation on Boost dependency
 
 ## Bug Fixes
 
