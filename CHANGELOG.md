@@ -55,6 +55,7 @@
 - PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
 - PR #5572 Add `cudf::encode` API.
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
+- PR #5642 Add `GroupBy.groups()`
 
 ## Improvements
 
@@ -149,6 +150,7 @@
 - PR #5759 Fix documentation describing JIT cache default location
 - PR #5780 Add Java bindings for pad
 - PR #5775 Update dask_cudf.read_parquet to align with upstream improvements
+- PR #5785 Enable computing views of ListColumns
 - PR #5791 Get nullable_pd_dtype from kwargs if provided in assert_eq
 - PR #5786 JNI Header Cleanup for cuSpatial
 - PR #5795 Clarify documentation on Boost dependency
@@ -227,6 +229,7 @@
 - PR #5766 Fix issue related to `iloc` and slicing a `DataFrame`
 - PR #5774 Add fallback for when `tolist` is absent
 - PR #5319 Disallow SUM and specialize MEAN of timestamp types
+- PR #5797 Fix a missing data issue in some Parquet files
 - PR #5787 Fix column create from dictionary column view
 
 
