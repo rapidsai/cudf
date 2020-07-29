@@ -196,10 +196,7 @@ class datasource {
 
   /**
    * @brief Implementation for non owning buffer where datasource holds buffer until destruction.
-   *
-   * @param[in] data Address of the buffer source data
-   * @param[in] size Bytes of the buffer size
-   **/
+   */
   class non_owning_buffer : public buffer {
    public:
     non_owning_buffer() : _data(0), _size(0) {}
@@ -221,6 +218,9 @@ class datasource {
  * could be a memory-mapped file or other implementation supported by Arrow.
  */
 class arrow_io_source : public datasource {
+  /**
+   * @brief Implementation for an owning buffer where `arrow::Buffer` holds the data.
+   */
   class arrow_io_buffer : public buffer {
     std::shared_ptr<arrow::Buffer> arrow_buffer;
 
@@ -234,8 +234,16 @@ class arrow_io_source : public datasource {
   };
 
  public:
+  /**
+   * @brief Constructs an object from an `arrow` source object.
+   *
+   * @param file The `arrow` object from which the data is read
+   */
   explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file) : arrow_file(file) {}
 
+  /**
+   * @brief Returns a buffer with a subset of data from the `arrow` source.
+   */
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     auto result = arrow_file->ReadAt(offset, size);
@@ -243,6 +251,9 @@ class arrow_io_source : public datasource {
     return std::make_unique<arrow_io_buffer>(result.ValueOrDie());
   }
 
+  /**
+   * @brief Reads a selected range from the `arrow` source into a preallocated buffer.
+   */
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     auto result = arrow_file->ReadAt(offset, size, dst);
@@ -250,6 +261,9 @@ class arrow_io_source : public datasource {
     return result.ValueOrDie();
   }
 
+  /**
+   * @brief Returns the size of the data in the `arrow` source.
+   */
   size_t size() const override
   {
     auto result = arrow_file->GetSize();
