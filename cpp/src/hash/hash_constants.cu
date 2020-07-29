@@ -12,16 +12,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column_device_view.cuh>
+// #include <cudf/column/column_device_view.cuh>
 #include "./hash_constants.hpp"
 
-#include <mutex>
+#include <strings/utilities.cuh>
 
 namespace cudf {
 namespace detail {
 
 const hex_to_char_mapping_type g_hex_to_char_mapping[] = {
   '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+
 const md5_shift_constants_type g_md5_shift_constants[] = {
   7,
   12,
@@ -52,30 +53,28 @@ const md5_hash_constants_type g_md5_hash_constants[] = {
   0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
 };
 
-std::mutex g_hex_to_char_mapping_mutex;
-std::mutex g_md5_hash_constants_mutex;
-std::mutex g_md5_shift_constants_mutex;
-
-hex_to_char_mapping_type* d_hex_to_char_mapping = nullptr;
-md5_hash_constants_type* d_md5_hash_constants   = nullptr;
-md5_shift_constants_type* d_md5_shift_constants = nullptr;
-
+namespace {
 __device__ hex_to_char_mapping_type hex_to_char_mapping[sizeof(g_hex_to_char_mapping)];
 __device__ md5_hash_constants_type md5_hash_constants[sizeof(g_md5_hash_constants)];
 __device__ md5_shift_constants_type md5_shift_constants[sizeof(g_md5_shift_constants)];
+
+strings::detail::thread_safe_per_context_cache<hex_to_char_mapping_type> d_hex_to_char_mapping;
+strings::detail::thread_safe_per_context_cache<md5_hash_constants_type> d_md5_hash_constants;
+strings::detail::thread_safe_per_context_cache<md5_shift_constants_type> d_md5_shift_constants;
+}  // namespace
 
 /**
  * @copydoc cudf::detail::get_hex_to_char_mapping
  */
 const hex_to_char_mapping_type* get_hex_to_char_mapping()
 {
-  std::lock_guard<std::mutex> guard(g_hex_to_char_mapping_mutex);
-  if (!d_hex_to_char_mapping) {
+  return d_hex_to_char_mapping.find_or_initialize([&](void) {
+    hex_to_char_mapping_type* table = nullptr;
     CUDA_TRY(cudaMemcpyToSymbol(
       hex_to_char_mapping, g_hex_to_char_mapping, sizeof(g_hex_to_char_mapping)));
-    CUDA_TRY(cudaGetSymbolAddress((void**)&d_hex_to_char_mapping, hex_to_char_mapping));
-  }
-  return d_hex_to_char_mapping;
+    CUDA_TRY(cudaGetSymbolAddress((void**)&table, hex_to_char_mapping));
+    return table;
+  });
 }
 
 /**
@@ -83,13 +82,13 @@ const hex_to_char_mapping_type* get_hex_to_char_mapping()
  */
 const md5_hash_constants_type* get_md5_hash_constants()
 {
-  std::lock_guard<std::mutex> guard(g_md5_hash_constants_mutex);
-  if (!d_md5_hash_constants) {
+  return d_md5_hash_constants.find_or_initialize([&](void) {
+    md5_hash_constants_type* table = nullptr;
     CUDA_TRY(
       cudaMemcpyToSymbol(md5_hash_constants, g_md5_hash_constants, sizeof(g_md5_hash_constants)));
-    CUDA_TRY(cudaGetSymbolAddress((void**)&d_md5_hash_constants, md5_hash_constants));
-  }
-  return d_md5_hash_constants;
+    CUDA_TRY(cudaGetSymbolAddress((void**)&table, md5_hash_constants));
+    return table;
+  });
 }
 
 /**
@@ -97,13 +96,13 @@ const md5_hash_constants_type* get_md5_hash_constants()
  */
 const md5_shift_constants_type* get_md5_shift_constants()
 {
-  std::lock_guard<std::mutex> guard(g_md5_shift_constants_mutex);
-  if (!d_md5_shift_constants) {
+  return d_md5_shift_constants.find_or_initialize([&](void) {
+    md5_shift_constants_type* table = nullptr;
     CUDA_TRY(cudaMemcpyToSymbol(
       md5_shift_constants, g_md5_shift_constants, sizeof(g_md5_shift_constants)));
-    CUDA_TRY(cudaGetSymbolAddress((void**)&d_md5_shift_constants, md5_shift_constants));
-  }
-  return d_md5_shift_constants;
+    CUDA_TRY(cudaGetSymbolAddress((void**)&table, md5_shift_constants));
+    return table;
+  });
 }
 
 }  // namespace detail

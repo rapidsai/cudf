@@ -26,6 +26,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+// #include <hash/hash_constants.hpp>
 
 #include <sys/types.h>
 #include <thrust/tabulate.h>
@@ -610,6 +611,46 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   }
 }
 
+/**
+ * @brief Finalize MD5 hash including converstion to hex string.
+ */
+void __device__ finalize_md5_hash(detail::md5_intermediate_data* hash_state,
+                                  char* result_location,
+                                  const detail::md5_hash_constants_type* hash_constants,
+                                  const detail::md5_shift_constants_type* shift_constants,
+                                  const detail::hex_to_char_mapping_type* hex_char_map)
+{
+  auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
+  thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
+
+  if (hash_state->buffer_length < 56) {
+    thrust::fill_n(thrust::seq,
+                   hash_state->buffer + hash_state->buffer_length + 1,
+                   (55 - hash_state->buffer_length),
+                   0x00);
+  } else {
+    thrust::fill_n(thrust::seq,
+                   hash_state->buffer + hash_state->buffer_length + 1,
+                   (64 - hash_state->buffer_length),
+                   0x00);
+    detail::md5_hash_step(hash_state, hash_constants, shift_constants);
+
+    thrust::fill_n(thrust::seq, hash_state->buffer, 56, 0x00);
+  }
+
+  thrust::copy_n(thrust::seq, (uint8_t*)&full_length, 8, hash_state->buffer + 56);
+  detail::md5_hash_step(hash_state, hash_constants, shift_constants);
+
+  u_char final_hash[32];
+  uint8_t* hash_result = reinterpret_cast<uint8_t*>(hash_state->hash_value);
+  for (int i = 0; i < 16; i++) {
+    final_hash[i * 2]     = hex_char_map[(hash_result[i] >> 4) & 0xf];
+    final_hash[i * 2 + 1] = hex_char_map[hash_result[i] & 0xf];
+  }
+
+  thrust::copy_n(thrust::seq, final_hash, 32, result_location);
+}
+
 }  // namespace
 
 namespace detail {
@@ -661,8 +702,8 @@ class md5_element_hasher {
   __device__ inline void operator()(column_device_view col,
                                     size_type row_index,
                                     md5_intermediate_data* hash_state,
-                                    const md5_hash_constants_type* hash_constants,
-                                    const md5_shift_constants_type* shift_constants)
+                                    md5_hash_constants_type const* hash_constants,
+                                    md5_shift_constants_type const* shift_constants)
   {
     if (!has_nulls || col.is_valid(row_index)) {
       MD5Hash<T>{}(col.element<T>(row_index), hash_state, hash_constants, shift_constants);
@@ -699,9 +740,9 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto const device_input = table_device_view::create(input, stream);
 
   // Fetch hash constants
-  const md5_shift_constants_type* shift_constants = get_md5_shift_constants();
-  const md5_hash_constants_type* hash_constants   = get_md5_hash_constants();
-  const hex_to_char_mapping_type* hex_char_map    = get_hex_to_char_mapping();
+  md5_shift_constants_type const* shift_constants = get_md5_shift_constants();
+  md5_hash_constants_type const* hash_constants   = get_md5_hash_constants();
+  hex_to_char_mapping_type const* hex_char_map    = get_hex_to_char_mapping();
 
   // Hash each row, hashing each element sequentially left to right
   thrust::for_each(
@@ -716,7 +757,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
      has_nulls       = nullable] __device__(auto row_index) {
       md5_intermediate_data hash_state;
       for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
-        if (!has_nulls) {
+        if (has_nulls) {
           cudf::type_dispatcher(device_input.column(col_index).type(),
                                 md5_element_hasher<true>{},
                                 device_input.column(col_index),

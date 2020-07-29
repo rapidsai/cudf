@@ -208,13 +208,6 @@ TEST_F(MD5HashTest, MultiValue)
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
   fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
 
-  using ts = cudf::timestamp_s;
-  fixed_width_column_wrapper<ts> const secs_col({ts::duration::zero(),
-                                                 static_cast<ts::duration>(100),
-                                                 static_cast<ts::duration>(-100),
-                                                 ts::duration::min(),
-                                                 ts::duration::max()});
-
   auto const string_input1      = cudf::table_view({strings_col});
   auto const string_input2      = cudf::table_view({strings_col, strings_col});
   auto const md5_string_output1 = cudf::hash(string_input1, cudf::hash_id::HASH_MD5);
@@ -224,8 +217,8 @@ TEST_F(MD5HashTest, MultiValue)
   expect_columns_equal(md5_string_output1->view(), md5_string_results1);
   expect_columns_equal(md5_string_output2->view(), md5_string_results2);
 
-  auto const input1      = cudf::table_view({strings_col, ints_col, bools_col1, secs_col});
-  auto const input2      = cudf::table_view({strings_col, ints_col, bools_col2, secs_col});
+  auto const input1      = cudf::table_view({strings_col, ints_col, bools_col1});
+  auto const input2      = cudf::table_view({strings_col, ints_col, bools_col2});
   auto const md5_output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
   auto const md5_output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
   EXPECT_EQ(input1.num_rows(), md5_output1->size());
@@ -263,29 +256,14 @@ TEST_F(MD5HashTest, MultiValueNulls)
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
   fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
 
-  // Nulls with different values should be equal
-  using ts = cudf::timestamp_s;
-  fixed_width_column_wrapper<ts> const secs_col1({ts::duration::zero(),
-                                                  static_cast<ts::duration>(100),
-                                                  static_cast<ts::duration>(-100),
-                                                  ts::duration::min(),
-                                                  ts::duration::max()},
-                                                 {1, 0, 0, 1, 1});
-  fixed_width_column_wrapper<ts> const secs_col2({ts::duration::zero(),
-                                                  static_cast<ts::duration>(-200),
-                                                  static_cast<ts::duration>(200),
-                                                  ts::duration::min(),
-                                                  ts::duration::max()},
-                                                 {1, 0, 0, 1, 1});
-
-  auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1, secs_col1});
-  auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2, secs_col2});
+  auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
+  auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
 
   auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view(), true);
+  expect_columns_equal(output1->view(), output2->view());
 }
 
 template <typename T>
