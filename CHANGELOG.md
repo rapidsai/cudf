@@ -55,6 +55,7 @@
 - PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
 - PR #5572 Add `cudf::encode` API.
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
+- PR #5642 Add `GroupBy.groups()`
 
 ## Improvements
 
@@ -149,11 +150,15 @@
 - PR #5759 Fix documentation describing JIT cache default location
 - PR #5780 Add Java bindings for pad
 - PR #5775 Update dask_cudf.read_parquet to align with upstream improvements
+- PR #5785 Enable computing views of ListColumns
+- PR #5791 Get nullable_pd_dtype from kwargs if provided in assert_eq
 - PR #5786 JNI Header Cleanup for cuspacial
 - PR #5800 Expose arrow datasource instead of directly taking a RandomAccessFile
+- PR #5795 Clarify documentation on Boost dependency
 
 ## Bug Fixes
 
+- PR #5793 Fix leak in mutable_table_device_view by deleting _descendant_storage in table_device_view_base::destroy
 - PR #5525 Make sure to allocate bitmasks of string columns only once
 - PR #5336 Initialize conversion tables on a per-context basis
 - PR #5283 Fix strings::ipv4_to_integers overflow to negative

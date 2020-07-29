@@ -139,21 +139,6 @@ CUDA/GPU requirements:
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
 
-Since `cmake` will download and build Apache Arrow you may need to install Boost C++ (version 1.58+) before running
-`cmake`:
-
-```bash
-# Install Boost C++ for Ubuntu 16.04/18.04
-$ sudo apt-get install libboost-all-dev
-```
-
-or
-
-```bash
-# Install Boost C++ for Conda
-$ conda install -c conda-forge boost
-```
-
 ## Script to build cuDF from source
 
 ### Build from Source
