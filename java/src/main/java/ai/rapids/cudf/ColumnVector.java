@@ -411,7 +411,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
           for (MemoryBuffer validity : valid) {
             if (validity != null) {
               HostMemoryBuffer hmb = HostMemoryBuffer.allocate(validity.getLength());
-              hmb.copyFromDeviceBuffer((DeviceMemoryBuffer) validity);
+              hmb.copyFromDeviceBuffer((DeviceMemoryBufferView) validity);
               hValids.add(hmb);
             } else {
               hValids.add(null);

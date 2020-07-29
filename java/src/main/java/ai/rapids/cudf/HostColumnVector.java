@@ -237,15 +237,24 @@ public final class HostColumnVector implements AutoCloseable {
     return getNullCount() > 0;
   }
 
-  //  void printOffsetBuffer(int level, int prevSize) {
-//    byte[] offsetBytes = new byte[128];
-//    System.out.println("OFFSET BUFFER" + offsetBytes);
-//    offHeap.offsets.get(level).getBytes(offsetBytes, 0, 0, offHeap.offsets.get(level).length);
-//    for (int i = 0; i < offsetBytes.length; i++) {
-//      System.out.print(offsetBytes[i]);
-//    }
-//  }
-//
+    void printOffsetBuffer(int level, int prevSize) {
+    byte[] offsetBytes = new byte[128];
+    System.out.println("OFFSET BUFFER" + offsetBytes);
+    offHeap.offsets.get(level).getBytes(offsetBytes, 0, 0, offHeap.offsets.get(level).length);
+    for (int i = 0; i < offsetBytes.length; i++) {
+      System.out.print(offsetBytes[i]);
+    }
+  }
+
+
+    void printDataBuffer() {
+    byte[] dataBytes = new byte[128];
+    System.out.println("DATA BUFFER" + dataBytes);
+    this.offHeap.data.getBytes(dataBytes, 0, 0, this.offHeap.data.length);
+    for (int i = 0; i < dataBytes.length; i++) {
+      System.out.print(dataBytes[i]);
+    }
+  }
   /////////////////////////////////////////////////////////////////////////////
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
@@ -399,9 +408,15 @@ public final class HostColumnVector implements AutoCloseable {
         byte[] rawData = new byte[endStrOffset-startStrOffset];
         if (size > 0) {
           offHeap.data.getBytes(rawData, 0, startStrOffset, size);
+          retList.add(new String(rawData));
+        } else if (isNull(level, index)) {
+            retList.add(null);
+        } else {
+          retList.add(new String(rawData));
         }
-        retList.add(new String(rawData));
       }
+      if (retList.isEmpty() && isNull(level, rowIndex))
+        return null;
       return retList;
     } else { //Level 1 list
       HostMemoryBuffer mainOffset = offHeap.offsets.get(level);
@@ -417,6 +432,8 @@ public final class HostColumnVector implements AutoCloseable {
       DataInputStream dataInputStream = new DataInputStream(bais);
       List<Integer> list = new ArrayList<>();
       readToList(dataInputStream, list, baseType);
+      if (list.isEmpty() && isNull(level, rowIndex))
+        return null;
       return list;
     }
   }
@@ -456,6 +473,17 @@ public final class HostColumnVector implements AutoCloseable {
         return false;
       }
       return BitVectorHelper.isNull(offHeap.valid.get(0), index);
+    }
+    return false;
+  }
+
+  public boolean isNull(int level, long index) {
+    assert (index >= 0 && index < allRows.get(allRows.size() - 1)) : "index is out of range 0 <= " + index + " < " + allRows.get(allRows.size() - 1);
+    if (hasValidityVector()) {
+      if (nullCount.isPresent() && !hasNulls()) {
+        return false;
+      }
+      return BitVectorHelper.isNull(offHeap.valid.get(level), index);
     }
     return false;
   }
@@ -1297,9 +1325,7 @@ public final class HostColumnVector implements AutoCloseable {
 
     //TODO: Needs clean up
     public Builder appendList(DType type, DType baseType, int level, int prevSize, List list) {
-      if (list.isEmpty()) {
-        throw new IllegalStateException("Cannot handle empty lists just yet");
-      } else if (list.get(0) instanceof List) {
+      if (list != null && !list.isEmpty() && list.get(0) instanceof List) {
         if (allTypes.size() <= level + 1){
           allTypes.add(level + 1, DType.LIST);
         } else {
@@ -1331,69 +1357,20 @@ public final class HostColumnVector implements AutoCloseable {
         }
         return this;
       } else {
+        ArrayList<Integer> nullIndices = new ArrayList<>();
         if (allTypes.size() <= level + 1){
           allTypes.add(level + 1, baseType);
         } else {
           allTypes.set(level + 1, baseType);
         }
         int baseTypeSizeInBytes = baseType.getSizeInBytes();
-        assert list != null : "appendNull must be used to append null strings";
-        int length = list.size();
+        //assert list != null : "appendNull must be used to append null lists";
+        int length = (list != null) ? list.size() : 0;
         // just for lists we want to throw a real exception if we would overrun the buffer
         long oldLen = data.getLength();
         long newLen = oldLen;
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        DataOutputStream dos = new DataOutputStream(bos);
-        byte[] listBytes = null;
-        try {
-          writeLists(dos, list, baseType);
-          dos.flush();
-          listBytes = bos.toByteArray();
-        } catch (IOException e) {
-          // ignore close exception
-        }
-        if (baseType != DType.STRING) {
-          while (currentListCount * baseTypeSizeInBytes + list.size() * baseTypeSizeInBytes > newLen) {
-            newLen *= 2;
-          }
-        } else {
-          while (newLen - currentStringByteIndex < listBytes.length) {
-            newLen = newLen + listBytes.length;
-          }
-        }
-        if (newLen > Integer.MAX_VALUE) {
-          throw new IllegalStateException("A string buffer is not supported over 2GB in size");
-        }
-        if (newLen != oldLen) {
-          // need to grow the size of the buffer.
-          HostMemoryBuffer newData = HostMemoryBuffer.allocate(newLen);
-          try {
-            if (baseType != DType.STRING) {
-              newData.copyFromHostBuffer(0, data, 0, currentListCount * baseTypeSizeInBytes);
-            } else {
-              newData.copyFromHostBuffer(0, data, 0, currentStringByteIndex);
-            }
-            data.close();
-            data = newData;
-            newData = null;
-          } finally {
-            if (newData != null) {
-              newData.close();
-            }
-          }
-        }
-        if (length > 0) {
-          if (baseType != DType.STRING) {
-            data.setBytes(currentListCount * baseTypeSizeInBytes, listBytes, 0, listBytes.length);
-          } else {
-            data.setBytes(currentStringByteIndex, listBytes, 0, listBytes.length);
-          }
-          byte[] tmpArr = new byte[(int) data.length];
-          data.getBytes(tmpArr, 0, 0, tmpArr.length);
-          for (int i = 0; i < tmpArr.length; i++) {
-            System.out.print((tmpArr[i]) + " ");
-          }
-        }
+        long prevListCount = currentListCount;
+        long prevStringByteIndex = currentStringByteIndex;
         currentListCount += length;
         currentListIndex++;
         if (allOffsets.size() <= level) {
@@ -1407,44 +1384,119 @@ public final class HostColumnVector implements AutoCloseable {
           this.allRows.add(0l);
         }
         this.allRows.set(level + 1, (long) currentListCount);
-      }
-      if (baseType == DType.STRING) {
-        if (!needToAdd) {
-          //TODO: Fix this hard code
-          allOffsets.add(HostMemoryBuffer.allocate(INIT_OFFSET_SIZE));
-          allOffsets.get(allOffsets.size() - 1).setInt(0, 0);
-          needToAdd = true;
-        }
-        HostMemoryBuffer currentOffsetBuffer = allOffsets.get(allOffsets.size() - 1);
-        //////////////
-        for (Object item : list) {
-          String strItem = (String)item;
-          int strLen = strItem.getBytes(UTF_8).length;
-          for (int k =0;k < strItem.getBytes(UTF_8).length;k++) {
-            System.out.print(strItem.getBytes(UTF_8)[k]);
-          }
-          currentStringByteIndex += strLen;
-          currentIndex++;
-          if (currentOffsetBuffer.length <= currentIndex*OFFSET_SIZE + OFFSET_SIZE) {
-            HostMemoryBuffer newOffset = HostMemoryBuffer.allocate(currentOffsetBuffer.length * 2);
-            try {
-              newOffset.copyFromHostBuffer(0, currentOffsetBuffer, 0, currentOffsetBuffer.length);
-              currentOffsetBuffer.close();
-              allOffsets.set(allOffsets.size() - 1, newOffset);
-              newOffset = null;
-            } finally {
-              if (newOffset != null) {
-                newOffset.close();
-              }
+        /// SET VALIDITY/////
+        if (list == null) {
+          setNullAt(level,currentListIndex);
+        } else {
+          for (int x = 0; x < list.size(); x++) {
+            if (list.get(x) == null) {
+              nullIndices.add((int) prevListCount + x);
             }
           }
-          currentOffsetBuffer = allOffsets.get(allOffsets.size() - 1);
-          currentOffsetBuffer.setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
+          for (Integer nullIndex : nullIndices) {
+            setNullAt(level + 1, nullIndex);
+          }
+          System.out.println("KUHU nullIndices=" + nullIndices);
         }
+          /////////////////////
+        if (list != null && baseType == DType.STRING) {
+          if (!needToAdd) {
+            //TODO: Fix this hard code
+            allOffsets.add(HostMemoryBuffer.allocate(INIT_OFFSET_SIZE));
+            allOffsets.get(allOffsets.size() - 1).setInt(0, 0);
+            needToAdd = true;
+          }
+          HostMemoryBuffer currentOffsetBuffer = allOffsets.get(allOffsets.size() - 1);
+          //////////////
+
+          for (Object item : list) {
+            String strItem = (String)item;
+            int strLen = 0;
+            if (strItem != null) {
+              strLen = strItem.getBytes(UTF_8).length;
+              for (int k = 0; k < strItem.getBytes(UTF_8).length; k++) {
+                System.out.print(strItem.getBytes(UTF_8)[k]);
+              }
+            }
+            currentStringByteIndex += strLen;
+            currentIndex++;
+            resizeAndSetOffsetBuffer(currentOffsetBuffer);
+            currentOffsetBuffer = allOffsets.get(allOffsets.size() - 1);
+            currentOffsetBuffer.setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
+          }
 //        printOffsetBuffer(allOffsets.size() - 1, 128);
 
+        }
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(bos);
+        byte[] listBytes = null;
+        try {
+          writeLists(dos, list, baseType);
+          dos.flush();
+          listBytes = bos.toByteArray();
+        } catch (IOException e) {
+          // ignore close exception
+        }
+        if (baseType != DType.STRING) {
+          while (prevListCount * baseTypeSizeInBytes + list.size() * baseTypeSizeInBytes > newLen) {
+            newLen *= 2;
+          }
+        } else {
+          while (newLen - prevStringByteIndex < listBytes.length) {
+            newLen = newLen + listBytes.length;
+          }
+        }
+        if (newLen > Integer.MAX_VALUE) {
+          throw new IllegalStateException("A string buffer is not supported over 2GB in size");
+        }
+        if (newLen != oldLen) {
+          // need to grow the size of the buffer.
+          HostMemoryBuffer newData = HostMemoryBuffer.allocate(newLen);
+          try {
+            if (baseType != DType.STRING) {
+              newData.copyFromHostBuffer(0, data, 0, prevListCount * baseTypeSizeInBytes);
+            } else {
+              newData.copyFromHostBuffer(0, data, 0, prevStringByteIndex);
+            }
+            data.close();
+            data = newData;
+            newData = null;
+          } finally {
+            if (newData != null) {
+              newData.close();
+            }
+          }
+        }
+        if (length > 0) {
+          if (baseType != DType.STRING) {
+            data.setBytes(prevListCount * baseTypeSizeInBytes, listBytes, 0, listBytes.length);
+          } else {
+            data.setBytes(prevStringByteIndex, listBytes, 0, listBytes.length);
+          }
+          byte[] tmpArr = new byte[(int) data.length];
+          data.getBytes(tmpArr, 0, 0, tmpArr.length);
+          for (int i = 0; i < tmpArr.length; i++) {
+            System.out.print((tmpArr[i]) + " ");
+          }
+        }
       }
       return this;
+    }
+
+    private void resizeAndSetOffsetBuffer(HostMemoryBuffer currentOffsetBuffer) {
+      if (currentOffsetBuffer.length <= currentIndex*OFFSET_SIZE + OFFSET_SIZE) {
+        HostMemoryBuffer newOffset = HostMemoryBuffer.allocate(currentOffsetBuffer.length * 2);
+        try {
+          newOffset.copyFromHostBuffer(0, currentOffsetBuffer, 0, currentOffsetBuffer.length);
+          currentOffsetBuffer.close();
+          allOffsets.set(allOffsets.size() - 1, newOffset);
+          newOffset = null;
+        } finally {
+          if (newOffset != null) {
+            newOffset.close();
+          }
+        }
+      }
     }
 
 //    private void printOffsetBuffer(int level, int prevSize) {
@@ -1457,6 +1509,8 @@ public final class HostColumnVector implements AutoCloseable {
 
 
     private void writeLists(DataOutputStream dos, List list, DType baseType) throws IOException {
+      if (list == null)
+        return;
       for (int i = 0; i < list.size(); i++) {
         switch (baseType) {
           case INT32:
@@ -1474,7 +1528,9 @@ public final class HostColumnVector implements AutoCloseable {
             break;
           case BOOL8: dos.writeBoolean((boolean) list.get(i));
             break;
-          case STRING: dos.writeBytes((String) list.get(i)); //cross check for utf8 etc.
+          case STRING: if (list.get(i) != null) {
+            dos.writeBytes((String) list.get(i)); //cross check for utf8 etc.
+          }
             break;
           default: throw new UnsupportedOperationException("Do not support " + baseType);
         }
@@ -1836,13 +1892,24 @@ public final class HostColumnVector implements AutoCloseable {
      * @param index
      */
     public final Builder setNullAt(long index) {
-      assert index < rows;
+      assert index < allRows.get(allRows.size() - 1);
 
       // add null
       if (this.valid == null) {
         allocateBitmaskAndSetDefaultValues();
       }
       nullCount += BitVectorHelper.setNullAt(valid, index);
+      return this;
+    }
+
+    public final Builder setNullAt(int level, long index) {
+      assert index < allRows.get((allRows.size() - 1));
+
+      // add null
+      if (this.valid == null) {
+        allocateBitmaskAndSetDefaultValues();
+      }
+      nullCount += BitVectorHelper.setNullAt(allValids.get(allValids.size() - 1), index);
       return this;
     }
 

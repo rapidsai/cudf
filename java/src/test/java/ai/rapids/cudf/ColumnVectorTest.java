@@ -2449,6 +2449,32 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testListCvEmpty() throws Exception {
+    List<Integer> list = new ArrayList<>();
+    list.add(0);
+    list.add(1);
+    list.add(2);
+    list.add(3);
+    List<Integer> list2 = new ArrayList<>();
+    list2.add(6);
+    list2.add(2);
+    list2.add(4);
+    list2.add(5);
+    List<Integer> list3 = new ArrayList<>();
+
+    ColumnVector res = ColumnVector.fromLists(DType.INT32, list, list2, list3);
+
+    HostColumnVector hcv = res.copyToHost();
+    List<Integer> ret = hcv.getList(1);
+    System.out.println("Element =" + ret.get(0));
+    System.out.println("Element =" + ret.get(1));
+    System.out.println("Element =" + ret.get(2));
+    //add assert
+    res.close();
+    hcv.close();
+  }
+
+  @Test
   void testListCvStrings() throws Exception {
     List<String> list = new ArrayList<>();
     list.add("0");
@@ -2457,24 +2483,22 @@ public class ColumnVectorTest extends CudfTestBase {
     list.add("3");
     List<String> list2 = new ArrayList<>();
     list2.add("4");
-    list2.add("5");
+    list2.add(null);
     list2.add("6");
-    list2.add("7");
-    List<String> list3 = new ArrayList<>();
-    list3.add("8");
-    list3.add("9");
-    list3.add("10");
-    list3.add("11");
-    list3.add("12");
+    list2.add(null);
+    List<String> list3 = null;
 
     ColumnVector res = ColumnVector.fromLists(DType.STRING, list, list2, list3);
 
     HostColumnVector hcv = res.copyToHost();
     List<String> ret = hcv.getList(1);
+    List<String> ret2 = hcv.getList(2);
+    System.out.println("KUHU ret size=" + ret.size() + " ret2=" + ret2.size());
 //    //add asserts
     System.out.println("Element =" + ret.get(0));
     System.out.println("Element =" + ret.get(1));
     System.out.println("Element =" + ret.get(2));
+    System.out.println("Element =" + ret.get(3));
     res.close();
     hcv.close();
   }
