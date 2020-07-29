@@ -153,7 +153,9 @@ struct dispatch_unary_cast_from {
 
   dispatch_unary_cast_from(column_view inp) : input(inp) {}
 
-  template <typename T, typename std::enable_if_t<cudf::is_primitive_type<T>()>* = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<cudf::is_fixed_width<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
