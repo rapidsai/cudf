@@ -75,12 +75,19 @@ class TimeDeltaColumn(column.ColumnBase):
 
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
             out_dtype = np.bool
-        elif op in ("add", "sub", "floordiv", "mul"):
-            if binop in ["mod", "floordiv"]:
-                out_dtype = np.dtype("int_")
-            else:
+        elif op in ("add", "sub", "mul"):
+            out_dtype = self.dtype
+        elif op == "truediv":
+            if np.isscalar(rhs):
                 out_dtype = self.dtype
-
+            else:
+                out_dtype = np.dtype("float_")
+        elif op == "floordiv":
+            op = "truediv"
+            if np.isscalar(rhs):
+                out_dtype = self.dtype
+            else:
+                out_dtype = np.dtype("int_")
         else:
             raise TypeError(
                 f"Series of dtype {self.dtype} cannot perform "
@@ -100,6 +107,8 @@ class TimeDeltaColumn(column.ColumnBase):
             ary = utils.scalar_broadcast_to(
                 other, size=len(self), dtype=self.dtype
             )
+        elif np.isscalar(other):
+            return other
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
