@@ -146,7 +146,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   CUDF_EXPECTS(max_sequence_length * max_rows_tensor < std::numeric_limits<cudf::size_type>::max(),
                "max_sequence_length x max_rows_tensor is too large for cudf output column size");
   auto const strings_count = strings.size();
-  if (strings_count == 0)
+  if (strings_count == 0 || strings.chars_size() == 0)
     return tokenizer_result{0,
                             max_sequence_length,
                             cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT32}),
@@ -157,6 +157,8 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   auto const d_offsets = offsets.data<uint32_t>() + strings.offset();
   auto const offset    = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);
   auto const d_chars   = strings.chars().data<char>() + offset;
+
+  printf("offsets.size()=%d,chars.size()=%d\n", offsets.size(), strings.chars_size());
 
   // Create tokenizer
   wordpiece_tokenizer tokenizer(vocab_table,
