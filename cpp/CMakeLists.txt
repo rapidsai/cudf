@@ -323,7 +323,7 @@ if(BUILD_TESTS)
     include(CTest)
     find_package(GTest)
     
-    if(NOT GTEST_FOUND)
+    if(NOT GTEST_ROOT)
         include(ConfigureGoogleTest)
         set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
     endif(NOT GTEST_FOUND)
@@ -336,8 +336,9 @@ if(BUILD_TESTS)
     include_directories(${GTEST_INCLUDE_DIR})
 
     if(GTEST_FOUND)
-        message(STATUS "Located Google C++ Testing Framework (Google Test): ${GTEST_ROOT}")
+        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
     else():
+        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
         set(BUILD_TESTING OFF)
     endif(NOT GTEST_FOUND)
 
@@ -361,12 +362,13 @@ if(BUILD_BENCHMARKS)
 
     set(GBENCH_INCLUDE_DIR "${benchmark_ROOT}/install/include")
     set(GBENCH_LIBRARY_DIR "${benchmark_ROOT}/install/lib")
-    link_directories(${GBENCH_LIBRARY_DIR})
+    link_directories(${GBENCH_LIBRARY_DIR}
     include_directories(${GBENCH_INCLUDE_DIR})
     
     if(benchmark_FOUND)
-        message(STATUS "Located Google C++ Benchmarking Framework (Google Benchmark): ${benchmark_ROOT}")
+        message(STATUS "Located Google C++ Benchmarking Framework (Google Benchmark) found in ${benchmark_ROOT}")
     else():
+        message(AUTHOR_WARNING "Located Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
         set(BUILD_BENCHMARKS off)
     endif(NOT benchmark_FOUND)
     
