@@ -849,7 +849,17 @@ class MultiIndex(Index):
         return result
 
     def _poplevels(self, level):
-        ilevels = [self.names.index(lev) for lev in level]
+        if not pd.api.types.is_list_like(level):
+            level = (level,)
+
+        if not level:
+            return self
+
+        if level[0] in self.names:
+            ilevels = level
+        else:
+            # assume that level is a list-like of level names
+            ilevels = [self.names.index(lev) for lev in level]
 
         popped_data = {}
         for i in ilevels:
@@ -868,7 +878,7 @@ class MultiIndex(Index):
 
         return result
 
-    def droplevels(self, level):
+    def droplevel(self, level):
         mi = self.copy()
         mi._poplevels(level)
         if mi.nlevels == 1:
