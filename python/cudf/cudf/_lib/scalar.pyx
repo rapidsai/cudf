@@ -175,7 +175,13 @@ cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,
                                     value,
                                     dtype,
                                     bool valid=True):
-    value = value if valid else 0
+    if np.isnat(value):
+        value = 0
+        valid = False
+        dtype = "datetime64[ns]"
+    else:
+        value = value if valid else 0
+
     if dtype == "datetime64[s]":
         s.reset(
             new timestamp_scalar[timestamp_s](<int64_t>np.int64(value), valid)
@@ -199,7 +205,13 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
                                      value,
                                      dtype,
                                      bool valid=True):
-    value = value if valid else 0
+    if np.isnat(value):
+        value = 0
+        valid = False
+        dtype = "timedelta64[ns]"
+    else:
+        value = value if valid else 0
+
     if dtype == "timedelta64[s]":
         s.reset(
             new duration_scalar[duration_s](<int64_t>np.int64(value), valid)
