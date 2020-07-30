@@ -144,6 +144,7 @@
 - PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
 - PR #5743 Reduce number of test cases in concatenate benchmark
 - PR #5748 Disable `tolist` API in `Series` & `Index` and add `tolist` dispatch in `dask-cudf`
+- PR #5744 Reduce number of test cases in reduction benchmark
 - PR #5756 Switch JNI code to use the RMM owning wrapper
 - PR #5725 Integrate Gbenchmarks into CI
 - PR #5752 Add cuDF internals documentation (ColumnAccessor)
@@ -153,6 +154,7 @@
 - PR #5785 Enable computing views of ListColumns
 - PR #5791 Get nullable_pd_dtype from kwargs if provided in assert_eq
 - PR #5786 JNI Header Cleanup for cuSpatial
+- PR #5800 Expose arrow datasource instead of directly taking a RandomAccessFile
 - PR #5795 Clarify documentation on Boost dependency
 - PR #5803 Add in Java support for the repeat command
 

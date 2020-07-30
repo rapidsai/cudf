@@ -20,6 +20,7 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -571,7 +572,8 @@ TEST_F(JsonReaderTest, ArrowFileSource)
   std::shared_ptr<arrow::io::ReadableFile> infile;
   ASSERT_TRUE(arrow::io::ReadableFile::Open(fname).Value(&infile).ok());
 
-  cudf_io::read_json_args in_args(cudf_io::source_info{infile});
+  auto arrow_source = cudf_io::arrow_io_source{infile};
+  cudf_io::read_json_args in_args(cudf_io::source_info{&arrow_source});
   in_args.lines                       = true;
   in_args.dtype                       = {"int8"};
   cudf_io::table_with_metadata result = cudf_io::read_json(in_args);
