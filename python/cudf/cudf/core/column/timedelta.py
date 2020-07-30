@@ -73,26 +73,42 @@ class TimeDeltaColumn(column.ColumnBase):
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
 
-        if op in ("eq", "ne", "lt", "gt", "le", "ge"):
-            out_dtype = np.bool
-        elif op in ("add", "sub", "mul"):
-            out_dtype = self.dtype
-        elif op == "truediv":
-            if np.isscalar(rhs):
+        if np.isscalar(rhs):
+            if op in ("eq", "ne"):
+                out_dtype = np.bool
+            elif op in ("lt", "gt", "le", "ge"):
+                raise TypeError(
+                    f"Invalid comparison between dtype={self.dtype}"
+                    f" and {type(rhs).__name__}"
+                )
+            elif op in ("mul", "mod", "truediv"):
+                out_dtype = self.dtype
+            elif op == "floordiv":
+                op = "truediv"
                 out_dtype = self.dtype
             else:
-                out_dtype = np.dtype("float_")
-        elif op == "floordiv":
-            op = "truediv"
-            if np.isscalar(rhs):
-                out_dtype = self.dtype
-            else:
-                out_dtype = np.dtype("int_")
+                raise TypeError(
+                    f"Series of dtype {self.dtype} cannot perform "
+                    f" the operation {op}"
+                )
         else:
-            raise TypeError(
-                f"Series of dtype {self.dtype} cannot perform "
-                f" the operation {op}"
-            )
+            if op in ("eq", "ne", "lt", "gt", "le", "ge"):
+                out_dtype = np.bool
+            elif op in ("add", "sub"):
+                out_dtype = self.dtype
+            elif op == "truediv":
+                out_dtype = np.dtype("float_")
+            elif op == "floordiv":
+                op = "truediv"
+                out_dtype = np.dtype("int_")
+            else:
+                raise TypeError(
+                    f"Series of dtype {self.dtype} cannot perform "
+                    f" the operation {op}"
+                )
+
+        if reflect:
+            lhs, rhs = rhs, lhs
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def normalize_binop_value(self, other):
