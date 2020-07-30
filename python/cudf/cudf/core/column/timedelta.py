@@ -97,6 +97,7 @@ class TimeDeltaColumn(column.ColumnBase):
             elif op in ("add", "sub"):
                 out_dtype = self.dtype
             elif op == "truediv":
+                lhs = lhs.astype("float64")
                 out_dtype = np.dtype("float_")
             elif op == "floordiv":
                 op = "truediv"
