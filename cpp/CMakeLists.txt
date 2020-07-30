@@ -370,7 +370,7 @@ if(BUILD_BENCHMARKS)
     else():
         message(AUTHOR_WARNING "Located Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
         set(BUILD_BENCHMARKS off)
-    endif(NOT benchmark_FOUND)
+    endif(benchmark_FOUND)
     
 
 endif(BUILD_BENCHMARKS)
