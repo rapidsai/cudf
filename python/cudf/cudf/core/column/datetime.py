@@ -205,7 +205,13 @@ class DatetimeColumn(column.ColumnBase):
         elif op in ("add", "sub") and isinstance(
             rhs, cudf.core.column.timedelta.TimeDeltaColumn
         ):
-            out_dtype = self.dtype
+            units = ["s", "ms", "us", "ns"]
+            lhs_unit = units.index(self.time_unit)
+            rhs_unit = units.index(rhs.time_unit)
+            out_dtype = np.dtype(
+                f"datetime64[{units[max(lhs_unit, rhs_unit)]}]"
+            )
+            print("k", out_dtype)
         else:
             raise TypeError(
                 f"Series of dtype {self.dtype} cannot perform "
