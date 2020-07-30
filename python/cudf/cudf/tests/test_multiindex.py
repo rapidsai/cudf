@@ -1022,6 +1022,26 @@ def test_multiIndex_size(pdi):
 
 @pytest.mark.parametrize(
     "level",
+    [
+        [],
+        "alpha",
+        "location",
+        "weather",
+        0,
+        1,
+        [0, 1],
+        -1,
+        [-1, -2],
+        [-1, "weather"],
+    ],
+)
+def test_multiindex_droplevel_simple(pdfIndex, level):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex.droplevel(level), gdfIndex.droplevel(level))
+
+
+@pytest.mark.parametrize(
+    "level",
     itertools.chain(
         *(
             itertools.combinations(
@@ -1031,7 +1051,17 @@ def test_multiIndex_size(pdi):
         )
     ),
 )
-def test_multiindex_droplevel(pdfIndex, level):
+def test_multiindex_droplevel_name(pdfIndex, level):
+    level = list(level)
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex.droplevel(level), gdfIndex.droplevel(level))
+
+
+@pytest.mark.parametrize(
+    "level",
+    itertools.chain(*(itertools.combinations(range(5), r) for r in range(5))),
+)
+def test_multiindex_droplevel_index(pdfIndex, level):
     level = list(level)
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex.droplevel(level), gdfIndex.droplevel(level))
