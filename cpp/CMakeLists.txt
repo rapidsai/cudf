@@ -337,7 +337,7 @@ if(BUILD_TESTS)
 
     if(GTEST_FOUND)
         message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-    else():
+    else()
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
         set(BUILD_TESTING OFF)
     endif(GTEST_FOUND)
