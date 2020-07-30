@@ -342,8 +342,6 @@ if(BUILD_TESTS)
         set(BUILD_TESTING OFF)
     endif(GTEST_FOUND)
 
-    
-
 endif(BUILD_TESTS)
 
 message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
@@ -372,7 +370,6 @@ if(BUILD_BENCHMARKS)
         set(BUILD_BENCHMARKS off)
     endif(benchmark_FOUND)
     
-
 endif(BUILD_BENCHMARKS)
 
 message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
