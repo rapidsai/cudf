@@ -178,7 +178,7 @@ class binary_expression : public operator_expression {
 
 class linearizer : public abstract_visitor {
  public:
-  linearizer(cudf::table_view table) : table(table), node_index(0), intermediate_counter() {}
+  linearizer(cudf::table_view table) : table(table), node_count(0), intermediate_counter() {}
 
   cudf::size_type visit(literal const& expr) override;
   cudf::size_type visit(column_reference const& expr) override;
@@ -206,7 +206,7 @@ class linearizer : public abstract_visitor {
 
   // State information about the "linearized" GPU execution plan
   cudf::table_view table;
-  cudf::size_type node_index;
+  cudf::size_type node_count;
   detail::intermediate_counter intermediate_counter;
   std::vector<detail::device_data_reference> data_references;
   std::vector<ast_operator> operators;

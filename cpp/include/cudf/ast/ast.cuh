@@ -181,7 +181,6 @@ struct typed_operator_dispatch_functor {
     auto typed_output = resolve_output_data_reference<Out>(
       output, table, output_column, thread_intermediate_storage, row_index);
     *typed_output = OperatorFunctor{}(typed_lhs, typed_rhs);
-    // printf("LHS: %i, RHS: %i, Output: %i\n", typed_lhs, typed_rhs, *typed_output);
   }
 
   template <typename OperatorFunctor,

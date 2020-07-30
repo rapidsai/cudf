@@ -66,8 +66,8 @@ cudf::size_type intermediate_counter::find_first_missing(cudf::size_type start,
 
 cudf::size_type linearizer::visit(literal const& expr)
 {
-  // Track the node id
-  auto const node_id = this->node_index++;
+  // Track the node index
+  auto const node_index = this->node_count++;
   // Resolve node type
   auto const data_type = expr.get_data_type();
   // TODO: Use scalar device view (?)
@@ -82,8 +82,8 @@ cudf::size_type linearizer::visit(literal const& expr)
 
 cudf::size_type linearizer::visit(column_reference const& expr)
 {
-  // Track the node id
-  auto const node_id = this->node_index++;
+  // Track the node index
+  auto const node_index = this->node_count++;
   // Resolve node type
   auto const data_type = expr.get_data_type(this->table);
   // Push data reference
@@ -96,8 +96,8 @@ cudf::size_type linearizer::visit(column_reference const& expr)
 
 cudf::size_type linearizer::visit(operator_expression const& expr)
 {
-  // Track the node id
-  auto const node_id = this->node_index++;
+  // Track the node index
+  auto const node_index = this->node_count++;
   // Visit children (operands) of this node
   auto const operand_data_reference_indices = this->visit_operands(expr.get_operands());
   // Resolve operand types
@@ -140,16 +140,28 @@ cudf::size_type linearizer::visit(operator_expression const& expr)
   // Push operator
   this->operators.push_back(op);
   // Push data reference
-  auto const source = detail::device_data_reference{
-    detail::device_data_reference_type::INTERMEDIATE, data_type, this->intermediate_counter.take()};
+  auto const source = [&]() {
+    if (node_index == 0) {
+      // This node is the root. Output should be directed to the output column.
+      // TODO: Could refactor to support output tables (multiple output columns)
+      printf("USING ROOT NODE\n");
+      return detail::device_data_reference{
+        detail::device_data_reference_type::COLUMN, data_type, 0, table_reference::OUTPUT};
+    } else {
+      // This node is not the root. Output is an intermediate value.
+      return detail::device_data_reference{detail::device_data_reference_type::INTERMEDIATE,
+                                           data_type,
+                                           this->intermediate_counter.take()};
+    }
+  }();
   auto const index = this->add_data_reference(source);
-  // Insert source indices from all operands (sources) and operator (destination)
+  // Insert source indices from all operands (sources) and this operator (destination)
   this->operator_source_indices.insert(this->operator_source_indices.end(),
                                        operand_data_reference_indices.cbegin(),
                                        operand_data_reference_indices.cend());
   this->operator_source_indices.push_back(index);
   return index;
-}  // namespace ast
+}
 
 cudf::data_type linearizer::get_root_data_type() const
 {
