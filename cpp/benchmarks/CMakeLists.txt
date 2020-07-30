@@ -249,7 +249,7 @@ ConfigureBench(SUBWORD_TOKENIZER_BENCH "${SUBWORD_TOKENIZER_BENCH_SRC}")
 ###################################################################################################
 # - convert to string benchmark -------------------------------------------------------------------
 
-set(CONVERT_TO_STRING_BENCH_SRC
+set(DURATION_TO_STRING_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/string/convert_durations_benchmark.cpp")
 
-ConfigureBench(CONVERT_TO_STRING_BENCH "${CONVERT_TO_STRING_BENCH_SRC}")
+ConfigureBench(DURATION_TO_STRING_BENCH "${DURATION_TO_STRING_BENCH_SRC}")
