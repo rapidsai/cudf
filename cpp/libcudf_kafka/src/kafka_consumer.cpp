@@ -225,8 +225,7 @@ bool kafka_consumer::close(int timeout)
   delete consumer.get();
   delete kafka_conf.get();
 
-  if (err != RdKafka::ERR_NO_ERROR) { return false; }
-  return true;
+  return err == RdKafka::ERR_NO_ERROR;
 }
 
 }  // namespace kafka

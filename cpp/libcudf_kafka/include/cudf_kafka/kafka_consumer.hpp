@@ -168,7 +168,7 @@ class kafka_consumer : public cudf::io::datasource {
   int64_t start_offset;
   int64_t end_offset;
   int batch_timeout;
-  int default_timeout = 10000;
+  int default_timeout = 10000;  // milliseconds
   std::string delimiter;
 
   std::string buffer;
