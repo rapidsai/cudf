@@ -44,6 +44,57 @@ def test_tokenize():
     assert_eq(expected, actual)
 
 
+def test_detokenize():
+    strings = cudf.Series(
+        [
+            "the",
+            "quick",
+            "fox",
+            "jumped",
+            "over",
+            "the",
+            "lazy",
+            "dog",
+            "the",
+            "siamésé",
+            "cat",
+            "jumped",
+            "under",
+            "the",
+            "sofa",
+        ]
+    )
+
+    indices = cudf.Series([0, 0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3])
+    actual = strings.str.detokenize(indices)
+    expected = cudf.Series(
+        [
+            "the quick fox",
+            "jumped over",
+            "the lazy dog",
+            "the siamésé cat jumped under the sofa",
+        ]
+    )
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    indices = cudf.Series(
+        [4, 0, 0, 0, 0, 4, 1, 1, 4, 2, 2, 2, 2, 4, 3], dtype=np.int8
+    )
+    actual = strings.str.detokenize(indices, "+")
+    expected = cudf.Series(
+        [
+            "quick+fox+jumped+over",
+            "lazy+dog",
+            "siamésé+cat+jumped+under",
+            "sofa",
+            "the+the+the+the",
+        ]
+    )
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize(
     "delimiter, expected_token_counts",
     [
