@@ -365,7 +365,7 @@ if(BUILD_BENCHMARKS)
     
     if(benchmark_FOUND)
         message(STATUS "Located Google C++ Benchmarking Framework (Google Benchmark) found in ${benchmark_ROOT}")
-    else():
+    else()
         message(AUTHOR_WARNING "Located Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
         set(BUILD_BENCHMARKS off)
     endif(benchmark_FOUND)
