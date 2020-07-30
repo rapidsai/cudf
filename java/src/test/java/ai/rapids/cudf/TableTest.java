@@ -1297,6 +1297,48 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testRepeat() {
+    try (Table t = new Table.TestBuilder()
+            .column(1, 2)
+            .column("a", "b")
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 1, 1, 2, 2, 2)
+                 .column("a", "a", "a", "b", "b", "b")
+                 .build();
+         Table repeated = t.repeat(3)) {
+      assertTablesAreEqual(expected, repeated);
+    }
+  }
+
+  @Test
+  void testRepeatColumn() {
+    try (Table t = new Table.TestBuilder()
+            .column(1, 2)
+            .column("a", "b")
+            .build();
+         ColumnVector repeats = ColumnVector.fromBytes((byte)1, (byte)4);
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2, 2, 2, 2)
+                 .column("a", "b", "b", "b", "b")
+                 .build();
+         Table repeated = t.repeat(repeats)) {
+      assertTablesAreEqual(expected, repeated);
+    }
+  }
+
+  @Test
+  void testRepeatColumnBad() {
+    try (Table t = new Table.TestBuilder()
+            .column(1, 2)
+            .column("a", "b")
+            .build();
+         ColumnVector repeats = ColumnVector.fromBytes((byte)2, (byte)-1)) {
+      assertThrows(CudfException.class, () -> t.repeat(repeats));
+    }
+  }
+
+  @Test
   void testInterleaveIntColumns() {
     try (Table t = new Table.TestBuilder()
           .column(1,2,3,4,5)
