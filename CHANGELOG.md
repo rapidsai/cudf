@@ -57,6 +57,7 @@
 - PR #5572 Add `cudf::encode` API.
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
 - PR #5642 Add `GroupBy.groups()`
+- PR #5811 Add `nvtext::edit_distance` API
 
 ## Improvements
 
