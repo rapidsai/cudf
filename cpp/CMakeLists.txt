@@ -323,7 +323,7 @@ if(BUILD_TESTS)
     include(CTest)
     find_package(GTest)
     
-    if(NOT GTEST_ROOT)
+    if(NOT GTEST_FOUND)
         include(ConfigureGoogleTest)
         set(GTEST_ROOT "${CMAKE_BINARY_DIR}/googletest")
     endif(NOT GTEST_FOUND)
@@ -361,7 +361,7 @@ if(BUILD_BENCHMARKS)
 
     set(GBENCH_INCLUDE_DIR "${benchmark_ROOT}/install/include")
     set(GBENCH_LIBRARY_DIR "${benchmark_ROOT}/install/lib")
-    link_directories(${GBENCH_LIBRARY_DIR}
+    link_directories(${GBENCH_LIBRARY_DIR})
     include_directories(${GBENCH_INCLUDE_DIR})
     
     if(benchmark_FOUND)
