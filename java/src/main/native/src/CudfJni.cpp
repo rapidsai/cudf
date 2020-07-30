@@ -16,6 +16,8 @@
 
 #include "jni_utils.hpp"
 
+#include <cudf/copying.hpp>
+
 namespace {
 
 // handles detaching a thread from the JVM when the thread terminates

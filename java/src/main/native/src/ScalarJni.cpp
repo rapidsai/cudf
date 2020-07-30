@@ -17,7 +17,7 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
-#include "jni_utils.hpp"
+#include "cudf_jni_apis.hpp"
 
 extern "C" {
 
