@@ -266,9 +266,9 @@ class NumericalColumn(column.ColumnBase):
         if dkind == "f":
             return self.dtype.type(np.nan)
         elif dkind == "i":
-            return np.iinfo(self.dtype).min
+            return np.iinfo(self.dtype.to_numpy).min
         elif dkind == "u":
-            return np.iinfo(self.dtype).max
+            return np.iinfo(self.dtype.to_numpy).max
         elif dkind == "b":
             return self.dtype.type(False)
         else:

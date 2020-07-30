@@ -84,7 +84,15 @@ class Dtype(ExtensionDtype, _Dtype):
 
     @property
     def type(self):
-        return self.pandas_dtype().type
+        return self.to_pandas.type
+
+    @property
+    def kind(self):
+        return self.to_pandas.kind
+
+    @property
+    def name(self):
+        return self._name
 
     def __repr__(self):
         return self.pa_type.__repr__()
@@ -92,41 +100,50 @@ class Dtype(ExtensionDtype, _Dtype):
     def __hash__(self):
         return hash(self.__repr__())
 
+    
+
 class IntDtype(Dtype):
     is_integer = True
 
 class UInt8Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.uint8()
+        self._name = "UInt8"
         
 class UInt16Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.uint16()
+        self._name = "UInt16"
 
 class UInt32Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.uint32()
+        self._name = "UInt32"
 
 class UInt64Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.uint64()
+        self._name = "UInt64"
 
 class Int8Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.int8()
+        self._name = "Int8"
 
 class Int16Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.int16()
+        self._name = "Int16"
 
 class Int32Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.int32()
+        self._name = "Int32"
 
 class Int64Dtype(IntDtype):
     def __init__(self):
         self.pa_type = pa.int64()
-
+        self._name = "Int64"
 
 class FloatDtype(Dtype):
     is_float = True
@@ -134,15 +151,18 @@ class FloatDtype(Dtype):
 class Float32Dtype(FloatDtype):
     def __init__(self):
         self.pa_type = pa.float32()
+        self._name = "Float32"
 
 class Float64Dtype(FloatDtype):
     def __init__(self):
         self.pa_type = pa.float64()
+        self._name = "Float64"
 
 class BooleanDtype(Dtype):
     is_boolean = True
     def __init__(self):
         self.pa_type = pa.bool_()
+        self._name = "Boolean"
 
 class DatetimeDtype(Dtype):
     is_datetime = True
@@ -150,23 +170,28 @@ class DatetimeDtype(Dtype):
 class Datetime64NSDtype(DatetimeDtype):
     def __init__(self):
         self.pa_type = pa.timestamp('ns')
+        self._name = "Datetime64NS"
 
 class Datetime64USDtype(DatetimeDtype):
     def __init__(self):
         self.pa_type = pa.timestamp('us')
+        self._name = "Datetime64US"
 
 class Datetime64MSDtype(DatetimeDtype):
     def __init__(self):
         self.pa_type = pa.timestamp('ms')
+        self._name = "Datetime64MS"
 
 class Datetime64SDtype(DatetimeDtype):
     def __init__(self):
         self.pa_type = pa.timestamp('s')
+        self._name = "Datetime64S"
 
 class StringDtype(Dtype):
     is_string = True
     def __init__(self):
         self.pa_type = pa.string()
+        self._name = "String"
 
 def make_dtype_from_string(obj):
     if obj in {'str', 'string', 'object'}:

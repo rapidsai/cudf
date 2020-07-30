@@ -81,10 +81,10 @@ class ColumnBase(Column, Serializable):
         """
         View the data as a device array object
         """
-        if self.dtype == "object":
+        if self.dtype.is_string:
             raise ValueError("Cannot get an array view of a StringColumn")
 
-        if is_categorical_dtype(self.dtype):
+        if self.dtype.is_categorical:
             return self.codes.data_array_view
         else:
             dtype = self.dtype
@@ -95,7 +95,7 @@ class ColumnBase(Column, Serializable):
         result = cuda.devicearray.DeviceNDArray(
             shape=(result.nbytes // dtype.itemsize,),
             strides=(dtype.itemsize,),
-            dtype=dtype,
+            dtype=dtype.to_numpy,
             gpu_data=result.gpu_data,
         )
         return result
@@ -1320,11 +1320,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
         if isinstance(col, cudf.core.column.CategoricalColumn):
             return col
-        elif np.issubdtype(col.dtype, np.floating):
+        elif col.dtype.is_float:
             if nan_as_null or (mask is None and nan_as_null is None):
                 mask = libcudf.transform.nans_to_nulls(col.fillna(np.nan))
                 col = col.set_mask(mask)
-        elif np.issubdtype(col.dtype, np.datetime64):
+        elif col.dtype.is_datetime:
             if nan_as_null or (mask is None and nan_as_null is None):
                 col = utils.time_col_replace_nulls(col)
         return col
@@ -1602,7 +1602,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 arb_dtype = np.dtype("O")
             else:
                 arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
-                if arb_dtype != arbitrary.dtype.numpy_dtype:
+                if arb_dtype != arbitrary.dtype.to_numpy:
                     arbitrary = arbitrary.astype(arb_dtype)
         if arb_dtype.kind in ("O", "U"):
             data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)
