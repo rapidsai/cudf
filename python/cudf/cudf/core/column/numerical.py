@@ -18,7 +18,7 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
     numeric_normalize_types,
 )
-
+from cudf.core.dtypes import make_dtype_from_obj
 
 class NumericalColumn(column.ColumnBase):
     def __init__(
@@ -32,7 +32,7 @@ class NumericalColumn(column.ColumnBase):
             The dtype associated with the data Buffer
         mask : Buffer, optional
         """
-        dtype = cudf.Dtype(dtype)
+        dtype = make_dtype_from_obj(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
@@ -139,7 +139,7 @@ class NumericalColumn(column.ColumnBase):
 
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
-                dtype.to_numpy
+                self.dtype
             ](self, **kwargs)
         else:
             return as_column([], dtype="object")
@@ -156,9 +156,12 @@ class NumericalColumn(column.ColumnBase):
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        dtype = np.dtype(dtype)
+        # dtype = np.dtype(dtype)
+        # expect a cudf dtype always here
         if dtype == self.dtype:
             return self
+        import pdb
+        pdb.set_trace()
         return libcudf.unary.cast(self, dtype)
 
     def to_pandas(self, index=None, nullable_pd_dtype=False):

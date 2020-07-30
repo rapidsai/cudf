@@ -145,7 +145,8 @@ class Series(Frame, Serializable):
             ``null`` values.
             If ``False``, leaves ``np.nan`` values as is.
         """
-        dtype = Dtype(dtype)
+        from cudf.core.dtypes import make_dtype_from_obj
+        dtype = make_dtype_from_obj(dtype) if dtype is not None else None
         if isinstance(data, pd.Series):
             if name is None:
                 name = data.name
@@ -187,7 +188,6 @@ class Series(Frame, Serializable):
                 )
             else:
                 data = {}
-
         if not isinstance(data, column.ColumnBase):
             data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
 

@@ -37,7 +37,7 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
 )
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
-
+from cudf.core.dtypes import make_dtype_from_obj
 
 class ColumnBase(Column, Serializable):
     def __init__(
@@ -878,6 +878,7 @@ class ColumnBase(Column, Serializable):
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
     def astype(self, dtype, **kwargs):
+        dtype = make_dtype_from_obj(dtype)
         if dtype.is_categorical:
             return self.as_categorical_column(dtype, **kwargs)
         elif dtype.is_datetime:
@@ -1263,6 +1264,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     * pyarrow array
     * pandas.Categorical objects
     """
+
     if isinstance(arbitrary, ColumnBase):
         if dtype is not None:
             return arbitrary.astype(dtype)
@@ -1552,7 +1554,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             arbitrary = np.ascontiguousarray(arbitrary)
 
         if dtype is not None:
-            arbitrary = arbitrary.astype(dtype)
+            arbitrary = arbitrary.astype(dtype.to_numpy)
 
         if arb_dtype.kind == "M":
 
@@ -1575,8 +1577,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 data=buffer, mask=mask, dtype=arbitrary.dtype
             )
         elif arb_dtype.kind in ("O", "U"):
+
+            pa_data = pa.Array.from_pandas(arbitrary)
             data = as_column(
-                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
+                pa_data, dtype=make_dtype_from_obj(pa_data.type)
             )
             # There is no cast operation available for pa.Array from int to
             # str, Hence instead of handling in pa.Array block, we
@@ -1645,11 +1649,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     if dtype.is_categorical:
                         raise TypeError
 
-                pa_data = pa.array(arbitrary, type=dtype.pa_type, from_pandas=True if nan_as_null is None else nan_as_null)
-                data = as_column(pa_data, dtype=cudf.Dtype(pa_data.type), nan_as_null=nan_as_null)
+                pa_data = pa.array(arbitrary, type=dtype.pa_type if dtype is not None else None, from_pandas=True if nan_as_null is None else nan_as_null)
+                data = as_column(pa_data, dtype=make_dtype_from_obj(pa_data.type), nan_as_null=nan_as_null)
 
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
-                if dtype.is_categorical_dtype:
+                if dtype.is_categorical:
                     sr = pd.Series(arbitrary, dtype="category")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
                 elif dtype.to_numpy == np.str_:
