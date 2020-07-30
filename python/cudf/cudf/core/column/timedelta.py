@@ -7,9 +7,9 @@ import pyarrow as pa
 
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
+from cudf._lib.scalar import Scalar, as_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
-from cudf.utils import utils
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 
 
@@ -73,7 +73,7 @@ class TimeDeltaColumn(column.ColumnBase):
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
 
-        if np.isscalar(rhs):
+        if isinstance(rhs, Scalar) or np.isscalar(rhs):
             if op in ("eq", "ne"):
                 out_dtype = np.bool
             elif op in ("lt", "gt", "le", "ge"):
@@ -86,6 +86,12 @@ class TimeDeltaColumn(column.ColumnBase):
             elif op == "floordiv":
                 op = "truediv"
                 out_dtype = self.dtype
+            elif op in ("add", "sub"):
+                out_dtype = self.dtype
+                if isinstance(rhs, Scalar) and rhs.value is None:
+                    return column.column_empty(
+                        row_count=len(self), dtype=self.dtype, masked=True
+                    )
             else:
                 raise TypeError(
                     f"Series of dtype {self.dtype} cannot perform "
@@ -114,21 +120,19 @@ class TimeDeltaColumn(column.ColumnBase):
 
     def normalize_binop_value(self, other):
         if isinstance(other, dt.timedelta):
-            other = np.timedelata64(other)
+            other = np.timedelta64(other)
 
         if isinstance(other, pd.Timestamp):
             # TODO
             pass
         elif isinstance(other, np.timedelta64):
             other = other.astype(self.dtype)
-            ary = utils.scalar_broadcast_to(
-                other, size=len(self), dtype=self.dtype
-            )
+            return as_scalar(other)
         elif np.isscalar(other):
             return other
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
-
+        ary = None
         return column.build_column(
             data=Buffer(ary.data_array_view.view("|u1")), dtype=self.dtype
         )
