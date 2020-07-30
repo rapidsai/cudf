@@ -855,11 +855,7 @@ class MultiIndex(Index):
         if not level:
             return self
 
-        if level[0] in self.names:
-            ilevels = level
-        else:
-            # assume that level is a list-like of level names
-            ilevels = [self.names.index(lev) for lev in level]
+        ilevels = [self._level_index_from_level(lev) for lev in level]
 
         popped_data = {}
         for i in ilevels:
@@ -879,7 +875,7 @@ class MultiIndex(Index):
         return result
 
     def droplevel(self, level):
-        mi = self.copy()
+        mi = self.copy(deep=False)
         mi._poplevels(level)
         if mi.nlevels == 1:
             return mi.get_level_values(mi.names[0])
@@ -1182,3 +1178,22 @@ class MultiIndex(Index):
                 return cudf_func(*args, **kwargs)
         else:
             return NotImplemented
+
+    def _level_index_from_level(self, level):
+        """
+        Return level index from given level name or index
+        """
+        try:
+            return self.names.index(level)
+        except ValueError:
+            if not pd.api.types.is_integer(level):
+                raise KeyError(f"Level {level} not found") from None
+            if level >= self.nlevels:
+                raise IndexError(
+                    f"Level {level} out of bounds. "
+                    f"Index has {self.nlevels} levels."
+                ) from None
+            return level
+
+    def _level_name_from_level(self, level):
+        return self.names[self._level_index_from_level(level)]
