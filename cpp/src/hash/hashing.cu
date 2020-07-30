@@ -638,7 +638,8 @@ void __device__ finalize_md5_hash(detail::md5_intermediate_data* hash_state,
     thrust::fill_n(thrust::seq, hash_state->buffer, 56, 0x00);
   }
 
-  thrust::copy_n(thrust::seq, (uint8_t*)&full_length, 8, hash_state->buffer + 56);
+  thrust::copy_n(
+    thrust::seq, reinterpret_cast<uint8_t const*>(&full_length), 8, hash_state->buffer + 56);
   detail::md5_hash_step(hash_state, hash_constants, shift_constants);
 
   u_char final_hash[32];
@@ -721,9 +722,13 @@ std::unique_ptr<column> md5_hash(table_view const& input,
     return output;
   }
 
+  std::for_each(input.begin(), input.end(), [](auto col) {
+    CUDF_EXPECTS(col.type().id() <= type_id::BOOL8 || col.type().id() == type_id::STRING,
+                 "Unsupported column type");
+  });
+
   // Result column allocation and creation
-  auto transformer = [] __device__(size_type idx) { return 32; };
-  auto begin = thrust::make_transform_iterator(thrust::make_counting_iterator(0), transformer);
+  auto begin = thrust::make_constant_iterator(32);
   auto offsets_column =
     cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), mr, stream);
   auto offsets_view  = offsets_column->view();

@@ -270,7 +270,7 @@ template <typename T>
 class MD5HashTestTyped : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(MD5HashTestTyped, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(MD5HashTestTyped, cudf::test::NumericTypes);
 
 TYPED_TEST(MD5HashTestTyped, Equality)
 {

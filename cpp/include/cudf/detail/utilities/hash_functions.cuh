@@ -43,13 +43,12 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state,
   uint32_t C = hash_state->hash_value[2];
   uint32_t D = hash_state->hash_value[3];
 
-  uint32_t* buffer_ints = reinterpret_cast<uint32_t*>(hash_state->buffer);
-
   for (unsigned int j = 0; j < 64; j++) {
-    uint32_t F, g;
+    uint32_t F;
+    uint32_t g;
     switch (j / 16) {
       case 0:
-        F = (B & C) | ((~B) & D);  // D ^ (B & (C ^ D))
+        F = (B & C) | ((~B) & D);
         g = j;
         break;
       case 1:
@@ -66,7 +65,12 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state,
         break;
     }
 
-    F = F + A + hash_constants[j] + buffer_ints[g];
+    uint32_t buffer_element_as_int;
+    thrust::copy_n(thrust::seq,
+                   hash_state->buffer + g * 4,
+                   4,
+                   reinterpret_cast<uint8_t*>(&buffer_element_as_int));
+    F = F + A + hash_constants[j] + buffer_element_as_int;
     A = D;
     D = C;
     C = B;
@@ -92,11 +96,11 @@ struct MD5Hash {
    */
   template <typename TKey>
   void __device__ process(TKey const& key,
-                          uint32_t const len,
                           md5_intermediate_data* hash_state,
                           md5_hash_constants_type const* hash_constants,
                           md5_shift_constants_type const* shift_constants) const
   {
+    uint32_t const len  = sizeof(TKey);
     uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
     hash_state->message_length += len;
 
@@ -120,60 +124,13 @@ struct MD5Hash {
     }
   }
 
-  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-  void __device__ operator()(T const& key,
-                             md5_intermediate_data* hash_state,
-                             md5_hash_constants_type const* hash_constants,
-                             md5_shift_constants_type const* shift_constants) const
-  {
-    if (isnan(key)) {
-      T nan = std::numeric_limits<T>::quiet_NaN();
-      process(nan, sizeof(T), hash_state, hash_constants, shift_constants);
-    } else if (key == T{0.0}) {
-      process(T{0.0}, sizeof(T), hash_state, hash_constants, shift_constants);
-    } else {
-      process(key, sizeof(T), hash_state, hash_constants, shift_constants);
-    }
-  }
-
-  template <typename T,
-            typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  void __device__ operator()(T const& key,
-                             md5_intermediate_data* hash_state,
-                             md5_hash_constants_type const* hash_constants,
-                             md5_shift_constants_type const* shift_constants) const
-  {
-    uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
-    uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
-
-    hash_state->message_length += len;
-
-    if (hash_state->buffer_length + len < 64) {
-      thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
-      hash_state->buffer_length += len;
-    } else {
-      uint32_t copylen = 64 - hash_state->buffer_length;
-      thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
-      md5_hash_step(hash_state, hash_constants, shift_constants);
-
-      while (len > 64 + copylen) {
-        thrust::copy_n(thrust::seq, data + copylen, 64, hash_state->buffer);
-        md5_hash_step(hash_state, hash_constants, shift_constants);
-        copylen += 64;
-      }
-
-      thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
-      hash_state->buffer_length = len - copylen;
-    }
-  }
-
   template <typename T, typename std::enable_if_t<is_chrono<T>()>* = nullptr>
   void __device__ operator()(T const& key,
                              md5_intermediate_data* hash_state,
                              md5_hash_constants_type const* hash_constants,
                              md5_shift_constants_type const* shift_constants) const
   {
-    release_assert(false && "Unsupported hash type");
+    release_assert(false && "MD5 Unsupported chrono type column");
   }
 
   template <typename T,
@@ -184,20 +141,84 @@ struct MD5Hash {
                              md5_hash_constants_type const* hash_constants,
                              md5_shift_constants_type const* shift_constants) const
   {
-    release_assert(false && "Unsupported hash type");
+    release_assert(false && "MD5 Unsupported non-fixed-width type column");
   }
 
-  template <typename T,
-            typename std::enable_if_t<!std::is_floating_point<T>::value && !is_chrono<T>() &&
-                                      is_numeric<T>()>* = nullptr>
-  void __device__ operator()(T const& key,
-                             md5_intermediate_data* hash_state,
-                             md5_hash_constants_type const* hash_constants,
-                             md5_shift_constants_type const* shift_constants) const
+  void CUDA_DEVICE_CALLABLE operator()(argument_type const& key,
+                                       md5_intermediate_data* hash_state,
+                                       md5_hash_constants_type const* hash_constants,
+                                       md5_shift_constants_type const* shift_constants) const
   {
-    process(key, sizeof(T), hash_state, hash_constants, shift_constants);
+    process(key, hash_state, hash_constants, shift_constants);
+  }
+
+  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  void __device__ process_floating_point(T const& key,
+                                         md5_intermediate_data* hash_state,
+                                         md5_hash_constants_type const* hash_constants,
+                                         md5_shift_constants_type const* shift_constants) const
+  {
+    if (isnan(key)) {
+      T nan = std::numeric_limits<T>::quiet_NaN();
+      process(nan, hash_state, hash_constants, shift_constants);
+    } else if (key == T{0.0}) {
+      process(T{0.0}, hash_state, hash_constants, shift_constants);
+    } else {
+      process(key, hash_state, hash_constants, shift_constants);
+    }
   }
 };
+
+template <>
+void CUDA_DEVICE_CALLABLE
+MD5Hash<string_view>::operator()(string_view const& key,
+                                 md5_intermediate_data* hash_state,
+                                 md5_hash_constants_type const* hash_constants,
+                                 md5_shift_constants_type const* shift_constants) const
+{
+  uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
+  uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
+
+  hash_state->message_length += len;
+
+  if (hash_state->buffer_length + len < 64) {
+    thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
+    hash_state->buffer_length += len;
+  } else {
+    uint32_t copylen = 64 - hash_state->buffer_length;
+    thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
+    md5_hash_step(hash_state, hash_constants, shift_constants);
+
+    while (len > 64 + copylen) {
+      thrust::copy_n(thrust::seq, data + copylen, 64, hash_state->buffer);
+      md5_hash_step(hash_state, hash_constants, shift_constants);
+      copylen += 64;
+    }
+
+    thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
+    hash_state->buffer_length = len - copylen;
+  }
+}
+
+template <>
+void CUDA_DEVICE_CALLABLE
+MD5Hash<float>::operator()(float const& key,
+                           md5_intermediate_data* hash_state,
+                           md5_hash_constants_type const* hash_constants,
+                           md5_shift_constants_type const* shift_constants) const
+{
+  this->process_floating_point(key, hash_state, hash_constants, shift_constants);
+}
+
+template <>
+void CUDA_DEVICE_CALLABLE
+MD5Hash<double>::operator()(double const& key,
+                            md5_intermediate_data* hash_state,
+                            md5_hash_constants_type const* hash_constants,
+                            md5_shift_constants_type const* shift_constants) const
+{
+  this->process_floating_point(key, hash_state, hash_constants, shift_constants);
+}
 
 }  // namespace detail
 }  // namespace cudf
