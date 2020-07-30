@@ -335,11 +335,13 @@ if(BUILD_TESTS)
     link_directories(${GTEST_LIBRARY_DIR})
     include_directories(${GTEST_INCLUDE_DIR})
 
-    if(NOT GTEST_FOUND)
+    if(GTEST_FOUND)
+        message(STATUS "Located Google C++ Testing Framework (Google Test): ${GTEST_ROOT}")
+    else():
         set(BUILD_TESTING OFF)
     endif(NOT GTEST_FOUND)
 
-    message(STATUS "Google C++ Testing Framework (Google Test) was found? ${GTEST_FOUND} - ${GTEST_ROOT}")
+    
 
 endif(BUILD_TESTS)
 
@@ -362,10 +364,12 @@ if(BUILD_BENCHMARKS)
     link_directories(${GBENCH_LIBRARY_DIR}
     include_directories(${GBENCH_INCLUDE_DIR})
     
-    if(NOT benchmark_FOUND)
+    if(benchmark_FOUND)
+        message(STATUS "Located Google C++ Benchmarking Framework (Google Benchmark): ${benchmark_ROOT}")
+    else():
         set(BUILD_BENCHMARKS off)
     endif(NOT benchmark_FOUND)
-    message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) was found? ${benchmark_FOUND} - ${benchmark_ROOT}")
+    
 
 endif(BUILD_BENCHMARKS)
 
