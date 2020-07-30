@@ -24,7 +24,7 @@ namespace io {
 namespace external {
 namespace kafka {
 
-kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs)
+kafka_consumer::kafka_consumer(std::map<std::string, std::string> const &configs)
 {
   kafka_conf = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
 
@@ -45,7 +45,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs)
     RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
 }
 
-kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
+kafka_consumer::kafka_consumer(std::map<std::string, std::string> const &configs,
                                std::string topic_name,
                                int partition,
                                int64_t start_offset,
@@ -166,7 +166,7 @@ int64_t kafka_consumer::get_committed_offset(std::string topic, int partition)
   }
 }
 
-std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string topic,
+std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string const &topic,
                                                                     int partition,
                                                                     int timeout,
                                                                     bool cached)
@@ -183,12 +183,11 @@ std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string 
   }
 
   if (err != RdKafka::ErrorCode::ERR_NO_ERROR) {
-    printf("Error: '%s'\n", err2str(err).c_str());
     if (err == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
       results.insert(std::pair<std::string, int64_t>("low", low));
       results.insert(std::pair<std::string, int64_t>("high", high));
     } else {
-      throw std::runtime_error(std::string(err2str(err).c_str()));
+      CUDF_FAIL("Error retrieving Kafka watermark offset from broker");
     }
   } else {
     results.insert(std::pair<std::string, int64_t>("low", low));
@@ -198,7 +197,7 @@ std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string 
   return results;
 }
 
-bool kafka_consumer::commit_offset(std::string topic, int partition, int64_t offset)
+bool kafka_consumer::commit_offset(std::string const &topic, int partition, int64_t offset)
 {
   std::vector<RdKafka::TopicPartition *> partitions_;
   RdKafka::TopicPartition *toppar = RdKafka::TopicPartition::create(topic, partition, offset);

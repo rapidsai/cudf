@@ -36,15 +36,17 @@ namespace kafka {
 class kafka_consumer : public cudf::io::datasource {
  public:
   /**
-   * @brief Creates an instance of the Kafka consumer object that is in a semi ready state. This
-   * is useful when the need for delayed partition and topic assignment is not know ahead of time
-   * and needs to be delayed to as late as possible. Documentation for librdkafka configurations can
-   *be found at https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+   * @brief Creates an instance of the Kafka consumer object that is in a semi ready state.
+   *
+   * This is useful when the need for delayed partition and topic assignment is not know ahead of
+   * time and needs to be delayed to as late as possible. Documentation for librdkafka
+   * configurations can be found at
+   * https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
    *
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client
    **/
-  kafka_consumer(std::map<std::string, std::string> configs);
+  kafka_consumer(std::map<std::string, std::string> const &configs);
 
   /**
    * @brief Instantiate a Kafka consumer object. Documentation for librdkafka configurations can be
@@ -61,7 +63,7 @@ class kafka_consumer : public cudf::io::datasource {
    * before batch_timeout, a smaller subset will be returned
    * @param delimiter optional delimiter to insert into the output between kafka messages, Ex: "\n"
    **/
-  kafka_consumer(std::map<std::string, std::string> configs,
+  kafka_consumer(std::map<std::string, std::string> const &configs,
                  std::string topic_name,
                  int partition,
                  int64_t start_offset,
@@ -106,7 +108,7 @@ class kafka_consumer : public cudf::io::datasource {
    *
    * @return True if the offset is successfully committed and false otherwise
    */
-  bool commit_offset(std::string topic, int partition, int64_t offset);
+  bool commit_offset(std::string const &topic, int partition, int64_t offset);
 
   /**
    * @brief Retrieve the watermark offset values for a topic/partition
@@ -118,7 +120,7 @@ class kafka_consumer : public cudf::io::datasource {
    *            the latest value will be retrieved from the Kafka broker by making a network
    *            request.
    */
-  std::map<std::string, int64_t> get_watermark_offset(std::string topic,
+  std::map<std::string, int64_t> get_watermark_offset(std::string const &topic,
                                                       int partition,
                                                       int timeout,
                                                       bool cached);
