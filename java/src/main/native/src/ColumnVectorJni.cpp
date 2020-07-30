@@ -48,7 +48,7 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
 
-#include "jni_utils.hpp"
+#include "cudf_jni_apis.hpp"
 
 namespace {
 
