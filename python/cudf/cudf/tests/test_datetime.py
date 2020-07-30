@@ -11,7 +11,7 @@ import pytest
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
-from cudf.tests.utils import NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def data1():
@@ -809,3 +809,45 @@ def test_str_null_to_datetime():
             gsr.astype("datetime64[s]")
     else:
         raise AssertionError("Expected psr.astype('datetime64[s]') to fail")
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4, 10, 100, 20000],
+        [None] * 7,
+        [10, 20, 30, None, 100, 200, None],
+        [3223.234, 342.2332, 23423.23, 3343.23324, 23432.2323, 242.23, 233],
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [1, 2, 3, 4, 10, 100, 20000],
+        [None] * 7,
+        [10, 20, 30, None, 100, 200, None],
+        [3223.234, 342.2332, 23423.23, 3343.23324, 23432.2323, 242.23, 233],
+        np.datetime64("2005-02"),
+        np.datetime64("2005-02-25"),
+        np.datetime64("2005-02-25T03:30"),
+        np.datetime64("nat"),
+    ],
+)
+@pytest.mark.parametrize("data_dtype", DATETIME_TYPES)
+@pytest.mark.parametrize("other_dtype", DATETIME_TYPES)
+def test_datetime_subtract(data, other, data_dtype, other_dtype):
+
+    gsr = cudf.Series(data, dtype=data_dtype)
+    psr = gsr.to_pandas()
+
+    if isinstance(other, np.datetime64):
+        gsr_other = other
+        psr_other = other
+    else:
+        gsr_other = cudf.Series(other, dtype=other_dtype)
+        psr_other = gsr_other.to_pandas()
+
+    expected = psr - psr_other
+    actual = gsr - gsr_other
+
+    assert_eq(expected, actual)
