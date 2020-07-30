@@ -1,3 +1,5 @@
+import datetime
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -282,5 +284,92 @@ def test_timedelta_ops_datetime_inputs(
 
     expected = getattr(psr_datetime, ops)(psr_timedelta)
     actual = getattr(gsr_datetime, ops)(gsr_timedelta)
+
+    assert_eq(expected, actual, nullable_pd_dtype=True)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(
+            {
+                "A": pd.Series(pd.date_range("2012-1-1", periods=3, freq="D")),
+                "B": pd.Series([pd.Timedelta(days=i) for i in range(3)]),
+            }
+        ),
+        pd.DataFrame(
+            {
+                "A": pd.Series(
+                    pd.date_range("1994-1-1", periods=50, freq="D")
+                ),
+                "B": pd.Series([pd.Timedelta(days=i) for i in range(50)]),
+            }
+        ),
+    ],
+)
+@pytest.mark.parametrize("op", ["add", "sub"])
+def test_timedelta_dataframe_ops(df, op):
+    pdf = df
+    gdf = cudf.from_pandas(pdf)
+
+    if op == "add":
+        pdf["C"] = pdf["A"] + pdf["B"]
+        gdf["C"] = gdf["A"] + gdf["B"]
+    elif op == "sub":
+        pdf["C"] = pdf["A"] - pdf["B"]
+        gdf["C"] = gdf["A"] - gdf["B"]
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        # np.array([10, 20, 30, None, 100]),
+        # TODO: Will get fixed with str type-cast implementation
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize(
+    "other_scalars",
+    [
+        datetime.timedelta(days=768),
+        datetime.timedelta(seconds=768),
+        # datetime.timedelta(microseconds=7), #TODO: Fix
+        datetime.timedelta(minutes=447),
+        datetime.timedelta(hours=447),
+        datetime.timedelta(weeks=734),
+        np.timedelta64(4, "s"),
+        np.timedelta64(456, "D"),
+        np.timedelta64(46, "h"),
+        # np.timedelta64('nat'),
+        # TODO Will get fixed with str type-cast implementation
+    ],
+)
+@pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
+@pytest.mark.parametrize("op", ["add", "sub"])
+def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
+    gsr = cudf.Series(data=data, dtype=dtype)
+    psr = gsr.to_pandas(nullable_pd_dtype=True)
+
+    if op == "add":
+        expected = psr + other_scalars
+        actual = gsr + other_scalars
+    elif op == "sub":
+        expected = psr - other_scalars
+        actual = gsr - other_scalars
 
     assert_eq(expected, actual, nullable_pd_dtype=True)
