@@ -11,6 +11,7 @@ from cudf._lib.types cimport (
     underlying_type_t_interpolation
 )
 cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib.cpp.types cimport data_type
 
 
 class TypeId(IntEnum):
@@ -119,3 +120,15 @@ class NullOrder(IntEnum):
 class NullHandling(IntEnum):
     INCLUDE = <underlying_type_t_null_policy> libcudf_types.null_policy.INCLUDE
     EXCLUDE = <underlying_type_t_null_policy> libcudf_types.null_policy.EXCLUDE
+
+
+cdef class _Dtype:
+    cdef data_type get_libcudf_type(self):
+        np_dtype = self.to_numpy
+        cdef libcudf_types.type_id tid = <libcudf_types.type_id> (
+                <underlying_type_t_type_id> (
+                    np_to_cudf_types[np_dtype]
+                )
+            )
+        cdef data_type libcudf_type = libcudf_types.data_type(tid)
+        return libcudf_type

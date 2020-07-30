@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.extensions import ExtensionDtype
-
+from cudf._lib.types import _Dtype
 import cudf
 
 pa_to_pd_dtypes = {
@@ -48,7 +48,7 @@ pa_to_np_dtypes = {
     None: None
 }
 
-class Dtype(ExtensionDtype):
+class Dtype(ExtensionDtype, _Dtype):
     is_integer = False
     is_string = False
     is_boolean = False

@@ -27,6 +27,7 @@ from cudf._lib.move cimport move
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_view cimport column_view
 cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib.types cimport _Dtype
 
 
 cdef class Column:
@@ -352,13 +353,8 @@ cdef class Column:
             col = self.base_children[0]
         else:
             col = self
-        data_dtype = col.dtype
-        cdef libcudf_types.type_id tid = <libcudf_types.type_id> (
-            <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(data_dtype)]
-            )
-        )
-        cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
+        cdef _Dtype data_dtype = col.dtype
+        cdef libcudf_types.data_type dtype = data_dtype.get_libcudf_type()
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
