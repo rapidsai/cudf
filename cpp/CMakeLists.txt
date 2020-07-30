@@ -340,7 +340,7 @@ if(BUILD_TESTS)
     else():
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
         set(BUILD_TESTING OFF)
-    endif(NOT GTEST_FOUND)
+    endif(GTEST_FOUND)
 
     
 
