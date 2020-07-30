@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
+from cudf._lib.scalar import as_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -109,6 +109,8 @@ class DatetimeColumn(column.ColumnBase):
     def normalize_binop_value(self, other):
         if isinstance(other, dt.datetime):
             other = np.datetime64(other)
+        elif isinstance(other, dt.timedelta):
+            other = np.timedelta64(other)
 
         if isinstance(other, pd.Timestamp):
             m = _numpy_to_pandas_conversion[self.time_unit]
@@ -120,6 +122,8 @@ class DatetimeColumn(column.ColumnBase):
             ary = utils.scalar_broadcast_to(
                 other, size=len(self), dtype=self.dtype
             )
+        elif isinstance(other, np.timedelta64):
+            return as_scalar(other)
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
@@ -199,19 +203,20 @@ class DatetimeColumn(column.ColumnBase):
 
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
-
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
             out_dtype = np.bool
-        elif op in ("add", "sub") and isinstance(
-            rhs, cudf.core.column.timedelta.TimeDeltaColumn
+        elif op in ("add", "sub") and pd.api.types.is_timedelta64_dtype(
+            rhs.dtype
         ):
             units = ["s", "ms", "us", "ns"]
             lhs_unit = units.index(self.time_unit)
-            rhs_unit = units.index(rhs.time_unit)
+            rhs_time_unit, _ = np.datetime_data(rhs.dtype)
+            rhs_unit = units.index(rhs_time_unit)
             out_dtype = np.dtype(
                 f"datetime64[{units[max(lhs_unit, rhs_unit)]}]"
             )
-            print("k", out_dtype)
+        elif op == "sub" and pd.api.types.is_datetime64_dtype(rhs.dtype):
+            out_dtype = np.dtype("timedelta64[ns]")
         else:
             raise TypeError(
                 f"Series of dtype {self.dtype} cannot perform "
