@@ -144,7 +144,6 @@ cudf::size_type linearizer::visit(operator_expression const& expr)
     if (node_index == 0) {
       // This node is the root. Output should be directed to the output column.
       // TODO: Could refactor to support output tables (multiple output columns)
-      printf("USING ROOT NODE\n");
       return detail::device_data_reference{
         detail::device_data_reference_type::COLUMN, data_type, 0, table_reference::OUTPUT};
     } else {
