@@ -64,12 +64,12 @@ class kafka_consumer : public cudf::io::datasource {
    * @param delimiter optional delimiter to insert into the output between kafka messages, Ex: "\n"
    **/
   kafka_consumer(std::map<std::string, std::string> const &configs,
-                 std::string topic_name,
+                 std::string const &topic_name,
                  int partition,
                  int64_t start_offset,
                  int64_t end_offset,
                  int batch_timeout,
-                 std::string delimiter);
+                 std::string const &delimiter);
 
   /**
    * @brief Returns a buffer with a subset of data from Kafka Topic
@@ -140,7 +140,7 @@ class kafka_consumer : public cudf::io::datasource {
    *
    * @return Latest offset for the specified topic/partition pair
    */
-  int64_t get_committed_offset(std::string topic, int partition);
+  int64_t get_committed_offset(std::string const &topic, int partition);
 
   /**
    * @brief Close the underlying socket connection to Kafka and clean up system resources

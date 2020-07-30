@@ -46,12 +46,12 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> const &configs
 }
 
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> const &configs,
-                               std::string topic_name,
+                               std::string const &topic_name,
                                int partition,
                                int64_t start_offset,
                                int64_t end_offset,
                                int batch_timeout,
-                               std::string delimiter)
+                               std::string const &delimiter)
   : topic_name(topic_name),
     partition(partition),
     start_offset(start_offset),
@@ -149,21 +149,16 @@ std::map<std::string, std::string> kafka_consumer::current_configs()
   return configs;
 }
 
-int64_t kafka_consumer::get_committed_offset(std::string topic, int partition)
+int64_t kafka_consumer::get_committed_offset(std::string const &topic, int partition)
 {
   std::vector<RdKafka::TopicPartition *> toppar_list;
-  // toppar_list.push_back(find_toppar(topic, partition));
   toppar_list.push_back(RdKafka::TopicPartition::create(topic, partition));
 
   // Query Kafka to populate the TopicPartitions with the desired offsets
   RdKafka::ErrorCode err = consumer->committed(toppar_list, default_timeout);
 
   int64_t offset = toppar_list[0]->offset();
-  if (offset > 0) {
-    return offset;
-  } else {
-    return 0;
-  }
+  return offset > 0 ? offset : 0;
 }
 
 std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string const &topic,
@@ -227,14 +222,11 @@ bool kafka_consumer::unsubscribe()
 bool kafka_consumer::close(int timeout)
 {
   RdKafka::ErrorCode err = consumer.get()->close();
-  if (err != RdKafka::ERR_NO_ERROR) {
-    printf("Timeout occurred while closing Kafka Consumer\n");
-    return false;
-  } else {
-    return true;
-  }
   delete consumer.get();
   delete kafka_conf.get();
+
+  if (err != RdKafka::ERR_NO_ERROR) { return false; }
+  return true;
 }
 
 }  // namespace kafka
