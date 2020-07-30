@@ -849,6 +849,9 @@ class MultiIndex(Index):
         return result
 
     def _poplevels(self, level):
+        """
+        Pop the specified levels from self
+        """
         if not pd.api.types.is_list_like(level):
             level = (level,)
 
@@ -877,7 +880,75 @@ class MultiIndex(Index):
 
         return result
 
-    def droplevel(self, level):
+    def droplevel(self, level=-1):
+        """
+        Removes the specified levels from the MultiIndex.
+
+        Parameters
+        ----------
+        level : level name or index, list-like
+            Integer, name or list of such, specifying one or more
+            levels to drop from the MultiIndex
+
+        Returns
+        -------
+        A MultiIndex or Index object, depending on the number of remaining
+        levels.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.MultiIndex.from_frame(
+        ...     cudf.DataFrame(
+        ...         {
+        ...             "first": ["a", "a", "a", "b", "b", "b"],
+        ...             "second": [1, 1, 2, 2, 3, 3],
+        ...             "third": [0, 1, 2, 0, 1, 2],
+        ...         }
+        ...     )
+        ... )
+
+        Dropping level by index:
+
+        >>> idx.droplevel(0)
+        MultiIndex(levels=[0    1
+        1    2
+        2    3
+        dtype: int64, 0    0
+        1    1
+        2    2
+        dtype: int64],
+        codes=   second  third
+        0       0      0
+        1       0      1
+        2       1      2
+        3       1      0
+        4       2      1
+        5       2      2)
+
+        Dropping level by name:
+
+        >>> idx.droplevel("first")
+        MultiIndex(levels=[0    1
+        1    2
+        2    3
+        dtype: int64, 0    0
+        1    1
+        2    2
+        dtype: int64],
+        codes=   second  third
+        0       0      0
+        1       0      1
+        2       1      2
+        3       1      0
+        4       2      1
+        5       2      2)
+
+        Dropping multiple levels:
+
+        >>> idx.droplevel(["first", "second"])
+        Int64Index([0, 1, 2, 0, 1, 2], dtype='int64', name='third')
+        """
         mi = self.copy(deep=False)
         mi._poplevels(level)
         if mi.nlevels == 1:
