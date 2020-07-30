@@ -17,71 +17,61 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <algorithm>
+#include <memory>
+#include "cudf/types.hpp"
+#include "thrust/iterator/counting_iterator.h"
 
 namespace cudf
 {
   namespace 
   {
     // Helper function to superimpose validity of parent struct
-    // over all member fields (i.e. child columns).
-    void superimpose_validity(
+    // over the specified member (child) column.
+    void superimpose_parent_nullmask(
       rmm::device_buffer const& parent_null_mask, 
       size_type parent_null_count,
-      std::vector<std::unique_ptr<column>>& children,
+      column& child,
       cudaStream_t stream,
       rmm::mr::device_memory_resource* mr
     )
     {
-      if (parent_null_mask.is_empty()) {
-        // Struct is not nullable. Children do not need adjustment.
-        // Bail.
-        return;
+      if (!child.nullable())
+      {
+        child.set_null_mask(std::move(rmm::device_buffer{parent_null_mask, stream, mr})); 
+        child.set_null_count(parent_null_count);
       }
+      else {
 
-      std::for_each(
-        children.begin(),
-        children.end(),
-        [&](std::unique_ptr<column>& p_child)
-        {
-          if (!p_child->nullable())
-          {
-            p_child->set_null_mask(std::move(rmm::device_buffer{parent_null_mask, stream, mr})); 
-            p_child->set_null_count(parent_null_count);
-          }
-          else {
+        auto data_type{child.type()};
+        auto num_rows{child.size()};
 
-            auto data_type{p_child->type()};
-            auto num_rows{p_child->size()};
-
-            // All this to reset the null mask. :/
-            cudf::column::contents contents{p_child->release()};
-            std::vector<bitmask_type const*> masks {
-              reinterpret_cast<bitmask_type const*>(parent_null_mask.data()), 
-              reinterpret_cast<bitmask_type const*>(contents.null_mask->data())};
-            
-            rmm::device_buffer new_child_mask = cudf::detail::bitmask_and(masks, {0, 0}, num_rows, stream, mr);
-
-            // Recurse for struct members.
-            // Push down recomputed child mask to child columns of the current child.
-            if (data_type.id() == cudf::type_id::STRUCT)
+        auto new_child_mask =
+          cudf::detail::bitmask_and(
             {
-              superimpose_validity(new_child_mask, UNKNOWN_NULL_COUNT, contents.children, stream, mr);
-            }
+              reinterpret_cast<bitmask_type const*>(parent_null_mask.data()),
+              reinterpret_cast<bitmask_type const*>(child.mutable_view().null_mask())
+            },
+            {0, 0},
+            child.size(),
+            stream,
+            mr
+          );
 
-            // Reconstitute the column.
-            p_child.reset(
-              new column(
-                data_type,
-                num_rows,
-                std::move(*contents.data),
-                std::move(new_child_mask),
-                UNKNOWN_NULL_COUNT,
-                std::move(contents.children)
-              )
-            );
-          }
+        if (child.type().id() == cudf::type_id::STRUCT)
+        {
+          std::for_each(
+            thrust::make_counting_iterator(0),
+            thrust::make_counting_iterator(child.num_children()),
+            [&new_child_mask, &child, stream, mr](auto i) 
+            {
+              superimpose_parent_nullmask(new_child_mask, UNKNOWN_NULL_COUNT, child.child(i), stream, mr);
+            }
+          );
         }
-      );
+
+        child.set_null_mask(std::move(new_child_mask));
+        child.set_null_count(UNKNOWN_NULL_COUNT);
+      }
     }
   }
 
@@ -105,7 +95,20 @@ namespace cudf
                     [&](auto const& i){ return num_rows == i->size(); }), 
         "Child columns must have the same number of rows as the Struct column.");
 
-      superimpose_validity(null_mask, null_count, child_columns, stream, mr);
+      if (!null_mask.is_empty())
+      {
+        std::for_each(
+          child_columns.begin(),
+          child_columns.end(),
+          [& null_mask,
+             null_count,
+             stream,
+             mr
+          ](auto & p_child) {
+            superimpose_parent_nullmask(null_mask, null_count, *p_child, stream, mr);
+          }
+        );
+      }
 
       return std::make_unique<column>(
         cudf::data_type{type_id::STRUCT},
