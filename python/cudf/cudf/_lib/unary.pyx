@@ -6,12 +6,15 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 import numpy as np
 
+
+from cudf.core.dtypes import Float64Dtype
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport (
     column_view, mutable_column_view
 )
 from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types cimport _Dtype
 from cudf._lib.cpp.types cimport (
     size_type,
     data_type,
@@ -90,16 +93,11 @@ def is_valid(Column input):
     return Column.from_unique_ptr(move(c_result))
 
 
-def cast(Column input, object dtype=np.float64):
+def cast(Column input, object dtype=Float64Dtype()):
     cdef column_view c_input = input.view()
-    cdef type_id tid = (
-        <type_id> (
-            <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(dtype)]
-            )
-        )
-    )
-    cdef data_type c_dtype = data_type(tid)
+    cdef _Dtype data_dtype = dtype
+
+    cdef data_type c_dtype = data_dtype.get_libcudf_type()
     cdef unique_ptr[column] c_result
 
     with nogil:
