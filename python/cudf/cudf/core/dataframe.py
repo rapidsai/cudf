@@ -6720,6 +6720,9 @@ class DataFrame(Frame, Serializable):
             self, index=index, columns=columns, values=values
         )
 
+    def unstack(self, level=-1):
+        return cudf.core.reshape.pivot(self, level=level)
+
 
 def from_pandas(obj, nan_as_null=None):
     """

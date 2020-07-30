@@ -725,3 +725,30 @@ def pivot(df, index=None, columns=None, values=None):
         )
 
     return cudf.DataFrame(result, index=cudf.Index(index_labels, name=index))
+
+
+def unstack(df, level, fill_value=None):
+    df = df.copy()
+
+    columns = df.index._poplevels(level)
+    index = df.index
+
+    columns_labels, columns_idx = columns._encode()
+    index_labels, index_idx = index._encode()
+    column_labels = columns_labels.to_pandas().to_frame()
+
+    # the result of pivot always has a multicolumn
+    result = cudf.core.column_accessor.ColumnAccessor(
+        multiindex=True, level_names=(None,) + columns.names
+    )
+
+    for v in df:
+        names = [(v,) + name for name in column_labels.itertuples(index=False)]
+        col = df._data[v]
+        result.update(
+            cudf.DataFrame._from_table(
+                col.scatter_to_table(index_idx, columns_idx, names)
+            )._data
+        )
+
+    return cudf.DataFrame(result, index=cudf.Index(index_labels, name=index))
