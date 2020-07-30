@@ -50,7 +50,7 @@
 - PR #5658 Add `filter_tokens` nvtext API
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
-- PR #5732 Added deps for `gtest` and `gmock` to `conda` environments and `CMakeLists.txt`
+- PR #5732 Add deps for `gtest` and `gmock` to `conda` environments and `CMakeLists.txt`
 - PR #5739 Add `nvtext::detokenize` API
 - PR #5645 Enforce pd.NA and Pandas nullable dtype parity
 - PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
