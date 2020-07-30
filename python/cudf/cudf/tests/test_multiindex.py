@@ -3,6 +3,7 @@
 """
 Test related to MultiIndex
 """
+import itertools
 import re
 
 import cupy as cp
@@ -1017,3 +1018,20 @@ def test_multiIndex_size(pdi):
     gdi = cudf.from_pandas(pdi)
 
     assert_eq(pdi.size, gdi.size)
+
+
+@pytest.mark.parametrize(
+    "level",
+    itertools.chain(
+        *(
+            itertools.combinations(
+                ("alpha", "location", "weather", "sign", "timestamp"), r
+            )
+            for r in range(5)
+        )
+    ),
+)
+def test_multiindex_droplevel(pdfIndex, level):
+    level = list(level)
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex.droplevel(level), gdfIndex.droplevel(level))

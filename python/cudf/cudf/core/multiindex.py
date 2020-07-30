@@ -858,15 +858,18 @@ class MultiIndex(Index):
         ilevels = [self._level_index_from_level(lev) for lev in level]
 
         popped_data = {}
-        for i in ilevels:
+        popped_names = []
+        names = list(self.names)
+
+        for i in reversed(sorted(ilevels)):
             n = self._data.names[i]
             popped_data[n] = self._data.pop(n)
+            popped_names.append(self.names[i])
+            names.pop(i)
 
         result = cudf.core.index.Index._from_table(
             cudf.core.frame.Frame(popped_data)
         )
-        names = list(self.names)
-        popped_names = [names.pop(i) for i in ilevels]
         result.names = popped_names
 
         self.names = names
