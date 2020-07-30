@@ -1191,6 +1191,8 @@ class MultiIndex(Index):
         except ValueError:
             if not pd.api.types.is_integer(level):
                 raise KeyError(f"Level {level} not found") from None
+            if level < 0:
+                level += self.nlevels
             if level >= self.nlevels:
                 raise IndexError(
                     f"Level {level} out of bounds. "
