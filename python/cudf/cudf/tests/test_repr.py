@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import numpy as np
 import pandas as pd
 import pytest
@@ -18,18 +18,19 @@ def test_null_series(nrows, dtype):
     data = cudf.Series(np.random.randint(1, 9, size))
     column = data.set_mask(mask)
     sr = cudf.Series(column).astype(dtype)
-    ps = sr.to_pandas()
+    ps = sr.to_pandas(nullable_pd_dtype=False)
     pd.options.display.max_rows = int(nrows)
     psrepr = ps.__repr__()
-    psrepr = psrepr.replace("NaN", "null")
-    psrepr = psrepr.replace("NaT", "null")
+    psrepr = psrepr.replace("NaN", "<NA>")
+    psrepr = psrepr.replace("NaT", "<NA>")
+    psrepr = psrepr.replace("None", "<NA>")
     if (
         dtype.startswith("int")
         or dtype.startswith("uint")
         or dtype.startswith("long")
     ):
         psrepr = psrepr.replace(
-            str(sr._column.default_na_value()) + "\n", "null\n"
+            str(sr._column.default_na_value()) + "\n", "<NA>\n"
         )
 
     print(psrepr)
@@ -59,8 +60,9 @@ def test_null_dataframe(ncols):
     pdf = gdf.to_pandas()
     pd.options.display.max_columns = int(ncols)
     pdfrepr = pdf.__repr__()
-    pdfrepr = pdfrepr.replace("NaN", "null")
-    pdfrepr = pdfrepr.replace("NaT", "null")
+    pdfrepr = pdfrepr.replace("NaN", "<NA>")
+    pdfrepr = pdfrepr.replace("NaT", "<NA>")
+    pdfrepr = pdfrepr.replace("None", "<NA>")
     print(pdf)
     print(gdf)
     assert pdfrepr.split() == gdf.__repr__().split()
@@ -236,3 +238,325 @@ def test_generic_index(length, dtype):
     gsr = cudf.Series.from_pandas(psr)
 
     assert psr.index.__repr__() == gsr.index.__repr__()
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        cudf.DataFrame({"a": range(10000)}),
+        cudf.DataFrame({"a": range(10000), "b": range(10000)}),
+        cudf.DataFrame({"a": range(20), "b": range(20)}),
+        cudf.DataFrame(
+            {
+                "a": range(20),
+                "b": range(20),
+                "c": ["abc", "def", "xyz", "def", "pqr"] * 4,
+            }
+        ),
+        cudf.DataFrame(index=[1, 2, 3]),
+        cudf.DataFrame(index=range(10000)),
+        cudf.DataFrame(columns=["a", "b", "c", "d"]),
+        cudf.DataFrame(columns=["a"], index=range(10000)),
+        cudf.DataFrame(columns=["a", "col2", "...col n"], index=range(10000)),
+        cudf.DataFrame(index=cudf.Series(range(10000)).astype("str")),
+        cudf.DataFrame(
+            columns=["a", "b", "c", "d"],
+            index=cudf.Series(range(10000)).astype("str"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "slice",
+    [
+        slice(2500, 5000),
+        slice(2500, 2501),
+        slice(5000),
+        slice(1, 10),
+        slice(10, 20),
+        slice(15, 2400),
+    ],
+)
+@pytest.mark.parametrize("max_seq_items", [1, 10, 60, 10000, None])
+@pytest.mark.parametrize("max_rows", [1, 10, 60, 10000, None])
+def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
+    pd.options.display.max_seq_items = max_seq_items
+    pd.options.display.max_rows = max_rows
+    pdf = gdf.to_pandas()
+
+    sliced_gdf = gdf[slice]
+    sliced_pdf = pdf[slice]
+
+    expected_repr = sliced_pdf.__repr__().replace("None", "<NA>")
+    actual_repr = sliced_gdf.__repr__()
+
+    assert expected_repr == actual_repr
+    pd.reset_option("display.max_rows")
+    pd.reset_option("display.max_seq_items")
+
+
+@pytest.mark.parametrize(
+    "index,expected_repr",
+    [
+        (
+            cudf.Index([1, 2, 3, None]),
+            "Int64Index([1, 2, 3, <NA>], dtype='int64')",
+        ),
+        (
+            cudf.Index([None, 2.2, 3.324342, None]),
+            "Float64Index([<NA>, 2.2, 3.324342, <NA>], dtype='float64')",
+        ),
+        (
+            cudf.Index([None, None, None], name="hello"),
+            "Float64Index([<NA>, <NA>, <NA>], dtype='float64', name='hello')",
+        ),
+        (
+            cudf.Index([None], name="hello"),
+            "Float64Index([<NA>], dtype='float64', name='hello')",
+        ),
+        (
+            cudf.Index([None], dtype="int8", name="hello"),
+            "Int8Index([<NA>], dtype='int8', name='hello')",
+        ),
+        (
+            cudf.Index([None] * 50, dtype="object"),
+            "StringIndex([None None None None None None None None "
+            "None None None None None None\n None None None None None None "
+            "None None None None None None None None\n None None None None "
+            "None None None None None None None None None None\n None None "
+            "None None None None None None], dtype='object')",
+        ),
+        (
+            cudf.Index([None] * 20, dtype="uint32"),
+            "UInt32Index([<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
+            "<NA>,\n       <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
+            "<NA>,\n       <NA>, <NA>],\n      dtype='uint32')",
+        ),
+        (
+            cudf.Index(
+                [None, 111, 22, 33, None, 23, 34, 2343, None], dtype="int16"
+            ),
+            "Int16Index([<NA>, 111, 22, 33, <NA>, 23, 34, 2343, <NA>], "
+            "dtype='int16')",
+        ),
+        (
+            cudf.Index([1, 2, 3, None], dtype="category"),
+            "CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], "
+            "ordered=False, dtype='category')",
+        ),
+        (
+            cudf.Index([None, None], dtype="category"),
+            "CategoricalIndex([<NA>, <NA>], categories=[], ordered=False, "
+            "dtype='category')",
+        ),
+        (
+            cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[ns]")),
+            "DatetimeIndex([1970-01-01 00:00:00.000000010, "
+            "1970-01-01 00:00:00.000000020,"
+            "\n       1970-01-01 00:00:00.000000030, <NA>],\n      "
+            "dtype='datetime64[ns]')",
+        ),
+        (
+            cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[s]")),
+            "DatetimeIndex([1970-01-01 00:00:10, "
+            "1970-01-01 00:00:20, 1970-01-01 00:00:30,\n"
+            "       <NA>],\n      dtype='datetime64[s]')",
+        ),
+        (
+            cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[us]")),
+            "DatetimeIndex([1970-01-01 00:00:00.000010, "
+            "1970-01-01 00:00:00.000020,\n       "
+            "1970-01-01 00:00:00.000030, <NA>],\n      "
+            "dtype='datetime64[us]')",
+        ),
+        (
+            cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[ms]")),
+            "DatetimeIndex([1970-01-01 00:00:00.010, "
+            "1970-01-01 00:00:00.020,\n       "
+            "1970-01-01 00:00:00.030, <NA>],\n      "
+            "dtype='datetime64[ms]')",
+        ),
+        (
+            cudf.Index(np.array([None] * 10, dtype="datetime64[ms]")),
+            "DatetimeIndex([<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
+            "<NA>,\n       <NA>],\n      dtype='datetime64[ms]')",
+        ),
+    ],
+)
+def test_generic_index_null(index, expected_repr):
+
+    actual_repr = index.__repr__()
+
+    assert expected_repr == actual_repr
+
+
+@pytest.mark.parametrize(
+    "df,pandas_special_case",
+    [
+        (pd.DataFrame({"a": [1, 2, 3]}, index=[10, 20, None]), False),
+        (
+            pd.DataFrame(
+                {
+                    "a": [1, None, 3],
+                    "string_col": ["hello", "world", "rapids"],
+                },
+                index=[None, "a", "b"],
+            ),
+            True,
+        ),
+        (pd.DataFrame([], index=[None, "a", "b"]), False),
+        (pd.DataFrame({"aa": [None, None]}, index=[None, None]), False),
+        (pd.DataFrame({"aa": [1, 2, 3]}, index=[None, None, None]), False),
+        (
+            pd.DataFrame(
+                {"aa": [None, 2, 3]},
+                index=np.array([1, None, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {"aa": [None, 2, 3]},
+                index=np.array([100, None, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {"aa": [None, None, None]},
+                index=np.array([None, None, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {"aa": [1, None, 3]},
+                index=np.array([10, 15, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {"a": [1, 2, None], "v": [10, None, 22], "p": [100, 200, 300]}
+            ).set_index(["a", "v"]),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": [1, 2, None],
+                    "v": ["n", "c", "a"],
+                    "p": [None, None, None],
+                }
+            ).set_index(["a", "v"]),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": np.array([1, None, None], dtype="datetime64[ns]"),
+                    "v": ["n", "c", "a"],
+                    "p": [None, None, None],
+                }
+            ).set_index(["a", "v"]),
+            False,
+        ),
+    ],
+)
+def test_dataframe_null_index_repr(df, pandas_special_case):
+    pdf = df
+    gdf = cudf.from_pandas(pdf)
+
+    expected_repr = (
+        pdf.__repr__()
+        .replace("NaN", "<NA>")
+        .replace("NaT", "<NA>")
+        .replace("None", "<NA>")
+    )
+    actual_repr = gdf.__repr__()
+
+    if pandas_special_case:
+        # Pandas inconsistently print StringIndex null values
+        # as `None` at some places and `NaN` at few other places
+        # Whereas cudf is consistent with strings `null` values
+        # to be printed as `None` everywhere.
+        actual_repr = gdf.__repr__().replace("None", "<NA>")
+
+    assert expected_repr.split() == actual_repr.split()
+
+
+@pytest.mark.parametrize(
+    "sr,pandas_special_case",
+    [
+        (pd.Series([1, 2, 3], index=[10, 20, None]), False),
+        (pd.Series([1, None, 3], name="a", index=[None, "a", "b"]), True),
+        (pd.Series(None, index=[None, "a", "b"], dtype="float"), True),
+        (pd.Series([None, None], name="aa", index=[None, None]), False),
+        (pd.Series([1, 2, 3], index=[None, None, None]), False),
+        (
+            pd.Series(
+                [None, 2, 3],
+                index=np.array([1, None, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.Series(
+                [None, None, None],
+                index=np.array([None, None, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.Series(
+                [1, None, 3],
+                index=np.array([10, 15, None], dtype="datetime64[ns]"),
+            ),
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {"a": [1, 2, None], "v": [10, None, 22], "p": [100, 200, 300]}
+            ).set_index(["a", "v"])["p"],
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": [1, 2, None],
+                    "v": ["n", "c", "a"],
+                    "p": [None, None, None],
+                }
+            ).set_index(["a", "v"])["p"],
+            False,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": np.array([1, None, None], dtype="datetime64[ns]"),
+                    "v": ["n", "c", "a"],
+                    "p": [None, None, None],
+                }
+            ).set_index(["a", "v"])["p"],
+            False,
+        ),
+    ],
+)
+def test_series_null_index_repr(sr, pandas_special_case):
+    psr = sr
+    gsr = cudf.from_pandas(psr)
+
+    expected_repr = (
+        psr.__repr__()
+        .replace("NaN", "<NA>")
+        .replace("NaT", "<NA>")
+        .replace("None", "<NA>")
+    )
+    actual_repr = gsr.__repr__()
+
+    if pandas_special_case:
+        # Pandas inconsistently print StringIndex null values
+        # as `None` at some places and `NaN` at few other places
+        # Whereas cudf is consistent with strings `null` values
+        # to be printed as `None` everywhere.
+        actual_repr = gsr.__repr__().replace("None", "<NA>")
+    assert expected_repr.split() == actual_repr.split()

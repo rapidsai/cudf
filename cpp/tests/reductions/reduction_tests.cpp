@@ -142,6 +142,35 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
     col_nulls, expected_max_null_result, result_error, cudf::make_max_aggregation());
 }
 
+template <typename T>
+struct SumReductionTest : public ReductionTest<T> {
+};
+using SumTypes = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::DurationTypes>;
+TYPED_TEST_CASE(SumReductionTest, SumTypes);
+
+TYPED_TEST(SumReductionTest, Sum)
+{
+  using T = TypeParam;
+  std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
+  std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
+  std::vector<T> v = convert_values<T>(int_values);
+
+  // test without nulls
+  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+  T expected_value = std::accumulate(v.begin(), v.end(), T{0});
+  this->reduction_test(col, expected_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
+
+  // test with nulls
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+  cudf::size_type valid_count =
+    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
+  auto r                = replace_nulls(v, host_bools, T{0});
+  T expected_null_value = std::accumulate(r.begin(), r.end(), T{0});
+
+  this->reduction_test(
+    col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
+}
+
 TYPED_TEST_CASE(ReductionTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionTest, Product)
@@ -173,29 +202,6 @@ TYPED_TEST(ReductionTest, Product)
 
   this->reduction_test(
     col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_product_aggregation());
-}
-
-TYPED_TEST(ReductionTest, Sum)
-{
-  using T = TypeParam;
-  std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
-  std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
-  std::vector<T> v = convert_values<T>(int_values);
-
-  // test without nulls
-  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  T expected_value = std::accumulate(v.begin(), v.end(), T{0});
-  this->reduction_test(col, expected_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
-
-  // test with nulls
-  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type valid_count =
-    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
-  auto r                = replace_nulls(v, host_bools, T{0});
-  T expected_null_value = std::accumulate(r.begin(), r.end(), T{0});
-
-  this->reduction_test(
-    col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
 }
 
 TYPED_TEST(ReductionTest, SumOfSquare)
@@ -232,8 +238,6 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 
 template <typename T>
 struct ReductionAnyAllTest : public ReductionTest<bool> {
-  ReductionAnyAllTest() {}
-  ~ReductionAnyAllTest() {}
 };
 
 TYPED_TEST_CASE(ReductionAnyAllTest, cudf::test::NumericTypes);
@@ -298,8 +302,6 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
 
 template <typename T>
 struct MultiStepReductionTest : public ReductionTest<T> {
-  MultiStepReductionTest() {}
-  ~MultiStepReductionTest() {}
 };
 
 using MultiStepReductionTypes = cudf::test::NumericTypes;
@@ -391,9 +393,6 @@ TYPED_TEST(MultiStepReductionTest, var_std)
 
 template <typename T>
 struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
-  ReductionMultiStepErrorCheck() {}
-  ~ReductionMultiStepErrorCheck() {}
-
   void reduction_error_check(cudf::test::fixed_width_column_wrapper<T> &col,
                              bool succeeded_condition,
                              std::unique_ptr<aggregation> const &agg,
@@ -655,8 +654,6 @@ TEST_F(ReductionErrorTest, empty_column)
 
 struct ReductionParamTest : public ReductionTest<double>,
                             public ::testing::WithParamInterface<cudf::size_type> {
-  ReductionParamTest() {}
-  ~ReductionParamTest() {}
 };
 
 INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
@@ -711,9 +708,6 @@ TEST_P(ReductionParamTest, std_var)
 struct StringReductionTest : public cudf::test::BaseFixture,
                              public testing::WithParamInterface<std::vector<std::string>> {
   // Min/Max
-  StringReductionTest() {}
-
-  ~StringReductionTest() {}
 
   void reduction_test(const cudf::column_view underlying_column,
                       std::string expected_value,

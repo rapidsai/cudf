@@ -46,7 +46,7 @@ def test_dataframe_sort_values_ignore_index(index, ignore_index):
     )
     gdf = gdf.set_index(index)
 
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     expect = pdf.sort_values(list(pdf.columns), ignore_index=ignore_index)
     got = gdf.sort_values((gdf.columns), ignore_index=ignore_index)
@@ -57,7 +57,7 @@ def test_dataframe_sort_values_ignore_index(index, ignore_index):
 @pytest.mark.parametrize("ignore_index", [True, False])
 def test_series_sort_values_ignore_index(ignore_index):
     gsr = Series([1, 3, 5, 2, 4])
-    psr = gsr.to_pandas()
+    psr = gsr.to_pandas(nullable_pd_dtype=False)
 
     expect = psr.sort_values(ignore_index=ignore_index)
     got = gsr.sort_values(ignore_index=ignore_index)

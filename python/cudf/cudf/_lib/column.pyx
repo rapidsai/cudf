@@ -7,7 +7,7 @@ import rmm
 
 import cudf
 from cudf.core.buffer import Buffer
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.utils.dtypes import is_categorical_dtype, is_list_dtype
 import cudf._lib as libcudfxx
 
 from cpython.buffer cimport PyObject_CheckBuffer
@@ -20,12 +20,16 @@ from libcpp.vector cimport vector
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
-from cudf._lib.types cimport underlying_type_t_type_id
+from cudf._lib.types cimport (
+    underlying_type_t_type_id,
+    dtype_from_column_view
+)
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.move cimport move
 
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 cimport cudf._lib.cpp.types as libcudf_types
 
 
@@ -251,8 +255,15 @@ cdef class Column:
 
     @property
     def children(self):
-        if self._children is None:
+        if (self.offset == 0) and (self.size == self.base_size):
             self._children = self.base_children
+        if self._children is None:
+            if self.base_children == ():
+                self._children = ()
+            else:
+                self._children = Column.from_unique_ptr(
+                    make_unique[column](self.view())
+                ).base_children
         return self._children
 
     def set_base_children(self, value):
@@ -352,12 +363,19 @@ cdef class Column:
             col = self.base_children[0]
         else:
             col = self
+
         data_dtype = col.dtype
-        cdef libcudf_types.type_id tid = <libcudf_types.type_id> (
-            <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(data_dtype)]
+        cdef libcudf_types.type_id tid
+
+        if not is_list_dtype(self.dtype):
+            tid = <libcudf_types.type_id> (
+                <underlying_type_t_type_id> (
+                    np_to_cudf_types[np.dtype(data_dtype)]
+                )
             )
-        )
+        else:
+            tid = libcudf_types.type_id.LIST
+
         cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
@@ -389,12 +407,8 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_unique_ptr(unique_ptr[column] c_col):
-
         size = c_col.get()[0].size()
-        dtype = cudf_to_np_types[
-            <underlying_type_t_type_id> (c_col.get()[0].type().id())
-        ]
-
+        dtype = dtype_from_column_view(c_col.get()[0].view())
         has_nulls = c_col.get()[0].has_nulls()
 
         # After call to release(), c_col is unusable
@@ -421,6 +435,7 @@ cdef class Column:
             data,
             dtype=dtype,
             mask=mask,
+            size=size,
             null_count=null_count,
             children=children
         )
@@ -442,9 +457,7 @@ cdef class Column:
 
         size = cv.size()
         offset = cv.offset()
-        dtype = cudf_to_np_types[
-            <underlying_type_t_type_id> (cv.type().id())
-        ]
+        dtype = dtype_from_column_view(cv)
 
         data_ptr = <uintptr_t>(cv.head[void]())
         data = None

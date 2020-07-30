@@ -25,6 +25,11 @@
 namespace nvtext {
 
 /**
+ * @addtogroup nvtext_tokenize
+ * @{
+ */
+
+/**
  * @brief The vocabulary data for use with the subword_tokenize function.
  */
 struct hashed_vocabulary {
@@ -171,4 +176,5 @@ tokenizer_result subword_tokenize(
   uint32_t max_rows_tensor,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace nvtext

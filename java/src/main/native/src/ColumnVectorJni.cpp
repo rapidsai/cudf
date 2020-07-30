@@ -48,7 +48,36 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
 
-#include "jni_utils.hpp"
+#include "cudf_jni_apis.hpp"
+
+namespace {
+
+// convert a timestamp type to the corresponding duration type
+cudf::data_type timestamp_to_duration(cudf::data_type dt) {
+  cudf::type_id duration_type_id;
+  switch (dt.id()) {
+    case cudf::type_id::TIMESTAMP_DAYS:
+      duration_type_id = cudf::type_id::DURATION_DAYS;
+      break;
+    case cudf::type_id::TIMESTAMP_SECONDS:
+      duration_type_id = cudf::type_id::DURATION_SECONDS;
+      break;
+    case cudf::type_id::TIMESTAMP_MILLISECONDS:
+      duration_type_id = cudf::type_id::DURATION_MILLISECONDS;
+      break;
+    case cudf::type_id::TIMESTAMP_MICROSECONDS:
+      duration_type_id = cudf::type_id::DURATION_MICROSECONDS;
+      break;
+    case cudf::type_id::TIMESTAMP_NANOSECONDS:
+      duration_type_id = cudf::type_id::DURATION_NANOSECONDS;
+      break;
+    default:
+      throw std::logic_error("Unexpected type in timestamp_to_duration");
+  }
+  return cudf::data_type(duration_type_id);
+}
+
+} // anonymous namespace
 
 extern "C" {
 
@@ -649,6 +678,37 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, job
           break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
+    } else if (cudf::is_timestamp(n_data_type) && cudf::is_numeric(column->type())) {
+      // This is a temporary workaround to allow Java to cast from integral types into a timestamp
+      // without forcing an intermediate duration column to be manifested.  Ultimately this style of
+      // "reinterpret" casting will be supported via https://github.com/rapidsai/cudf/pull/5358
+      if (n_data_type.id() == cudf::type_id::TIMESTAMP_DAYS) {
+        if (column->type().id() != cudf::type_id::INT32) {
+          JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Numeric cast to TIMESTAMP_DAYS requires INT32", 0);
+        }
+      } else {
+        if (column->type().id() != cudf::type_id::INT64) {
+          JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Numeric cast to non-day timestamp requires INT64", 0);
+        }
+      }
+      cudf::data_type duration_type = timestamp_to_duration(n_data_type);
+      cudf::column_view duration_view = cudf::column_view(duration_type,
+                                                          column->size(),
+                                                          column->head(),
+                                                          column->null_mask(),
+                                                          column->null_count());
+      result = cudf::cast(duration_view, n_data_type);
+    } else if (cudf::is_timestamp(column->type()) && cudf::is_numeric(n_data_type)) {
+      // This is a temporary workaround to allow Java to cast from timestamp types to integral types
+      // without forcing an intermediate duration column to be manifested.  Ultimately this style of
+      // "reinterpret" casting will be supported via https://github.com/rapidsai/cudf/pull/5358
+      cudf::data_type duration_type = timestamp_to_duration(column->type());
+      cudf::column_view duration_view = cudf::column_view(duration_type,
+                                                          column->size(),
+                                                          column->head(),
+                                                          column->null_mask(),
+                                                          column->null_count());
+      result = cudf::cast(duration_view, n_data_type);
     } else {
       result = cudf::cast(*column, n_data_type);
     }
@@ -998,7 +1058,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_zfill(
     jint j_width) {
 
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, j_width, "width is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
@@ -1006,6 +1065,30 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_zfill(
     cudf::size_type width = reinterpret_cast<cudf::size_type>(j_width);
 
     std::unique_ptr<cudf::column> result = cudf::strings::zfill(scv, width);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_pad(
+    JNIEnv *env,
+    jclass,
+    jlong column_view,
+    jint j_width,
+    jint j_side,
+    jstring fill_char) {
+
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, fill_char, "fill_char is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::size_type width = reinterpret_cast<cudf::size_type>(j_width);
+    cudf::strings::pad_side side = static_cast<cudf::strings::pad_side>(j_side);
+    cudf::jni::native_jstring ss_fill(env, fill_char);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::pad(scv, width, side, ss_fill.get());
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
