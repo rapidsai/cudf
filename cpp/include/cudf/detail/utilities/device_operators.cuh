@@ -47,7 +47,7 @@ struct DeviceSum {
   template <typename T, typename std::enable_if_t<!cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
-    return T{};
+    return T{0};
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
