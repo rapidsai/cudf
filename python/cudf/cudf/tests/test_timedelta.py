@@ -158,41 +158,6 @@ def test_timedelta_series_to_pandas(data, dtype):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-    ],
-)
-@pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
-@pytest.mark.parametrize(
-    "ops", ["add", "radd", "sub", "rsub", "floordiv", "truediv"]
-)
-def test_timedelta_basic_ops(data, dtype, ops):
-    gsr = cudf.Series(data, dtype=dtype)
-    psr = gsr.to_pandas(nullable_pd_dtype=True)
-
-    print("act", psr)
-    expected = getattr(psr, ops)(psr)
-    actual = getattr(gsr, ops)(gsr)
-    if expected.dtype in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes:
-        expected = expected.astype(
-            cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[expected.dtype]
-        )
-
-    if ops == "floordiv":
-        expected[actual.isna().to_pandas()] = pd.NA
-
-    assert_eq(expected, actual, nullable_pd_dtype=True)
-
-
-@pytest.mark.parametrize(
     "data,other",
     [
         ([1000000, 200000, 3000000], [1000000, 200000, 3000000]),
@@ -232,6 +197,7 @@ def test_timedelta_basic_ops(data, dtype, ops):
         "sub",
         "rsub",
         "floordiv",
+        "truediv",
     ],
 )
 def test_timedelta_ops_misc_inputs(data, other, dtype, ops):
@@ -255,5 +221,66 @@ def test_timedelta_ops_misc_inputs(data, other, dtype, ops):
 
     if ops == "floordiv":
         expected[actual.isna().to_pandas()] = pd.NA
+
+    assert_eq(expected, actual, nullable_pd_dtype=True)
+
+
+@pytest.mark.parametrize(
+    "datetime_data,timedelta_data",
+    [
+        ([1000000, 200000, 3000000], [1000000, 200000, 3000000]),
+        ([1000000, 200000, None], [1000000, 200000, None]),
+        ([], []),
+        ([None], [None]),
+        ([None, None, None, None, None], [None, None, None, None, None]),
+        (
+            [12, 12, 22, 343, 4353534, 435342],
+            [12, 12, 22, 343, 4353534, 435342],
+        ),
+        (np.array([10, 20, 30, None, 100]), np.array([10, 20, 30, None, 100])),
+        (cp.asarray([10, 20, 30, 100]), cp.asarray([10, 20, 30, 100])),
+        ([1000000, 200000, 3000000], [200000, 34543, 3000000]),
+        ([1000000, 200000, None], [1000000, 200000, 3000000]),
+        ([None], [1]),
+        (
+            [12, 12, 22, 343, 4353534, 435342],
+            [None, 1, 220, 3, 34, 4353423287],
+        ),
+        (np.array([10, 20, 30, None, 100]), np.array([10, 20, 30, None, 100])),
+        (cp.asarray([10, 20, 30, 100]), cp.asarray([10, 20, 30, 100])),
+        (
+            [12, 11, 232, 223432411, 2343241, 234324, 23234],
+            [11, 1132324, 2322323111, 23341, 2434, 332, 323],
+        ),
+        (
+            [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+            [11, 1132324, 2322323111, 23341, 2434, 332, 323],
+        ),
+        (
+            [11, 1132324, 2322323111, 23341, 2434, 332, 323],
+            [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        ),
+        (
+            [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+            [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        ),
+    ],
+)
+@pytest.mark.parametrize("datetime_dtype", dtypeutils.DATETIME_TYPES)
+@pytest.mark.parametrize("timedelta_dtype", dtypeutils.TIMEDELTA_TYPES)
+@pytest.mark.parametrize(
+    "ops", ["add", "sub"],
+)
+def test_timedelta_ops_datetime_inputs(
+    datetime_data, timedelta_data, datetime_dtype, timedelta_dtype, ops
+):
+    gsr_datetime = cudf.Series(datetime_data, dtype=datetime_dtype)
+    gsr_timedelta = cudf.Series(timedelta_data, dtype=timedelta_dtype)
+
+    psr_datetime = gsr_datetime.to_pandas(nullable_pd_dtype=True)
+    psr_timedelta = gsr_timedelta.to_pandas(nullable_pd_dtype=True)
+
+    expected = getattr(psr_datetime, ops)(psr_timedelta)
+    actual = getattr(gsr_datetime, ops)(gsr_timedelta)
 
     assert_eq(expected, actual, nullable_pd_dtype=True)
