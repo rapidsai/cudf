@@ -158,8 +158,6 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   auto const offset    = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);
   auto const d_chars   = strings.chars().data<char>() + offset;
 
-  printf("offsets.size()=%d,chars.size()=%d\n", offsets.size(), strings.chars_size());
-
   // Create tokenizer
   wordpiece_tokenizer tokenizer(vocab_table,
                                 max_num_strings,
