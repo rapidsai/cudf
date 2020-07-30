@@ -235,6 +235,7 @@
 - PR #5319 Disallow SUM and specialize MEAN of timestamp types
 - PR #5797 Fix a missing data issue in some Parquet files
 - PR #5787 Fix column create from dictionary column view
+- PR #5813 Fix normalizer exception with all-null strings column
 
 
 # cuDF 0.14.0 (03 Jun 2020)
