@@ -34,22 +34,22 @@ namespace strings {
  *
  * | Specifier | Description | Range |
  * | :-------: | ----------- | ---------------- |
- * | %%%% | A literal % character | '%' |
- * | %%n | A newline character | '\n' |
- * | %%t | A horizontal tab character | '\t' |
- * | %%D | Days | -2,147,483,648 to 2,147,483,647 |
- * | %%H | 24-hour of the day | 00 to 23 |
- * | %%I | 12-hour of the day | 00 to 11 |
- * | %%M | Minute of the hour | 00 to 59 |
- * | %%S | Second of the minute | 00 to 59.999999999 |
- * | %%OH | same as %H but without sign | 00 to 23 |
- * | %%OI | same as %I but without sign | 00 to 11 |
- * | %%OM | same as %M but without sign | 00 to 59 |
- * | %%OS | same as %S but without sign | 00 to 59 |
- * | %%p | AM/PM designations associated with a 12-hour clock | 'AM' or 'PM' |
- * | %%R | Equivalent to "%H:%M" |  |
- * | %%T | Equivalent to "%H:%M:%S" |  |
- * | %%r | Equivalent to "%OI:%OM:%OS %p" |  |
+ * | %% | A literal % character | % |
+ * | \%n | A newline character | \\n |
+ * | \%t | A horizontal tab character | \\t |
+ * | \%D | Days | -2,147,483,648 to 2,147,483,647 |
+ * | \%H | 24-hour of the day | 00 to 23 |
+ * | \%I | 12-hour of the day | 00 to 11 |
+ * | \%M | Minute of the hour | 00 to 59 |
+ * | \%S | Second of the minute | 00 to 59.999999999 |
+ * | \%OH | same as %H but without sign | 00 to 23 |
+ * | \%OI | same as %I but without sign | 00 to 11 |
+ * | \%OM | same as %M but without sign | 00 to 59 |
+ * | \%OS | same as %S but without sign | 00 to 59 |
+ * | \%p | AM/PM designations associated with a 12-hour clock | 'AM' or 'PM' |
+ * | \%R | Equivalent to "%H:%M" |  |
+ * | \%T | Equivalent to "%H:%M:%S" |  |
+ * | \%r | Equivalent to "%OI:%OM:%OS %p" |  |
  *
  * Other specifiers are not currently supported.
  *
@@ -83,22 +83,22 @@ std::unique_ptr<column> to_durations(
  *
  * | Specifier | Description | Range |
  * | :-------: | ----------- | ---------------- |
- * | %%%% | A literal % character | '%' |
- * | %%n | A newline character | '\n' |
- * | %%t | A horizontal tab character | '\t' |
- * | %%D | Days | -2,147,483,648 to 2,147,483,647 |
- * | %%H | 24-hour of the day | 00 to 23 |
- * | %%I | 12-hour of the day | 00 to 11 |
- * | %%M | Minute of the hour | 00 to 59 |
- * | %%S | Second of the minute | 00 to 59.999999999 |
- * | %%OH | same as %H but without sign | 00 to 23 |
- * | %%OI | same as %I but without sign | 00 to 11 |
- * | %%OM | same as %M but without sign | 00 to 59 |
- * | %%OS | same as %S but without sign | 00 to 59 |
- * | %%p | AM/PM designations associated with a 12-hour clock | 'AM' or 'PM' |
- * | %%R | Equivalent to "%H:%M" |  |
- * | %%T | Equivalent to "%H:%M:%S" |  |
- * | %%r | Equivalent to "%OI:%OM:%OS %p" |  |
+ * | %% | A literal % character | % |
+ * | \%n | A newline character | \\n |
+ * | \%t | A horizontal tab character | \\t |
+ * | \%D | Days | -2,147,483,648 to 2,147,483,647 |
+ * | \%H | 24-hour of the day | 00 to 23 |
+ * | \%I | 12-hour of the day | 00 to 11 |
+ * | \%M | Minute of the hour | 00 to 59 |
+ * | \%S | Second of the minute | 00 to 59.999999999 |
+ * | \%OH | same as %H but without sign | 00 to 23 |
+ * | \%OI | same as %I but without sign | 00 to 11 |
+ * | \%OM | same as %M but without sign | 00 to 59 |
+ * | \%OS | same as %S but without sign | 00 to 59 |
+ * | \%p | AM/PM designations associated with a 12-hour clock | 'AM' or 'PM' |
+ * | \%R | Equivalent to "%H:%M" |  |
+ * | \%T | Equivalent to "%H:%M:%S" |  |
+ * | \%r | Equivalent to "%OI:%OM:%OS %p" |  |
  *
  * No checking is done for invalid formats or invalid duration values. Formatting sticks to
  * specifications of `std::formatter<std::chrono::duration>` as much as possible.
