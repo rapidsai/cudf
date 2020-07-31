@@ -187,7 +187,7 @@ class ColumnBase(Column, Serializable):
 
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
-            if is_categorical_dtype(dtype):
+            if dtype.is_categorical:
                 dtype = CategoricalDtype()
             return column_empty(0, dtype=dtype, masked=True)
 
@@ -200,18 +200,18 @@ class ColumnBase(Column, Serializable):
                 [
                     o
                     for o in not_null_cols
-                    if not is_numerical_dtype(o.dtype)
-                    or np.issubdtype(o.dtype, np.datetime64)
+                    if not o.dtype.is_numeric
+                    or o.dtype.is_datetime
                 ]
             )
             == 0
         ):
-            col_dtypes = [o.dtype for o in not_null_cols]
+            np_col_dtypes = [o.dtype.to_numpy for o in not_null_cols]
             # Use NumPy to find a common dtype
-            common_dtype = np.find_common_type(col_dtypes, [])
+            np_common_dtype = np.find_common_type(np_col_dtypes, [])
             # Cast all columns to the common dtype
             for i in range(len(objs)):
-                objs[i] = objs[i].astype(common_dtype)
+                objs[i] = objs[i].astype(make_dtype_from_obj(np_common_dtype))
 
         # Find the first non-null column:
         head = objs[0]
@@ -232,7 +232,7 @@ class ColumnBase(Column, Serializable):
                     raise ValueError("All columns must be the same type")
 
         cats = None
-        is_categorical = all(is_categorical_dtype(o.dtype) for o in objs)
+        is_categorical = all(o.dtype.is_categorical for o in objs)
 
         # Combine CategoricalColumn categories
         if is_categorical:
