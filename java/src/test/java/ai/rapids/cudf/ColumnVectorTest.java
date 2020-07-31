@@ -2437,7 +2437,6 @@ public class ColumnVectorTest extends CudfTestBase {
     list3.add(2);
 
     ColumnVector res = ColumnVector.fromLists(DType.INT32, list, list2, list3);
-
     HostColumnVector hcv = res.copyToHost();
     List<Integer> ret = hcv.getList(1);
     System.out.println("Element =" + ret.get(0));
@@ -2685,10 +2684,12 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector res1 = ColumnVector.fromLists(DType.INT32, list, list2, list3);
          ColumnVector res2 = ColumnVector.fromLists(DType.INT32, list4, list5, list6);
          ColumnVector v = ColumnVector.concatenate(res1, res2);
+         ColumnVector expected = ColumnVector.fromLists(DType.INT32, list, list2, list3, list4, list5, list6);
          HostColumnVector hostColumnVector = v.copyToHost()) {
       List<Integer> ret = hostColumnVector.getList(5);
       System.out.println("Guess we passed!"+ret.size() + " v size ="+v.getRowCount());
       //add asserts
+      assertColumnsAreEqual(expected,v);
     } catch (Exception e) {
       e.printStackTrace();
     }
