@@ -74,7 +74,7 @@ class TimeDeltaColumn(column.ColumnBase):
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
 
-        if isinstance(rhs, Scalar) or np.isscalar(rhs):
+        if not pd.api.types.is_timedelta64_dtype(rhs.dtype):
             if op in ("eq", "ne"):
                 out_dtype = np.bool
             elif op in ("lt", "gt", "le", "ge"):
@@ -82,7 +82,9 @@ class TimeDeltaColumn(column.ColumnBase):
                     f"Invalid comparison between dtype={self.dtype}"
                     f" and {type(rhs).__name__}"
                 )
-            elif op in ("mul", "mod", "truediv"):
+            elif op in ("mul", "mod"):
+                out_dtype = self.dtype
+            elif op == "truediv":
                 out_dtype = self.dtype
             elif op == "floordiv":
                 op = "truediv"
@@ -105,6 +107,10 @@ class TimeDeltaColumn(column.ColumnBase):
                 out_dtype = self.dtype
             elif op == "truediv":
                 lhs = lhs.astype("float64")
+                if isinstance(rhs, Scalar):
+                    rhs = as_scalar(rhs, dtype="float64")
+                else:
+                    rhs = rhs.astype("float64")
                 out_dtype = np.dtype("float_")
             elif op == "floordiv":
                 op = "truediv"
@@ -130,7 +136,7 @@ class TimeDeltaColumn(column.ColumnBase):
             other = other.astype(self.dtype)
             return as_scalar(other)
         elif np.isscalar(other):
-            return other
+            return as_scalar(other)
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
         ary = None
@@ -220,6 +226,30 @@ class TimeDeltaColumn(column.ColumnBase):
             return pd.Timedelta(
                 self.as_numerical.sum(dtype=dtype), unit=self.time_unit
             )
+
+    @property
+    def days(self):
+        return self.binary_operator(
+            "truediv", as_scalar(np.timedelta64(1, "D"))
+        )
+
+    @property
+    def seconds(self):
+        return self.binary_operator(
+            "truediv", as_scalar(np.timedelta64(1, "s"))
+        )
+
+    @property
+    def microseconds(self):
+        return self.binary_operator(
+            "truediv", as_scalar(np.timedelta64(1, "ms"))
+        )
+
+    @property
+    def nanoseconds(self):
+        return self.binary_operator(
+            "truediv", as_scalar(np.timedelta64(1, "ns"))
+        )
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")

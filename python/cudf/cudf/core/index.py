@@ -1994,6 +1994,7 @@ class DatetimeIndex(GenericIndex):
 
 
 class TimedeltaIndex(GenericIndex):
+    # TODO: Add tests and handle unit vs dtype conversions
     def __new__(
         cls,
         data=None,
