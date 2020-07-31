@@ -158,7 +158,6 @@ struct operator_functor<ast_operator::ADD> {
   }
 };
 
-/*
 template <>
 struct operator_functor<ast_operator::SUB> {
   template <typename LHS, typename RHS>
@@ -168,6 +167,7 @@ struct operator_functor<ast_operator::SUB> {
   }
 };
 
+/*
 template <>
 struct operator_functor<ast_operator::MUL> {
   template <typename LHS, typename RHS>
