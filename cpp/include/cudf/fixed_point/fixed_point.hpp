@@ -18,6 +18,8 @@
 
 #define _LIBCUDACXX_USE_CXX17_TYPE_TRAITS
 
+// Note: The <simt/*> versions are used in order for Jitify to work with our fixed_point type.
+//       Jitify is needed for several algorithms (binaryop, rolling, etc)
 #include <simt/limits>
 #include <simt/type_traits>  // add simt namespace
 
