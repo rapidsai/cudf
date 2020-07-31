@@ -222,6 +222,8 @@ class DatetimeColumn(column.ColumnBase):
                 f"Series of dtype {self.dtype} cannot perform "
                 f" the operation {op}"
             )
+        if reflect:
+            lhs, rhs = rhs, lhs
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def fillna(self, fill_value):

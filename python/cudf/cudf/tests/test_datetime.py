@@ -851,3 +851,8 @@ def test_datetime_subtract(data, other, data_dtype, other_dtype):
     actual = gsr - gsr_other
 
     assert_eq(expected, actual)
+
+    expected = psr_other - psr
+    actual = gsr_other - gsr
+
+    assert_eq(expected, actual)
