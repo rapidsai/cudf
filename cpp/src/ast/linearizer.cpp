@@ -126,17 +126,7 @@ cudf::size_type linearizer::visit(operator_expression const& expr)
     });
   // Resolve node type
   auto const op        = expr.get_operator();
-  auto const data_type = [&] {
-    if (cudf::ast::is_arithmetic_operator(op)) {
-      return operand_types.at(0);
-    } else if (cudf::ast::is_comparator(op)) {
-      return cudf::data_type(cudf::type_id::BOOL8);
-    } else if (cudf::ast::is_logical_operator(op)) {
-      return cudf::data_type(cudf::type_id::BOOL8);
-    }
-    CUDF_FAIL("An invalid AST operator was provided.");
-    return cudf::data_type(cudf::type_id::EMPTY);
-  }();
+  auto const data_type = cudf::ast::ast_operator_return_type(op, operand_types);
   // Push operator
   this->operators.push_back(op);
   // Push data reference
