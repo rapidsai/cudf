@@ -4769,7 +4769,7 @@ class DataFrame(Frame, Serializable):
 
         return result
 
-    def to_arrow(self, preserve_index=True):
+    def _to_arrow(self, preserve_index=True):
         """
         Convert to a PyArrow Table.
 
@@ -4836,7 +4836,7 @@ class DataFrame(Frame, Serializable):
         return pa.Table.from_arrays(arrays, names=names, metadata=metadata)
 
     @classmethod
-    def from_arrow(cls, table):
+    def __from_arrow(cls, table):
         """Convert from a PyArrow Table.
 
         Parameters

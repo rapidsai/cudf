@@ -12,7 +12,7 @@ import warnings
 
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.dlpack cimport (
+from cudf._lib.cpp.interop cimport (
     from_dlpack as cpp_from_dlpack,
     to_dlpack as cpp_to_dlpack,
     DLManagedTensor

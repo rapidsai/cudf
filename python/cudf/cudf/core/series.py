@@ -305,7 +305,7 @@ class Series(Frame, Serializable):
         return self._column.values_host
 
     @classmethod
-    def from_arrow(cls, s):
+    def _from_arrow(cls, s):
         """Convert from a PyArrow Array.
 
         Parameters
@@ -2012,7 +2012,7 @@ class Series(Frame, Serializable):
         s.name = self.name
         return s
 
-    def to_arrow(self):
+    def _to_arrow(self):
         """
         Convert Series to a PyArrow Array.
 

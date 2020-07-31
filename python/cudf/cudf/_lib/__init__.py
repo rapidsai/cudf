@@ -12,6 +12,7 @@ from . import (
     filling,
     gpuarrow,
     hash,
+    interop,
     join,
     merge,
     null_mask,

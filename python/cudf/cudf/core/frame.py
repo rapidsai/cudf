@@ -7,6 +7,7 @@ from collections import OrderedDict, abc as abc
 import cupy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas.api.types import is_dict_like, is_dtype_equal
 
 import cudf
@@ -20,6 +21,7 @@ from cudf.utils.dtypes import (
     is_numerical_dtype,
     is_scalar,
     min_scalar_type,
+    min_signed_type,
 )
 
 
@@ -1818,6 +1820,121 @@ class Frame(libcudf.table.Table):
                     result.index = None
 
             return result
+
+    @classmethod
+    def from_arrow(cls, data):
+        if cls in (cudf.DataFrame, cudf.MultiIndex) and not isinstance(
+            data, (pa.Table)
+        ):
+            raise TypeError(
+                "To create a multicolumn cudf data, the data should be an arrow Table"
+            )
+        elif cls in (cudf.Series, cudf.Index):
+            if not isinstance(data, (pa.Array)):
+                raise TypeError(
+                    "To create a cudf Series, the data should be an arrow Array"
+                )
+            data = pa.table([data], [None])
+
+        dict_indices = {}
+        dict_dictionaries = {}
+        for field in data.schema:
+            if isinstance(field.type, pa.DictionaryType):
+                dict_indices[field.name] = pa.chunked_array(
+                    [chunk.indices for chunk in data[field.name].chunks]
+                )
+                dict_dictionaries[field.name] = pa.chunked_array(
+                    [chunk.dictionary for chunk in data[field.name].chunks]
+                )
+
+        cudf_dict_table = cudf.DataFrame()
+        if len(dict_indices) != 0:
+            dict_indices_table = pa.table(dict_indices)
+            # dict_dictionaries_table = pa.table(dict_dictionaries);
+
+            data = data.drop(dict_indices_table.column_names)
+
+            cudf_indices_frame = cudf.DataFrame._from_table(
+                libcudf.interop.from_arrow(
+                    dict_indices_table, dict_indices_table.column_names
+                )
+            )
+            # as dictionary size can vary, it can't be a single table
+            cudf_dictionaries_frames = [
+                cudf.DataFrame._from_table(
+                    libcudf.interop.from_arrow(
+                        pa.table({name: dict_dictionaries[name]}), [name]
+                    )
+                )
+                for name in dict_dictionaries.keys()
+            ]
+            cudf_dictionaries_frame = cudf.concat(
+                cudf_dictionaries_frames, axis=1
+            )
+
+            for name in cudf_indices_frame._data.names:
+                codes = cudf_indices_frame._data[name]
+                cudf_dict_table[name] = build_categorical_column(
+                    cudf_dictionaries_frame._data[name],
+                    codes,
+                    mask=codes.base_mask,
+                    size=codes.size,
+                )
+
+        cudf_non_dict_table = (
+            cudf.DataFrame()
+            if data.num_columns == 0
+            else cudf.DataFrame._from_table(
+                libcudf.interop.from_arrow(data, data.column_names)
+            )
+        )
+
+        result = cudf.concat(
+            [cudf_non_dict_table, cudf_dict_table], axis=1
+        )
+
+        if cls == cudf.MultiIndex:
+            result = cudf.Index(result)
+        elif cls in (cudf.Series, cudf.Index):
+            result = cls(result._data.columns[0])
+
+        return result
+
+    def to_arrow(self, preserve_index=True):
+        data = self
+        codes = {}
+        categories = {}
+        if preserve_index and isinstance(self, (cudf.DataFrame, cudf.Series)):
+            data = data.reset_index()
+
+        for name in self._data.names:
+            if isinstance(
+                self._data[name],
+                cudf.core.column.CategoricalColumn,
+            ):
+                # arrow doesn't support unsigned codes
+                signed_type = min_signed_type(self._data[name].codes.max())
+                codes[name] = self._data[name].codes.astype(signed_type)
+                categories[name] = self._data[name].categories
+        
+        data = cudf.DataFrame(data._data)
+        data = data.drop(codes.keys())
+
+        out_table = pa.table([])
+        if data.ndim > 0:
+            out_table = libcudf.interop.to_arrow(data, data._data.names, keep_index=False)
+
+        if len(codes) > 0:
+            codes_df = cudf.DataFrame(codes)
+            indices = libcudf.interop.to_arrow(codes_df, codes_df._data.names, keep_index=False)
+            dictionaries = dict((name, libcudf.interop.to_arrow(cudf.DataFrame({name: categories[name]}), [name], keep_index=False)[name]) for name in categories.keys())
+            for name in codes.keys():
+                if out_table is None:
+                    out_table = pa.table({name: pa.DictionaryArray.from_arrays(indices[name].chunk(0), dictionaries[name].chunk(0))})
+                else:
+                    out_table = out_table.append_column(name, pa.DictionaryArray.from_arrays(indices[name].chunk(0), dictionaries[name].chunk(0), ordered=self._data[name].ordered))
+
+        return out_table
 
     def drop_duplicates(
         self,
