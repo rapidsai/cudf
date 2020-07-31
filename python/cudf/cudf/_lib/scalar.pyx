@@ -175,7 +175,7 @@ cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,
                                     value,
                                     dtype,
                                     bool valid=True):
-    if np.isnat(value):
+    if isinstance(value, np.datetime64) and np.isnat(value):
         value = 0
         valid = False
         dtype = "datetime64[ns]"
@@ -205,7 +205,7 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
                                      value,
                                      dtype,
                                      bool valid=True):
-    if np.isnat(value):
+    if isinstance(value, np.timedelta64) and np.isnat(value):
         value = 0
         valid = False
         dtype = "timedelta64[ns]"

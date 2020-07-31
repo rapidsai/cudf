@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import datetime as dt
+from numbers import Number
 
 import numpy as np
 import pandas as pd
@@ -193,6 +194,32 @@ class TimeDeltaColumn(column.ColumnBase):
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
+
+    def mean(self, dtype=np.float64):
+        return pd.Timedelta(
+            self.as_numerical.mean(dtype=dtype), unit=self.time_unit
+        )
+
+    def median(self, dtype=np.float64):
+        return pd.Timedelta(
+            self.as_numerical.median(dtype=dtype), unit=self.time_unit
+        )
+
+    def quantile(self, q, interpolation, exact):
+        result = self.as_numerical.quantile(
+            q=q, interpolation=interpolation, exact=exact
+        )
+        if isinstance(q, Number):
+            return [pd.Timedelta(result[0], unit=self.time_unit)]
+        return result.astype(self.dtype)
+
+    def sum(self, dtype=None):
+        if len(self) == 0:
+            return pd.Timedelta(None, unit=self.time_unit)
+        else:
+            return pd.Timedelta(
+                self.as_numerical.sum(dtype=dtype), unit=self.time_unit
+            )
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")

@@ -373,3 +373,47 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
         actual = gsr - other_scalars
 
     assert_eq(expected, actual, nullable_pd_dtype=True)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        # [1000000, 200000, None],
+        [],
+        # [None],
+        # [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        # np.array([10, 20, 30, None, 100]),
+        # TODO: Will get fixed with str type-cast implementation
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        # [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
+@pytest.mark.parametrize("reduction_op", ["sum", "mean", "median", "quantile"])
+def test_timedelta_reduction_ops(data, dtype, reduction_op):
+    gsr = cudf.Series(data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    expected = getattr(psr, reduction_op)()
+    actual = getattr(gsr, reduction_op)()
+    if pd.isna(expected) and pd.isna(actual):
+        pass
+    elif isinstance(expected, pd.Timedelta) and isinstance(
+        actual, pd.Timedelta
+    ):
+        assert (
+            expected.round(gsr._column.time_unit).value
+            == actual.round(gsr._column.time_unit).value
+        )
+    else:
+        print(expected, type(expected))
+        print(actual, type(actual))
+        assert_eq(expected, actual)
