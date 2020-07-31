@@ -162,7 +162,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(AtomicsTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(AtomicsTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 // tests for atomicAdd/Min/Max
 TYPED_TEST(AtomicsTest, atomicOps)
