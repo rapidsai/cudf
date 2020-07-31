@@ -198,7 +198,9 @@ class StringDtype(Dtype):
         self._name = "String"
 
 def make_dtype_from_string(obj):
-    if obj in {'str', 'string', 'object'}:
+    import pdb
+    pdb.set_trace()
+    if obj in {'str', 'string', 'object', 'O'}:
         return StringDtype()
     elif 'datetime' in obj:
         if obj == 'datetime64[ns]':
