@@ -2689,7 +2689,7 @@ public class ColumnVectorTest extends CudfTestBase {
       List<Integer> ret = hostColumnVector.getList(5);
       System.out.println("Guess we passed!"+ret.size() + " v size ="+v.getRowCount());
       //add asserts
-      assertColumnsAreEqual(expected,v);
+      assertColumnsAreEqual(expected, v);
     } catch (Exception e) {
       e.printStackTrace();
     }
@@ -2712,7 +2712,8 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector res1 = ColumnVector.fromLists(DType.STRING, list, list3);
          ColumnVector res2 = ColumnVector.fromLists(DType.STRING, list2);
          ColumnVector v = ColumnVector.concatenate(res1, res2);
-         HostColumnVector hostColumnVector = v.copyToHost()) {
+         HostColumnVector hostColumnVector = v.copyToHost();
+         ColumnVector expected = ColumnVector.fromLists(DType.STRING, list, list2, list3)) {
       List<String> ret = hostColumnVector.getList(2);
       System.out.println("Guess we passed!"+ (ret.get(1) == null) + " v size ="+v.getRowCount());
       //add asserts
@@ -2748,10 +2749,11 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector res1 = ColumnVector.fromLists(DType.INT32, mainList);
          ColumnVector res2 = ColumnVector.fromLists(DType.INT32, mainList2);
          ColumnVector v = ColumnVector.concatenate(res1, res2);
-         HostColumnVector hostColumnVector = v.copyToHost()) {
+         HostColumnVector hostColumnVector = v.copyToHost();
+         ColumnVector expected = ColumnVector.fromLists(DType.INT32, mainList, mainList2)) {
       List<Integer> ret = hostColumnVector.getList(1);
       System.out.println("Guess we passed!"+ ret + " v size = "+v.getRowCount());
-      //add asserts
+      assertColumnsAreEqual(expected, v);
     } catch (Exception e) {
       e.printStackTrace();
     }

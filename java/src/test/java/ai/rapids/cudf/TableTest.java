@@ -157,6 +157,7 @@ public class TableTest extends CudfTestBase {
           case STRING:
             assertArrayEquals(expected.getUTF8(expectedRow), cv.getUTF8(tableRow),
                 "Column " + colName + " Row " + tableRow);
+            break;
           case LIST:
             try {
               assertArrayEquals(expected.getList(expectedRow).toString().getBytes(), cv.getList(tableRow).toString().getBytes(),

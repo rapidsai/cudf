@@ -362,19 +362,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       HostMemoryBuffer hostDataBuffer = null;
       HostMemoryBuffer hostValidityBuffer = null;
       HostMemoryBuffer hostOffsetsBuffer = null;
-      List<MemoryBuffer> valid = new ArrayList<>();
-      List<MemoryBuffer> offsets = new ArrayList<>();
+      List<BaseDeviceMemoryBuffer> valid = new ArrayList<>();
+      List<BaseDeviceMemoryBuffer> offsets = new ArrayList<>();
       List<DType> allTypes = new ArrayList<>();
       List<Long> allRows = new ArrayList<>();
       ColumnViewPointerAccess child;
       for (child = this; child != null; child = child.getChildColumnView()) {
-        offsets.add(child.getOffsetBuffer());
-        valid.add(child.getValidityBuffer());
+        offsets.add((BaseDeviceMemoryBuffer)child.getOffsetBuffer());
+        valid.add((BaseDeviceMemoryBuffer)child.getValidityBuffer());
         allRows.add(child.getRows());
         allTypes.add(child.getDataType());
       }
 
-      MemoryBuffer data = offHeap.getData();
+      BaseDeviceMemoryBuffer data = offHeap.getData();
       boolean needsCleanup = true;
       try {
         // We don't have a good way to tell if it is cached on the device or recalculate it on
@@ -383,16 +383,16 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
         if (type != DType.LIST) {
           if (!valid.isEmpty() && valid.get(0) != null) {
             hostValidityBuffer = HostMemoryBuffer.allocate(valid.get(0).getLength());
-            hostValidityBuffer.copyFromDeviceBuffer((DeviceMemoryBufferView) valid.get(0));
+            hostValidityBuffer.copyFromDeviceBuffer(valid.get(0));
           }
           if (!offsets.isEmpty() && offsets.get(0) != null) {
             hostOffsetsBuffer = HostMemoryBuffer.allocate(offsets.get(0).length);
-            hostOffsetsBuffer.copyFromDeviceBuffer((DeviceMemoryBufferView) offsets.get(0));
+            hostOffsetsBuffer.copyFromDeviceBuffer(offsets.get(0));
           }
           // If a strings column is all null values there is no data buffer allocated
           if (data != null) {
             hostDataBuffer = HostMemoryBuffer.allocate(data.length);
-            hostDataBuffer.copyFromDeviceBuffer((DeviceMemoryBufferView) data);
+            hostDataBuffer.copyFromDeviceBuffer(data);
           }
           HostColumnVector ret = new HostColumnVector(type, rows, nullCount,
               hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer);
@@ -406,21 +406,21 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
           List<Long> hRows = new ArrayList<>();
           if (data != null) {
             hData = HostMemoryBuffer.allocate(data.length);
-            hData.copyFromDeviceBuffer((DeviceMemoryBufferView)data);
+            hData.copyFromDeviceBuffer(data);
           }
-          for (MemoryBuffer validity : valid) {
+          for (BaseDeviceMemoryBuffer validity : valid) {
             if (validity != null) {
               HostMemoryBuffer hmb = HostMemoryBuffer.allocate(validity.getLength());
-              hmb.copyFromDeviceBuffer((DeviceMemoryBufferView) validity);
+              hmb.copyFromDeviceBuffer(validity);
               hValids.add(hmb);
             } else {
               hValids.add(null);
             }
           }
-          for (MemoryBuffer offset : offsets) {
+          for (BaseDeviceMemoryBuffer offset : offsets) {
             if (offset != null) {
               HostMemoryBuffer hmb = HostMemoryBuffer.allocate(offset.getLength());
-              hmb.copyFromDeviceBuffer((DeviceMemoryBufferView) offset);
+              hmb.copyFromDeviceBuffer(offset);
               hOffsets.add(hmb);
             } else {
               hOffsets.add(null);
