@@ -50,12 +50,16 @@
 - PR #5658 Add `filter_tokens` nvtext API
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
+- PR #5704 Initial `fixed_point` Column Support
+- PR #5716 Add `double_type_dispatcher` to libcudf
 - PR #5739 Add `nvtext::detokenize` API
 - PR #5645 Enforce pd.NA and Pandas nullable dtype parity
 - PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
 - PR #5572 Add `cudf::encode` API.
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
+- PR #5782 Add Kafka support to custreamz
 - PR #5642 Add `GroupBy.groups()`
+- PR #5810 Make Cython subdirs packages and simplify package_data
 
 ## Improvements
 
@@ -154,6 +158,7 @@
 - PR #5785 Enable computing views of ListColumns
 - PR #5791 Get nullable_pd_dtype from kwargs if provided in assert_eq
 - PR #5786 JNI Header Cleanup for cuSpatial
+- PR #5800 Expose arrow datasource instead of directly taking a RandomAccessFile
 - PR #5795 Clarify documentation on Boost dependency
 - PR #5803 Add in Java support for the repeat command
 

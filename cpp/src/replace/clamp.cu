@@ -300,7 +300,33 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::list_view>(
 }
 
 template <>
-std::unique_ptr<column> dispatch_clamp::operator()<cudf::struct_view>(
+std::unique_ptr<column> dispatch_clamp::operator()<numeric::decimal32>(
+  column_view const& input,
+  scalar const& lo,
+  scalar const& lo_replace,
+  scalar const& hi,
+  scalar const& hi_replace,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("clamp for decimal32 not supported");
+}
+
+template <>
+std::unique_ptr<column> dispatch_clamp::operator()<numeric::decimal64>(
+  column_view const& input,
+  scalar const& lo,
+  scalar const& lo_replace,
+  scalar const& hi,
+  scalar const& hi_replace,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("clamp for decimal32 not supported");
+}
+
+template <>
+std::unique_ptr<column> dispatch_clamp::operator()<struct_view>(
   column_view const& input,
   scalar const& lo,
   scalar const& lo_replace,

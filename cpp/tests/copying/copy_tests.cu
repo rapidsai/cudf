@@ -32,7 +32,7 @@ template <typename T>
 struct CopyTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CopyTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(CopyTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 #define wrapper cudf::test::fixed_width_column_wrapper
 
