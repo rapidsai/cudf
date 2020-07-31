@@ -155,6 +155,7 @@
 - PR #5786 JNI Header Cleanup for cuSpatial
 - PR #5795 Clarify documentation on Boost dependency
 - PR #5803 Add in Java support for the repeat command
+- PR #5806 Expose the error message from native exception when throwing an OOM exception
 
 ## Bug Fixes
 

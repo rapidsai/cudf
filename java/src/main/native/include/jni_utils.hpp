@@ -721,7 +721,8 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     if (cudaErrorMemoryAllocation == cudaPeekAtLastError()) {                                      \
       cudaGetLastError();                                                                          \
     }                                                                                              \
-    auto what = std::string("Could not allocate native memory, caused by \n  ") + e.what();        \
+    auto what = std::string("Could not allocate native memory: ") +                                \
+      (e.what() == nullptr ? "" : e.what());                                                       \
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
