@@ -44,7 +44,7 @@ cimport cudf._lib.cpp.types as libcudf_types
 
 cdef class Scalar:
 
-    def __init__(self, value, dtype=None):
+    def __init__(self, value, dtype=None, valid=None):
         """
         cudf.Scalar: Type representing a scalar value on the device
 
@@ -61,7 +61,14 @@ cdef class Scalar:
         from cudf.utils.dtypes import to_cudf_compatible_scalar
 
         value = to_cudf_compatible_scalar(value, dtype=dtype)
-        valid = value is not None
+
+        if valid is None:
+            if isinstance(
+                value, (np.timedelta64, np.datetime64)
+            ) and np.isnat(value):
+                valid = False if valid is None else valid
+            else:
+                valid = value is not None
 
         if dtype is None:
             if value is None:
@@ -175,12 +182,8 @@ cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,
                                     value,
                                     dtype,
                                     bool valid=True):
-    if isinstance(value, np.datetime64) and np.isnat(value):
-        value = 0
-        valid = False
-        dtype = "datetime64[ns]"
-    else:
-        value = value if valid else 0
+
+    value = value if valid else 0
 
     if dtype == "datetime64[s]":
         s.reset(
@@ -205,12 +208,8 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
                                      value,
                                      dtype,
                                      bool valid=True):
-    if isinstance(value, np.timedelta64) and np.isnat(value):
-        value = 0
-        valid = False
-        dtype = "timedelta64[ns]"
-    else:
-        value = value if valid else 0
+
+    value = value if valid else 0
 
     if dtype == "timedelta64[s]":
         s.reset(
@@ -352,11 +351,11 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
 
 
-def as_scalar(val, dtype=None):
+def as_scalar(val, dtype=None, valid=None):
     if isinstance(val, Scalar):
         if (dtype is None or dtype == val.dtype):
             return val
         else:
-            return Scalar(val.value, dtype)
+            return Scalar(val.value, dtype, valid=valid)
     else:
-        return Scalar(val, dtype)
+        return Scalar(value=val, dtype=dtype, valid=valid)
